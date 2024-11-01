@@ -1,0 +1,137 @@
+[project]
+name = "madsci.client"
+dynamic = ["version"]
+description = "The Modular Autonomous Discovery for Science (MADSci) Python Client and CLI."
+authors = [
+    {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
+    {name = "Ryan D. Lewis", email = "ryan.lewis@anl.gov"},
+    {name = "Casey Stone", email = "cstone@anl.gov"},
+    {name = "Doga Ozgulbas", email = "dozgulbas@anl.gov"},
+]
+requires-python = ">=3.9.1"
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = [
+  "madsci.common",
+  "click>=8.1.7",
+  "trogon>=0.6.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/AD-SDL/MADSci"
+
+[project.scripts]
+madsci = "madsci.client.cli:root_cli"
+
+######################
+# Build Info + Tools #
+######################
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+#[dependency-groups]
+#dev = ["-e madsci-common @ file:///${PROJECT_ROOT}/../madsci_common"]
+
+#####################
+# Development Tools #
+#####################
+
+[tool.ruff]
+# https://docs.astral.sh/ruff/configuration/
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    ".venv",
+    "docs",
+]
+
+# Same as Black.
+line-length = 88
+indent-width = 4
+
+# Assume Python 3.9
+target-version = "py39"
+
+[tool.ruff.lint]
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    # "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    # "SIM",
+    # isort
+    "I",
+    # Warning
+    "W",
+    # pydocstyle
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",
+    # ruff
+    # "RUF"
+]
+ignore = [
+    "E501", # Line too long
+    "B006", # Do not use mutable data structures for argument defaults
+]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+# https://docs.pytest.org/en/stable/customize.html
+addopts = "-x --ignore-glob=**/test_module/*"
+junit_family="xunit1"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::pottery.exceptions.InefficientAccessWarning",
+]
+
+
+[tool.pdm.version]
+source = "scm"
+fallback_version = "0.0.0"
