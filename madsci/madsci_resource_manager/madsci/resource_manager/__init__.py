@@ -1,0 +1,1 @@
+"""MADSci Resource Manager."""

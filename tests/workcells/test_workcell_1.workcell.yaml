@@ -1,0 +1,6 @@
+name: Test Workcell 1
+workcell_id: 01JBW658V9EY7BW2BVV5Q8CM99
+description: Test 1
+config:
+    scheduler_update_interval: 0.1
+    module_update_interval: 1.0

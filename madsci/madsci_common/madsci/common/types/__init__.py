@@ -32,7 +32,7 @@ class BaseModel(SQLModel, use_enum_values=True):
         Allows all derived data models to be exported into yaml.
         """
         with open(path, mode="w") as fp:
-            yaml.dump(json.loads(self.json()), fp, indent=4, sort_keys=False)
+            yaml.dump(json.loads(self.model_dump_json()), fp, indent=2, sort_keys=False)
 
     @classmethod
     def from_yaml(cls: Type[_T], path: PathLike) -> _T:

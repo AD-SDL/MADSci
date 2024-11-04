@@ -1,7 +1,7 @@
 [project]
-name = "madsci.common"
+name = "madsci.resource_manager"
 dynamic = ["version"]
-description = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
+description = "The Modular Autonomous Discovery for Science (MADSci) Resource Manager."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
     {name = "Ryan D. Lewis", email = "ryan.lewis@anl.gov"},
@@ -12,18 +12,12 @@ requires-python = ">=3.9.1"
 readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
-    "pydantic>=2.9.2",
-    "PyYAML>=6.0.2",
-    "sqlmodel>=0.0.22",
-    "python-ulid[pydantic]>=3.0.0",
-    "aenum>=3.1.15",
+  "madsci.common[server]"
 ]
-
-[dependency-groups]
-server = ["fastapi>=0.115.4", "uvicorn[standard]>=0.32.0"]
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"
+
 
 ######################
 # Build Info + Tools #
@@ -36,6 +30,9 @@ build-backend = "pdm.backend"
 [tool.pdm.version]
 source = "scm"
 fallback_version = "0.0.0"
+
+#[dependency-groups]
+#dev = ["-e madsci-common @ file:///${PROJECT_ROOT}/../madsci_common"]
 
 #####################
 # Development Tools #

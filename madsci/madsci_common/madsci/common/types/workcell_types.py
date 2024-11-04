@@ -1,15 +1,16 @@
 """Types for MADSci Workcell configuration."""
 
-from typing import Optional
+from typing import Dict, Optional
 
 from pydantic.functional_validators import field_validator
+from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
 
 from madsci.common.types import BaseModel, new_ulid_str
 from madsci.common.types.validators import ulid_validator
 
 
-class Workcell(BaseModel):
+class WorkcellDefinition(BaseModel, extra="allow"):
     """Configuration for a MADSci Workcell."""
 
     name: str = Field(
@@ -31,6 +32,16 @@ class Workcell(BaseModel):
         description="The configuration for the workcell.",
         default_factory=lambda: WorkcellConfig(),
     )
+    modules: Dict[str, AnyUrl] = Field(
+        default_factory=dict,
+        title="Workcell Module URL",
+        description="The URL for each module in the workcell.",
+    )
+    # resources: Dict[str, Union["ResourceDefinition"]] = Field(
+    #     default_factory=dict,
+    #     title="Workcell Resource Definitions",
+    #     description="Any definitions for default resources used by the workcell. If they are defined here, they will be created when the workcell is started, if they don't already exist.",
+    # )
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
 
