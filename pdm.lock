@@ -141,7 +141,7 @@ files = [
 
 [[package]]
 name = "madsci-client"
-version = "0.1.dev1"
+version = "0.1.dev2"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_client"
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.1.dev1"
+version = "0.1.dev2"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_common"
@@ -165,24 +165,25 @@ dependencies = [
     "PyYAML>=6.0.2",
     "aenum>=3.1.15",
     "pydantic>=2.9.2",
+    "python-dotenv>=1.0.1",
     "python-ulid[pydantic]>=3.0.0",
     "sqlmodel>=0.0.22",
 ]
 
 [[package]]
 name = "madsci-common"
-version = "0.1.dev1"
+version = "0.1.dev2"
 extras = ["server"]
 requires_python = ">=3.9.1"
 summary = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
 groups = ["dev"]
 dependencies = [
-    "madsci-common==0.1.dev1",
+    "madsci-common==0.1.dev2",
 ]
 
 [[package]]
 name = "madsci-module"
-version = "0.1.dev1"
+version = "0.1.dev2"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_module"
@@ -194,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.1.dev1"
+version = "0.1.dev2"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_resource_manager"
@@ -206,14 +207,14 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.1.dev1"
+version = "0.1.dev2"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_squid"
 summary = "The Modular Autonomous Discovery for Science (MADSci) Control Server and Scheduler, aka Squid."
 groups = ["dev"]
 dependencies = [
-    "madsci-common",
+    "madsci-common[server]",
 ]
 
 [[package]]
@@ -398,6 +399,17 @@ groups = ["dev"]
 files = [
     {file = "pygments-2.18.0-py3-none-any.whl", hash = "sha256:b8e6aca0523f3ab76fee51799c488e38782ac06eafcf95e7ba832985c8e7b13a"},
     {file = "pygments-2.18.0.tar.gz", hash = "sha256:786ff802f32e91311bff3889f6e9a86e81505fe99f2735bb6d60ae0c5004f199"},
+]
+
+[[package]]
+name = "python-dotenv"
+version = "1.0.1"
+requires_python = ">=3.8"
+summary = "Read key-value pairs from a .env file and set them as environment variables"
+groups = ["dev"]
+files = [
+    {file = "python-dotenv-1.0.1.tar.gz", hash = "sha256:e324ee90a023d808f1959c46bcbc04446a10ced277783dc6ee09987c37ec10ca"},
+    {file = "python_dotenv-1.0.1-py3-none-any.whl", hash = "sha256:f7b63ef50f1b690dddf550d03497b66d609393b40b564ed0d674909a68ebf16a"},
 ]
 
 [[package]]

@@ -3,7 +3,7 @@ default:
   @just --list --justfile {{justfile()}}
 
 # initialize the project
-init:
+init: hooks
   @which pdm || echo "pdm not found, you'll need to install it: https://github.com/pdm-project/pdm"
   @pdm install
   @#test -e .env || cp .env.example .env

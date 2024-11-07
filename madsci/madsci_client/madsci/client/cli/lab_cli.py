@@ -174,3 +174,64 @@ def run(ctx: LabContext, command: str):
         console.print(
             f"Command [bold]{command}[/] not found in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})"
         )
+
+
+@lab.command()
+@click.option("--command_name", "-n", type=str, required=False)
+@click.option("--command", "-c", type=str, required=False)
+@pass_lab
+def add_command(ctx: LabContext, command_name: str, command: str):
+    """Add a command to a lab definition."""
+    if not ctx.lab_def:
+        console.print(
+            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'."
+        )
+        return
+
+    if not command_name:
+        command_name = prompt_for_input("Command Name", required=True)
+    if not command:
+        command = prompt_for_input("Command", required=True)
+
+    if command_name in ctx.lab_def.commands:
+        console.print(
+            f"Command [bold]{command_name}[/] already exists in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})"
+        )
+        if not prompt_yes_no("Do you want to overwrite it?", default="no"):
+            return
+
+    ctx.lab_def.commands[command_name] = command
+    save_model(ctx.path, ctx.lab_def, overwrite_check=False)
+    console.print(
+        f"Added command [bold]{command_name}[/] to lab: [bold]{ctx.lab_def.name}[/]"
+    )
+
+
+@lab.command()
+@click.argument("command_name", type=str, required=False)
+@pass_lab
+def delete_command(ctx: LabContext, command_name: str):
+    """Delete a command from a lab definition."""
+    if not ctx.lab_def:
+        console.print(
+            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'."
+        )
+        return
+
+    if not command_name:
+        command_name = prompt_for_input("Command Name", required=True)
+
+    if command_name in ctx.lab_def.commands:
+        if prompt_yes_no(
+            f"Are you sure you want to delete command [bold]{command_name}[/]?",
+            default="no",
+        ):
+            del ctx.lab_def.commands[command_name]
+            save_model(ctx.path, ctx.lab_def, overwrite_check=False)
+            console.print(
+                f"Deleted command [bold]{command_name}[/] from lab: [bold]{ctx.lab_def.name}[/]"
+            )
+    else:
+        console.print(
+            f"Command [bold]{command_name}[/] not found in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})"
+        )

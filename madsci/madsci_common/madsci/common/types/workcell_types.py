@@ -1,12 +1,13 @@
 """Types for MADSci Workcell configuration."""
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
 
-from madsci.common.types import BaseModel, new_ulid_str
+from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.node_types import NodeDefinition
 from madsci.common.types.validators import ulid_validator
 
 
@@ -32,10 +33,10 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         description="The configuration for the workcell.",
         default_factory=lambda: WorkcellConfig(),
     )
-    modules: Dict[str, AnyUrl] = Field(
+    nodes: Dict[str, Union[AnyUrl, "NodeDefinition", PathLike]] = Field(
         default_factory=dict,
-        title="Workcell Module URL",
-        description="The URL for each module in the workcell.",
+        title="Workcell Node URLs",
+        description="The URL, path, or definition for each node in the workcell.",
     )
     # resources: Dict[str, Union["ResourceDefinition"]] = Field(
     #     default_factory=dict,
@@ -54,8 +55,13 @@ class WorkcellConfig(BaseModel):
         title="Scheduler Update Interval",
         description="The interval at which the scheduler runs, in seconds.",
     )
-    module_update_interval: float = Field(
+    node_update_interval: float = Field(
         default=1.0,
-        title="Module Update Interval",
-        description="The interval at which the workcell queries its modules' states, in seconds.",
+        title="Node Update Interval",
+        description="The interval at which the workcell queries its node's states, in seconds.",
+    )
+    auto_start: bool = Field(
+        default=True,
+        title="Auto Start",
+        description="Whether the workcell should automatically create a new Workcell Manager and start it when the lab starts, registering it with the Lab Server.",
     )

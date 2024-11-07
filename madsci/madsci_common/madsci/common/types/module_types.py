@@ -1,121 +1,174 @@
 """Types related to MADSci Modules."""
 
-from typing import Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-from aenum._enum import Enum
-from pydantic.functional_validators import field_validator, model_validator
-from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
 
-from madsci.common.types import BaseModel, new_ulid_str
-from madsci.common.types.validators import ulid_validator
+from madsci.common.types.action_types import ActionDefinition
+from madsci.common.types.admin_command_types import AdminCommands
+from madsci.common.types.base_types import BaseModel
 
 
-class ModuleDefinition(BaseModel):
+class ModuleType(str, Enum):
+    """The type of a MADSci Module."""
+
+    DEVICE = "device"
+    COMPUTE = "compute"
+    RESOURCE_MANAGER = "resource_manager"
+    EVENT_MANAGER = "event_manager"
+    WORKCELL_MANAGER = "workcell_manager"
+    DATA_MANAGER = "data_manager"
+    TRANSFER_MANAGER = "transfer_manager"
+
+
+class ModuleDefinition(BaseModel, extra="allow"):
     """Definition for a MADSci Module."""
 
-    name: str = Field(
+    module_name: str = Field(
         title="Module Name",
         description="The name of the module.",
+    )
+    module_type: Optional[ModuleType] = Field(
+        title="Module Type",
+        description="The type of the module.",
+        default=None,
     )
     description: Optional[str] = Field(
         default=None,
         title="Module Description",
         description="A description of the module.",
     )
-    url: AnyUrl = Field(
-        title="Module URL",
-        description="The URL to the module.",
-    )
-
-
-class Module(ModuleDefinition):
-    """A runtime representation of a MADSci Module used in a Workcell."""
-
-    module_id: Optional[str] = Field(
-        title="Module ID",
-        description="The ID of the module. This is defined by the module itself, and will be used to uniquely identify the module in the workcell.",
-        default=None,
-    )
-    info: Optional["ModuleInfo"] = Field(
-        default=None,
-        title="Module Info",
-        description="Information about the module, provided by the module itself.",
-    )
-
-    is_ulid = field_validator("module_id")(ulid_validator)
-
-    @model_validator(mode="after")
-    def validate_module_id(self) -> "Module":
-        """Validate that the module ID matches the ID in the module info."""
-        if self.module_id and self.info and self.info.module_id:
-            if self.module_id != self.info.module_id:
-                raise ValueError(
-                    "Module ID does not match the ID returned in the module info."
-                )
-        return self
-
-
-class ModuleInfo(BaseModel):
-    """Information about a MADSci Module."""
-
-    module_id: str = Field(
-        title="Module ID",
-        description="The ID of the module.",
-        default_factory=new_ulid_str,
-    )
     capabilities: "ModuleCapabilities" = Field(
         default_factory=lambda: ModuleCapabilities(),
         title="Module Capabilities",
         description="The capabilities of the module.",
     )
+    module_config: List["ConfigParameter"] = Field(
+        title="Module Configuration",
+        description="The configuration of the module.",
+        default_factory=list,
+    )
+    module_actions: Optional[List["ActionDefinition"]] = Field(
+        title="Module Actions",
+        description="The actions that the module supports.",
+        default=None,
+    )
+    module_commands: Optional[Dict[str, str]] = Field(
+        title="Module Commands",
+        description="The commands that the module supports.",
+        default=None,
+    )
 
-    is_ulid = field_validator("module_id")(ulid_validator)
+
+class ConfigParameter(BaseModel, extra="allow"):
+    """A parameter for a MADSci Module/Node Configuration."""
+
+    name: str = Field(
+        title="Parameter Name",
+        description="The name of the parameter.",
+    )
+    description: Optional[str] = Field(
+        title="Parameter Description",
+        description="A description of the parameter.",
+        default=None,
+    )
+    default: Optional[Any] = Field(
+        title="Parameter Default",
+        description="The default value of the parameter.",
+        default=None,
+    )
+    required: bool = Field(
+        title="Parameter Required",
+        description="Whether the parameter is required.",
+        default=False,
+    )
 
 
-class ModuleCapabilities(BaseModel):
-    """Capabilities of a MADSci Module. All capabilities are optional (though a module with no capabilities set will not be able to do anything). The server will not use any capabilities that are not set to True. If a module does not support a capability, it should not set it to True. If a module does not support the /info endpoint, the server will test the other capabilities by sending the appropriate requests and seeing if they fail or not."""
+MODULE_CONFIG_TEMPLATES: Dict[str, List[ConfigParameter]] = {
+    "REST Module": [
+        ConfigParameter(
+            name="host",
+            description="The host of the REST API.",
+            default="localhost",
+            required=True,
+        ),
+        ConfigParameter(
+            name="port",
+            description="The port of the REST API.",
+            default=8000,
+            required=True,
+        ),
+        ConfigParameter(
+            name="protocol",
+            description="The protocol of the REST API, either 'http' or 'https'.",
+            default="http",
+            required=True,
+        ),
+    ]
+}
 
-    info: bool = Field(
+
+class ModuleInterfaceCapabilities(BaseModel):
+    """Capabilities of a MADSci Module Interface."""
+
+    get_info: bool = Field(
         default=False,
         title="Module Info",
-        description="Whether the module supports the /info endpoint.",
+        description="Whether the module/interface supports querying its info.",
     )
-    state: bool = Field(
+    get_state: bool = Field(
         default=False,
         title="Module State",
-        description="Whether the module supports the /state endpoint.",
+        description="Whether the module/inteface supports querying its state.",
     )
-    action: bool = Field(
+    get_status: bool = Field(
         default=False,
-        title="Module Action",
-        description="Whether the module supports the /action endpoint.",
+        title="Module Status",
+        description="Whether the module/inteface supports querying its status.",
     )
-    admin_commands: Optional[set["AdminCommands"]] = Field(
-        default=None,
-        title="Module Admin Commands",
-        description="Whether the module supports the /admin endpoint, and if so, the commands it supports.",
+    send_action: bool = Field(
+        default=False,
+        title="Module Send Action",
+        description="Whether the module/interface supports sending actions.",
+    )
+    get_action: bool = Field(
+        default=False,
+        title="Module Get Action",
+        description="Whether the module/interface supports querying the status of an action.",
+    )
+    action_files: bool = Field(
+        default=False,
+        title="Module Action Files",
+        description="Whether the module/interface supports sending action files.",
+    )
+    send_admin_commands: bool = Field(
+        default=False,
+        title="Module Send Admin Commands",
+        description="Whether the module supports sending admin commands.",
+    )
+    set_config: bool = Field(
+        default=False,
+        title="Module Set Config",
+        description="Whether the module/interface supports setting configuration.",
+    )
+
+
+class ModuleCapabilities(ModuleInterfaceCapabilities):
+    """Capabilities of a MADSci Module."""
+
+    events: bool = Field(
+        default=False,
+        title="Module Events",
+        description="Whether the module supports raising events.",
     )
     resources: bool = Field(
         default=False,
         title="Module Resources",
-        description="Whether the module supports the /resources endpoint.",
+        description="Whether the module supports MADSci-compatible resource management.",
     )
-    websockets: bool = Field(
-        default=False,
-        title="Module Websockets Interface",
-        description="Whether the module supports the /ws endpoint.",
+    admin_commands: Optional[set["AdminCommands"]] = Field(
+        default=None,
+        title="Module Admin Commands",
+        description="Which admin commands the module supports.",
     )
-
-
-class AdminCommands(str, Enum):
-    """Valid Admin Commands to send to a Module"""
-
-    SAFETY_STOP = "safety_stop"
-    RESET = "reset"
-    PAUSE = "pause"
-    RESUME = "resume"
-    CANCEL = "cancel"
-    SHUTDOWN = "shutdown"
-    LOCK = "lock"
-    UNLOCK = "unlock"

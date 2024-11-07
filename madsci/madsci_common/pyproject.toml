@@ -17,6 +17,7 @@ dependencies = [
     "sqlmodel>=0.0.22",
     "python-ulid[pydantic]>=3.0.0",
     "aenum>=3.1.15",
+    "python-dotenv>=1.0.1",
 ]
 
 [dependency-groups]

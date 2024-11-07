@@ -1,12 +1,13 @@
 """Types for MADSci Squid configuration."""
 
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
 
-from madsci.common.types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 from madsci.common.types.validators import (
     alphanumeric_with_underscores_validator,
     ulid_validator,
@@ -28,7 +29,7 @@ class LabDefinition(BaseModel):
         title="Description",
         description="A description of the lab.",
     )
-    lab_server: "LabServerConfig" = Field(
+    server_config: "LabServerConfig" = Field(
         title="Lab Server Configuration",
         default_factory=lambda: LabServerConfig(),
         description="The configuration for the lab server.",
@@ -36,17 +37,17 @@ class LabDefinition(BaseModel):
     workcells: List[Union["WorkcellDefinition", PathLike]] = Field(
         default_factory=list,
         title="Workcells",
-        description="The workcells in the lab.",
+        description="The workcells in the lab. Either a path to a workcell definition file, or a workcell definition object.",
     )
     commands: Dict[str, str] = Field(
         default_factory=dict,
         title="Commands",
         description="Commands for operating the lab.",
     )
-    squid_plugins: Dict[str, Union["SquidPluginDefinition", PathLike, AnyUrl]] = Field(
+    managers: Dict[str, Union["ManagerDefinition", PathLike, AnyUrl]] = Field(
         default_factory=dict,
-        title="Squid Plugin Definitions",
-        description="Squid Plugin definitions used by the lab. Either a path to a plugin definition file, a URL to a plugin, or a plugin definition object. If the plugin definition is a URL, the server will attempt to fetch the plugin definition from the URL.",
+        title="Squid Manager Definitions",
+        description="Squid Manager definitions used by the lab. Either a path to a manager definition file, a URL to a manager, or a manager definition object. If the manager definition is a URL, the server will attempt to fetch the manager definition from the URL.",
     )
 
     @field_validator("commands")
@@ -65,7 +66,7 @@ class LabServerConfig(BaseModel, extra="allow"):
     """Configuration for a MADSci Lab Server."""
 
     host: str = Field(
-        default="localhost",
+        default="127.0.0.1",
         title="Server Host",
         description="The hostname or IP address of the Squid Lab Server.",
     )
@@ -76,35 +77,57 @@ class LabServerConfig(BaseModel, extra="allow"):
     )
 
 
-class SquidPluginDefinition(BaseModel):
-    """Definition for a Squid Plugin."""
+class ManagerDefinition(BaseModel):
+    """Definition for a Squid Manager."""
 
     name: str = Field(
-        title="Plugin Name", description="The name of this plugin instance."
+        title="Manager Name", description="The name of this manager instance."
     )
-    plugin_id: Optional[str] = Field(
-        title="Plugin ID", description="The ID of the plugin.", default=None
+    manager_id: Optional[str] = Field(
+        title="Manager ID", description="The ID of the manager.", default=None
     )
     description: Optional[str] = Field(
         default=None,
         title="Description",
-        description="A description of the plugin.",
+        description="A description of the manager.",
     )
-    plugin_type: str = Field(
-        title="Plugin Type",
-        description="The type of the plugin, used by other components or plugins to find matching plugins.",
+    manager_type: str = Field(
+        title="Manager Type",
+        description="The type of the manager, used by other components or managers to find matching managers.",
     )
-    plugin_config: Optional[Dict[str, Any]] = Field(
+    manager_config: Optional[Dict[str, Any]] = Field(
         default=None,
-        title="Plugin Configuration",
-        description="The configuration for the plugin.",
+        title="Manager Configuration",
+        description="The configuration for the manager.",
     )
     url: Optional[AnyUrl] = Field(
         default=None,
-        title="Plugin URL",
-        description="The URL of the plugin server.",
+        title="Manager URL",
+        description="The URL of the manager server.",
     )
 
-    is_alphanumeric = field_validator("plugin_type")(
+    is_alphanumeric = field_validator("manager_type")(
         alphanumeric_with_underscores_validator
     )
+
+
+class ManagerTypes(str, Enum):
+    """Types of Squid Managers."""
+
+    WORKCELL_MANAGER = "workcell_manager"
+    RESOURCE_MANAGER = "resource_manager"
+    EVENT_MANAGER = "event_manager"
+    LOG_MANAGER = "log_manager"
+    AUTH_MANAGER = "auth_manager"
+    NOTIFICATION_MANAGER = "notification_manager"
+    DATA_MANAGER = "data_manager"
+    TRANSFER_MANAGER = "transfer_manager"
+    DASHBOARD_MANAGER = "dashboard_manager"
+
+    @classmethod
+    def _missing_(cls, value):
+        value = value.lower()
+        for member in cls:
+            if member.lower() == value:
+                return member
+        raise ValueError(f"Invalid ManagerTypes: {value}")

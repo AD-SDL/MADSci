@@ -3,9 +3,10 @@
 from pathlib import Path
 from typing import List, Optional
 
+from pydantic import ValidationError
 from rich.console import Console
 
-from madsci.common.types import BaseModel, PathLike
+from madsci.common.types.base_types import BaseModel, PathLike
 
 console = Console()
 
@@ -61,6 +62,10 @@ def search_for_file_pattern(
 
 def save_model(path: PathLike, model: BaseModel, overwrite_check: bool = True) -> None:
     """Save a MADSci model to a YAML file, optionally with a check to overwrite if the file already exists."""
+    try:
+        model.model_validate(model)
+    except ValidationError as e:
+        raise ValueError(f"Validation error while saving model {model}: {e}") from e
     if Path(path).exists() and overwrite_check:
         if not prompt_yes_no(f"File already exists: {path}. Overwrite?", default="no"):
             return
@@ -178,3 +183,51 @@ def new_name_str(prefix: str = "") -> str:
     if prefix:
         name = f"{prefix}_{name}"
     return name
+
+
+def string_to_bool(string: str) -> bool:
+    """Convert a string to a boolean value."""
+    from argparse import ArgumentTypeError
+
+    if string.lower() in ("true", "t", "1", "yes", "y"):
+        return True
+    elif string.lower() in ("false", "f", "0", "no", "n"):
+        return False
+    else:
+        raise ArgumentTypeError(f"Invalid boolean value: {string}")
+
+
+def prompt_from_list(
+    prompt: str,
+    options: List[str],
+    default: Optional[str] = None,
+    required: bool = False,
+) -> str:
+    """Prompt the user for input from a list of options."""
+
+    # *Print numbered list of options
+    for i, option in enumerate(options, 1):
+        console.print(f"[bold]{i}[/]. {option}")
+
+    # *Allow selection by number or exact match
+    def validate_response(response: str) -> Optional[str]:
+        if response in options:
+            return response
+        try:
+            idx = int(response)
+            if 1 <= idx <= len(options):
+                return options[idx - 1]
+        except ValueError:
+            pass
+        return None
+
+    while True:
+        try:
+            response = validate_response(
+                prompt_for_input(prompt, default=default, required=required)
+            )
+        except ValueError:
+            continue
+        else:
+            break
+    return response

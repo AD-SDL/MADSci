@@ -2,11 +2,11 @@
 
 from sqlmodel.main import Field
 
-from madsci.common.types import BaseModel
-from madsci.common.types.squid_types import SquidPluginDefinition
+from madsci.common.types.base_types import BaseModel
+from madsci.common.types.squid_types import ManagerDefinition
 
 
-class ResourceManagerDefinition(SquidPluginDefinition):
+class ResourceManagerDefinition(ManagerDefinition):
     """Definition for a MADSci Resource Manager."""
 
     plugin_type: str = Field(

@@ -1,6 +1,0 @@
-resources:
-  resource_1:
-    name: "Resource 1"
-    description: "A description of the resource."
-    resource_type: "asset"
-    asset_type: "container"

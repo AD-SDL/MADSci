@@ -5,7 +5,7 @@
 groups = ["default", "server"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:7b26265cf1fb8999ff7207f6ea4622b321ef59918a223cd0bd72a325d015980c"
+content_hash = "sha256:145994dbb4355aa56e06a59666a8ba7cb22d79032a567eb071740d94f9a44e2d"
 
 [[metadata.targets]]
 requires_python = ">=3.9.1"
@@ -351,7 +351,7 @@ name = "python-dotenv"
 version = "1.0.1"
 requires_python = ">=3.8"
 summary = "Read key-value pairs from a .env file and set them as environment variables"
-groups = ["server"]
+groups = ["default", "server"]
 files = [
     {file = "python-dotenv-1.0.1.tar.gz", hash = "sha256:e324ee90a023d808f1959c46bcbc04446a10ced277783dc6ee09987c37ec10ca"},
     {file = "python_dotenv-1.0.1-py3-none-any.whl", hash = "sha256:f7b63ef50f1b690dddf550d03497b66d609393b40b564ed0d674909a68ebf16a"},

@@ -151,7 +151,9 @@ def list(ctx: WorkcellContext):
             )
     else:
         lab_context = " in lab directory" if ctx.lab and ctx.lab.path else ""
-        print(f"No workcell definitions found{lab_context}")
+        print(
+            f"No workcell definitions found{lab_context}, you can create one with 'madsci workcell create'"
+        )
 
 
 @workcell.command()

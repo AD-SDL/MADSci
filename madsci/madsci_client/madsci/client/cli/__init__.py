@@ -5,6 +5,8 @@ from rich.console import Console
 from trogon import tui
 
 from madsci.client.cli.lab_cli import lab
+from madsci.client.cli.module_cli import module
+from madsci.client.cli.node_cli import node
 from madsci.client.cli.workcell_cli import workcell
 
 console = Console()
@@ -25,6 +27,8 @@ def version():
 
 root_cli.add_command(lab)
 root_cli.add_command(workcell)
+root_cli.add_command(module)
+root_cli.add_command(node)
 
 if __name__ == "__main__":
-    root_cli()
+    tui(root_cli)

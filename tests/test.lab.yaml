@@ -1,9 +1,0 @@
-name: Test
-lab_id: 01JBW63ZSV4CA07ECQB2XDPRP7
-description: null
-lab_server:
-    host: localhost
-    port: 8000
-workcells:
-- workcells/test_workcell_1.workcell.yaml
-commands: {}

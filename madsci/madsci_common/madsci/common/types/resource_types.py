@@ -6,7 +6,7 @@ from aenum._enum import Enum
 from pydantic.functional_validators import field_validator
 from sqlmodel.main import Field
 
-from madsci.common.types import BaseModel, new_ulid_str
+from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.validators import ulid_validator
 from madsci.common.utils import new_name_str
 
