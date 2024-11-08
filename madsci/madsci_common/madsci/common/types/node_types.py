@@ -72,15 +72,10 @@ class NodeStatus(BaseModel):
         title="Node Ready",
         description="Whether the node is ready to accept actions.",
     )
-    running_actions: set[str] = Field(
+    action_ids: set[str] = Field(
         default_factory=set,
-        title="Running Actions",
-        description="The IDs of the actions that are currently running on the node.",
-    )
-    completed_actions: set[str] = Field(
-        default_factory=set,
-        title="Completed Actions",
-        description="The IDs of the actions that have completed on the node.",
+        title="Action IDs",
+        description="The IDs of the actions that the node is currently running or has completed.",
     )
     paused: bool = Field(
         default=False,

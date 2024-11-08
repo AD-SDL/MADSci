@@ -1,10 +1,15 @@
 """Base module interface and helper classes."""
 
+import argparse
 import inspect
 import threading
 from typing import Any, Dict, List, Optional
 
-from madsci.common.definition_loaders import module_definition_loader
+from pydantic import ValidationError
+
+from madsci.common.definition_loaders import (
+    node_definition_loader,
+)
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionRequest,
@@ -16,9 +21,12 @@ from madsci.common.types.base_types import Error
 from madsci.common.types.module_types import (
     AdminCommands,
     ModuleDefinition,
-    ModuleInfo,
     ModuleInterfaceCapabilities,
-    ModuleSetConfigResponse,
+)
+from madsci.common.types.node_types import (
+    NodeDefinition,
+    NodeInfo,
+    NodeSetConfigResponse,
     NodeStatus,
 )
 
@@ -38,7 +46,7 @@ class BaseModuleInterface:
         """Initialize the module interface."""
         self.module = module
 
-    def send_action(self, name: str, args: None, files: None) -> ActionResponse:
+    def send_action(self, action_request: ActionRequest) -> ActionResponse:
         """Perform an action on the module."""
         raise NotImplementedError(
             "send_action not implemented by this module interface"
@@ -62,13 +70,13 @@ class BaseModuleInterface:
             "get_state is not implemented by this module interface"
         )
 
-    def get_info(self) -> ModuleInfo:
+    def get_info(self) -> NodeInfo:
         """Get information about the module."""
         raise NotImplementedError(
             "get_info is not implemented by this module interface"
         )
 
-    def set_config(self, config_key: str, config_value: Any) -> ModuleSetConfigResponse:
+    def set_config(self, config_key: str, config_value: Any) -> NodeSetConfigResponse:
         """Set configuration values of the module."""
         raise NotImplementedError(
             "set_config is not implemented by this module interface"
@@ -84,14 +92,18 @@ class BaseModuleInterface:
 class BaseModule:
     """Base Module implementation, protocol agnostic, all module class definitions should inherit from or be based on this."""
 
-    module_definition: ModuleDefinition = None
+    module_definiton: ModuleDefinition = None
     """The module definition."""
-    module_info: Optional[ModuleInfo] = None
+    node_definition: NodeDefinition = None
+    """The node definition."""
+    node_info: Optional[NodeInfo] = None
     """Information about the module."""
-    module_status: NodeStatus = NodeStatus(
+    node_status: NodeStatus = NodeStatus(
         initializing=True,
     )
     """The status of the module."""
+    node_state: Dict[str, Any] = {}
+    """The state of the module."""
     action_handlers: Dict[str, callable] = {}
     """The handlers for the actions that the module can perform."""
     admin_command_handlers: Dict[AdminCommands, callable] = {}
@@ -100,28 +112,59 @@ class BaseModule:
     """The actions that the module can perform."""
     action_history: Dict[str, List[ActionResponse]] = {}
     """The history of the actions that the module has performed."""
-    running_actions: set[str] = set()
-    """The IDs of the actions that are currently running on the module."""
-    completed_actions: set[str] = set()
-    """The IDs of the actions that have completed on the module."""
+    argparser = argparse.ArgumentParser()
+    """The argparser for the module."""
 
     def __init__(self):
         """Initialize the module."""
-        self.module_definition = module_definition_loader()
+        self.node_definiton = node_definition_loader()
+        if isinstance(self.node_definition.module, ModuleDefinition):
+            self.module_definiton = self.node_definition.module
         self._lock = threading.Lock()  # Add a lock for thread safety
+        self.argparser_from_node_config()
+
+    def argparser_from_node_config(self):
+        """Create an argparser from the node configuration."""
+        for config in self.node_definition.node_config:
+            self.argparser.add_argument(f"--{config.name}", default=config.default, help=config.description)
+
 
     def start_module(self):
         """Start the module."""
+        self.args = self.argparser.parse_args()
+        # *Check for any required config parameters that weren't set
+        for config in self.node_definition.node_config:
+            if config.required and not hasattr(self.args, config.name) and config.default is None:
+                print(f"Required config parameter '{config.name}' not set")
+                self.node_status.waiting_for_config = True
+
+        yield # * Wait for any protocol-specific startup code to kick off
+
+        # * TODO
         pass
 
     def run_action(self, action_request: ActionRequest) -> ActionResponse:
         """Run an action on the module."""
-        self.module_status.running_actions.add(action_request.action_id)
-        action_response = self.action_handler(action_request)
-        if action_response.status != ActionStatus.RUNNING:
-            self.module_status.running_actions.discard(action_request.action_id)
-            self.module_status.completed_actions.add(action_request.action_id)
-        self.action_history[action_request.action_id].append(action_response)
+        self.node_status.running_actions.add(action_request.action_id)
+        try:
+            action_response = self.action_handler(action_request)
+        except Exception as e:
+            action_response = action_request.failed(
+                error=Error.from_exception(e)
+            )
+        else:
+            if action_response is None:
+                # * Assume success if no return value and no exception
+                action_response = action_request.succeeded()
+            elif not isinstance(action_response, ActionResponse):
+                try:
+                    action_response = ActionResponse.model_validate(action_response)
+                except ValidationError as e:
+                    action_response = action_request.failed(
+                        error=Error.from_exception(e)
+                    )
+        finally:
+            self.action_history[action_request.action_id].append(action_response)
         return action_response
 
     def action_handler(self, action_request: ActionRequest) -> ActionResponse:
@@ -145,6 +188,8 @@ class BaseModule:
             arg_dict["state"] = self.state
         if parameters.__contains__("action"):
             arg_dict["action"] = self.action_request
+        if parameters.__contains__("self"):
+            arg_dict["self"] = self
         if list(parameters.values())[-1].kind == inspect.Parameter.VAR_KEYWORD:
             # * Function has **kwargs, so we can pass all action args and files
             arg_dict = {**arg_dict, **action_request.args}
@@ -175,21 +220,21 @@ class BaseModule:
                         error=Error(message=f"Missing required file '{file.name}'")
                     )
 
-        if not self.module_status.is_ready[0]:
+        if not self.node_status.is_ready[0]:
             return action_request.not_ready(
                 error=Error(
-                    message=f"Module is not ready: {self.module_status.is_ready[1]}",
+                    message=f"Module is not ready: {self.node_status.is_ready[1]}",
                     error_type="ModuleNotReady",
                 )
             )
 
         # * Perform the action here and return result
         with self._lock():
-            # * If the action is blocking, set the module status to not ready for the duration of the action, otherwise release the lock immediately
+            # * If the action is marked as blocking, set the module status to not ready for the duration of the action, otherwise release the lock immediately
             if action_request.blocking:
-                self.module_status.ready = False
+                self.node_status.ready = False
                 result = action_callable(**arg_dict)
-                self.module_status.ready = True
+                self.node_status.ready = True
             else:
                 self._lock.release()
                 result = action_callable(**arg_dict)
@@ -224,12 +269,20 @@ class BaseModule:
 
     def get_status(self) -> NodeStatus:
         """Get the status of the module."""
-        return self.module_status
+        return self.node_status
 
-    def set_config(self, config_key: str, config_value: Any) -> ModuleSetConfigResponse:
+    def set_config(self, config_key: str, config_value: Any) -> NodeSetConfigResponse:
         """Set configuration values of the module."""
-        self.module_definition.module_config[config_key] = config_value
-        return ModuleSetConfigResponse(
+        self.node_definiton.module_config[config_key] = config_value
+        # *Check if all required parameters are set
+        all_required_set = True
+        for param in self.node_definiton.module_config:
+            if param.required and param.name not in self.node_definiton.module_config:
+                all_required_set = False
+                break
+        if all_required_set:
+            self.node_status.waiting_for_config = False
+        return NodeSetConfigResponse(
             success=True,
         )
 
@@ -254,10 +307,14 @@ class BaseModule:
                 ],
             )
 
-    def get_info(self) -> ModuleInfo:
+    def get_info(self) -> NodeInfo:
         """Get information about the module."""
-        return self.module_info
+        return self.node_info
 
     def get_state(self) -> Dict[str, Any]:
         """Get the state of the module."""
-        return {}
+        return self.node_state
+
+    def node_state_handler(self):
+        """Called periodically to update the node state."""
+        pass

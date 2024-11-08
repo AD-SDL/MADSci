@@ -1,10 +1,20 @@
 """REST-based module interface and helper classes."""
 
+import json
+import os
+import shutil
+import tempfile
+from pathlib import PureWindowsPath
 from typing import Any, Dict, List
+from zipfile import ZipFile
 
 from fastapi import requests
+from fastapi.applications import FastAPI
+from fastapi.routing import APIRouter
+from starlette.datastructures import State, UploadFile
+from starlette.responses import FileResponse
 
-from madsci.common.types.action_types import ActionResponse
+from madsci.common.types.action_types import ActionRequest, ActionResponse, ActionStatus
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.module_types import (
     AdminCommands,
@@ -13,6 +23,7 @@ from madsci.common.types.module_types import (
     ModuleSetConfigResponse,
     NodeStatus,
 )
+from madsci.common.types.node_types import NodeSetConfigResponse
 from madsci.module.base_module import BaseModule, BaseModuleInterface
 
 
@@ -37,11 +48,18 @@ class RestModuleInterface(BaseModuleInterface):
         """Initialize the module interface."""
         super().__init__(module)
 
-    def send_action(self, name: str, args: None, files: None) -> ActionResponse:
+    def send_action(self, action_request: ActionRequest) -> ActionResponse:
         """Perform an action on the module."""
-        raise NotImplementedError(
-            "send_action not implemented by this module interface"
+        rest_response = requests.post(
+            self.module.module_url,
+            params={"name": action_request.name, "args": json.dumps(action_request.args)},
+            files=[
+                ("files", (file, open(path, "rb"))) for file, path in action_request.files.items()
+            ],
         )
+        if not rest_response.ok:
+            rest_response.raise_for_status()
+        return ActionResponse.model_validate(rest_response.json())
 
     def get_action(self, action_id: str) -> ActionResponse:
         """Get the status of an action on the module."""
@@ -90,6 +108,113 @@ class RestModuleInterface(BaseModuleInterface):
             response.raise_for_status()
         return AdminCommandResponse.model_validate(response.json())
 
+def action_response_to_headers(action_response: ActionResponse) -> Dict[str, str]:
+    """Converts the response to a dictionary of headers"""
+    return {
+        "x-madsci-action-id": action_response.action_id,
+        "x-madsci-status": str(action_response.status),
+        "x-madsci-data": json.dumps(action_response.data),
+        "x-madsci-error": json.dumps(action_response.error),
+        "x-madsci-files": json.dumps(action_response.files),
+    }
+
+def action_response_from_headers(headers: Dict[str, Any]) -> ActionResponse:
+    """Creates an ActionResponse from the headers of a file response"""
+
+    return ActionResponse(
+        action_id=headers["x-madsci-action-id"],
+        status=ActionStatus(headers["x-wei-status"]),
+        errors=json.loads(headers["x-wei-error"]),
+        files=json.loads(headers["x-wei-files"]),
+        data=json.loads(headers["x-wei-data"]),
+    )
+
+class ActionResponseWithFiles(FileResponse):
+    """Action response from a REST-based module."""
+
+    def from_action_response(self, action_response: ActionResponse):
+        """Create an ActionResponseWithFiles from an ActionResponse."""
+        if len(action_response.files) == 1:
+            return super().__init__(
+                path=list(action_response.files.values())[0],
+                headers=action_response_to_headers(action_response),
+            )
+
+        temp_zipfile_path = tempfile.TemporaryFile(suffix=".zip")
+        temp_zip = ZipFile(temp_zipfile_path, "w")
+        for file in action_response.files:
+            temp_zip.write(action_response.files[file])
+            action_response.files[file] = str(PureWindowsPath(action_response.files[file]).name)
+
+        return super().__init__(
+            path=temp_zipfile_path,
+            headers=action_response_to_headers(action_response),
+        )
+
 
 class RestModule(BaseModule):
-    """REST-based module interface and helper classes. Inherits from BaseModule. Inherit from this class to create a new module."""
+    """REST-based module implementation and helper classes. Inherits from BaseModule. Inherit from this class to create a new module."""
+
+
+    def start_module(self):
+        """Start the node."""
+        super().start_module() # *Kick off protocol agnostic-startup
+        self.start_rest_api()
+        super().start_module() # *Finish up protocol-specific startup
+
+    def start_rest_api(self):
+        """Start the REST API for the node."""
+        import uvicorn
+
+        self.rest_api = FastAPI()
+        self.rest_api.state = State({"node": self})
+        self.configure_routes()
+        uvicorn.run(self.rest_api, host=self.node_definition.node_config.host, port=self.node_definition.port)
+
+    def configure_routes(self):
+        """Configure the routes for the REST API."""
+        self.router = APIRouter()
+        self.router.add_api_route("/status", self.get_status, methods=["GET"])
+        self.router.add_api_route("/info", self.get_info, methods=["GET"])
+        self.router.add_api_route("/state", self.get_state, methods=["GET"])
+        self.router.add_api_route("/action", self.run_action, methods=["POST"])
+        self.router.add_api_route("/config", self.set_config, methods=["POST"])
+        self.router.add_api_route("/admin", self.run_admin_command, methods=["POST"])
+        self.rest_api.include_router(self.router)
+
+    def get_status(self) -> NodeStatus:
+        """Get the status of the node."""
+        return super().get_status()
+
+    def get_info(self) -> ModuleInfo:
+        """Get information about the node."""
+        return super().get_info()
+
+    def get_state(self) -> Dict[str, Any]:
+        """Get the state of the node."""
+        return super().get_state()
+
+    def run_action(self, name: str, args: Dict[str, Any] = {}, files: List[UploadFile] = []) -> ActionResponseWithFiles:
+        """Run an action on the node."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for file in files:
+                with open(os.path.join(temp_dir, file.filename), "wb") as f:
+                    shutil.copyfileobj(file.file, f)
+            response = super().run_action(ActionRequest(name=name, args=args, files={file.filename: os.path.join(temp_dir, file.filename) for file in files}))
+            if response.files:
+                return ActionResponseWithFiles().from_action_response(action_response=response)
+            else:
+                return ActionResponse.model_validate(response)
+
+    def get_action_response(self, action_id: str) -> ActionResponse:
+        """Get the status of an action on the node."""
+        return super().get_action_response(action_id)
+
+    def set_config(self, config_key: str, config_value: Any) -> NodeSetConfigResponse:
+        """Set configuration values of the node."""
+        return super().set_config(config_key, config_value)
+
+    def run_admin_command(self, admin_command: AdminCommands) -> AdminCommandResponse:
+        """Perform an administrative command on the node."""
+        return super().run_admin_command(admin_command)
+
