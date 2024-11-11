@@ -1,0 +1,30 @@
+module_name: test_module
+module_type: device
+description: Test
+capabilities:
+  get_info: false
+  get_state: false
+  get_status: false
+  send_action: false
+  get_action: false
+  action_files: false
+  send_admin_commands: false
+  set_config: false
+  events: false
+  resources: false
+  admin_commands: null
+module_config:
+- name: host
+  description: The host of the REST API.
+  default: localhost
+  required: true
+- name: port
+  description: The port of the REST API.
+  default: 8000
+  required: true
+- name: protocol
+  description: The protocol of the REST API, either 'http' or 'https'.
+  default: http
+  required: true
+module_actions: null
+module_commands: null

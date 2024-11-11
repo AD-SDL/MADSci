@@ -18,10 +18,11 @@ dependencies = [
     "python-ulid[pydantic]>=3.0.0",
     "aenum>=3.1.15",
     "python-dotenv>=1.0.1",
+    "requests>=2.32.3",
 ]
 
 [dependency-groups]
-server = ["fastapi>=0.115.4", "uvicorn[standard]>=0.32.0"]
+server = ["fastapi>=0.115.4", "uvicorn[standard]>=0.32.0", "python-multipart>=0.0.17"]
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"

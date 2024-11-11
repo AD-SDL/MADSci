@@ -1,0 +1,17 @@
+node_name: test_alpha
+node_id: 01JC6ZFFW744A19Z4YVBQ6YB7Q
+description: testing
+module: test_module.module.yaml
+node_config:
+- name: host
+  description: The host of the REST API.
+  default: localhost
+  required: true
+- name: port
+  description: The port of the REST API.
+  default: 8000
+  required: true
+- name: protocol
+  description: The protocol of the REST API, either 'http' or 'https'.
+  default: http
+  required: true

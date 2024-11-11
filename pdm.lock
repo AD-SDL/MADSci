@@ -141,7 +141,7 @@ files = [
 
 [[package]]
 name = "madsci-client"
-version = "0.1.dev2"
+version = "0.1.dev4"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_client"
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.1.dev2"
+version = "0.1.dev4"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_common"
@@ -172,18 +172,18 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.1.dev2"
+version = "0.1.dev4"
 extras = ["server"]
 requires_python = ">=3.9.1"
 summary = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
 groups = ["dev"]
 dependencies = [
-    "madsci-common==0.1.dev2",
+    "madsci-common==0.1.dev4",
 ]
 
 [[package]]
 name = "madsci-module"
-version = "0.1.dev2"
+version = "0.1.dev4"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_module"
@@ -195,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.1.dev2"
+version = "0.1.dev4"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_resource_manager"
@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.1.dev2"
+version = "0.1.dev4"
 requires_python = ">=3.9.1"
 editable = true
 path = "./madsci/madsci_squid"

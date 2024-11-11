@@ -7,6 +7,7 @@ import click
 from rich.console import Console
 from rich.pretty import pprint
 
+from madsci.common.types.module_types import ModuleDefinition
 from madsci.common.types.node_types import NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.utils import (
@@ -154,6 +155,7 @@ def create(
             path = Path(new_path)
     path = Path(path).absolute()
     node_definition.module = Path(module_path).absolute().relative_to(path.parent)
+    node_definition.node_config = ModuleDefinition.from_yaml(module_path).config
     save_model(path=path, model=node_definition)
 
 

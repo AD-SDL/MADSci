@@ -6,6 +6,7 @@ import threading
 from typing import Any, Dict, List, Optional
 
 from pydantic import ValidationError
+from rich import print
 
 from madsci.common.definition_loaders import (
     node_definition_loader,
@@ -117,31 +118,37 @@ class BaseModule:
 
     def __init__(self):
         """Initialize the module."""
-        self.node_definiton = node_definition_loader()
-        if isinstance(self.node_definition.module, ModuleDefinition):
+        node_definition = node_definition_loader()
+        print(node_definition)
+        self.node_definition = node_definition
+        if self.node_definition.module and isinstance(
+            self.node_definition.module, ModuleDefinition
+        ):
             self.module_definiton = self.node_definition.module
         self._lock = threading.Lock()  # Add a lock for thread safety
         self.argparser_from_node_config()
 
     def argparser_from_node_config(self):
         """Create an argparser from the node configuration."""
-        for config in self.node_definition.node_config:
-            self.argparser.add_argument(f"--{config.name}", default=config.default, help=config.description)
-
+        print("HELLO")
+        for config in self.node_definition.node_config.values():
+            print(config)
+            self.argparser.add_argument(
+                f"--{config.name}", default=config.default, help=config.description
+            )
 
     def start_module(self):
         """Start the module."""
         self.args = self.argparser.parse_args()
         # *Check for any required config parameters that weren't set
-        for config in self.node_definition.node_config:
-            if config.required and not hasattr(self.args, config.name) and config.default is None:
+        for config in self.node_definition.node_config.values():
+            if (
+                config.required
+                and not hasattr(self.args, config.name)
+                and config.default is None
+            ):
                 print(f"Required config parameter '{config.name}' not set")
                 self.node_status.waiting_for_config = True
-
-        yield # * Wait for any protocol-specific startup code to kick off
-
-        # * TODO
-        pass
 
     def run_action(self, action_request: ActionRequest) -> ActionResponse:
         """Run an action on the module."""
@@ -149,9 +156,7 @@ class BaseModule:
         try:
             action_response = self.action_handler(action_request)
         except Exception as e:
-            action_response = action_request.failed(
-                error=Error.from_exception(e)
-            )
+            action_response = action_request.failed(error=Error.from_exception(e))
         else:
             if action_response is None:
                 # * Assume success if no return value and no exception

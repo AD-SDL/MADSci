@@ -33,7 +33,7 @@ def madsci_definition_loader(
             help=f"[{field.annotation}] {field.description}",
             default=None,
         )
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
     definition_file = args.definition
 
     # *Load from definition file
@@ -60,15 +60,17 @@ def madsci_definition_loader(
 
     # *Load from command line arguments
     for field_name in model.model_fields.keys():
-        if field_name in args and args[field_name] is not None:
-            print(f"Loading {field_name} from command line argument {args[field_name]}")
-            kwargs[field_name] = json.loads(args[field_name])
+        if field_name in args and getattr(args, field_name) is not None:
+            print(
+                f"Loading {field_name} from command line argument {getattr(args, field_name)}"
+            )
+            kwargs[field_name] = json.loads(getattr(args, field_name))
 
     # *Override with kwargs
     for field_name, field in kwargs.items():
         setattr(model_instance, field_name, field)
 
-    return model.model_validate(model_instance)
+    return model_instance
 
 
 def lab_definition_loader(
@@ -93,6 +95,7 @@ def node_definition_loader(
     model=NodeDefinition, definition_file_pattern: str = "*.node.yaml", **kwargs
 ) -> NodeDefinition:
     """Node Definition Loader. Supports loading from a definition file, environment variables, and command line arguments, in reverse order of priority (i.e. command line arguments override environment variables, which override definition file values)."""
-    return madsci_definition_loader(
+    node_definition = madsci_definition_loader(
         model=model, definition_file_pattern=definition_file_pattern, **kwargs
     )
+    return node_definition

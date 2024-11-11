@@ -1,7 +1,7 @@
 """MADSci Node Types."""
 
 from os import PathLike
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from pydantic import Field
 from pydantic.functional_validators import field_validator
@@ -30,13 +30,23 @@ class NodeDefinition(BaseModel):
         title="Module",
         description="The module that the node is an instance of.",
     )
-    node_config: List[ConfigParameter] = Field(
+    node_config: Union[List[ConfigParameter], Dict[str, ConfigParameter]] = Field(
         title="Node Configuration",
         description="The configuration for the node.",
         default_factory=list,
     )
 
     is_ulid = field_validator("node_id")(ulid_validator)
+
+    @field_validator("node_config", mode="after")
+    def validate_node_config(
+        cls, v: Union[List[ConfigParameter], Dict[str, ConfigParameter]]
+    ) -> Union[List[ConfigParameter], Dict[str, ConfigParameter]]:
+        """Validate the node configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
+        if isinstance(v, dict):
+            return v
+        else:
+            return {param.name: param for param in v}
 
 
 class Node(NodeDefinition, arbitrary_types_allowed=True):
