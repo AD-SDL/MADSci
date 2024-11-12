@@ -30,6 +30,7 @@ from madsci.common.types.node_types import (
     NodeSetConfigResponse,
     NodeStatus,
 )
+from madsci.common.types.resource_types import ResourceDefinition
 
 MODULE_INTERFACE_MAP = {}  # * Map of module types to module interfaces, add your module interface to this map to if it isn't a subclass of BaseModuleInterface
 
@@ -87,6 +88,12 @@ class BaseModuleInterface:
         """Perform an administrative command on the module."""
         raise NotImplementedError(
             "send_admin_command is not implemented by this module interface"
+        )
+
+    def get_resources(self) -> Dict[str, ResourceDefinition]:
+        """Get the resources of the module."""
+        raise NotImplementedError(
+            "get_resources is not implemented by this module interface"
         )
 
 

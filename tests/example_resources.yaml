@@ -1,0 +1,110 @@
+resource_types:
+  # * Consumables
+  - type_name: liquid
+    type_description: A liquid in a well.
+    base_type: consumable
+  - type_name: powder
+    type_description: A powder in a well.
+    base_type: consumable
+  - type_name: water
+    type_description: A consumable resource type for water.
+    base_type: consumable
+    parent_types: liquid # * Can be used in wells because it is a liquid
+
+  # * Plates
+  - type_name: plate
+    type_description: Any ANSI/SLAS standard microplate.
+    base_type: asset
+  - type_name: plate_96_well_corningware
+    type_description: A 96 well ANSI/SLAS standard microplate made by corningware.
+    base_type: grid
+    parent_types:
+      - plate
+    default_child_type: well
+    default_child_template:
+      - resource_type: well
+        resource_name: ${self.row}${self.column}} #* i.e. A1
+        resource_description: Well ${self.key} in plate ${self.parent.resource_name}.
+    resizeable: false
+    rows: [A, B, C, D, E, F, G, H] #* Explicitly defined row indices
+    columns: 12 # automatically converted to range 1-12
+    supported_child_types:
+      - well
+  - type_name: well
+    type_description: A single well in a 96 well plate.
+    base_type: pool
+    default_capacity: null # *no limit to number of items (i.e. distinct liquids) in the well
+    resizeable: false
+    supported_child_types:
+      - liquid
+      - powder
+
+  # * Containers
+  - type_name: nest
+    type_description: A nest for plates.
+    base_type: container
+    default_capacity: 1
+    resizeable: false
+    supported_child_types:
+      - plate
+  - type_name: plate_stack
+    type_description: A stack of 96 well plates.
+    base_type: stack
+    default_capacity: 10
+    resizeable: true #* Plate stacks can be many different sizes
+    default_child_type: plate_96_well_corningware
+    supported_child_types:
+      - plate
+  - type_name: trash_conveyor
+    type_description: A trash conveyor.
+    base_type: queue
+    default_capacity: 10
+    resizeable: true #* allow any size trash conveyor
+    supported_child_types:
+      - resource
+  - type_name: incubator
+    type_description: A simple incubator with 10 nests.
+    base_type: collection
+    default_capacity: 10
+    resizeable: true #* allow any size incubator
+    supported_child_types:
+      - plate
+    keys: [A, B, C, D, E, F, G, H] #* Explicitly defined keys
+
+
+
+default_resources:
+  - resource_name: plate_stack_1
+    resource_type: plate_stack
+    resource_description: A 10-plate stack for ANSI/SLAS standard microplates.
+    parent: null #* default to the owning module or workcell
+    default_children: #* Explicitly defined children
+    - resource_type: plate_96_well_corningware
+      resource_name: plate_96_well_corningware_1
+      resource_description: A 96 well ANSI/SLAS standard microplate made by corningware.
+      # parent: plate_stack_1 #* default to the parent resource, no need to specify
+  - resource_name: trash_conveyor_1
+    resource_type: trash_conveyor
+    resource_description: A trash conveyor.
+    parent: null #* default to the owning module or workcell
+    capacity: 5 #* override the default capacity
+  - resource_name: incubator_1
+    resource_type: incubator
+    resource_description: A simple incubator with 10 wells.
+    parent: null #* default to the owning module or workcell
+    capacity: 20 #* override the default capacity
+    keys: 20 #* override the default keys
+    default_children:
+      - resource_type: plate_96_well_corningware
+        resource_name: plate_96_well_corningware_2
+        resource_description: A 96 well ANSI/SLAS standard microplate made by corningware.
+        # parent: incubator_1 #* default to the parent resource, no need to specify
+  - resource_name: test_unknown_resource_type
+    resource_type: unknown_resource_type #TODO: support resource types defined by other sources
+    resource_description: A test resource with an unknown resource type.
+    parent: null #* default to the owning module or workcell
+    default_children:
+      - resource_type: liquid
+        resource_name: liquid_1
+        resource_description: A test liquid.
+        parent: test_unknown_resource_type

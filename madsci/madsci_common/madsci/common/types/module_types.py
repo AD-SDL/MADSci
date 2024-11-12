@@ -152,6 +152,11 @@ class ModuleInterfaceCapabilities(BaseModel):
         title="Module Set Config",
         description="Whether the module/interface supports setting configuration.",
     )
+    get_resources: bool = Field(
+        default=False,
+        title="Module Get Resources",
+        description="Whether the module/interface supports querying its resources.",
+    )
 
 
 class ModuleCapabilities(ModuleInterfaceCapabilities):
@@ -160,7 +165,7 @@ class ModuleCapabilities(ModuleInterfaceCapabilities):
     events: bool = Field(
         default=False,
         title="Module Events",
-        description="Whether the module supports raising events.",
+        description="Whether the module supports raising MADSci events.",
     )
     resources: bool = Field(
         default=False,
@@ -170,5 +175,5 @@ class ModuleCapabilities(ModuleInterfaceCapabilities):
     admin_commands: Optional[set["AdminCommands"]] = Field(
         default=None,
         title="Module Admin Commands",
-        description="Which admin commands the module supports.",
+        description="Which admin commands the module supports, if any.",
     )
