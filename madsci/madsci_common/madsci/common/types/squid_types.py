@@ -1,7 +1,7 @@
 """Types for MADSci Squid configuration."""
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
@@ -34,10 +34,10 @@ class LabDefinition(BaseModel):
         default_factory=lambda: LabServerConfig(),
         description="The configuration for the lab server.",
     )
-    workcells: List[Union["WorkcellDefinition", PathLike]] = Field(
-        default_factory=list,
+    workcells: Dict[str, Union["WorkcellDefinition", PathLike]] = Field(
+        default_factory=dict,
         title="Workcells",
-        description="The workcells in the lab. Either a path to a workcell definition file, or a workcell definition object.",
+        description="The workcells in the lab. Keys are workcell names. Values are either paths to workcell definition files, or workcell definition objects.",
     )
     commands: Dict[str, str] = Field(
         default_factory=dict,

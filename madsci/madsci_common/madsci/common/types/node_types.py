@@ -1,15 +1,69 @@
 """MADSci Node Types."""
 
 from os import PathLike
-from typing import Dict, List, Optional, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import Field
+from pydantic.fields import computed_field
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 
+from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
 from madsci.common.types.module_types import ConfigParameter, ModuleDefinition
 from madsci.common.types.validators import ulid_validator
+
+
+def get_module_from_node_definition(
+    node_definition: "NodeDefinition",
+) -> Optional[ModuleDefinition]:
+    """Get the module definition from a node definition.
+
+    Args:
+        node_definition: The node definition to get the module definition from
+
+    Returns:
+        The module definition, or None if not found
+
+    Raises:
+        ValueError: If the module definition path cannot be resolved
+    """
+    if node_definition.module_definition is None:
+        return None
+
+    # * If it's already a ModuleDefinition instance, return it
+    if isinstance(node_definition.module_definition, ModuleDefinition):
+        return node_definition.module_definition
+
+    # * Otherwise treat it as a path
+    module_path = Path(str(node_definition.module_definition))
+
+    # * If path is relative, try to resolve it
+    if not module_path.is_absolute():
+        # * First try relative to node definition path if set
+        if node_definition._definition_path:
+            resolved_path = Path(node_definition._definition_path).parent / module_path
+            if resolved_path.exists():
+                return ModuleDefinition.from_yaml(resolved_path)
+
+        # * Otherwise try relative to current working directory
+        cwd_path = Path.cwd() / module_path
+        if cwd_path.exists():
+            return ModuleDefinition.from_yaml(cwd_path)
+
+        raise ValueError(
+            f"Could not resolve module definition path '{module_path}'. "
+            f"Tried:\n"
+            f"  - {resolved_path if node_definition._definition_path else 'No node definition path set'}\n"
+            f"  - {cwd_path}"
+        )
+
+    # * For absolute paths, just try to load directly
+    if module_path.exists():
+        return ModuleDefinition.from_yaml(module_path)
+
+    raise ValueError(f"Module definition file not found at '{module_path}'")
 
 
 class NodeDefinition(BaseModel):
@@ -21,25 +75,36 @@ class NodeDefinition(BaseModel):
         description="The ID of the node.",
         default_factory=new_ulid_str,
     )
-    description: Optional[str] = Field(
+    node_url: Optional[AnyUrl] = Field(
+        title="Node URL",
+        description="The URL used to communicate with the node.",
+        default=None,
+    )
+    node_description: Optional[str] = Field(
         title="Description",
         description="A description of the node.",
         default=None,
     )
-    module: Union[ModuleDefinition, PathLike] = Field(
+    module_definition: Optional[Union[ModuleDefinition, PathLike]] = Field(
         title="Module",
-        description="The module that the node is an instance of.",
-    )
-    node_config: Union[List[ConfigParameter], Dict[str, ConfigParameter]] = Field(
+        description="Definition of the module that the node is an instance of.",
+        default=None,
+    )  # TODO: Add support for pointing to URL
+    config: Union[List[ConfigParameter], Dict[str, ConfigParameter]] = Field(
         title="Node Configuration",
         description="The configuration for the node.",
         default_factory=list,
     )
+    commands: Dict[str, str] = Field(
+        default_factory=dict,
+        title="Commands",
+        description="Commands for operating the node.",
+    )
 
     is_ulid = field_validator("node_id")(ulid_validator)
 
-    @field_validator("node_config", mode="after")
-    def validate_node_config(
+    @field_validator("config", mode="after")
+    def validate_config(
         cls, v: Union[List[ConfigParameter], Dict[str, ConfigParameter]]
     ) -> Union[List[ConfigParameter], Dict[str, ConfigParameter]]:
         """Validate the node configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
@@ -49,10 +114,10 @@ class NodeDefinition(BaseModel):
             return {param.name: param for param in v}
 
 
-class Node(NodeDefinition, arbitrary_types_allowed=True):
+class Node(BaseModel, arbitrary_types_allowed=True):
     """A runtime representation of a MADSci Node used in a Workcell."""
 
-    node_url: Optional[AnyUrl] = Field(
+    node_url: AnyUrl = Field(
         title="Node URL",
         description="The URL used to communicate with the module.",
     )
@@ -68,24 +133,56 @@ class Node(NodeDefinition, arbitrary_types_allowed=True):
     )
 
 
-class NodeInfo(NodeDefinition):
+class NodeInfo(NodeDefinition, ModuleDefinition):
     """Information about a MADSci Node."""
 
-    pass
+    actions: Dict[str, "ActionDefinition"] = Field(
+        title="Module Actions",
+        description="The actions that the module supports.",
+        default_factory=dict,
+    )
+    config_values: Dict[str, Any] = Field(
+        default_factory=dict,
+        title="Node Configuration",
+        description="The configuration of the node.",
+    )
+
+    @classmethod
+    def from_node_and_module(
+        cls,
+        node: NodeDefinition,
+        module: Optional[ModuleDefinition] = None,
+        config_values: Optional[Dict[str, Any]] = None,
+    ) -> "NodeInfo":
+        """Create a NodeInfo from a NodeDefinition and a ModuleDefinition."""
+        if module is None:
+            module = get_module_from_node_definition(node)
+        if config_values is None:
+            config_values = {}
+        # * Merge the node and module configs and commands, with the node config taking precedence
+        config = {**module.config, **node.config}
+        commands = {**module.commands, **node.commands}
+        return cls(
+            **node.model_dump(exclude={"config", "commands"}),
+            **module.model_dump(exclude={"config", "commands"}),
+            config=config,
+            commands=commands,
+            config_values=config_values,
+        )
 
 
 class NodeStatus(BaseModel):
     """Status of a MADSci Node."""
 
-    ready: bool = Field(
+    busy: bool = Field(
         default=False,
-        title="Node Ready",
-        description="Whether the node is ready to accept actions.",
+        title="Node Busy",
+        description="Whether the node is currently at capacity, i.e. running the maximum number of actions allowed.",
     )
-    action_ids: set[str] = Field(
+    running_actions: set[str] = Field(
         default_factory=set,
-        title="Action IDs",
-        description="The IDs of the actions that the node is currently running or has completed.",
+        title="Running Action IDs",
+        description="The IDs of the actions that the node is currently running.",
     )
     paused: bool = Field(
         default=False,
@@ -112,28 +209,59 @@ class NodeStatus(BaseModel):
         title="Node Initializing",
         description="Whether the node is currently initializing.",
     )
-    waiting_for_config: bool = Field(
-        default=False,
+    waiting_for_config: set[str] = Field(
+        default_factory=set,
         title="Node Waiting for Configuration",
-        description="Whether the node is waiting for configuration to be set.",
+        description="Set of configuration parameters that the node is waiting for.",
+    )
+    config_values: Dict[str, Any] = Field(
+        default_factory=dict,
+        title="Node Configuration Values",
+        description="The current configuration values of the node.",
     )
 
+    @computed_field
     @property
-    def is_ready(self) -> Tuple[bool, str]:
+    def ready(self) -> bool:
         """Whether the node is ready to accept actions."""
-        if not self.ready:
-            return False, "Node is not ready"
+        ready = True
+        if self.busy:
+            ready = False
         if self.locked:
-            return False, "Node is locked"
+            ready = False
         if self.errored:
-            return False, "Node is in an error state"
+            ready = False
         if self.initializing:
-            return False, "Node is initializing"
-        if self.waiting_for_config:
-            return False, "Node is waiting for configuration"
+            ready = False
         if self.paused:
-            return False, "Node is paused"
-        return True, "Node is ready"
+            ready = False
+        if len(self.waiting_for_config) > 0:
+            ready = False
+        return ready
+
+    @computed_field
+    @property
+    def description(self) -> str:
+        """A description of the node's status."""
+        reasons = []
+        if self.busy:
+            reasons.append("Node is busy")
+        if self.locked:
+            reasons.append("Node is locked")
+        if self.errored:
+            reasons.append("Node is in an error state")
+        if self.initializing:
+            reasons.append("Node is initializing")
+        if self.paused:
+            reasons.append("Node is paused")
+        if len(self.waiting_for_config) > 0:
+            reasons.append(
+                f"Node is missing configuration values: {self.waiting_for_config}"
+            )
+        if reasons:
+            return "; ".join(reasons)
+        else:
+            return "Node is ready"
 
 
 class NodeSetConfigResponse(BaseModel):

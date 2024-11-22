@@ -4,111 +4,36 @@ import json
 import os
 import shutil
 import tempfile
+import time
+from multiprocessing import Process
 from pathlib import PureWindowsPath
-from typing import Any, Dict, List, Union
+from threading import Thread
+from typing import Any, Dict, List, Optional, Union
 from zipfile import ZipFile
 
-from fastapi import requests
 from fastapi.applications import FastAPI
 from fastapi.datastructures import UploadFile
 from fastapi.routing import APIRouter
-from starlette.datastructures import State
+from rich import print
 from starlette.responses import FileResponse
 
 from madsci.common.types.action_types import ActionRequest, ActionResponse, ActionStatus
 from madsci.common.types.admin_command_types import AdminCommandResponse
+from madsci.common.types.base_types import Error, new_ulid_str
 from madsci.common.types.module_types import (
     AdminCommands,
-    ModuleInterfaceCapabilities,
+    ModuleCapabilities,
 )
-from madsci.common.types.node_types import NodeInfo, NodeSetConfigResponse, NodeStatus
-from madsci.module.base_module import BaseModule, BaseModuleInterface
-
-
-class RestModuleInterface(BaseModuleInterface):
-    """REST-based module interface."""
-
-    url_protocols: List[str] = ["http", "https"]
-    """The protocols supported by this module interface."""
-
-    supported_capabilities: ModuleInterfaceCapabilities = ModuleInterfaceCapabilities(
-        get_info=True,
-        get_state=True,
-        get_status=True,
-        send_action=False,
-        get_action=True,
-        action_files=True,
-        send_admin_commands=True,
-        set_config=True,
-    )
-
-    def __init__(self, module: BaseModule):
-        """Initialize the module interface."""
-        super().__init__(module)
-
-    def send_action(self, action_request: ActionRequest) -> ActionResponse:
-        """Perform an action on the module."""
-        rest_response = requests.post(
-            self.module.module_url,
-            params={
-                "name": action_request.name,
-                "args": json.dumps(action_request.args),
-            },
-            files=[
-                ("files", (file, open(path, "rb")))
-                for file, path in action_request.files.items()
-            ],
-        )
-        if not rest_response.ok:
-            rest_response.raise_for_status()
-        return ActionResponse.model_validate(rest_response.json())
-
-    def get_action(self, action_id: str) -> ActionResponse:
-        """Get the status of an action on the module."""
-        response = requests.get(f"{self.module.module_url}/action/{action_id}")
-        if not response.ok:
-            response.raise_for_status()
-        return ActionResponse.model_validate(response.json())
-
-    def get_status(self) -> NodeStatus:
-        """Get the status of the module."""
-        response = requests.get(f"{self.module.module_url}/status")
-        if not response.ok:
-            response.raise_for_status()
-        return NodeStatus.model_validate(response.json())
-
-    def get_state(self) -> Dict[str, Any]:
-        """Get the state of the module."""
-        response = requests.get(f"{self.module.module_url}/state")
-        if not response.ok:
-            response.raise_for_status()
-        return response.json()
-
-    def get_info(self) -> NodeInfo:
-        """Get information about the module."""
-        response = requests.get(f"{self.module.module_url}/info")
-        if not response.ok:
-            response.raise_for_status()
-        return NodeInfo.model_validate(response.json())
-
-    def set_config(self, config_key: str, config_value: Any) -> NodeSetConfigResponse:
-        """Set configuration values of the module."""
-        response = requests.post(
-            f"{self.module.module_url}/config",
-            json={"config_key": config_key, "config_value": config_value},
-        )
-        if not response.ok:
-            response.raise_for_status()
-        return NodeSetConfigResponse.model_validate(response.json())
-
-    def send_admin_command(self, admin_command: AdminCommands) -> bool:
-        """Perform an administrative command on the module."""
-        response = requests.post(
-            f"{self.module.module_url}/admin", json={"admin_command": admin_command}
-        )
-        if not response.ok:
-            response.raise_for_status()
-        return AdminCommandResponse.model_validate(response.json())
+from madsci.common.types.node_types import (
+    NodeInfo,
+    NodeSetConfigResponse,
+    NodeStatus,
+)
+from madsci.common.utils import threaded_task
+from madsci.module.abstract_module import (
+    AbstractModule,
+)
+from madsci.module.interface.rest_module_interface import RestModuleInterface
 
 
 def action_response_to_headers(action_response: ActionResponse) -> Dict[str, str]:
@@ -159,53 +84,55 @@ class ActionResponseWithFiles(FileResponse):
         )
 
 
-class RestModule(BaseModule):
+class RestModule(AbstractModule):
     """REST-based module implementation and helper classes. Inherits from BaseModule. Inherit from this class to create a new module."""
 
-    def start_module(self):
+    rest_api = None
+    """The REST API server for the node."""
+    restart_flag = False
+    """Whether the node should restart the REST server."""
+    exit_flag = False
+    """Whether the node should exit."""
+    capabilities: ModuleCapabilities = ModuleCapabilities(
+        **RestModuleInterface.supported_capabilities.model_dump()
+    )
+
+    """------------------------------------------------------------------------------------------------"""
+    """Node Lifecycle and Public Methods"""
+    """------------------------------------------------------------------------------------------------"""
+
+    def start_node(self, config: Dict[str, Any] = {}):
         """Start the node."""
-        super().start_module()  # *Kick off protocol agnostic-startup
-        self.start_rest_api()
+        super().start_node(config)  # *Kick off protocol agnostic-startup
+        self._start_rest_api()
 
-    def start_rest_api(self):
-        """Start the REST API for the node."""
-        import uvicorn
-
-        self.rest_api = FastAPI()
-        self.rest_api.state = State({"node": self})
-        self.configure_routes()
-        print(self.node_definition.node_config)
-        uvicorn.run(self.rest_api, host=self.args.host, port=self.args.port)
-
-    def configure_routes(self):
-        """Configure the routes for the REST API."""
-        self.router = APIRouter()
-        self.router.add_api_route("/status", self.get_status, methods=["GET"])
-        self.router.add_api_route("/info", self.get_info, methods=["GET"])
-        self.router.add_api_route("/state", self.get_state, methods=["GET"])
-        self.router.add_api_route(
-            "/action", self.run_action, methods=["POST"], response_model=None
-        )
-        self.router.add_api_route(
-            "/action/{action_id}", self.get_action, methods=["GET"]
-        )
-        self.router.add_api_route("/config", self.set_config, methods=["POST"])
-        self.router.add_api_route(
-            "/admin/{admin_command}", self.run_admin_command, methods=["POST"]
-        )
-        self.rest_api.include_router(self.router)
+    """------------------------------------------------------------------------------------------------"""
+    """Interface Methods"""
+    """------------------------------------------------------------------------------------------------"""
 
     def run_action(
-        self, name: str, args: Dict[str, Any] = {}, files: List[UploadFile] = []
+        self,
+        action_name: str,
+        args: Optional[str] = None,
+        files: List[UploadFile] = [],
+        action_id: Optional[str] = None,
     ) -> Union[ActionResponse, ActionResponseWithFiles]:
         """Run an action on the node."""
+        if args:
+            args = json.loads(args)
+            if not isinstance(args, dict):
+                raise ValueError("args must be a JSON object")
+        else:
+            args = {}
         with tempfile.TemporaryDirectory() as temp_dir:
+            # * Save the uploaded files to a temporary directory
             for file in files:
                 with open(os.path.join(temp_dir, file.filename), "wb") as f:
                     shutil.copyfileobj(file.file, f)
             response = super().run_action(
                 ActionRequest(
-                    name=name,
+                    action_id=action_id if action_id else new_ulid_str(),
+                    action_name=action_name,
                     args=args,
                     files={
                         file.filename: os.path.join(temp_dir, file.filename)
@@ -213,12 +140,28 @@ class RestModule(BaseModule):
                     },
                 )
             )
+            # * Return a file response if there are files to be returned
             if response.files:
                 return ActionResponseWithFiles().from_action_response(
                     action_response=response
                 )
             else:
+                # * Otherwise, return a normal action response
                 return ActionResponse.model_validate(response)
+
+    def get_action(self, action_id: str):
+        """Get the status of an action on the node."""
+        action_response = super().get_action(action_id)
+        if action_response.files:
+            return ActionResponseWithFiles().from_action_response(
+                action_response=action_response
+            )
+        else:
+            return ActionResponse.model_validate(action_response)
+
+    def get_actions(self) -> List[str]:
+        """Get the action history of the node."""
+        return super().get_actions()
 
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""
@@ -232,10 +175,6 @@ class RestModule(BaseModule):
         """Get the state of the node."""
         return super().get_state()
 
-    def get_action_response(self, action_id: str) -> ActionResponse:
-        """Get the status of an action on the node."""
-        return super().get_action_response(action_id)
-
     def set_config(self, config_key: str, config_value: Any) -> NodeSetConfigResponse:
         """Set configuration values of the node."""
         return super().set_config(config_key, config_value)
@@ -244,10 +183,129 @@ class RestModule(BaseModule):
         """Perform an administrative command on the node."""
         return super().run_admin_command(admin_command)
 
-    def get_action(self, action_id: str) -> ActionResponse:
-        """Get the status of an action on the node."""
-        return super().get_action_response(action_id)
+    """------------------------------------------------------------------------------------------------"""
+    """Admin Commands"""
+    """------------------------------------------------------------------------------------------------"""
+
+    def reset(self) -> AdminCommandResponse:
+        """Restart the node."""
+        try:
+            self.restart_flag = True  # * Restart the REST server
+            self.shutdown_handler()
+            self.startup_handler(self.config)
+        except Exception as exception:
+            return AdminCommandResponse(
+                success=False,
+                errors=[Error.from_exception(exception)],
+            )
+        return AdminCommandResponse(
+            success=True,
+            errors=[],
+        )
+
+    def shutdown(self) -> AdminCommandResponse:
+        """Shutdown the node."""
+        try:
+            self.restart_flag = False
+
+            @threaded_task
+            def shutdown_server():
+                """Shutdown the REST server."""
+                time.sleep(2)
+                self.rest_server_process.terminate()
+                self.exit_flag = True
+
+            shutdown_server()
+        except Exception as exception:
+            return AdminCommandResponse(
+                success=False,
+                errors=[Error.from_exception(exception)],
+            )
+        return AdminCommandResponse(
+            success=True,
+            errors=[],
+        )
+
+    """------------------------------------------------------------------------------------------------"""
+    """Internal and Private Methods"""
+    """------------------------------------------------------------------------------------------------"""
+
+    def _start_rest_api(self):
+        """Start the REST API for the node."""
+        import uvicorn
+
+        self.rest_api = FastAPI(lifespan=self._lifespan)
+        self._configure_routes()
+        self.rest_server_process = Process(
+            target=uvicorn.run,
+            args=(self.rest_api,),
+            kwargs={"host": self.config["host"], "port": self.config["port"]},
+            daemon=True,
+        )
+        self.rest_server_process.start()
+        while True:
+            time.sleep(1)
+            if self.restart_flag:
+                self.rest_server_process.terminate()
+                self.restart_flag = False
+                self._start_rest_api()
+                break
+            if self.exit_flag:
+                break
+
+    def _startup_thread(self):
+        """The startup thread for the REST API."""
+        try:
+            # * Create a clean status and mark the node as initializing
+            self.node_status.initializing = True
+            self.node_status.errored = False
+            self.node_status.locked = False
+            self.node_status.paused = False
+            self.startup_handler()
+        except Exception as exception:
+            # * Handle any exceptions that occurred during startup
+            self._exception_handler(exception)
+            self.node_status.errored = True
+        finally:
+            # * Mark the node as no longer initializing
+            print("Startup complete")
+            self.node_status.initializing = False
+
+    def _lifespan(self, app: FastAPI):
+        """The lifespan of the REST API."""
+        # * Run startup on a separate thread so it doesn't block the rest server from starting
+        # * (module won't accept actions until startup is complete)
+        Thread(target=self._startup_thread, daemon=True).start()
+        self._loop_handler()
+
+        yield
+
+        try:
+            # * Call any shutdown logic
+            self.shutdown_handler()
+        except Exception as exception:
+            # * If an exception occurs during shutdown, handle it so we at least see the error in logs/terminal
+            self._exception_handler(exception)
+
+    def _configure_routes(self):
+        """Configure the routes for the REST API."""
+        self.router = APIRouter()
+        self.router.add_api_route("/status", self.get_status, methods=["GET"])
+        self.router.add_api_route("/info", self.get_info, methods=["GET"])
+        self.router.add_api_route("/state", self.get_state, methods=["GET"])
+        self.router.add_api_route(
+            "/action", self.run_action, methods=["POST"], response_model=None
+        )
+        self.router.add_api_route(
+            "/action/{action_id}", self.get_action, methods=["GET"]
+        )
+        self.router.add_api_route("/action", self.get_actions, methods=["GET"])
+        self.router.add_api_route("/config", self.set_config, methods=["POST"])
+        self.router.add_api_route(
+            "/admin/{admin_command}", self.run_admin_command, methods=["POST"]
+        )
+        self.rest_api.include_router(self.router)
 
 
 if __name__ == "__main__":
-    RestModule().start_module()
+    RestModule().start_node()

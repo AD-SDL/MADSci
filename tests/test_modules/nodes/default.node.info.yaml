@@ -1,0 +1,57 @@
+module_name: liquidhandler
+module_type: device
+module_description: null
+capabilities:
+  get_info: false
+  get_state: false
+  get_status: false
+  send_action: false
+  get_action: false
+  get_action_history: false
+  action_files: false
+  send_admin_commands: false
+  set_config: false
+  get_resources: false
+  events: false
+  resources: false
+  admin_commands:
+  - shutdown
+  - reset
+config:
+  host:
+    name: host
+    description: The host of the REST API.
+    default: 127.0.0.1
+    required: true
+    reset_on_change: true
+  port:
+    name: port
+    description: The port of the REST API.
+    default: 8000
+    required: true
+    reset_on_change: true
+  protocol:
+    name: protocol
+    description: The protocol of the REST API, either 'http' or 'https'.
+    default: http
+    required: true
+    reset_on_change: true
+commands: {}
+node_name: default
+node_id: 01JD7WCXX8Y1CMER8P3XHA6CTW
+node_url: null
+node_description: Default liquidhandler
+module_definition: ../liquidhandler.module.yaml
+actions:
+  run_command:
+    name: run_command
+    description: Run a command on the liquid handler.
+    args:
+      command:
+        name: command
+        description: ''
+        required: true
+        default: null
+    files: {}
+    results: {}
+    blocking: false

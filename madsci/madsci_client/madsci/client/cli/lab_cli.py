@@ -28,6 +28,7 @@ class LabContext:
         """Initialize the context object."""
         self.lab_def: Optional[LabDefinition] = None
         self.path: Optional[Path] = None
+        self.quiet: bool = False
 
 
 pass_lab = click.make_pass_decorator(LabContext)
@@ -68,31 +69,39 @@ def find_lab(name: Optional[str], path: Optional[str]) -> LabContext:
 def lab(ctx, name: Optional[str], path: Optional[str]):
     """Manage labs."""
     ctx.obj = find_lab(name, path)
+    ctx.obj.quiet = ctx.parent.params.get("quiet")
 
 
 @lab.command()
+@click.option("--name", "-n", type=str, help="The name of the lab.", required=False)
+@click.option("--path", "-p", type=str, help="The path to the lab definition file.")
 @click.option("--description", "-d", type=str, help="The description of the lab.")
 @click.pass_context
-def create(ctx, description: Optional[str]):
+def create(ctx, name: Optional[str], path: Optional[str], description: Optional[str]):
     """Create a new lab."""
-    name = ctx.parent.params.get("name")
     if not name:
-        name = prompt_for_input("Lab Name", required=True)
+        name = ctx.parent.params.get("name")
+    if not name:
+        name = prompt_for_input("Lab Name", required=True, quiet=ctx.obj.quiet)
     if not description:
-        description = prompt_for_input("Lab Description")
+        description = prompt_for_input("Lab Description", quiet=ctx.obj.quiet)
 
     lab_definition = LabDefinition(name=name, description=description)
     console.print(lab_definition)
 
-    path = ctx.parent.params.get("path")
+    if not path:
+        path = ctx.parent.params.get("path")
     if not path:
         default_path = Path.cwd() / f"{to_snake_case(name)}.lab.yaml"
         new_path = prompt_for_input(
-            "Path to save Lab Definition file", default=str(default_path)
+            "Path to save Lab Definition file",
+            default=str(default_path),
+            quiet=ctx.obj.quiet,
         )
         if new_path:
             path = Path(new_path)
-    save_model(path=path, model=lab_definition)
+    print("Path:", path)
+    save_model(path=path, model=lab_definition, overwrite_check=not ctx.obj.quiet)
 
 
 @lab.command()
@@ -106,6 +115,13 @@ def list():
             console.print(
                 f"[bold]{lab_definition.name}[/]: {lab_definition.description} ({lab_file})"
             )
+            if lab_definition.workcells:
+                console.print("  Workcells:")
+                for name, workcell in lab_definition.workcells.items():
+                    if isinstance(workcell, str):
+                        console.print(f"    - {name}: {workcell}")
+                    else:
+                        console.print(f"    - {name}: {workcell.description}")
     else:
         print("No lab definitions found")
 
@@ -123,12 +139,13 @@ def info(ctx: LabContext):
 
 
 @lab.command()
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @pass_lab
-def delete(ctx: LabContext):
+def delete(ctx: LabContext, yes: bool):
     """Delete a lab."""
     if ctx.lab_def and ctx.path:
         console.print(f"Deleting lab: {ctx.lab_def.name} ({ctx.path})")
-        if prompt_yes_no("Are you sure?"):
+        if yes or ctx.quiet or prompt_yes_no("Are you sure?"):
             ctx.path.unlink()
             console.print(f"Deleted {ctx.path}")
     else:
@@ -177,7 +194,7 @@ def run(ctx: LabContext, command: str):
 
 
 @lab.command()
-@click.option("--command_name", "-n", type=str, required=False)
+@click.option("--command_name", "--name", "-n", type=str, required=False)
 @click.option("--command", "-c", type=str, required=False)
 @pass_lab
 def add_command(ctx: LabContext, command_name: str, command: str):
@@ -209,8 +226,9 @@ def add_command(ctx: LabContext, command_name: str, command: str):
 
 @lab.command()
 @click.argument("command_name", type=str, required=False)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @pass_lab
-def delete_command(ctx: LabContext, command_name: str):
+def delete_command(ctx: LabContext, command_name: str, yes: bool):
     """Delete a command from a lab definition."""
     if not ctx.lab_def:
         console.print(
@@ -222,9 +240,13 @@ def delete_command(ctx: LabContext, command_name: str):
         command_name = prompt_for_input("Command Name", required=True)
 
     if command_name in ctx.lab_def.commands:
-        if prompt_yes_no(
-            f"Are you sure you want to delete command [bold]{command_name}[/]?",
-            default="no",
+        if (
+            yes
+            or ctx.quiet
+            or prompt_yes_no(
+                f"Are you sure you want to delete command [bold]{command_name}[/]?",
+                default="no",
+            )
         ):
             del ctx.lab_def.commands[command_name]
             save_model(ctx.path, ctx.lab_def, overwrite_check=False)

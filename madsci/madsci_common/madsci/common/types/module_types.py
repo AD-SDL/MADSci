@@ -1,11 +1,11 @@
 """Types related to MADSci Modules."""
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
+from pydantic.functional_validators import field_validator
 from sqlmodel.main import Field
 
-from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.base_types import BaseModel
 
@@ -34,7 +34,7 @@ class ModuleDefinition(BaseModel, extra="allow"):
         description="The type of the module.",
         default=None,
     )
-    description: Optional[str] = Field(
+    module_description: Optional[str] = Field(
         default=None,
         title="Module Description",
         description="A description of the module.",
@@ -44,21 +44,26 @@ class ModuleDefinition(BaseModel, extra="allow"):
         title="Module Capabilities",
         description="The capabilities of the module.",
     )
-    module_config: List["ConfigParameter"] = Field(
+    config: Union[List["ConfigParameter"], Dict[str, "ConfigParameter"]] = Field(
         title="Module Configuration",
-        description="The configuration of the module.",
+        description="The configuration of the module. These are 'default' configuration parameters inherited by nodes.",
         default_factory=list,
     )
-    module_actions: Optional[List["ActionDefinition"]] = Field(
-        title="Module Actions",
-        description="The actions that the module supports.",
-        default=None,
-    )
-    module_commands: Optional[Dict[str, str]] = Field(
+    commands: Dict[str, str] = Field(
         title="Module Commands",
-        description="The commands that the module supports.",
-        default=None,
+        description="The commands that the module supports. These are 'default' commands inherited by nodes.",
+        default_factory=dict,
     )
+
+    @field_validator("config", mode="after")
+    def validate_config(
+        cls, v: Union[List["ConfigParameter"], Dict[str, "ConfigParameter"]]
+    ) -> Union[List["ConfigParameter"], Dict[str, "ConfigParameter"]]:
+        """Validate the module configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
+        if isinstance(v, dict):
+            return v
+        else:
+            return {param.name: param for param in v}
 
 
 class ConfigParameter(BaseModel, extra="allow"):
@@ -83,6 +88,11 @@ class ConfigParameter(BaseModel, extra="allow"):
         description="Whether the parameter is required.",
         default=False,
     )
+    reset_on_change: bool = Field(
+        title="Parameter Reset on Change",
+        description="Whether the node should restart whenever the parameter changes.",
+        default=True,
+    )
 
 
 MODULE_CONFIG_TEMPLATES: Dict[str, List[ConfigParameter]] = {
@@ -90,7 +100,7 @@ MODULE_CONFIG_TEMPLATES: Dict[str, List[ConfigParameter]] = {
         ConfigParameter(
             name="host",
             description="The host of the REST API.",
-            default="localhost",
+            default="127.0.0.1",
             required=True,
         ),
         ConfigParameter(
@@ -137,6 +147,11 @@ class ModuleInterfaceCapabilities(BaseModel):
         title="Module Get Action",
         description="Whether the module/interface supports querying the status of an action.",
     )
+    get_actions: bool = Field(
+        default=False,
+        title="Module Get Actions",
+        description="Whether the module/interface supports querying the history of actions.",
+    )
     action_files: bool = Field(
         default=False,
         title="Module Action Files",
@@ -157,6 +172,11 @@ class ModuleInterfaceCapabilities(BaseModel):
         title="Module Get Resources",
         description="Whether the module/interface supports querying its resources.",
     )
+    get_log: bool = Field(
+        default=False,
+        title="Module Get Log",
+        description="Whether the module/interface supports querying its log.",
+    )
 
 
 class ModuleCapabilities(ModuleInterfaceCapabilities):
@@ -172,8 +192,8 @@ class ModuleCapabilities(ModuleInterfaceCapabilities):
         title="Module Resources",
         description="Whether the module supports MADSci-compatible resource management.",
     )
-    admin_commands: Optional[set["AdminCommands"]] = Field(
-        default=None,
+    admin_commands: set[AdminCommands] = Field(
+        default=set(),
         title="Module Admin Commands",
         description="Which admin commands the module supports, if any.",
     )

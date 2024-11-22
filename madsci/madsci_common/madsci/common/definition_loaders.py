@@ -2,20 +2,26 @@
 
 import argparse
 import json
-import os
 from pathlib import Path
+from typing import Any, Dict, Tuple
 
 from dotenv import load_dotenv
 
 from madsci.common.types.base_types import BaseModel
 from madsci.common.types.module_types import ModuleDefinition
-from madsci.common.types.node_types import NodeDefinition
+from madsci.common.types.node_types import (
+    NodeDefinition,
+    get_module_from_node_definition,
+)
 from madsci.common.types.squid_types import LabDefinition
 from madsci.common.utils import search_for_file_pattern
 
 
 def madsci_definition_loader(
-    model=BaseModel, definition_file_pattern: str = "*.yaml", **kwargs
+    model=BaseModel,
+    definition_file_pattern: str = "*.yaml",
+    search_for_file: bool = True,
+    **kwargs,
 ) -> BaseModel:
     """MADSci Definition Loader. Supports loading from a definition file, environment variables, and command line arguments, in reverse order of priority (i.e. command line arguments override environment variables, which override definition file values)."""
 
@@ -26,49 +32,27 @@ def madsci_definition_loader(
     parser.add_argument(
         "--definition", type=Path, help="The path to the MADSci configuration file."
     )
-    for field_name, field in model.model_fields.items():
-        parser.add_argument(
-            f"--{field_name}",
-            type=str,
-            help=f"[{field.annotation}] {field.description}",
-            default=None,
-        )
     args, _ = parser.parse_known_args()
     definition_file = args.definition
-
-    # *Load from definition file
     if not definition_file:
-        definition_files = search_for_file_pattern(
-            definition_file_pattern, parents=True, children=True
-        )
-
-        if not definition_files:
+        if not search_for_file:
             raise ValueError(
-                f"No configuration files found matching pattern: {definition_file_pattern}. Please specify a valid configuration file path using the --definition argument."
+                "Definition file not specified, please specify a definition file using the --definition argument."
             )
+
+        # *Load from definition file
+        if search_for_file:
+            definition_files = search_for_file_pattern(
+                definition_file_pattern, parents=True, children=True
+            )
+            if not definition_files:
+                raise ValueError(
+                    f"No definition files found matching pattern: {definition_file_pattern}. Please specify a valid configuration file path using the --definition argument."
+                )
 
         definition_file = definition_files[0]
 
     model_instance = model.from_yaml(definition_file)
-
-    # *Load from environment variables
-    for field_name in model.model_fields.keys():
-        env_var = f"MADSCI_{model.__name__.upper()}_{field_name.upper()}"
-        if env_var in os.environ:
-            print(f"Loading {field_name} from environment variable {env_var}")
-            kwargs[field_name] = json.loads(os.environ[env_var])
-
-    # *Load from command line arguments
-    for field_name in model.model_fields.keys():
-        if field_name in args and getattr(args, field_name) is not None:
-            print(
-                f"Loading {field_name} from command line argument {getattr(args, field_name)}"
-            )
-            kwargs[field_name] = json.loads(getattr(args, field_name))
-
-    # *Override with kwargs
-    for field_name, field in kwargs.items():
-        setattr(model_instance, field_name, field)
 
     return model_instance
 
@@ -77,25 +61,69 @@ def lab_definition_loader(
     model=LabDefinition, definition_file_pattern: str = "*.lab.yaml", **kwargs
 ) -> LabDefinition:
     """Lab Definition Loader. Supports loading from a definition file, environment variables, and command line arguments, in reverse order of priority (i.e. command line arguments override environment variables, which override definition file values)."""
-    return madsci_definition_loader(
+    definition = madsci_definition_loader(
         model=model, definition_file_pattern=definition_file_pattern, **kwargs
     )
-
-
-def module_definition_loader(
-    model=ModuleDefinition, definition_file_pattern: str = "*.module.yaml", **kwargs
-) -> ModuleDefinition:
-    """Module Definition Loader. Supports loading from a definition file, environment variables, and command line arguments, in reverse order of priority (i.e. command line arguments override environment variables, which override definition file values)."""
-    return madsci_definition_loader(
-        model=model, definition_file_pattern=definition_file_pattern, **kwargs
-    )
+    for field_name, field in definition.lab_config.model_fields.items():
+        parser = argparse.ArgumentParser(
+            description=f"MADSci Lab Definition Loader for {field_name}"
+        )
+        parser.add_argument(
+            f"--{field_name}",
+            type=str,
+            help=f"[{field.annotation}] {field.description}",
+            default=None,
+        )
+    args, _ = parser.parse_known_args()
+    for field_name in definition.lab_config.model_fields.keys():
+        if getattr(args, field_name) is not None:
+            setattr(
+                definition.lab_config, field_name, json.loads(getattr(args, field_name))
+            )
+    definition.model_validate(definition)
+    return definition
 
 
 def node_definition_loader(
     model=NodeDefinition, definition_file_pattern: str = "*.node.yaml", **kwargs
-) -> NodeDefinition:
+) -> Tuple[NodeDefinition, ModuleDefinition, Dict[str, Any]]:
     """Node Definition Loader. Supports loading from a definition file, environment variables, and command line arguments, in reverse order of priority (i.e. command line arguments override environment variables, which override definition file values)."""
+
+    # * Load the node definition file
     node_definition = madsci_definition_loader(
         model=model, definition_file_pattern=definition_file_pattern, **kwargs
     )
-    return node_definition
+
+    module_definition = get_module_from_node_definition(node_definition)
+
+    combined_config = node_definition.config.copy()
+
+    # * Import any module config from the module definition
+    for config_name, config in module_definition.config.items():
+        # * Only add the config if it isn't already defined in the node definition
+        if config_name not in node_definition.config.keys():
+            combined_config[config_name] = config
+
+    # * Load the node configuration from the command line
+    parser = argparse.ArgumentParser(description="MADSci Node Definition Loader")
+    for field_name, field in combined_config.items():
+        parser.add_argument(
+            f"--{field_name}",
+            type=str,
+            help=field.description,
+            default=field.default,
+            required=False,
+        )
+    args, _ = parser.parse_known_args()
+    config_values = {}
+    for arg_name, arg_value in vars(args).items():
+        if arg_value is not None:
+            try:
+                config_values[arg_name] = json.loads(str(arg_value))
+            except json.JSONDecodeError:
+                config_values[arg_name] = arg_value
+        else:
+            config_values[arg_name] = field.default
+
+    # * Return the node and module definitions
+    return node_definition, module_definition, config_values

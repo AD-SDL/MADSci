@@ -23,6 +23,7 @@ dependencies = [
 
 [dependency-groups]
 server = ["fastapi>=0.115.4", "uvicorn[standard]>=0.32.0", "python-multipart>=0.0.17"]
+tests = ["ipykernel>=6.29.5"]
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"

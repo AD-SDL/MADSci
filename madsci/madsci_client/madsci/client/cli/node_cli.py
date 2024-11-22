@@ -1,5 +1,6 @@
 """Command Line Interface for managing MADSci Nodes."""
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +15,7 @@ from madsci.common.utils import (
     prompt_for_input,
     prompt_from_list,
     prompt_yes_no,
+    relative_path,
     save_model,
     search_for_file_pattern,
     to_snake_case,
@@ -30,6 +32,7 @@ class NodeContext:
         self.node_def: Optional[NodeDefinition] = None
         self.path: Optional[Path] = None
         self.workcell_def: Optional[WorkcellDefinition] = None
+        self.quiet: bool = False
 
 
 pass_node = click.make_pass_decorator(NodeContext)
@@ -54,7 +57,7 @@ def find_node(name: Optional[str], path: Optional[str]) -> NodeContext:
     node_files = search_for_file_pattern("*.node.yaml")
     for node_file in node_files:
         node_def = NodeDefinition.from_yaml(node_file)
-        if node_def.node_name == name:
+        if not name or node_def.node_name == name:
             node_context.path = Path(node_file)
             node_context.node_def = node_def
             return node_context
@@ -77,11 +80,11 @@ def find_node_in_workcell(
 ) -> Optional[NodeDefinition]:
     """Find a node definition within a workcell."""
     for node in workcell_def.nodes:
-        if isinstance(node, NodeDefinition) and node.node_name == name:
+        if isinstance(node, NodeDefinition) and (not name or node.node_name == name):
             return node
         elif isinstance(node, str) and node.endswith(".node.yaml"):
             node_def = NodeDefinition.from_yaml(node)
-            if node_def.node_name == name:
+            if not name or node_def.node_name == name:
                 return node_def
     return None
 
@@ -95,9 +98,14 @@ def find_node_in_workcell(
 def node(ctx, name: Optional[str], path: Optional[str]):
     """Manage nodes."""
     ctx.obj = find_node(name, path)
+    ctx.obj.quiet = ctx.parent.params.get("quiet")
 
 
 @node.command()
+@click.option("--name", "-n", type=str, help="The name of the node.", required=False)
+@click.option(
+    "--path", "-p", type=str, help="The path to save the node definition file."
+)
 @click.option("--description", "-d", type=str, help="The description of the node.")
 @click.option(
     "--module_name", "-m", type=str, help="The name of the module to use for the node."
@@ -108,19 +116,27 @@ def node(ctx, name: Optional[str], path: Optional[str]):
     type=str,
     help="Path to the module definition file to use for the node.",
 )
+@click.option(
+    "--standalone", "-s", is_flag=True, help="Don't add node to any workcell."
+)
 @click.pass_context
 def create(
     ctx,
+    name: Optional[str],
+    path: Optional[str],
     description: Optional[str],
     module_name: Optional[str],
     module_path: Optional[str],
+    standalone: bool,
 ):
     """Create a new node."""
-    name = ctx.parent.params.get("name")
+    commands = {}
     if not name:
-        name = prompt_for_input("Node Name", required=True)
+        name = ctx.parent.params.get("name")
+    if not name:
+        name = prompt_for_input("Node Name", required=True, quiet=ctx.obj.quiet)
     if not description:
-        description = prompt_for_input("Node Description")
+        description = prompt_for_input("Node Description", quiet=ctx.obj.quiet)
     if module_name or module_path:
         from madsci.client.cli.module_cli import find_module
 
@@ -133,30 +149,80 @@ def create(
                 options=modules,
                 default=modules[0],
                 required=True,
+                quiet=ctx.obj.quiet,
             )
-        else:
-            console.print(
-                "No module definition files found. Please specify a module definition file using --module. If you don't have a module definition file, you can create one with 'madsci module create'."
-            )
-            return
+            if module_path:
+                try:
+                    module_definition = ModuleDefinition.from_yaml(module_path)
+                    commands = module_definition.commands
+                except Exception as e:
+                    console.print(f"Error loading module definition file: {e}")
+                    return
 
     node_definition = NodeDefinition(
-        node_name=name, description=description, module=Path(module_path).absolute()
+        node_name=name,
+        description=description,
+        module_definition=Path(module_path).absolute() if module_path else None,
+        commands=commands,
     )
     console.print(node_definition)
 
-    path = ctx.parent.params.get("path")
     if not path:
-        default_path = Path.cwd() / f"{to_snake_case(name)}.node.yaml"
+        path = ctx.parent.params.get("path")
+    if not path:
+        if Path.cwd().name == "nodes":
+            default_path = Path.cwd() / f"{to_snake_case(name)}.node.yaml"
+        else:
+            default_path = Path.cwd() / "nodes" / f"{to_snake_case(name)}.node.yaml"
         new_path = prompt_for_input(
-            "Path to save Node Definition file", default=str(default_path)
+            "Path to save Node Definition file",
+            default=str(default_path),
+            quiet=ctx.obj.quiet,
         )
         if new_path:
             path = Path(new_path)
+        if not path.parent.exists():
+            console.print(f"Creating directory: {path.parent}")
+            path.parent.mkdir(parents=True, exist_ok=True)
     path = Path(path).absolute()
-    node_definition.module = Path(module_path).absolute().relative_to(path.parent)
-    node_definition.node_config = ModuleDefinition.from_yaml(module_path).config
-    save_model(path=path, model=node_definition)
+    node_definition.module_definition = relative_path(
+        source=path.parent.absolute(), target=Path(module_path).absolute()
+    )
+    node_definition.config = ModuleDefinition.from_yaml(module_path).config
+    save_model(path=path, model=node_definition, overwrite_check=not ctx.obj.quiet)
+
+    # *Handle workcell integration
+    if not standalone and prompt_yes_no(
+        "Add node to a workcell?", default=True, quiet=ctx.obj.quiet
+    ):
+        workcell_files = search_for_file_pattern("*.workcell.yaml")
+        if workcell_files:
+            if ctx.obj.quiet:
+                # *In quiet mode, automatically add to first workcell
+                workcell_path = workcell_files[0]
+            else:
+                workcell_path = prompt_from_list(
+                    prompt="Add node to workcell",
+                    options=workcell_files,
+                    default=workcell_files[0],
+                )
+
+            if workcell_path:
+                workcell_def = WorkcellDefinition.from_yaml(workcell_path)
+                # *Calculate relative path from workcell to node
+                workcell_dir = Path(workcell_path).parent
+                rel_path = str(
+                    relative_path(
+                        target=path.absolute(), source=workcell_dir.absolute()
+                    )
+                )
+
+                # *Add node to workcell if not already present
+                workcell_def.nodes[node_definition.node_name] = rel_path
+                save_model(workcell_path, workcell_def, overwrite_check=False)
+                console.print(
+                    f"Added node [bold]{name}[/] to workcell: [bold]{workcell_path}[/]"
+                )
 
 
 @node.command()
@@ -201,25 +267,33 @@ def info(ctx: NodeContext):
 
 
 @node.command()
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @pass_node
-def delete(ctx: NodeContext):
+def delete(ctx: NodeContext, yes: bool):
     """Delete a node."""
     if ctx.node_def and ctx.path:
-        if ctx.workcell_def:
-            # Remove node from workcell
-            ctx.workcell_def.nodes = [
-                node for node in ctx.workcell_def.nodes if node != ctx.node_def
-            ]
-            save_model(ctx.path, ctx.workcell_def)
-            console.print(
-                f"Deleted node [bold]{ctx.node_def.node_name}[/] from workcell: [bold]{ctx.path}[/]"
-            )
-        else:
-            # Delete node file
-            console.print(f"Deleting node: {ctx.node_def.node_name} ({ctx.path})")
-            if prompt_yes_no("Are you sure?"):
-                ctx.path.unlink()
-                console.print(f"Deleted {ctx.path}")
+        console.print(f"Deleting node: {ctx.node_def.node_name} ({ctx.path})")
+        if yes or ctx.quiet or prompt_yes_no("Are you sure?"):
+            # First find all workcells that contain this node
+            workcell_files = search_for_file_pattern("*.workcell.yaml")
+            for workcell_file in workcell_files:
+                workcell_def = WorkcellDefinition.from_yaml(workcell_file)
+                if ctx.node_def.node_name in workcell_def.nodes:
+                    if (
+                        yes
+                        or ctx.quiet
+                        or prompt_yes_no(
+                            f"Remove from workcell [bold]{workcell_def.name}[/] ([italic]{workcell_file}[/])?",
+                            default=True,
+                        )
+                    ):
+                        del workcell_def.nodes[ctx.node_def.node_name]
+                        save_model(workcell_file, workcell_def, overwrite_check=False)
+                        console.print(f"Removed from workcell: {workcell_file}")
+
+            # Finally delete the node file
+            ctx.path.unlink()
+            console.print(f"Deleted {ctx.path}")
     else:
         console.print(
             "No node found. Specify node by name or path. If you don't have a node file, you can create one with 'madsci node create'."
@@ -235,4 +309,106 @@ def validate(ctx: NodeContext):
     else:
         console.print(
             "No node found. Specify node by name or path. If you don't have a node definition file, you can create one with 'madsci node create'."
+        )
+
+
+@node.command()
+@click.option("--command_name", "--name", "-n", type=str, required=False)
+@click.option("--command", "-c", type=str, required=False)
+@pass_node
+def add_command(ctx: NodeContext, command_name: str, command: str):
+    """Add a command to a node definition."""
+    if not ctx.node_def:
+        console.print(
+            "No node found. Specify node by name or path. If you don't have a node file, you can create one with 'madsci node create'."
+        )
+        return
+
+    if not command_name:
+        command_name = prompt_for_input(
+            "Command Name", required=True, quiet=ctx.obj.quiet
+        )
+    if not command:
+        command = prompt_for_input("Command", required=True, quiet=ctx.obj.quiet)
+
+    if command_name in ctx.node_def.commands:
+        console.print(
+            f"Command [bold]{command_name}[/] already exists in node definition: [bold]{ctx.node_def.node_name}[/] ({ctx.path})"
+        )
+        if not prompt_yes_no(
+            "Do you want to overwrite it?", default="no", quiet=ctx.quiet
+        ):
+            return
+
+    ctx.node_def.commands[command_name] = command
+    save_model(ctx.path, ctx.node_def, overwrite_check=False)
+    console.print(
+        f"Added command [bold]{command_name}[/] to node: [bold]{ctx.node_def.node_name}[/]"
+    )
+
+
+@node.command()
+@click.argument("command_name", type=str)
+@pass_node
+def run(ctx: NodeContext, command_name: str):
+    """Run a command in a node."""
+    if not ctx.node_def:
+        console.print(
+            "No node found. Specify node by name or path. If you don't have a node file, you can create one with 'madsci node create'."
+        )
+        return
+
+    if command_name in ctx.node_def.commands:
+        command = ctx.node_def.commands[command_name]
+        console.print(
+            f"Running command: [bold]{command_name}[/] ({command}) in node: [bold]{ctx.node_def.node_name}[/] ({ctx.path})"
+        )
+        print(os.popen(command).read())
+    else:
+        console.print(
+            f"Command [bold]{command_name}[/] not found in node definition: [bold]{ctx.node_def.node_name}[/] ({ctx.path})"
+        )
+
+
+@node.command()
+@click.argument("command_name", type=str, required=False)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+@pass_node
+def delete_command(ctx: NodeContext, command_name: str, yes: bool):
+    """Delete a command from a node definition."""
+    if not ctx.node_def:
+        console.print(
+            "No node found. Specify node by name or path. If you don't have a node file, you can create one with 'madsci node create'."
+        )
+        return
+
+    if not command_name:
+        if not ctx.node_def.commands:
+            console.print("No commands found in node definition.")
+            return
+        command_name = prompt_from_list(
+            "Select command to delete",
+            options=list(ctx.node_def.commands.keys()),
+            required=True,
+            quiet=ctx.obj.quiet,
+        )
+
+    if command_name in ctx.node_def.commands:
+        if (
+            yes
+            or ctx.quiet
+            or prompt_yes_no(
+                f"Are you sure you want to delete command [bold]{command_name}[/]?",
+                default="no",
+                quiet=ctx.obj.quiet,
+            )
+        ):
+            del ctx.node_def.commands[command_name]
+            save_model(ctx.path, ctx.node_def, overwrite_check=False)
+            console.print(
+                f"Deleted command [bold]{command_name}[/] from node: [bold]{ctx.node_def.node_name}[/]"
+            )
+    else:
+        console.print(
+            f"Command [bold]{command_name}[/] not found in node definition: [bold]{ctx.node_def.node_name}[/] ({ctx.path})"
         )

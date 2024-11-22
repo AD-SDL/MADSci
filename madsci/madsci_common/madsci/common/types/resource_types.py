@@ -3,11 +3,14 @@
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union
 
+from pydantic import Json
+from pydantic.config import ConfigDict
 from pydantic.functional_validators import field_validator, model_validator
 from pydantic.types import Discriminator, Tag
 from sqlmodel.main import Field
 
-from madsci.common.types.base_types import BaseModel, BaseModelNoSql, new_ulid_str
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.validators import ulid_validator
 
 
@@ -44,11 +47,14 @@ class ContainerType(str, Enum):
     voxel_grid = "voxel_grid"
     pool = "pool"
 
+
 ResourceTypes = Union[ResourceType, AssetType, ContainerType, ConsumableType]
 
 
-class ResourceTypeDefinition(BaseModel, extra="allow"):
+class ResourceTypeDefinition(BaseModel):
     """Definition for a MADSci Resource Type."""
+
+    model_config = ConfigDict(extra="allow")
 
     type_name: str = Field(
         title="Resource Type Name",
@@ -68,6 +74,11 @@ class ResourceTypeDefinition(BaseModel, extra="allow"):
         title="Resource Parent Types",
         description="The parent types of the resource.",
     )
+    custom_attributes: Optional[List["CustomResourceAttributeDefinition"]] = Field(
+        default=None,
+        title="Custom Attributes",
+        description="Custom attributes used by resources of this type.",
+    )
 
     @field_validator("parent_types", mode="before")
     @classmethod
@@ -76,6 +87,30 @@ class ResourceTypeDefinition(BaseModel, extra="allow"):
         if isinstance(v, str):
             return [v]
         return v
+
+
+class CustomResourceAttributeDefinition(BaseModel, extra="allow"):
+    """Definition for a MADSci Custom Resource Attribute."""
+
+    attribute_name: str = Field(
+        title="Attribute Name",
+        description="The name of the attribute.",
+    )
+    attribute_description: Optional[str] = Field(
+        default=None,
+        title="Attribute Description",
+        description="A description of the attribute.",
+    )
+    optional: bool = Field(
+        default=False,
+        title="Optional",
+        description="Whether the attribute is optional.",
+    )
+    default_value: Json[Any] = Field(
+        default=None,
+        title="Default Value",
+        description="The default value of the attribute.",
+    )
 
 
 class ContainerResourceTypeDefinition(ResourceTypeDefinition):
@@ -95,7 +130,9 @@ class ContainerResourceTypeDefinition(ResourceTypeDefinition):
         title="Resizeable",
         description="Whether containers of this type support different sizes. If True, the container can be resized. If False, the container is fixed size.",
     )
-    default_children: Optional[List["ResourceDefinition"]] = Field(
+    default_children: Optional[
+        Union[List["ResourceDefinition"], Dict[str, "ResourceDefinition"]]
+    ] = Field(
         default=None,
         title="Default Children",
         description="The default children to create when populating the container. Takes precedence over default_child_template.",
@@ -111,6 +148,7 @@ class ContainerResourceTypeDefinition(ResourceTypeDefinition):
         description="The base type of the container.",
     )
 
+
 class AssetResourceTypeDefinition(ResourceTypeDefinition):
     """Definition for a MADSci Asset Resource Type."""
 
@@ -119,6 +157,7 @@ class AssetResourceTypeDefinition(ResourceTypeDefinition):
         title="Asset Base Type",
         description="The base type of the asset.",
     )
+
 
 class ConsumableResourceTypeDefinition(ResourceTypeDefinition):
     """Definition for a MADSci Consumable Resource Type."""
@@ -129,6 +168,7 @@ class ConsumableResourceTypeDefinition(ResourceTypeDefinition):
         description="The base type of the consumable.",
     )
 
+
 class DiscreteConsumableResourceTypeDefinition(ConsumableResourceTypeDefinition):
     """Definition for a MADSci Discrete Consumable Resource Type."""
 
@@ -138,6 +178,7 @@ class DiscreteConsumableResourceTypeDefinition(ConsumableResourceTypeDefinition)
         description="The base type of the discrete consumable.",
     )
 
+
 class ContinuousConsumableResourceTypeDefinition(ConsumableResourceTypeDefinition):
     """Definition for a MADSci Continuous Consumable Resource Type."""
 
@@ -146,6 +187,7 @@ class ContinuousConsumableResourceTypeDefinition(ConsumableResourceTypeDefinitio
         title="Continuous Consumable Base Type",
         description="The base type of the continuous consumable.",
     )
+
 
 class StackResourceTypeDefinition(ContainerResourceTypeDefinition):
     """Definition for a MADSci Stack Resource Type."""
@@ -161,6 +203,7 @@ class StackResourceTypeDefinition(ContainerResourceTypeDefinition):
         description="The base type of the stack.",
     )
 
+
 class QueueResourceTypeDefinition(ContainerResourceTypeDefinition):
     """Definition for a MADSci Queue Resource Type."""
 
@@ -175,6 +218,7 @@ class QueueResourceTypeDefinition(ContainerResourceTypeDefinition):
         description="The base type of the queue.",
     )
 
+
 class CollectionResourceTypeDefinition(ContainerResourceTypeDefinition):
     """Definition for a MADSci Collection Resource Type."""
 
@@ -182,7 +226,9 @@ class CollectionResourceTypeDefinition(ContainerResourceTypeDefinition):
         title="Collection Keys",
         description="The keys of the collection.",
     )
-    default_children: Optional[Dict[str, "ResourceDefinition"]] = Field(
+    default_children: Optional[
+        Union[List["ResourceDefinition"], Dict[str, "ResourceDefinition"]]
+    ] = Field(
         default=None,
         title="Default Children",
         description="The default children to create when populating the container.",
@@ -195,11 +241,13 @@ class CollectionResourceTypeDefinition(ContainerResourceTypeDefinition):
         if isinstance(v, int):
             return [str(i) for i in range(1, v + 1)]
         return v
+
     base_type: Literal[ContainerType.collection] = Field(
         default=ContainerType.collection,
         title="Collection Base Type",
         description="The base type of the collection.",
     )
+
 
 class GridResourceTypeDefinition(ContainerResourceTypeDefinition):
     """Definition for a MADSci Grid Resource Type."""
@@ -220,11 +268,13 @@ class GridResourceTypeDefinition(ContainerResourceTypeDefinition):
         if isinstance(v, int):
             return [str(i) for i in range(1, v + 1)]
         return v
+
     base_type: Literal[ContainerType.grid] = Field(
         default=ContainerType.grid,
         title="Grid Base Type",
         description="The base type of the grid.",
     )
+
 
 class VoxelGridResourceTypeDefinition(GridResourceTypeDefinition):
     """Definition for a MADSci Voxel Grid Resource Type."""
@@ -245,11 +295,13 @@ class VoxelGridResourceTypeDefinition(GridResourceTypeDefinition):
         if isinstance(v, int):
             return [str(i) for i in range(1, v + 1)]
         return v
+
     base_type: Literal[ContainerType.voxel_grid] = Field(
         default=ContainerType.voxel_grid,
         title="Voxel Grid Base Type",
         description="The base type of the voxel grid.",
     )
+
 
 class PoolResourceTypeDefinition(ContainerResourceTypeDefinition):
     """Definition for a MADSci Pool Resource Type."""
@@ -260,16 +312,18 @@ class PoolResourceTypeDefinition(ContainerResourceTypeDefinition):
         description="The base type of the pool.",
     )
 
-class ResourceDefinition(BaseModelNoSql, extra="allow"):
+
+class ResourceDefinition(BaseModel, extra="allow"):
     """Definition for a MADSci Resource."""
+
+    model_config = ConfigDict(extra="allow")
 
     resource_name: str = Field(
         title="Resource Name",
         description="The name of the resource.",
     )
     resource_type: str = Field(
-        title="Resource Type",
-        description="The type of the resource."
+        title="Resource Type", description="The type of the resource."
     )
     base_type: Optional[str] = Field(
         default=None,
@@ -291,7 +345,7 @@ class ResourceDefinition(BaseModelNoSql, extra="allow"):
         title="Parent Resource",
         description="The parent resource ID or name. If None, defaults to the owning module or workcell.",
     )
-    attributes: Dict[str, Any] = Field(
+    attributes: Dict[str, Json] = Field(
         title="Resource Attributes",
         description="Additional attributes for the resource.",
         default_factory=dict,
@@ -299,21 +353,30 @@ class ResourceDefinition(BaseModelNoSql, extra="allow"):
 
     is_ulid = field_validator("resource_id")(ulid_validator)
 
+
 class AssetResourceDefinition(ResourceDefinition):
     """Definition for an asset resource."""
+
     pass
+
 
 class ConsumableResourceDefinition(ResourceDefinition):
     """Definition for a consumable resource."""
+
     pass
+
 
 class DiscreteConsumableResourceDefinition(ConsumableResourceDefinition):
     """Definition for a discrete consumable resource."""
+
     pass
+
 
 class ContinuousConsumableResourceDefinition(ConsumableResourceDefinition):
     """Definition for a continuous consumable resource."""
+
     pass
+
 
 class ContainerResourceDefinition(ResourceDefinition):
     """Definition for a container resource."""
@@ -323,7 +386,9 @@ class ContainerResourceDefinition(ResourceDefinition):
         title="Container Capacity",
         description="The capacity of the container. If None, uses the type's default_capacity.",
     )
-    default_children: Optional[List[ResourceDefinition]] = Field(
+    default_children: Optional[
+        Union[List[ResourceDefinition], Dict[str, ResourceDefinition]]
+    ] = Field(
         default=None,
         title="Default Children",
         description="The default children to create when initializing the container. If None, use the type's default_children.",
@@ -334,6 +399,7 @@ class ContainerResourceDefinition(ResourceDefinition):
         description="Template for creating child resources, supporting variable substitution. If None, use the type's default_child_template.",
     )
 
+
 class CollectionResourceDefinition(ContainerResourceDefinition):
     """Definition for a collection resource. Collections are used for resources that have a number of children, each with a unique key, which can be randomly accessed."""
 
@@ -342,7 +408,9 @@ class CollectionResourceDefinition(ContainerResourceDefinition):
         title="Collection Keys",
         description="The keys for the collection. Can be an integer (converted to 1-based range) or explicit list.",
     )
-    default_children: Optional[Dict[str, ResourceDefinition]] = Field(
+    default_children: Optional[
+        Union[List[ResourceDefinition], Dict[str, ResourceDefinition]]
+    ] = Field(
         default=None,
         title="Default Children",
         description="The default children to create when initializing the collection. If None, use the type's default_children.",
@@ -355,6 +423,7 @@ class CollectionResourceDefinition(ContainerResourceDefinition):
         if isinstance(v, int):
             return [str(i) for i in range(1, v + 1)]
         return v
+
 
 class GridResourceDefinition(ContainerResourceDefinition):
     """Definition for a grid resource. Grids are 2D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Resource]])."""
@@ -369,44 +438,52 @@ class GridResourceDefinition(ContainerResourceDefinition):
 class VoxelGridResourceDefinition(GridResourceDefinition):
     """Definition for a voxel grid resource. Voxel grids are 3D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Collection[Resource]]])."""
 
-    default_children: Optional[Dict[str, Dict[str, Dict[str, ResourceDefinition]]]] = Field(
-        default=None,
-        title="Default Children",
-        description="The default children to create when initializing the collection. If None, use the type's default_children.",
+    default_children: Optional[Dict[str, Dict[str, Dict[str, ResourceDefinition]]]] = (
+        Field(
+            default=None,
+            title="Default Children",
+            description="The default children to create when initializing the collection. If None, use the type's default_children.",
+        )
     )
+
 
 class StackResourceDefinition(ContainerResourceDefinition):
     """Definition for a stack resource."""
+
     default_child_quantity: Optional[int] = Field(
         default=None,
         title="Default Child Quantity",
         description="The number of children to create by default. If None, use the type's default_child_quantity.",
     )
+
 
 class QueueResourceDefinition(ContainerResourceDefinition):
     """Definition for a queue resource."""
+
     default_child_quantity: Optional[int] = Field(
         default=None,
         title="Default Child Quantity",
         description="The number of children to create by default. If None, use the type's default_child_quantity.",
     )
 
+
 class PoolResourceDefinition(ContainerResourceDefinition):
     """Definition for a pool resource. Pool resources are collections of consumables with no structure (used for wells, reservoirs, etc.)."""
+
     pass
 
 
 ResourceTypeDefinitions = Union[
     ResourceTypeDefinition,
-    ContainerResourceTypeDefinition, #* container of resources: Container[Resource]
-    AssetResourceTypeDefinition, #* trackable resource: Asset
-    ConsumableResourceTypeDefinition, #* consumable resource: Consumable
-    StackResourceTypeDefinition, #* stack of resources: Container[Resource]
-    QueueResourceTypeDefinition, #* queue of resources: Container[Resource]
-    CollectionResourceTypeDefinition, #* collection of resources: Container[Resource]
-    GridResourceTypeDefinition, #* 2D grid of resources: Collection[Collection[Resource]]
-    VoxelGridResourceTypeDefinition, #* 3D grid of resources: Collection[Collection[Collection[Resource]]]
-    PoolResourceTypeDefinition, #* collection of consumables with no structure: Collection[Consumable]
+    ContainerResourceTypeDefinition,  # * container of resources: Container[Resource]
+    AssetResourceTypeDefinition,  # * trackable resource: Asset
+    ConsumableResourceTypeDefinition,  # * consumable resource: Consumable
+    StackResourceTypeDefinition,  # * stack of resources: Container[Resource]
+    QueueResourceTypeDefinition,  # * queue of resources: Container[Resource]
+    CollectionResourceTypeDefinition,  # * collection of resources: Container[Resource]
+    GridResourceTypeDefinition,  # * 2D grid of resources: Collection[Collection[Resource]]
+    VoxelGridResourceTypeDefinition,  # * 3D grid of resources: Collection[Collection[Collection[Resource]]]
+    PoolResourceTypeDefinition,  # * collection of consumables with no structure: Collection[Consumable]
 ]
 
 ResourceDefinitions = Union[
@@ -421,7 +498,10 @@ ResourceDefinitions = Union[
     Annotated[PoolResourceDefinition, Tag("pool")],
 ]
 
-def discriminate_default_resources(v: Union[ResourceDefinitions, Dict[str, Any]]) -> ResourceDefinitions:
+
+def discriminate_default_resources(
+    v: Union[ResourceDefinitions, Dict[str, Any]],
+) -> ResourceDefinitions:
     """Discriminate default resources. If the resource type is not explicitly defined, default to 'resource'."""
     if isinstance(v, dict):
         if v.get("resource_type") in RESOURCE_DEFINITION_MAP.keys():
@@ -433,49 +513,84 @@ def discriminate_default_resources(v: Union[ResourceDefinitions, Dict[str, Any]]
     else:
         return "resource"
 
+
 class ResourceFile(BaseModel):
     """Definition for a MADSci Resource File."""
 
-    resource_types: List[Annotated[ResourceTypeDefinitions, Field(discriminator="base_type")]] = Field(
+    resource_types: List[
+        Annotated[ResourceTypeDefinitions, Field(discriminator="base_type")]
+    ] = Field(
         title="Resource Types",
         description="The definitions of the resource types in the file.",
         default=[],
     )
-    default_resources: List[Union[Annotated[ResourceDefinitions, Discriminator(discriminate_default_resources)], Any]] = Field(
+    default_resources: List[
+        Annotated[ResourceDefinitions, Discriminator(discriminate_default_resources)]
+    ] = Field(
         title="Default Resources",
         description="The definitions of the default resources in the file.",
         default=[],
     )
-    # default_resources: List[Any] = Field(
-    #     title="Default Resources",
-    #     description="The definitions of the default resources in the file.",
-    #     default=[],
-    # )
 
     @model_validator(mode="after")
     def validate_resource_types(self) -> "ResourceFile":
         """Validate resource types."""
         for resource_type in self.resource_types:
             for parent_type in resource_type.parent_types:
-                if parent_type not in RESOURCE_TYPE_DEFINITION_MAP.keys() and parent_type not in [resource_type.type_name for resource_type in self.resource_types]:
-                    raise ValueError(f"Unknown resource parent type: {parent_type}, parent type must be one of {RESOURCE_TYPE_DEFINITION_MAP.keys()} or a defined resource type.")
+                if (
+                    parent_type not in RESOURCE_TYPE_DEFINITION_MAP.keys()
+                    and parent_type
+                    not in [
+                        resource_type.type_name for resource_type in self.resource_types
+                    ]
+                ):
+                    raise ValueError(
+                        f"Unknown resource parent type: {parent_type}, parent type must be one of {RESOURCE_TYPE_DEFINITION_MAP.keys()} or a defined resource type."
+                    )
         return self
 
-    # @model_validator(mode="after")
-    # def validate_default_resources(self) -> "ResourceFile":
-    #     """Validate default resources and their resource types."""
-    #     default_resources = []
-    #     for resource in self.default_resources:
-    #         if resource.resource_type not in RESOURCE_DEFINITION_MAP.keys():
-    #             resource_type = next((resource_type for resource_type in self.resource_types if resource_type.type_name == resource.resource_type), None)
-    #             if resource_type is None:
-    #                 default_resources.append(resource)
-    #             else:
-    #                 default_resources.append(RESOURCE_DEFINITION_MAP[resource_type.base_type].model_validate(resource))
-    #         else:
-    #             default_resources.append(resource)
-    #     self.__dict__["default_resources"] = default_resources
-    #     return self
+    @model_validator(mode="after")
+    def validate_default_resources(self) -> "ResourceFile":
+        """Validate default resources and their resource types."""
+        default_resources = []
+        for resource in self.default_resources:
+            if resource.resource_type not in RESOURCE_DEFINITION_MAP.keys():
+                resource_type = next(
+                    (
+                        resource_type
+                        for resource_type in self.resource_types
+                        if resource_type.type_name == resource.resource_type
+                    ),
+                    None,
+                )
+                if resource_type is None:
+                    default_resources.append(resource)
+                else:
+                    default_resources.append(
+                        RESOURCE_DEFINITION_MAP[resource_type.base_type].model_validate(
+                            resource
+                        )
+                    )
+            else:
+                default_resources.append(resource)
+        self.__dict__["default_resources"] = default_resources
+        return self
+
+
+RESOURCE_BASE_TYPES = [
+    ResourceType.resource,
+    ResourceType.asset,
+    ResourceType.consumable,
+    ConsumableType.discrete_consumable,
+    ConsumableType.continuous_consumable,
+    AssetType.container,
+    ContainerType.stack,
+    ContainerType.queue,
+    ContainerType.collection,
+    ContainerType.grid,
+    ContainerType.voxel_grid,
+    ContainerType.pool,
+]
 
 RESOURCE_TYPE_DEFINITION_MAP: Dict[str, Type[ResourceTypeDefinition]] = {
     ResourceType.resource: ResourceTypeDefinition,
@@ -514,31 +629,45 @@ class ResourceBase(ResourceDefinition, extra="allow"):
     resource_url: str = Field(
         title="Resource URL", description="The URL of the resource."
     )
+    ownership: OwnershipInfo = Field(
+        title="Ownership",
+        description="Information about the ownership of the resource.",
+        default_factory=OwnershipInfo,
+    )
+
 
 class AssetBase(AssetResourceDefinition):
     """Base class for all MADSci Assets."""
+
     pass
+
 
 class ConsumableBase(ResourceBase):
     """Base class for all MADSci Consumables."""
+
     quantity: Optional[Union[int, float]] = Field(
         title="Quantity",
         description="The quantity of the consumable.",
     )
 
+
 class DiscreteConsumableBase(ConsumableBase):
     """Base class for all MADSci Discrete Consumables."""
+
     quantity: int = Field(
         title="Quantity",
         description="The quantity of the discrete consumable.",
     )
 
+
 class ContinuousConsumableBase(ConsumableBase):
     """Base class for all MADSci Continuous Consumables."""
+
     quantity: float = Field(
         title="Quantity",
         description="The quantity of the continuous consumable.",
     )
+
 
 class ContainerBase(ResourceBase):
     """Base class for all MADSci Containers."""
@@ -552,6 +681,7 @@ class ContainerBase(ResourceBase):
         description="The capacity of the container.",
     )
 
+
 class CollectionBase(ContainerBase):
     """Base class for all MADSci Collections."""
 
@@ -560,6 +690,7 @@ class CollectionBase(ContainerBase):
         description="The keys of the collection.",
     )
 
+
 class GridBase(ContainerBase):
     """Base class for all MADSci Grids."""
 
@@ -567,6 +698,7 @@ class GridBase(ContainerBase):
         title="Children",
         description="The children of the grid.",
     )
+
 
 class VoxelGridBase(GridBase):
     """Base class for all MADSci Voxel Grids."""
@@ -579,14 +711,19 @@ class VoxelGridBase(GridBase):
 
 class StackBase(ContainerBase):
     """Base class for all MADSci Stacks."""
+
     pass
+
 
 class QueueBase(ContainerBase):
     """Base class for all MADSci Queues."""
+
     pass
+
 
 class PoolBase(ContainerBase):
     """Base class for all MADSci Pools."""
+
     children: Dict[str, ConsumableBase] = Field(
         title="Children",
         description="The children of the pool.",
@@ -595,4 +732,3 @@ class PoolBase(ContainerBase):
         title="Capacity",
         description="The capacity of the pool.",
     )
-

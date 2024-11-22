@@ -1,6 +1,5 @@
 """Command Line Interface for managing MADSci Modules."""
 
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -32,6 +31,7 @@ class ModuleContext:
         """Initialize the context object."""
         self.module: Optional[ModuleDefinition] = None
         self.path: Optional[Path] = None
+        self.quiet: bool = False
 
 
 pass_module = click.make_pass_decorator(ModuleContext)
@@ -50,7 +50,7 @@ def find_module(name: Optional[str], path: Optional[str]) -> ModuleContext:
     module_files = search_for_file_pattern("*.module.yaml")
     for module_file in module_files:
         module_def = ModuleDefinition.from_yaml(module_file)
-        if not name or module_def.name == name:
+        if not name or module_def.module_name == name:
             module_context.path = Path(module_file)
             module_context.module = module_def
             return module_context
@@ -65,9 +65,12 @@ def find_module(name: Optional[str], path: Optional[str]) -> ModuleContext:
 def module(ctx, name: Optional[str], path: Optional[str]):
     """Manage modules."""
     ctx.obj = find_module(name, path)
+    ctx.obj.quiet = ctx.parent.params.get("quiet")
 
 
 @module.command()
+@click.option("--name", "-n", type=str, help="The name of the module.")
+@click.option("--path", "-p", type=str, help="The path to the module definition file.")
 @click.option("--description", "-d", type=str, help="The description of the module.")
 @click.option("--module_type", "-t", type=str, help="The type of the module.")
 @click.option(
@@ -79,16 +82,19 @@ def module(ctx, name: Optional[str], path: Optional[str]):
 @click.pass_context
 def create(
     ctx,
+    name: Optional[str],
+    path: Optional[str],
     description: Optional[str],
     module_type: Optional[str],
     config_template: Optional[str],
 ):
     """Create a new module."""
-    name = ctx.parent.params.get("name")
     if not name:
-        name = prompt_for_input("Module Name", required=True)
+        name = ctx.parent.params.get("name")
+    if not name:
+        name = prompt_for_input("Module Name", required=True, quiet=ctx.obj.quiet)
     if not description:
-        description = prompt_for_input("Module Description")
+        description = prompt_for_input("Module Description", quiet=ctx.obj.quiet)
     if not module_type or module_type not in [
         module_type.value for module_type in ModuleType
     ]:
@@ -96,19 +102,19 @@ def create(
             "Module Type",
             [module_type.value for module_type in ModuleType],
             default=ModuleType.DEVICE.value,
+            quiet=ctx.obj.quiet,
         )
-    module_config_keys = []
+    config_keys = []
     for key in MODULE_CONFIG_TEMPLATES.keys():
-        module_config_keys.append(key)
-    if not config_template or config_template not in module_config_keys:
+        config_keys.append(key)
+    if not config_template or config_template not in config_keys:
         if prompt_yes_no(
             "Do you want to use a configuration template to add configuration options to your module?",
             default="no",
+            quiet=ctx.obj.quiet,
         ):
             template_name = prompt_from_list(
-                "Module Configuration Template",
-                module_config_keys,
-                default=module_config_keys[0],
+                "Module Configuration Template", config_keys, default=config_keys[0]
             )
             config_template = MODULE_CONFIG_TEMPLATES[template_name]
         else:
@@ -120,23 +126,29 @@ def create(
         module_name=name,
         description=description,
         module_type=module_type,
-        module_config=config_template,
+        config=config_template,
     )
     console.print(module_definition)
 
-    path = ctx.parent.params.get("path")
+    if not path:
+        path = ctx.parent.params.get("path")
     if not path:
         default_path = Path.cwd() / f"{to_snake_case(name)}.module.yaml"
         new_path = prompt_for_input(
-            "Path to save Module Definition file", default=str(default_path)
+            "Path to save Module Definition file",
+            default=str(default_path),
+            quiet=ctx.obj.quiet,
         )
         if new_path:
             path = Path(new_path)
-    save_model(path=path, model=module_definition)
+    save_model(path=path, model=module_definition, overwrite_check=not ctx.obj.quiet)
 
     console.print()
     console.print(
         f"Created module definition: [bold]{module_definition.module_name}[/] ({path}). Next, you can define your module and add commands to control it with 'madsci module add-command'."
+    )
+    console.print(
+        "[red]Note:[/] You need to define a node before you can use this module, see 'madsci node create'."
     )
 
 
@@ -150,7 +162,7 @@ def list(ctx: ModuleContext):
         for module_file in sorted(set(module_files)):
             module_definition = ModuleDefinition.from_yaml(module_file)
             console.print(
-                f"[bold]{module_definition.name}[/]: {module_definition.description} ({module_file})"
+                f"[bold]{module_definition.module_name}[/]: {module_definition.description} ({module_file})"
             )
     else:
         console.print("No module definitions found")
@@ -169,12 +181,13 @@ def info(ctx: ModuleContext):
 
 
 @module.command()
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @pass_module
-def delete(ctx: ModuleContext):
+def delete(ctx: ModuleContext, yes: bool):
     """Delete a module."""
     if ctx.module and ctx.path:
-        console.print(f"Deleting module: {ctx.module.name} ({ctx.path})")
-        if prompt_yes_no("Are you sure?"):
+        console.print(f"Deleting module: {ctx.module.module_name} ({ctx.path})")
+        if yes or prompt_yes_no("Are you sure?", quiet=ctx.quiet):
             ctx.path.unlink()
             console.print(f"Deleted {ctx.path}")
     else:
@@ -195,35 +208,8 @@ def validate(ctx: ModuleContext):
         )
 
 
-def run_command(command: str, module: ModuleDefinition, path: Path):
-    """Run a command for a module."""
-    console.print(
-        f"Running command: [bold]{command}[/] ({module.module_commands[command]}) in module: [bold]{module.name}[/] ({path})"
-    )
-    print(os.popen(module.module_commands[command]).read())
-
-
 @module.command()
-@click.argument("command", type=str)
-@pass_module
-def run(ctx: ModuleContext, command: str):
-    """Run a command for a module."""
-    if not ctx.module:
-        console.print(
-            "No module found. Specify module by name or path. If you don't have a module file, you can create one with 'madsci module create'."
-        )
-        return
-
-    if ctx.module.module_commands and ctx.module.module_commands.get(command):
-        run_command(command, ctx.module, ctx.path)
-    else:
-        console.print(
-            f"Command [bold]{command}[/] not found in module definition: [bold]{ctx.module.name}[/] ({ctx.path})"
-        )
-
-
-@module.command()
-@click.option("--command_name", "-n", type=str, required=False)
+@click.option("--command_name", "--name", "-n", type=str, required=False)
 @click.option("--command", "-c", type=str, required=False)
 @pass_module
 def add_command(ctx: ModuleContext, command_name: str, command: str):
@@ -239,28 +225,30 @@ def add_command(ctx: ModuleContext, command_name: str, command: str):
     if not command:
         command = prompt_for_input("Command", required=True)
 
-    if ctx.module.module_commands is None:
-        ctx.module.module_commands = {}
+    if ctx.module.commands is None:
+        ctx.module.commands = {}
 
-    if command_name in ctx.module.module_commands:
+    if command_name in ctx.module.commands:
         console.print(
-            f"Command [bold]{command_name}[/] already exists in module definition: [bold]{ctx.module.name}[/] ({ctx.path})"
+            f"Command [bold]{command_name}[/] already exists in module definition: [bold]{ctx.module.module_name}[/] ({ctx.path})"
         )
         if not prompt_yes_no("Do you want to overwrite it?", default="no"):
             return
 
-    ctx.module.module_commands[command_name] = command
+    ctx.module.commands[command_name] = command
     save_model(ctx.path, ctx.module, overwrite_check=False)
     console.print(
-        f"Added command [bold]{command_name}[/] to module: [bold]{ctx.module.name}[/]"
+        f"Added command [bold]{command_name}[/] to module: [bold]{ctx.module.module_name}[/]"
     )
 
 
 @module.command()
-@click.argument("command_name", type=str, required=False)
+@click.option("--command_name", "--name", "-n", type=str, required=False)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @pass_module
-def delete_command(ctx: ModuleContext, command_name: str):
+def delete_command(ctx: ModuleContext, command_name: str, yes: bool):
     """Delete a command from a module definition."""
+    quiet = ctx.quiet or yes
     if not ctx.module:
         console.print(
             "No module found. Specify module by name or path. If you don't have a module file, you can create one with 'madsci module create'."
@@ -268,19 +256,20 @@ def delete_command(ctx: ModuleContext, command_name: str):
         return
 
     if not command_name:
-        command_name = prompt_for_input("Command Name", required=True)
+        command_name = prompt_for_input("Command Name", required=True, quiet=quiet)
 
-    if ctx.module.module_commands and command_name in ctx.module.module_commands:
-        if prompt_yes_no(
+    if ctx.module.commands and command_name in ctx.module.commands:
+        if yes or prompt_yes_no(
             f"Are you sure you want to delete command [bold]{command_name}[/]?",
             default="no",
+            quiet=quiet,
         ):
-            del ctx.module.module_commands[command_name]
+            del ctx.module.commands[command_name]
             save_model(ctx.path, ctx.module, overwrite_check=False)
             console.print(
-                f"Deleted command [bold]{command_name}[/] from module: [bold]{ctx.module.name}[/]"
+                f"Deleted command [bold]{command_name}[/] from module: [bold]{ctx.module.module_name}[/]"
             )
     else:
         console.print(
-            f"Command [bold]{command_name}[/] not found in module definition: [bold]{ctx.module.name}[/] ({ctx.path})"
+            f"Command [bold]{command_name}[/] not found in module definition: [bold]{ctx.module.module_name}[/] ({ctx.path})"
         )
