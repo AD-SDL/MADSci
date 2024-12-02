@@ -1,0 +1,11 @@
+name: ExampleLab
+lab_id: 01JDN5Q2T3BJQZQF17AA0VTT15
+description: An example for Doga
+server_config:
+  host: 127.0.0.1
+  port: 8000
+workcells:
+  TestWorkcell: workcells/test_workcell.workcell.yaml
+commands:
+  helloworld: echo "hello world"
+managers: {}

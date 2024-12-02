@@ -5,7 +5,7 @@ Base types for MADSci.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Type, TypeVar, Union
+from typing import Any, Optional, TypeVar, Union
 
 import yaml
 from pydantic.config import ConfigDict
@@ -31,19 +31,6 @@ class BaseModel(SQLModel, use_enum_values=True):
     Parent class for all MADSci data models.
     """
 
-    # created_at: Optional[datetime] = Field(
-    #     default=None,
-    #     sa_type=DateTime,
-    #     sa_column_kwargs={"server_default": func.now()},
-    #     nullable=False
-    # )
-    # updated_at: Optional[datetime] = Field(
-    #     default=None,
-    #     sa_column=Column(
-    #         DateTime, onupdate=func.now, nullable=True
-    #     )
-    # )
-
     _definition_path: Optional[PathLike] = PrivateAttr(
         default=None,
     )
@@ -52,13 +39,13 @@ class BaseModel(SQLModel, use_enum_values=True):
         validate_assignment=True,
     )
 
-    def to_yaml(self, path: PathLike, **kwargs) -> None:
+    def to_yaml(self, path: PathLike, **kwargs: Any) -> None:
         """
         Allows all derived data models to be exported into yaml.
 
         kwargs are passed to model_dump_json
         """
-        with open(path, mode="w") as fp:
+        with Path(path).open(mode="w") as fp:
             yaml.dump(
                 json.loads(self.model_dump_json(**kwargs)),
                 fp,
@@ -67,11 +54,11 @@ class BaseModel(SQLModel, use_enum_values=True):
             )
 
     @classmethod
-    def from_yaml(cls: Type[_T], path: PathLike) -> _T:
+    def from_yaml(cls: type[_T], path: PathLike) -> _T:
         """
         Allows all derived data models to be loaded from yaml.
         """
-        with open(path) as fp:
+        with Path(path).open() as fp:
             raw_data = yaml.safe_load(fp)
         model_instance = cls.model_validate(raw_data)
         model_instance._definition_path = path

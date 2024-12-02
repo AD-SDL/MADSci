@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from click.core import Context
 from rich import print
 from rich.console import Console
 from rich.pretty import pprint
@@ -24,7 +25,7 @@ console = Console()
 class LabContext:
     """Context object for lab commands."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the context object."""
         self.lab_def: Optional[LabDefinition] = None
         self.path: Optional[Path] = None
@@ -66,7 +67,7 @@ def find_lab(name: Optional[str], path: Optional[str]) -> LabContext:
 @click.option("--name", "-n", type=str, help="The name of the lab to operate on.")
 @click.option("--path", "-p", type=str, help="The path to the lab definition file.")
 @click.pass_context
-def lab(ctx, name: Optional[str], path: Optional[str]):
+def lab(ctx: Context, name: Optional[str], path: Optional[str]) -> None:
     """Manage labs."""
     ctx.obj = find_lab(name, path)
     ctx.obj.quiet = ctx.parent.params.get("quiet")
@@ -77,7 +78,12 @@ def lab(ctx, name: Optional[str], path: Optional[str]):
 @click.option("--path", "-p", type=str, help="The path to the lab definition file.")
 @click.option("--description", "-d", type=str, help="The description of the lab.")
 @click.pass_context
-def create(ctx, name: Optional[str], path: Optional[str], description: Optional[str]):
+def create(
+    ctx: Context,
+    name: Optional[str],
+    path: Optional[str],
+    description: Optional[str],
+) -> None:
     """Create a new lab."""
     if not name:
         name = ctx.parent.params.get("name")
@@ -105,7 +111,7 @@ def create(ctx, name: Optional[str], path: Optional[str], description: Optional[
 
 
 @lab.command()
-def list():
+def list() -> None:
     """List all labs. Will list all labs in the current directory, subdirectories, and parent directories."""
     lab_files = search_for_file_pattern("*.lab.yaml")
 
@@ -113,7 +119,7 @@ def list():
         for lab_file in sorted(set(lab_files)):
             lab_definition = LabDefinition.from_yaml(lab_file)
             console.print(
-                f"[bold]{lab_definition.name}[/]: {lab_definition.description} ({lab_file})"
+                f"[bold]{lab_definition.name}[/]: {lab_definition.description} ({lab_file})",
             )
             if lab_definition.workcells:
                 console.print("  Workcells:")
@@ -128,20 +134,20 @@ def list():
 
 @lab.command()
 @pass_lab
-def info(ctx: LabContext):
+def info(ctx: LabContext) -> None:
     """Get information about a lab."""
     if ctx.lab_def:
         pprint(ctx.lab_def)
     else:
         console.print(
-            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'."
+            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'.",
         )
 
 
 @lab.command()
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @pass_lab
-def delete(ctx: LabContext, yes: bool):
+def delete(ctx: LabContext, yes: bool) -> None:
     """Delete a lab."""
     if ctx.lab_def and ctx.path:
         console.print(f"Deleting lab: {ctx.lab_def.name} ({ctx.path})")
@@ -150,38 +156,38 @@ def delete(ctx: LabContext, yes: bool):
             console.print(f"Deleted {ctx.path}")
     else:
         console.print(
-            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'."
+            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'.",
         )
 
 
 @lab.command()
 @pass_lab
-def validate(ctx: LabContext):
+def validate(ctx: LabContext) -> None:
     """Validate a lab definition file."""
     if ctx.lab_def:
         console.print(ctx.lab_def)
     else:
         console.print(
-            "No lab found. Specify lab by name or path. If you don't have a lab definition file, you can create one with 'madsci lab create'."
+            "No lab found. Specify lab by name or path. If you don't have a lab definition file, you can create one with 'madsci lab create'.",
         )
 
 
-def run_command(command: str, lab: LabDefinition, path: Path):
+def run_command(command: str, lab: LabDefinition, path: Path) -> None:
     """Run a command in a lab."""
     console.print(
-        f"Running command: [bold]{command}[/] ({lab.commands[command]}) in lab: [bold]{lab.name}[/] ({path})"
+        f"Running command: [bold]{command}[/] ({lab.commands[command]}) in lab: [bold]{lab.name}[/] ({path})",
     )
-    print(os.popen(lab.commands[command]).read())
+    print(os.popen(lab.commands[command]).read())  # noqa: S605
 
 
 @lab.command()
 @click.argument("command", type=str)
 @pass_lab
-def run(ctx: LabContext, command: str):
+def run(ctx: LabContext, command: str) -> None:
     """Run a command in a lab."""
     if not ctx.lab_def:
         console.print(
-            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'."
+            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'.",
         )
         return
 
@@ -189,7 +195,7 @@ def run(ctx: LabContext, command: str):
         run_command(command, ctx.lab_def, ctx.path)
     else:
         console.print(
-            f"Command [bold]{command}[/] not found in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})"
+            f"Command [bold]{command}[/] not found in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})",
         )
 
 
@@ -197,11 +203,11 @@ def run(ctx: LabContext, command: str):
 @click.option("--command_name", "--name", "-n", type=str, required=False)
 @click.option("--command", "-c", type=str, required=False)
 @pass_lab
-def add_command(ctx: LabContext, command_name: str, command: str):
+def add_command(ctx: LabContext, command_name: str, command: str) -> None:
     """Add a command to a lab definition."""
     if not ctx.lab_def:
         console.print(
-            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'."
+            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'.",
         )
         return
 
@@ -212,7 +218,7 @@ def add_command(ctx: LabContext, command_name: str, command: str):
 
     if command_name in ctx.lab_def.commands:
         console.print(
-            f"Command [bold]{command_name}[/] already exists in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})"
+            f"Command [bold]{command_name}[/] already exists in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})",
         )
         if not prompt_yes_no("Do you want to overwrite it?", default="no"):
             return
@@ -220,7 +226,7 @@ def add_command(ctx: LabContext, command_name: str, command: str):
     ctx.lab_def.commands[command_name] = command
     save_model(ctx.path, ctx.lab_def, overwrite_check=False)
     console.print(
-        f"Added command [bold]{command_name}[/] to lab: [bold]{ctx.lab_def.name}[/]"
+        f"Added command [bold]{command_name}[/] to lab: [bold]{ctx.lab_def.name}[/]",
     )
 
 
@@ -228,11 +234,11 @@ def add_command(ctx: LabContext, command_name: str, command: str):
 @click.argument("command_name", type=str, required=False)
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @pass_lab
-def delete_command(ctx: LabContext, command_name: str, yes: bool):
+def delete_command(ctx: LabContext, command_name: str, yes: bool) -> None:
     """Delete a command from a lab definition."""
     if not ctx.lab_def:
         console.print(
-            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'."
+            "No lab found. Specify lab by name or path. If you don't have a lab file, you can create one with 'madsci lab create'.",
         )
         return
 
@@ -251,9 +257,9 @@ def delete_command(ctx: LabContext, command_name: str, yes: bool):
             del ctx.lab_def.commands[command_name]
             save_model(ctx.path, ctx.lab_def, overwrite_check=False)
             console.print(
-                f"Deleted command [bold]{command_name}[/] from lab: [bold]{ctx.lab_def.name}[/]"
+                f"Deleted command [bold]{command_name}[/] from lab: [bold]{ctx.lab_def.name}[/]",
             )
     else:
         console.print(
-            f"Command [bold]{command_name}[/] not found in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})"
+            f"Command [bold]{command_name}[/] not found in lab definition: [bold]{ctx.lab_def.name}[/] ({ctx.path})",
         )

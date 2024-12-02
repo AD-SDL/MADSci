@@ -16,15 +16,17 @@ console = Console()
 @tui()
 @click.group()
 @click.option(
-    "--quiet", "-q", is_flag=True, help="Run in quiet mode, skipping prompts."
+    "--quiet",
+    "-q",
+    is_flag=True,
+    help="Run in quiet mode, skipping prompts.",
 )
-def root_cli(quiet: bool = False):
+def root_cli(quiet: bool = False) -> None:
     """MADSci command line interface."""
-    pass
 
 
 @root_cli.command()
-def version():
+def version() -> None:
     """Display the MADSci client version."""
     console.print("MADSci Client v0.1.0")
 

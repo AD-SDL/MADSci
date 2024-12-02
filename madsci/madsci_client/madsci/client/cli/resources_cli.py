@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from click.core import Context
 from rich.console import Console
 from rich.pretty import pprint
 
@@ -30,7 +31,7 @@ console = Console()
 class ResourceContext:
     """Context object for resource commands."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the context object."""
         self.resource_file: Optional[ResourceFile] = None
         self.path: Optional[Path] = None
@@ -61,20 +62,21 @@ def find_resource_file(path: Optional[str]) -> ResourceContext:
 @click.group()
 @click.option("--path", "-p", type=str, help="Path to the resource definition file.")
 @click.pass_context
-def resource(ctx, path: Optional[str]):
+def resource(ctx: Context, path: Optional[str]) -> None:
     """Manage resources."""
     ctx.obj = find_resource_file(path)
 
 
 @resource.command()
 @click.pass_context
-def create(ctx):
+def create(ctx: Context) -> None:
     """Create a new resource file."""
     path = ctx.parent.params.get("path")
     if not path:
         default_path = Path.cwd() / "default.resources.yaml"
         new_path = prompt_for_input(
-            "Path to save Resource Definition file", default=str(default_path)
+            "Path to save Resource Definition file",
+            default=str(default_path),
         )
         if new_path:
             path = Path(new_path)
@@ -85,8 +87,7 @@ def create(ctx):
 
 
 @resource.command()
-@pass_resource
-def list(ctx: ResourceContext):
+def list() -> None:
     """List all resource files and their contents."""
     resource_files = search_for_file_pattern("*.resources.yaml")
 
@@ -99,23 +100,22 @@ def list(ctx: ResourceContext):
                 console.print("\n[bold]Resource Types:[/]")
                 for resource_type in resource_def.resource_types:
                     console.print(
-                        f"  [bold]{resource_type.type_name}[/]: {resource_type.type_description}"
+                        f"  [bold]{resource_type.type_name}[/]: {resource_type.type_description}",
                     )
 
             if resource_def.default_resources:
                 console.print("\n[bold]Default Resources:[/]")
                 for resource in resource_def.default_resources:
                     console.print(
-                        f"  [bold]{resource.resource_name}[/]: {resource.resource_description or 'No description'}"
+                        f"  [bold]{resource.resource_name}[/]: {resource.resource_description or 'No description'}",
                     )
     else:
         console.print("No resource files found")
 
 
 @resource.group(name="type")
-def resource_type():
+def resource_type() -> None:
     """Manage resource types within a resource file."""
-    pass
 
 
 @resource_type.command()
@@ -128,11 +128,11 @@ def add(
     name: Optional[str],
     description: Optional[str],
     base_type: Optional[str],
-):
+) -> None:
     """Add a new resource type to the resource file."""
     if not ctx.resource_file or not ctx.path:
         console.print(
-            "No resource file found. Create one with 'madsci resource create' first."
+            "No resource file found. Create one with 'madsci resource create' first.",
         )
         return
 
@@ -157,13 +157,14 @@ def add(
             type_name=name,
             type_description=description,
             base_type=base_type,
-        )
+        ),
     )
 
     # *Check if type already exists
     if any(rt.type_name == name for rt in ctx.resource_file.resource_types):
         if not prompt_yes_no(
-            f"Resource type '{name}' already exists. Overwrite?", default=False
+            f"Resource type '{name}' already exists. Overwrite?",
+            default=False,
         ):
             return
         # *Remove existing type
@@ -180,11 +181,11 @@ def add(
 @resource_type.command()
 @click.argument("name", required=False)
 @pass_resource
-def delete(ctx: ResourceContext, name: Optional[str]):
+def delete(ctx: ResourceContext, name: Optional[str]) -> None:
     """Delete a resource type from the resource file."""
     if not ctx.resource_file or not ctx.path:
         console.print(
-            "No resource file found. Create one with 'madsci resource create' first."
+            "No resource file found. Create one with 'madsci resource create' first.",
         )
         return
 
@@ -201,7 +202,8 @@ def delete(ctx: ResourceContext, name: Optional[str]):
 
     # Find the resource type
     resource_type = next(
-        (rt for rt in ctx.resource_file.resource_types if rt.type_name == name), None
+        (rt for rt in ctx.resource_file.resource_types if rt.type_name == name),
+        None,
     )
     if not resource_type:
         console.print(f"Resource type [bold]{name}[/] not found.")
@@ -215,7 +217,7 @@ def delete(ctx: ResourceContext, name: Optional[str]):
     ]
     if used_by_resources:
         console.print(
-            f"Cannot delete resource type [bold]{name}[/] as it is used by these resources:"
+            f"Cannot delete resource type [bold]{name}[/] as it is used by these resources:",
         )
         for resource_name in used_by_resources:
             console.print(f"  - {resource_name}")
@@ -232,11 +234,11 @@ def delete(ctx: ResourceContext, name: Optional[str]):
 @resource_type.command()
 @click.argument("name", required=False)
 @pass_resource
-def info(ctx: ResourceContext, name: Optional[str]):
+def info(ctx: ResourceContext, name: Optional[str]) -> None:
     """Show information about a resource type."""
     if not ctx.resource_file:
         console.print(
-            "No resource file found. Create one with 'madsci resource create' first."
+            "No resource file found. Create one with 'madsci resource create' first.",
         )
         return
 
@@ -252,7 +254,8 @@ def info(ctx: ResourceContext, name: Optional[str]):
         )
 
     resource_type = next(
-        (rt for rt in ctx.resource_file.resource_types if rt.type_name == name), None
+        (rt for rt in ctx.resource_file.resource_types if rt.type_name == name),
+        None,
     )
     if resource_type:
         pprint(resource_type)
@@ -262,11 +265,11 @@ def info(ctx: ResourceContext, name: Optional[str]):
 
 @resource_type.command(name="list")
 @pass_resource
-def list_types(ctx: ResourceContext):
+def list_types(ctx: ResourceContext) -> None:
     """List all resource types in the file."""
     if not ctx.resource_file:
         console.print(
-            "No resource file found. Create one with 'madsci resource create' first."
+            "No resource file found. Create one with 'madsci resource create' first.",
         )
         return
 
@@ -277,7 +280,7 @@ def list_types(ctx: ResourceContext):
     console.print("\n[bold]Resource Types:[/]")
     for resource_type in ctx.resource_file.resource_types:
         console.print(
-            f"  [bold]{resource_type.type_name}[/] ({resource_type.base_type})"
+            f"  [bold]{resource_type.type_name}[/] ({resource_type.base_type})",
         )
         if resource_type.type_description:
             console.print(f"    Description: {resource_type.type_description}")
@@ -286,31 +289,30 @@ def list_types(ctx: ResourceContext):
 
 @resource.command()
 @pass_resource
-def add_resource(ctx: ResourceContext):
+def add_resource(ctx: ResourceContext) -> None:
     """Add a new default resource to the resource file."""
     if not ctx.resource_file or not ctx.path:
         console.print(
-            "No resource file found. Create one with 'madsci resource create' first."
+            "No resource file found. Create one with 'madsci resource create' first.",
         )
         return
 
     name = prompt_for_input("Resource Name", required=True)
     description = prompt_for_input("Resource Description")
 
-    # Combine built-in types and custom types for selection
+    # * Combine built-in types and custom types for selection
     available_types = list(RESOURCE_DEFINITION_MAP.keys())
     custom_types = [rt.type_name for rt in ctx.resource_file.resource_types]
     all_types = available_types + custom_types
 
     resource_type = prompt_from_list(
-        "Resource Type", all_types, default=ResourceType.resource.value
+        "Resource Type",
+        all_types,
+        default=ResourceType.resource.value,
     )
 
-    # Create the resource definition
-    if resource_type in RESOURCE_DEFINITION_MAP:
-        resource_def_class = RESOURCE_DEFINITION_MAP[resource_type]
-    else:
-        resource_def_class = ResourceDefinition
+    # * Create the resource definition
+    resource_def_class = RESOURCE_DEFINITION_MAP.get(resource_type, ResourceDefinition)
 
     resource_def = resource_def_class(
         resource_name=name,
@@ -325,31 +327,31 @@ def add_resource(ctx: ResourceContext):
 
 @resource.command(name="info")
 @pass_resource
-def file_info(ctx: ResourceContext):
+def file_info(ctx: ResourceContext) -> None:
     """Get information about a resource file."""
     if ctx.resource_file:
         pprint(ctx.resource_file)
     else:
         console.print(
-            "No resource file found. Create one with 'madsci resource create'."
+            "No resource file found. Create one with 'madsci resource create'.",
         )
 
 
 @resource.command()
 @pass_resource
-def validate(ctx: ResourceContext):
+def validate(ctx: ResourceContext) -> None:
     """Validate a resource file."""
     if ctx.resource_file:
         console.print(ctx.resource_file)
     else:
         console.print(
-            "No resource file found. Create one with 'madsci resource create'."
+            "No resource file found. Create one with 'madsci resource create'.",
         )
 
 
 @resource.command(name="delete")
 @pass_resource
-def delete_file(ctx: ResourceContext):
+def delete_file(ctx: ResourceContext) -> None:
     """Delete a resource file."""
     if ctx.resource_file and ctx.path:
         console.print(f"Deleting resource file: {ctx.path}")
@@ -358,5 +360,5 @@ def delete_file(ctx: ResourceContext):
             console.print(f"Deleted {ctx.path}")
     else:
         console.print(
-            "No resource file found. Create one with 'madsci resource create'."
+            "No resource file found. Create one with 'madsci resource create'.",
         )

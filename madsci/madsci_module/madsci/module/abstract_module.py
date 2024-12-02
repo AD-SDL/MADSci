@@ -1,11 +1,11 @@
-"""Base module interface and helper classes."""
+"""Base Node Module helper classes."""
 
 import inspect
 import threading
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, get_type_hints
+from typing import Any, Callable, ClassVar, Optional, Union, get_type_hints
 
 from pydantic import ValidationError
 from rich import print
@@ -13,19 +13,26 @@ from rich import print
 from madsci.common.definition_loaders import (
     node_definition_loader,
 )
+from madsci.common.events import MADSciEventLogger
+from madsci.common.exceptions import (
+    ActionMissingArgumentError,
+    ActionMissingFileError,
+    ActionNotImplementedError,
+)
 from madsci.common.types.action_types import (
     ActionArgumentDefinition,
     ActionDefinition,
     ActionFileDefinition,
     ActionRequest,
-    ActionResponse,
+    ActionResult,
     ActionStatus,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error
+from madsci.common.types.event_types import Event
 from madsci.common.types.module_types import (
     AdminCommands,
-    ModuleDefinition,
+    NodeModuleDefinition,
 )
 from madsci.common.types.node_types import (
     NodeDefinition,
@@ -41,7 +48,7 @@ def action(
     name: Optional[str] = None,
     description: Optional[str] = None,
     blocking: bool = False,
-):
+) -> Callable:
     """Decorator to mark a method as an action handler."""
     func.__is_madsci_action__ = True
 
@@ -57,64 +64,66 @@ def action(
     return func
 
 
-class AbstractModule:
+class AbstractNode:
     """
-    Base Module implementation, protocol agnostic, all module class definitions should inherit from or be based on this.
+    Base Node implementation, protocol agnostic, all node class definitions should inherit from or be based on this.
 
     Note that this class is abstract: it is intended to be inherited from, not used directly.
     """
 
-    module_definition: ModuleDefinition = None
+    module_definition: ClassVar[NodeModuleDefinition] = None
     """The module definition."""
-    node_definition: NodeDefinition = None
+    node_definition: ClassVar[NodeDefinition] = None
     """The node definition."""
-    config: Dict[str, Any] = {}
+    config: ClassVar[dict[str, Any]] = {}
     """The configuration of the module."""
-    node_status: NodeStatus = NodeStatus(
+    node_status: ClassVar[NodeStatus] = NodeStatus(
         initializing=True,
     )
     """The status of the module."""
-    node_state: Dict[str, Any] = {}
+    node_state: ClassVar[dict[str, Any]] = {}
     """The state of the module."""
-    action_handlers: Dict[str, callable] = {}
+    action_handlers: ClassVar[dict[str, callable]] = {}
     """The handlers for the actions that the module can perform."""
-    action_history: Dict[str, ActionResponse] = {}
+    action_history: ClassVar[dict[str, ActionResult]] = {}
     """The history of the actions that the module has performed."""
-    status_update_interval: float = 5.0
+    status_update_interval: ClassVar[float] = 5.0
     """The interval at which the status handler is called. Overridable by config."""
-    state_update_interval: float = 5.0
+    state_update_interval: ClassVar[float] = 5.0
     """The interval at which the state handler is called. Overridable by config."""
-    node_info_path: Optional[Path] = None
+    node_info_path: ClassVar[Optional[Path]] = None
     """The path to the node info file. If unset, defaults to '<node_definition_path>.info.yaml'"""
+    logger: ClassVar[MADSciEventLogger] = MADSciEventLogger()
+    """The event logger for this node"""
 
-    def __init__(self):
+    def __init__(self) -> "AbstractNode":
         """Initialize the module class."""
         (self.node_definition, self.module_definition, self.config) = (
             node_definition_loader()
         )
-        assert (
-            self.node_definition is not None
-        ), "Node definition not found, aborting node initialization"
-        assert (
-            self.module_definition is not None
-        ), "Module definition not found, aborting node initialization"
+        if self.node_definition is None:
+            raise ValueError("Node definition not found, aborting node initialization")
+        if self.module_definition is None:
+            raise ValueError(
+                "Module definition not found, aborting node initialization",
+            )
 
         # * Synthesize the node info
         self.node_info = NodeInfo.from_node_and_module(
-            self.node_definition, self.module_definition, self.config
+            self.node_definition,
+            self.module_definition,
+            self.config,
         )
 
         # * Add the admin commands to the node info
         self.node_info.capabilities.admin_commands = set.union(
             self.node_info.capabilities.admin_commands,
-            set(
-                [
-                    admin_command.value
-                    for admin_command in AdminCommands
-                    if hasattr(self, admin_command.value)
-                    and callable(self.__getattribute__(admin_command.value))
-                ]
-            ),
+            {
+                admin_command.value
+                for admin_command in AdminCommands
+                if hasattr(self, admin_command.value)
+                and callable(self.__getattribute__(admin_command.value))
+            },
         )
         # * Add the action decorators to the node
         for action_callable in self.__class__.__dict__.values():
@@ -129,12 +138,11 @@ class AbstractModule:
         # * Save the node info
         if self.node_info_path:
             self.node_info.to_yaml(self.node_info_path)
-        else:
-            if self.node_definition._definition_path:
-                self.node_info_path = Path(
-                    self.node_definition._definition_path
-                ).with_suffix(".info.yaml")
-                self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
+        elif self.node_definition._definition_path:
+            self.node_info_path = Path(
+                self.node_definition._definition_path,
+            ).with_suffix(".info.yaml")
+            self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
 
         # * Add a lock for thread safety with blocking actions
         self._action_lock = threading.Lock()
@@ -143,13 +151,13 @@ class AbstractModule:
     """Node Lifecycle and Public Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def start_node(self, config: Dict[str, Any] = {}):
+    def start_node(self, config: dict[str, Any] = {}) -> None:
         """Called once to start the node."""
         if self.module_definition._definition_path:
             self.module_definition.to_yaml(self.module_definition._definition_path)
         else:
             print(
-                "No definition path set for module, skipping module definition update"
+                "No definition path set for module, skipping module definition update",
             )
         if self.node_definition._definition_path:
             self.node_definition.to_yaml(self.node_definition._definition_path)
@@ -158,47 +166,53 @@ class AbstractModule:
 
         # *Check for any required config parameters that weren't set
         self.config = {**self.config, **config}
-        for config in self.node_definition.config.values():
+        for config_value in self.node_definition.config.values():
             if (
-                config.required
-                and (config.name not in self.config or self.config[config.name] is None)
-                and config.default is None
+                config_value.required
+                and (
+                    config_value.name not in self.config
+                    or self.config[config_value.name] is None
+                )
+                and config_value.default is None
             ):
-                print(f"Required config parameter '{config.name}' not set")
-                self.node_status.waiting_for_config.add(config.name)
+                print(f"Required config parameter '{config_value.name}' not set")
+                self.node_status.waiting_for_config.add(config_value.name)
             else:
-                self.node_status.waiting_for_config.discard(config.name)
+                self.node_status.waiting_for_config.discard(config_value.name)
 
-    def status_handler(self):
-        """Called periodically to update the node status."""
-        pass
+    def status_handler(self) -> None:
+        """Called periodically to update the node status. Should set `self.node_status`"""
 
-    def state_handler(self):
-        """Called periodically to update the node state."""
-        pass
+    def state_handler(self) -> None:
+        """Called periodically to update the node state. Should set `self.node_state`"""
 
-    def startup_handler(self):
+    def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
-        pass
 
-    def shutdown_handler(self):
+    def shutdown_handler(self) -> None:
         """Called to shut down the node. Should be used to clean up any resources."""
-        pass
 
     """------------------------------------------------------------------------------------------------"""
     """Interface Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def get_action_history(self) -> List[str]:
+    def get_action_history(self) -> list[str]:
         """Get the action history of the module."""
         return list(self.action_history.keys())
 
-    def run_action(self, action_request: ActionRequest) -> ActionResponse:
+    def run_action(self, action_request: ActionRequest) -> ActionResult:
         """Run an action on the module."""
         self.node_status.running_actions.add(action_request.action_id)
         action_response = None
+        arg_dict = {}
         try:
-            action_response = self._action_handler(action_request)
+            arg_dict = self._parse_action_args(action_request)
+            self._check_required_args(action_request)
+        except Exception as e:
+            self._exception_handler(e, set_node_error=False)
+            action_response = action_request.failed(errors=Error.from_exception(e))
+        try:
+            self._run_action(action_request, arg_dict)
         except Exception as e:
             self._exception_handler(e)
             action_response = action_request.failed(errors=Error.from_exception(e))
@@ -206,36 +220,35 @@ class AbstractModule:
             if action_response is None:
                 # * Assume success if no return value and no exception
                 action_response = action_request.succeeded()
-            elif not isinstance(action_response, ActionResponse):
+            elif not isinstance(action_response, ActionResult):
                 try:
-                    action_response = ActionResponse.model_validate(action_response)
+                    action_response = ActionResult.model_validate(action_response)
                 except ValidationError as e:
                     action_response = action_request.failed(
-                        errors=Error.from_exception(e)
+                        errors=Error.from_exception(e),
                     )
         finally:
             self.node_status.running_actions.discard(action_request.action_id)
             self.action_history[action_request.action_id] = action_response
         return action_response
 
-    def get_action(self, action_id: str) -> ActionResponse:
+    def get_action_result(self, action_id: str) -> ActionResult:
         """Get the status of an action on the module."""
         if action_id in self.action_history:
             return self.action_history[action_id]
-        else:
-            return ActionResponse(
-                status=ActionStatus.FAILED,
-                errors=Error(
-                    message=f"Action with id '{action_id}' not found",
-                    error_type="ActionNotFound",
-                ),
-            )
+        return ActionResult(
+            status=ActionStatus.FAILED,
+            errors=Error(
+                message=f"Action with id '{action_id}' not found",
+                error_type="ActionNotFound",
+            ),
+        )
 
     def get_status(self) -> NodeStatus:
         """Get the status of the module."""
         return self.node_status
 
-    def set_config(self, new_config: Dict[str, Any]) -> NodeSetConfigResponse:
+    def set_config(self, new_config: dict[str, Any]) -> NodeSetConfigResponse:
         """Set configuration values of the module."""
         need_reset = False
         errors = []
@@ -260,7 +273,7 @@ class AbstractModule:
         if need_reset and hasattr(self, "reset"):
             # * Reset after a short delay to allow the response to be returned
             @threaded_task
-            def schedule_reset():
+            def schedule_reset() -> None:
                 time.sleep(2)
                 self.reset()
 
@@ -273,7 +286,7 @@ class AbstractModule:
     def run_admin_command(self, admin_command: AdminCommands) -> AdminCommandResponse:
         """Run the specified administrative command on the module."""
         if self.hasattr(admin_command) and callable(
-            self.__getattribute__(admin_command)
+            self.__getattribute__(admin_command),
         ):
             try:
                 response = self.__getattribute__(admin_command)()
@@ -292,7 +305,7 @@ class AbstractModule:
                 if isinstance(response, AdminCommandResponse):
                     return response
                 raise ValueError(
-                    f"Admin command {admin_command} returned an unexpected value: {response}"
+                    f"Admin command {admin_command} returned an unexpected value: {response}",
                 )
             except Exception as e:
                 self._exception_handler(e)
@@ -315,17 +328,25 @@ class AbstractModule:
         """Get information about the module."""
         return self.node_info
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """Get the state of the module."""
         return self.node_state
+
+    def get_log(self) -> list[Event]:
+        """Return the log of the node"""
+        return self.logger.get_log()
 
     """------------------------------------------------------------------------------------------------"""
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
 
     def _add_action(
-        self, func: Callable, action_name: str, description: str, blocking: bool = False
-    ):
+        self,
+        func: Callable,
+        action_name: str,
+        description: str,
+        blocking: bool = False,
+    ) -> None:
         """Add an action to the module.
 
         Args:
@@ -348,8 +369,11 @@ class AbstractModule:
         signature = inspect.signature(func)
         if signature.parameters:
             for parameter_name, parameter_type in get_type_hints(
-                func, include_extras=True
+                func,
+                include_extras=True,
             ).items():
+                if parameter_name == "return":
+                    continue
                 if (
                     parameter_name not in action_def.args
                     and parameter_name not in [file.name for file in action_def.files]
@@ -383,7 +407,7 @@ class AbstractModule:
                         )
                         if annotated_as_file and annotated_as_arg:
                             raise ValueError(
-                                f"Parameter '{parameter_name}' is annotated as both a file and an argument. This is not allowed."
+                                f"Parameter '{parameter_name}' is annotated as both a file and an argument. This is not allowed.",
                             )
                     if annotated_as_file or (
                         type_hint.__name__
@@ -409,30 +433,28 @@ class AbstractModule:
                             name=parameter_name,
                             type=pretty_type_repr(type_hint),
                             default=default,
-                            required=True if default is None else False,
+                            required=default is None,
                             description=description,
                         )
         self.node_info.actions[action_name] = action_def
 
-    def _action_handler(self, action_request: ActionRequest) -> ActionResponse:
+    def _parse_action_args(
+        self,
+        action_request: ActionRequest,
+    ) -> Union[ActionResult, tuple[callable, dict[str, Any]]]:
         """Run an action on the module."""
         action_callable = self.action_handlers.get(action_request.action_name, None)
         if action_callable is None:
-            return action_request.failed(
-                errors=Error(
-                    message=f"Action {action_request.action_name} not implemented by this module",
-                    error_type="ActionNotImplemented",
-                )
+            raise ActionNotImplementedError(
+                f"Action {action_request.action_name} not implemented by this module",
             )
         # * Prepare arguments for the action function.
         # * If the action function has a 'state' or 'action' parameter
         # * we'll pass in our state and action objects.
         arg_dict = {}
         parameters = inspect.signature(action_callable).parameters
-        if parameters.__contains__("state"):
-            arg_dict["state"] = self.state
         if parameters.__contains__("action"):
-            arg_dict["action"] = self.action_request
+            arg_dict["action"] = action_request
         if parameters.__contains__("self"):
             arg_dict["self"] = self
         if list(parameters.values())[-1].kind == inspect.Parameter.VAR_KEYWORD:
@@ -443,37 +465,51 @@ class AbstractModule:
                 **{file.filename: file.file for file in action_request.files},
             }
         else:
+            # * Pass only explicit arguments, dropping extras
             for arg_name, arg_value in action_request.args.items():
-                if arg_name in parameters.keys():
+                if arg_name in parameters:
                     arg_dict[arg_name] = arg_value
+                else:
+                    self.logger.log_info(f"Ignoring unexpected argument {arg_name}")
             for file in action_request.files:
-                if file.filename in parameters.keys():
+                if file.filename in parameters:
                     arg_dict[file.filename] = file
+                else:
+                    self.logger.log_info(f"Ignoring unexpected file {file.filename}")
+        return arg_dict
 
+    def _check_required_args(
+        self,
+        action_request: ActionRequest,
+    ) -> None:
         for arg in self.node_info.actions[action_request.action_name].args.values():
-            if arg.name not in action_request.args:
-                if arg.required:
-                    return action_request.failed(
-                        errors=Error(message=f"Missing required argument '{arg.name}'")
-                    )
+            if arg.name not in action_request.args and arg.required:
+                raise ActionMissingArgumentError(
+                    f"Missing required argument '{arg.name}'",
+                )
         for file in self.node_info.actions[action_request.action_name].files.values():
-            if not any(
-                arg_file.filename == file.name for arg_file in action_request.files
+            if (
+                not any(
+                    arg_file.filename == file.name for arg_file in action_request.files
+                )
+                and file.required
             ):
-                if file.required:
-                    return action_request.failed(
-                        errors=Error(message=f"Missing required file '{file.name}'")
-                    )
+                raise ActionMissingFileError(f"Missing required file '{file.name}'")
 
+    def _run_action(
+        self,
+        action_request: ActionRequest,
+        arg_dict: dict[str, Any],
+    ) -> ActionResult:
+        action_callable = self.action_handlers.get(action_request.action_name, None)
+        # * Perform the action here and return result
         if not self.node_status.ready:
             return action_request.not_ready(
                 error=Error(
                     message=f"Module is not ready: {self.node_status.description}",
                     error_type="ModuleNotReady",
-                )
+                ),
             )
-
-        # * Perform the action here and return result
         self._action_lock.acquire()
         try:
             # * If the action is marked as blocking, set the module status to not ready for the duration of the action, otherwise release the lock immediately
@@ -497,43 +533,43 @@ class AbstractModule:
         finally:
             if self._action_lock.locked():
                 self._action_lock.release()
-        if isinstance(result, ActionResponse):
+        if isinstance(result, ActionResult):
             # * Make sure the action ID is set correctly on the result
             result.action_id = action_request.action_id
             return result
-        elif result is None:
+        if result is None:
             # *Assume success if no return value and no exception
             return action_request.succeeded()
-        else:
-            # * Return a failure if the action returns something unexpected
-            return action_request.failed(
-                errors=Error(
-                    message=f"Action '{action_request.action_name}' returned an unexpected value: {result}"
-                )
-            )
+        # * Return a failure if the action returns something unexpected
+        return action_request.failed(
+            errors=Error(
+                message=f"Action '{action_request.action_name}' returned an unexpected value: {result}",
+            ),
+        )
 
-    def _exception_handler(self, e: Exception) -> None:
+    def _exception_handler(self, e: Exception, set_node_error: bool = True) -> None:
         """Handle an exception."""
-        self.node_status.errored = True
+        self.node_status.errored = set_node_error
         self.node_status.errors.append(Error.from_exception(e))
         traceback.print_exc()
-        return
 
     @threaded_daemon
-    def _loop_handler(self):
+    def _loop_handler(self) -> None:
         """Handles calling periodic handlers, like the status and state handlers"""
         last_status_update = 0.0
         last_state_update = 0.0
         while True:
             try:
                 status_update_interval = self.config.get(
-                    "status_update_interval", self.status_update_interval
+                    "status_update_interval",
+                    self.status_update_interval,
                 )
                 if time.time() - last_status_update > status_update_interval:
                     last_status_update = time.time()
                     self.status_handler()
                 state_update_interval = self.config.get(
-                    "state_update_interval", self.state_update_interval
+                    "state_update_interval",
+                    self.state_update_interval,
                 )
                 if time.time() - last_state_update > state_update_interval:
                     last_state_update = time.time()

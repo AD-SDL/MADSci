@@ -1,11 +1,11 @@
 """Types for MADSci Steps."""
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from sqlmodel.main import Field
 
-from madsci.common.types.action_types import ActionResponse, ActionStatus
+from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 
 
@@ -25,17 +25,17 @@ class StepDefinition(BaseModel):
         title="Step Action",
         description="The action to perform in the step.",
     )
-    args: Dict[str, Any] = Field(
+    args: dict[str, Any] = Field(
         title="Step Arguments",
         description="Arguments for the step action.",
         default_factory=dict,
     )
-    files: Dict[str, PathLike] = Field(
+    files: dict[str, PathLike] = Field(
         title="Step Files",
         description="Files to be used in the step.",
         default_factory=dict,
     )
-    data_labels: Dict[str, str] = Field(
+    data_labels: dict[str, str] = Field(
         title="Step Data Labels",
         description="Data labels for the results of the step. Maps from the names of the outputs of the action to the names of the data labels.",
         default_factory=dict,
@@ -55,7 +55,7 @@ class Step(StepDefinition):
         description="The status of the step.",
         default=ActionStatus.NOT_STARTED,
     )
-    results: Dict[str, ActionResponse] = Field(
+    results: dict[str, ActionResult] = Field(
         title="Step Results",
         description="The results of the step.",
         default_factory=dict,

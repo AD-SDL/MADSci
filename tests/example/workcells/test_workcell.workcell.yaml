@@ -1,0 +1,8 @@
+name: TestWorkcell
+workcell_id: 01JDN5Z858MNVYG7MJW5D6Z94F
+description: asldfkj
+config:
+  scheduler_update_interval: 0.1
+  node_update_interval: 1.0
+  auto_start: true
+nodes: {}

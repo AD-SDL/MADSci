@@ -1,7 +1,7 @@
 """Types related to MADSci Modules."""
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic.functional_validators import field_validator
 from sqlmodel.main import Field
@@ -10,8 +10,8 @@ from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.base_types import BaseModel
 
 
-class ModuleType(str, Enum):
-    """The type of a MADSci Module."""
+class NodeType(str, Enum):
+    """The type of a MADSci node."""
 
     DEVICE = "device"
     COMPUTE = "compute"
@@ -22,48 +22,49 @@ class ModuleType(str, Enum):
     TRANSFER_MANAGER = "transfer_manager"
 
 
-class ModuleDefinition(BaseModel, extra="allow"):
-    """Definition for a MADSci Module."""
+class NodeModuleDefinition(BaseModel, extra="allow"):
+    """Definition for a MADSci Node Module."""
 
     module_name: str = Field(
-        title="Module Name",
-        description="The name of the module.",
+        title="Node Module Name",
+        description="The name of the node module.",
     )
-    module_type: Optional[ModuleType] = Field(
+    module_type: Optional[NodeType] = Field(
         title="Module Type",
-        description="The type of the module.",
+        description="The type of the node module.",
         default=None,
     )
     module_description: Optional[str] = Field(
         default=None,
         title="Module Description",
-        description="A description of the module.",
+        description="A description of the node module.",
     )
-    capabilities: "ModuleCapabilities" = Field(
-        default_factory=lambda: ModuleCapabilities(),
+    capabilities: "NodeCapabilities" = Field(
+        default_factory=lambda: NodeCapabilities(),
         title="Module Capabilities",
-        description="The capabilities of the module.",
+        description="The capabilities of the node module.",
     )
-    config: Union[List["ConfigParameter"], Dict[str, "ConfigParameter"]] = Field(
+    config: Union[list["ConfigParameter"], dict[str, "ConfigParameter"]] = Field(
         title="Module Configuration",
-        description="The configuration of the module. These are 'default' configuration parameters inherited by nodes.",
+        description="The configuration of the node module. These are 'default' configuration parameters inherited by all child nodes.",
         default_factory=list,
     )
-    commands: Dict[str, str] = Field(
+    commands: dict[str, str] = Field(
         title="Module Commands",
-        description="The commands that the module supports. These are 'default' commands inherited by nodes.",
+        description="The commands that the node module supports. These are 'default' commands inherited by all child nodes.",
         default_factory=dict,
     )
 
     @field_validator("config", mode="after")
+    @classmethod
     def validate_config(
-        cls, v: Union[List["ConfigParameter"], Dict[str, "ConfigParameter"]]
-    ) -> Union[List["ConfigParameter"], Dict[str, "ConfigParameter"]]:
-        """Validate the module configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
+        cls,
+        v: Union[list["ConfigParameter"], dict[str, "ConfigParameter"]],
+    ) -> Union[list["ConfigParameter"], dict[str, "ConfigParameter"]]:
+        """Validate the node module configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
         if isinstance(v, dict):
             return v
-        else:
-            return {param.name: param for param in v}
+        return {param.name: param for param in v}
 
 
 class ConfigParameter(BaseModel, extra="allow"):
@@ -95,7 +96,7 @@ class ConfigParameter(BaseModel, extra="allow"):
     )
 
 
-MODULE_CONFIG_TEMPLATES: Dict[str, List[ConfigParameter]] = {
+NODE_MODULE_CONFIG_TEMPLATES: dict[str, list[ConfigParameter]] = {
     "REST Module": [
         ConfigParameter(
             name="host",
@@ -115,72 +116,72 @@ MODULE_CONFIG_TEMPLATES: Dict[str, List[ConfigParameter]] = {
             default="http",
             required=True,
         ),
-    ]
+    ],
 }
 
 
-class ModuleInterfaceCapabilities(BaseModel):
-    """Capabilities of a MADSci Module Interface."""
+class NodeClientCapabilities(BaseModel):
+    """Capabilities of a MADSci Node Client."""
 
     get_info: bool = Field(
         default=False,
         title="Module Info",
-        description="Whether the module/interface supports querying its info.",
+        description="Whether the node supports querying its info.",
     )
     get_state: bool = Field(
         default=False,
         title="Module State",
-        description="Whether the module/inteface supports querying its state.",
+        description="Whether the node supports querying its state.",
     )
     get_status: bool = Field(
         default=False,
         title="Module Status",
-        description="Whether the module/inteface supports querying its status.",
+        description="Whether the node supports querying its status.",
     )
     send_action: bool = Field(
         default=False,
         title="Module Send Action",
-        description="Whether the module/interface supports sending actions.",
+        description="Whether the node supports sending actions.",
     )
-    get_action: bool = Field(
+    get_action_result: bool = Field(
         default=False,
         title="Module Get Action",
-        description="Whether the module/interface supports querying the status of an action.",
+        description="Whether the node supports querying the status of an action.",
     )
-    get_actions: bool = Field(
+    get_action_history: bool = Field(
         default=False,
         title="Module Get Actions",
-        description="Whether the module/interface supports querying the history of actions.",
+        description="Whether the node supports querying the history of actions.",
     )
     action_files: bool = Field(
         default=False,
         title="Module Action Files",
-        description="Whether the module/interface supports sending action files.",
+        description="Whether the node supports sending action files.",
     )
     send_admin_commands: bool = Field(
         default=False,
         title="Module Send Admin Commands",
-        description="Whether the module supports sending admin commands.",
+        description="Whether the node supports sending admin commands.",
     )
     set_config: bool = Field(
         default=False,
         title="Module Set Config",
-        description="Whether the module/interface supports setting configuration.",
+        description="Whether the node supports setting configuration.",
     )
     get_resources: bool = Field(
         default=False,
         title="Module Get Resources",
-        description="Whether the module/interface supports querying its resources.",
+        description="Whether the node supports querying its resources.",
     )
     get_log: bool = Field(
         default=False,
         title="Module Get Log",
-        description="Whether the module/interface supports querying its log.",
+        description="Whether the node supports querying its log.",
     )
 
 
-class ModuleCapabilities(ModuleInterfaceCapabilities):
-    """Capabilities of a MADSci Module."""
+class NodeCapabilities(NodeClientCapabilities):
+    """Capabilities of a MADSci Node."""
 
     events: bool = Field(
         default=False,

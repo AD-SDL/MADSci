@@ -27,7 +27,9 @@ class Event(BaseModel):
         default_factory=new_ulid_str,
     )
     event_type: "EventType" = Field(
-        title="Event Type", description="The type of the event.", default="unknown"
+        title="Event Type",
+        description="The type of the event.",
+        default="unknown",
     )
     log_level: "EventLogLevel" = Field(
         title="Event Log Level",

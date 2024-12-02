@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from click import Context
 from rich.console import Console
 from rich.pretty import pprint
 
@@ -23,7 +24,7 @@ console = Console()
 class WorkcellContext:
     """Context object for workcell commands."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the context object."""
         self.workcell: Optional[WorkcellDefinition] = None
         self.path: Optional[Path] = None
@@ -35,7 +36,9 @@ pass_workcell = click.make_pass_decorator(WorkcellContext)
 
 
 def find_workcell(
-    name: Optional[str], path: Optional[str], lab_context: Optional[LabContext] = None
+    name: Optional[str],
+    path: Optional[str],
+    lab_context: Optional[LabContext] = None,
 ) -> WorkcellContext:
     """Find a workcell by name or path."""
     workcell_context = WorkcellContext()
@@ -50,7 +53,8 @@ def find_workcell(
     # If we have a lab context, search in the lab directory first
     if lab_context and lab_context.path:
         workcell_files = search_for_file_pattern(
-            "*.workcell.yaml", start_dir=lab_context.path.parent
+            "*.workcell.yaml",
+            start_dir=lab_context.path.parent,
         )
         for workcell_file in workcell_files:
             workcell = WorkcellDefinition.from_yaml(workcell_file)
@@ -76,7 +80,12 @@ def find_workcell(
 @click.option("--path", "-p", type=str, help="Path to the workcell definition file.")
 @click.option("--lab", "-l", type=str, help="Name or path of the lab to operate in.")
 @click.pass_context
-def workcell(ctx, name: Optional[str], path: Optional[str], lab: Optional[str]):
+def workcell(
+    ctx: Context,
+    name: Optional[str],
+    path: Optional[str],
+    lab: Optional[str],
+) -> None:
     """Manage workcells. Specify workcell by name or path."""
     lab_context = find_lab(name=lab, path=lab)
     ctx.obj = find_workcell(name=name, path=path, lab_context=lab_context)
@@ -86,27 +95,38 @@ def workcell(ctx, name: Optional[str], path: Optional[str], lab: Optional[str]):
 @workcell.command()
 @click.option("--name", "-n", type=str, help="The name of the workcell.")
 @click.option(
-    "--path", "-p", type=str, help="The path to the workcell definition file."
+    "--path",
+    "-p",
+    type=str,
+    help="The path to the workcell definition file.",
 )
 @click.option("--description", "-d", type=str, help="The description of the workcell.")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @click.pass_context
 def create(
-    ctx, name: Optional[str], path: Optional[str], description: Optional[str], yes: bool
-):
+    ctx: Context,
+    name: Optional[str],
+    path: Optional[str],
+    description: Optional[str],
+    yes: bool,
+) -> None:
     """Create a new workcell."""
-    if not name:
-        name = ctx.parent.params.get("name")
-    if not name:
-        name = prompt_for_input("Workcell Name", required=True, quiet=ctx.obj.quiet)
-    if not description:
-        description = prompt_for_input("Workcell Description", quiet=ctx.obj.quiet)
+    name = name if name else ctx.parent.params.get("name")
+    name = (
+        name
+        if name
+        else prompt_for_input("Workcell Name", required=True, quiet=ctx.obj.quiet)
+    )
+    description = (
+        description
+        if description
+        else prompt_for_input("Workcell Description", quiet=ctx.obj.quiet)
+    )
 
     workcell = WorkcellDefinition(name=name, description=description)
     console.print(workcell)
 
-    if not path:
-        path = ctx.parent.params.get("path")
+    path = path if path else ctx.parent.params.get("path")
     if not path:
         if ctx.obj.lab and ctx.obj.lab.path:
             # If we have a lab context, create in the lab directory
@@ -125,7 +145,9 @@ def create(
                 )
 
         new_path = prompt_for_input(
-            "Path to save Workcell Definition file", default=path, quiet=ctx.obj.quiet
+            "Path to save Workcell Definition file",
+            default=path,
+            quiet=ctx.obj.quiet,
         )
         if new_path:
             path = Path(new_path)
@@ -136,24 +158,27 @@ def create(
         path.parent.mkdir(parents=True, exist_ok=True)
     save_model(path, workcell, overwrite_check=not ctx.obj.quiet and not yes)
 
-    if ctx.obj.lab and ctx.obj.lab.lab_def:
-        if (
+    if (
+        ctx.obj.lab
+        and ctx.obj.lab.lab_def
+        and (
             yes
             or ctx.obj.quiet
             or prompt_yes_no(
                 f"Add workcell to lab [bold]{ctx.obj.lab.lab_def.name}[/] ([italic]{ctx.obj.lab.path}[/])?",
                 default="yes",
             )
-        ):
-            relative_path = path.relative_to(ctx.obj.lab.path.parent)
-            if name not in ctx.obj.lab.lab_def.workcells:
-                ctx.obj.lab.lab_def.workcells[name] = relative_path
-                save_model(ctx.obj.lab.path, ctx.obj.lab.lab_def, overwrite_check=False)
+        )
+    ):
+        relative_path = path.relative_to(ctx.obj.lab.path.parent)
+        if name not in ctx.obj.lab.lab_def.workcells:
+            ctx.obj.lab.lab_def.workcells[name] = relative_path
+            save_model(ctx.obj.lab.path, ctx.obj.lab.lab_def, overwrite_check=False)
 
 
 @workcell.command()
 @pass_workcell
-def list(ctx: WorkcellContext):
+def list(ctx: WorkcellContext) -> None:
     """List all workcells."""
     search_dir = ctx.lab.path.parent if ctx.lab and ctx.lab.path else None
     workcell_files = search_for_file_pattern("*.workcell.yaml", start_dir=search_dir)
@@ -162,24 +187,24 @@ def list(ctx: WorkcellContext):
         for workcell_file in sorted(set(workcell_files)):
             workcell = WorkcellDefinition.from_yaml(workcell_file)
             console.print(
-                f"[bold]{workcell.name}[/]: {workcell.description} ({workcell_file})"
+                f"[bold]{workcell.name}[/]: {workcell.description} ({workcell_file})",
             )
     else:
         lab_context = " in lab directory" if ctx.lab and ctx.lab.path else ""
         print(
-            f"No workcell definitions found{lab_context}, you can create one with 'madsci workcell create'"
+            f"No workcell definitions found{lab_context}, you can create one with 'madsci workcell create'",
         )
 
 
 @workcell.command()
 @pass_workcell
-def info(ctx: WorkcellContext):
+def info(ctx: WorkcellContext) -> None:
     """Get information about a workcell."""
     if ctx.workcell:
         pprint(ctx.workcell)
     else:
         print(
-            "No workcell specified/found, please specify a workcell with --name or --path, or create a new workcell with 'madsci workcell create'"
+            "No workcell specified/found, please specify a workcell with --name or --path, or create a new workcell with 'madsci workcell create'",
         )
 
 
@@ -187,10 +212,18 @@ def info(ctx: WorkcellContext):
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
 @click.option("--name", "-n", type=str, help="The name of the workcell.")
 @click.option(
-    "--path", "-p", type=str, help="The path to the workcell definition file."
+    "--path",
+    "-p",
+    type=str,
+    help="The path to the workcell definition file.",
 )
 @pass_workcell
-def delete(ctx: WorkcellContext, yes: bool, name: Optional[str], path: Optional[str]):
+def delete(
+    ctx: WorkcellContext,
+    yes: bool,
+    name: Optional[str],
+    path: Optional[str],
+) -> None:
     """Delete a workcell."""
     if name or path:
         ctx.workcell = find_workcell(name=name, path=None, lab_context=ctx.lab).workcell
@@ -200,33 +233,29 @@ def delete(ctx: WorkcellContext, yes: bool, name: Optional[str], path: Optional[
             ctx.path.unlink()
             console.print(f"Deleted {ctx.path}")
             if (
-                ctx.lab
-                and ctx.lab.lab_def
-                and yes
+                (ctx.lab and ctx.lab.lab_def and yes)
                 or ctx.quiet
                 or prompt_yes_no(
                     f"Remove from lab [bold]{ctx.lab.lab_def.name}[/] ([italic]{ctx.lab.path}[/])?",
                     default="yes",
                 )
-            ):
-                if ctx.workcell.name in ctx.lab.lab_def.workcells:
-                    del ctx.lab.lab_def.workcells[ctx.workcell.name]
-                    save_model(ctx.lab.path, ctx.lab.lab_def, overwrite_check=False)
+            ) and ctx.workcell.name in ctx.lab.lab_def.workcells:
+                del ctx.lab.lab_def.workcells[ctx.workcell.name]
+                save_model(ctx.lab.path, ctx.lab.lab_def, overwrite_check=False)
     else:
         print(
-            "No workcell specified/found, please specify a workcell with --name or --path, or create a new workcell with 'madsci workcell create'"
+            "No workcell specified/found, please specify a workcell with --name or --path, or create a new workcell with 'madsci workcell create'",
         )
 
 
 @workcell.command()
 @pass_workcell
-def validate(ctx: WorkcellContext):
+def validate(ctx: WorkcellContext) -> None:
     """Validate a workcell definition file."""
     if ctx.workcell:
         console.print(ctx.workcell)
         return
-    else:
-        console.print(
-            "No workcell specified, please specify a workcell with --name or --path, or create a new workcell with 'madsci workcell create'"
-        )
-        return
+    console.print(
+        "No workcell specified, please specify a workcell with --name or --path, or create a new workcell with 'madsci workcell create'",
+    )
+    return

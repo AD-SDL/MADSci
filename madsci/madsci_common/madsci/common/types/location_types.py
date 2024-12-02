@@ -1,6 +1,6 @@
 """Location types for MADSci."""
 
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import Field
 from pydantic.functional_validators import field_validator
@@ -14,7 +14,8 @@ class Location(BaseModel):
     """A location in the lab."""
 
     location_name: str = Field(
-        title="Location Name", description="The name of the location."
+        title="Location Name",
+        description="The name of the location.",
     )
     location_id: str = Field(
         title="Location ID",
@@ -22,9 +23,11 @@ class Location(BaseModel):
         default_factory=new_ulid_str,
     )
     description: Optional[str] = Field(
-        title="Description", description="A description of the location.", default=None
+        title="Description",
+        description="A description of the location.",
+        default=None,
     )
-    poses: List["Pose"] = Field(
+    poses: list["Pose"] = Field(
         title="Poses",
         description="A dictionary of poses representing the location. Keys are node names.",
         default=[],
@@ -43,11 +46,15 @@ class Pose(BaseModel):
 
     node_id: str = Field(title="Node ID", description="The ID of the node in the lab.")
     pose_id: str = Field(
-        title="Pose ID", description="The ID of the pose.", default_factory=new_ulid_str
+        title="Pose ID",
+        description="The ID of the pose.",
+        default_factory=new_ulid_str,
     )
     pose_name: str = Field(title="Pose Name", description="The name of the pose.")
     pose_description: Optional[str] = Field(
-        title="Pose Description", description="A description of the pose.", default=None
+        title="Pose Description",
+        description="A description of the pose.",
+        default=None,
     )
     pose_value: Json = Field(
         title="Pose Value",

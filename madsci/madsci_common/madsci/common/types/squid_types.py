@@ -1,7 +1,7 @@
 """Types for MADSci Squid configuration."""
 
 from enum import Enum
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
@@ -34,24 +34,25 @@ class LabDefinition(BaseModel):
         default_factory=lambda: LabServerConfig(),
         description="The configuration for the lab server.",
     )
-    workcells: Dict[str, Union["WorkcellDefinition", PathLike]] = Field(
+    workcells: dict[str, Union["WorkcellDefinition", PathLike]] = Field(
         default_factory=dict,
         title="Workcells",
         description="The workcells in the lab. Keys are workcell names. Values are either paths to workcell definition files, or workcell definition objects.",
     )
-    commands: Dict[str, str] = Field(
+    commands: dict[str, str] = Field(
         default_factory=dict,
         title="Commands",
         description="Commands for operating the lab.",
     )
-    managers: Dict[str, Union["ManagerDefinition", PathLike, AnyUrl]] = Field(
+    managers: dict[str, Union["ManagerDefinition", PathLike, AnyUrl]] = Field(
         default_factory=dict,
         title="Squid Manager Definitions",
         description="Squid Manager definitions used by the lab. Either a path to a manager definition file, a URL to a manager, or a manager definition object. If the manager definition is a URL, the server will attempt to fetch the manager definition from the URL.",
     )
 
     @field_validator("commands")
-    def validate_commands(cls, v: Dict[str, str]) -> Dict[str, str]:
+    @classmethod
+    def validate_commands(cls, v: dict[str, str]) -> dict[str, str]:
         """Validate the commands."""
         if v:
             for command in v:
@@ -81,10 +82,13 @@ class ManagerDefinition(BaseModel):
     """Definition for a Squid Manager."""
 
     name: str = Field(
-        title="Manager Name", description="The name of this manager instance."
+        title="Manager Name",
+        description="The name of this manager instance.",
     )
     manager_id: Optional[str] = Field(
-        title="Manager ID", description="The ID of the manager.", default=None
+        title="Manager ID",
+        description="The ID of the manager.",
+        default=None,
     )
     description: Optional[str] = Field(
         default=None,
@@ -95,7 +99,7 @@ class ManagerDefinition(BaseModel):
         title="Manager Type",
         description="The type of the manager, used by other components or managers to find matching managers.",
     )
-    manager_config: Optional[Dict[str, Any]] = Field(
+    manager_config: Optional[dict[str, Any]] = Field(
         default=None,
         title="Manager Configuration",
         description="The configuration for the manager.",
@@ -107,7 +111,7 @@ class ManagerDefinition(BaseModel):
     )
 
     is_alphanumeric = field_validator("manager_type")(
-        alphanumeric_with_underscores_validator
+        alphanumeric_with_underscores_validator,
     )
 
 
@@ -125,7 +129,7 @@ class ManagerTypes(str, Enum):
     DASHBOARD_MANAGER = "dashboard_manager"
 
     @classmethod
-    def _missing_(cls, value):
+    def _missing_(cls, value: str) -> "ManagerTypes":
         value = value.lower()
         for member in cls:
             if member.lower() == value:

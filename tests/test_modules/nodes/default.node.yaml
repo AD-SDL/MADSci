@@ -13,7 +13,7 @@ config:
   port:
     name: port
     description: The port of the REST API.
-    default: 8000
+    default: 2000
     required: true
     reset_on_change: true
   protocol:

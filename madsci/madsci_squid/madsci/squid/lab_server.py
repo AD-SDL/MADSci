@@ -2,6 +2,7 @@
 
 import uvicorn
 from fastapi import FastAPI
+from starlette.responses import JSONResponse
 
 from madsci.common.definition_loaders import lab_definition_loader
 from madsci.common.types.squid_types import LabDefinition
@@ -10,7 +11,7 @@ app = FastAPI()
 
 
 @app.get("/")
-async def root():
+async def root() -> JSONResponse:
     """Root endpoint."""
     return {"message": "Hello World"}
 

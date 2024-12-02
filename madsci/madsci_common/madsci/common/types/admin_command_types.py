@@ -1,7 +1,6 @@
 """Types for Admin Commands."""
 
 from enum import Enum
-from typing import List
 
 from sqlmodel.main import Field
 
@@ -29,7 +28,7 @@ class AdminCommandResponse(BaseModel):
         description="Whether the admin command was successful.",
         default=True,
     )
-    errors: List[Error] = Field(
+    errors: list[Error] = Field(
         title="Admin Command Errors",
         description="A list of errors that occurred while executing the admin command.",
         default_factory=list,

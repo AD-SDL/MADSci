@@ -15,6 +15,7 @@ hooks:
 # Run the pre-commit checks
 checks:
   @pre-commit run --all-files || { echo "Checking fixes\n" ; pre-commit run --all-files; }
+check: checks
 
 
 # Python tasks

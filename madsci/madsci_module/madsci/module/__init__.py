@@ -1,3 +1,1 @@
-"""Package for MADSci module helper classes and interfaces."""
-
-pass
+"""Package for MADSci Node and Node Module helper classes."""

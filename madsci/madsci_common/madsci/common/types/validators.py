@@ -17,6 +17,6 @@ def alphanumeric_with_underscores_validator(v: str, info: ValidationInfo) -> str
     """Validates that a string field is alphanumeric with underscores."""
     if not str(v).replace("_", "").isalnum():
         raise ValueError(
-            f"Field {info.field_name} must contain only alphanumeric characters and underscores"
+            f"Field {info.field_name} must contain only alphanumeric characters and underscores",
         )
     return v

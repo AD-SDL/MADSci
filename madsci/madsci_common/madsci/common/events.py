@@ -10,7 +10,10 @@ class MADSciEventLogger:
     """A logger for MADSci events."""
 
     def __init__(
-        self, name: str = None, log_level: int = logging.NOTSET, server_url: str = None
+        self,
+        name: Optional[str] = None,
+        log_level: int = logging.INFO,
+        event_server: Optional[str] = None,
     ) -> None:
         """Initialize the event logger."""
         if name:
@@ -18,13 +21,17 @@ class MADSciEventLogger:
         else:
             self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self.server_url = server_url
+        self.event_server = event_server
+
+    def get_log(self) -> list[Event]:
+        """Read the log"""
+        # TODO: Read logs
 
     def log(self, event: Event, level: Optional[int] = None) -> None:
         """Log an event."""
         event.log_level = level if level else event.log_level
         logging.log(event.log_level, event.event_data)
-        if self.server_url:
+        if self.event_server:
             self.send_event(event)
 
     def log_debug(self, event: Event) -> None:
@@ -49,7 +56,6 @@ class MADSciEventLogger:
 
     def send_event(self, event: Event) -> None:
         """Send an event to the event manager."""
-        pass
 
 
 default_event_logger = MADSciEventLogger()

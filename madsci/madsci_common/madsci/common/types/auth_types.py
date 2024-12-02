@@ -1,6 +1,6 @@
 """Types related to authentication and ownership of MADSci objects."""
 
-from typing import List, Optional
+from typing import Optional
 
 from pydantic.functional_validators import field_validator
 from sqlmodel.main import Field
@@ -13,7 +13,8 @@ class OwnershipInfo(BaseModel):
     """Information about the ownership of a MADSci object."""
 
     auth_id: str = Field(
-        title="Auth ID", description="The ID of the auth that owns the object."
+        title="Auth ID",
+        description="The ID of the auth that owns the object.",
     )
 
     user_id: Optional[str] = Field(
@@ -78,16 +79,20 @@ class ProjectInfo(BaseModel):
 
     project_id: str = Field(title="Project ID", description="The ID of the project.")
     project_name: str = Field(
-        title="Project Name", description="The name of the project."
+        title="Project Name",
+        description="The name of the project.",
     )
     project_description: str = Field(
-        title="Project Description", description="The description of the project."
+        title="Project Description",
+        description="The description of the project.",
     )
     project_owner: UserInfo = Field(
-        title="Project Owner", description="The owner of the project."
+        title="Project Owner",
+        description="The owner of the project.",
     )
-    project_members: List[UserInfo] = Field(
-        title="Project Members", description="The members of the project."
+    project_members: list[UserInfo] = Field(
+        title="Project Members",
+        description="The members of the project.",
     )
 
     is_ulid = field_validator("project_id", mode="after")(ulid_validator)

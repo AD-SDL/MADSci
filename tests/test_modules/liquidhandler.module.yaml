@@ -6,12 +6,13 @@ capabilities:
   get_state: false
   get_status: false
   send_action: false
-  get_action: false
+  get_action_result: false
   get_action_history: false
   action_files: false
   send_admin_commands: false
   set_config: false
   get_resources: false
+  get_log: false
   events: false
   resources: false
   admin_commands: []
@@ -25,7 +26,7 @@ config:
   port:
     name: port
     description: The port of the REST API.
-    default: 8000
+    default: 2000
     required: true
     reset_on_change: true
   protocol:

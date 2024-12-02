@@ -1,6 +1,6 @@
 """Types for MADSci Workcell configuration."""
 
-from typing import Dict, Optional, Union
+from typing import Optional, Union
 
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
@@ -33,16 +33,11 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         description="The configuration for the workcell.",
         default_factory=lambda: WorkcellConfig(),
     )
-    nodes: Dict[str, Union[AnyUrl, "NodeDefinition", PathLike]] = Field(
+    nodes: dict[str, Union[AnyUrl, "NodeDefinition", PathLike]] = Field(
         default_factory=dict,
         title="Workcell Node URLs",
         description="The URL, path, or definition for each node in the workcell.",
     )
-    # resources: Dict[str, Union["ResourceDefinition"]] = Field(
-    #     default_factory=dict,
-    #     title="Workcell Resource Definitions",
-    #     description="Any definitions for default resources used by the workcell. If they are defined here, they will be created when the workcell is started, if they don't already exist.",
-    # )
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
 

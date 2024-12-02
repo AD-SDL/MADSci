@@ -1,14 +1,14 @@
-"""REST-based module interface and helper classes."""
+"""REST-based Node Module helper classes."""
 
 import json
-import os
 import shutil
 import tempfile
 import time
+from collections.abc import Generator
 from multiprocessing import Process
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 from threading import Thread
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 from zipfile import ZipFile
 
 from fastapi.applications import FastAPI
@@ -17,12 +17,14 @@ from fastapi.routing import APIRouter
 from rich import print
 from starlette.responses import FileResponse
 
-from madsci.common.types.action_types import ActionRequest, ActionResponse, ActionStatus
+from madsci.client.node.rest_node_client import RestNodeClient
+from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error, new_ulid_str
+from madsci.common.types.event_types import Event
 from madsci.common.types.module_types import (
     AdminCommands,
-    ModuleCapabilities,
+    NodeCapabilities,
 )
 from madsci.common.types.node_types import (
     NodeInfo,
@@ -31,12 +33,11 @@ from madsci.common.types.node_types import (
 )
 from madsci.common.utils import threaded_task
 from madsci.module.abstract_module import (
-    AbstractModule,
+    AbstractNode,
 )
-from madsci.module.interface.rest_module_interface import RestModuleInterface
 
 
-def action_response_to_headers(action_response: ActionResponse) -> Dict[str, str]:
+def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
     """Converts the response to a dictionary of headers"""
     return {
         "x-madsci-action-id": action_response.action_id,
@@ -47,10 +48,10 @@ def action_response_to_headers(action_response: ActionResponse) -> Dict[str, str
     }
 
 
-def action_response_from_headers(headers: Dict[str, Any]) -> ActionResponse:
-    """Creates an ActionResponse from the headers of a file response"""
+def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
+    """Creates an ActionResult from the headers of a file response"""
 
-    return ActionResponse(
+    return ActionResult(
         action_id=headers["x-madsci-action-id"],
         status=ActionStatus(headers["x-wei-status"]),
         errors=json.loads(headers["x-wei-error"]),
@@ -59,33 +60,36 @@ def action_response_from_headers(headers: Dict[str, Any]) -> ActionResponse:
     )
 
 
-class ActionResponseWithFiles(FileResponse):
+class ActionResultWithFiles(FileResponse):
     """Action response from a REST-based module."""
 
-    def from_action_response(self, action_response: ActionResponse):
-        """Create an ActionResponseWithFiles from an ActionResponse."""
+    def from_action_response(self, action_response: ActionResult) -> ActionResult:
+        """Create an ActionResultWithFiles from an ActionResult."""
         if len(action_response.files) == 1:
             return super().__init__(
-                path=list(action_response.files.values())[0],
+                path=next(iter(action_response.files.values())),
                 headers=action_response_to_headers(action_response),
             )
 
-        temp_zipfile_path = tempfile.TemporaryFile(suffix=".zip")
-        temp_zip = ZipFile(temp_zipfile_path, "w")
-        for file in action_response.files:
-            temp_zip.write(action_response.files[file])
-            action_response.files[file] = str(
-                PureWindowsPath(action_response.files[file]).name
+        with tempfile.NamedTemporaryFile(
+            suffix=".zip",
+            delete=False,
+        ) as temp_zipfile_path:
+            temp_zip = ZipFile(temp_zipfile_path, "w")
+            for file in action_response.files:
+                temp_zip.write(action_response.files[file])
+                action_response.files[file] = str(
+                    PureWindowsPath(action_response.files[file]).name,
+                )
+
+            return super().__init__(
+                path=temp_zipfile_path,
+                headers=action_response_to_headers(action_response),
             )
 
-        return super().__init__(
-            path=temp_zipfile_path,
-            headers=action_response_to_headers(action_response),
-        )
 
-
-class RestModule(AbstractModule):
-    """REST-based module implementation and helper classes. Inherits from BaseModule. Inherit from this class to create a new module."""
+class RestNode(AbstractNode):
+    """REST-based node implementation and helper class. Inherit from this class to create a new REST-based node class."""
 
     rest_api = None
     """The REST API server for the node."""
@@ -93,15 +97,15 @@ class RestModule(AbstractModule):
     """Whether the node should restart the REST server."""
     exit_flag = False
     """Whether the node should exit."""
-    capabilities: ModuleCapabilities = ModuleCapabilities(
-        **RestModuleInterface.supported_capabilities.model_dump()
+    capabilities: NodeCapabilities = NodeCapabilities(
+        **RestNodeClient.supported_capabilities.model_dump(),
     )
 
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def start_node(self, config: Dict[str, Any] = {}):
+    def start_node(self, config: dict[str, Any] = {}) -> None:
         """Start the node."""
         super().start_node(config)  # *Kick off protocol agnostic-startup
         self._start_rest_api()
@@ -114,9 +118,9 @@ class RestModule(AbstractModule):
         self,
         action_name: str,
         args: Optional[str] = None,
-        files: List[UploadFile] = [],
+        files: list[UploadFile] = [],
         action_id: Optional[str] = None,
-    ) -> Union[ActionResponse, ActionResponseWithFiles]:
+    ) -> Union[ActionResult, ActionResultWithFiles]:
         """Run an action on the node."""
         if args:
             args = json.loads(args)
@@ -127,7 +131,7 @@ class RestModule(AbstractModule):
         with tempfile.TemporaryDirectory() as temp_dir:
             # * Save the uploaded files to a temporary directory
             for file in files:
-                with open(os.path.join(temp_dir, file.filename), "wb") as f:
+                with (Path(temp_dir) / file.filename).open("wb") as f:
                     shutil.copyfileobj(file.file, f)
             response = super().run_action(
                 ActionRequest(
@@ -135,33 +139,33 @@ class RestModule(AbstractModule):
                     action_name=action_name,
                     args=args,
                     files={
-                        file.filename: os.path.join(temp_dir, file.filename)
-                        for file in files
+                        file.filename: Path(temp_dir) / file.filename for file in files
                     },
-                )
+                ),
             )
             # * Return a file response if there are files to be returned
             if response.files:
-                return ActionResponseWithFiles().from_action_response(
-                    action_response=response
+                return ActionResultWithFiles().from_action_response(
+                    action_response=response,
                 )
-            else:
-                # * Otherwise, return a normal action response
-                return ActionResponse.model_validate(response)
+            # * Otherwise, return a normal action response
+            return ActionResult.model_validate(response)
 
-    def get_action(self, action_id: str):
+    def get_action_result(
+        self,
+        action_id: str,
+    ) -> Union[ActionResult, ActionResultWithFiles]:
         """Get the status of an action on the node."""
-        action_response = super().get_action(action_id)
+        action_response = super().get_action_result(action_id)
         if action_response.files:
-            return ActionResponseWithFiles().from_action_response(
-                action_response=action_response
+            return ActionResultWithFiles().from_action_response(
+                action_response=action_response,
             )
-        else:
-            return ActionResponse.model_validate(action_response)
+        return ActionResult.model_validate(action_response)
 
-    def get_actions(self) -> List[str]:
+    def get_action_history(self) -> list[str]:
         """Get the action history of the node."""
-        return super().get_actions()
+        return super().get_action_history()
 
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""
@@ -171,9 +175,13 @@ class RestModule(AbstractModule):
         """Get information about the node."""
         return super().get_info()
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """Get the state of the node."""
         return super().get_state()
+
+    def get_log(self) -> list[Event]:
+        """Get the log of the node"""
+        return super().get_log()
 
     def set_config(self, config_key: str, config_value: Any) -> NodeSetConfigResponse:
         """Set configuration values of the node."""
@@ -209,7 +217,7 @@ class RestModule(AbstractModule):
             self.restart_flag = False
 
             @threaded_task
-            def shutdown_server():
+            def shutdown_server() -> None:
                 """Shutdown the REST server."""
                 time.sleep(2)
                 self.rest_server_process.terminate()
@@ -230,7 +238,7 @@ class RestModule(AbstractModule):
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def _start_rest_api(self):
+    def _start_rest_api(self) -> None:
         """Start the REST API for the node."""
         import uvicorn
 
@@ -253,7 +261,7 @@ class RestModule(AbstractModule):
             if self.exit_flag:
                 break
 
-    def _startup_thread(self):
+    def _startup_thread(self) -> None:
         """The startup thread for the REST API."""
         try:
             # * Create a clean status and mark the node as initializing
@@ -271,7 +279,7 @@ class RestModule(AbstractModule):
             print("Startup complete")
             self.node_status.initializing = False
 
-    def _lifespan(self, app: FastAPI):
+    def _lifespan(self, app: FastAPI) -> Generator[None, None, None]:  # noqa: ARG002
         """The lifespan of the REST API."""
         # * Run startup on a separate thread so it doesn't block the rest server from starting
         # * (module won't accept actions until startup is complete)
@@ -287,25 +295,33 @@ class RestModule(AbstractModule):
             # * If an exception occurs during shutdown, handle it so we at least see the error in logs/terminal
             self._exception_handler(exception)
 
-    def _configure_routes(self):
+    def _configure_routes(self) -> None:
         """Configure the routes for the REST API."""
         self.router = APIRouter()
         self.router.add_api_route("/status", self.get_status, methods=["GET"])
         self.router.add_api_route("/info", self.get_info, methods=["GET"])
         self.router.add_api_route("/state", self.get_state, methods=["GET"])
         self.router.add_api_route(
-            "/action", self.run_action, methods=["POST"], response_model=None
+            "/action",
+            self.run_action,
+            methods=["POST"],
+            response_model=None,
         )
         self.router.add_api_route(
-            "/action/{action_id}", self.get_action, methods=["GET"]
+            "/action/{action_id}",
+            self.get_action_result,
+            methods=["GET"],
+            response_model=None,
         )
-        self.router.add_api_route("/action", self.get_actions, methods=["GET"])
+        self.router.add_api_route("/action", self.get_action_history, methods=["GET"])
         self.router.add_api_route("/config", self.set_config, methods=["POST"])
         self.router.add_api_route(
-            "/admin/{admin_command}", self.run_admin_command, methods=["POST"]
+            "/admin/{admin_command}",
+            self.run_admin_command,
+            methods=["POST"],
         )
         self.rest_api.include_router(self.router)
 
 
 if __name__ == "__main__":
-    RestModule().start_node()
+    RestNode().start_node()

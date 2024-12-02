@@ -3,7 +3,7 @@
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Optional
 
 from pydantic import ValidationError
 from pydantic_core._pydantic_core import PydanticUndefined
@@ -31,7 +31,7 @@ def search_for_file_pattern(
     start_dir: Optional[PathLike] = None,
     parents: bool = True,
     children: bool = True,
-) -> List[str]:
+) -> list[str]:
     """
     Search up and down the file tree for a file(s) matching a pattern.
 
@@ -45,21 +45,17 @@ def search_for_file_pattern(
         A list of paths to the files that match the pattern.
     """
 
-    import glob
-
-    if not start_dir:
-        start_dir = Path.cwd()
-    else:
-        start_dir = Path(start_dir).resolve()
+    start_dir = Path.cwd() if not start_dir else Path(start_dir).resolve()
 
     results = []
     if children:
-        results.extend(glob.glob(str(Path("./**") / pattern), recursive=True))
+        results.extend(Path("./").glob(str(Path("**") / pattern)))
     else:
-        results.extend(glob.glob(str(Path("./") / pattern), recursive=False))
+        results.extend(Path.glob(str(Path("./") / pattern)))
+        results.extend(Path("./").glob(pattern))
     if parents:
         for parent in start_dir.parents:
-            results.extend(glob.glob(str(parent / pattern), recursive=False))
+            results.extend(Path(parent).glob(pattern))
     return results
 
 
@@ -69,9 +65,12 @@ def save_model(path: PathLike, model: BaseModel, overwrite_check: bool = True) -
         model.model_validate(model)
     except ValidationError as e:
         raise ValueError(f"Validation error while saving model {model}: {e}") from e
-    if Path(path).exists() and overwrite_check:
-        if not prompt_yes_no(f"File already exists: {path}. Overwrite?", default="no"):
-            return
+    if (
+        Path(path).exists()
+        and overwrite_check
+        and not prompt_yes_no(f"File already exists: {path}. Overwrite?", default="no")
+    ):
+        return
     model.to_yaml(path)
 
 
@@ -79,9 +78,12 @@ def prompt_yes_no(prompt: str, default: str = "no", quiet: bool = False) -> bool
     """Prompt the user for a yes or no answer."""
     response = str(
         prompt_for_input(
-            rf"{prompt} \[y/n]", default=default, required=False, quiet=quiet
-        )
-    ).lower()  # noqa: W605
+            rf"{prompt} \[y/n]",
+            default=default,
+            required=False,
+            quiet=quiet,
+        ),
+    ).lower()
     return response in ["y", "yes", "true"]
 
 
@@ -97,10 +99,9 @@ def prompt_for_input(
             return default
         if required:
             raise ValueError(
-                "No input provided and no default value specified for required option."
+                "No input provided and no default value specified for required option.",
             )
-        else:
-            return
+        return None
     if not required:
         if default:
             response = console.input(f"{prompt} (optional, default: {default}): ")
@@ -201,7 +202,7 @@ def new_name_str(prefix: str = "") -> str:
         "elk",
     ]
 
-    name = f"{random.choice(adjectives)}_{random.choice(nouns)}"
+    name = f"{random.choice(adjectives)}_{random.choice(nouns)}"  # noqa: S311
     if prefix:
         name = f"{prefix}_{name}"
     return name
@@ -213,15 +214,14 @@ def string_to_bool(string: str) -> bool:
 
     if string.lower() in ("true", "t", "1", "yes", "y"):
         return True
-    elif string.lower() in ("false", "f", "0", "no", "n"):
+    if string.lower() in ("false", "f", "0", "no", "n"):
         return False
-    else:
-        raise ArgumentTypeError(f"Invalid boolean value: {string}")
+    raise ArgumentTypeError(f"Invalid boolean value: {string}")
 
 
 def prompt_from_list(
     prompt: str,
-    options: List[str],
+    options: list[str],
     default: Optional[str] = None,
     required: bool = False,
     quiet: bool = False,
@@ -249,8 +249,11 @@ def prompt_from_list(
         try:
             response = validate_response(
                 prompt_for_input(
-                    prompt, default=default, required=required, quiet=quiet
-                )
+                    prompt,
+                    default=default,
+                    required=required,
+                    quiet=quiet,
+                ),
             )
         except ValueError:
             continue
@@ -259,7 +262,7 @@ def prompt_from_list(
     return response
 
 
-def prompt_from_pydantic_model(model: BaseModel, prompt: str, **kwargs) -> str:
+def prompt_from_pydantic_model(model: BaseModel, prompt: str, **kwargs: Any) -> str:
     """Prompt the user for input from a pydantic model.
 
     Args:
@@ -307,7 +310,7 @@ def prompt_from_pydantic_model(model: BaseModel, prompt: str, **kwargs) -> str:
                 result[field_name] = response
             except json.JSONDecodeError as e:
                 console.print(
-                    f"[bold red]Invalid JSON input for field {field_name}: {e}[/]"
+                    f"[bold red]Invalid JSON input for field {field_name}: {e}[/]",
                 )
                 continue
             else:
@@ -355,14 +358,14 @@ def relative_path(source: Path, target: Path, walk_up: bool = True) -> Path:
     return Path(*reversed(parts0))
 
 
-def threaded_task(func):
+def threaded_task(func: callable) -> callable:
     """Mark a function as a threaded task, to be run without awaiting. Returns the thread object, so you _can_ await if needed."""
 
     import functools
     import threading
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> threading.Thread:
+    def wrapper(*args: Any, **kwargs: Any) -> threading.Thread:
         thread = threading.Thread(target=func, args=args, kwargs=kwargs)
         thread.start()
         return thread
@@ -370,14 +373,14 @@ def threaded_task(func):
     return wrapper
 
 
-def threaded_daemon(func):
+def threaded_daemon(func: callable) -> callable:
     """Mark a function as a threaded daemon, to be run without awaiting. Returns the thread object, so you _can_ await if needed, and stops when the calling thread terminates."""
 
     import functools
     import threading
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> threading.Thread:
+    def wrapper(*args: Any, **kwargs: Any) -> threading.Thread:
         thread = threading.Thread(target=func, args=args, kwargs=kwargs)
         thread.daemon = True
         thread.start()
@@ -386,7 +389,7 @@ def threaded_daemon(func):
     return wrapper
 
 
-def pretty_type_repr(type_hint):
+def pretty_type_repr(type_hint: Any) -> str:
     """Returns a pretty string representation of a type hint, including subtypes."""
     type_name = type_hint.__name__
     if (
