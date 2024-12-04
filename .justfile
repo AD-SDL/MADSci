@@ -13,6 +13,7 @@ init: hooks
 # Install the pre-commit hooks
 hooks:
   @pre-commit install
+  @pre-commit autoupdate
 
 # Run the pre-commit checks
 checks:

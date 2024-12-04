@@ -29,7 +29,8 @@
 				"redhat.vscode-yaml",
 				"KevinRose.vsc-python-indent",
 				"ms-python.vscode-pylance",
-				"ms-toolsai.jupyter"
+				"ms-toolsai.jupyter",
+				"github.vscode-github-actions"
 			]
 		}
 	},
