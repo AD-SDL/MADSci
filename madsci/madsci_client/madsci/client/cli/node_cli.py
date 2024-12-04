@@ -9,8 +9,7 @@ from click.core import Context
 from rich.console import Console
 from rich.pretty import pprint
 
-from madsci.common.types.module_types import NodeModuleDefinition
-from madsci.common.types.node_types import NodeDefinition
+from madsci.common.types.node_types import NodeDefinition, NodeModuleDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.utils import (
     PathLike,

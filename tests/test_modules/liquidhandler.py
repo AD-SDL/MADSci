@@ -3,8 +3,8 @@
 from typing import Any
 
 from madsci.common.types.action_types import ActionResult, ActionSucceeded
-from madsci.module.abstract_module import action
-from madsci.module.rest_module import RestNode
+from madsci.node_module.abstract_module import action
+from madsci.node_module.rest_module import RestNode
 
 
 class LiquidHandler:

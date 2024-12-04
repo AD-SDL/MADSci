@@ -8,7 +8,7 @@ from click.core import Context
 from rich.console import Console
 from rich.pretty import pprint
 
-from madsci.common.types.module_types import (
+from madsci.common.types.node_types import (
     NODE_MODULE_CONFIG_TEMPLATES,
     NodeModuleDefinition,
     NodeType,

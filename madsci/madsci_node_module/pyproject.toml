@@ -1,6 +1,6 @@
 
 [project]
-name = "madsci.module"
+name = "madsci.node_module"
 dynamic = ["version"]
 description = "The Modular Autonomous Discovery for Science (MADSci) Node Module Helper Classes."
 authors = [

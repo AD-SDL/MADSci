@@ -8,9 +8,9 @@ from typing import Any
 from dotenv import load_dotenv
 
 from madsci.common.types.base_types import BaseModel
-from madsci.common.types.module_types import NodeModuleDefinition
 from madsci.common.types.node_types import (
     NodeDefinition,
+    NodeModuleDefinition,
     get_module_from_node_definition,
 )
 from madsci.common.types.squid_types import LabDefinition

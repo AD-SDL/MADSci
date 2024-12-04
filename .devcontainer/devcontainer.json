@@ -13,6 +13,9 @@
 
 	"customizations": {
 		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/workspaces/MADSci/.venv/bin/python"
+			},
 			"extensions": [
 				"ms-python.python",
 				"donjayamanne.python-environment-manager",
@@ -26,7 +29,8 @@
 				"redhat.vscode-yaml",
 				"KevinRose.vsc-python-indent",
 				"ms-python.vscode-pylance",
-				"ms-toolsai.jupyter"
+				"ms-toolsai.jupyter",
+				"github.vscode-github-actions"
 			]
 		}
 	},
