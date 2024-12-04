@@ -11,8 +11,9 @@ from pydantic.networks import AnyUrl
 
 from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
-from madsci.common.types.module_types import ConfigParameter, NodeModuleDefinition
-from madsci.common.types.validators import ulid_validator
+from madsci.common.types.config_types import ConfigParameter
+from madsci.common.types.module_types import NodeModuleDefinition
+from madsci.common.validators import ulid_validator
 
 
 def get_module_from_node_definition(

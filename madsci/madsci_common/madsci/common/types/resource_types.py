@@ -11,7 +11,7 @@ from sqlmodel.main import Field
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci.common.types.validators import ulid_validator
+from madsci.common.validators import ulid_validator
 
 
 class ResourceType(str, Enum):

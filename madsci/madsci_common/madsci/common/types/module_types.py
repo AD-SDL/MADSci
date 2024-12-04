@@ -1,13 +1,14 @@
 """Types related to MADSci Modules."""
 
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from pydantic.functional_validators import field_validator
 from sqlmodel.main import Field
 
 from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.base_types import BaseModel
+from madsci.common.types.config_types import ConfigParameter
 
 
 class NodeType(str, Enum):
@@ -67,37 +68,8 @@ class NodeModuleDefinition(BaseModel, extra="allow"):
         return {param.name: param for param in v}
 
 
-class ConfigParameter(BaseModel, extra="allow"):
-    """A parameter for a MADSci Module/Node Configuration."""
-
-    name: str = Field(
-        title="Parameter Name",
-        description="The name of the parameter.",
-    )
-    description: Optional[str] = Field(
-        title="Parameter Description",
-        description="A description of the parameter.",
-        default=None,
-    )
-    default: Optional[Any] = Field(
-        title="Parameter Default",
-        description="The default value of the parameter.",
-        default=None,
-    )
-    required: bool = Field(
-        title="Parameter Required",
-        description="Whether the parameter is required.",
-        default=False,
-    )
-    reset_on_change: bool = Field(
-        title="Parameter Reset on Change",
-        description="Whether the node should restart whenever the parameter changes.",
-        default=True,
-    )
-
-
 NODE_MODULE_CONFIG_TEMPLATES: dict[str, list[ConfigParameter]] = {
-    "REST Module": [
+    "REST Node": [
         ConfigParameter(
             name="host",
             description="The host of the REST API.",

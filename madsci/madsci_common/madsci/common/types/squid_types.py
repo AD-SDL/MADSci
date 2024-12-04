@@ -8,11 +8,11 @@ from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
 
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
-from madsci.common.types.validators import (
+from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.validators import (
     alphanumeric_with_underscores_validator,
     ulid_validator,
 )
-from madsci.common.types.workcell_types import WorkcellDefinition
 
 
 class LabDefinition(BaseModel):

@@ -5,8 +5,8 @@ from typing import Optional
 from pydantic.functional_validators import field_validator
 from sqlmodel.main import Field
 
-from madsci.common.types.base_types import BaseModel
-from madsci.common.types.validators import ulid_validator
+from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.validators import ulid_validator
 
 
 class OwnershipInfo(BaseModel):
@@ -15,6 +15,7 @@ class OwnershipInfo(BaseModel):
     auth_id: str = Field(
         title="Auth ID",
         description="The ID of the auth that owns the object.",
+        default_factory=new_ulid_str,
     )
 
     user_id: Optional[str] = Field(

@@ -10,10 +10,10 @@ from typing import Any, Callable, ClassVar, Optional, Union, get_type_hints
 from pydantic import ValidationError
 from rich import print
 
+from madsci.client.event_client import EventClient
 from madsci.common.definition_loaders import (
     node_definition_loader,
 )
-from madsci.common.events import MADSciEventLogger
 from madsci.common.exceptions import (
     ActionMissingArgumentError,
     ActionMissingFileError,
@@ -28,8 +28,9 @@ from madsci.common.types.action_types import (
     ActionStatus,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
-from madsci.common.types.event_types import Event
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.module_types import (
     AdminCommands,
     NodeModuleDefinition,
@@ -93,7 +94,7 @@ class AbstractNode:
     """The interval at which the state handler is called. Overridable by config."""
     node_info_path: ClassVar[Optional[Path]] = None
     """The path to the node info file. If unset, defaults to '<node_definition_path>.info.yaml'"""
-    logger: ClassVar[MADSciEventLogger] = MADSciEventLogger()
+    logger: ClassVar[EventClient] = EventClient()
     """The event logger for this node"""
 
     def __init__(self) -> "AbstractNode":
@@ -107,6 +108,11 @@ class AbstractNode:
             raise ValueError(
                 "Module definition not found, aborting node initialization",
             )
+
+        self.logger = EventClient(
+            name=f"node.{self.node_definition.node_name}",
+            source=OwnershipInfo(node_id=self.node_definition.node_id),
+        )
 
         # * Synthesize the node info
         self.node_info = NodeInfo.from_node_and_module(
@@ -156,13 +162,13 @@ class AbstractNode:
         if self.module_definition._definition_path:
             self.module_definition.to_yaml(self.module_definition._definition_path)
         else:
-            print(
+            self.log(
                 "No definition path set for module, skipping module definition update",
             )
         if self.node_definition._definition_path:
             self.node_definition.to_yaml(self.node_definition._definition_path)
         else:
-            print("No definition path set for node, skipping node definition update")
+            self.log("No definition path set for node, skipping node definition update")
 
         # *Check for any required config parameters that weren't set
         self.config = {**self.config, **config}
@@ -179,6 +185,9 @@ class AbstractNode:
                 self.node_status.waiting_for_config.add(config_value.name)
             else:
                 self.node_status.waiting_for_config.discard(config_value.name)
+
+        if log_level := self.config.get("log_level", None) is not None:
+            self.logger.logger.setLevel(log_level)
 
     def status_handler(self) -> None:
         """Called periodically to update the node status. Should set `self.node_status`"""
@@ -550,8 +559,12 @@ class AbstractNode:
     def _exception_handler(self, e: Exception, set_node_error: bool = True) -> None:
         """Handle an exception."""
         self.node_status.errored = set_node_error
-        self.node_status.errors.append(Error.from_exception(e))
-        traceback.print_exc()
+        madsci_error = Error.from_exception(e)
+        self.node_status.errors.append(madsci_error)
+        self.logger.log_error(
+            Event(event_type=EventType.NODE_ERROR, event_data=madsci_error)
+        )
+        self.logger.log_error(traceback.format_exc())
 
     @threaded_daemon
     def _loop_handler(self) -> None:
