@@ -31,13 +31,11 @@ from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.event_types import Event, EventType
-from madsci.common.types.module_types import (
-    AdminCommands,
-    NodeModuleDefinition,
-)
 from madsci.common.types.node_types import (
+    AdminCommands,
     NodeDefinition,
     NodeInfo,
+    NodeModuleDefinition,
     NodeSetConfigResponse,
     NodeStatus,
 )

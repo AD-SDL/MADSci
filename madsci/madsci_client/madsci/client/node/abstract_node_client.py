@@ -8,12 +8,10 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
-from madsci.common.types.module_types import (
-    AdminCommands,
-    NodeClientCapabilities,
-)
 from madsci.common.types.node_types import (
+    AdminCommands,
     Node,
+    NodeClientCapabilities,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
