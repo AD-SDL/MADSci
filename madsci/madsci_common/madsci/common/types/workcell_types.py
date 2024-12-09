@@ -44,7 +44,36 @@ class WorkcellDefinition(BaseModel, extra="allow"):
 
 class WorkcellConfig(BaseModel):
     """Configuration for a MADSci Workcell."""
-
+    workcell_name: str = Field(
+        default="Workcell 1",
+        title="Name",
+        description="The name of the workcell.",
+    )
+    host: str = Field(
+        default="127.0.0.1",
+        title="Host",
+        description="The host to run the workcell manager on.",
+    )
+    port: int = Field(
+        default=8013,
+        title="Port",
+        description="The port to run the workcell manager on.",
+    )
+    redis_host: str = Field(
+        default="localhost",
+        title="Redis Host",
+        description="The hostname for the redis server .",
+    )
+    redis_port: int = Field(
+        default=6379,
+        title="Redis Port",
+        description="The port for the redis server.",
+    )
+    redis_password: Union[str, None] = Field(
+        default=None,
+        title="Redis Password",
+        description="The password for the redis server.",
+    )
     scheduler_update_interval: float = Field(
         default=0.1,
         title="Scheduler Update Interval",

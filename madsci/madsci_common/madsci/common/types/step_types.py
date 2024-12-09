@@ -9,6 +9,21 @@ from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 
 
+class Condition(BaseModel):
+    """A model for the conditions a step needs to be run"""
+    resource: str = Field(
+        title="Condition Target Resource",
+        description="The resource targeted by the condition",
+    )
+    field: str = Field(
+        title="Condition Target Field",
+        description="The field in the target resource targeted by the condition",    
+    )
+    value: Any = Field(
+        title="Condition Target Resource",
+        description="The resource targeted by the condition",
+    )
+
 class StepDefinition(BaseModel):
     """A definition of a step in a workflow."""
 
@@ -25,6 +40,10 @@ class StepDefinition(BaseModel):
         title="Step Action",
         description="The action to perform in the step.",
     )
+    node: str = Field(
+        title="Node Name",
+        description="Name of the node to run on"
+    )
     args: dict[str, Any] = Field(
         title="Step Arguments",
         description="Arguments for the step action.",
@@ -34,6 +53,11 @@ class StepDefinition(BaseModel):
         title="Step Files",
         description="Files to be used in the step.",
         default_factory=dict,
+    )
+    conditions: list[Condition] = Field(
+        title="Step Conditions",
+        description="Conditions for running the step",
+        default_factory=list
     )
     data_labels: dict[str, str] = Field(
         title="Step Data Labels",
