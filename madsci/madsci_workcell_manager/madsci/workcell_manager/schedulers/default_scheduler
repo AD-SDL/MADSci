@@ -1,0 +1,34 @@
+from scheduler import Scheduler
+class DefaultScheduler(Scheduler):
+
+    def run_iteration(self):
+        for run_id, wf in self.state_handler.get_all_workflow_runs().items():
+                if wf.status == WorkflowStatus.NEW:
+                    wf.status = WorkflowStatus.QUEUED
+                    print(
+                        f"Processed new workflow: {wf.name} with run_id: {run_id}"
+                    )
+                    #send_event(WorkflowQueuedEvent.from_wf_run(wf_run=wf_run))
+                    self.state_handler.set_workflow_run(wf)
+                elif wf.status in [
+                    WorkflowStatus.QUEUED,
+                    WorkflowStatus.IN_PROGRESS,
+                ]:
+                    step = wf.steps[wf.step_index]
+                    if check_step(wf.experiment_id, run_id, step):
+                        module = find_step_module(
+                            self.state_handler.get_workcell(), step.module
+                        )
+
+                        #if wf_run.status == WorkflowStatus.QUEUED:
+                            #send_event(WorkflowStartEvent.from_wf_run(wf_run=wf_run))
+                        wf.status = WorkflowStatus.RUNNING
+                        print(
+                            f"Starting step {wf.name}.{step.name} for run: {run_id}"
+                        )
+                        if wf.step_index == 0:
+                            wf.start_time = datetime.now()
+                        self.state_handler.set_workflow_run(wf)
+                        run_step(wf_run=wf, module=module)
+        
+

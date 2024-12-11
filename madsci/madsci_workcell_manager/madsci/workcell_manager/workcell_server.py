@@ -9,6 +9,7 @@ from madsci.workcell_manager.workcell_manager_types import (
 )
 
 from madsci.workcell_manager.workflow_utils import create_workflow, save_workflow_files
+from workcell_engine import Engine
 
 from typing import Annotated, Optional
 from madsci.common.types.workcell_types import WorkcellDefinition
@@ -28,6 +29,7 @@ arg_parser.add_argument(
 async def lifespan(app: FastAPI) -> None:
     app.state.state_handler=WorkcellRedisHandler(workcell_manager_definition)
     app.state.state_handler.set_workcell(workcell)
+    Engine(workcell_manager_definition, app.state.state_handler)
     yield
 app = FastAPI(lifespan=lifespan)
 
@@ -42,7 +44,7 @@ def get_workcell() -> WorkcellDefinition:
     return app.state.state_handler.get_workcell()
 
 @app.post("/start_workflow")
-async def start_run(
+async def start_workflow(
     workflow: Annotated[str, Form()],
     experiment_id: Annotated[Optional[str], Form()] = None,
     parameters: Annotated[Optional[str], Form()] = None,
@@ -96,7 +98,7 @@ async def start_run(
     )
 
     if not validate_only:
-        wf = save_workflow_files(wf=wf, files=files)
+        wf = save_workflow_files(working_directory=workcell_manager_definition.plugin_config.workcell_directory, workflow=wf, files=files)
         with app.state.state_handler.wc_state_lock():
             app.state.state_handler.set_workflow(wf)
     return wf

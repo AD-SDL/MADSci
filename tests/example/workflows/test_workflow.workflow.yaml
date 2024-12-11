@@ -1,18 +1,17 @@
 name: Test_Workflow
-metadata:
+workflow_metadata:
   author: Tobias Ginsburg, Kyle Hippe, Ryan D. Lewis
-  info: Example workflow for WEI
+  description: Example workflow for WEI
   version: 0.3
 parameters:
   - name: delay
     default: 1.5
-  - name: pos
-  - name: aim
 flowdef:
-  - name: Get plate to $pos
+  - name: Get plate to thingy
     node: transfer
     action: transfer
     args:
       target: thingy
     comment: Get a new plate
+    files: {"protocol": "/workspaces/MADSci/tests/example/protocols/protocol.txt"}
 

@@ -33,7 +33,7 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         description="The configuration for the workcell.",
         default_factory=lambda: WorkcellConfig(),
     )
-    nodes: dict[str, Union[AnyUrl, "NodeDefinition", PathLike]] = Field(
+    nodes: dict[str, Union["NodeDefinition", AnyUrl, PathLike]] = Field(
         default_factory=dict,
         title="Workcell Node URLs",
         description="The URL, path, or definition for each node in the workcell.",
@@ -58,6 +58,11 @@ class WorkcellConfig(BaseModel):
         default=8013,
         title="Port",
         description="The port to run the workcell manager on.",
+    )
+    workcell_directory: str = Field(
+        default="/.MADsci/Workcell",
+        title="Workcell Directory",
+        description="Directory to save workflow files"
     )
     redis_host: str = Field(
         default="localhost",
@@ -88,4 +93,9 @@ class WorkcellConfig(BaseModel):
         default=True,
         title="Auto Start",
         description="Whether the workcell should automatically create a new Workcell Manager and start it when the lab starts, registering it with the Lab Server.",
+    )
+    clear_workflows: bool = Field(
+        default=False,
+        title="Clear Workflows",
+        description="Whether the workcell should clear old workflows on restart",
     )

@@ -59,7 +59,11 @@ class WorkcellRedisHandler:
         return RedisDict(
             key=f"{self._workcell_prefix}:workcell", redis=self._redis_client
         )
-
+    @property
+    def _nodes(self) -> RedisDict:
+        return RedisDict(
+            key=f"{self._workcell_prefix}:nodes", redis=self._redis_client
+        )
     @property
     def _workflows(self) -> RedisDict:
         return RedisDict(
@@ -86,8 +90,7 @@ class WorkcellRedisHandler:
         return {
             "status": self.wc_status,
             "error": self.error,
-            "locations": self._locations.to_dict(),
-            "modules": self._modules.to_dict(),
+            "nodes": self._nodes.to_dict(),
             "workflows": self._workflow_runs.to_dict(),
             "workcell": self._workcell.to_dict(),
             "paused": self.paused,
@@ -109,17 +112,14 @@ class WorkcellRedisHandler:
         return self._redis_client.set(f"{self._workcell_prefix}:error", value)
 
     def clear_state(
-        self, reset_locations: bool = True, clear_workflow_runs: bool = False
+        self, clear_workflows: bool = False
     ) -> None:
         """
         Clears the state of the workcell, optionally leaving the locations state intact.
         """
-        self._modules.clear()
-        if reset_locations:
-            self._locations.clear()
-        if clear_workflow_runs:
-            self._workflow_runs.clear()
-        self._workcell.clear()
+        self._nodes.clear()
+        if clear_workflows:
+            self._workflows.clear()
         self.state_change_marker = "0"
         self.paused = False
         self.locked = False
@@ -183,7 +183,7 @@ class WorkcellRedisHandler:
         Returns all workflow runs
         """
         valid_workflows = {}
-        for run_id, workflow in self._workflow.to_dict().items():
+        for run_id, workflow in self._workflows.to_dict().items():
             try:
                 valid_workflows[str(run_id)] = Workflow.model_validate(
                     workflow

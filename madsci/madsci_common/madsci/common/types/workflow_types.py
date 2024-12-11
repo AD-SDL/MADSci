@@ -49,7 +49,7 @@ class WorkflowParameter(BaseModel):
     default: Optional[Any] = None
     """ the default value of the parameter"""
 
-class Metadata(BaseModel, extra="allow"):
+class WorkflowMetadata(BaseModel, extra="allow"):
     """Metadata container"""
 
     author: Optional[str] = None
@@ -64,7 +64,7 @@ class WorkflowDefinition(BaseModel):
 
     name: str
     """Name of the workflow"""
-    metadata: Metadata = Field(default_factory=Metadata)
+    workflow_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
     parameters: Optional[list[WorkflowParameter]] = []
     """Inputs to the workflow"""
@@ -87,22 +87,9 @@ class WorkflowDefinition(BaseModel):
 
 
 
-
-class Workflow(WorkflowDefinition):
-    """Container for a workflow run"""
-
-    label: Optional[str] = None
-    """Label for the workflow run"""
-    run_id: str = Field(default_factory=new_ulid_str)
-    """ID of the workflow run"""
-    payload: dict[str, Any] = {}
-    """input information for a given workflow run"""
+class SchedulerMetadata(BaseModel):
     status: WorkflowStatus = Field(default=WorkflowStatus.NEW)
     """current status of the workflow"""
-    steps: list[Step] = []
-    """WEI Processed Steps of the flow"""
-    experiment_id: str
-    """ID of the experiment this workflow is a part of"""
     step_index: int = 0
     """Index of the current step"""
     simulate: bool = False
@@ -114,6 +101,23 @@ class Workflow(WorkflowDefinition):
     duration: Optional[timedelta] = None
     """Duration of the workflow's run"""
 
+
+
+class Workflow(WorkflowDefinition):
+    """Container for a workflow run"""
+    scheduler_metadata: SchedulerMetadata = Field(default_factory=SchedulerMetadata)
+    """scheduler information for the workflow run"""
+    label: Optional[str] = None
+    """Label for the workflow run"""
+    run_id: str = Field(default_factory=new_ulid_str)
+    """ID of the workflow run"""
+    steps: list[Step] = []
+    """WEI Processed Steps of the flow"""
+    parameter_values: dict[str, Any] = Field(default_factory={})
+    """parameter values used inthis workflow"""
+    experiment_id: Optional[str] = None
+    """ID of the experiment this workflow is a part of"""
+    
     def get_step_by_name(self, name: str) -> Step:
         """Return the step object by its name"""
         for step in self.steps:

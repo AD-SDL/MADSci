@@ -5,5 +5,9 @@ config:
   scheduler_update_interval: 0.1
   node_update_interval: 1.0
   auto_start: true
+  workcell_directory: "/.MADSci/Workcell"
   
-nodes: {}
+nodes: {
+  "liquid_handler": "http://localhost:2000"
+  
+}
