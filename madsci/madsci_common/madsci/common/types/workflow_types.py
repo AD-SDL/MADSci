@@ -94,6 +94,8 @@ class SchedulerMetadata(BaseModel):
     """Index of the current step"""
     simulate: bool = False
     """Whether or not this workflow is being simulated"""
+    submitted_time: Optional[datetime] = None
+    """Time workflow was submitted to the scheduler"""
     start_time: Optional[datetime] = None
     """Time the workflow started running"""
     end_time: Optional[datetime] = None
@@ -109,7 +111,7 @@ class Workflow(WorkflowDefinition):
     """scheduler information for the workflow run"""
     label: Optional[str] = None
     """Label for the workflow run"""
-    run_id: str = Field(default_factory=new_ulid_str)
+    workflow_id: str = Field(default_factory=new_ulid_str)
     """ID of the workflow run"""
     steps: list[Step] = []
     """WEI Processed Steps of the flow"""

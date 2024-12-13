@@ -1,1 +1,1 @@
-"""MADSci Workcell Manager."""
+"""MADSci Workcell Manager Schedulers."""

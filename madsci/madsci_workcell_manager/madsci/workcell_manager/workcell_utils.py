@@ -3,39 +3,34 @@ from pydantic import AnyUrl
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.node_types import NodeStatus, Node, NodeDefinition
 from madsci.client.node import AbstractNodeClient, NODE_CLIENT_MAP
+import concurrent
+import traceback
+import warnings
 
-def initialize_state(state_manager: WorkcellRedisHandler, workcell=None) -> None:
+def initialize_workcell(state_manager: WorkcellRedisHandler, workcell=None) -> None:
     """
     Initializes the state of the workcell from the workcell definition.
     """
 
     if not workcell:
         workcell = state_manager.get_workcell()
-    initialize_workcell_nodes(workcell)
+    initialize_workcell_nodes(workcell, state_manager)
     initialize_workcell_resources(workcell)
 
-def initialize_workcell_nodes(workcell):
-    for value in workcell.nodes.values():
+def initialize_workcell_nodes(workcell: WorkcellDefinition, state_manager: WorkcellRedisHandler):
+    for key, value in workcell.nodes.items():
         if type(value) is NodeDefinition:
-            url = value.url
-        elif type(value) is AnyUrl:
-            url = value
-        elif type(value) is str:
-            url = AnyUrl(value)
-        update_node_info(url, workcell)
-        update_node_status(url, workcell)
+            node = Node(node_url=value.node_url)
+        elif type(value) is AnyUrl or type(value) is str:
+            node = Node(node_url=AnyUrl(value))
+        state_manager.set_node(key, node)
 
 
 def initialize_workcell_resources(workcell):
     pass
 
-def update_node_info(url: AnyUrl, workcell: WorkcellDefinition):
-    client = find_node_client(url)
-    print(client.get_info())
 
-def update_node_status(url: AnyUrl, workcell: WorkcellDefinition):
-    client = find_node_client(url)
-    print(client.get_status())
+
 
 def find_node_client(url: str) -> AbstractNodeClient:
     """finds the right client for the node url provided"""
@@ -46,3 +41,35 @@ def find_node_client(url: str) -> AbstractNodeClient:
         if client.validate_url(url):
             return client(url)
     return None
+
+def update_active_nodes(state_manager: WorkcellRedisHandler) -> None:
+    """Update all active nodes in the workcell."""
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        node_futures = []
+        for node_name, node in state_manager.get_all_nodes().items():
+                node_future = executor.submit(update_node, node_name, node, state_manager)
+                node_futures.append(node_future)
+
+        # Wait for all node updates to complete
+        concurrent.futures.wait(node_futures)
+
+
+def update_node(node_name: str, node: Node, state_manager: WorkcellRedisHandler) -> None:
+    """Update a single node's state and about information."""
+    try:
+        old_status = node.status
+        old_info = node.info
+        client = find_node_client(node.node_url)
+        node.status = client.get_status()
+        node.info = client.get_info()
+        node.state = client.get_state()
+        if old_status != node.status or old_info != node.info:
+            with state_manager.wc_state_lock():
+                state_manager.set_node(node_name, node)
+    except Exception:
+        warnings.warn(
+            message=f"Unable to update node {node_name}",
+            category=UserWarning,
+            stacklevel=1,
+        )
+

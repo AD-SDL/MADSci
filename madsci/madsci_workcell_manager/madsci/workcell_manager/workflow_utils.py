@@ -9,7 +9,7 @@ from fastapi import UploadFile
 import re
 import copy
 from pathlib import Path
-
+from datetime import datetime
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
     """
@@ -23,13 +23,48 @@ def replace_positions(workcell: WorkcellDefinition, step: Step):
     """Allow the user to put location names instead of """
     pass
 
-def validate_step(step: Step) -> tuple[bool, str]:
-    """Check if a step is valid based on the node's info"""
-    return (True, "")
+def validate_step(step: Step, state_manager: WorkcellRedisHandler) -> tuple[bool, str]:
+    """Check if a step is valid based on the module's about"""
+    if step.node in state_manager.get_all_nodes():
+        node = state_manager.get_node(step.node)
+        info = node.info
+        if info is None:
+            return (
+                True,
+                f"Node {step.node} didn't return proper about information, skipping validation",
+            )
+        if step.action in info.actions:
+            action = info.actions[step.action]
+            for action_arg in action.args.values():
+                if action_arg.name not in step.args and action_arg.required:
+                    return (
+                        False,
+                        f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing arg '{action_arg.name}'",
+                    )
+                # TODO: Action arg type validation goes here
+            for action_file in action.files:
+                if action_file.name not in step.files and action_file.required:
+                    return (
+                        False,
+                        f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing file '{action_file.name}'",
+                    )
+            return True, f"Step '{step.name}': Validated successfully"
+
+        return (
+            False,
+            f"Step '{step.name}': Node {step.node} has no action '{step.action}'",
+        )
+    else:
+        return (
+            False,
+            f"Step '{step.name}': Node {step.node} is not defined in workcell",
+        )
+
 
 def create_workflow(
     workflow_def: WorkflowDefinition,
     workcell: WorkcellDefinition,
+    state_manager: WorkcellRedisHandler,
     experiment_id: Optional[str] = None,
     parameters: Optional[dict[str, Any]] = None,
     simulate: bool = False,
@@ -69,18 +104,17 @@ def create_workflow(
         }
     )
     wf = Workflow(**wf_dict)
-
     steps = []
     for step in workflow_def.flowdef:
         replace_positions(workcell, step)
-        valid, validation_string = validate_step(step)
+        valid, validation_string = validate_step(step, state_manager=state_manager)
         print(validation_string)
         if not valid:
             raise ValueError(validation_string)
         steps.append(step)
 
     wf.steps = steps
-
+    wf.scheduler_metadata.submitted_time = datetime.now()
     return wf
 
 def save_workflow_files(working_directory: str, workflow: Workflow, files: list[UploadFile]) -> Workflow:
@@ -88,7 +122,7 @@ def save_workflow_files(working_directory: str, workflow: Workflow, files: list[
     and updates the step files to point to the new location"""
 
     get_workflow_inputs_directory(
-        workflow_run_id=workflow.run_id,
+        workflow_id=workflow.workflow_id,
         working_directory=working_directory
     ).mkdir(parents=True, exist_ok=True)
     if files:
@@ -96,7 +130,7 @@ def save_workflow_files(working_directory: str, workflow: Workflow, files: list[
             file_path = (
                 get_workflow_inputs_directory(
                     working_directory=working_directory,
-                    workflow_run_id=workflow.run_id,
+                    workflow_id=workflow.workflow_id,
                 )
                 / file.filename
             )
@@ -109,16 +143,16 @@ def save_workflow_files(working_directory: str, workflow: Workflow, files: list[
                         print(f"{step_file_key}: {file_path} ({step_file_path})")
     return workflow
 
-def get_workflow_inputs_directory(workflow_run_id: str = None, working_directory: str = None) -> Path:
+def get_workflow_inputs_directory(workflow_id: str = None, working_directory: str = None) -> Path:
     """returns a directory name for the workflows inputs"""
-    return Path(working_directory) / "Workflows" / workflow_run_id / "Inputs"
+    return Path(working_directory) / "Workflows" / workflow_id / "Inputs"
 
 
 def cancel_workflow(wf: Workflow, state_manager: WorkcellRedisHandler) -> None:
     """Cancels the workflow run"""
     wf.scheduler_metadata.status = WorkflowStatus.CANCELLED
     with state_manager.wc_state_lock():
-        state_manager.set_workflow_run(wf)
+        state_manager.set_workflow(wf)
     return wf
 
 
@@ -130,4 +164,4 @@ def cancel_active_workflows(state_manager: WorkcellRedisHandler) -> None:
             WorkflowStatus.QUEUED,
             WorkflowStatus.IN_PROGRESS,
         ]:
-            cancel_workflow(wf)
+            cancel_workflow(wf, state_manager=state_manager)

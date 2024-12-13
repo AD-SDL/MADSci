@@ -17,7 +17,6 @@ class WorkflowClient:
     def send_workflow(self, workflow: str, parameters: dict, validate_only: bool = False) -> Workflow:
         """send a workflow to the workcell manager"""
         workflow = WorkflowDefinition.from_yaml(workflow)
-        print(workflow)
         WorkflowDefinition.model_validate(workflow)
         insert_parameter_values(workflow=workflow, parameters=parameters)
         files = self._extract_files_from_workflow(workflow)
@@ -30,11 +29,10 @@ class WorkflowClient:
                 "validate_only": validate_only
                 },
             files={
-                ("files", (str(Path(path).name), Path.open(path, "rb")))
+                ("files", (str(Path(path).name), Path.open(Path(path), "rb")))
                 for _, path in files.items()
             },
             )
-        print(response)
     def _extract_files_from_workflow(
         self, workflow: WorkflowDefinition
     ) -> dict[str, Any]:

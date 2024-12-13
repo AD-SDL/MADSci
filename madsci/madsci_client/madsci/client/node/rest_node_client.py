@@ -57,7 +57,7 @@ class RestNodeClient(AbstractNodeClient):
                 ("files", (file, Path(path).open("rb")))  # noqa: SIM115
                 for file, path in action_request.files.items()
             ]
-            print(files)
+           
 
             rest_response = requests.post(
                 f"{self.url}/action",
@@ -72,7 +72,7 @@ class RestNodeClient(AbstractNodeClient):
         finally:
             # * Ensure files are closed
             for file in files:
-                file[1].close()
+                file[1][1].close()
         if not rest_response.ok:
             rest_response.raise_for_status()
         return ActionResult.model_validate(rest_response.json())
@@ -129,7 +129,7 @@ class RestNodeClient(AbstractNodeClient):
     def send_admin_command(self, admin_command: AdminCommands) -> bool:
         """Perform an administrative command on the node."""
         response = requests.post(
-            f"{self.url}/admin",
+            f"{self.url}/admin/{admin_command}",
             json={"admin_command": admin_command},
             timeout=10,
         )

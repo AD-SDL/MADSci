@@ -21,3 +21,4 @@ class WorkcellManagerDefinition(ManagerDefinition):
         description="The configuration for the workcell manager plugin.",
     )
 
+

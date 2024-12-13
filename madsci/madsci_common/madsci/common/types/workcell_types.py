@@ -99,3 +99,14 @@ class WorkcellConfig(BaseModel):
         title="Clear Workflows",
         description="Whether the workcell should clear old workflows on restart",
     )
+    cold_start_delay: int = Field(
+        default=0,
+        title="Cold Start Delay",
+        description="How long the Workcell engine should sleep on startup",
+    )
+    scheduler: str = Field(
+        default="schedulers.default_scheduler",
+        title="scheduler",
+        description="Scheduler module in the workcell manager scheduler folder with a Scheduler class that inherits from AbstractScheduler to use"
+        
+    )

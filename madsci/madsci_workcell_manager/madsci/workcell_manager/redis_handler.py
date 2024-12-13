@@ -6,13 +6,14 @@ import warnings
 from typing import Any, Callable, Dict, Union
 
 import redis
-from pottery import InefficientAccessWarning, RedisDict, Redlock
+from pottery import InefficientAccessWarning, RedisDict, Redlock, RedisList
 from pydantic import ValidationError
 
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import Workflow
 from madsci.common.types.base_types import new_ulid_str
 from madsci.workcell_manager.workcell_manager_types import WorkcellManagerDefinition
+from madsci.common.types.node_types import Node, NodeDefinition
 
 
 class WorkcellRedisHandler:
@@ -65,9 +66,14 @@ class WorkcellRedisHandler:
             key=f"{self._workcell_prefix}:nodes", redis=self._redis_client
         )
     @property
+    def _workflow_queue(self) -> RedisList:
+        return RedisList(
+            key=f"{self._workcell_prefix}:workflow_queue", redis=self._redis_client
+        )
+    @property
     def _workflows(self) -> RedisDict:
         return RedisDict(
-            key=f"{self._workcell_prefix}:workflow_runs", redis=self._redis_client
+            key=f"{self._workcell_prefix}:workflows", redis=self._redis_client
         )
 
 
@@ -172,20 +178,20 @@ class WorkcellRedisHandler:
         return wc_id
 
     # *Workflow Methods
-    def get_workflow(self, run_id: Union[str, str]) -> Workflow:
+    def get_workflow(self, workflow_id: Union[str, str]) -> Workflow:
         """
         Returns a workflow by ID
         """
-        return Workflow.model_validate(self._workflows[str(run_id)])
+        return Workflow.model_validate(self._workflows[str(workflow_id)])
 
     def get_all_workflows(self) -> dict[str, Workflow]:
         """
         Returns all workflow runs
         """
         valid_workflows = {}
-        for run_id, workflow in self._workflows.to_dict().items():
+        for workflow_id, workflow in self._workflows.to_dict().items():
             try:
-                valid_workflows[str(run_id)] = Workflow.model_validate(
+                valid_workflows[str(workflow_id)] = Workflow.model_validate(
                     workflow
                 )
             except ValidationError:
@@ -200,21 +206,71 @@ class WorkcellRedisHandler:
             wf_dump = wf.model_dump(mode="json")
         else:
             wf_dump = Workflow.model_validate(wf).model_dump(mode="json")
-        self._workflows[str(wf_dump["run_id"])] = wf_dump
+        self._workflows[str(wf_dump["workflow_id"])] = wf_dump
         self.mark_state_changed()
 
-    def delete_workflow(self, run_id: Union[str, str]) -> None:
+    def delete_workflow(self, workflow_id: Union[str, str]) -> None:
         """
         Deletes a workflow by ID
         """
-        del self._workflows[str(run_id)]
+        del self._workflows[str(workflow_id)]
         self.mark_state_changed()
 
     def update_workflow(
-        self, run_id: str, func: Callable[..., Any], *args: Any, **kwargs: Any
+        self, workflow_id: str, func: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> None:
         """
         Updates the state of a workflow.
         """
-        self.set_workflow(func(self.get_workflow(run_id), *args, **kwargs))
+        self.set_workflow(func(self.get_workflow(workflow_id), *args, **kwargs))
 
+    def get_node(self, node_name: str) -> Node:
+            """
+            Returns a node by name
+            """
+            return Node.model_validate(self._nodes[node_name])
+
+    def get_all_nodes(self) -> Dict[str, Node]:
+            """
+            Returns all nodes
+            """
+            valid_nodes = {}
+            for node_name, node in self._nodes.to_dict().items():
+                try:
+                    valid_nodes[str(node_name)] = Node.model_validate(node)
+                except ValidationError:
+                    continue
+            return valid_nodes
+
+    def set_node(
+            self, node_name: str, node: Union[Node, NodeDefinition, Dict[str, Any]]
+        ) -> None:
+            """
+            Sets a node by name
+            """
+            if isinstance(node, Node):
+                node_dump = node.model_dump(mode="json")
+            elif isinstance(node, NodeDefinition):
+                node_dump = Node.model_validate(
+                    node, from_attributes=True
+                ).model_dump(mode="json")
+            else:
+                node_dump = Node.model_validate(node).model_dump(mode="json")
+            self._nodes[node_name] = node_dump
+            self.mark_state_changed()
+    def delete_node(self, node_name: str) -> None:
+        """
+        Deletes a node by name
+        """
+        del self._nodes[node_name]
+        self.mark_state_changed()
+
+    def update_node(
+        self, node_name: str, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> None:
+        """
+        Updates the state of a node.
+        """
+        self.set_node(
+            node_name, func(self.get_node(node_name), *args, **kwargs)
+        )

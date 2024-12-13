@@ -120,17 +120,22 @@ class Node(BaseModel, arbitrary_types_allowed=True):
 
     node_url: AnyUrl = Field(
         title="Node URL",
-        description="The URL used to communicate with the module.",
+        description="The URL used to communicate with the node.",
     )
     status: Optional["NodeStatus"] = Field(
         default=None,
         title="Module Status",
-        description="The status of the module. Set to None if the module does not support status reporting or the status is unknown (e.g. if it hasn't reported/responded to status requests).",
+        description="The status of the node. Set to None if the node does not support status reporting or the status is unknown (e.g. if it hasn't reported/responded to status requests).",
     )
     info: Optional["NodeInfo"] = Field(
         default=None,
         title="Node Info",
         description="Information about the node, provided by the node itself.",
+    )
+    state: Optional[dict[str, Any]] = Field(
+        default=None,
+        title="Node State",
+        description="Detailed nodes specific state information"
     )
 
 

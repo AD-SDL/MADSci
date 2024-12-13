@@ -9,11 +9,13 @@ from madsci.workcell_manager.workcell_manager_types import (
 )
 
 from madsci.workcell_manager.workflow_utils import create_workflow, save_workflow_files
+from madsci.workcell_manager.workcell_utils import find_node_client
 from workcell_engine import Engine
 
 from typing import Annotated, Optional
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import WorkflowDefinition, Workflow
+from madsci.common.types.node_types import Node
 import argparse
 import json
 import traceback
@@ -29,7 +31,8 @@ arg_parser.add_argument(
 async def lifespan(app: FastAPI) -> None:
     app.state.state_handler=WorkcellRedisHandler(workcell_manager_definition)
     app.state.state_handler.set_workcell(workcell)
-    Engine(workcell_manager_definition, app.state.state_handler)
+    engine = Engine(workcell_manager_definition, app.state.state_handler)
+    engine.start_engine_thread()
     yield
 app = FastAPI(lifespan=lifespan)
 
@@ -42,6 +45,39 @@ def info() -> WorkcellManagerDefinition:
 def get_workcell() -> WorkcellDefinition:
     """Get information about the resource manager."""
     return app.state.state_handler.get_workcell()
+
+@app.get("/nodes")
+def get_nodes() -> dict[str, Node]:
+    """Get information about the resource manager."""
+    return app.state.state_handler.get_all_nodes()
+
+@app.get("/admin/{command}")
+def send_admin_command(command: str) -> list:
+    """Get information about the resource manager."""
+    responses = []
+    for node in app.state.state_handler.get_all_nodes().values():
+        if command in node.info.capabilities.admin_commands:
+            client = find_node_client(node.node_url)
+            response = client.send_admin_command(command)
+            responses.append(response)
+    return responses
+
+@app.get("/admin/{command}/{node}")
+def send_admin_command_to_node(command: str, node: str) -> list:
+    """Get information about the resource manager."""
+    responses = []
+    node = app.state.state_handler.get_node(node)
+    if command in node.info.capabilities.admin_commands:
+        client = find_node_client(node.node_url)
+        response = client.send_admin_command(command)
+        responses.append(response)
+    return responses
+
+
+@app.get("/workflows")
+def get_workflows() -> dict[str, Workflow]:
+    """Get information about the resource manager."""
+    return app.state.state_handler.get_all_workflows()
 
 @app.post("/start_workflow")
 async def start_workflow(
@@ -95,6 +131,7 @@ async def start_workflow(
         workcell=workcell,
         experiment_id=experiment_id,
         parameters=parameters,
+        state_manager=app.state.state_handler
     )
 
     if not validate_only:
