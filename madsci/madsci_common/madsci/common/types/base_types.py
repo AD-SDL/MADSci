@@ -26,7 +26,7 @@ def new_ulid_str() -> str:
     return str(ULID())
 
 
-class BaseModel(SQLModel, use_enum_values=True):
+class BaseModel(SQLModel, use_enum_values=True, table=False):
     """
     Parent class for all MADSci data models.
     """
