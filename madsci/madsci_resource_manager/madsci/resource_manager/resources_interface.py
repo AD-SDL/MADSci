@@ -17,7 +17,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 #     Stack,
 # )
 from madsci.common.types.resource_types import StackBase,PoolBase,ResourceBase
-from db_tables import Stack, Asset
+from db_tables import Stack, Asset, Queue
 
 class ResourcesInterface:
     """
@@ -90,106 +90,85 @@ class ResourcesInterface:
             return resource
 
 
-    # def get_resource(
-    #     self,
-    #     resource_name: Optional[str] = None,
-    #     owner_name: Optional[str] = None,
-    #     resource_id: Optional[str] = None,
-    # ) -> Optional[SQLModel]:
-    #     """
-    #     Retrieve a resource from the database by its name and owner_name across all resource types.
+    def get_resource(
+        self,
+        resource_name: Optional[str] = None,
+        owner_name: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+    ) -> Optional[SQLModel]:
+        """
+        Retrieve a resource from the database by its name and owner_name across all resource types.
 
-    #     Args:
-    #         resource_name (str): The name of the resource to retrieve.
-    #         owner_name (str): The module name associated with the resource.
-    #         resource_id (Optional[str]): The optional ID of the resource (if provided, this will take priority).
+        Args:
+            resource_name (str): The name of the resource to retrieve.
+            owner_name (str): The module name associated with the resource.
+            resource_id (Optional[str]): The optional ID of the resource (if provided, this will take priority).
 
-    #     Returns:
-    #         Optional[SQLModel]: The resource if found, otherwise None.
-    #     """
-    #     if not resource_id and (not resource_name or not owner_name):
-    #         raise ValueError(
-    #             "You must provide either a resource_id or both resource_name and owner_name."
-    #         )
+        Returns:
+            Optional[SQLModel]: The resource if found, otherwise None.
+        """
+        if not resource_id and not (resource_name or owner_name or resource_type):
+            raise ValueError(
+                "You must provide at least one of the following: resource_id, resource_name, owner_name, or resource_type."
+            )
 
-    #     with self.session as session:
-    #         resource_classes = [
-    #             Stack,
-    #             Queue,
-    #             Collection,
-    #             Pool,
-    #         ]
+        # Map resource type names to their respective SQLModel classes
+        resource_type_map = {
+            "stack": Stack,
+            "queue": Queue,
+        }
 
-    #     # If resource_id is provided, use it to directly query the resource
-    #     if resource_id:
-    #         for resource_class in resource_classes:
-    #             statement = select(resource_class).where(
-    #                 resource_class.id == resource_id
-    #             )
-    #             resource = session.exec(statement).first()
+        with self.session as session:
+            # If resource_id is provided, prioritize searching by ID
+            if resource_id:
+                resource_types = (
+                    [resource_type]
+                    if resource_type and resource_type in resource_type_map
+                    else resource_type_map.keys()
+                )
+                for r_type in resource_types:
+                    resource_type = resource_type_map[r_type]
+                    resource = session.exec(
+                        select(resource_type).where(resource_type.resource_id == resource_id)
+                    ).first()
+                    if resource:
+                        print(f"Resource found by ID: {resource.resource_id} in {r_type}")
+                        return resource
 
-    #             if resource:
-    #                 # Check if the resource is a Collection and is_plate is True
-    #                 if isinstance(resource, Collection) and resource.is_plate:
-    #                     plate = Plate(
-    #                         id=resource.id,
-    #                         name=resource.name,
-    #                         description=resource.description,
-    #                         capacity=resource.capacity,
-    #                         well_capacity=100.0,  # TODO: Set well_capacity dynamically
-    #                         owner_name=resource.owner_name,
-    #                         quantity=resource.quantity,
-    #                         unique_resource=resource.unique_resource,
-    #                     )
-    #                     return plate
+                print(f"No resource found with ID '{resource_id}'.")
+                return None
 
-    #                 # If it's not a plate, return the found resource
-    #                 print(f"Resource found by ID: {resource.id}")
-    #                 return resource
+            # Build query conditions for name and owner
+            query_conditions = []
+            if resource_name:
+                query_conditions.append(lambda cls: cls.resource_name == resource_name)
+            if owner_name:
+                query_conditions.append(lambda cls: cls.owner == owner_name)
 
-    #         print(f"No resource found with ID '{resource_id}'.")
-    #         return None
+            # Search specific resource type if provided, otherwise search all types
+            resource_types = (
+                [resource_type]
+                if resource_type and resource_type in resource_type_map
+                else resource_type_map.keys()
+            )
+            for r_type in resource_types:
+                resource_type = resource_type_map[r_type]
+                statement = select(resource_type)
+                for condition in query_conditions:
+                    statement = statement.where(condition(resource_type))
+                resource = session.exec(statement).first()
+                if resource:
+                    print(
+                        f"Resource found: {resource.resource_name} in {r_type}."
+                    )
+                    return resource
 
-    #     # Fallback to using resource_name and owner_name if resource_id is not provided
-    #     for resource_class in resource_classes:
-    #         statement = select(resource_class).where(
-    #             resource_class.name == resource_name,
-    #             resource_class.owner_name == owner_name,
-    #         )
-    #         resources = session.exec(statement).all()
-    #         if not resources:
-    #             continue
-
-    #         # Handle multiple results found
-    #         if len(resources) > 1:
-    #             raise MultipleResultsFound(
-    #                 f"Multiple resources found for name '{resource_name}' in owner '{owner_name}'. Please provide a resource ID."
-    #             )
-
-    #         resource = resources[0]
-
-    #         # If the resource is a Plate (Collection with is_plate=True), return a Plate object
-    #         if isinstance(resource, Collection) and resource.is_plate:
-    #             plate = Plate(
-    #                 id=resource.id,
-    #                 name=resource.name,
-    #                 description=resource.description,
-    #                 capacity=resource.capacity,
-    #                 well_capacity=100.0,  # TODO: Set well_capacity dynamically
-    #                 owner_name=resource.owner_name,
-    #                 quantity=resource.quantity,
-    #                 unique_resource=resource.unique_resource,
-    #             )
-    #             return plate
-
-    #         print(
-    #             f"Resource found: {resource.name} in owner '{owner_name}' (Type: {resource_class.__name__})"
-    #         )
-    #         return resource
-
-    #     print(f"No resource found with name '{resource_name}' in owner '{owner_name}'.")
-    #     return None
-
+            print(
+                f"No resource found matching name '{resource_name}', owner '{owner_name}', or type '{resource_type}'."
+            )
+            return None
+        
     # def get_resource_type(self, resource_id: str) -> Optional[str]:
     #     """
     #     Determine the resource type name based on the provided resource_id.
@@ -632,7 +611,10 @@ if __name__ == "__main__":
     asset = Asset(resource_name="Test plate") 
     asset = resources_interface.add_resource(asset) 
     resources_interface.push_to_stack(stack,asset)
-    n_asset = resources_interface.pop_from_stack(stack)
+    retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
+    print(retrieved_stack)
+    n_asset = resources_interface.pop_from_stack(retrieved_stack)
+    
     # resources_interface.clear_all_table_records()
     # pool = Pool(
     #     name="Test Pool",

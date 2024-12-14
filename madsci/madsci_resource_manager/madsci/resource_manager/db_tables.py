@@ -5,7 +5,7 @@ from sqlalchemy import (
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Field, Session
 
-from madsci.common.types.resource_types import AssetBase, StackBase
+from madsci.common.types.resource_types import AssetBase, StackBase, QueueBase
 
 
 class Asset(AssetBase, table=True):
@@ -396,7 +396,6 @@ class Stack(StackBase, table=True):
         self.children.append(serialized_asset)
         # Explicitly flag the `children` field as modified
         flag_modified(self, "children")
-        print(self.children)
         # Commit the session to persist changes to the database
         session.add(self)
         session.commit()
@@ -415,15 +414,11 @@ class Stack(StackBase, table=True):
         Raises:
             ValueError: If the stack is empty or if the asset is not found.
         """
-        # Ensure the stack is not empty
-        children = self.get_contents(session)
-        print(self.children)
-
-        if not children or len(children) == 0:
+        if not self.children or len(self.children) == 0:
             raise ValueError(f"Stack {self.resource_name} is empty.")
 
-        # Remove and retrieve the last asset from the list
-        serialized_asset = children.pop()
+        # Retrieve and remove the last serialized asset from the list
+        serialized_asset = self.children.pop()
 
         # Flag the children field as modified
         flag_modified(self, "children")
@@ -433,7 +428,106 @@ class Stack(StackBase, table=True):
         session.commit()
 
         # Deserialize the asset back into an Asset object
-        return Asset(**serialized_asset)
+        if isinstance(serialized_asset, dict):
+            return Asset(**serialized_asset)  # Deserialize dictionary to Asset
+        else:
+            raise TypeError(
+                f"Unexpected type in children: {type(serialized_asset)}. Expected dict."
+            )
+
+class Queue(QueueBase, table = False): 
+    """
+    Base class for queue resources with methods to push and pop assets.
+
+    Attributes:
+        contents (List[Dict[str, Any]]): List of assets in the queue, stored as JSONB.
+    """
+
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the stack.",
+    )
+    def get_contents(self, session: Session):
+        """
+        Fetch and return assets in the queue, ordered by their index (FIFO).
+
+        The assets are returned as a list, ordered by their index in ascending order.
+        Args:
+            session (Session): The database session passed from the interface layer.
+
+        Returns:
+            List[Asset]: A list of assets sorted by their index.
+        """
+
+        # Return the assets based on the sorted allocations
+        # return [session.get(Asset, alloc.asset_id) for alloc in allocations]
+        pass
+
+    def push(self, asset: Asset, session: Session) -> int:
+        """
+        Push a new asset onto the queue.
+
+        Args:
+            asset (Any): The asset to push onto the queue.
+            session (Session): SQLAlchemy session to use for saving.
+
+        Returns:
+            int: The index of the pushed asset.
+
+        Raises:
+            ValueError: If the queue is full.
+        """
+        # Fetch the current contents (sorted by index)
+        contents = self.get_contents(session)
+        # Check if the capacity is exceeded
+        if self.capacity and len(contents) >= self.capacity:
+            raise ValueError(f"Queue {self.name} is full. Capacity: {self.capacity}")
+
+
+
+
+        # Update the quantity based on the number of assets in the queue
+        self.quantity = len(contents) + 1  # Increase quantity by 1
+        self.save(session)
+
+
+    def pop(self, session: Session) :
+        """
+        Pop the first asset from the queue (FIFO).
+
+        Args:
+            session (Session): SQLAlchemy session to use for saving.
+
+        Returns:
+            Any: The popped asset.
+
+        Raises:
+            ValueError: If the queue is empty or if the asset is not found.
+        """
+        # Fetch the current contents (sorted by index)
+        contents = self.get_contents(session)  # Get the current queue contents
+
+        if not contents:
+            raise ValueError(f"Resource {self.name} is empty.")  # Error raised here
+
+        # Pop the first asset (FIFO)
+        first_asset = contents[0]
+
+        # Deallocate the asset from this queue
+        first_asset.deallocate(session)
+
+        # Update the quantity after removing the asset
+        self.quantity = len(contents) - 1  # Decrease quantity
+        self.save(session)
+
+        return {
+            "id": first_asset.id,
+            "name": first_asset.name,
+            "owner_name": first_asset.owner_name,
+        }
+
 
 
 if __name__ == "__main__":
