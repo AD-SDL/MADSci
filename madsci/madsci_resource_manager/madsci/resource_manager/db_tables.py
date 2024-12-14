@@ -381,25 +381,31 @@ class Stack(StackBase, table=True):
             int: The new index of the pushed asset.
         """
         # Ensure the children attribute exists
-        if not hasattr(self, "children") or self.children is None:
+        if not hasattr(self, 'children') or self.children is None:
             self.children = []
-
-        # Check if the capacity is exceeded
+            
         if len(self.children) >= self.capacity:
-            raise ValueError(
-                f"Stack {self.resource_name} is full. Capacity: {self.capacity}"
-            )
+            raise ValueError(f"Stack {self.resource_name} is full. Capacity: {self.capacity}")
 
-        # Add the asset to the stack
+        # Update parent and owner for the asset
+        asset.parent = self.resource_name
+
+        # Save the asset to the database with updated parent and owner
+        session.merge(asset)  # Use merge to insert or update
+        session.commit()
+
+        # Serialize the Asset object to a dictionary before storing it
         serialized_asset = asset.dict()
 
+        # Append the serialized asset to the children list
         self.children.append(serialized_asset)
-        # Explicitly flag the `children` field as modified
+
+        # Flag the children field as modified and commit the changes
         flag_modified(self, "children")
-        # Commit the session to persist changes to the database
         session.add(self)
         session.commit()
-        return len(self.children)  # Return the new index
+
+        return len(self.children)
 
     def pop(self, session: Session) -> Asset:
         """
@@ -429,11 +435,18 @@ class Stack(StackBase, table=True):
 
         # Deserialize the asset back into an Asset object
         if isinstance(serialized_asset, dict):
-            return Asset(**serialized_asset)  # Deserialize dictionary to Asset
+            asset = Asset(**serialized_asset)
         else:
             raise TypeError(
                 f"Unexpected type in children: {type(serialized_asset)}. Expected dict."
             )
+
+        # Only modify the parent 
+        asset.parent = None
+        # Update the asset in the database
+        session.commit()
+
+        return asset
 
 class Queue(QueueBase, table = False): 
     """

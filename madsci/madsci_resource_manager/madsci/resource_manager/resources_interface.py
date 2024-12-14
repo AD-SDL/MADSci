@@ -613,7 +613,7 @@ if __name__ == "__main__":
     resources_interface.push_to_stack(stack,asset)
     retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
     print(retrieved_stack)
-    n_asset = resources_interface.pop_from_stack(retrieved_stack)
+    # n_asset = resources_interface.pop_from_stack(retrieved_stack)
     
     # resources_interface.clear_all_table_records()
     # pool = Pool(
