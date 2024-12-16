@@ -15,11 +15,11 @@ madsci manager add --type event_manager
 python -m madsci.event_manager.event_server
 ```
 
-You should see a REST server started on the configured host and port.
+You should see a REST server started on the configured host and port. Navigate in your browser to the URL you configured (default: `http://localhost:8001`) to see if it's working.
 
 ## Client
 
-You can use the EventClient (`madsci.client.event_client.EventClient`) to log events to the event manager.
+You can use MADSci's `EventClient` (`madsci.client.event_client.EventClient`) in your python code to log events to the event manager.
 
 ```python
 from madsci.client.event_client import EventClient
@@ -37,4 +37,7 @@ event = Event(
 )
 event_client.log(event)
 event_client.log_warning(event) # Log the same event, but override the log level.
+
+# Query for recent events
+event_client.get_events(number=50)
 ```

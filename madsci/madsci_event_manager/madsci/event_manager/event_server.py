@@ -10,12 +10,19 @@ from madsci.common.definition_loaders import (
     manager_definition_loader,
 )
 from madsci.common.types.event_types import Event
-from madsci.common.types.squid_types import ManagerType
+from madsci.common.types.squid_types import EventManagerDefinition, ManagerType
 
 app = FastAPI()
 
 events = OrderedDict()
 logger = EventClient(name=__name__)
+event_manager_definition = None
+
+
+@app.get("/")
+async def root() -> EventManagerDefinition:
+    """Return the Event Manager Definition"""
+    return event_manager_definition
 
 
 @app.get("/event/{event_id}")
@@ -47,7 +54,6 @@ async def create_event(event: Event) -> Event:
 
 if __name__ == "__main__":
     manager_definitions = manager_definition_loader()
-    event_manager_definition = None
     for manager in manager_definitions:
         if manager.manager_type == ManagerType.EVENT_MANAGER:
             event_manager_definition = manager
