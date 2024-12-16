@@ -13,7 +13,7 @@ from sqlmodel import Field
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci.common.types.validators import ulid_validator
+from madsci.common.validators import ulid_validator
 
 
 class Event(BaseModel):
@@ -29,12 +29,12 @@ class Event(BaseModel):
     event_type: "EventType" = Field(
         title="Event Type",
         description="The type of the event.",
-        default="unknown",
+        default_factory=lambda: EventType.UNKNOWN,
     )
     log_level: "EventLogLevel" = Field(
         title="Event Log Level",
         description="The log level of the event. Defaults to NOTSET. See https://docs.python.org/3/library/logging.html#logging-levels",
-        default_factory=lambda: EventLogLevel.NOTSET,
+        default_factory=lambda: EventLogLevel.INFO,
     )
     event_timestamp: datetime = Field(
         title="Event Timestamp",
@@ -70,6 +70,12 @@ class EventType(str, Enum):
     """The type of an event."""
 
     UNKNOWN = "unknown"
+    LOG = "log"
+    LOG_DEBUG = "log_debug"
+    LOG_INFO = "log_info"
+    LOG_WARNING = "log_warning"
+    LOG_ERROR = "log_error"
+    LOG_CRITICAL = "log_critical"
     # *Lab Events
     LAB_CREATE = "lab_create"
     LAB_START = "lab_start"
@@ -80,6 +86,7 @@ class EventType(str, Enum):
     NODE_STOP = "node_stop"
     NODE_CONFIG_UPDATE = "node_config_update"
     NODE_STATUS_UPDATE = "node_status_update"
+    NODE_ERROR = "node_error"
     # *Workcell Events
     WORKCELL_CREATE = "workcell_create"
     WORKCELL_START = "workcell_start"
@@ -104,3 +111,11 @@ class EventType(str, Enum):
     CAMPAIGN_START = "campaign_start"
     CAMPAIGN_COMPLETE = "campaign_complete"
     CAMPAIGN_ABORT = "campaign_abort"
+
+    @classmethod
+    def _missing_(cls, value: str) -> "EventType":
+        value = value.lower()
+        for member in cls:
+            if member.lower() == value:
+                return member
+        raise ValueError(f"Invalid ManagerTypes: {value}")

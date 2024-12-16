@@ -6,11 +6,14 @@ default:
 init: hooks
   @which pdm || echo "pdm not found, you'll need to install it: https://github.com/pdm-project/pdm"
   @pdm install
+  @cd madsci/madsci_common && pdm install && cd -
+  @pdm update
   @#test -e .env || cp .env.example .env
 
 # Install the pre-commit hooks
 hooks:
   @pre-commit install
+  @pre-commit autoupdate
 
 # Run the pre-commit checks
 checks:

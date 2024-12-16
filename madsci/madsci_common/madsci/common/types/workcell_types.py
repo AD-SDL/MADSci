@@ -8,7 +8,7 @@ from sqlmodel.main import Field
 
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 from madsci.common.types.node_types import NodeDefinition
-from madsci.common.types.validators import ulid_validator
+from madsci.common.validators import ulid_validator
 
 
 class WorkcellDefinition(BaseModel, extra="allow"):

@@ -7,7 +7,7 @@ from pydantic.functional_validators import field_validator
 from pydantic.types import Json
 
 from madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci.common.types.validators import ulid_validator
+from madsci.common.validators import ulid_validator
 
 
 class Location(BaseModel):
