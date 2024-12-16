@@ -44,7 +44,8 @@
 		"ghcr.io/devcontainers-extra/features/pdm:2": {},
 		"ghcr.io/devcontainers-extra/features/vue-cli:2": {},
 		"ghcr.io/devcontainers-extra/features/pre-commit:2": {},
-		"ghcr.io/devcontainers-extra/features/ruff:1": {}
+		"ghcr.io/devcontainers-extra/features/ruff:1": {},
+		"ghcr.io/devcontainers-extra/features/mongosh-homebrew:1": {}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [8000],

@@ -13,7 +13,7 @@ from sqlmodel.main import Field
 from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
-from madsci.common.types.config_types import ConfigParameter
+from madsci.common.types.config_types import ConfigParameterDefinition
 from madsci.common.validators import ulid_validator
 
 
@@ -51,7 +51,9 @@ class NodeModuleDefinition(BaseModel, extra="allow"):
         title="Module Capabilities",
         description="The capabilities of the node module.",
     )
-    config: Union[list["ConfigParameter"], dict[str, "ConfigParameter"]] = Field(
+    config: Union[
+        list["ConfigParameterDefinition"], dict[str, "ConfigParameterDefinition"]
+    ] = Field(
         title="Module Configuration",
         description="The configuration of the node module. These are 'default' configuration parameters inherited by all child nodes.",
         default_factory=list,
@@ -66,29 +68,33 @@ class NodeModuleDefinition(BaseModel, extra="allow"):
     @classmethod
     def validate_config(
         cls,
-        v: Union[list["ConfigParameter"], dict[str, "ConfigParameter"]],
-    ) -> Union[list["ConfigParameter"], dict[str, "ConfigParameter"]]:
+        v: Union[
+            list["ConfigParameterDefinition"], dict[str, "ConfigParameterDefinition"]
+        ],
+    ) -> Union[
+        list["ConfigParameterDefinition"], dict[str, "ConfigParameterDefinition"]
+    ]:
         """Validate the node module configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
         if isinstance(v, dict):
             return v
         return {param.name: param for param in v}
 
 
-NODE_MODULE_CONFIG_TEMPLATES: dict[str, list[ConfigParameter]] = {
+NODE_MODULE_CONFIG_TEMPLATES: dict[str, list[ConfigParameterDefinition]] = {
     "REST Node": [
-        ConfigParameter(
+        ConfigParameterDefinition(
             name="host",
             description="The host of the REST API.",
             default="127.0.0.1",
             required=True,
         ),
-        ConfigParameter(
+        ConfigParameterDefinition(
             name="port",
             description="The port of the REST API.",
             default=8000,
             required=True,
         ),
-        ConfigParameter(
+        ConfigParameterDefinition(
             name="protocol",
             description="The protocol of the REST API, either 'http' or 'https'.",
             default="http",
@@ -253,7 +259,9 @@ class NodeDefinition(BaseModel):
         description="Definition of the module that the node is an instance of.",
         default=None,
     )  # TODO: Add support for pointing to URL
-    config: Union[list[ConfigParameter], dict[str, ConfigParameter]] = Field(
+    config: Union[
+        list[ConfigParameterDefinition], dict[str, ConfigParameterDefinition]
+    ] = Field(
         title="Node Configuration",
         description="The configuration for the node.",
         default_factory=list,
@@ -270,8 +278,8 @@ class NodeDefinition(BaseModel):
     @classmethod
     def validate_config(
         cls,
-        v: Union[list[ConfigParameter], dict[str, ConfigParameter]],
-    ) -> Union[list[ConfigParameter], dict[str, ConfigParameter]]:
+        v: Union[list[ConfigParameterDefinition], dict[str, ConfigParameterDefinition]],
+    ) -> Union[list[ConfigParameterDefinition], dict[str, ConfigParameterDefinition]]:
         """Validate the node configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
         if isinstance(v, dict):
             return v

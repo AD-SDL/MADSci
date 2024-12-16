@@ -11,6 +11,7 @@ dev = [
     "-e madsci.client @ file:///${PROJECT_ROOT}/madsci/madsci_client",
     "-e madsci.node_module @ file:///${PROJECT_ROOT}/madsci/madsci_node_module",
     "-e madsci.resource_manager @ file:///${PROJECT_ROOT}/madsci/madsci_resource_manager",
+    "-e madsci.event_manager @ file:///${PROJECT_ROOT}/madsci/madsci_event_manager",
 ]
 [tool.pdm.version]
 source = "scm"

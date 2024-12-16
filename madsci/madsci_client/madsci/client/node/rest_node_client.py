@@ -54,7 +54,7 @@ class RestNodeClient(AbstractNodeClient):
                 ("files", (file, Path(path).open("rb")))  # noqa: SIM115
                 for file, path in action_request.files.items()
             ]
-            print(files)
+            self.logger.log_debug(files)
 
             rest_response = requests.post(
                 f"{self.node.node_url}/action",

@@ -2,12 +2,12 @@
 
 from typing import Any, Optional
 
-from sqlmodel.main import Field
+from pydantic import Field
 
 from madsci.common.types.base_types import BaseModel
 
 
-class ConfigParameter(BaseModel, extra="allow"):
+class ConfigParameterDefinition(BaseModel, extra="allow"):
     """A configuration parameter definition for a MADSci system component."""
 
     name: str = Field(
@@ -31,6 +31,16 @@ class ConfigParameter(BaseModel, extra="allow"):
     )
     reset_on_change: bool = Field(
         title="Parameter Reset on Change",
-        description="Whether the node should restart whenever the parameter changes.",
+        description="Whether the configured object should restart/reset whenever the parameter changes.",
         default=True,
+    )
+
+
+class ConfigParameterWithValue(ConfigParameterDefinition):
+    """A configuration parameter definition with value set"""
+
+    value: Optional[Any] = Field(
+        title="Parameter Value",
+        description="The value of the parameter, if set",
+        default=None,
     )

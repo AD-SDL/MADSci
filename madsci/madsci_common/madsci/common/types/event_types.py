@@ -71,6 +71,11 @@ class EventType(str, Enum):
 
     UNKNOWN = "unknown"
     LOG = "log"
+    LOG_DEBUG = "log_debug"
+    LOG_INFO = "log_info"
+    LOG_WARNING = "log_warning"
+    LOG_ERROR = "log_error"
+    LOG_CRITICAL = "log_critical"
     # *Lab Events
     LAB_CREATE = "lab_create"
     LAB_START = "lab_start"
@@ -106,3 +111,11 @@ class EventType(str, Enum):
     CAMPAIGN_START = "campaign_start"
     CAMPAIGN_COMPLETE = "campaign_complete"
     CAMPAIGN_ABORT = "campaign_abort"
+
+    @classmethod
+    def _missing_(cls, value: str) -> "EventType":
+        value = value.lower()
+        for member in cls:
+            if member.lower() == value:
+                return member
+        raise ValueError(f"Invalid ManagerTypes: {value}")
