@@ -464,7 +464,7 @@ class Stack(StackBase, table=True):
 
         return existing_asset
 
-class Queue(QueueBase, table = False): 
+class Queue(QueueBase, table = True): 
     """
     Base class for queue resources with methods to push and pop assets.
 
@@ -472,12 +472,7 @@ class Queue(QueueBase, table = False):
         contents (List[Dict[str, Any]]): List of assets in the queue, stored as JSONB.
     """
 
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the stack.",
-    )
+
     def get_contents(self, session: Session):
         """
         Fetch and return assets in the queue, ordered by their index (FIFO).
