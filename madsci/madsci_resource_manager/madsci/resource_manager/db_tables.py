@@ -3,6 +3,7 @@ from sqlalchemy import (
     Column,
 )
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.inspection import inspect
 from sqlmodel import Field, Session
 
 from madsci.common.types.resource_types import AssetBase, StackBase, QueueBase
@@ -17,7 +18,16 @@ class Asset(AssetBase, table=True):
         title="Attributes",
         description="Custom attributes for the asset.",
     )
+    
+    def to_json(self) -> dict:
+        """
+        Serialize the Asset object into a JSON-compatible dictionary using SQLAlchemy's inspection.
 
+        Returns:
+            dict: Serialized dictionary of the Asset object.
+        """
+        # Use SQLAlchemy's inspection to get the object's field data
+        return {column.key: getattr(self, column.key) for column in inspect(self).mapper.column_attrs}
 
 # class AssetBase(SQLModel):
 #     """
@@ -380,27 +390,30 @@ class Stack(StackBase, table=True):
         Returns:
             int: The new index of the pushed asset.
         """
-        # Ensure the children attribute exists
         if not hasattr(self, 'children') or self.children is None:
             self.children = []
-            
+
         if len(self.children) >= self.capacity:
             raise ValueError(f"Stack {self.resource_name} is full. Capacity: {self.capacity}")
 
-        # Update parent and owner for the asset
-        asset.parent = self.resource_name
+        # Fetch the existing asset from the database
+        existing_asset = session.query(Asset).filter_by(resource_id=asset.resource_id).first()
+        if not existing_asset:
+            raise ValueError(f"Asset with ID {asset.resource_id} not found in the database.")
 
-        # Save the asset to the database with updated parent and owner
-        session.merge(asset)  # Use merge to insert or update
+        # Update the parent and owner fields
+        existing_asset.parent = self.resource_name
+
+        # Commit changes to the database
         session.commit()
 
-        # Serialize the Asset object to a dictionary before storing it
-        serialized_asset = asset.dict()
+        # Serialize the Asset object using the to_json method
+        serialized_asset = existing_asset.to_json()
 
         # Append the serialized asset to the children list
         self.children.append(serialized_asset)
 
-        # Flag the children field as modified and commit the changes
+        # Flag the children field as modified
         flag_modified(self, "children")
         session.add(self)
         session.commit()
@@ -433,20 +446,23 @@ class Stack(StackBase, table=True):
         session.add(self)
         session.commit()
 
-        # Deserialize the asset back into an Asset object
-        if isinstance(serialized_asset, dict):
-            asset = Asset(**serialized_asset)
-        else:
-            raise TypeError(
-                f"Unexpected type in children: {type(serialized_asset)}. Expected dict."
-            )
+        # Deserialize the asset to get its resource_id
+        resource_id = serialized_asset.get("resource_id")
+        if not resource_id:
+            raise ValueError("The popped asset does not have a resource_id.")
 
-        # Only modify the parent 
-        asset.parent = None
-        # Update the asset in the database
+        # Fetch the existing asset from the database
+        existing_asset = session.query(Asset).filter_by(resource_id=resource_id).first()
+        if not existing_asset:
+            raise ValueError(f"Asset with ID {resource_id} not found in the database.")
+
+        # Update the parent and owner fields of the asset
+        existing_asset.parent = None
+
+        # Commit the changes to the database
         session.commit()
 
-        return asset
+        return existing_asset
 
 class Queue(QueueBase, table = False): 
     """
