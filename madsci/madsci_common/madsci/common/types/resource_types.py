@@ -616,19 +616,20 @@ RESOURCE_DEFINITION_MAP: dict[str, type[ResourceDefinition]] = {
 }
 
 
-class ResourceBase(ResourceDefinition, extra="allow"):
+class ResourceBase(ResourceDefinition, extra="allow", table=False):
     """Base class for all MADSci Resources."""
     # Might be better to put this elsewhere
     # resource_url: str = Field(
     #     title="Resource URL",
     #     description="The URL of the resource.",
     # )
-    ownership: Optional[OwnershipInfo] = Field(
-        title="Ownership",
-        description="Information about the ownership of the resource.",
-        default_factory=OwnershipInfo,
-        sa_column=Column(JSON),
-    )
+    # ownership: Optional[OwnershipInfo] = Field(
+    #     title="Ownership",
+    #     description="Information about the ownership of the resource.",
+    #     default_factory=OwnershipInfo,
+    #     sa_column=Column(JSON),
+    #     nullable=True
+    # )
     owner: str = Field(
         title="Resource Type",
         description="The type of the resource.", 
@@ -638,7 +639,12 @@ class ResourceBase(ResourceDefinition, extra="allow"):
 
 class AssetBase(AssetResourceDefinition):
     """Base class for all MADSci Assets."""
-
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the asset.",
+    )
 
 class ConsumableBase(ResourceBase):
     """Base class for all MADSci Consumables."""
@@ -656,7 +662,12 @@ class DiscreteConsumableBase(ConsumableBase):
         title="Quantity",
         description="The quantity of the discrete consumable.",
     )
-
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the descrete consumable.",
+    )
 
 class ContinuousConsumableBase(ConsumableBase):
     """Base class for all MADSci Continuous Consumables."""
@@ -665,17 +676,16 @@ class ContinuousConsumableBase(ConsumableBase):
         title="Quantity",
         description="The quantity of the continuous consumable.",
     )
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the continuous consumable.",
+    )
 
-
-class ContainerBase(ResourceBase):
+class ContainerBase(ResourceBase,table=False):
     """Base class for all MADSci Containers."""
 
-    children: Optional[list[ResourceBase]] = Field(
-        title="Children",
-        description="The children of the container.",
-        default_factory=list,
-        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
-    )
     capacity: Optional[int] = Field(
         title="Capacity",
         description="The capacity of the container.",
@@ -689,7 +699,12 @@ class CollectionBase(ContainerBase):
         title="Keys",
         description="The keys of the collection.",
     )
-
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the collection.",
+    )
 
 class GridBase(ContainerBase):
     """Base class for all MADSci Grids."""
@@ -698,7 +713,12 @@ class GridBase(ContainerBase):
         title="Children",
         description="The children of the grid.",
     )
-
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the grid.",
+    )
 
 class VoxelGridBase(GridBase):
     """Base class for all MADSci Voxel Grids."""
@@ -707,16 +727,41 @@ class VoxelGridBase(GridBase):
         title="Children",
         description="The children of the voxel grid.",
     )
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the voxel grid.",
+    )
 
-
-class StackBase(ContainerBase):
+class StackBase(ContainerBase,table=False):
     """Base class for all MADSci Stacks."""
-
-
-class QueueBase(ContainerBase):
+    children: Optional[list[ResourceBase]] = Field(
+        title="Children",
+        description="The children of the container.",
+        default_factory=list,
+        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
+    )
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the stack.",
+    )
+class QueueBase(ContainerBase,table=False):
     """Base class for all MADSci Queues."""
-
-
+    children: Optional[list[ResourceBase]] = Field(
+        title="Children",
+        description="The children of the container.",
+        default_factory=list,
+        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
+    )
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the queue.",
+    )
 class PoolBase(ContainerBase):
     """Base class for all MADSci Pools."""
 
@@ -728,7 +773,12 @@ class PoolBase(ContainerBase):
         title="Capacity",
         description="The capacity of the pool.",
     )
-
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        title="Attributes",
+        description="Custom attributes for the pool.",
+    )
 if __name__ == "__main__":
     a = ConsumableBase(resource_name="Water",resource_type="pool",quantity=50.0,ownership=None,capacity=100)
     t = PoolBase(resource_name="Test Pool",resource_description="teststes",capacity=100,ownership=None,quantity=50,children={"A":a},resource_type="pool")
