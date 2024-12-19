@@ -500,13 +500,16 @@ class Stack(StackBase, table=True):
 
         # Determine the next index
         next_index = len(contents) + 1
+        # Update the parent of the asset
+        asset.parent = self.resource_id
+        session.add(asset)  # Persist the updated asset
 
         # Allocate the asset to this stack
         Allocation.allocate_to_resource(
             resource_id=asset.resource_id,
             resource_name=asset.resource_name,
             parent=self.resource_id,
-            resource_type=str(Stack),
+            resource_type="Stack",
             index=next_index,
             session=session,
         )
@@ -553,6 +556,9 @@ class Stack(StackBase, table=True):
         # Remove resource_id from children and flag it as modified
         self.children.pop()
         flag_modified(self, "children")
+        # Update the parent of the asset
+        last_asset.parent = None
+        session.add(last_asset)  # Persist the updated asset
 
         # Update and save the stack quantity
         self.quantity = len(contents) - 1
@@ -569,110 +575,121 @@ class Queue(QueueBase, table = True):
         contents (List[Dict[str, Any]]): List of assets in the queue, stored as JSONB.
     """
 
-    def get_contents(self, session: Session):
+    def get_contents(self, session: Session) -> List[Asset]:
         """
         Fetch and return assets in the queue, ordered by their index (FIFO).
 
-        The assets are returned as a list, ordered by their index in ascending order.
         Args:
-            session (Session): The database session passed from the interface layer.
+            session (Session): SQLAlchemy session.
 
         Returns:
-            list: List of Asset objects currently in the queue.
+            List[Asset]: List of assets in the queue, ordered by their index.
         """
-        return [
-            session.query(Asset).filter_by(resource_id=child["resource_id"]).first()
-            for child in self.children
-            if "resource_id" in child
-        ]
+        # Query allocations for this queue and sort by index
+        allocations = (
+            session.query(Allocation)
+            .filter_by(parent=self.resource_id)
+            .order_by(Allocation.index.asc())
+            .all()
+        )
+
+        # Fetch assets from the database using the allocation records
+        return [session.get(Asset, alloc.resource_id) for alloc in allocations]
 
     def push(self, asset: Asset, session: Session) -> int:
         """
-        Push a new asset onto the queue.
+        Add a new asset to the queue. Assigns the next available index.
 
         Args:
-            asset (Any): The asset to push onto the queue.
-            session (Session): SQLAlchemy session to use for saving.
+            asset (Asset): The asset to push.
+            session (Session): SQLAlchemy session passed from the interface layer.
 
         Returns:
-            int: The index of the pushed asset.
-
-        Raises:
-            ValueError: If the queue is full.
+            int: The new index of the pushed asset.
         """
-        if not hasattr(self, 'children') or self.children is None:
-            self.children = []
+        # Fetch the current contents
+        contents = self.get_contents(session)
 
-        if len(self.children) >= self.capacity:
-            raise ValueError(f"Stack {self.resource_name} is full. Capacity: {self.capacity}")
+        # Check capacity
+        if self.capacity and len(contents) >= self.capacity:
+            raise ValueError(f"Queue {self.resource_name} is full. Capacity: {self.capacity}")
 
-        # Fetch the existing asset from the database
-        existing_asset = session.query(Asset).filter_by(resource_id=asset.resource_id).first()
-        if not existing_asset:
-            raise ValueError(f"Asset with ID {asset.resource_id} not found in the database.")
+        # Determine the next available index dynamically
+        max_index = (
+            session.query(Allocation)
+            .filter_by(parent=self.resource_id)
+            .order_by(Allocation.index.desc())
+            .first()
+        )
+        next_index = int(max_index.index) + 1 if max_index else 1
 
-        # Update the parent and owner fields
-        existing_asset.parent = self.resource_name
+        # Update the parent of the asset
+        asset.parent = self.resource_id
+        session.add(asset)  # Persist the updated asset
 
-        # Commit changes to the database
-        session.commit()
+        # Allocate the asset to this queue
+        Allocation.allocate_to_resource(
+            resource_id=asset.resource_id,
+            resource_name=asset.resource_name,
+            parent=self.resource_id,
+            resource_type="Queue",
+            index=next_index,
+            session=session,
+        )
 
-        # Serialize the Asset object using the to_json method
-        serialized_asset = existing_asset.to_json()
-
-        # Append the serialized asset to the children list
-        self.children.append(serialized_asset)
-
-        # Flag the children field as modified
+        # Add resource_id to children and flag it as modified
+        self.children.append(asset.resource_id)
         flag_modified(self, "children")
+
+        # Update and save the queue quantity
+        self.quantity = len(contents) + 1
         session.add(self)
         session.commit()
 
-        return len(self.children)
-    
-    def pop(self, session: Session) :
+        return next_index
+
+    def pop(self, session: Session) -> Asset:
         """
-        Pop the first asset from the queue (FIFO).
+        Remove and return the first asset from the queue (FIFO).
 
         Args:
             session (Session): SQLAlchemy session to use for saving.
 
         Returns:
-            Any: The popped asset.
+            Asset: The poped asset.
 
         Raises:
             ValueError: If the queue is empty or if the asset is not found.
         """
-        if not self.children or len(self.children) == 0:
-            raise ValueError(f"Stack {self.resource_name} is empty.")
+        # Fetch the current contents
+        contents = self.get_contents(session)
 
-        # Retrieve and remove the last serialized asset from the list
-        serialized_asset = self.children.pop(0)
+        if not contents:
+            raise ValueError(f"Queue {self.resource_name} is empty.")
 
-        # Flag the children field as modified
+        # Get the first asset (FIFO)
+        first_asset = contents[0]
+
+        # Deallocate the asset from this queue
+        Allocation.deallocate(
+            resource_id=first_asset.resource_id,
+            session=session,
+        )
+
+        # Remove resource_id from children and flag it as modified
+        self.children.pop(0)
         flag_modified(self, "children")
 
-        # Commit the updated stack to the database
+        # Update the parent of the asset
+        first_asset.parent = None
+        session.add(first_asset)  # Persist the updated asset
+
+        # Update and save the queue quantity
+        self.quantity = len(contents) - 1
         session.add(self)
         session.commit()
 
-        # Deserialize the asset to get its resource_id
-        resource_id = serialized_asset.get("resource_id")
-        if not resource_id:
-            raise ValueError("The popped asset does not have a resource_id.")
-
-        # Fetch the existing asset from the database
-        existing_asset = session.query(Asset).filter_by(resource_id=resource_id).first()
-        if not existing_asset:
-            raise ValueError(f"Asset with ID {resource_id} not found in the database.")
-
-        # Update the parent and owner fields of the asset
-        existing_asset.parent = None
-
-        # Commit the changes to the database
-        session.commit()
-
-        return existing_asset
+        return first_asset
 
 
 if __name__ == "__main__":
