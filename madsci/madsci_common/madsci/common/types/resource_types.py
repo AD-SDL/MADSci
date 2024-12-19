@@ -2,13 +2,15 @@
 
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional, Union
+from datetime import datetime
 
 from pydantic import Json
 from pydantic.config import ConfigDict
 from pydantic.functional_validators import field_validator, model_validator
 from pydantic.types import Discriminator, Tag
-from sqlmodel import Field, Column
+from sqlmodel import Field, Column, DateTime
 from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.sql import func
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
@@ -350,11 +352,24 @@ class ResourceDefinition(BaseModel, extra="allow", table=False):
         title="Parent Resource",
         description="The parent resource ID or name. If None, defaults to the owning module or workcell.",
     )
-    attributes: dict = Field(
-        title="Resource Attributes",
-        description="Additional attributes for the resource.",
-        default_factory=dict,
-    )
+    # time_created: datetime = Field(
+    #     sa_column=Column(DateTime(timezone=True), server_default=func.now()),
+    #     title="Time Created",
+    #     description="Timestamp when the allocation was created.",
+    # )
+    # time_updated: datetime = Field(
+    #     sa_column=Column(
+    #         DateTime(timezone=True), onupdate=func.now(), server_default=func.now()
+    #     ),
+    #     title="Time Updated",
+    #     description="Timestamp when the allocation was last updated.",
+    # )
+
+    # attributes: dict = Field(
+    #     title="Resource Attributes",
+    #     description="Additional attributes for the resource.",
+    #     default_factory=dict,
+    # )
 
     is_ulid = field_validator("resource_id")(ulid_validator)
 
@@ -690,7 +705,12 @@ class ContainerBase(ResourceBase,table=False):
         title="Capacity",
         description="The capacity of the container.",
     )
-
+    quantity: int = Field(
+        default=0,
+        nullable=False,
+        title="Quantity",
+        description="The number of assets currently in.",
+    )
 
 class CollectionBase(ContainerBase):
     """Base class for all MADSci Collections."""
@@ -742,6 +762,7 @@ class StackBase(ContainerBase,table=False):
         default_factory=list,
         sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
     )
+
     attributes: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON),
@@ -756,6 +777,7 @@ class QueueBase(ContainerBase,table=False):
         default_factory=list,
         sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
     )
+    
     attributes: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON),
