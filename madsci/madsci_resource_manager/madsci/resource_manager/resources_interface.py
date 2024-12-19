@@ -616,15 +616,26 @@ if __name__ == "__main__":
         asset = resources_interface.add_resource(asset) 
         resources_interface.push_to_stack(stack,asset)
     retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
-    # n_asset = resources_interface.pop_from_stack(retrieved_stack)
+    for i in range(2):
+        n_asset = resources_interface.pop_from_stack(retrieved_stack)
+    
+    queue = Queue(
+        resource_name="queue",
+        resource_type="queue",  # Make sure this matches the expected type in validation
+        capacity=10,
+        ownership=None
+    )
+    queue = resources_interface.add_resource(queue)
+    for i in range(5):
+        asset = Asset(resource_name="Test plate"+str(i)) 
+        asset = resources_interface.add_resource(asset) 
+        resources_interface.push_to_queue(queue,asset)
+    retrieved_queue = resources_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
+    for i in range(2):
+        n_asset = resources_interface.pop_from_queue(retrieved_queue)
+    resources_interface.push_to_queue(queue,n_asset)
 
-    # queue = Queue(
-    #     resource_name="queue",
-    #     resource_type="queue",  # Make sure this matches the expected type in validation
-    #     capacity=10,
-    #     ownership=None
-    # )
-    # queue = resources_interface.add_resource(queue)
+
     # resources_interface.push_to_queue(queue,n_asset)
     # n_asset = resources_interface.pop_from_stack(retrieved_stack)
     
