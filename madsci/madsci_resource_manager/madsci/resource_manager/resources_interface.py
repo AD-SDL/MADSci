@@ -2,22 +2,18 @@
 
 import time
 from typing import Dict, List, Optional, Type
+import warnings
+
+# Suppress SAWarnings
+warnings.filterwarnings("ignore")
 
 from sqlalchemy import text
 from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, select
 
-# from wei.types.resource_types import (
-#     Asset,
-#     Collection,
-#     Plate,
-#     Pool,
-#     Queue,
-#     ResourceContainerBase,
-#     Stack,
-# )
 from madsci.common.types.resource_types import StackBase,PoolBase,ResourceBase
 from db_tables import Stack, Asset, Queue
+
 
 class ResourcesInterface:
     """
@@ -405,34 +401,41 @@ class ResourcesInterface:
             asset (Asset): The asset to push onto the queue.
         """
         with self.session as session:
-            # Check if the queue exists in the database
-            existing_queue = session.query(Queue).filter_by(id=queue.id).first()
+            # Check if the stack exists in the database
+            existing_queue = session.query(Queue).filter_by(resource_id=queue.resource_id).first()
 
             if not existing_queue:
                 # If the queue doesn't exist, raise an error
                 raise ValueError(
-                    f"Queue '{queue.name}' does not exist in the database. Please provide a valid resource."
+                    f"Queue '{queue.resource_name, queue.resource_id}' does not exist in the database. Please provide a valid resource."
                 )
-
             queue = existing_queue
             asset = session.merge(asset)
             queue.push(asset, session)
             session.commit()
             session.refresh(queue)
 
-    # def pop_from_queue(self, queue: Queue) -> Asset:
-    #     """
-    #     Pop an asset from a queue resource.
+    def pop_from_queue(self, queue: Queue) -> Asset:
+        """
+        Pop an asset from a queue resource.
 
-    #     Args:
-    #         queue (Queue): The queue resource to update.
+        Args:
+            queue (Queue): The queue resource to update.
 
-    #     Returns:
-    #         Asset: The popped asset.
-    #     """
-    #     with self.session as session:
-    #         session.add(queue)
-    #         return queue.pop(session)
+        Returns:
+            Asset: The popped asset.
+        """
+        with self.session as session:
+            queue = session.merge(queue)
+            asset = queue.pop(session)
+            session.commit()
+            session.refresh(queue)
+
+            if asset:
+                return asset
+            else:
+                raise ValueError("The stack is empty or the asset does not exist.")
+
 
     # def insert_into_collection(
     #     self, collection: Collection, location: str, asset: Asset
@@ -608,11 +611,21 @@ if __name__ == "__main__":
         ownership=None
     )
     stack = resources_interface.add_resource(stack) 
-    asset = Asset(resource_name="Test plate") 
-    asset = resources_interface.add_resource(asset) 
-    resources_interface.push_to_stack(stack,asset)
+    for i in range(5):
+        asset = Asset(resource_name="Test plate"+str(i)) 
+        asset = resources_interface.add_resource(asset) 
+        resources_interface.push_to_stack(stack,asset)
     retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
-    print(retrieved_stack)
+    # n_asset = resources_interface.pop_from_stack(retrieved_stack)
+
+    # queue = Queue(
+    #     resource_name="queue",
+    #     resource_type="queue",  # Make sure this matches the expected type in validation
+    #     capacity=10,
+    #     ownership=None
+    # )
+    # queue = resources_interface.add_resource(queue)
+    # resources_interface.push_to_queue(queue,n_asset)
     # n_asset = resources_interface.pop_from_stack(retrieved_stack)
     
     # resources_interface.clear_all_table_records()
