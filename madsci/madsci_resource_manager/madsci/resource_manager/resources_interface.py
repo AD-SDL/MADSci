@@ -650,6 +650,7 @@ if __name__ == "__main__":
         children={"Water": consumable}  # Add the ConsumableBase to children
     )
     resources_interface.add_resource(pool)
+    print(pool.children["Water"])
 
     # Example operations on the pool
     print(f"Initial Pool Quantity: {pool.quantity}")

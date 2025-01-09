@@ -11,6 +11,8 @@ from pydantic.types import Discriminator, Tag
 from sqlmodel import Field, Column, DateTime
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql import func
+from sqlalchemy.types import PickleType
+from sqlalchemy.ext.mutable import MutableDict
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
@@ -757,11 +759,11 @@ class VoxelGridBase(GridBase):
 
 class StackBase(ContainerBase,table=False):
     """Base class for all MADSci Stacks."""
-    children: Optional[list[ResourceBase]] = Field(
+    children: Optional[dict[str, ResourceBase]] = Field(
+        default_factory=dict,
+        sa_column=Column(MutableDict.as_mutable(PickleType)),
         title="Children",
-        description="The children of the container.",
-        default_factory=list,
-        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
+        description="The children of the pool stored as pickled objects.",
     )
 
     attributes: dict = Field(
@@ -788,11 +790,11 @@ class QueueBase(ContainerBase,table=False):
 class PoolBase(ContainerBase):
     """Base class for all MADSci Pools."""
 
-    children: Optional[list[ResourceBase]] = Field(
+    children: Optional[dict[str, ConsumableBase]] = Field(
+        default_factory=dict,
+        sa_column=Column(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
-        description="The children of the Pool.",
-        default_factory=list,
-        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
+        description="The children of the pool.",
     )
     capacity: Optional[float] = Field(
         title="Capacity",
