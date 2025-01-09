@@ -8,7 +8,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.inspection import inspect
 from sqlmodel import SQLModel, Field, Session, UniqueConstraint, PrimaryKeyConstraint
 
-from madsci.common.types.resource_types import AssetBase, StackBase, QueueBase, ResourceDefinition
+from madsci.common.types.resource_types import AssetBase, StackBase, QueueBase, PoolBase, ResourceDefinition, ConsumableBase
 
 
 # class AssetBase(SQLModel):
@@ -453,6 +453,16 @@ class Allocation(SQLModel, table=True):
         # Delete the allocation
         session.delete(allocation)
         session.commit()
+
+
+class Consumable(ConsumableBase, table=True):
+    """
+    Consumable table class inheriting from ConsumableBase.
+    Represents all consumables in the database.
+    """
+    # Fields from ConsumableBase are mapped.
+    pass
+
 class Stack(StackBase, table=True):
     """
     Base class for stack resources with methods to push and pop assets.
@@ -691,7 +701,78 @@ class Queue(QueueBase, table = True):
 
         return first_asset
 
+class Pool(PoolBase, table=True):
+    """
+    Pool resource class with methods to manage its quantity and capacity.
+    """
 
+    def increase_quantity(self, amount: float, session: Session) -> None:
+        """
+        Increase the quantity in the pool.
+
+        Args:
+            amount (float): The amount to increase.
+            session (Session): SQLAlchemy session for database operations.
+
+        Raises:
+            ValueError: If the pool exceeds its capacity.
+        """
+        #TODO: Children could be used to increase the amount which should reflect to the quantity of the Pool resource
+        if self.capacity and self.quantity + amount > self.capacity:
+            raise ValueError(
+                f"Pool {self.resource_name} exceeds its capacity. Capacity: {self.capacity}"
+            )
+
+        self.quantity += amount
+        session.add(self)
+        session.commit()
+
+    def decrease_quantity(self, amount: float, session: Session) -> None:
+        """
+        Decrease the quantity in the pool.
+
+        Args:
+            amount (float): The amount to decrease.
+            session (Session): SQLAlchemy session for database operations.
+
+        Raises:
+            ValueError: If the quantity falls below zero.
+        """
+        if self.quantity - amount < 0:
+            raise ValueError(f"Pool {self.resource_name} cannot have a negative quantity.")
+
+        self.quantity -= amount
+        session.add(self)
+        session.commit()
+
+    def fill(self, session: Session) -> None:
+        """
+        Fill the pool to its maximum capacity.
+
+        Args:
+            session (Session): SQLAlchemy session for database operations.
+
+        Raises:
+            ValueError: If the capacity is not defined.
+        """
+        if not self.capacity:
+            raise ValueError(f"Pool {self.resource_name} does not have a defined capacity.")
+
+        self.quantity = self.capacity
+        session.add(self)
+        session.commit()
+
+    def empty(self, session: Session) -> None:
+        """
+        Empty the pool by setting its quantity to zero.
+
+        Args:
+            session (Session): SQLAlchemy session for database operations.
+        """
+        self.quantity = 0
+        session.add(self)
+        session.commit()
+        
 if __name__ == "__main__":
     # s= Stack(resource_name="",resource_types="",capacity=10,ownership=None)
     # s= StackBase(resource_name="a",resource_type="a",capacity=10,ownership=None)

@@ -645,10 +645,11 @@ class ResourceBase(ResourceDefinition, extra="allow", table=False):
     #     sa_column=Column(JSON),
     #     nullable=True
     # )
-    owner: str = Field(
-        title="Resource Type",
-        description="The type of the resource.", 
-        nullable=True
+    owner: Optional[str] = Field(
+        title="Resource owner",
+        description="The owner of the resource.", 
+        nullable=True,
+        default=None
     )
 
 
@@ -664,7 +665,7 @@ class AssetBase(AssetResourceDefinition):
 class ConsumableBase(ResourceBase):
     """Base class for all MADSci Consumables."""
 
-    quantity: Optional[Union[int, float]] = Field(
+    quantity: Optional[float] = Field(
         title="Quantity",
         description="The quantity of the consumable.",
     )
@@ -787,11 +788,13 @@ class QueueBase(ContainerBase,table=False):
 class PoolBase(ContainerBase):
     """Base class for all MADSci Pools."""
 
-    children: dict[str, ConsumableBase] = Field(
+    children: Optional[list[ResourceBase]] = Field(
         title="Children",
-        description="The children of the pool.",
+        description="The children of the Pool.",
+        default_factory=list,
+        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
     )
-    capacity: Optional[Union[int, float]] = Field(
+    capacity: Optional[float] = Field(
         title="Capacity",
         description="The capacity of the pool.",
     )

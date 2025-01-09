@@ -11,8 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from madsci.common.types.resource_types import StackBase,PoolBase,ResourceBase
-from db_tables import Stack, Asset, Queue
+from madsci.common.types.resource_types import ResourceBase
+from db_tables import Stack, Asset, Queue, Pool, Consumable
 
 
 class ResourcesInterface:
@@ -298,55 +298,52 @@ class ResourcesInterface:
     #             session.rollback()
     #             print(f"An error occurred while clearing table records: {e}")
 
-    # def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
-    #     """
-    #     Increase the quantity of a pool resource.
+    def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
+        """
+        Increase the quantity of a pool resource.
 
-    #     Args:
-    #         pool (Pool): The pool resource to update.
-    #         amount (float): The amount to increase.
-    #     """
-    #     with self.session as session:
-    #         session.add(pool)
-    #         pool.increase(amount, session)
-    #         session.refresh(pool)
+        Args:
+            pool (Pool): The pool resource to update.
+            amount (float): The amount to increase.
+        """
+        with self.session as session:
+            pool.increase_quantity(amount, session)
+            session.refresh(pool)
 
-    # def decrease_pool_quantity(self, pool: Pool, amount: float) -> None:
-    #     """
-    #     Decrease the quantity of a pool resource.
+    def decrease_pool_quantity(self, pool: Pool, amount: float) -> None:
+        """
+        Decrease the quantity of a pool resource.
 
-    #     Args:
-    #         pool (Pool): The pool resource to update.
-    #         amount (float): The amount to decrease.
-    #     """
-    #     with self.session as session:
-    #         session.add(pool)
-    #         pool.decrease(amount, session)
-    #         session.refresh(pool)
+        Args:
+            pool (Pool): The pool resource to update.
+            amount (float): The amount to decrease.
+        """
+        with self.session as session:
+            pool.decrease_quantity(amount, session)
+            session.refresh(pool)
 
-    # def empty_pool(self, pool: Pool) -> None:
-    #     """
-    #     Empty the pool by setting the quantity to zero.
+    def empty_pool(self, pool: Pool) -> None:
+        """
+        Empty the pool by setting the quantity to zero.
 
-    #     Args:
-    #         pool (Pool): The pool resource to empty.
-    #     """
-    #     with self.session as session:
-    #         session.add(pool)
-    #         pool.empty(session)
-    #         session.refresh(pool)
+        Args:
+            pool (Pool): The pool resource to empty.
+        """
+        with self.session as session:
+            pool.empty(session)
+            session.refresh(pool)
 
-    # def fill_pool(self, pool: Pool) -> None:
-    #     """
-    #     Fill the pool by setting the quantity to its capacity.
+    def fill_pool(self, pool: Pool) -> None:
+        """
+        Fill the pool by setting the quantity to its capacity.
 
-    #     Args:
-    #         pool (Pool): The pool resource to fill.
-    #     """
-    #     with self.session as session:
-    #         session.add(pool)
-    #         pool.fill(session)
-    #         session.refresh(pool)
+        Args:
+            pool (Pool): The pool resource to fill.
+        """
+        with self.session as session:
+            pool.fill(session)
+            session.refresh(pool)
+
 
     def push_to_stack(self, stack: Stack, asset: Asset) -> None:
         """
@@ -604,38 +601,71 @@ class ResourcesInterface:
 
 if __name__ == "__main__":
     resources_interface = ResourcesInterface()
-    stack = Stack(
-        resource_name="stack",
-        resource_type="stack1",  # Make sure this matches the expected type in validation
-        capacity=10,
-        ownership=None
-    )
-    stack = resources_interface.add_resource(stack) 
-    for i in range(5):
-        asset = Asset(resource_name="Test plate"+str(i)) 
-        asset = resources_interface.add_resource(asset) 
-        resources_interface.push_to_stack(stack,asset)
-    retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
-    for i in range(2):
-        n_asset = resources_interface.pop_from_stack(retrieved_stack)
+    # stack = Stack(
+    #     resource_name="stack",
+    #     resource_type="stack1",  # Make sure this matches the expected type in validation
+    #     capacity=10,
+    #     ownership=None
+    # )
+    # stack = resources_interface.add_resource(stack) 
+    # for i in range(5):
+    #     asset = Asset(resource_name="Test plate"+str(i)) 
+    #     asset = resources_interface.add_resource(asset) 
+    #     resources_interface.push_to_stack(stack,asset)
+    # retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
+    # for i in range(2):
+    #     n_asset = resources_interface.pop_from_stack(retrieved_stack)
     
-    queue = Queue(
-        resource_name="queue",
-        resource_type="queue",  # Make sure this matches the expected type in validation
-        capacity=10,
-        ownership=None
+    # queue = Queue(
+    #     resource_name="queue",
+    #     resource_type="queue",  # Make sure this matches the expected type in validation
+    #     capacity=10,
+    #     ownership=None
+    # )
+    # queue = resources_interface.add_resource(queue)
+    # for i in range(5):
+    #     asset = Asset(resource_name="Test plate"+str(i)) 
+    #     asset = resources_interface.add_resource(asset) 
+    #     resources_interface.push_to_queue(queue,asset)
+    # retrieved_queue = resources_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
+    # for i in range(2):
+    #     n_asset = resources_interface.pop_from_queue(retrieved_queue)
+    # resources_interface.push_to_queue(queue,n_asset)
+
+    consumable = Consumable(
+        resource_name="Water",
+        resource_type="consumable",
+        quantity=50.0,
+        ownership=None,
+        capacity=100,
     )
-    queue = resources_interface.add_resource(queue)
-    for i in range(5):
-        asset = Asset(resource_name="Test plate"+str(i)) 
-        asset = resources_interface.add_resource(asset) 
-        resources_interface.push_to_queue(queue,asset)
-    retrieved_queue = resources_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
-    for i in range(2):
-        n_asset = resources_interface.pop_from_queue(retrieved_queue)
-    resources_interface.push_to_queue(queue,n_asset)
+    # Add the ConsumableBase to the database
+    resources_interface.add_resource(consumable)
 
+    # Create a Pool resource
+    pool = Pool(
+        resource_name="Vial_1",
+        resource_type="pool",
+        capacity=500.0,
+        children={"Water": consumable}  # Add the ConsumableBase to children
+    )
+    resources_interface.add_resource(pool)
 
+    # Example operations on the pool
+    print(f"Initial Pool Quantity: {pool.quantity}")
+    resources_interface.increase_pool_quantity(pool, 50.0)
+    print(f"After Increase: {pool.quantity}")
+
+    resources_interface.decrease_pool_quantity(pool, 20.0)
+    print(f"After Decrease: {pool.quantity}")
+
+    resources_interface.fill_pool(pool)
+    print(f"After Fill: {pool.quantity}")
+
+    resources_interface.empty_pool(pool)
+    print(f"After Empty: {pool.quantity}")
+
+#--------------------------------------------------------------------------------------
     # resources_interface.push_to_queue(queue,n_asset)
     # n_asset = resources_interface.pop_from_stack(retrieved_stack)
     
