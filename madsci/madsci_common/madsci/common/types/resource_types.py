@@ -718,9 +718,11 @@ class ContainerBase(ResourceBase,table=False):
 class CollectionBase(ContainerBase):
     """Base class for all MADSci Collections."""
 
-    children: dict[str, ResourceBase] = Field(
-        title="Keys",
-        description="The keys of the collection.",
+    children: Optional[dict[str, ResourceBase]] = Field(
+        default_factory=dict,
+        sa_column=Column(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
+        title="Children",
+        description="The children of the collection.",
     )
     attributes: dict = Field(
         default_factory=dict,
@@ -732,9 +734,11 @@ class CollectionBase(ContainerBase):
 class GridBase(ContainerBase):
     """Base class for all MADSci Grids."""
 
-    children: dict[str, dict[str, ResourceBase]] = Field(
+    children: Optional[dict[str, ResourceBase]] = Field(
+        default_factory=dict,
+        sa_column=Column(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
-        description="The children of the grid.",
+        description="The children of the collection.",
     )
     attributes: dict = Field(
         default_factory=dict,
@@ -759,13 +763,12 @@ class VoxelGridBase(GridBase):
 
 class StackBase(ContainerBase,table=False):
     """Base class for all MADSci Stacks."""
-    children: Optional[dict[str, ResourceBase]] = Field(
-        default_factory=dict,
-        sa_column=Column(MutableDict.as_mutable(PickleType)),
+    children: Optional[list[ResourceBase]] = Field(
         title="Children",
-        description="The children of the pool stored as pickled objects.",
+        description="The children of the container.",
+        default_factory=list,
+        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
     )
-
     attributes: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON),
@@ -780,7 +783,6 @@ class QueueBase(ContainerBase,table=False):
         default_factory=list,
         sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
     )
-    
     attributes: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON),
@@ -790,12 +792,13 @@ class QueueBase(ContainerBase,table=False):
 class PoolBase(ContainerBase):
     """Base class for all MADSci Pools."""
 
-    children: Optional[dict[str, ConsumableBase]] = Field(
+    children: Optional[dict[str, ResourceBase]] = Field(
         default_factory=dict,
         sa_column=Column(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
         description="The children of the pool.",
     )
+
     capacity: Optional[float] = Field(
         title="Capacity",
         description="The capacity of the pool.",

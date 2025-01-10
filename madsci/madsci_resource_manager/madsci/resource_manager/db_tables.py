@@ -8,327 +8,8 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.inspection import inspect
 from sqlmodel import SQLModel, Field, Session, UniqueConstraint, PrimaryKeyConstraint
 
-from madsci.common.types.resource_types import AssetBase, StackBase, QueueBase, PoolBase, ResourceDefinition, ConsumableBase
+from madsci.common.types.resource_types import AssetBase, StackBase, QueueBase, PoolBase, ConsumableBase, CollectionBase, ResourceBase, GridBase
 
-
-# class AssetBase(SQLModel):
-#     """
-#     Base class for assets with an ID and a name.
-
-#     Attributes:
-#         id (str): Unique identifier for the asset.
-#         name (str): Name of the asset.
-#         owner_name (str): Module name of the asset.
-#     """
-
-#     id: str = SQLField(default_factory=lambda: str(ulid.new()), primary_key=True)
-#     name: str = SQLField(default="", nullable=False)
-#     owner_name: str = SQLField(default="", nullable=True)
-#     unique_resource: bool = SQLField(
-#         default=True, nullable=False
-#     )  # New flag to determine uniqueness
-
-
-# class Asset(AssetBase, table=True):
-#     """
-#     Represents the asset table with relationships to other resources.
-
-#     Attributes:
-#         time_created (datetime): Timestamp when the asset is created.
-#         time_updated (datetime): Timestamp when the asset is last updated.
-#     """
-
-#     time_created: datetime = SQLField(
-#         sa_column=Column(DateTime(timezone=True), server_default=func.now())
-#     )
-#     time_updated: datetime = SQLField(
-#         sa_column=Column(
-#             DateTime(timezone=True), onupdate=func.now(), server_default=func.now()
-#         )
-#     )
-
-#     def allocate_to_resource(
-#         self, resource_type: str, resource_id: str, index: str, session: Session
-#     ):
-#         """
-#         Allocate this asset to a specific resource.
-
-#         Args:
-#             resource_type (str): The type of the resource ('stack', 'queue', etc.).
-#             resource_id (str): The ID of the resource.
-#             index (int): The index of the asset in the resource (for ordering in lists).
-#             session (Session): SQLAlchemy session to use for saving.
-
-#         Raises:
-#             ValueError: If the asset is already allocated to a different resource.
-#         """
-#         # Check if this asset is already allocated
-#         existing_allocation = (
-#             session.query(AssetAllocation).filter_by(asset_id=self.id).first()
-#         )
-
-#         if existing_allocation:
-#             # Raise an error if the asset is already allocated to a different resource
-#             raise ValueError(
-#                 f"Asset {self.name} (ID: {self.id}) is already allocated to resource {existing_allocation.resource_type} "
-#                 f"with resource ID {existing_allocation.resource_id}."
-#             )
-
-#         # Update the owner_name to match the resource being allocated (optional step)
-#         resource = session.get(Asset, resource_id)
-#         if resource:
-#             self.owner_name = (
-#                 resource.owner_name
-#             )  # Sync the owner_name with the resource
-
-#         # Create a new allocation for the asset
-#         new_allocation = AssetAllocation(
-#             asset_id=self.id,
-#             resource_type=resource_type,
-#             resource_id=resource_id,
-#             index=index,
-#         )
-#         session.add(new_allocation)
-
-#         # Update the asset's timestamp
-#         self.time_updated = datetime.now(timezone.utc)
-
-#         # Commit the transaction
-#         session.commit()
-
-#     def deallocate(self, session: Session):
-#         """
-#         Deallocate this asset from its current resource.
-
-#         Args:
-#             session (Session): SQLAlchemy session to use for saving.
-
-#         Raises:
-#             ValueError: If the asset is not allocated to any resource.
-#         """
-#         allocation = session.query(AssetAllocation).filter_by(asset_id=self.id).first()
-
-#         if allocation is None:
-#             raise ValueError(f"Asset {self.id} is not allocated to any resource.")
-
-#         # Deallocate and set the owner_name to None (indicating the asset is no longer allocated)
-#         self.owner_name = None
-#         self.time_updated = datetime.now(
-#             timezone.utc
-#         )  # Set time_updated to current time
-#         session.delete(allocation)
-#         session.commit()
-
-#     def delete_asset(self, session: Session):
-#         """
-#         Delete this asset and automatically remove any associated asset allocations.
-
-#         Args:
-#             session (Session): The current SQLAlchemy session.
-#         """
-#         session.delete(self)
-#         session.commit()
-
-
-# class AssetAllocation(SQLModel, table=True):
-#     """
-#     Table that tracks which asset is allocated to which resource.
-
-#     Attributes:
-#         asset_id (str): Foreign key referencing the Asset.
-#         resource_type (str): Type of resource (e.g., 'stack', 'queue').
-#         resource_id (str): ID of the resource to which the asset is allocated.
-#     """
-
-#     asset_id: str = SQLField(foreign_key="asset.id", nullable=False)
-#     resource_type: str = SQLField(nullable=False)
-#     resource_id: str = SQLField(nullable=False)
-#     index: str = SQLField(nullable=False)
-
-#     # Use a composite primary key
-#     __table_args__ = (
-#         UniqueConstraint(
-#             "asset_id",
-#             "resource_type",
-#             "resource_id",
-#             name="uix_asset_resource_allocation",
-#         ),
-#         PrimaryKeyConstraint("asset_id", "resource_type", "resource_id"),
-#     )
-
-
-# class ResourceContainerBase(AssetBase):
-#     """
-#     Base class for resource containers with common attributes.
-
-#     Attributes:
-#         description (str): Description of the resource container.
-#         capacity (Optional[float]): Capacity of the resource container.
-#         quantity (float): Current quantity of resources in the container.
-#     """
-
-#     description: str = SQLField(default="")
-#     capacity: Optional[float] = SQLField(default=None, nullable=True)
-#     quantity: float = SQLField(default=0.0)
-
-#     def save(self, session: Session):
-#         """
-#         Save the resource container to the database.
-
-#         Args:
-#             session (Session): SQLAlchemy session to use for saving.
-#         """
-#         if isinstance(self, Plate):
-#             # Handling the Plate as a Collection for database operations
-#             collection = (
-#                 session.query(Collection)
-#                 .filter_by(
-#                     name=self.name,
-#                     owner_name=self.owner_name,
-#                 )
-#                 .first()
-#             )
-
-#             if not collection:
-#                 # Create a new Collection if it doesn't exist
-#                 collection = Collection(
-#                     id=self.id,
-#                     name=self.name,
-#                     description=self.description,
-#                     capacity=self.capacity,
-#                     quantity=self.quantity,
-#                     owner_name=self.owner_name,
-#                     unique_resource=self.unique_resource,
-#                     is_plate=True,
-#                 )
-#                 session.add(collection)
-#             else:
-#                 # Update the existing Collection attributes
-#                 collection.description = self.description
-#                 collection.capacity = self.capacity
-#                 collection.quantity = self.quantity
-#                 collection.owner_name = self.owner_name
-
-#             session.commit()
-#             session.refresh(collection)
-
-#             # Update the corresponding Asset (if it exists)
-#             asset = session.get(Asset, collection.id)
-#             if asset:
-#                 asset.time_updated = datetime.now(timezone.utc)
-#                 session.commit()
-
-#             return collection  # Return the updated Collection
-
-#         # Handle normal resources
-#         session.add(self)
-#         session.commit()
-
-#         # Update the corresponding Asset (if it exists)
-#         asset = session.get(Asset, self.id)
-#         if asset:
-#             asset.time_updated = datetime.now(timezone.utc)
-#             session.commit()
-
-#         session.refresh(self)
-#         return self  # Return the updated resource
-
-#     def add_resource(self, session: Session) -> "ResourceContainerBase":
-#         """
-#         Check if a resource with the same name and owner_name exists.
-#         If it exists, return the existing resource. Otherwise, create the resource
-#         and link it with an Asset.
-
-#         Args:
-#             session (Session): SQLAlchemy session to use for database operations.
-
-#         Returns:
-#             ResourceContainerBase: The saved or existing resource.
-#         """
-#         # Handle Plate type as Collection
-#         if isinstance(self, Plate):
-#             print("Handling Plate as a Collection")
-
-#             # Check if the Plate (treated as Collection) already exists
-#             existing_resource = (
-#                 session.query(Collection)
-#                 .filter_by(name=self.name, owner_name=self.owner_name)
-#                 .first()
-#             )
-
-#             # If unique_resource is True, check for existing Plate and return or raise an error
-#             if self.unique_resource:
-#                 if existing_resource:
-#                     print(
-#                         f"Using existing collection resource: {existing_resource.name}"
-#                     )
-#                     return self  # Return the Plate object (don't create a duplicate)
-
-#             # If unique_resource is False, allow multiple plates with the same name
-#             if not self.unique_resource or not existing_resource:
-#                 # Create a new Collection object from the Plate data
-#                 collection_resource = Collection(
-#                     id=self.id,
-#                     name=self.name,
-#                     description=self.description,
-#                     capacity=self.capacity,
-#                     owner_name=self.owner_name,
-#                     quantity=self.quantity,
-#                     unique_resource=self.unique_resource,
-#                     is_plate=True,
-#                 )
-
-#                 session.add(collection_resource)
-#                 session.commit()
-#                 session.refresh(collection_resource)
-
-#                 # Create and link an Asset entry for the resource
-#                 asset = Asset(
-#                     name=collection_resource.name,
-#                     id=collection_resource.id,
-#                     owner_name=collection_resource.owner_name,
-#                     unique_resource=self.unique_resource,
-#                 )
-#                 session.add(asset)
-#                 session.commit()
-#                 session.refresh(asset)
-
-#                 print(f"Added new collection resource: {collection_resource.name}")
-#                 return self  # Returning the Plate object itself
-
-#         # Handle normal resources (non-Plate)
-#         existing_resource = (
-#             session.query(type(self))
-#             .filter_by(name=self.name, owner_name=self.owner_name)
-#             .first()
-#         )
-
-#         # If unique_resource is True, check for existing resource and return or raise an error
-#         if self.unique_resource:
-#             if existing_resource:
-#                 print(f"Using existing resource: {existing_resource.name}")
-#                 return existing_resource
-
-#         # If unique_resource is False, allow creating multiple resources with the same name
-#         if not self.unique_resource or not existing_resource:
-#             # If the resource doesn't exist, create and save a new one
-#             session.add(self)
-#             session.commit()
-#             session.refresh(self)
-
-#             # Automatically create and link an Asset entry for the resource
-#             asset = Asset(
-#                 name=self.name,
-#                 id=self.id,
-#                 owner_name=self.owner_name,
-#                 unique_resource=self.unique_resource,
-#             )
-#             session.add(asset)
-#             session.commit()
-#             session.refresh(asset)
-
-#             print(f"Added new resource: {self.name}")
-#             return self
 class Asset(AssetBase, table=True):
     """Asset table class"""
 
@@ -773,6 +454,182 @@ class Pool(PoolBase, table=True):
         session.add(self)
         session.commit()
         
+class Plate(CollectionBase, table=True):
+    """
+    Plate type for managing collections of Pool resources.
+
+    This class represents a plate resource, which can store Pool resources
+    as its children, accessed by unique keys (e.g., "A1", "B1").
+    """
+
+    def __init__(self, **kwargs):
+        """
+        Custom initialization for Plate.
+
+        Automatically sets the parent ID for children resources during initialization.
+        """
+        super().__init__(**kwargs)
+
+        # Ensure children have the Plate's resource_id as their parent
+        for key, resource in self.children.items():
+            if isinstance(resource, ResourceBase):
+                resource.parent = self.resource_id
+
+    def add_child(self, key: str, resource: Pool, session: Session) -> None:
+        """
+        Add a Pool resource to the Plate.
+
+        Args:
+            key (str): The unique key for the Pool resource (e.g., "A1").
+            resource (Pool): The Pool resource to add.
+            session (Session): The database session for persisting changes.
+        """
+        if key in self.children:
+            raise ValueError(f"Key '{key}' already exists in the plate.")
+
+        # Set the parent of the Pool resource
+        resource.parent = self.resource_id
+        session.add(resource)
+
+        # Add the resource to the children dictionary
+        self.children[key] = resource
+        self.quantity=len(self.children)
+        flag_modified(self, "children")
+
+        # Persist the changes to the Plate
+        session.add(self)
+        session.commit()
+
+    def remove_child(self, key: str, session: Session) -> Pool:
+        """
+        Remove a Pool resource from the Plate.
+
+        Args:
+            key (str): The unique key of the Pool resource to remove.
+            session (Session): The database session for persisting changes.
+
+        Returns:
+            Pool: The removed Pool resource.
+        """
+        if key not in self.children:
+            raise KeyError(f"Key '{key}' does not exist in the plate.")
+
+        # Remove the child resource
+        pool = self.children.pop(key)
+        flag_modified(self, "children")
+        self.quantity=len(self.children)
+
+        # Update the parent of the Pool resource to None
+        pool.parent = None
+        session.add(pool)
+
+        # Persist the changes
+        session.add(self)
+        session.commit()
+
+        return pool        
+class Grid(GridBase, table=True):
+        """
+        Grid class that can hold other resource types as children, such as Pool.
+        """
+
+        def __init__(self, **data):
+            """
+            Custom initialization to handle setting parent IDs for children resources.
+            """
+            children = data.pop("children", {})
+            super().__init__(**data)
+
+            # Set parent for each child
+            for key, resource in children.items():
+                resource.parent = self.resource_id
+            self.children = children
+
+        def add_child(self, key: str, resource: ResourceBase, session: Session) -> None:
+            """
+            Add a resource to the Grid's children.
+
+            Args:
+                key (str): The key to identify the resource (e.g., "A1").
+                resource (ResourceBase): The resource to add as a child.
+                session (Session): The database session to persist changes.
+
+            Raises:
+                ValueError: If the key already exists in the children.
+            """
+            if key in self.children:
+                raise ValueError(f"Key '{key}' already exists in Grid {self.resource_name}.")
+
+            # Set the parent of the child resource
+            resource.parent = self.resource_id
+            session.add(resource)
+
+            # Add the child resource to the children dictionary
+            self.children[key] = resource
+            flag_modified(self, "children")
+
+            # Save changes
+            session.add(self)
+            session.commit()
+
+        def remove_child(self, key: str, session: Session) -> ResourceBase:
+            """
+            Remove a resource from the Grid's children.
+
+            Args:
+                key (str): The key of the resource to remove.
+                session (Session): The database session to persist changes.
+
+            Returns:
+                ResourceBase: The removed resource.
+
+            Raises:
+                KeyError: If the key does not exist in the children.
+            """
+            if key not in self.children:
+                raise KeyError(f"Key '{key}' not found in Grid {self.resource_name}.")
+
+            # Get and remove the resource
+            resource = self.children.pop(key)
+            flag_modified(self, "children")
+
+            # Update the parent of the removed resource
+            resource.parent = None
+            session.add(resource)
+
+            # Save changes
+            session.add(self)
+            session.commit()
+
+            return resource
+
+        def update_child(self, key: str, session: Session, **kwargs) -> None:
+            """
+            Update attributes of a child resource.
+
+            Args:
+                key (str): The key of the child resource to update.
+                session (Session): The database session to persist changes.
+                kwargs: The attributes to update on the child resource.
+
+            Raises:
+                KeyError: If the key does not exist in the children.
+            """
+            if key not in self.children:
+                raise KeyError(f"Key '{key}' not found in Grid {self.resource_name}.")
+
+            # Get the child resource
+            resource = self.children[key]
+
+            # Update resource attributes
+            for attr, value in kwargs.items():
+                if hasattr(resource, attr):
+                    setattr(resource, attr, value)
+
+            session.add(resource)
+            session.commit()
+        
+               
 if __name__ == "__main__":
     # s= Stack(resource_name="",resource_types="",capacity=10,ownership=None)
     # s= StackBase(resource_name="a",resource_type="a",capacity=10,ownership=None)

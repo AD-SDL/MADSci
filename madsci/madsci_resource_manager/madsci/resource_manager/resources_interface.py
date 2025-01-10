@@ -12,7 +12,7 @@ from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from madsci.common.types.resource_types import ResourceBase
-from db_tables import Stack, Asset, Queue, Pool, Consumable
+from db_tables import Stack, Asset, Queue, Pool, Consumable, Plate, Grid
 
 
 class ResourcesInterface:
@@ -469,168 +469,121 @@ class ResourcesInterface:
     #         collection = session.merge(collection)
     #         return collection.retrieve(location, session)
 
-    # def update_plate_well(self, plate: Plate, well_id: str, quantity: float) -> None:
-    #     """
-    #     Update the quantity of a specific well in a plate resource.
+    def increase_plate_well(self, plate: Plate, well_id: str, quantity: float) -> None:
+        """
+        Increase the quantity of liquid in a specific well of a plate.
 
-    #     Args:
-    #         plate (Plate): The plate resource to update.
-    #         well_id (str): The well ID to update.
-    #         quantity (float): The new quantity for the well.
-    #     """
-    #     with self.session as session:
-    #         # Find the corresponding collection (plate) in the database
-    #         collection = session.query(Collection).filter_by(name=plate.name).first()
+        Args:
+            plate (Plate): The plate resource to update.
+            well_id (str): The well ID to increase the quantity for.
+            quantity (float): The amount to increase the well quantity by.
+        """
+        with self.session as session:
+            # Ensure the plate instance is bound to the session
+            plate = session.get(Plate, plate.resource_id)  # Re-query the plate
 
-    #         if not collection:
-    #             raise ValueError(f"Collection for plate {plate.name} not found.")
+            if not plate:
+                raise ValueError(f"Plate with ID '{plate.resource_id}' not found in the database.")
 
-    #         # Use the set_wells function to update the well quantity
-    #         plate.set_wells({well_id: quantity}, session)
+            # Check if the well exists
+            if well_id not in plate.children:
+                raise KeyError(f"Well ID '{well_id}' does not exist in plate '{plate.resource_name}'.")
 
-    #         # Commit the changes and refresh the collection object if needed
-    #         session.commit()
-    #         session.refresh(collection)
+            # Get the pool resource from the well
+            pool = plate.children[well_id]
+            if not isinstance(pool, Pool):
+                raise TypeError("Only Pool resources are supported in plate wells.")
 
-    # def update_plate_contents(
-    #     self, plate: Plate, new_contents: Dict[str, float]
-    # ) -> None:
-    #     """
-    #     Update the entire contents of a plate resource.
+            # Use the `increase_pool_quantity` method to increase the pool's quantity
+            self.increase_pool_quantity(pool=pool, amount=quantity)
 
-    #     Args:
-    #         plate (Plate): The plate resource to update.
-    #         new_contents (Dict[str, float]): A dictionary with well IDs as keys and quantities as values.
-    #     """
-    #     with self.session as session:
-    #         # Retrieve the corresponding Collection from the database
-    #         collection = (
-    #             session.query(Collection)
-    #             .filter_by(
-    #                 name=plate.name,
-    #                 owner_name=plate.owner_name,
-    #             )
-    #             .first()
-    #         )
+            # Update the plate's quantity based on the number of wells
+            plate.quantity = len(plate.children)
+            session.add(plate)
+            session.commit() 
+            
+    def decrease_plate_well(self, plate: Plate, well_id: str, quantity: float) -> None:
+        """
+        Decrease the quantity of liquid in a specific well of a plate.
 
-    #         if not collection:
-    #             raise ValueError(f"Collection for Plate {plate.name} not found.")
+        Args:
+            plate (Plate): The plate resource to update.
+            well_id (str): The well ID to decrease the quantity for.
+            quantity (float): The amount to decrease the well quantity by.
+        """
+        with self.session as session:
+            # Ensure the plate instance is bound to the session
+            plate = session.merge(plate)
 
-    #         # Use the plate object (in memory) to update the wells
-    #         plate.set_wells(new_contents, session)  # Use the Plate's set_wells logic
+            # Check if the well exists
+            if well_id not in plate.children:
+                raise KeyError(f"Well ID '{well_id}' does not exist in plate '{plate.resource_name}'.")
 
-    #         # Make sure to update the Collection's quantity as well
-    #         session.commit()
+            # Get the pool resource from the well
+            pool = plate.children[well_id]
+            if not isinstance(pool, Pool):
+                raise TypeError("Only Pool resources are supported in plate wells.")
 
-    # def get_well_quantity(self, plate: Plate, well_id: str) -> Optional[float]:
-    #     """
-    #     Retrieve the quantity in a specific well of a plate resource.
+            # Use the `decrease_pool_quantity` method to decrease the pool's quantity
+            self.decrease_pool_quantity(pool=pool, amount=quantity)
 
-    #     Args:
-    #         plate (Plate): The plate resource to query.
-    #         well_id (str): The ID of the well to retrieve the quantity for.
+            # Update the plate's quantity based on the number of wells
+            plate.quantity = len(plate.children)
+            session.add(plate)
+            session.commit()
+            
+    def update_plate_well(self, plate: Plate, well_id: str, pool: Pool) -> None:
+        """
+        Update or add a resource in a specific well of a plate using the `add_child` method.
 
-    #     Returns:
-    #         Optional[float]: The quantity in the well, or None if the well does not exist.
-    #     """
-    #     with self.session as session:
-    #         plate = session.merge(plate)
-    #         wells = plate.get_wells(session)
-    #         well = wells.get(well_id)
+        Args:
+            plate (Plate): The plate resource to update.
+            well_id (str): The well ID to update or add.
+            pool (Pool): The Pool resource to associate with the well.
+        """
+        if not isinstance(pool, Pool):
+            raise TypeError("Only Pool resources can be assigned to plate wells.")
 
-    #         if well is not None:
-    #             return well.quantity
-    #         else:
-    #             print(f"Well {well_id} not found in plate {plate.name}")
-    #             return None
+        with self.session as session:
+            # Use the add_child method to handle adding/updating the well
+            plate.add_child(well_id, pool, session)
 
-    # def increase_well(self, plate: Plate, well_id: str, quantity: float) -> None:
-    #     """
-    #     Increase the quantity of liquid in a specific well of a plate.
-
-    #     Args:
-    #         plate (Plate): The plate resource to update.
-    #         well_id (str): The well ID to increase the quantity for.
-    #         quantity (float): The amount to increase the well quantity by.
-    #     """
-    #     with self.session as session:
-    #         # Find the corresponding collection (plate)
-    #         collection = session.query(Collection).filter_by(name=plate.name).first()
-
-    #         if not collection:
-    #             raise ValueError(f"Collection for plate {plate.name} not found.")
-
-    #         plate.increase_well(well_id, quantity, session)
-    #         session.commit()
-    #         session.refresh(collection)  # Refresh the collection object if needed
-
-    # def decrease_well(self, plate: Plate, well_id: str, quantity: float) -> None:
-    #     """
-    #     Decrease the quantity of liquid in a specific well of a plate.
-
-    #     Args:
-    #         plate (Plate): The plate resource to update.
-    #         well_id (str): The well ID to decrease the quantity for.
-    #         quantity (float): The amount to decrease the well quantity by.
-    #     """
-    #     with self.session as session:
-    #         # Find the corresponding collection (plate) in the database
-    #         collection = session.query(Collection).filter_by(name=plate.name).first()
-
-    #         if not collection:
-    #             raise ValueError(f"Collection for plate {plate.name} not found.")
-
-    #         plate.decrease_well(well_id, quantity, session)
-    #         session.commit()
-    #         session.refresh(collection)
-
-    # def get_wells(self, plate: Plate) -> Dict[str, Pool]:
-    #     """
-    #     Retrieve the entire contents (wells) of a plate resource.
-
-    #     Args:
-    #         plate (Plate): The plate resource to query.
-
-    #     Returns:
-    #         Dict[str, Pool]: A dictionary of all wells in the plate, keyed by their well IDs.
-    #     """
-    #     with self.session as session:
-    #         wells = plate.get_wells(session)
-    #         return wells
-
+            # Commit the changes
+            session.add(plate)
+        session.commit()
 
 if __name__ == "__main__":
     resources_interface = ResourcesInterface()
-    # stack = Stack(
-    #     resource_name="stack",
-    #     resource_type="stack1",  # Make sure this matches the expected type in validation
-    #     capacity=10,
-    #     ownership=None
-    # )
-    # stack = resources_interface.add_resource(stack) 
-    # for i in range(5):
-    #     asset = Asset(resource_name="Test plate"+str(i)) 
-    #     asset = resources_interface.add_resource(asset) 
-    #     resources_interface.push_to_stack(stack,asset)
-    # retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
-    # for i in range(2):
-    #     n_asset = resources_interface.pop_from_stack(retrieved_stack)
+    stack = Stack(
+        resource_name="stack",
+        resource_type="stack1",  # Make sure this matches the expected type in validation
+        capacity=10,
+        ownership=None
+    )
+    stack = resources_interface.add_resource(stack) 
+    for i in range(5):
+        asset = Asset(resource_name="Test plate"+str(i)) 
+        asset = resources_interface.add_resource(asset) 
+        resources_interface.push_to_stack(stack,asset)
+    retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
+    for i in range(2):
+        n_asset = resources_interface.pop_from_stack(retrieved_stack)
     
-    # queue = Queue(
-    #     resource_name="queue",
-    #     resource_type="queue",  # Make sure this matches the expected type in validation
-    #     capacity=10,
-    #     ownership=None
-    # )
-    # queue = resources_interface.add_resource(queue)
-    # for i in range(5):
-    #     asset = Asset(resource_name="Test plate"+str(i)) 
-    #     asset = resources_interface.add_resource(asset) 
-    #     resources_interface.push_to_queue(queue,asset)
-    # retrieved_queue = resources_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
-    # for i in range(2):
-    #     n_asset = resources_interface.pop_from_queue(retrieved_queue)
-    # resources_interface.push_to_queue(queue,n_asset)
+    queue = Queue(
+        resource_name="queue",
+        resource_type="queue",  # Make sure this matches the expected type in validation
+        capacity=10,
+        ownership=None
+    )
+    queue = resources_interface.add_resource(queue)
+    for i in range(5):
+        asset = Asset(resource_name="Test plate"+str(i)) 
+        asset = resources_interface.add_resource(asset) 
+        resources_interface.push_to_queue(queue,asset)
+    retrieved_queue = resources_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
+    for i in range(2):
+        n_asset = resources_interface.pop_from_queue(retrieved_queue)
+    resources_interface.push_to_queue(queue,n_asset)
 
     consumable = Consumable(
         resource_name="Water",
@@ -647,10 +600,10 @@ if __name__ == "__main__":
         resource_name="Vial_1",
         resource_type="pool",
         capacity=500.0,
-        children={"Water": consumable}  # Add the ConsumableBase to children
+         # Add the ConsumableBase to children
     )
     resources_interface.add_resource(pool)
-    print(pool.children["Water"])
+    # print(pool.children["Water"])
 
     # Example operations on the pool
     print(f"Initial Pool Quantity: {pool.quantity}")
@@ -660,11 +613,31 @@ if __name__ == "__main__":
     resources_interface.decrease_pool_quantity(pool, 20.0)
     print(f"After Decrease: {pool.quantity}")
 
-    resources_interface.fill_pool(pool)
-    print(f"After Fill: {pool.quantity}")
+    # resources_interface.fill_pool(pool)
+    # print(f"After Fill: {pool.quantity}")
 
-    resources_interface.empty_pool(pool)
-    print(f"After Empty: {pool.quantity}")
+    # resources_interface.empty_pool(pool)
+    # print(f"After Empty: {pool.quantity}")
+    pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
+    resources_interface.add_resource(pool1)
+    # Create a Plate resource with initial children
+    plate = Plate(
+        resource_name="Microplate1",
+        resource_type="plate",
+        children={"A1": pool},
+    )
+    resources_interface.add_resource(plate)
+
+    # Increase quantity in a well
+    resources_interface.increase_plate_well(plate, "A1", 30)
+    print(f"A1 Quantity after increase: {plate.children['A1'].quantity}")
+
+    # Decrease quantity in a well
+    resources_interface.decrease_plate_well(plate, "A1", 20)
+    print(f"A1 Quantity after decrease: {plate.children['A1'].quantity}")
+    
+    resources_interface.update_plate_well(plate, "A2", pool1)
+    print(f"A2 Pool Name: {plate.children['A2'].resource_name}")
 
 #--------------------------------------------------------------------------------------
     # resources_interface.push_to_queue(queue,n_asset)
