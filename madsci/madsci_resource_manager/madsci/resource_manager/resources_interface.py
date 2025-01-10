@@ -165,138 +165,6 @@ class ResourcesInterface:
             )
             return None
         
-    # def get_resource_type(self, resource_id: str) -> Optional[str]:
-    #     """
-    #     Determine the resource type name based on the provided resource_id.
-
-    #     Args:
-    #         resource_id (str): The ID of the resource.
-
-    #     Returns:
-    #         str or None: The name of the resource type if found, otherwise None.
-    #     """
-    #     resource_types = {
-    #         "Stack": Stack,
-    #         "Pool": Pool,
-    #         "Queue": Queue,
-    #         "Collection": Collection,
-    #         "Plate": Plate,
-    #     }
-
-    #     with self.session as session:
-    #         for type_name, resource_type in resource_types.items():
-    #             statement = select(resource_type).where(resource_type.id == resource_id)
-    #             result = session.exec(statement).first()
-    #             if result:
-    #                 return type_name
-
-    #     return None
-
-    # def get_all_resources(self, resource_type: Type[SQLModel]) -> List[SQLModel]:
-    #     """
-    #     Retrieve all resources of a specific type from the database.
-
-    #     Args:
-    #         resource_type (Type[SQLModel]): The type of the resources.
-
-    #     Returns:
-    #         List[SQLModel]: A list of all resources of the specified type.
-    #     """
-    #     with self.session as session:
-    #         # Handle Plate type by filtering Collection where is_plate=True
-    #         if resource_type is Plate:
-    #             statement = select(Collection).where(Collection.is_plate)
-    #             resources = session.exec(statement).all()
-    #             return resources
-
-    #         # Handle Collection type by filtering Collection where is_plate=False
-    #         elif resource_type is Collection:
-    #             statement = select(Collection).where(Collection.is_plate)
-    #             resources = session.exec(statement).all()
-    #             return resources
-
-    #         # Handle all other resource types normally
-    #         else:
-    #             statement = select(resource_type)
-    #             # Fetch and return resources of the requested type
-    #             resources = session.exec(statement).all()
-    #             return resources
-
-    # def update_resource(
-    #     self, resource_type: Type[SQLModel], resource_id: str, updates: Dict
-    # ) -> Optional[SQLModel]:
-    #     """
-    #     Update a resource in the database.
-
-    #     Args:
-    #         resource_type (Type[SQLModel]): The type of the resource.
-    #         resource_id (str): The ID of the resource.
-    #         updates (Dict): The updates to apply.
-
-    #     Returns:
-    #         SQLModel: The updated resource, or None if not found.
-    #     """
-    #     with self.session as session:
-    #         resource = self.get_resource(resource_type, resource_id)
-    #         if not resource:
-    #             return None
-
-    #         for key, value in updates.items():
-    #             setattr(resource, key, value)
-
-    #         session.add(resource)
-    #         session.commit()
-    #         session.refresh(resource)
-    #         return resource
-
-    # def delete_resource(self, resource_type: Type[SQLModel], resource_id: str) -> bool:
-    #     """
-    #     Delete a resource from the database.
-
-    #     Args:
-    #         resource_type (Type[SQLModel]): The type of the resource.
-    #         resource_id (str): The ID of the resource.
-
-    #     Returns:
-    #         bool: True if the resource was deleted, False if not found.
-    #     """
-    #     with self.session as session:
-    #         resource = self.get_resource(resource_type, resource_id)
-    #         if not resource:
-    #             return False
-
-    #         session.delete(resource)
-    #         session.commit()
-    #         return True
-
-    # def delete_all_tables(self):
-    #     """
-    #     Drop all tables associated with the SQLModel metadata from the database.
-    #     """
-    #     try:
-    #         with self.engine.connect() as connection:
-    #             # Drop Asset first, handling foreign key constraints with CASCADE
-    #             connection.execute(text("DROP TABLE IF EXISTS assetallocation CASCADE"))
-    #             connection.commit()
-    #         # Drop the rest of the tables
-    #         SQLModel.metadata.drop_all(self.engine)
-    #         print("All tables have been deleted.")
-    #     except Exception as e:
-    #         print(f"An error occurred while deleting tables: {e}")
-
-    # def clear_all_table_records(self):
-    #     """
-    #     Delete all records from all tables associated with the SQLModel metadata.
-    #     """
-    #     with self.session as session:
-    #         try:
-    #             for table in reversed(SQLModel.metadata.sorted_tables):
-    #                 session.exec(table.delete())
-    #             session.commit()
-    #             print("All table records have been cleared.")
-    #         except Exception as e:
-    #             session.rollback()
-    #             print(f"An error occurred while clearing table records: {e}")
 
     def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
         """
@@ -433,42 +301,6 @@ class ResourcesInterface:
             else:
                 raise ValueError("The stack is empty or the asset does not exist.")
 
-
-    # def insert_into_collection(
-    #     self, collection: Collection, location: str, asset: Asset
-    # ) -> None:
-    #     """
-    #     Insert an asset into a collection resource.
-
-    #     Args:
-    #         collection (Collection): The collection resource to update.
-    #         location (str): The location within the collection to insert the asset.
-    #         asset (Asset): The asset to insert.
-    #     """
-    #     with self.session as session:
-    #         collection = session.merge(collection)
-    #         asset = session.merge(asset)
-    #         collection.insert(location, asset, session)
-    #         session.commit()
-    #         session.refresh(collection)
-
-    # def retrieve_from_collection(
-    #     self, collection: Collection, location: str
-    # ) -> Optional[Asset]:
-    #     """
-    #     Retrieve an asset from a collection resource.
-
-    #     Args:
-    #         collection (Collection): The collection resource to update.
-    #         location (str): The location within the collection to retrieve the asset from.
-
-    #     Returns:
-    #         Asset: The retrieved asset.
-    #     """
-    #     with self.session as session:
-    #         collection = session.merge(collection)
-    #         return collection.retrieve(location, session)
-
     def increase_plate_well(self, plate: Plate, well_id: str, quantity: float) -> None:
         """
         Increase the quantity of liquid in a specific well of a plate.
@@ -479,29 +311,25 @@ class ResourcesInterface:
             quantity (float): The amount to increase the well quantity by.
         """
         with self.session as session:
-            # Ensure the plate instance is bound to the session
-            plate = session.get(Plate, plate.resource_id)  # Re-query the plate
+            # Re-attach the plate to the session if it is detached
+            plate = session.merge(plate)
 
-            if not plate:
-                raise ValueError(f"Plate with ID '{plate.resource_id}' not found in the database.")
+            # Access the child Pool resource in the specified well
+            pool = plate.children.get(well_id)
+            if not pool:
+                raise ValueError(f"No resource found in well '{well_id}' of plate {plate.resource_name}.")
 
-            # Check if the well exists
-            if well_id not in plate.children:
-                raise KeyError(f"Well ID '{well_id}' does not exist in plate '{plate.resource_name}'.")
-
-            # Get the pool resource from the well
-            pool = plate.children[well_id]
-            if not isinstance(pool, Pool):
-                raise TypeError("Only Pool resources are supported in plate wells.")
-
-            # Use the `increase_pool_quantity` method to increase the pool's quantity
+            # Increase the Pool resource's quantity
             self.increase_pool_quantity(pool=pool, amount=quantity)
 
-            # Update the plate's quantity based on the number of wells
-            plate.quantity = len(plate.children)
+            # Update the Plate's quantity to reflect the number of wells
+            # plate.quantity = len(plate.children)
+
+            # Save changes to the session
             session.add(plate)
-            session.commit() 
-            
+            session.commit()
+
+
     def decrease_plate_well(self, plate: Plate, well_id: str, quantity: float) -> None:
         """
         Decrease the quantity of liquid in a specific well of a plate.
@@ -528,7 +356,7 @@ class ResourcesInterface:
             self.decrease_pool_quantity(pool=pool, amount=quantity)
 
             # Update the plate's quantity based on the number of wells
-            plate.quantity = len(plate.children)
+            # plate.quantity = len(plate.children)
             session.add(plate)
             session.commit()
             
@@ -546,10 +374,13 @@ class ResourcesInterface:
 
         with self.session as session:
             # Use the add_child method to handle adding/updating the well
+            plate = session.merge(plate)
+            pool = session.merge(pool)
             plate.add_child(well_id, pool, session)
 
             # Commit the changes
             session.add(plate)
+            # session.refresh()
         session.commit()
 
 if __name__ == "__main__":
@@ -600,9 +431,10 @@ if __name__ == "__main__":
         resource_name="Vial_1",
         resource_type="pool",
         capacity=500.0,
+        children = {"Water":consumable}
          # Add the ConsumableBase to children
     )
-    resources_interface.add_resource(pool)
+    pool = resources_interface.add_resource(pool)
     # print(pool.children["Water"])
 
     # Example operations on the pool
@@ -619,132 +451,23 @@ if __name__ == "__main__":
     # resources_interface.empty_pool(pool)
     # print(f"After Empty: {pool.quantity}")
     pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
-    resources_interface.add_resource(pool1)
+    pool1 = resources_interface.add_resource(pool1)
     # Create a Plate resource with initial children
     plate = Plate(
         resource_name="Microplate1",
         resource_type="plate",
         children={"A1": pool},
     )
-    resources_interface.add_resource(plate)
-
+    plate = resources_interface.add_resource(plate)
+    print(plate.children)
     # Increase quantity in a well
     resources_interface.increase_plate_well(plate, "A1", 30)
-    print(f"A1 Quantity after increase: {plate.children['A1'].quantity}")
+    print(f"A1 Quantity after increase: {plate.children}")
 
     # Decrease quantity in a well
     resources_interface.decrease_plate_well(plate, "A1", 20)
-    print(f"A1 Quantity after decrease: {plate.children['A1'].quantity}")
+    print(f"A1 Quantity after decrease: {plate.children}")
     
     resources_interface.update_plate_well(plate, "A2", pool1)
-    print(f"A2 Pool Name: {plate.children['A2'].resource_name}")
+    print(f"A2 Pool Name: {plate.children}")
 
-#--------------------------------------------------------------------------------------
-    # resources_interface.push_to_queue(queue,n_asset)
-    # n_asset = resources_interface.pop_from_stack(retrieved_stack)
-    
-    # resources_interface.clear_all_table_records()
-    # pool = Pool(
-    #     name="Test Pool",
-    #     description="A test pool",
-    #     capacity=100.0,
-    #     quantity=50.0,
-    #     owner_name="test1",
-    # )
-    # pool = resources_interface.add_resource(pool)
-    # all_pools = resources_interface.get_all_resources(Pool)
-    # print("\nAll Pools after modification:", all_pools)
-    # resources_interface.increase_pool_quantity(pool, 0.0)
-    # all_pools = resources_interface.get_all_resources(Pool)
-    # print("\nAll Pools after modification:", all_pools)
-    # stack = Stack(
-    #     name="Test Stack", description="A test stack", capacity=10, owner_name="test2"
-    # )
-    # resources_interface.add_resource(stack)
-    # retrieved_stack = resources_interface.get_resource(
-    #     resource_name="Test Stack", owner_name="test2"
-    # )
-    # print("Retreived_STACK:", retrieved_stack)
-    # asset = Asset(name="Test Asset", unique_resource=False)
-    # asset3 = Asset(name="Test Asset3", unique_resource=False)
-    # resources_interface.push_to_stack(stack, asset)
-    # resources_interface.push_to_stack(stack, asset3)
-    # all_stacks = resources_interface.get_all_resources(Stack)
-    # print("\nAll Stacks after modification:", all_stacks)
-    # popped_asset = resources_interface.pop_from_stack(stack)
-    # all_stacks = resources_interface.get_all_resources(Stack)
-    # print("\nAll Stacks after modification:", all_stacks)
-    # queue = Queue(
-    #     name="Test Queue", description="A test queue", capacity=10, owner_name="test3"
-    # )
-    # queue = resources_interface.add_resource(queue)
-    # asset2 = Asset(name="Test Asset2")
-    # resources_interface.push_to_queue(queue, asset2)
-    # # resource_interface.push_to_queue(queue, asset)
-    # all_queues = resources_interface.get_all_resources(Queue)
-    # print("\nAll Queues after modification:", all_queues)
-    # popped_asset_q = resources_interface.pop_from_queue(queue)
-    # print("\nPopped Asset from Queue:", popped_asset_q)
-    # all_queues = resources_interface.get_all_resources(Queue)
-    # print("\nAll Queues after modification:", all_queues)
-    # collection = Collection(
-    #     name="Test Collection",
-    #     description="A test collection",
-    #     capacity=10,
-    #     owner_name="test4",
-    # )
-    # collection = resources_interface.add_resource(collection)
-    # resources_interface.insert_into_collection(collection, location="1", asset=asset3)
-    # retrieved_asset = resources_interface.retrieve_from_collection(
-    #     collection, location=1
-    # )
-    # print("\nRetrieved Asset from Collection:", retrieved_asset)
-    # plate = Plate(
-    #     name="Test Plate",
-    #     description="A test plate",
-    #     capacity=96,
-    #     well_capacity=100.0,
-    #     owner_name="test5",
-    #     unique_resource=False,
-    # )
-    # plate2 = Plate(
-    #     name="Test Plate",
-    #     description="A test plate",
-    #     capacity=96,
-    #     well_capacity=100.0,
-    #     owner_name="test5",
-    #     unique_resource=False,
-    # )
-    # plate = resources_interface.add_resource(plate)
-    # plate2 = resources_interface.add_resource(plate2)
-    # wells_to_add = {
-    #     "A1": 50.0,
-    #     "B1": 66.0,
-    # }
-    # resources_interface.update_plate_contents(plate, wells_to_add)
-    # all_wells = resources_interface.get_wells(plate)
-    # print(f"All wells in the plate: {all_wells}")
-    # resources_interface.increase_well(plate, well_id="A1", quantity=20.0)
-    # resources_interface.decrease_well(plate, well_id="B1", quantity=10.0)
-    # new_well_to_add = {
-    #     "C1": 70.0,
-    # }
-    # resources_interface.update_plate_contents(plate, new_well_to_add)
-    # updated_wells = resources_interface.get_wells(plate)
-    # print(f"Updated wells: {updated_wells}")
-    # resources_interface.update_plate_well(plate, well_id="A1", quantity=80.0)
-    # all_plates = resources_interface.get_all_resources(Plate)
-    # print("\nAll Plates after modification:", all_plates)
-    # new_well_to_add2 = {
-    #     "D1": 70.0,  # Well C1 with 70.0 quantity
-    # }
-
-    # r = resources_interface.get_resource(resource_id=plate2.id)
-    # resources_interface.update_plate_contents(r, new_well_to_add2)
-
-    # # all_asset = resource_interface.get_all_resources(Asset)
-    # # print("\n Asset Table", all_asset)
-
-    # # print(resource_interface.get_resource_type(stack.id))
-
-    # # print(resource_interface.get_all_assets_with_relations())
