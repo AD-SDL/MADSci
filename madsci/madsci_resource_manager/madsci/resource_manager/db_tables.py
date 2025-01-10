@@ -475,7 +475,7 @@ class Plate(CollectionBase, table=True):
             if isinstance(resource, ResourceBase):
                 resource.parent = self.resource_id
 
-    def add_child(self, key: str, resource: Pool, session: Session) -> None:
+    def add_child(self, key: str, resource: ResourceBase, session: Session) -> None:
         """
         Add a Pool resource to the Plate.
 
@@ -484,15 +484,14 @@ class Plate(CollectionBase, table=True):
             resource (Pool): The Pool resource to add.
             session (Session): The database session for persisting changes.
         """
-        if key in self.children:
-            raise ValueError(f"Key '{key}' already exists in the plate.")
-
+        resource = session.merge(resource)
         # Set the parent of the Pool resource
         resource.parent = self.resource_id
+        print(resource)
         session.add(resource)
 
         # Add the resource to the children dictionary
-        self.children[key] = resource
+        self.children[key] = resource.dict()
         self.quantity=len(self.children)
         flag_modified(self, "children")
 
