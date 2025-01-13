@@ -9,35 +9,28 @@ from madsci.common.types.step_types import Step
 
 class WorkflowStatus(str, Enum):
     """Status for a workflow run"""
-
-    NEW = "new"
-    """Newly created workflow run, hasn't been queued yet"""
     QUEUED = "queued"
     """Workflow run is queued, hasn't started yet"""
     RUNNING = "running"
     """Workflow is currently running a step"""
     IN_PROGRESS = "in_progress"
-    """Workflow run has started, but is not actively running a step"""
-    PAUSED = "paused"
-    """Workflow run is paused"""
+    """Workflow has started, but is not actively running a step"""
     COMPLETED = "completed"
-    """Workflow run has completed"""
+    """Workflow has completed"""
     FAILED = "failed"
-    """Workflow run has failed"""
+    """Workflow has failed"""
     UNKNOWN = "unknown"
-    """Workflow run status is unknown"""
+    """Workflow status is unknown"""
     CANCELLED = "cancelled"
-    """Workflow run has been cancelled"""
+    """Workflow has been cancelled"""
 
     @property
     def is_active(self) -> bool:
         """Whether or not the workflow run is active"""
         return self in [
-            WorkflowStatus.NEW,
             WorkflowStatus.QUEUED,
             WorkflowStatus.RUNNING,
             WorkflowStatus.IN_PROGRESS,
-            WorkflowStatus.PAUSED,
         ]
 
 
@@ -88,21 +81,10 @@ class WorkflowDefinition(BaseModel):
 
 
 class SchedulerMetadata(BaseModel):
-    status: WorkflowStatus = Field(default=WorkflowStatus.NEW)
-    """current status of the workflow"""
-    step_index: int = 0
-    """Index of the current step"""
-    simulate: bool = False
-    """Whether or not this workflow is being simulated"""
-    submitted_time: Optional[datetime] = None
-    """Time workflow was submitted to the scheduler"""
-    start_time: Optional[datetime] = None
-    """Time the workflow started running"""
-    end_time: Optional[datetime] = None
-    """Time the workflow finished running"""
-    duration: Optional[timedelta] = None
-    """Duration of the workflow's run"""
-
+    """Scheduler information"""
+    ready_to_run: bool = False
+    """whether or not the next step in the workflow is ready to run"""
+    priority: int = 0
 
 
 class Workflow(WorkflowDefinition):
@@ -119,6 +101,23 @@ class Workflow(WorkflowDefinition):
     """parameter values used inthis workflow"""
     experiment_id: Optional[str] = None
     """ID of the experiment this workflow is a part of"""
+    status: WorkflowStatus = Field(default=WorkflowStatus.QUEUED)
+    """current status of the workflow"""
+    step_index: int = 0
+    """Index of the current step"""
+    simulate: bool = False
+    """Whether or not this workflow is being simulated"""
+    submitted_time: Optional[datetime] = None
+    """Time workflow was submitted to the scheduler"""
+    start_time: Optional[datetime] = None
+    """Time the workflow started running"""
+    end_time: Optional[datetime] = None
+    """Time the workflow finished running"""
+    duration: Optional[timedelta] = None
+    """Duration of the workflow's run"""
+    paused: Optional[bool] = False
+    """whether or not the workflow is paused"""
+
     
     def get_step_by_name(self, name: str) -> Step:
         """Return the step object by its name"""

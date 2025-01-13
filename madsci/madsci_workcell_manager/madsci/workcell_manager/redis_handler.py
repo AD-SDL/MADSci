@@ -208,6 +208,16 @@ class WorkcellRedisHandler:
             wf_dump = Workflow.model_validate(wf).model_dump(mode="json")
         self._workflows[str(wf_dump["workflow_id"])] = wf_dump
         self.mark_state_changed()
+        
+    def set_workflow_quiet(self, wf: Workflow) -> None:
+        """
+        Sets a workflow by ID
+        """
+        if isinstance(wf, Workflow):
+            wf_dump = wf.model_dump(mode="json")
+        else:
+            wf_dump = Workflow.model_validate(wf).model_dump(mode="json")
+        self._workflows[str(wf_dump["workflow_id"])] = wf_dump
 
     def delete_workflow(self, workflow_id: Union[str, str]) -> None:
         """

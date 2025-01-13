@@ -74,6 +74,7 @@ class RestNodeClient(AbstractNodeClient):
             for file in files:
                 file[1][1].close()
         if not rest_response.ok:
+            print(rest_response)
             rest_response.raise_for_status()
         return ActionResult.model_validate(rest_response.json())
 

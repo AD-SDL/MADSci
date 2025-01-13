@@ -80,14 +80,14 @@ class WorkcellConfig(BaseModel):
         description="The password for the redis server.",
     )
     scheduler_update_interval: float = Field(
-        default=0.1,
+        default=2.0,
         title="Scheduler Update Interval",
-        description="The interval at which the scheduler runs, in seconds.",
+        description="The interval at which the scheduler runs, in seconds. Must be >= node_update_interval",
     )
     node_update_interval: float = Field(
         default=1.0,
         title="Node Update Interval",
-        description="The interval at which the workcell queries its node's states, in seconds.",
+        description="The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval",
     )
     auto_start: bool = Field(
         default=True,

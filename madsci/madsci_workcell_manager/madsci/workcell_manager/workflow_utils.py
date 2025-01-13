@@ -10,6 +10,7 @@ import re
 import copy
 from pathlib import Path
 from datetime import datetime
+import shutil
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
     """
@@ -114,7 +115,7 @@ def create_workflow(
         steps.append(step)
 
     wf.steps = steps
-    wf.scheduler_metadata.submitted_time = datetime.now()
+    wf.submitted_time = datetime.now()
     return wf
 
 def save_workflow_files(working_directory: str, workflow: Workflow, files: list[UploadFile]) -> Workflow:
@@ -143,6 +144,21 @@ def save_workflow_files(working_directory: str, workflow: Workflow, files: list[
                         print(f"{step_file_key}: {file_path} ({step_file_path})")
     return workflow
 
+def copy_workflow_files(working_directory: str, old_id: str, workflow: Workflow) -> Workflow:
+    """Saves the files to the workflow run directory,
+    and updates the step files to point to the new location"""
+
+    new = get_workflow_inputs_directory(
+        workflow_id=workflow.workflow_id,
+        working_directory=working_directory
+    )
+    old = get_workflow_inputs_directory(
+        workflow_id=old_id,
+        working_directory=working_directory
+    )
+    shutil.copytree(old, new)
+    return workflow
+
 def get_workflow_inputs_directory(workflow_id: str = None, working_directory: str = None) -> Path:
     """returns a directory name for the workflows inputs"""
     return Path(working_directory) / "Workflows" / workflow_id / "Inputs"
@@ -150,7 +166,7 @@ def get_workflow_inputs_directory(workflow_id: str = None, working_directory: st
 
 def cancel_workflow(wf: Workflow, state_manager: WorkcellRedisHandler) -> None:
     """Cancels the workflow run"""
-    wf.scheduler_metadata.status = WorkflowStatus.CANCELLED
+    wf.status = WorkflowStatus.CANCELLED
     with state_manager.wc_state_lock():
         state_manager.set_workflow(wf)
     return wf
@@ -159,7 +175,7 @@ def cancel_workflow(wf: Workflow, state_manager: WorkcellRedisHandler) -> None:
 def cancel_active_workflows(state_manager: WorkcellRedisHandler) -> None:
     """Cancels all currently running workflow runs"""
     for wf in state_manager.get_all_workflows().values():
-        if wf.scheduler_metadata.status in [
+        if wf.status in [
             WorkflowStatus.RUNNING,
             WorkflowStatus.QUEUED,
             WorkflowStatus.IN_PROGRESS,

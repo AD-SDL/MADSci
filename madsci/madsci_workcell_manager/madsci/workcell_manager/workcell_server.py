@@ -3,24 +3,26 @@
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.datastructures import State
 from redis_handler import WorkcellRedisHandler
+from madsci.common.types.base_types import new_ulid_str
+from madsci.common.types.auth_types import OwnershipInfo
 
 from madsci.workcell_manager.workcell_manager_types import (
     WorkcellManagerDefinition,
 )
 
-from madsci.workcell_manager.workflow_utils import create_workflow, save_workflow_files
+from madsci.workcell_manager.workflow_utils import create_workflow, save_workflow_files, copy_workflow_files
 from madsci.workcell_manager.workcell_utils import find_node_client
+
 from workcell_engine import Engine
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Union
 from madsci.common.types.workcell_types import WorkcellDefinition
-from madsci.common.types.workflow_types import WorkflowDefinition, Workflow
-from madsci.common.types.node_types import Node
+from madsci.common.types.workflow_types import WorkflowDefinition, Workflow, WorkflowStatus
+from madsci.common.types.node_types import Node, NodeDefinition
 import argparse
 import json
 import traceback
-
-
+from datetime import datetime
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument(
     "--workcell_file",
@@ -51,6 +53,47 @@ def get_nodes() -> dict[str, Node]:
     """Get information about the resource manager."""
     return app.state.state_handler.get_all_nodes()
 
+@app.get("/nodes/{node_name}")
+def get_node(node_name: str) -> Union[Node, str]:
+    """Get information about the resource manager."""
+    try:
+        node = app.state.state_handler.get_node(node_name)
+    except Exception as e:
+        return "Node not found!"
+    return node
+
+@app.post("/nodes/add_node")
+def add_node(
+    node_name: str,
+    node_url: str,
+    node_description: str = "A Node",
+    permanent: bool = False
+    ) -> Union[Node, str]:
+    """Get information about the resource manager."""
+    if node_name in app.state.state_handler.get_all_nodes():
+        return "Node name exists, node names must be unique!"
+    node = Node(node_url=node_url)
+    app.state.state_handler.set_node(node_name, node)
+    if permanent:
+        workcell.nodes[node_name] = NodeDefinition(node_name=node_name, node_url=node_url, node_description=node_description)
+        workcell.to_yaml(workcell_file)
+    return app.state.state_handler.get_node(node_name)
+
+@app.post("/nodes/reserve")
+def reserve_node(
+    node_name: str,
+    ownership_info: Optional[OwnershipInfo] = None,
+    duration: str,
+    ) -> Union[Node, str]:
+    """Get information about the resource manager."""
+    node = app.state.state_handler.get_node(node_name)
+    node.reserved_by = ownership_info
+    app.state.state_handler.set_node(node_name, node)
+    
+    return app.state.state_handler.get_node(node_name)
+
+
+
 @app.get("/admin/{command}")
 def send_admin_command(command: str) -> list:
     """Get information about the resource manager."""
@@ -75,11 +118,86 @@ def send_admin_command_to_node(command: str, node: str) -> list:
 
 
 @app.get("/workflows")
-def get_workflows() -> dict[str, Workflow]:
+def get_all_workflows() -> dict[str, Workflow]:
     """Get information about the resource manager."""
     return app.state.state_handler.get_all_workflows()
 
-@app.post("/start_workflow")
+@app.get("/workflows/{workflow_id}")
+def get_workflow(workflow_id: str) -> Workflow:
+    """Get information about the resource manager."""
+    return app.state.state_handler.get_workflow(workflow_id)
+
+@app.get("/workflows/pause/{workflow_id}")
+def pause_workflow(workflow_id: str) -> Workflow:
+    """Get information about the resource manager."""
+    with app.state.state_handler.wc_state_lock():
+        wf = app.state.state_handler.get_workflow(workflow_id)
+        if wf.status in ["running", "in_progress", "queued"]:
+            if wf.status == "running":
+             send_admin_command_to_node("pause", wf.steps[wf.step_index].node)
+             wf.steps[wf.step_index] = ActionStatus.PAUSED
+            wf.paused = True
+            app.state.state_handler.set_workflow(wf)
+    
+    return app.state.state_handler.get_workflow(workflow_id)
+
+@app.get("/workflows/resume/{workflow_id}")
+def resume_workflow(workflow_id: str) -> Workflow:
+    """Get information about the resource manager."""
+    with app.state.state_handler.wc_state_lock():
+        wf = app.state.state_handler.get_workflow(workflow_id)
+        if wf.paused:
+            if wf.status == "running":
+             send_admin_command_to_node("resume", wf.steps[wf.step_index].node)
+             wf.steps[wf.step_index] = ActionStatus.RUNNING
+            wf.paused = False
+            app.state.state_handler.set_workflow(wf)
+    return app.state.state_handler.get_workflow(workflow_id)
+
+@app.get("/workflows/cancel/{workflow_id}")
+def cancel_workflow(workflow_id: str) -> Workflow:
+    """Get information about the resource manager."""
+    with app.state.state_handler.wc_state_lock():
+        wf = app.state.state_handler.get_workflow(workflow_id)
+        if wf.status == "running":
+             send_admin_command_to_node("stop", wf.steps[wf.step_index].node)
+             wf.steps[wf.step_index] = ActionStatus.CANCELLED
+        wf.status = WorkflowStatus.CANCELLED
+        app.state.state_handler.set_workflow(wf)
+    return app.state.state_handler.get_workflow(workflow_id)
+@app.get("/workflows/resubmit/{workflow_id}")
+def resubmit_workflow(workflow_id: str) -> Workflow:
+    """Get information about the resource manager."""
+    with app.state.state_handler.wc_state_lock():
+        wf = app.state.state_handler.get_workflow(workflow_id)
+        wf.workflow_id = new_ulid_str()
+        wf.step_index = 0
+        wf.start_time = None
+        wf.end_time = None
+        wf.submitted_time = datetime.now()
+        for step in wf.steps:
+            step.step_id = new_ulid_str()
+            step.start_time = None
+            step.end_time = None
+            step.status = ActionStatus.NOT_STARTED
+        copy_workflow_files(old_id=workflow_id, workflow=wf, working_directory=workcell_manager_definition.plugin_config.workcell_directory)
+        app.state.state_handler.set_workflow(wf)
+    return app.state.state_handler.get_workflow(workflow_id)
+
+@app.post("/workflows/retry")
+def retry_workflow(workflow_id: str,
+                    index: int = -1) -> Workflow:
+    """Get information about the resource manager."""
+    with app.state.state_handler.wc_state_lock():
+        wf = app.state.state_handler.get_workflow(workflow_id)
+        if wf.status in ["completed", "failed"]:
+            if index >= 0:
+                wf.step_index = index
+            wf.status = WorkflowStatus.QUEUED
+            app.state.state_handler.set_workflow(wf)
+    return app.state.state_handler.get_workflow(workflow_id)
+
+@app.post("/workflows/start")
 async def start_workflow(
     workflow: Annotated[str, Form()],
     experiment_id: Annotated[Optional[str], Form()] = None,
@@ -143,7 +261,18 @@ async def start_workflow(
 
 
 
-
+@app.post("/nodes/reserve")
+def reserve_nodes(ownership_info: OwnershipInfo,
+                  nodes: list[str]) -> Workflow:
+    """Get information about the resource manager."""
+    with app.state.state_handler.wc_state_lock():
+        wf = app.state.state_handler.get_workflow(workflow_id)
+        if wf.status in ["completed", "failed"]:
+            if index >= 0:
+                wf.step_index = index
+            wf.status = WorkflowStatus.QUEUED
+            app.state.state_handler.set_workflow(wf)
+    return app.state.state_handler.get_workflow(workflow_id)
 
 
 if __name__ == "__main__":

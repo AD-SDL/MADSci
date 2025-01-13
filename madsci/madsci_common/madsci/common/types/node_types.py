@@ -3,6 +3,7 @@
 from os import PathLike
 from pathlib import Path
 from typing import Any, Optional, Union
+from datetime import datetime
 
 from pydantic import Field
 from pydantic.fields import computed_field
@@ -10,6 +11,7 @@ from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 
 from madsci.common.types.action_types import ActionDefinition
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
 from madsci.common.types.module_types import ConfigParameter, NodeModuleDefinition
 from madsci.common.types.validators import ulid_validator
@@ -136,6 +138,11 @@ class Node(BaseModel, arbitrary_types_allowed=True):
         default=None,
         title="Node State",
         description="Detailed nodes specific state information"
+    )
+    reserved_by: Optional["Reservation"] = Field(
+        default=None,
+        title="Reserved By",
+        description="Ownership unit that is reserving this node"
     )
 
 
@@ -268,6 +275,11 @@ class NodeStatus(BaseModel):
             return "; ".join(reasons)
         return "Node is ready"
 
+class Reservation(BaseModel):
+    owned_by: OwnershipInfo
+    
+    started: datetime
+    
 
 class NodeSetConfigResponse(BaseModel):
     """Response from a Node Set Config Request"""
