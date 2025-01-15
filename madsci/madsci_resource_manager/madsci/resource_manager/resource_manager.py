@@ -33,6 +33,32 @@ def add_resource(database_url: str, resource: ResourceBase):
         return {"message": "Resource added successfully", "resource_id": saved_resource.resource_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/resources/get")
+def get_resource(
+    database_url: str,
+    resource_name: str = None,
+    owner_name: str = None,
+    resource_id: str = None,
+    resource_type: str = None
+):
+    """
+    Retrieve a resource from the database.
+    """
+    try:
+        interface = ResourcesInterface(database_url=database_url)
+        resource = interface.get_resource(
+            resource_name=resource_name,
+            owner_name=owner_name,
+            resource_id=resource_id,
+            resource_type=resource_type
+        )
+        if not resource:
+            raise HTTPException(status_code=404, detail="Resource not found")
+
+        return {"message": "Resource retrieved successfully", "resource": resource.to_json()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/stack/push")
 def push_to_stack(database_url: str, stack: Stack, asset: Asset):
@@ -166,31 +192,6 @@ def update_plate_well(database_url: str, plate: Plate, well_id: str, pool: Pool)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/resources/get")
-def get_resource(
-    database_url: str,
-    resource_name: str = None,
-    owner_name: str = None,
-    resource_id: str = None,
-    resource_type: str = None
-):
-    """
-    Retrieve a resource from the database.
-    """
-    try:
-        interface = ResourcesInterface(database_url=database_url)
-        resource = interface.get_resource(
-            resource_name=resource_name,
-            owner_name=owner_name,
-            resource_id=resource_id,
-            resource_type=resource_type
-        )
-        if not resource:
-            raise HTTPException(status_code=404, detail="Resource not found")
-
-        return {"message": "Resource retrieved successfully", "resource": resource.to_json()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
