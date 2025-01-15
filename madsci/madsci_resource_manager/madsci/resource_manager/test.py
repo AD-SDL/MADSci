@@ -1,3 +1,4 @@
+
 from resource_client import ResourceClient
 from db_tables import Stack, Asset, Queue, Pool, Plate, Consumable
 
@@ -6,6 +7,9 @@ database_url = "postgresql://rpl:rpl@127.0.0.1:5432/resources"
 base_url = "http://localhost:8012" 
 client = ResourceClient(base_url=base_url, database_url=database_url)
 
+# message = "Hello, FastAPI!"
+# response = client.send_message(message)
+# print(response)
 # Create and add a stack
 stack = Stack(
     resource_name="stack",

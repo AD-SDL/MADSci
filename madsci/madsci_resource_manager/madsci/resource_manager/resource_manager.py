@@ -39,8 +39,6 @@ def add_resource(database_url: str, resource: dict):
     """
     try:
         # Determine the resource type
-        print(f"Received Resource: {resource}")
-
         resource_type = resource.get("resource_type")
         if not resource_type or resource_type not in RESOURCE_TYPE_MAP:
             raise ValueError(f"Unknown or missing resource_type: {resource_type}")
@@ -56,7 +54,7 @@ def add_resource(database_url: str, resource: dict):
         return {"message": "Resource added successfully", "resource_id": saved_resource.resource_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 @app.get("/resource/get")
 def get_resource(
     database_url: str,
@@ -218,7 +216,8 @@ def update_plate_well(database_url: str, plate: Plate, well_id: str, pool: Pool)
 
 if __name__ == "__main__":
     import uvicorn
-
+    print(resource_manager_definition.plugin_config.host)
+    print(resource_manager_definition.plugin_config.port)
     uvicorn.run(
         app,
         host=resource_manager_definition.plugin_config.host,

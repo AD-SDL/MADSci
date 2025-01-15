@@ -11,14 +11,14 @@ class ResourceClient:
 
     def add_resource(self, resource):
         """Add a resource."""
-        payload = {
-            "database_url": self.database_url,
-            "resource": resource.dict()
-        }
-        print(f"Payload: {payload}")  # Debugging
-        response = requests.post(f"{self.base_url}/resource/add", json=payload)
+        response = requests.post(
+            f"{self.base_url}/resource/add",
+            params={"database_url": self.database_url},
+            json=resource.dict()
+        )
         response.raise_for_status()
         return response.json()
+    
     def push_to_stack(self, stack, asset):
         """Push an asset to a stack."""
         response = requests.post(f"{self.base_url}/stack/{stack.resource_id}/push", json={
