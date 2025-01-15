@@ -15,7 +15,7 @@ from madsci.common.types.resource_types import ResourceBase
 from db_tables import Stack, Asset, Queue, Pool, Consumable, Plate, Grid
 
 
-class ResourcesInterface:
+class ResourceInterface():
     """
     Interface for managing various types of resources.
 
@@ -384,21 +384,21 @@ class ResourcesInterface:
         session.commit()
 
 if __name__ == "__main__":
-    resources_interface = ResourcesInterface()
+    resource_interface = ResourceInterface()()
     stack = Stack(
         resource_name="stack",
         resource_type="stack1",  # Make sure this matches the expected type in validation
         capacity=10,
         ownership=None
     )
-    stack = resources_interface.add_resource(stack) 
+    stack = resource_interface.add_resource(stack) 
     for i in range(5):
         asset = Asset(resource_name="Test plate"+str(i)) 
-        asset = resources_interface.add_resource(asset) 
-        resources_interface.push_to_stack(stack,asset)
-    retrieved_stack = resources_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
+        asset = resource_interface.add_resource(asset) 
+        resource_interface.push_to_stack(stack,asset)
+    retrieved_stack = resource_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
     for i in range(2):
-        n_asset = resources_interface.pop_from_stack(retrieved_stack)
+        n_asset = resource_interface.pop_from_stack(retrieved_stack)
     
     queue = Queue(
         resource_name="queue",
@@ -406,15 +406,15 @@ if __name__ == "__main__":
         capacity=10,
         ownership=None
     )
-    queue = resources_interface.add_resource(queue)
+    queue = resource_interface.add_resource(queue)
     for i in range(5):
         asset = Asset(resource_name="Test plate"+str(i)) 
-        asset = resources_interface.add_resource(asset) 
-        resources_interface.push_to_queue(queue,asset)
-    retrieved_queue = resources_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
+        asset = resource_interface.add_resource(asset) 
+        resource_interface.push_to_queue(queue,asset)
+    retrieved_queue = resource_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
     for i in range(2):
-        n_asset = resources_interface.pop_from_queue(retrieved_queue)
-    resources_interface.push_to_queue(queue,n_asset)
+        n_asset = resource_interface.pop_from_queue(retrieved_queue)
+    resource_interface.push_to_queue(queue,n_asset)
 
     consumable = Consumable(
         resource_name="Water",
@@ -424,7 +424,7 @@ if __name__ == "__main__":
         capacity=100,
     )
     # Add the ConsumableBase to the database
-    resources_interface.add_resource(consumable)
+    resource_interface.add_resource(consumable)
 
     # Create a Pool resource
     pool = Pool(
@@ -434,40 +434,40 @@ if __name__ == "__main__":
         children = {"Water":consumable}
          # Add the ConsumableBase to children
     )
-    pool = resources_interface.add_resource(pool)
+    pool = resource_interface.add_resource(pool)
     # print(pool.children["Water"])
 
     # Example operations on the pool
     print(f"Initial Pool Quantity: {pool.quantity}")
-    resources_interface.increase_pool_quantity(pool, 50.0)
+    resource_interface.increase_pool_quantity(pool, 50.0)
     print(f"After Increase: {pool.quantity}")
 
-    resources_interface.decrease_pool_quantity(pool, 20.0)
+    resource_interface.decrease_pool_quantity(pool, 20.0)
     print(f"After Decrease: {pool.quantity}")
 
-    # resources_interface.fill_pool(pool)
+    # resource_interface.fill_pool(pool)
     # print(f"After Fill: {pool.quantity}")
 
-    # resources_interface.empty_pool(pool)
+    # resource_interface.empty_pool(pool)
     # print(f"After Empty: {pool.quantity}")
     pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
-    pool1 = resources_interface.add_resource(pool1)
+    pool1 = resource_interface.add_resource(pool1)
     # Create a Plate resource with initial children
     plate = Plate(
         resource_name="Microplate1",
         resource_type="plate",
         children={"A1": pool},
     )
-    plate = resources_interface.add_resource(plate)
+    plate = resource_interface.add_resource(plate)
     print(plate.children)
     # Increase quantity in a well
-    resources_interface.increase_plate_well(plate, "A1", 30)
+    resource_interface.increase_plate_well(plate, "A1", 30)
     print(f"A1 Quantity after increase: {plate.children}")
 
     # Decrease quantity in a well
-    resources_interface.decrease_plate_well(plate, "A1", 20)
+    resource_interface.decrease_plate_well(plate, "A1", 20)
     print(f"A1 Quantity after decrease: {plate.children}")
     
-    resources_interface.update_plate_well(plate, "A2", pool1)
+    resource_interface.update_plate_well(plate, "A2", pool1)
     print(f"A2 Pool Name: {plate.children}")
 
