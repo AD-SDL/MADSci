@@ -1,33 +1,39 @@
 """Utility function for the workcell manager."""
-from madsci.common.types.workcell_types import WorkcellDefinition
-from madsci.common.types.workflow_types import Workflow, WorkflowDefinition, WorkflowStatus
-from madsci.common.types.step_types import Step
-from madsci.common.types.node_types import Node
-from redis_handler import WorkcellRedisHandler
-from typing import Optional, Any
-from fastapi import UploadFile
-import re
-import copy
-from pathlib import Path
-from datetime import datetime
+
 import shutil
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
+
+from fastapi import UploadFile
+from redis_handler import WorkcellRedisHandler
+
+from madsci.common.types.step_types import Step
+from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workflow_types import (
+    Workflow,
+    WorkflowDefinition,
+    WorkflowStatus,
+)
+
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
     """
     Validates that the nodes in the workflow.flowdef are in the workcell.modules
     """
     for node_name in [step.node for step in workflow.flowdef]:
-        if not node_name in workcell.nodes:
-             raise ValueError(f"Node {node_name} not in Workcell {workcell.name}")
+        if node_name not in workcell.nodes:
+            raise ValueError(f"Node {node_name} not in Workcell {workcell.name}")
 
-def replace_positions(workcell: WorkcellDefinition, step: Step):
-    """Allow the user to put location names instead of """
-    pass
 
-def validate_step(step: Step, state_manager: WorkcellRedisHandler) -> tuple[bool, str]:
+def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
+    """Allow the user to put location names instead of joint angle value"""
+
+
+def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool, str]:
     """Check if a step is valid based on the module's about"""
-    if step.node in state_manager.get_all_nodes():
-        node = state_manager.get_node(step.node)
+    if step.node in state_handler.get_all_nodes():
+        node = state_handler.get_node(step.node)
         info = node.info
         if info is None:
             return (
@@ -55,20 +61,18 @@ def validate_step(step: Step, state_manager: WorkcellRedisHandler) -> tuple[bool
             False,
             f"Step '{step.name}': Node {step.node} has no action '{step.action}'",
         )
-    else:
-        return (
-            False,
-            f"Step '{step.name}': Node {step.node} is not defined in workcell",
-        )
+    return (
+        False,
+        f"Step '{step.name}': Node {step.node} is not defined in workcell",
+    )
 
 
 def create_workflow(
     workflow_def: WorkflowDefinition,
     workcell: WorkcellDefinition,
-    state_manager: WorkcellRedisHandler,
+    state_handler: WorkcellRedisHandler,
     experiment_id: Optional[str] = None,
     parameters: Optional[dict[str, Any]] = None,
-    simulate: bool = False,
 ) -> Workflow:
     """Pulls the workcell and builds a list of dictionary steps to be executed
 
@@ -100,15 +104,14 @@ def create_workflow(
         {
             "label": workflow_def.name,
             "experiment_id": experiment_id,
-            "simulate": simulate,
-            "parameter_values": parameters
+            "parameter_values": parameters,
         }
     )
     wf = Workflow(**wf_dict)
     steps = []
     for step in workflow_def.flowdef:
-        replace_positions(workcell, step)
-        valid, validation_string = validate_step(step, state_manager=state_manager)
+        replace_locations(workcell, step)
+        valid, validation_string = validate_step(step, state_handler=state_handler)
         print(validation_string)
         if not valid:
             raise ValueError(validation_string)
@@ -118,13 +121,15 @@ def create_workflow(
     wf.submitted_time = datetime.now()
     return wf
 
-def save_workflow_files(working_directory: str, workflow: Workflow, files: list[UploadFile]) -> Workflow:
+
+def save_workflow_files(
+    working_directory: str, workflow: Workflow, files: list[UploadFile]
+) -> Workflow:
     """Saves the files to the workflow run directory,
     and updates the step files to point to the new location"""
 
     get_workflow_inputs_directory(
-        workflow_id=workflow.workflow_id,
-        working_directory=working_directory
+        workflow_id=workflow.workflow_id, working_directory=working_directory
     ).mkdir(parents=True, exist_ok=True)
     if files:
         for file in files:
@@ -144,40 +149,44 @@ def save_workflow_files(working_directory: str, workflow: Workflow, files: list[
                         print(f"{step_file_key}: {file_path} ({step_file_path})")
     return workflow
 
-def copy_workflow_files(working_directory: str, old_id: str, workflow: Workflow) -> Workflow:
+
+def copy_workflow_files(
+    working_directory: str, old_id: str, workflow: Workflow
+) -> Workflow:
     """Saves the files to the workflow run directory,
     and updates the step files to point to the new location"""
 
     new = get_workflow_inputs_directory(
-        workflow_id=workflow.workflow_id,
-        working_directory=working_directory
+        workflow_id=workflow.workflow_id, working_directory=working_directory
     )
     old = get_workflow_inputs_directory(
-        workflow_id=old_id,
-        working_directory=working_directory
+        workflow_id=old_id, working_directory=working_directory
     )
     shutil.copytree(old, new)
     return workflow
 
-def get_workflow_inputs_directory(workflow_id: str = None, working_directory: str = None) -> Path:
+
+def get_workflow_inputs_directory(
+    workflow_id: Optional[str] = None, working_directory: Optional[str] = None
+) -> Path:
     """returns a directory name for the workflows inputs"""
     return Path(working_directory) / "Workflows" / workflow_id / "Inputs"
 
 
-def cancel_workflow(wf: Workflow, state_manager: WorkcellRedisHandler) -> None:
+def cancel_workflow(wf: Workflow, state_handler: WorkcellRedisHandler) -> None:
     """Cancels the workflow run"""
     wf.status = WorkflowStatus.CANCELLED
-    with state_manager.wc_state_lock():
-        state_manager.set_workflow(wf)
+    with state_handler.wc_state_lock():
+        state_handler.set_workflow(wf)
     return wf
 
 
-def cancel_active_workflows(state_manager: WorkcellRedisHandler) -> None:
+def cancel_active_workflows(state_handler: WorkcellRedisHandler) -> None:
     """Cancels all currently running workflow runs"""
-    for wf in state_manager.get_all_workflows().values():
+    for wf in state_handler.get_all_workflows().values():
         if wf.status in [
             WorkflowStatus.RUNNING,
             WorkflowStatus.QUEUED,
             WorkflowStatus.IN_PROGRESS,
         ]:
-            cancel_workflow(wf, state_manager=state_manager)
+            cancel_workflow(wf, state_handler=state_handler)

@@ -44,6 +44,7 @@ class WorkcellDefinition(BaseModel, extra="allow"):
 
 class WorkcellConfig(BaseModel):
     """Configuration for a MADSci Workcell."""
+
     workcell_name: str = Field(
         default="Workcell 1",
         title="Name",
@@ -62,7 +63,7 @@ class WorkcellConfig(BaseModel):
     workcell_directory: str = Field(
         default="/.MADsci/Workcell",
         title="Workcell Directory",
-        description="Directory to save workflow files"
+        description="Directory to save workflow files",
     )
     redis_host: str = Field(
         default="localhost",
@@ -89,6 +90,11 @@ class WorkcellConfig(BaseModel):
         title="Node Update Interval",
         description="The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval",
     )
+    heartbeat_interval: float = Field(
+        default=2.0,
+        title="Heartbeat Interval",
+        description="The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval",
+    )
     auto_start: bool = Field(
         default=True,
         title="Auto Start",
@@ -107,6 +113,5 @@ class WorkcellConfig(BaseModel):
     scheduler: str = Field(
         default="schedulers.default_scheduler",
         title="scheduler",
-        description="Scheduler module in the workcell manager scheduler folder with a Scheduler class that inherits from AbstractScheduler to use"
-        
+        description="Scheduler module in the workcell manager scheduler folder with a Scheduler class that inherits from AbstractScheduler to use",
     )

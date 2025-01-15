@@ -1,9 +1,9 @@
 """MADSci Node Types."""
 
+from datetime import datetime
 from os import PathLike
 from pathlib import Path
 from typing import Any, Optional, Union
-from datetime import datetime
 
 from pydantic import Field
 from pydantic.fields import computed_field
@@ -137,12 +137,12 @@ class Node(BaseModel, arbitrary_types_allowed=True):
     state: Optional[dict[str, Any]] = Field(
         default=None,
         title="Node State",
-        description="Detailed nodes specific state information"
+        description="Detailed nodes specific state information",
     )
     reserved_by: Optional["Reservation"] = Field(
         default=None,
         title="Reserved By",
-        description="Ownership unit that is reserving this node"
+        description="Ownership unit that is reserving this node",
     )
 
 
@@ -275,11 +275,14 @@ class NodeStatus(BaseModel):
             return "; ".join(reasons)
         return "Node is ready"
 
+
 class Reservation(BaseModel):
+    """a reservation of a module"""
+
     owned_by: OwnershipInfo
-    
+
     started: datetime
-    
+
 
 class NodeSetConfigResponse(BaseModel):
     """Response from a Node Set Config Request"""

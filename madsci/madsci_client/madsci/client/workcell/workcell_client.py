@@ -1,24 +1,38 @@
-from madsci.common.types.workflow_types import Workflow, WorkflowDefinition, WorkflowStatus
-from madsci.common.exceptions import WorkflowFailedException, WorkflowCanceledException
+"""client for performing workcell actions"""
+
+import copy
+import json
+import re
+import time
+from pathlib import Path
 from typing import Any, Optional
 
-from pathlib import Path
-import re
-import copy
 import requests
-import json
-import time
-from datetime import datetime
+
+from madsci.common.exceptions import WorkflowFailedException
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.workflow_types import (
+    Workflow,
+    WorkflowDefinition,
+    WorkflowStatus,
+)
+
 
 class WorkcellClient:
     """a client for running workflows"""
-    def __init__(self, workcell_manager_url: str, working_directory: str="~/.MADsci/temp", ownership_info: Optional[OwnershipInfo] = None) -> "WorkflowClient":
+
+    def __init__(
+        self,
+        workcell_manager_url: str,
+        working_directory: str = "~/.MADsci/temp",
+        ownership_info: Optional[OwnershipInfo] = None,
+    ) -> "WorkcellClient":
         """initialize the client"""
         self.url = workcell_manager_url
         self.working_directory = Path(working_directory)
         self.ownership_info = ownership_info
-        
-    def query_workflow(self, workflow_id: str) -> Workflow:
+
+    def query_workflow(self, workflow_id: str) -> Optional[Workflow]:
         """Checks on a workflow run using the id given
 
         Parameters
@@ -34,20 +48,22 @@ class WorkcellClient:
            The JSON portion of the response from the server"""
 
         url = f"{self.url}/workflows/{workflow_id}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
 
         if response.ok:
             return Workflow(**response.json())
-        else:
-            response.raise_for_status()
+        response.raise_for_status()
+        return None
 
-    def start_workflow(self, 
-                      workflow: str, 
-                      parameters: dict, 
-                      validate_only: bool = False, 
-                      blocking: bool = True,
-                      raise_on_failed: bool = True,
-                      raise_on_cancelled: bool = True) -> Workflow:
+    def start_workflow(
+        self,
+        workflow: str,
+        parameters: dict,
+        validate_only: bool = False,
+        blocking: bool = True,
+        raise_on_failed: bool = True,
+        raise_on_cancelled: bool = True,
+    ) -> Workflow:
         """send a workflow to the workcell manager"""
         workflow = WorkflowDefinition.from_yaml(workflow)
         WorkflowDefinition.model_validate(workflow)
@@ -59,18 +75,22 @@ class WorkcellClient:
             data={
                 "workflow": workflow.model_dump_json(),
                 "parameters": json.dumps(parameters),
-                "validate_only": validate_only
-                },
+                "validate_only": validate_only,
+            },
             files={
                 ("files", (str(Path(path).name), Path.open(Path(path), "rb")))
                 for _, path in files.items()
             },
-            )
+            timeout=10,
+        )
         if not blocking:
             return Workflow(**response.json())
-        else:
-            return self.await_workflow(response.json()["workflow_id"], raise_on_cancelled=raise_on_cancelled, raise_on_failed=raise_on_failed)
-            
+        return self.await_workflow(
+            response.json()["workflow_id"],
+            raise_on_cancelled=raise_on_cancelled,
+            raise_on_failed=raise_on_failed,
+        )
+
     def _extract_files_from_workflow(
         self, workflow: WorkflowDefinition
     ) -> dict[str, Any]:
@@ -89,16 +109,27 @@ class WorkcellClient:
                         )
                     step.files[file] = Path(files[unique_filename]).name
         return files
-    def run_workflows_in_order(workflows: list[str], parameters: list[dict[str: Any]]):
+
+    def run_workflows_in_order(
+        self, workflows: list[str], parameters: list[dict[str:Any]]
+    ) -> list[Workflow]:
+        """run a list of workflows in order"""
+        wfs = []
         for i in range(len(workflows)):
-            self.start_workflow(workflows[i], parameters[i], blocking=True)
-    def run_workflow_batch(workflows: list[str], parameters: list[dict[str: Any]]):
+            wf = self.start_workflow(workflows[i], parameters[i], blocking=True)
+            wfs.append(wf)
+        return wfs
+
+    def run_workflow_batch(
+        self, workflows: list[str], parameters: list[dict[str:Any]]
+    ) -> list[Workflow]:
+        """run a batch of workflows in no particular order"""
         id_list = []
         for i in range(len(workflows)):
             response = self.start_workflow(workflows[i], parameters[i], blocking=False)
             id_list.append(response.json()["workflow_id"])
         finished = False
-        while finished == False:
+        while not finished:
             flag = True
             wfs = []
             for id in id_list:
@@ -107,29 +138,46 @@ class WorkcellClient:
                 wfs.append(wf)
             finished = flag
         return wfs
-    def retry_workflow(self, workflow_id: str, index: int = -1):
-            url = f"{self.url}/workflows/retry"
-            response = requests.post(url,
-                          params={
-                              "workflow_id": node_name,
-                              "index": index,
-                          })
-            return response.json()
-    def resubmit_workflow(self, workflow_id: str, 
-                          blocking: bool = True, 
-                          raise_on_failed: bool = True,
-                          raise_on_cancelled: bool = True):
-            url = f"{self.url}/workflows/resubmit/{workflow_id}"
-            response = requests.get(url)
-            new_wf = Workflow(**response.json())
-            if blocking:
-                return self.await_workflow(new_wf.workflow_id, raise_on_failed=raise_on_failed, raise_on_cancelled=raise_on_cancelled)
-            else:
-                return new_wf
-        
-    def await_workflow(self, workflow_id: str, 
-                      raise_on_failed: bool = True,
-                      raise_on_cancelled: bool = True):
+
+    def retry_workflow(self, workflow_id: str, index: int = -1) -> dict:
+        """rerun an exisiting wf using the same wf id"""
+        url = f"{self.url}/workflows/retry"
+        response = requests.post(
+            url,
+            params={
+                "workflow_id": workflow_id,
+                "index": index,
+            },
+            timeout=10,
+        )
+        return response.json()
+
+    def resubmit_workflow(
+        self,
+        workflow_id: str,
+        blocking: bool = True,
+        raise_on_failed: bool = True,
+        raise_on_cancelled: bool = True,
+    ) -> Workflow:
+        """resubmit an existing workflows as a new workflow with a new id"""
+        url = f"{self.url}/workflows/resubmit/{workflow_id}"
+        response = requests.get(url, timeout=10)
+        new_wf = Workflow(**response.json())
+        if blocking:
+            return self.await_workflow(
+                new_wf.workflow_id,
+                raise_on_failed=raise_on_failed,
+                raise_on_cancelled=raise_on_cancelled,
+            )
+        return new_wf
+
+    def await_workflow(
+        self,
+        workflow_id: str,
+        raise_on_failed: bool = True,
+        raise_on_cancelled: bool = True,
+    ) -> Workflow:
+        """await a workflows completion"""
         prior_status = None
         prior_index = None
         while True:
@@ -167,38 +215,50 @@ class WorkcellClient:
                 f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.step_index}: '{wf.steps[wf.step_index].name}'."
             )
         return wf
-    def get_all_nodes(self):
+
+    def get_all_nodes(self) -> dict:
+        """get all nodes in the workcell"""
         url = f"{self.url}/nodes"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         return response.json()
-    def get_node(self, node_name):
+
+    def get_node(self, node_name: str) -> dict:
+        """get a single node from a workcell"""
         url = f"{self.url}/nodes/{node_name}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         return response.json()
-    def add_node(self, node_name: str, node_url: str, node_description: str="A Node", permanent: bool=False):
-            url = f"{self.url}/nodes/add_node"
-            response = requests.post(url,
-                          params={
-                              "node_name": node_name,
-                              "node_url": node_url,
-                              "node_description": node_description,
-                              "permanent": permanent
-                          })
-            return response.json()
-    def reserve_node(self, node_name: str, duration: datetime):
-            url = f"{self.url}/nodes/reserve"
-            response = requests.post(url,
-                          params={
-                              "node_name": node_name,
-                              "duration": str(datetime)
-                              "ownership_info": self.ownership_info
-                          })
-            return response.json()
-    def get_all_workflows(self):
+
+    def add_node(
+        self,
+        node_name: str,
+        node_url: str,
+        node_description: str = "A Node",
+        permanent: bool = False,
+    ) -> dict:
+        """add a node to a workcell"""
+        url = f"{self.url}/nodes/add_node"
+        response = requests.post(
+            url,
+            params={
+                "node_name": node_name,
+                "node_url": node_url,
+                "node_description": node_description,
+                "permanent": permanent,
+            },
+            timeout=10,
+        )
+        return response.json()
+
+    def get_all_workflows(self) -> dict:
+        """get all workflows from a workcell manager"""
         url = f"{self.url}/workflows"
-        response = requests.get(url)
+        response = requests.get(url, timeout=100)
         return response.json()
-def insert_parameter_values(workflow: WorkflowDefinition, parameters: dict[str, Any]) -> Workflow:
+
+
+def insert_parameter_values(
+    workflow: WorkflowDefinition, parameters: dict[str, Any]
+) -> Workflow:
     """Replace the parameter strings in the workflow with the provided values"""
     for param in workflow.parameters:
         if param.name not in parameters:
@@ -220,7 +280,10 @@ def insert_parameter_values(workflow: WorkflowDefinition, parameters: dict[str, 
         steps.append(step)
     workflow.flowdef = steps
 
-def walk_and_replace(args: dict[str, Any], input_parameters: dict[str, Any]) -> dict[str, Any]:
+
+def walk_and_replace(
+    args: dict[str, Any], input_parameters: dict[str, Any]
+) -> dict[str, Any]:
     """Recursively walk the arguments and replace all parameters"""
     new_args = copy.deepcopy(args)
     for key, val in args.items():
@@ -283,6 +346,3 @@ def value_substitution(input_string: str, input_parameters: dict[str, Any]) -> s
                     + ", please define it in the parameters section of the Workflow Definition."
                 )
     return input_string
-
-
-    

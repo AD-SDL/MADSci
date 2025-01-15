@@ -12,18 +12,20 @@ class ActionMissingFileError(ValueError):
 class ActionNotImplementedError(ValueError):
     """An action was requested, but isn't implemented by the node"""
 
-class WorkflowFailedException(Exception):
+
+class WorkflowFailedError(Exception):
     """Raised when a workflow fails"""
 
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> "WorkflowFailedError":
         """Initializes the exception"""
         super().__init__(message)
         self.message = message
 
-class WorkflowCanceledException(Exception):
+
+class WorkflowCanceledError(Exception):
     """Raised when a workflow is canceled"""
 
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> "WorkflowCanceledError":
         """Initializes the exception"""
         super().__init__(message)
         self.message = message

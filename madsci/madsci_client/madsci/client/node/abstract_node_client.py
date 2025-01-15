@@ -1,6 +1,7 @@
 """Base node client implementation."""
 
 from typing import Any, ClassVar
+
 from pydantic import AnyUrl
 
 from madsci.common.types.action_types import (
@@ -14,12 +15,12 @@ from madsci.common.types.module_types import (
     NodeClientCapabilities,
 )
 from madsci.common.types.node_types import (
-    Node,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
 )
 from madsci.common.types.resource_types import ResourceDefinition
+
 
 class AbstractNodeClient:
     """Base Node Client, protocol agnostic, all node clients should inherit from or be based on this."""
@@ -77,6 +78,7 @@ class AbstractNodeClient:
     def get_log(self) -> list[Event]:
         """Get the log of the node."""
         raise NotImplementedError("get_log is not implemented by this client")
+
     @classmethod
     def validate_url(cls, url: AnyUrl) -> bool:
         """check if a url matches this node type"""

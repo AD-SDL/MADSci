@@ -21,4 +21,3 @@ flowdef:
       command: thingy
     comment: Get a new plate
     files: {"protocol": "/workspaces/MADSci/tests/example/protocols/protocol.txt"}
-

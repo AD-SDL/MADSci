@@ -472,12 +472,10 @@ class AbstractNode:
                 else:
                     self.logger.log_info(f"Ignoring unexpected argument {arg_name}")
             for file in action_request.files:
-                
                 if file in parameters:
                     arg_dict[file] = action_request.files[file]
                 else:
-                    #self.logger.log_info(f"Ignoring unexpected file {file}")
-                    pass
+                    self.logger.log_info(f"Ignoring unexpected file {file}")
         return arg_dict
 
     def _check_required_args(

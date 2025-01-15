@@ -3,17 +3,17 @@ StateManager for WEI
 """
 
 import warnings
-from typing import Any, Callable, Dict, Union
+from typing import Any, Callable, Union
 
 import redis
-from pottery import InefficientAccessWarning, RedisDict, Redlock, RedisList
+from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
 from pydantic import ValidationError
 
+from madsci.common.types.base_types import new_ulid_str
+from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import Workflow
-from madsci.common.types.base_types import new_ulid_str
 from madsci.workcell_manager.workcell_manager_types import WorkcellManagerDefinition
-from madsci.common.types.node_types import Node, NodeDefinition
 
 
 class WorkcellRedisHandler:
@@ -60,22 +60,22 @@ class WorkcellRedisHandler:
         return RedisDict(
             key=f"{self._workcell_prefix}:workcell", redis=self._redis_client
         )
+
     @property
     def _nodes(self) -> RedisDict:
-        return RedisDict(
-            key=f"{self._workcell_prefix}:nodes", redis=self._redis_client
-        )
+        return RedisDict(key=f"{self._workcell_prefix}:nodes", redis=self._redis_client)
+
     @property
     def _workflow_queue(self) -> RedisList:
         return RedisList(
             key=f"{self._workcell_prefix}:workflow_queue", redis=self._redis_client
         )
+
     @property
     def _workflows(self) -> RedisDict:
         return RedisDict(
             key=f"{self._workcell_prefix}:workflows", redis=self._redis_client
         )
-
 
     def wc_state_lock(self) -> Redlock:
         """
@@ -89,7 +89,7 @@ class WorkcellRedisHandler:
         )
 
     # *State Methods
-    def get_state(self) -> Dict[str, Dict[Any, Any]]:
+    def get_state(self) -> dict[str, dict[Any, Any]]:
         """
         Return a dict containing the current state of the workcell.
         """
@@ -104,7 +104,6 @@ class WorkcellRedisHandler:
             "shutdown": self.shutdown,
         }
 
-
     @property
     def error(self) -> str:
         """Latest error on the server"""
@@ -117,9 +116,7 @@ class WorkcellRedisHandler:
             self.mark_state_changed()
         return self._redis_client.set(f"{self._workcell_prefix}:error", value)
 
-    def clear_state(
-        self, clear_workflows: bool = False
-    ) -> None:
+    def clear_state(self, clear_workflows: bool = False) -> None:
         """
         Clears the state of the workcell, optionally leaving the locations state intact.
         """
@@ -191,9 +188,7 @@ class WorkcellRedisHandler:
         valid_workflows = {}
         for workflow_id, workflow in self._workflows.to_dict().items():
             try:
-                valid_workflows[str(workflow_id)] = Workflow.model_validate(
-                    workflow
-                )
+                valid_workflows[str(workflow_id)] = Workflow.model_validate(workflow)
             except ValidationError:
                 continue
         return valid_workflows
@@ -208,7 +203,7 @@ class WorkcellRedisHandler:
             wf_dump = Workflow.model_validate(wf).model_dump(mode="json")
         self._workflows[str(wf_dump["workflow_id"])] = wf_dump
         self.mark_state_changed()
-        
+
     def set_workflow_quiet(self, wf: Workflow) -> None:
         """
         Sets a workflow by ID
@@ -235,39 +230,40 @@ class WorkcellRedisHandler:
         self.set_workflow(func(self.get_workflow(workflow_id), *args, **kwargs))
 
     def get_node(self, node_name: str) -> Node:
-            """
-            Returns a node by name
-            """
-            return Node.model_validate(self._nodes[node_name])
+        """
+        Returns a node by name
+        """
+        return Node.model_validate(self._nodes[node_name])
 
-    def get_all_nodes(self) -> Dict[str, Node]:
-            """
-            Returns all nodes
-            """
-            valid_nodes = {}
-            for node_name, node in self._nodes.to_dict().items():
-                try:
-                    valid_nodes[str(node_name)] = Node.model_validate(node)
-                except ValidationError:
-                    continue
-            return valid_nodes
+    def get_all_nodes(self) -> dict[str, Node]:
+        """
+        Returns all nodes
+        """
+        valid_nodes = {}
+        for node_name, node in self._nodes.to_dict().items():
+            try:
+                valid_nodes[str(node_name)] = Node.model_validate(node)
+            except ValidationError:
+                continue
+        return valid_nodes
 
     def set_node(
-            self, node_name: str, node: Union[Node, NodeDefinition, Dict[str, Any]]
-        ) -> None:
-            """
-            Sets a node by name
-            """
-            if isinstance(node, Node):
-                node_dump = node.model_dump(mode="json")
-            elif isinstance(node, NodeDefinition):
-                node_dump = Node.model_validate(
-                    node, from_attributes=True
-                ).model_dump(mode="json")
-            else:
-                node_dump = Node.model_validate(node).model_dump(mode="json")
-            self._nodes[node_name] = node_dump
-            self.mark_state_changed()
+        self, node_name: str, node: Union[Node, NodeDefinition, dict[str, Any]]
+    ) -> None:
+        """
+        Sets a node by name
+        """
+        if isinstance(node, Node):
+            node_dump = node.model_dump(mode="json")
+        elif isinstance(node, NodeDefinition):
+            node_dump = Node.model_validate(node, from_attributes=True).model_dump(
+                mode="json"
+            )
+        else:
+            node_dump = Node.model_validate(node).model_dump(mode="json")
+        self._nodes[node_name] = node_dump
+        self.mark_state_changed()
+
     def delete_node(self, node_name: str) -> None:
         """
         Deletes a node by name
@@ -281,6 +277,4 @@ class WorkcellRedisHandler:
         """
         Updates the state of a node.
         """
-        self.set_node(
-            node_name, func(self.get_node(node_name), *args, **kwargs)
-        )
+        self.set_node(node_name, func(self.get_node(node_name), *args, **kwargs))

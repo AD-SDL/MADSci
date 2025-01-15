@@ -2,7 +2,6 @@
 
 from sqlmodel.main import Field
 
-from madsci.common.types.base_types import BaseModel
 from madsci.common.types.squid_types import ManagerDefinition
 from madsci.common.types.workcell_types import WorkcellConfig
 
@@ -20,5 +19,3 @@ class WorkcellManagerDefinition(ManagerDefinition):
         title="Plugin Configuration",
         description="The configuration for the workcell manager plugin.",
     )
-
-

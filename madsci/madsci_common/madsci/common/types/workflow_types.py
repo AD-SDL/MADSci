@@ -1,14 +1,18 @@
+"""Types for MADSci Worfklow running."""
+
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, Union
 
 from pydantic import Field, field_validator
 
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.step_types import Step
 
+
 class WorkflowStatus(str, Enum):
     """Status for a workflow run"""
+
     QUEUED = "queued"
     """Workflow run is queued, hasn't started yet"""
     RUNNING = "running"
@@ -42,6 +46,7 @@ class WorkflowParameter(BaseModel):
     default: Optional[Any] = None
     """ the default value of the parameter"""
 
+
 class WorkflowMetadata(BaseModel, extra="allow"):
     """Metadata container"""
 
@@ -52,6 +57,7 @@ class WorkflowMetadata(BaseModel, extra="allow"):
     version: Union[float, str] = ""
     """Version of the object"""
 
+
 class WorkflowDefinition(BaseModel):
     """Grand container that pulls all info of a workflow together"""
 
@@ -59,11 +65,10 @@ class WorkflowDefinition(BaseModel):
     """Name of the workflow"""
     workflow_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
-    parameters: Optional[list[WorkflowParameter]] = []
+    parameters: ClassVar[Optional[list[WorkflowParameter]]] = []
     """Inputs to the workflow"""
     flowdef: list[Step]
     """User Submitted Steps of the flow"""
-
 
     @field_validator("flowdef", mode="after")
     @classmethod
@@ -79,9 +84,9 @@ class WorkflowDefinition(BaseModel):
         return v
 
 
-
 class SchedulerMetadata(BaseModel):
     """Scheduler information"""
+
     ready_to_run: bool = False
     """whether or not the next step in the workflow is ready to run"""
     priority: int = 0
@@ -89,13 +94,14 @@ class SchedulerMetadata(BaseModel):
 
 class Workflow(WorkflowDefinition):
     """Container for a workflow run"""
+
     scheduler_metadata: SchedulerMetadata = Field(default_factory=SchedulerMetadata)
     """scheduler information for the workflow run"""
     label: Optional[str] = None
     """Label for the workflow run"""
     workflow_id: str = Field(default_factory=new_ulid_str)
     """ID of the workflow run"""
-    steps: list[Step] = []
+    steps: ClassVar[list[Step]] = []
     """WEI Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory={})
     """parameter values used inthis workflow"""
@@ -118,7 +124,6 @@ class Workflow(WorkflowDefinition):
     paused: Optional[bool] = False
     """whether or not the workflow is paused"""
 
-    
     def get_step_by_name(self, name: str) -> Step:
         """Return the step object by its name"""
         for step in self.steps:

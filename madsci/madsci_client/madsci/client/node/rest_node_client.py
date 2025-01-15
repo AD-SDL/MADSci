@@ -3,9 +3,9 @@
 import json
 from pathlib import Path
 from typing import Any, ClassVar
-from pydantic import AnyUrl
 
 import requests
+from pydantic import AnyUrl
 
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
@@ -18,7 +18,6 @@ from madsci.common.types.module_types import (
     NodeClientCapabilities,
 )
 from madsci.common.types.node_types import (
-    Node,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
@@ -57,7 +56,6 @@ class RestNodeClient(AbstractNodeClient):
                 ("files", (file, Path(path).open("rb")))  # noqa: SIM115
                 for file, path in action_request.files.items()
             ]
-           
 
             rest_response = requests.post(
                 f"{self.url}/action",
