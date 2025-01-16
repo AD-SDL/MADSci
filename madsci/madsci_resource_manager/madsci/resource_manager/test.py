@@ -19,16 +19,16 @@ stack = Stack(
 )
 stack = client.add_resource(stack)
 
-# # Add assets to the stack and push them
-# for i in range(5):
-#     asset = Asset(resource_name=f"Test plate {i}")
-#     asset = client.add_resource(asset)
-#     client.push_to_stack(stack, asset)
+# Add assets to the stack and push them
+for i in range(5):
+    asset = Asset(resource_name=f"Test plate {i}",resource_type="asset")
+    asset = client.add_resource(asset)
+    client.push_to_stack(stack, asset)
 
 # # Retrieve the stack and pop two assets
-# retrieved_stack = client.get_resource(resource_id=stack.resource_id)
-# for _ in range(2):
-#     popped_asset = client.pop_from_stack(retrieved_stack)
+retrieved_stack = client.get_resource(resource_id=stack.resource_id)
+for _ in range(2):
+    popped_asset = client.pop_from_stack(retrieved_stack)
 
 # # Create and add a queue
 # queue = Queue(

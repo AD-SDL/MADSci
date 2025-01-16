@@ -40,6 +40,7 @@ def add_resource(database_url: str, resource: dict):
     try:
         # Determine the resource type
         resource_type = resource.get("resource_type")
+        print(type(resource))
         if not resource_type or resource_type not in RESOURCE_TYPE_MAP:
             raise ValueError(f"Unknown or missing resource_type: {resource_type}")
 
@@ -51,23 +52,26 @@ def add_resource(database_url: str, resource: dict):
         interface = ResourceInterface(database_url=database_url)
         saved_resource = interface.add_resource(resource_obj)
 
-        return {"message": "Resource added successfully", "resource_id": saved_resource.resource_id}
+        return saved_resource.dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.get("/resource/get")
-def get_resource(
-    database_url: str,
-    resource_name: str = None,
-    owner_name: str = None,
-    resource_id: str = None,
-    resource_type: str = None
-):
+@app.post("/resource/get")
+def get_resource(database_url: str, data: dict):
     """
-    Retrieve a resource from the database.
+    Retrieve a resource from the database using optional parameters.
     """
     try:
+        # Extract optional parameters from the data
+        resource_name = data.get("resource_name")
+        owner_name = data.get("owner_name")
+        resource_id = data.get("resource_id")
+        resource_type = data.get("resource_type")
+
+        # Initialize the Resource Interface
         interface = ResourceInterface(database_url=database_url)
+
+        # Retrieve the resource
         resource = interface.get_resource(
             resource_name=resource_name,
             owner_name=owner_name,
@@ -77,136 +81,169 @@ def get_resource(
         if not resource:
             raise HTTPException(status_code=404, detail="Resource not found")
 
-        return {"message": "Resource retrieved successfully", "resource": resource.to_json()}
+        # Return the resource as JSON
+        return resource.dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    
 @app.post("/stack/push")
-def push_to_stack(database_url: str, stack: Stack, asset: Asset):
+def push_to_stack(database_url: str, data: dict):
     """
     Push an asset onto a stack.
     """
     try:
+        stack = Stack(**data["stack"])
+        asset = Asset(**data["asset"])
         interface = ResourceInterface(database_url=database_url)
         interface.push_to_stack(stack, asset)
         return {"message": "Asset pushed successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/stack/pop")
-def pop_from_stack(database_url: str, stack: Stack):
+def pop_from_stack(database_url: str, data: dict):
     """
     Pop an asset from a stack.
     """
     try:
+        stack = Stack(**data["stack"])
         interface = ResourceInterface(database_url=database_url)
         asset = interface.pop_from_stack(stack)
         return {"message": "Asset popped successfully", "asset": asset.to_json()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/queue/push")
-def push_to_queue(database_url: str, queue: Queue, asset: Asset):
+def push_to_queue(database_url: str, data: dict):
     """
     Push an asset onto a queue.
     """
     try:
+        queue = Queue(**data["queue"])
+        asset = Asset(**data["asset"])
         interface = ResourceInterface(database_url=database_url)
         interface.push_to_queue(queue, asset)
         return {"message": "Asset pushed successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/queue/pop")
-def pop_from_queue(database_url: str, queue: Queue):
+def pop_from_queue(database_url: str, data: dict):
     """
     Pop an asset from a queue.
     """
     try:
+        queue = Queue(**data["queue"])
         interface = ResourceInterface(database_url=database_url)
         asset = interface.pop_from_queue(queue)
         return {"message": "Asset popped successfully", "asset": asset.to_json()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/pool/increase")
-def increase_pool_quantity(database_url: str, pool: Pool, amount: float):
+def increase_pool_quantity(database_url: str, data: dict):
     """
     Increase the quantity of a pool resource.
     """
     try:
+        pool = Pool(**data["pool"])
+        amount = data["amount"]
         interface = ResourceInterface(database_url=database_url)
         interface.increase_pool_quantity(pool, amount)
         return {"message": "Pool quantity increased successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/pool/decrease")
-def decrease_pool_quantity(database_url: str, pool: Pool, amount: float):
+def decrease_pool_quantity(database_url: str, data: dict):
     """
     Decrease the quantity of a pool resource.
     """
     try:
+        pool = Pool(**data["pool"])
+        amount = data["amount"]
         interface = ResourceInterface(database_url=database_url)
         interface.decrease_pool_quantity(pool, amount)
         return {"message": "Pool quantity decreased successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/pool/empty")
-def empty_pool(database_url: str, pool: Pool):
+def empty_pool(database_url: str, data: dict):
     """
     Empty a pool resource by setting its quantity to zero.
     """
     try:
+        pool = Pool(**data["pool"])
         interface = ResourceInterface(database_url=database_url)
         interface.empty_pool(pool)
         return {"message": "Pool emptied successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/pool/fill")
-def fill_pool(database_url: str, pool: Pool):
+def fill_pool(database_url: str, data: dict):
     """
     Fill a pool resource to its maximum capacity.
     """
     try:
+        pool = Pool(**data["pool"])
         interface = ResourceInterface(database_url=database_url)
         interface.fill_pool(pool)
         return {"message": "Pool filled successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/plate/well/increase")
-def increase_plate_well(database_url: str, plate: Plate, well_id: str, quantity: float):
+
+@app.post("/plate/increase_well")
+def increase_plate_well(database_url: str, data: dict):
     """
     Increase the quantity in a specific well of a plate.
     """
     try:
+        plate = Plate(**data["plate"])
+        well_id = data["well_id"]
+        quantity = data["quantity"]
         interface = ResourceInterface(database_url=database_url)
         interface.increase_plate_well(plate, well_id, quantity)
         return {"message": "Well quantity increased successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/plate/well/decrease")
-def decrease_plate_well(database_url: str, plate: Plate, well_id: str, quantity: float):
+
+@app.post("/plate/decrease_well")
+def decrease_plate_well(database_url: str, data: dict):
     """
     Decrease the quantity in a specific well of a plate.
     """
     try:
+        plate = Plate(**data["plate"])
+        well_id = data["well_id"]
+        quantity = data["quantity"]
         interface = ResourceInterface(database_url=database_url)
         interface.decrease_plate_well(plate, well_id, quantity)
         return {"message": "Well quantity decreased successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/plate/well/update")
-def update_plate_well(database_url: str, plate: Plate, well_id: str, pool: Pool):
+
+@app.post("/plate/update_well")
+def update_plate_well(database_url: str, data: dict):
     """
     Update a specific well in a plate.
     """
     try:
+        plate = Plate(**data["plate"])
+        well_id = data["well_id"]
+        pool = Pool(**data["child"])
         interface = ResourceInterface(database_url=database_url)
         interface.update_plate_well(plate, well_id, pool)
         return {"message": "Well updated successfully"}
@@ -214,10 +251,10 @@ def update_plate_well(database_url: str, plate: Plate, well_id: str, pool: Pool)
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 if __name__ == "__main__":
     import uvicorn
-    print(resource_manager_definition.plugin_config.host)
-    print(resource_manager_definition.plugin_config.port)
+
     uvicorn.run(
         app,
         host=resource_manager_definition.plugin_config.host,
