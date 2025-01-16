@@ -36,16 +36,47 @@
 	},
 
 	"features": {
-		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
-		"ghcr.io/devcontainers/features/python:1": {},
-		"ghcr.io/guiyomh/features/just:0": {},
-		"ghcr.io/devcontainers-extra/features/act:1": {},
-		"ghcr.io/devcontainers-extra/features/actionlint:1": {},
-		"ghcr.io/devcontainers-extra/features/pdm:2": {},
-		"ghcr.io/devcontainers-extra/features/vue-cli:2": {},
-		"ghcr.io/devcontainers-extra/features/pre-commit:2": {},
-		"ghcr.io/devcontainers-extra/features/ruff:1": {},
-		"ghcr.io/devcontainers-extra/features/mongosh-homebrew:1": {}
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+			"moby": true,
+			"installDockerBuildx": true,
+			"installDockerComposeSwitch": true,
+			"version": "latest",
+			"dockerDashComposeVersion": "v2.32.3"
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"installTools": true,
+			"installJupyterlab": true,
+			"version": "3.9"
+		},
+		"ghcr.io/guiyomh/features/just:0": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/act:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/actionlint:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/pdm:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/vue-cli:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/pre-commit:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/ruff:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/mongosh-homebrew:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/nix:1": {
+			"multiUser": true,
+			"version": "latest",
+			"packages": "jless"
+		}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [8000],

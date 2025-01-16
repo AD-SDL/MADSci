@@ -1,0 +1,41 @@
+name: madsci_example_lab
+services:
+  mongodb:
+    container_name: mongodb
+    image: mongodb/mongodb-community-server:latest
+    ports:
+      - 27017:27017
+  event_manager:
+    container_name: event_manager
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    ports:
+      - 8001:8001
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python -m madsci.event_manager.event_server
+    depends_on:
+      - mongodb
+  liquidhandler:
+    container_name: liquidhandler
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/default_liquidhandler.node.yaml
+    ports:
+      - 2001:2001
+    depends_on:
+      - event_manager

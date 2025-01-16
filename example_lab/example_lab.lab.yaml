@@ -1,0 +1,23 @@
+name: ExampleLab
+lab_id: 01JFK5527MDKJ92RE7B8PX71ZM
+description: An example of a lab powered by the MADSci framework
+server_config:
+  host: 127.0.0.1
+  port: 8000
+workcells: {}
+commands:
+  start: docker compose up -d
+  logs: docker compose logs
+  stop: docker compose down
+  restart: docker compose restart
+managers:
+  event_manager:
+    name: event_manager
+    manager_id: 01JHJVMM9KYMNHR8VQQGP4AYY3
+    description: An event manager for this example MADSci Lab
+    manager_type: event_manager
+    manager_config:
+      host: 0.0.0.0
+      port: 8001
+      db_url: mongodb://mongodb:27017
+    url: http://killingtime:8001/

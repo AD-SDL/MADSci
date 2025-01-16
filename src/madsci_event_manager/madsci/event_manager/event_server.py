@@ -1,0 +1,107 @@
+"""REST Server for the MADSci Event Manager"""
+
+from typing import Optional
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.routing import APIRouter
+from madsci.client.event_client import EventClient
+from madsci.common.definition_loaders import (
+    manager_definition_loader,
+)
+from madsci.common.types.event_types import Event
+from madsci.common.types.squid_types import EventManagerDefinition, ManagerType
+from pymongo import MongoClient
+from pymongo.synchronous.collection import Collection
+from pymongo.synchronous.database import Database
+
+
+class EventManagerServer:
+    """A REST server for managing MADSci events across a lab."""
+
+    event_manager_definition: EventManagerDefinition
+    db_client: MongoClient
+    app = FastAPI()
+    logger = EventClient(name=__name__)
+    events: Collection
+
+    def __init__(
+        self,
+        event_manager_definition: Optional[EventManagerDefinition] = None,
+        db_connection: Optional[Database] = None,
+    ) -> None:
+        """Initialize the Event Manager Server."""
+        if event_manager_definition is not None:
+            self.event_manager_definition = event_manager_definition
+        else:
+            manager_definitions = manager_definition_loader()
+            for manager in manager_definitions:
+                if manager.manager_type == ManagerType.EVENT_MANAGER:
+                    self.event_manager_definition = manager
+            if self.event_manager_definition is None:
+                raise ValueError(
+                    "No event manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
+                )
+
+        # * Logger
+        self.logger = EventClient(name=event_manager_definition.name)
+        self.logger.log_info(event_manager_definition)
+
+        # * DB Config
+        if db_connection is not None:
+            self.events_db = db_connection
+        else:
+            self.db_client = MongoClient(
+                self.event_manager_definition.manager_config.db_url
+            )
+            self.events_db = self.db_client["madsci_events"]
+        self.events = self.events_db["events"]
+        self.events.create_index("event_id", unique=True, background=True)
+
+        # * REST Server Config
+        self._configure_routes()
+
+    async def root(self) -> EventManagerDefinition:
+        """Return the Event Manager Definition"""
+        return self.event_manager_definition
+
+    async def get_event(self, event_id: str) -> Event:
+        """Look up an event by event_id"""
+        return self.events.find_one({"event_id": event_id})
+
+    async def get_events(self, number: int = 100, level: int = 0) -> dict[str, Event]:
+        """Get the latest events"""
+        event_list = (
+            self.events.find({"log_level": {"$gte": level}})
+            .sort("event_timestamp", -1)
+            .limit(number)
+            .to_list()
+        )
+        return {event["event_id"]: event for event in event_list}
+
+    async def create_event(self, event: Event) -> Event:
+        """Create a new event."""
+        self.events.insert_one(event.model_dump(mode="json"))
+        return event
+
+    def start_server(self) -> None:
+        """Start the server."""
+        uvicorn.run(
+            self.app,
+            host=self.event_manager_definition.manager_config.host,
+            port=self.event_manager_definition.manager_config.port,
+        )
+
+    def _configure_routes(self) -> None:
+        self.router = APIRouter()
+        self.router.add_api_route("/", self.root, methods=["GET"])
+        self.router.add_api_route("/event/{event_id}", self.get_event, methods=["GET"])
+        self.router.add_api_route("/event", self.get_events, methods=["GET"])
+        self.router.add_api_route("/events", self.get_events, methods=["GET"])
+        self.router.add_api_route("/event", self.create_event, methods=["POST"])
+        self.app.include_router(self.router)
+
+
+if __name__ == "__main__":
+    server = EventManagerServer()
+    server.start_server()
