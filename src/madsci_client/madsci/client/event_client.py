@@ -160,4 +160,4 @@ class EventClient:
         )
 
 
-default_logger = EventClient(name="MADSci_Default_Logger", log_level=logging.INFO)
+default_logger = EventClient(name="madsci_default_log", log_level=logging.INFO)

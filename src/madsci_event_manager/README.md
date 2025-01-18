@@ -6,7 +6,7 @@ Handles distributed logging and events throughout a MADSci-powered Lab.
 
 ## Manager
 
-Run the following in your MADSci lab directory:
+To create and run a new MADSci Event Manager, do the following in your MADSci lab directory:
 
 ```bash
 # Create an Event Manager Definition
@@ -15,7 +15,9 @@ madsci manager add --type event_manager
 python -m madsci.event_manager.event_server
 ```
 
-You should see a REST server started on the configured host and port. Navigate in your browser to the URL you configured (default: `http://localhost:8001`) to see if it's working.
+You should see a REST server started on the configured host and port. Navigate in your browser to the URL you configured (default: `http://localhost:8001/`) to see if it's working.
+
+You can see up-to-date documentation on the endpoints provided by your event manager, and try them out, via the swagger page served at `http://your-event-manager-url-here/docs`.
 
 ## Client
 

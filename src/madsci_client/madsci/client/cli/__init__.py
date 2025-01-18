@@ -2,6 +2,7 @@
 
 import click
 from madsci.client.cli.lab_cli import lab
+from madsci.client.cli.manager_cli import manager
 from madsci.client.cli.module_cli import module
 from madsci.client.cli.node_cli import node
 from madsci.client.cli.resources_cli import resource
@@ -35,6 +36,7 @@ root_cli.add_command(workcell)
 root_cli.add_command(module)
 root_cli.add_command(node)
 root_cli.add_command(resource)
+root_cli.add_command(manager)
 
 if __name__ == "__main__":
     tui(root_cli, auto_envvar_prefix="MADSCI_CLI_")

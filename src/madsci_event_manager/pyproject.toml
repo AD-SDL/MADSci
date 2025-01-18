@@ -12,7 +12,7 @@ requires-python = ">=3.9.1"
 readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
-#  "madsci.common[server]"
+  "madsci.common[server]"
 ]
 
 [project.urls]
@@ -37,5 +37,5 @@ build-backend = "pdm.backend"
 source = "scm"
 fallback_version = "0.0.0"
 
-[dependency-groups]
-dev = ["-e madsci-common @ file:///${PROJECT_ROOT}/../madsci_common"]
+#[dependency-groups]
+#dev = ["-e madsci-common @ file:///${PROJECT_ROOT}/../madsci_common"]
