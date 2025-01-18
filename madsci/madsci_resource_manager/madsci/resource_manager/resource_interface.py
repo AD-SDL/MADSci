@@ -112,7 +112,11 @@ class ResourceInterface():
         # Map resource type names to their respective SQLModel classes
         resource_type_map = {
             "stack": Stack,
+            "asset": Asset,
             "queue": Queue,
+            "pool": Pool,
+            "plate": Plate,
+            "consumable": Consumable,
         }
 
         with self.session as session:
@@ -245,15 +249,18 @@ class ResourceInterface():
 
         Returns:
             Asset: The popped asset.
+            updated_stack: updated stack resource
+
         """
         with self.session as session:
             stack = session.merge(stack)
             asset = stack.pop(session)
-            session.commit()
-            session.refresh(stack)
+            # session.commit()
+            # session.refresh(stack)
 
             if asset:
-                return asset
+                updated_stack = session.query(Stack).filter_by(resource_id=stack.resource_id).first()
+                return asset, updated_stack            
             else:
                 raise ValueError("The stack is empty or the asset does not exist.")
 
@@ -266,7 +273,6 @@ class ResourceInterface():
             asset (Asset): The asset to push onto the queue.
         """
         with self.session as session:
-            # Check if the stack exists in the database
             existing_queue = session.query(Queue).filter_by(resource_id=queue.resource_id).first()
 
             if not existing_queue:
@@ -277,10 +283,9 @@ class ResourceInterface():
             queue = existing_queue
             asset = session.merge(asset)
             queue.push(asset, session)
-            session.commit()
             session.refresh(queue)
 
-    def pop_from_queue(self, queue: Queue) -> Asset:
+    def pop_from_queue(self, queue: Queue) -> tuple:
         """
         Pop an asset from a queue resource.
 
@@ -289,6 +294,7 @@ class ResourceInterface():
 
         Returns:
             Asset: The popped asset.
+            updated_queue: updated queue resource
         """
         with self.session as session:
             queue = session.merge(queue)
@@ -297,9 +303,10 @@ class ResourceInterface():
             session.refresh(queue)
 
             if asset:
-                return asset
+                updated_queue = session.query(Queue).filter_by(resource_id=queue.resource_id).first()
+                return asset, updated_queue        
             else:
-                raise ValueError("The stack is empty or the asset does not exist.")
+                raise ValueError("The queue is empty or the asset does not exist.")
 
     def increase_plate_well(self, plate: Plate, well_id: str, quantity: float) -> None:
         """
@@ -398,8 +405,9 @@ if __name__ == "__main__":
         resource_interface.push_to_stack(stack,asset)
     retrieved_stack = resource_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
     for i in range(2):
-        n_asset = resource_interface.pop_from_stack(retrieved_stack)
-        print(n_asset)
+        n_asset,retrieved_stack = resource_interface.pop_from_stack(retrieved_stack)
+        print(f"Popped asset: {n_asset}")
+        
     # queue = Queue(
     #     resource_name="queue",
     #     resource_type="queue",  # Make sure this matches the expected type in validation
