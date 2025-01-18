@@ -7,14 +7,7 @@ from db_tables import Stack, Queue, Pool, Plate, Asset, Consumable
 
 # --- Resource Client ---
 # Resource type map for dynamic reconstruction
-RESOURCE_TYPE_MAP = {
-    "stack": Stack,
-    "asset": Asset,
-    "queue": Queue,
-    "pool": Pool,
-    "plate": Plate,
-    "consumable": Consumable,
-}
+
 class ResourceClient:
     def __init__(self, base_url: str, database_url: str):
         self.base_url = base_url

@@ -44,7 +44,6 @@ async def add_resource(data: UploadFile):
         payload = pickle.loads(await data.read())
         database_url = payload["database_url"]
         resource = pickle.loads(payload["resource"])  # Deserialize the resource object
-
         # Add the resource to the database
         interface = ResourceInterface(database_url=database_url)
         saved_resource = interface.add_resource(resource)

@@ -420,25 +420,25 @@ if __name__ == "__main__":
     #     n_asset = resource_interface.pop_from_queue(retrieved_queue)
     # resource_interface.push_to_queue(queue,n_asset)
 
-    # consumable = Consumable(
-    #     resource_name="Water",
-    #     resource_type="consumable",
-    #     quantity=50.0,
-    #     ownership=None,
-    #     capacity=100,
-    # )
-    # # Add the ConsumableBase to the database
-    # resource_interface.add_resource(consumable)
+    consumable = Consumable(
+        resource_name="Water",
+        resource_type="consumable",
+        quantity=50.0,
+        ownership=None,
+        capacity=100,
+    )
+    # Add the ConsumableBase to the database
+    resource_interface.add_resource(consumable)
 
     # # Create a Pool resource
-    # pool = Pool(
-    #     resource_name="Vial_1",
-    #     resource_type="pool",
-    #     capacity=500.0,
-    #     children = {"Water":consumable}
-    #      # Add the ConsumableBase to children
-    # )
-    # pool = resource_interface.add_resource(pool)
+    pool = Pool(
+        resource_name="Vial_1",
+        resource_type="pool",
+        capacity=500.0,
+        children = {"Water":consumable}
+         # Add the ConsumableBase to children
+    )
+    pool = resource_interface.add_resource(pool)
     # # print(pool.children["Water"])
 
     # # Example operations on the pool
