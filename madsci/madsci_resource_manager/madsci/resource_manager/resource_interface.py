@@ -255,8 +255,6 @@ class ResourceInterface():
         with self.session as session:
             stack = session.merge(stack)
             asset = stack.pop(session)
-            # session.commit()
-            # session.refresh(stack)
 
             if asset:
                 updated_stack = session.query(Stack).filter_by(resource_id=stack.resource_id).first()
@@ -299,8 +297,6 @@ class ResourceInterface():
         with self.session as session:
             queue = session.merge(queue)
             asset = queue.pop(session)
-            session.commit()
-            session.refresh(queue)
 
             if asset:
                 updated_queue = session.query(Queue).filter_by(resource_id=queue.resource_id).first()

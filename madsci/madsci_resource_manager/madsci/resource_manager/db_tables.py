@@ -376,16 +376,22 @@ class Queue(QueueBase, table = True):
 
         # Remove resource_id from children and flag it as modified
         self.children.pop(0)
+
+        # Notify SQLAlchemy that the children field has been modified
         flag_modified(self, "children")
+
+        self.quantity = len(contents) - 1
 
         # Update the parent of the asset
         first_asset.parent = None
         session.add(first_asset)  # Persist the updated asset
+        session.add(self)  
 
-        # Update and save the queue quantity
-        self.quantity = len(contents) - 1
-        session.add(self)
+        # Commit the transaction
         session.commit()
+
+        session.refresh(first_asset)
+        session.refresh(self)
 
         return first_asset
 

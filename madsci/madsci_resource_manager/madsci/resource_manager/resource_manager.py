@@ -122,13 +122,20 @@ async def pop_from_stack(data: UploadFile):
         stack = pickle.loads(payload["stack"])
 
         interface = ResourceInterface(database_url=database_url)
-        asset = interface.pop_from_stack(stack)
-        print(asset)
-        return Response(content=pickle.dumps(asset), media_type="application/octet-stream")  # Serialize and send
+        popped_asset, updated_stack = interface.pop_from_stack(stack)
+        # Test serialization
+        pickle.dumps(popped_asset)  # Will raise error if not serializable
+        pickle.dumps(updated_stack)  # Will raise error if not serializable
+
+        # Return both the popped asset and updated stack
+        response = {
+            "asset": popped_asset,         
+            "updated_stack": updated_stack, 
+        }
+        return Response(content=pickle.dumps(response), media_type="application/octet-stream")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
+    
 @app.post("/queue/push")
 async def push_to_queue(data: UploadFile):
     """
@@ -159,12 +166,16 @@ async def pop_from_queue(data: UploadFile):
         queue = pickle.loads(payload["queue"])
 
         interface = ResourceInterface(database_url=database_url)
-        asset = interface.pop_from_queue(queue)
+        popped_asset, updated_queue = interface.pop_from_queue(queue)
 
-        return Response(content=pickle.dumps(asset), media_type="application/octet-stream")  # Serialize and send
+        # Return both the popped asset and updated queue
+        response = {
+            "asset": popped_asset,  # Serialize the popped asset
+            "updated_queue": updated_queue,  # Serialize the updated queue
+        }
+        return Response(content=pickle.dumps(response), media_type="application/octet-stream")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/pool/increase")
 async def increase_pool_quantity(data: UploadFile):

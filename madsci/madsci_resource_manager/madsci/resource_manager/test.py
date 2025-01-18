@@ -27,9 +27,8 @@ for i in range(5):
 
 # # # Retrieve the stack and pop two assets
 retrieved_stack = client.get_resource(resource_id=stack.resource_id)
-print(retrieved_stack)
 for _ in range(2):
-    popped_asset = client.pop_from_stack(retrieved_stack)
+    popped_asset, retrieved_stack = client.pop_from_stack(retrieved_stack)
     print(popped_asset)
 
 # # Create and add a queue

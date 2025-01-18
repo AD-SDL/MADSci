@@ -100,8 +100,8 @@ class ResourceClient:
             files={"data": pickle.dumps(data)}
         )
         response.raise_for_status()
-        print(response)
-        return pickle.loads(response.content)
+        result = pickle.loads(response.content)  # Deserialize the response
+        return result["asset"], result["updated_stack"]  # Return asset and stack
 
     def push_to_queue(self, queue, asset):
         """Push an asset to a queue."""
@@ -128,7 +128,8 @@ class ResourceClient:
             files={"data": pickle.dumps(data)}
         )
         response.raise_for_status()
-        return pickle.loads(response.content)
+        result = pickle.loads(response.content)  # Deserialize the response
+        return result["asset"], result["updated_queue"]  # Return asset and queue
 
     def increase_pool_quantity(self, pool, amount: float):
         """Increase the quantity of a pool resource."""
