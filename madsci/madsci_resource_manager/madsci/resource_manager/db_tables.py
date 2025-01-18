@@ -1,4 +1,5 @@
 from typing import List
+from copy import deepcopy
 
 from sqlalchemy import (
     JSON,
@@ -127,14 +128,12 @@ class Allocation(SQLModel, table=True):
         """
         # Fetch the allocation
         allocation = session.query(Allocation).filter_by(resource_id=resource_id).first()
-
         if not allocation:
             raise ValueError(f"Resource {resource_id} is not allocated to any parent.")
 
         # Delete the allocation
         session.delete(allocation)
         session.commit()
-
 
 class Consumable(ConsumableBase, table=True):
     """
@@ -244,20 +243,28 @@ class Stack(StackBase, table=True):
             session=session,
         )
 
-        # Remove resource_id from children and flag it as modified
+        # Remove resource_id from children
         self.children.pop()
+
+        # Notify SQLAlchemy that the children field has been modified
         flag_modified(self, "children")
+
+        # Update the stack quantity
+        self.quantity = len(contents) - 1
+
         # Update the parent of the asset
         last_asset.parent = None
         session.add(last_asset)  # Persist the updated asset
+        session.add(self)  # Update the stack
 
-        # Update and save the stack quantity
-        self.quantity = len(contents) - 1
-        session.add(self)
+        # Commit the transaction
         session.commit()
 
-        return last_asset
+        # Refresh the queried asset and stack to reload their states
+        session.refresh(last_asset)
+        session.refresh(self)
 
+        return last_asset
 class Queue(QueueBase, table = True): 
     """
     Base class for queue resources with methods to push and pop assets.
