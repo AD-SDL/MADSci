@@ -763,7 +763,7 @@ class VoxelGridBase(GridBase):
 
 class StackBase(ContainerBase,table=False):
     """Base class for all MADSci Stacks."""
-    children: Optional[list[ResourceBase]] = Field(
+    children: Optional[list[str]] = Field(
         title="Children",
         description="The children of the container.",
         default_factory=list,
