@@ -397,9 +397,9 @@ if __name__ == "__main__":
         asset = resource_interface.add_resource(asset) 
         resource_interface.push_to_stack(stack,asset)
     retrieved_stack = resource_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
-    # for i in range(2):
-    #     n_asset = resource_interface.pop_from_stack(retrieved_stack)
-    
+    for i in range(2):
+        n_asset = resource_interface.pop_from_stack(retrieved_stack)
+        print(n_asset)
     # queue = Queue(
     #     resource_name="queue",
     #     resource_type="queue",  # Make sure this matches the expected type in validation
