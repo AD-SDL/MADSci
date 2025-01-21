@@ -14,7 +14,9 @@
 	"customizations": {
 		"vscode": {
 			"settings": {
-				"python.defaultInterpreterPath": "/workspaces/MADSci/.venv/bin/python"
+				"python.defaultInterpreterPath": "/workspaces/MADSci/.venv/bin/python",
+				"python.terminal.activateEnvInCurrentTerminal": true
+
 			},
 			"extensions": [
 				"ms-python.python",

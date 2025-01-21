@@ -77,7 +77,7 @@ def find_manager(name: Optional[str], path: Optional[str]) -> ManagerContext:
 @click.option("--path", "-p", type=str, help="The path to the manager definition file.")
 @click.pass_context
 def manager(ctx: Context, name: Optional[str], path: Optional[str]) -> None:
-    """Manage managers."""
+    """Manage lab system managers."""
     ctx.obj = find_manager(name, path)
     ctx.obj.quiet = ctx.parent.params.get("quiet")
 
@@ -181,8 +181,8 @@ def delete(ctx: ManagerContext, yes: bool) -> None:
     if ctx.manager_def and ctx.path:
         console.print(f"Deleting manager: {ctx.manager_def.name} ({ctx.path})")
         if yes or ctx.quiet or prompt_yes_no("Are you sure?"):
-            if ctx.obj.lab_def:
-                del ctx.obj.lab_def.managers[ctx.manager_def.name]
+            if ctx.lab_def and ctx.lab_def.managers.get(ctx.manager_def.name):
+                del ctx.lab_def.managers[ctx.manager_def.name]
                 save_model(
                     ctx.obj.path, ctx.obj.lab_def, overwrite_check=not ctx.obj.quiet
                 )

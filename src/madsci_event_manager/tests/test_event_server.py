@@ -78,3 +78,27 @@ def test_get_events(db_connection: Database) -> None:
         assert event.event_data["test"] in range(5, 10)
         assert previous_timestamp >= event.event_timestamp.timestamp()
         previous_timestamp = event.event_timestamp.timestamp()
+
+
+def test_query_events(db_connection: Database) -> None:
+    """
+    Test querying events based on a selector.
+    """
+    event_manager_server = EventManagerServer(
+        event_manager_definition=event_manager_def, db_connection=db_connection
+    )
+    event_manager_server._configure_routes()
+    test_client = TestClient(event_manager_server.app)
+    for i in range(10, 20):
+        test_event = Event(
+            event_type=EventType.TEST,
+            event_data={"test": i},
+        )
+        test_client.post("/event", json=test_event.model_dump(mode="json"))
+    test_val = 10
+    selector = {"event_data.test": {"$gte": test_val}}
+    result = test_client.post("/events/query", json=selector).json()
+    assert len(result) == test_val
+    for _, value in result.items():
+        event = Event.model_validate(value)
+        assert event.event_data["test"] >= test_val

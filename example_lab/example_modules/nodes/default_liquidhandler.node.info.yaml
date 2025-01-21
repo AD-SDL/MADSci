@@ -45,7 +45,7 @@ config:
       event_server:
         name: event_server
         description: The URL of the event manager.
-        default: http://event_manager:8001
+        default: http://localhost:8001
         required: false
       log_level:
         name: log_level

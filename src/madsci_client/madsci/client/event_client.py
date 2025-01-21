@@ -88,6 +88,22 @@ class EventClient:
                 break
         return selected_events
 
+    def query_events(self, selector: dict) -> dict[str, Event]:
+        """Query the event server for events based on a selector. Requires an event server be configured."""
+        events = OrderedDict()
+        if self.event_server:
+            response = requests.get(
+                self.event_server + "/events",
+                timeout=10,
+                params={"selector": selector},
+            )
+            if not response.ok:
+                response.raise_for_status()
+            for key, value in response.json().items():
+                events[key] = Event.model_validate(value)
+            return dict(events)
+        raise ValueError("No event server configured, cannot query events.")
+
     def log(self, event: Union[Event, Any], level: Optional[int] = None) -> None:
         """Log an event."""
 

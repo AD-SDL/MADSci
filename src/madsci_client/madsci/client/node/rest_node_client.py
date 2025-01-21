@@ -29,6 +29,7 @@ class RestNodeClient(AbstractNodeClient):
     """The protocols supported by this client."""
 
     supported_capabilities: NodeClientCapabilities = NodeClientCapabilities(
+        # *Supported capabilities
         get_info=True,
         get_state=True,
         get_status=True,
@@ -38,6 +39,8 @@ class RestNodeClient(AbstractNodeClient):
         action_files=True,
         send_admin_commands=True,
         set_config=True,
+        get_log=True,
+        # *Unsupported Capabilities
         get_resources=False,
     )
 

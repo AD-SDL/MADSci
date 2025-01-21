@@ -1,9 +1,10 @@
 """REST Server for the MADSci Event Manager"""
 
-from typing import Optional
+from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.params import Body
 from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient
 from madsci.common.definition_loaders import (
@@ -19,7 +20,7 @@ from pymongo.synchronous.database import Database
 class EventManagerServer:
     """A REST server for managing MADSci events across a lab."""
 
-    event_manager_definition: EventManagerDefinition
+    event_manager_definition: Optional[EventManagerDefinition] = None
     db_client: MongoClient
     app = FastAPI()
     logger = EventClient(name=__name__)
@@ -38,14 +39,14 @@ class EventManagerServer:
             for manager in manager_definitions:
                 if manager.manager_type == ManagerType.EVENT_MANAGER:
                     self.event_manager_definition = manager
-            if self.event_manager_definition is None:
-                raise ValueError(
-                    "No event manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
-                )
+        if self.event_manager_definition is None:
+            raise ValueError(
+                "No event manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
+            )
 
         # * Logger
-        self.logger = EventClient(name=event_manager_definition.name)
-        self.logger.log_info(event_manager_definition)
+        self.logger = EventClient(name=self.event_manager_definition.name)
+        self.logger.log_info(self.event_manager_definition)
 
         # * DB Config
         if db_connection is not None:
@@ -65,6 +66,11 @@ class EventManagerServer:
         """Return the Event Manager Definition"""
         return self.event_manager_definition
 
+    async def create_event(self, event: Event) -> Event:
+        """Create a new event."""
+        self.events.insert_one(event.model_dump(mode="json"))
+        return event
+
     async def get_event(self, event_id: str) -> Event:
         """Look up an event by event_id"""
         return self.events.find_one({"event_id": event_id})
@@ -79,10 +85,10 @@ class EventManagerServer:
         )
         return {event["event_id"]: event for event in event_list}
 
-    async def create_event(self, event: Event) -> Event:
-        """Create a new event."""
-        self.events.insert_one(event.model_dump(mode="json"))
-        return event
+    async def query_events(self, selector: Any = Body()) -> dict[str, Event]:  # noqa: B008
+        """Query events based on a selector. Note: this is a raw query, so be careful."""
+        event_list = self.events.find(selector).to_list()
+        return {event["event_id"]: event for event in event_list}
 
     def start_server(self) -> None:
         """Start the server."""
@@ -99,6 +105,8 @@ class EventManagerServer:
         self.router.add_api_route("/event", self.get_events, methods=["GET"])
         self.router.add_api_route("/events", self.get_events, methods=["GET"])
         self.router.add_api_route("/event", self.create_event, methods=["POST"])
+        self.router.add_api_route("/events/query", self.query_events, methods=["POST"])
+        self.router.add_api_route("/event/query", self.query_events, methods=["POST"])
         self.app.include_router(self.router)
 
 

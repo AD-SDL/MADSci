@@ -168,7 +168,7 @@ def parse_args_to_config(
 def manager_definition_loader(
     model: type[BaseModel] = ManagerDefinition,
     definition_file_pattern: str = "*.*manager.yaml",
-) -> ManagerDefinition:
+) -> list[ManagerDefinition]:
     """Loads all Manager Definitions available in the current context"""
 
     # * Load from any standalone manager definition files

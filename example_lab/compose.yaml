@@ -14,28 +14,26 @@ services:
     environment:
       - USER_ID=1000
       - GROUP_ID=1000
-    ports:
-      - 8001:8001
+    network_mode: host
     volumes:
       - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
       - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
     command: python -m madsci.event_manager.event_server
     depends_on:
       - mongodb
-  liquidhandler:
-    container_name: liquidhandler
-    image: madsci:latest
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    environment:
-      - USER_ID=1000
-      - GROUP_ID=1000
-    volumes:
-      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
-      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
-    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/default_liquidhandler.node.yaml
-    ports:
-      - 2001:2001
-    depends_on:
-      - event_manager
+  # liquidhandler:
+  #   container_name: liquidhandler
+  #   image: madsci:latest
+  #   build:
+  #     context: ..
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     - USER_ID=1000
+  #     - GROUP_ID=1000
+  #   volumes:
+  #     - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+  #     - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+  #   command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/default_liquidhandler.node.yaml
+  #   network_mode: host
+  #   depends_on:
+  #     - event_manager

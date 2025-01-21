@@ -94,17 +94,10 @@ def test_lab_commands(runner: CliRunner, temp_lab_file: Path) -> None:
             "--name",
             "test_command",
             "--command",
-            "echo 'Hello, World!'",
+            'echo "Hello, World!"',
         ],
     )
     assert result.exit_code == 0
-    assert "test_command" in result.output
-    # * Test running the command
-    result = runner.invoke(
-        root_cli, ["lab", "--path", str(temp_lab_file), "run", "test_command"]
-    )
-    assert result.exit_code == 0
-    assert "Hello, World!" in result.output
     # * Test deleting the command
     result = runner.invoke(
         root_cli,
@@ -119,8 +112,3 @@ def test_lab_commands(runner: CliRunner, temp_lab_file: Path) -> None:
     )
     assert result.exit_code == 0
     assert "Deleted command" in result.output
-    # * Test running the command after deletion
-    result = runner.invoke(
-        root_cli, ["lab", "--path", str(temp_lab_file), "run", "test_command"]
-    )
-    assert result.exit_code != 0

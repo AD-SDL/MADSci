@@ -19,5 +19,5 @@ managers:
     manager_config:
       host: 0.0.0.0
       port: 8001
-      db_url: mongodb://mongodb:27017
+      db_url: mongodb://localhost:27017
     url: http://killingtime:8001/
