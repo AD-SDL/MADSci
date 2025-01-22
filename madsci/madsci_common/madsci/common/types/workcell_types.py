@@ -113,5 +113,5 @@ class WorkcellConfig(BaseModel):
     scheduler: str = Field(
         default="madsci.workcell_manager.schedulers.default_scheduler",
         title="scheduler",
-        description="Scheduler module in the workcell manager scheduler folder with a Scheduler class that inherits from AbstractScheduler to use",
+        description="Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use",
     )
