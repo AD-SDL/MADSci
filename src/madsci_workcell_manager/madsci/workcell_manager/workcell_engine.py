@@ -8,16 +8,21 @@ import traceback
 from datetime import datetime
 from typing import Optional
 
+from madsci.client.event_client import default_logger
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.common.types.action_types import ActionRequest, ActionResult
 from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import WorkflowStatus
 from madsci.common.utils import threaded_daemon
-from redis_handler import WorkcellRedisHandler
-from workcell_manager_types import WorkcellManagerDefinition
-from workcell_utils import find_node_client, initialize_workcell, update_active_nodes
-from workflow_utils import cancel_active_workflows
+from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from madsci.workcell_manager.workcell_manager_types import WorkcellManagerDefinition
+from madsci.workcell_manager.workcell_utils import (
+    find_node_client,
+    initialize_workcell,
+    update_active_nodes,
+)
+from madsci.workcell_manager.workflow_utils import cancel_active_workflows
 
 
 class Engine:
@@ -46,7 +51,7 @@ class Engine:
             initialize_workcell(state_handler)
         time.sleep(workcell_manager_definition.plugin_config.cold_start_delay)
 
-        print("Engine initialized, waiting for workflows...")
+        default_logger.log_info("Engine initialized, waiting for workflows...")
         # TODO send event
 
     def spin(self) -> None:
@@ -65,7 +70,7 @@ class Engine:
                     > self.definition.plugin_config.heartbeat_interval
                 ):
                     heartbeat = time.time()
-                    print(f"Heartbeat: {time.time()}")
+                    default_logger.log_info(f"Heartbeat: {time.time()}")
                 if (
                     time.time() - node_tick
                     > self.definition.plugin_config.node_update_interval
@@ -84,7 +89,7 @@ class Engine:
                         scheduler_tick = time.time()
             except Exception:
                 traceback.print_exc()
-                print(
+                default_logger.log_info(
                     f"Error in engine loop, waiting {self.definition.plugin_config.node_update_interval} seconds before trying again."
                 )
                 time.sleep(self.definition.plugin_config.node_update_interval)
@@ -149,7 +154,7 @@ class Engine:
             )
             response = client.send_action(request)
         except Exception:
-            print("request had exception")
+            default_logger.log_info("request had exception")
         finally:
             response = self.query_action_result(node, client, request, response)
         if response is None:

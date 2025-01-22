@@ -188,14 +188,14 @@ class WorkcellClient:
                     step_name = wf.steps[step_index].name
                 else:
                     step_name = "Workflow End"
-                print()
-                print(
-                    f"{wf.name} [{step_index}]: {step_name} ({wf.status})",
+                # TODO: Improve progress reporting
+                print(  # noqa: T201
+                    f"\n{wf.name} [{step_index}]: {step_name} ({wf.status})",
                     end="",
                     flush=True,
                 )
             else:
-                print(".", end="", flush=True)
+                print(".", end="", flush=True)  # noqa: T201
             time.sleep(1)
             if wf.status in [
                 WorkflowStatus.COMPLETED,

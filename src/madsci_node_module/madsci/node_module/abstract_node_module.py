@@ -7,7 +7,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional, Union, get_type_hints
 
-from madsci.client.event_client import EventClient
+from madsci.client.event_client import EventClient, default_logger
 from madsci.common.definition_loaders import (
     node_definition_loader,
 )
@@ -479,12 +479,14 @@ class AbstractNode:
                 if arg_name in parameters:
                     arg_dict[arg_name] = arg_value
                 else:
-                    print(f"Ignoring unexpected argument {arg_name}")
+                    default_logger.log_warning(
+                        f"Ignoring unexpected argument {arg_name}"
+                    )
             for file in action_request.files:
                 if file in parameters:
                     arg_dict[file] = action_request.files[file]
                 else:
-                    print(f"Ignoring unexpected file {file}")
+                    default_logger.log_warning(f"Ignoring unexpected file {file}")
         return arg_dict
 
     def _check_required_args(

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import UploadFile
+from madsci.client.event_client import default_logger
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -111,7 +112,7 @@ def create_workflow(
     for step in workflow_def.flowdef:
         replace_locations(workcell, step)
         valid, validation_string = validate_step(step, state_handler=state_handler)
-        print(validation_string)
+        default_logger.log_info(validation_string)
         if not valid:
             raise ValueError(validation_string)
         steps.append(step)
@@ -145,7 +146,9 @@ def save_workflow_files(
                 for step_file_key, step_file_path in step.files.items():
                     if step_file_path == file.filename:
                         step.files[step_file_key] = str(file_path)
-                        print(f"{step_file_key}: {file_path} ({step_file_path})")
+                        default_logger.log_info(
+                            f"{step_file_key}: {file_path} ({step_file_path})"
+                        )
     return workflow
 
 
