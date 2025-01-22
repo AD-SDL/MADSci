@@ -52,25 +52,25 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/info")
 def info() -> WorkcellManagerDefinition:
-    """Get information about the resource manager."""
+    """Get information about the workcell manager."""
     return workcell_manager_definition
 
 
 @app.get("/workcell")
 def get_workcell() -> WorkcellDefinition:
-    """Get information about the resource manager."""
+    """Get the currently running workcell."""
     return app.state.state_handler.get_workcell()
 
 
 @app.get("/nodes")
 def get_nodes() -> dict[str, Node]:
-    """Get information about the resource manager."""
+    """Get info on the nodes in the workcell."""
     return app.state.state_handler.get_all_nodes()
 
 
 @app.get("/nodes/{node_name}")
 def get_node(node_name: str) -> Union[Node, str]:
-    """Get information about the resource manager."""
+    """Get information about about a specific node."""
     try:
         node = app.state.state_handler.get_node(node_name)
     except Exception:
@@ -85,7 +85,7 @@ def add_node(
     node_description: str = "A Node",
     permanent: bool = False,
 ) -> Union[Node, str]:
-    """Get information about the resource manager."""
+    """Add a node to the workcells nodes"""
     if node_name in app.state.state_handler.get_all_nodes():
         return "Node name exists, node names must be unique!"
     node = Node(node_url=node_url)
@@ -103,7 +103,7 @@ def add_node(
 
 @app.get("/admin/{command}")
 def send_admin_command(command: str) -> list:
-    """Get information about the resource manager."""
+    """Send an admin command to all capable nodes."""
     responses = []
     for node in app.state.state_handler.get_all_nodes().values():
         if command in node.info.capabilities.admin_commands:
@@ -115,7 +115,7 @@ def send_admin_command(command: str) -> list:
 
 @app.get("/admin/{command}/{node}")
 def send_admin_command_to_node(command: str, node: str) -> list:
-    """Get information about the resource manager."""
+    """Send admin command to a node."""
     responses = []
     node = app.state.state_handler.get_node(node)
     if command in node.info.capabilities.admin_commands:
@@ -127,19 +127,19 @@ def send_admin_command_to_node(command: str, node: str) -> list:
 
 @app.get("/workflows")
 def get_all_workflows() -> dict[str, Workflow]:
-    """Get information about the resource manager."""
+    """get all workflows."""
     return app.state.state_handler.get_all_workflows()
 
 
 @app.get("/workflows/{workflow_id}")
 def get_workflow(workflow_id: str) -> Workflow:
-    """Get information about the resource manager."""
+    """Get info on a specific workflow."""
     return app.state.state_handler.get_workflow(workflow_id)
 
 
 @app.get("/workflows/pause/{workflow_id}")
 def pause_workflow(workflow_id: str) -> Workflow:
-    """Get information about the resource manager."""
+    """Pause a specific workflow."""
     with app.state.state_handler.wc_state_lock():
         wf = app.state.state_handler.get_workflow(workflow_id)
         if wf.status in ["running", "in_progress", "queued"]:
@@ -154,7 +154,7 @@ def pause_workflow(workflow_id: str) -> Workflow:
 
 @app.get("/workflows/resume/{workflow_id}")
 def resume_workflow(workflow_id: str) -> Workflow:
-    """Get information about the resource manager."""
+    """Resume a paused workflow."""
     with app.state.state_handler.wc_state_lock():
         wf = app.state.state_handler.get_workflow(workflow_id)
         if wf.paused:
@@ -168,7 +168,7 @@ def resume_workflow(workflow_id: str) -> Workflow:
 
 @app.get("/workflows/cancel/{workflow_id}")
 def cancel_workflow(workflow_id: str) -> Workflow:
-    """Get information about the resource manager."""
+    """Cancel a specific workflow."""
     with app.state.state_handler.wc_state_lock():
         wf = app.state.state_handler.get_workflow(workflow_id)
         if wf.status == "running":
@@ -181,7 +181,7 @@ def cancel_workflow(workflow_id: str) -> Workflow:
 
 @app.get("/workflows/resubmit/{workflow_id}")
 def resubmit_workflow(workflow_id: str) -> Workflow:
-    """Get information about the resource manager."""
+    """resubmit a previous workflow as a new workflow."""
     with app.state.state_handler.wc_state_lock():
         wf = app.state.state_handler.get_workflow(workflow_id)
         wf.workflow_id = new_ulid_str()
@@ -205,7 +205,7 @@ def resubmit_workflow(workflow_id: str) -> Workflow:
 
 @app.post("/workflows/retry")
 def retry_workflow(workflow_id: str, index: int = -1) -> Workflow:
-    """Get information about the resource manager."""
+    """Retry an existing workflow from a specific step."""
     with app.state.state_handler.wc_state_lock():
         wf = app.state.state_handler.get_workflow(workflow_id)
         if wf.status in ["completed", "failed"]:

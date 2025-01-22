@@ -129,8 +129,7 @@ class RestNodeClient(AbstractNodeClient):
         """Perform an administrative command on the node."""
         response = requests.post(
             f"{self.url}/admin/{admin_command}",
-            json={"admin_command": admin_command},
-            timeout=10,
+            timeout=10
         )
         if not response.ok:
             response.raise_for_status()

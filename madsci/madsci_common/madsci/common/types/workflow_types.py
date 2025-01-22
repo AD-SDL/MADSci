@@ -102,7 +102,7 @@ class Workflow(WorkflowDefinition):
     workflow_id: str = Field(default_factory=new_ulid_str)
     """ID of the workflow run"""
     steps: ClassVar[list[Step]] = []
-    """WEI Processed Steps of the flow"""
+    """Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory={})
     """parameter values used inthis workflow"""
     experiment_id: Optional[str] = None

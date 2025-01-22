@@ -102,7 +102,7 @@ class Engine:
             lambda wf: wf.scheduler_metadata.ready_to_run, workflows.values()
         )
         sorted_ready_workflows = sorted(
-            ready_workflows, key=lambda wf: wf.scheduler_metadata.priority, reserve=True
+            ready_workflows, key=lambda wf: wf.scheduler_metadata.priority, reverse=True
         )
         if len(sorted_ready_workflows) > 0:
             next_wf = sorted_ready_workflows[0]
@@ -110,7 +110,7 @@ class Engine:
             self.state_handler.set_workflow(next_wf)
             self.run_step(next_wf.workflow_id, next_wf.steps[next_wf.step_index])
 
-    def retry_action(
+    def query_action_result(
         self,
         node: Node,
         client: AbstractNodeClient,
@@ -143,14 +143,16 @@ class Engine:
             self.state_handler.set_workflow(wf)
         node = self.state_handler.get_node(step.node)
         client = find_node_client(node.node_url)
+        response = None
         try:
             request = ActionRequest(
                 action_name=step.action, args=step.args, files=step.files
             )
             response = client.send_action(request)
         except Exception:
-            response = self.retry_action(node, client, request)
-        response = self.retry_action(node, client, request, response)
+            print("request had exception")
+        finally:
+            response = self.query_action_result(node, client, request, response)
         if response is None:
             response = request.failed()
         with self.state_handler.wc_state_lock():

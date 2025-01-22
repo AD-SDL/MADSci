@@ -1,4 +1,4 @@
-"""client for performing workcell actions"""
+"""Client for performing workcell actions"""
 
 import copy
 import json
