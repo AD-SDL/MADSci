@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, ClassVar, Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic import Field, field_validator
 
@@ -65,7 +65,7 @@ class WorkflowDefinition(BaseModel):
     """Name of the workflow"""
     workflow_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
-    parameters: ClassVar[Optional[list[WorkflowParameter]]] = []
+    parameters: Optional[list[WorkflowParameter]] = Field(default_factory=list)
     """Inputs to the workflow"""
     flowdef: list[Step]
     """User Submitted Steps of the flow"""
@@ -101,7 +101,7 @@ class Workflow(WorkflowDefinition):
     """Label for the workflow run"""
     workflow_id: str = Field(default_factory=new_ulid_str)
     """ID of the workflow run"""
-    steps: ClassVar[list[Step]] = []
+    steps: list[Step] = Field(default_factory=list)
     """Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory={})
     """parameter values used inthis workflow"""

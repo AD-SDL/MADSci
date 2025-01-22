@@ -9,7 +9,7 @@ from typing import Any, Optional
 
 import requests
 
-from madsci.common.exceptions import WorkflowFailedException
+from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.workflow_types import (
     Workflow,
@@ -207,11 +207,11 @@ class WorkcellClient:
             prior_status = status
             prior_index = step_index
         if wf.status == WorkflowStatus.FAILED and raise_on_failed:
-            raise WorkflowFailedException(
+            raise WorkflowFailedError(
                 f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.step_index}: '{wf.steps[wf.step_index].name}'."
             )
         if wf.status == WorkflowStatus.CANCELLED and raise_on_cancelled:
-            raise WorkflowFailedException(
+            raise WorkflowFailedError(
                 f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.step_index}: '{wf.steps[wf.step_index].name}'."
             )
         return wf
