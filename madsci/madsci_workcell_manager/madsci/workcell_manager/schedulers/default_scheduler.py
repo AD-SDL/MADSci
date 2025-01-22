@@ -1,4 +1,4 @@
-"""the default scheduler for the system"""
+"""Default MADSci Workcell scheduler"""
 
 from schedulers.scheduler import AbstractScheduler
 
