@@ -130,7 +130,8 @@ class RestNode(AbstractNode):
             args = {}
         with tempfile.TemporaryDirectory() as temp_dir:
             # * Save the uploaded files to a temporary directory
-            for file in files:
+            for i in range(len(files)):
+                file = files[i]
                 with (Path(temp_dir) / file.filename).open("wb") as f:
                     shutil.copyfileobj(file.file, f)
             response = super().run_action(

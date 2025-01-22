@@ -81,7 +81,7 @@ def module(ctx: Context, name: Optional[str], path: Optional[str]) -> None:
     help="The template of the module configuration to use.",
 )
 @click.pass_context
-def create(  # noqa: PLR0913
+def create(
     ctx: Context,
     name: Optional[str],
     path: Optional[str],

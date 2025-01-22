@@ -16,8 +16,8 @@ capabilities:
   events: false
   resources: false
   admin_commands:
-  - reset
   - shutdown
+  - reset
 config:
   host:
     name: host

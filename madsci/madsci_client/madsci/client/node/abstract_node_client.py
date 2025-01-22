@@ -2,6 +2,8 @@
 
 from typing import Any, ClassVar
 
+from pydantic import AnyUrl
+
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
@@ -13,7 +15,6 @@ from madsci.common.types.module_types import (
     NodeClientCapabilities,
 )
 from madsci.common.types.node_types import (
-    Node,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
@@ -30,9 +31,9 @@ class AbstractNodeClient:
     supported_capabilities: ClassVar[NodeClientCapabilities] = NodeClientCapabilities()
     """The capabilities supported by this node client."""
 
-    def __init__(self, node: Node) -> "AbstractNodeClient":
+    def __init__(self, url: AnyUrl) -> "AbstractNodeClient":
         """Initialize the client."""
-        self.node = node
+        self.url = url
 
     def send_action(self, action_request: ActionRequest) -> ActionResult:
         """Perform an action on the node."""
@@ -77,3 +78,9 @@ class AbstractNodeClient:
     def get_log(self) -> list[Event]:
         """Get the log of the node."""
         raise NotImplementedError("get_log is not implemented by this client")
+
+    @classmethod
+    def validate_url(cls, url: AnyUrl) -> bool:
+        """check if a url matches this node type"""
+        protocol = url.scheme
+        return protocol in cls.url_protocols

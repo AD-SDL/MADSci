@@ -1,5 +1,6 @@
 """MADSci Node Types."""
 
+from datetime import datetime
 from os import PathLike
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -10,6 +11,7 @@ from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 
 from madsci.common.types.action_types import ActionDefinition
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
 from madsci.common.types.module_types import ConfigParameter, NodeModuleDefinition
 from madsci.common.types.validators import ulid_validator
@@ -120,17 +122,27 @@ class Node(BaseModel, arbitrary_types_allowed=True):
 
     node_url: AnyUrl = Field(
         title="Node URL",
-        description="The URL used to communicate with the module.",
+        description="The URL used to communicate with the node.",
     )
     status: Optional["NodeStatus"] = Field(
         default=None,
         title="Module Status",
-        description="The status of the module. Set to None if the module does not support status reporting or the status is unknown (e.g. if it hasn't reported/responded to status requests).",
+        description="The status of the node. Set to None if the node does not support status reporting or the status is unknown (e.g. if it hasn't reported/responded to status requests).",
     )
     info: Optional["NodeInfo"] = Field(
         default=None,
         title="Node Info",
         description="Information about the node, provided by the node itself.",
+    )
+    state: Optional[dict[str, Any]] = Field(
+        default=None,
+        title="Node State",
+        description="Detailed nodes specific state information",
+    )
+    reserved_by: Optional["Reservation"] = Field(
+        default=None,
+        title="Reserved By",
+        description="Ownership unit that is reserving this node",
     )
 
 
@@ -262,6 +274,14 @@ class NodeStatus(BaseModel):
         if reasons:
             return "; ".join(reasons)
         return "Node is ready"
+
+
+class Reservation(BaseModel):
+    """a reservation of a module"""
+
+    owned_by: OwnershipInfo
+
+    started: datetime
 
 
 class NodeSetConfigResponse(BaseModel):

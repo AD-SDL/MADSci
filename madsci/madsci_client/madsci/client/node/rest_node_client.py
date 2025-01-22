@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import requests
+from pydantic import AnyUrl
 
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
@@ -17,7 +18,6 @@ from madsci.common.types.module_types import (
     NodeClientCapabilities,
 )
 from madsci.common.types.node_types import (
-    Node,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
@@ -44,9 +44,9 @@ class RestNodeClient(AbstractNodeClient):
         get_resources=False,
     )
 
-    def __init__(self, node: Node) -> "RestNodeClient":
+    def __init__(self, url: AnyUrl) -> "RestNodeClient":
         """Initialize the client."""
-        super().__init__(node)
+        super().__init__(url)
 
     def send_action(self, action_request: ActionRequest) -> ActionResult:
         """Perform an action on the node."""
@@ -56,10 +56,9 @@ class RestNodeClient(AbstractNodeClient):
                 ("files", (file, Path(path).open("rb")))  # noqa: SIM115
                 for file, path in action_request.files.items()
             ]
-            print(files)
 
             rest_response = requests.post(
-                f"{self.node.node_url}/action",
+                f"{self.url}/action",
                 params={
                     "action_name": action_request.action_name,
                     "args": json.dumps(action_request.args),
@@ -71,14 +70,15 @@ class RestNodeClient(AbstractNodeClient):
         finally:
             # * Ensure files are closed
             for file in files:
-                file[1].close()
+                file[1][1].close()
         if not rest_response.ok:
+            print(rest_response)
             rest_response.raise_for_status()
         return ActionResult.model_validate(rest_response.json())
 
     def get_action_history(self) -> list[str]:
         """Get a list of the action IDs for actions that the node has recently performed."""
-        response = requests.get(f"{self.node.node_url}/action", timeout=10)
+        response = requests.get(f"{self.url}/action", timeout=10)
         if not response.ok:
             response.raise_for_status()
         return response.json()
@@ -86,7 +86,7 @@ class RestNodeClient(AbstractNodeClient):
     def get_action_result(self, action_id: str) -> ActionResult:
         """Get the result of an action on the node."""
         response = requests.get(
-            f"{self.node.node_url}/action/{action_id}",
+            f"{self.url}/action/{action_id}",
             timeout=10,
         )
         if not response.ok:
@@ -95,21 +95,21 @@ class RestNodeClient(AbstractNodeClient):
 
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""
-        response = requests.get(f"{self.node.node_url}/status", timeout=10)
+        response = requests.get(f"{self.url}/status", timeout=10)
         if not response.ok:
             response.raise_for_status()
         return NodeStatus.model_validate(response.json())
 
     def get_state(self) -> dict[str, Any]:
         """Get the state of the node."""
-        response = requests.get(f"{self.node.node_url}/state", timeout=10)
+        response = requests.get(f"{self.url}/state", timeout=10)
         if not response.ok:
             response.raise_for_status()
         return response.json()
 
     def get_info(self) -> NodeInfo:
         """Get information about the node and module."""
-        response = requests.get(f"{self.node.node_url}/info", timeout=10)
+        response = requests.get(f"{self.url}/info", timeout=10)
         if not response.ok:
             response.raise_for_status()
         return NodeInfo.model_validate(response.json())
@@ -117,7 +117,7 @@ class RestNodeClient(AbstractNodeClient):
     def set_config(self, config_dict: dict[str, Any]) -> NodeSetConfigResponse:
         """Set configuration values of the node."""
         response = requests.post(
-            f"{self.node.node_url}/config",
+            f"{self.url}/config",
             json=config_dict,
             timeout=60,
         )
@@ -128,9 +128,8 @@ class RestNodeClient(AbstractNodeClient):
     def send_admin_command(self, admin_command: AdminCommands) -> bool:
         """Perform an administrative command on the node."""
         response = requests.post(
-            f"{self.node.node_url}/admin",
-            json={"admin_command": admin_command},
-            timeout=10,
+            f"{self.url}/admin/{admin_command}",
+            timeout=10
         )
         if not response.ok:
             response.raise_for_status()
@@ -145,7 +144,7 @@ class RestNodeClient(AbstractNodeClient):
 
     def get_log(self) -> list[Event]:
         """Get the log from the node"""
-        response = requests.get(f"{self.node.node_url}/log", timeout=10)
+        response = requests.get(f"{self.url}/log", timeout=10)
         if not response.ok:
             response.raise_for_status()
         return response.json()
