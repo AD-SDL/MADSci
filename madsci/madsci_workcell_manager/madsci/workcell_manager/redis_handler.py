@@ -1,5 +1,5 @@
 """
-StateManager for WEI
+State management for the WorkcellManager
 """
 
 import warnings
