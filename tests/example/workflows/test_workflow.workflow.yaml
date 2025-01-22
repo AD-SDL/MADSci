@@ -1,0 +1,23 @@
+name: Test_Workflow
+workflow_metadata:
+  author: Tobias Ginsburg, Kyle Hippe, Ryan D. Lewis
+  description: Example workflow for WEI
+  version: 0.3
+parameters:
+  - name: delay
+    default: 1.5
+flowdef:
+  - name: Get plate to thingy
+    node: "liquid_handler"
+    action: run_command
+    args:
+      command: thingy
+    comment: Get a new plate
+    files: {"protocol": "/workspaces/MADSci/tests/example/protocols/protocol.txt"}
+  - name: Get plate to thingy
+    node: liquid_handler
+    action: run_command
+    args:
+      command: thingy
+    comment: Get a new plate
+    files: {"protocol": "/workspaces/MADSci/tests/example/protocols/protocol.txt"}

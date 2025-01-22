@@ -134,7 +134,7 @@ def node(ctx: Context, name: Optional[str], path: Optional[str]) -> None:
     help="Don't add node to any workcell.",
 )
 @click.pass_context
-def create(  # noqa: PLR0913
+def create(
     ctx: Context,
     name: Optional[str],
     path: Optional[str],

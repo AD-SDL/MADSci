@@ -97,6 +97,7 @@ ignore = [
     "B006", # Do not use mutable data structures for argument defaults
     "ANN401", # Don't flag Any types
     "COM812", # Don't fight over trailing commas
+    "PLR0913", # Allow for a reasonable number of arguments
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
