@@ -102,7 +102,7 @@ class Engine:
             lambda wf: wf.scheduler_metadata.ready_to_run, workflows.values()
         )
         sorted_ready_workflows = sorted(
-            ready_workflows, key=lambda wf: wf.scheduler_metadata.priority
+            ready_workflows, key=lambda wf: wf.scheduler_metadata.priority, reserve=True
         )
         if len(sorted_ready_workflows) > 0:
             next_wf = sorted_ready_workflows[0]
