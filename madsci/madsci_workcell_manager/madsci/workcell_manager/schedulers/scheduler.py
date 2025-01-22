@@ -5,7 +5,7 @@ from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 from madsci.workcell_manager.workcell_manager_types import WorkcellManagerDefinition
 
 
-def send_event(test: Event) -> None:
+def send_event(test: Event) -> None: # TODO: remove placeholder
     """send an event to the server"""
 
 
