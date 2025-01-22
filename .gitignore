@@ -301,6 +301,7 @@ test_experiment/
 
 # Output data
 .wei/
+.madsci/
 
 #node modules
 **/node_modules

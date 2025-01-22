@@ -1,0 +1,7 @@
+node_name: default_liquidhandler
+node_id: 01JD7WCXX8Y1CMER8P3XHA6CTW
+node_url: null
+node_description: Default liquidhandler
+module_definition: ../liquidhandler.module.yaml
+config: {}
+commands: {}

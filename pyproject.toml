@@ -6,12 +6,13 @@ dynamic = ["version"]
 
 [tool.pdm.dev-dependencies]
 dev = [
-    "-e madsci.common @ file:///${PROJECT_ROOT}/madsci/madsci_common",
-    "-e madsci.squid @ file:///${PROJECT_ROOT}/madsci/madsci_squid",
-    "-e madsci.client @ file:///${PROJECT_ROOT}/madsci/madsci_client",
-    "-e madsci.module @ file:///${PROJECT_ROOT}/madsci/madsci_module",
-    "-e madsci.resource_manager @ file:///${PROJECT_ROOT}/madsci/madsci_resource_manager",
-    "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/madsci/madsci_workcell_manager",
+    "-e madsci.common @ file:///${PROJECT_ROOT}/src/madsci_common",
+    "-e madsci.squid @ file:///${PROJECT_ROOT}/src/madsci_squid",
+    "-e madsci.client @ file:///${PROJECT_ROOT}/src/madsci_client",
+    "-e madsci.node_module @ file:///${PROJECT_ROOT}/src/madsci_node_module",
+    "-e madsci.resource_manager @ file:///${PROJECT_ROOT}/src/madsci_resource_manager",
+    "-e madsci.event_manager @ file:///${PROJECT_ROOT}/src/madsci_event_manager",
+    "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
 ]
 [tool.pdm.version]
 source = "scm"
