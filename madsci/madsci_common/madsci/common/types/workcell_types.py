@@ -111,7 +111,7 @@ class WorkcellConfig(BaseModel):
         description="How long the Workcell engine should sleep on startup",
     )
     scheduler: str = Field(
-        default="schedulers.default_scheduler",
+        default="madsci.workcell_manager.schedulers.default_scheduler",
         title="scheduler",
         description="Scheduler module in the workcell manager scheduler folder with a Scheduler class that inherits from AbstractScheduler to use",
     )
