@@ -79,7 +79,7 @@ def update_node(
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
     except Exception:
-        warnings.warn(
+        warnings.warn( # TODO: Replace with event logger
             message=f"Unable to update node {node_name}",
             category=UserWarning,
             stacklevel=1,
