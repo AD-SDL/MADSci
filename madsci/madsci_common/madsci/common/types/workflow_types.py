@@ -104,7 +104,7 @@ class Workflow(WorkflowDefinition):
     steps: list[Step] = Field(default_factory=list)
     """Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory={})
-    """parameter values used inthis workflow"""
+    """parameter values used in this workflow"""
     experiment_id: Optional[str] = None
     """ID of the experiment this workflow is a part of"""
     status: WorkflowStatus = Field(default=WorkflowStatus.QUEUED)
