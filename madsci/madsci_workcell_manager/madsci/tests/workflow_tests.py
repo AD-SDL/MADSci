@@ -1,4 +1,4 @@
-"""basic tests for workflow functionality"""
+"""Basic tests for workflow functionality"""
 
 from pathlib import Path
 
