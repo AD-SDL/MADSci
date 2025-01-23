@@ -13,16 +13,7 @@ from madsci.common.types.resource_types import discriminate_default_resources, A
 
 class Asset(AssetBase, table=True):
     """Asset table class"""
-
-    def to_json(self) -> dict:
-        """
-        Serialize the Asset object into a JSON-compatible dictionary using SQLAlchemy's inspection.
-
-        Returns:
-            dict: Serialized dictionary of the Asset object.
-        """
-        # Use SQLAlchemy's inspection to get the object's field data
-        return {column.key: getattr(self, column.key) for column in inspect(self).mapper.column_attrs}
+    pass
 class Allocation(SQLModel, table=True):
     """
     Table that tracks which resource is allocated to another resource.
@@ -399,6 +390,18 @@ class Pool(PoolBase, table=True):
     """
     Pool resource class with methods to manage its quantity and capacity.
     """
+    def __init__(self, **kwargs):
+        """
+        Custom initialization for Pool.
+
+        Automatically sets the parent ID for children resources during initialization.
+        """
+        super().__init__(**kwargs)
+
+        # Ensure children have the Pool's resource_id as their parent
+        for key, resource in self.children.items():
+            if isinstance(resource, ResourceBase):
+                resource.parent = self.resource_id
 
     def increase_quantity(self, amount: float, session: Session) -> None:
         """
@@ -467,38 +470,38 @@ class Pool(PoolBase, table=True):
         session.add(self)
         session.commit()
         
-class Plate(CollectionBase, table=True):
+class Collection(CollectionBase, table=True):
     """
-    Plate type for managing collections of Pool resources.
+    Collection type for managing collections of resources.
 
-    This class represents a plate resource, which can store Pool resources
+    This class represents a Collection resource, which can store resources
     as its children, accessed by unique keys (e.g., "A1", "B1").
     """
 
     def __init__(self, **kwargs):
         """
-        Custom initialization for Plate.
+        Custom initialization for Collection.
 
         Automatically sets the parent ID for children resources during initialization.
         """
         super().__init__(**kwargs)
 
-        # Ensure children have the Plate's resource_id as their parent
+        # Ensure children have the Pool's resource_id as their parent
         for key, resource in self.children.items():
             if isinstance(resource, ResourceBase):
                 resource.parent = self.resource_id
 
     def add_child(self, key: str, resource: ResourceBase, session: Session) -> None:
         """
-        Add a Pool resource to the Plate.
+        Add a resource to the Collection.
 
         Args:
-            key (str): The unique key for the Pool resource (e.g., "A1").
-            resource (Pool): The Pool resource to add.
+            key (str): The unique key for the resource (e.g., "A1").
+            resource: The resource to add.
             session (Session): The database session for persisting changes.
         """
         resource = session.merge(resource)
-        # Set the parent of the Pool resource
+        # Set the parent of the resource
         resource.parent = self.resource_id
         print(resource)
         session.add(resource)
@@ -508,41 +511,41 @@ class Plate(CollectionBase, table=True):
         self.quantity=len(self.children)
         flag_modified(self, "children")
 
-        # Persist the changes to the Plate
+        # Persist the changes to the Collection
         session.add(self)
         session.commit()
 
-    def remove_child(self, key: str, session: Session) -> Pool:
+    def remove_child(self, key: str, session: Session):
         """
-        Remove a Pool resource from the Plate.
+        Remove a resource from the Collection.
 
         Args:
-            key (str): The unique key of the Pool resource to remove.
+            key (str): The unique key of the resource to remove.
             session (Session): The database session for persisting changes.
 
         Returns:
-            Pool: The removed Pool resource.
+            resource: The removed  resource.
         """
         if key not in self.children:
-            raise KeyError(f"Key '{key}' does not exist in the plate.")
+            raise KeyError(f"Key '{key}' does not exist in the Collection.")
 
         # Remove the child resource
-        pool = self.children.pop(key)
+        resource = self.children.pop(key)
         flag_modified(self, "children")
         self.quantity=len(self.children)
 
-        # Update the parent of the Pool resource to None
-        pool.parent = None
-        session.add(pool)
+        # Update the parent of the resource to None
+        resource.parent = None
+        session.add(resource)
 
         # Persist the changes
         session.add(self)
         session.commit()
 
-        return pool        
+        return resource        
 class Grid(GridBase, table=True):
         """
-        Grid class that can hold other resource types as children, such as Pool.
+        Grid class that can hold other resource types as children.
         """
 
         def __init__(self, **data):
@@ -647,7 +650,7 @@ DB_RESOURCE_MAP = {
     "stack": Stack,
     "queue": Queue,
     "pool": Pool,
-    "plate": Plate,
+    "collection": Collection,
     "asset": Asset,
     "consumable": Consumable,
 }
@@ -665,7 +668,6 @@ def map_resource_type(resource_data: dict):
     """
     # Infer the resource type using discriminate_default_resources
     inferred_type = discriminate_default_resources(resource_data)
-    print(inferred_type)
     # Use RESOURCE_DEFINITION_MAP to validate the resource type
     if inferred_type == "resource":
         raise ValueError(f"Unknown or unsupported resource type: {inferred_type}")
