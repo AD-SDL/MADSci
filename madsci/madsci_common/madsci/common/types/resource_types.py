@@ -724,6 +724,7 @@ class CollectionBase(ContainerBase):
         title="Children",
         description="The children of the collection.",
     )
+    
     attributes: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON),
@@ -777,7 +778,7 @@ class StackBase(ContainerBase,table=False):
     )
 class QueueBase(ContainerBase,table=False):
     """Base class for all MADSci Queues."""
-    children: Optional[list[ResourceBase]] = Field(
+    children: Optional[list[str]] = Field(
         title="Children",
         description="The children of the container.",
         default_factory=list,
