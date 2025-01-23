@@ -9,7 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.inspection import inspect
 from sqlmodel import SQLModel, Field, Session, UniqueConstraint, PrimaryKeyConstraint
 
-from madsci.common.types.resource_types import AssetBase, StackBase, QueueBase, PoolBase, ConsumableBase, CollectionBase, ResourceBase, GridBase
+from madsci.common.types.resource_types import discriminate_default_resources, AssetBase, StackBase, QueueBase, PoolBase, ConsumableBase, CollectionBase, ResourceBase, GridBase
 
 class Asset(AssetBase, table=True):
     """Asset table class"""
@@ -641,8 +641,47 @@ class Grid(GridBase, table=True):
             session.add(resource)
             session.commit()
         
-               
+ 
+# Define a mapping of resource types to DB table classes
+DB_RESOURCE_MAP = {
+    "stack": Stack,
+    "queue": Queue,
+    "pool": Pool,
+    "plate": Plate,
+    "asset": Asset,
+    "consumable": Consumable,
+}
+
+def map_resource_type(resource_data: dict):
+    """
+    Map a resource type to its corresponding DB table class using
+    `discriminate_default_resources` to infer the resource type.
+
+    Args:
+        resource_data (dict): The resource data dictionary.
+
+    Returns:
+        type: The corresponding DB table class.
+    """
+    # Infer the resource type using discriminate_default_resources
+    inferred_type = discriminate_default_resources(resource_data)
+    print(inferred_type)
+    # Use RESOURCE_DEFINITION_MAP to validate the resource type
+    if inferred_type == "resource":
+        raise ValueError(f"Unknown or unsupported resource type: {inferred_type}")
+    
+    # Map the inferred type to the DB table class
+    db_class = DB_RESOURCE_MAP.get(inferred_type)
+    if not db_class:
+        raise ValueError(f"No DB table class found for resource type: {inferred_type}")
+    
+    return db_class
+              
 if __name__ == "__main__":
     # s= Stack(resource_name="",resource_types="",capacity=10,ownership=None)
     # s= StackBase(resource_name="a",resource_type="a",capacity=10,ownership=None)
-    s = Stack(resource_name="a", resource_type="a", capacity=10, ownership=None)
+    s = Stack(resource_name="a", resource_type="pool", capacity=10, ownership=None)
+    resource_class = map_resource_type(s)
+    print(resource_class)
+    
+    
