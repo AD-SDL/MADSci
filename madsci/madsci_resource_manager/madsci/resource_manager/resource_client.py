@@ -6,7 +6,6 @@ from typing import Dict, Any
 from serialization_utils import serialize_resource, deserialize_resource  
 
 # --- Resource Client ---
-# Resource type map for dynamic reconstruction
 
 class ResourceClient:
     def __init__(self, base_url: str, database_url: str):
@@ -26,6 +25,24 @@ class ResourceClient:
         resource_data = serialize_resource(resource)
         response = requests.post(
             f"{self.base_url}/resource/add",
+            json={"database_url": self.database_url, "resource": resource_data},
+        )
+        response.raise_for_status()
+        return deserialize_resource(response.json())
+        
+    def update_resource(self, resource):
+        """
+        Update or refresh a resource, including its children, on the server.
+
+        Args:
+            resource (ResourceBase): The resource to update.
+
+        Returns:
+            ResourceBase: The updated resource as returned by the server.
+        """
+        resource_data = serialize_resource(resource)
+        response = requests.post(
+            f"{self.base_url}/resource/update",
             json={"database_url": self.database_url, "resource": resource_data},
         )
         response.raise_for_status()
@@ -75,7 +92,7 @@ class ResourceClient:
         }
         response = requests.post(f"{self.base_url}/stack/push", json=payload)
         response.raise_for_status()
-        return response.json()
+        return deserialize_resource(response.json())
 
     def pop_from_stack(self, stack) :
         """
@@ -113,7 +130,7 @@ class ResourceClient:
         }
         response = requests.post(f"{self.base_url}/queue/push", json=payload)
         response.raise_for_status()
-        return response.json()
+        return deserialize_resource(response.json())
 
     def pop_from_queue(self, queue) :
         """
@@ -151,7 +168,7 @@ class ResourceClient:
         }
         response = requests.post(f"{self.base_url}/pool/increase", json=payload)
         response.raise_for_status()
-        return response.json()
+        return deserialize_resource(response.json())
 
     def decrease_pool_quantity(self, pool, amount: float) -> Dict[str, Any]:
         """
@@ -171,7 +188,7 @@ class ResourceClient:
         }
         response = requests.post(f"{self.base_url}/pool/decrease", json=payload)
         response.raise_for_status()
-        return response.json()
+        return deserialize_resource(response.json())
 
     def fill_pool(self, pool) -> Dict[str, Any]:
         """
@@ -186,7 +203,7 @@ class ResourceClient:
         payload = {"database_url": self.database_url, "pool": serialize_resource(pool)}
         response = requests.post(f"{self.base_url}/pool/fill", json=payload)
         response.raise_for_status()
-        return response.json()
+        return deserialize_resource(response.json())
 
     def empty_pool(self, pool) -> Dict[str, Any]:
         """
@@ -201,7 +218,7 @@ class ResourceClient:
         payload = {"database_url": self.database_url, "pool": serialize_resource(pool)}
         response = requests.post(f"{self.base_url}/pool/empty", json=payload)
         response.raise_for_status()
-        return response.json()
+        return deserialize_resource(response.json())
         
     def increase_plate_well(self, plate, well_id: str, quantity: float) -> Dict[str, Any]:
         """
@@ -223,7 +240,7 @@ class ResourceClient:
         }
         response = requests.post(f"{self.base_url}/plate/increase_well", json=payload)
         response.raise_for_status()
-        return response.json()
+        return deserialize_resource(response.json())
 
     def decrease_plate_well(self, plate, well_id: str, quantity: float) -> Dict[str, Any]:
         """
@@ -245,26 +262,26 @@ class ResourceClient:
         }
         response = requests.post(f"{self.base_url}/plate/decrease_well", json=payload)
         response.raise_for_status()
-        return response.json()
+        return deserialize_resource(response.json())
 
-    def update_plate_well(self, plate, well_id: str, child):
+    def update_collection_child(self, collection, key_id: str, child):
         """
-        Update a specific well in a plate.
+        Update a specific chhild in a collection.
 
         Args:
-            plate (ResourceBase): The plate resource.
-            well_id (str): The ID of the well to update.
+            collection (ResourceBase): The collection resource.
+            key_id (str): The ID of the collection key to update.
             child (ResourceBase): The new child resource to set.
 
         Returns:
-            ResourceBase: The updated plate resource.
+            ResourceBase: The updated collection resource.
         """
         payload = {
             "database_url": self.database_url,
-            "plate": serialize_resource(plate),
-            "well_id": well_id,
+            "collection": serialize_resource(collection),
+            "key_id": key_id,
             "child": serialize_resource(child),
         }
-        response = requests.post(f"{self.base_url}/plate/update_well", json=payload)
+        response = requests.post(f"{self.base_url}/collection/update_child", json=payload)
         response.raise_for_status()
         return deserialize_resource(response.json())
