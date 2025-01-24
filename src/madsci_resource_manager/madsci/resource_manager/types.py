@@ -1,7 +1,7 @@
 """MADSci Resource Manager Types."""
 
 from madsci.common.types.base_types import BaseModel
-from madsci.common.types.squid_types import ManagerDefinition
+from madsci.common.types.lab_types import ManagerDefinition
 from sqlmodel.main import Field
 
 

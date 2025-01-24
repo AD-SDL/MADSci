@@ -5,7 +5,7 @@ from typing import Optional
 
 import click
 from click.core import Context
-from madsci.common.types.squid_types import (
+from madsci.common.types.lab_types import (
     LabDefinition,
     ManagerDefinition,
     ManagerType,

@@ -7,7 +7,7 @@ from typing import Optional
 
 import click
 from click.core import Context
-from madsci.common.types.squid_types import LabDefinition
+from madsci.common.types.lab_types import LabDefinition
 from madsci.common.utils import (
     prompt_for_input,
     prompt_yes_no,

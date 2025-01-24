@@ -10,15 +10,15 @@ from madsci.common.types.config_types import (
     ConfigNamespaceDefinition,
     ConfigParameterDefinition,
 )
+from madsci.common.types.lab_types import (
+    MANAGER_TYPE_DEFINITION_MAP,
+    LabDefinition,
+    ManagerDefinition,
+)
 from madsci.common.types.node_types import (
     NodeDefinition,
     NodeModuleDefinition,
     get_module_from_node_definition,
-)
-from madsci.common.types.squid_types import (
-    MANAGER_TYPE_DEFINITION_MAP,
-    LabDefinition,
-    ManagerDefinition,
 )
 from madsci.common.utils import search_for_file_pattern
 from pydantic import AnyUrl

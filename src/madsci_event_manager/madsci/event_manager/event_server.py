@@ -11,7 +11,7 @@ from madsci.common.definition_loaders import (
     manager_definition_loader,
 )
 from madsci.common.types.event_types import Event
-from madsci.common.types.squid_types import EventManagerDefinition, ManagerType
+from madsci.common.types.lab_types import EventManagerDefinition, ManagerType
 from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
 from pymongo.synchronous.database import Database

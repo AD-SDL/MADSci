@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from madsci.client.event_client import default_logger
-from madsci.client.workcell.workcell_client import WorkcellClient
+from madsci.client.workcell_client import WorkcellClient
 
 client = WorkcellClient("http://localhost:8013")
 

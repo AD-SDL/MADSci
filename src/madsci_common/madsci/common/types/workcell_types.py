@@ -2,9 +2,11 @@
 
 from typing import Optional, Union
 
+from madsci.common.serializers import dict_to_list
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 from madsci.common.types.node_types import NodeDefinition
-from madsci.common.validators import ulid_validator
+from madsci.common.validators import create_dict_promoter, ulid_validator
+from pydantic import field_serializer
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
@@ -39,10 +41,10 @@ class WorkcellDefinition(BaseModel, extra="allow"):
     )
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
-    """
-    TODO: Do we need this validator?
-    is_dict = field_validator("nodes", mode="before")(create_dict_promoter("node_name"))
-    """
+    validate_nodes_to_dict = field_validator("nodes", mode="before")(
+        create_dict_promoter("node_name")
+    )
+    serialize_nodes_to_list = field_serializer("nodes")(dict_to_list)
 
 
 class WorkcellConfig(BaseModel):

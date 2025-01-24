@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 from madsci.client.cli import root_cli
-from madsci.common.types.squid_types import ManagerDefinition, ManagerType
+from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 
 
 @pytest.fixture

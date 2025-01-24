@@ -1,4 +1,4 @@
-"""Types for MADSci Squid configuration."""
+"""Types for MADSci Squid Lab configuration."""
 
 from enum import Enum
 from typing import Any, Literal, Optional, Union
