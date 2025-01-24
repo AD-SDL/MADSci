@@ -488,6 +488,7 @@ class Collection(CollectionBase, table=True):
 
         # Ensure children have the Pool's resource_id as their parent
         for key, resource in self.children.items():
+
             if isinstance(resource, ResourceBase):
                 resource.parent = self.resource_id
 
@@ -503,7 +504,6 @@ class Collection(CollectionBase, table=True):
         resource = session.merge(resource)
         # Set the parent of the resource
         resource.parent = self.resource_id
-        print(resource)
         session.add(resource)
 
         # Add the resource to the children dictionary
