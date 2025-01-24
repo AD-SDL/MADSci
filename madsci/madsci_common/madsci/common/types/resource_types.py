@@ -1,7 +1,7 @@
 """Types related to MADSci Resources."""
 
 from enum import Enum
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union, Dict
 from datetime import datetime
 
 from pydantic import Json
@@ -718,7 +718,7 @@ class ContainerBase(ResourceBase,table=False):
 class CollectionBase(ContainerBase):
     """Base class for all MADSci Collections."""
 
-    children: Optional[dict[str, ResourceBase]] = Field(
+    children: Optional[Dict[str, ResourceBase]] = Field(
         default_factory=dict,
         sa_column=Column(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
@@ -793,13 +793,12 @@ class QueueBase(ContainerBase,table=False):
 class PoolBase(ContainerBase):
     """Base class for all MADSci Pools."""
 
-    children: Optional[dict[str, ResourceBase]] = Field(
+    children: Optional[Dict[str, ResourceBase]] = Field(
         default_factory=dict,
         sa_column=Column(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
         description="The children of the pool.",
     )
-
     capacity: Optional[float] = Field(
         title="Capacity",
         description="The capacity of the pool.",
