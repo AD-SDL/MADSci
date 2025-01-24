@@ -61,14 +61,54 @@ class ResourceInterface():
         """
         with self.session as session:
             try:
-                session.add(resource)
+                # Ensure children are properly merged
+                if hasattr(resource, "children") and isinstance(resource.children, dict):
+                    for key, child in resource.children.items():
+                        if isinstance(child, ResourceBase):
+                            # Merge the child resource
+                            child = session.merge(child)
+                            resource.children[key] = child
+
+                resource = session.merge(resource)
                 session.commit()
                 session.refresh(resource)
-                print("Interface",resource)
+                if hasattr(resource, "children") and isinstance(resource.children, dict):
+                    resource.children = {
+                        key: self.get_resource(resource_id=child.resource_id)
+                        if isinstance(child, ResourceBase) else child
+                        for key, child in resource.children.items()
+                    }
+
                 return resource
             except Exception as e:
-                print(e)
+                print(f"Error adding resource: {e}")
+                raise
+                    
+    def update_resource(self, resource: ResourceBase):
+        """
+        Update or refresh a resource in the database, including its children.
 
+        Args:
+            resource (ResourceBase): The resource to refresh.
+
+        Returns:
+            None
+        """
+        with self.session as session:
+            try:
+                resource = session.merge(resource)
+                if hasattr(resource, "children") and isinstance(resource.children, dict):
+                    for key, child in resource.children.items():
+                        if isinstance(child, ResourceBase):
+                            child.parent = resource.resource_id
+                            session.merge(child)
+
+                session.commit()
+                session.refresh(resource)
+            except Exception as e:
+                print(f"Error refreshing resource {resource.resource_id}: {e}")
+                raise
+                
     def get_resource(
         self,
         resource_name: Optional[str] = None,
@@ -162,6 +202,7 @@ class ResourceInterface():
             existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
             existing_pool.increase_quantity(amount, session)
             session.refresh(existing_pool)
+            return existing_pool
 
     def decrease_pool_quantity(self, pool: Pool, amount: float) -> None:
         """
@@ -175,6 +216,7 @@ class ResourceInterface():
             existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
             existing_pool.decrease_quantity(amount, session)
             session.refresh(existing_pool)
+            return existing_pool
 
     def empty_pool(self, pool: Pool) -> None:
         """
@@ -187,6 +229,7 @@ class ResourceInterface():
             existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
             existing_pool.empty(session)
             session.refresh(existing_pool)
+            return existing_pool
 
     def fill_pool(self, pool: Pool) -> None:
         """
@@ -199,6 +242,7 @@ class ResourceInterface():
             existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
             existing_pool.fill(session)
             session.refresh(existing_pool)
+            return existing_pool
 
 
     def push_to_stack(self, stack: Stack, asset: Asset) -> None:
@@ -219,8 +263,9 @@ class ResourceInterface():
             stack = existing_stack
             asset = session.merge(asset)
             stack.push(asset, session)
-            session.commit()
+            # session.commit()
             session.refresh(stack)
+            return stack
 
     def pop_from_stack(self, stack: Stack) -> Asset:
         """
@@ -263,6 +308,8 @@ class ResourceInterface():
             asset = session.merge(asset)
             queue.push(asset, session)
             session.refresh(queue)
+            return queue
+
 
     def pop_from_queue(self, queue: Queue) -> tuple:
         """
@@ -295,16 +342,16 @@ class ResourceInterface():
             quantity (float): The amount to increase the well quantity by.
         """
         with self.session as session:
-            plate = session.merge(plate)
-            pool = plate.children.get(well_id)
+            existing_plate= session.query(Collection).filter_by(resource_id=plate.resource_id).first()
+            pool = existing_plate.children.get(well_id)
             
             if not pool:
-                raise ValueError(f"No resource found in well '{well_id}' of plate {plate.resource_name}.")
+                raise ValueError(f"No resource found in well '{well_id}' of plate {existing_plate.resource_name}.")
             
             self.increase_pool_quantity(pool=pool, amount=quantity)
-            session.add(plate)
-            session.commit()
-
+            session.add(existing_plate)
+            session.refresh(existing_plate)
+            return existing_plate
 
     def decrease_plate_well(self, plate: Collection, well_id: str, quantity: float) -> None:
         """
@@ -316,20 +363,22 @@ class ResourceInterface():
             quantity (float): The amount to decrease the well quantity by.
         """
         with self.session as session:
-            plate = session.merge(plate)
+            existing_plate= session.query(Collection).filter_by(resource_id=plate.resource_id).first()
 
-            if well_id not in plate.children:
-                raise KeyError(f"Well ID '{well_id}' does not exist in plate '{plate.resource_name}'.")
+            if well_id not in existing_plate.children:
+                raise KeyError(f"Well ID '{well_id}' does not exist in existing_plate '{existing_plate.resource_name}'.")
 
-            pool = plate.children[well_id]
+            pool = existing_plate.children[well_id]
             if not isinstance(pool, Pool):
-                raise TypeError("Only Pool resources are supported in plate wells.")
+                raise TypeError("Only Pool resources are supported in existing_plate wells.")
 
             self.decrease_pool_quantity(pool=pool, amount=quantity)
-            session.add(plate)
-            session.commit()
+            session.add(existing_plate)
+            session.refresh(existing_plate)
+            # session.commit()
+            return existing_plate
             
-    def update_collection(self, collection: Collection, key: str, resource: ResourceBase) -> None:
+    def update_collection_child(self, collection: Collection, key: str, resource: ResourceBase) -> None:
         """
         Update or add a resource in a specific well of a collection using the `add_child` method.
 
@@ -339,11 +388,14 @@ class ResourceInterface():
             resource (resource): The resource resource to associate with the well.
         """
         with self.session as session:
-            collection = session.merge(collection)
+            collection= session.query(Collection).filter_by(resource_id=collection.resource_id).first()
+            resource = self.get_resource(resource_id=resource.resource_id)
             resource = session.merge(resource)
             collection.add_child(key, resource, session)
             session.add(collection)
-            session.commit()
+            # session.commit()
+            session.refresh(collection)
+            return collection
 
 if __name__ == "__main__":
     resource_interface = ResourceInterface()
@@ -398,6 +450,7 @@ if __name__ == "__main__":
          # Add the ConsumableBase to children
     )
     resource_interface.add_resource(pool)
+    print(pool.children)
     # print(pool.children["Water"])
 
     # Example operations on the pool
@@ -422,7 +475,7 @@ if __name__ == "__main__":
         children={"A1": pool},
     )
     resource_interface.add_resource(plate)
-    # print(plate.children)
+    print(plate.children)
     # # Increase quantity in a well
     # resource_interface.increase_plate_well(plate, "A1", 30)
     # print(f"A1 Quantity after increase: {plate.children}")
