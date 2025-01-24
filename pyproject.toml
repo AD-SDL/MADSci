@@ -17,3 +17,9 @@ dev = [
 [tool.pdm.version]
 source = "scm"
 fallback_version = "0.0.1"
+
+[dependency-groups]
+tests = ["ipykernel>=6.29.5"]
+dev = [
+    "pytest>=8.3.4",
+]

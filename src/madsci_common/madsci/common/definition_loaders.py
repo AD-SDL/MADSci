@@ -11,7 +11,6 @@ from madsci.common.types.config_types import (
     ConfigParameterDefinition,
 )
 from madsci.common.types.lab_types import (
-    MANAGER_TYPE_DEFINITION_MAP,
     LabDefinition,
     ManagerDefinition,
 )
@@ -20,7 +19,7 @@ from madsci.common.types.node_types import (
     NodeModuleDefinition,
     get_module_from_node_definition,
 )
-from madsci.common.utils import search_for_file_pattern
+from madsci.common.utils import search_for_file_pattern, to_snake_case
 from pydantic import AnyUrl
 
 
@@ -195,12 +194,12 @@ def manager_definition_loader(
     # * Upgrade to more specific manager types, where possible
     refined_managers = []
     for manager in manager_definitions:
-        if manager.manager_type in MANAGER_TYPE_DEFINITION_MAP:
-            refined_managers.append(
-                MANAGER_TYPE_DEFINITION_MAP[manager.manager_type].model_validate(
-                    manager
-                )
-            )
+        for manager_type in ManagerDefinition.__subclasses__():
+            if to_snake_case(manager.manager_type) == to_snake_case(
+                manager_type.__name__
+            ):
+                refined_managers.append(manager_type.model_validate(manager))
+                break
         else:
             refined_managers.append(manager)
 
