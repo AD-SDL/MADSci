@@ -32,24 +32,35 @@ async def add_resource(data: dict):
     """
     try:
         database_url = data["database_url"]
-        resource_data = data["resource"]
-        print("Raw resource data:", resource_data)
-        
-        # Deserialize resource
+        resource_data = data["resource"]       
         resource = deserialize_resource(resource_data)
-        print("Deserialized resource:", resource)
-        print("Deserialized children:", resource.children)
-        # Add resource to the database
         interface = ResourceInterface(database_url=database_url)
         saved_resource = interface.add_resource(resource)
-        print("HERE",type(saved_resource))
-
-        # Serialize the saved resource
         return JSONResponse(serialize_resource(saved_resource))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/resource/update")
+async def update_resource(data: dict):
+    """
+    Update or refresh a resource in the database, including its children.
+    """
+    try:
+        database_url = data["database_url"]
+        resource_data = data["resource"]
 
+        # Deserialize the resource
+        resource = deserialize_resource(resource_data)
 
+        # Update the resource in the database
+        interface = ResourceInterface(database_url=database_url)
+        interface.update_resource(resource)
+
+        # Serialize and return the updated resource
+        return JSONResponse(serialize_resource(resource))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/resource/get")
 async def get_resource(data: dict):
     """
@@ -61,8 +72,6 @@ async def get_resource(data: dict):
         owner_name = data.get("owner_name")
         resource_id = data.get("resource_id")
         resource_type = data.get("resource_type")
-
-        # Retrieve the resource
         interface = ResourceInterface(database_url=database_url)
         resource = interface.get_resource(
             resource_name=resource_name,
@@ -73,11 +82,9 @@ async def get_resource(data: dict):
         if not resource:
             raise HTTPException(status_code=404, detail="Resource not found")
 
-        # Serialize the resource
         return JSONResponse(serialize_resource(resource))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/stack/push")
 async def push_to_stack(data: dict):
@@ -88,19 +95,13 @@ async def push_to_stack(data: dict):
         database_url = data["database_url"]
         stack_data = data["stack"]
         asset_data = data["asset"]
-
-        # Deserialize stack and asset
         stack = deserialize_resource(stack_data)
         asset = deserialize_resource(asset_data)
-
-        # Push the asset onto the stack
         interface = ResourceInterface(database_url=database_url)
-        interface.push_to_stack(stack, asset)
-
-        return JSONResponse({"message": "Asset pushed successfully"})
+        updated_stack = interface.push_to_stack(stack, asset)
+        return JSONResponse(serialize_resource(updated_stack))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/stack/pop")
 async def pop_from_stack(data: dict):
@@ -110,22 +111,15 @@ async def pop_from_stack(data: dict):
     try:
         database_url = data["database_url"]
         stack_data = data["stack"]
-
-        # Deserialize stack
         stack = deserialize_resource(stack_data)
-
-        # Pop the asset from the stack
         interface = ResourceInterface(database_url=database_url)
         popped_asset, updated_stack = interface.pop_from_stack(stack)
-
-        # Serialize and return the response
         return JSONResponse({
             "asset": serialize_resource(popped_asset),
             "updated_stack": serialize_resource(updated_stack),
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/queue/push")
 async def push_to_queue(data: dict):
@@ -136,19 +130,14 @@ async def push_to_queue(data: dict):
         database_url = data["database_url"]
         queue_data = data["queue"]
         asset_data = data["asset"]
-
-        # Deserialize queue and asset
         queue = deserialize_resource(queue_data)
         asset = deserialize_resource(asset_data)
-
-        # Push the asset onto the queue
         interface = ResourceInterface(database_url=database_url)
-        interface.push_to_queue(queue, asset)
+        updated_queue = interface.push_to_queue(queue, asset)
 
-        return JSONResponse({"message": "Asset pushed successfully"})
+        return JSONResponse(serialize_resource(updated_queue))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/queue/pop")
 async def pop_from_queue(data: dict):
@@ -158,22 +147,15 @@ async def pop_from_queue(data: dict):
     try:
         database_url = data["database_url"]
         queue_data = data["queue"]
-
-        # Deserialize queue
         queue = deserialize_resource(queue_data)
-
-        # Pop the asset from the queue
         interface = ResourceInterface(database_url=database_url)
         popped_asset, updated_queue = interface.pop_from_queue(queue)
-
-        # Serialize and return the response
         return JSONResponse({
             "asset": serialize_resource(popped_asset),
             "updated_queue": serialize_resource(updated_queue),
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/pool/increase")
 async def increase_pool_quantity(data: dict):
@@ -184,17 +166,12 @@ async def increase_pool_quantity(data: dict):
         database_url = data["database_url"]
         pool_data = data["pool"]
         amount = data["amount"]
-
-        # Deserialize pool
         pool = deserialize_resource(pool_data)
-
-        # Increase the pool quantity
         interface = ResourceInterface(database_url=database_url)
-        interface.increase_pool_quantity(pool, float(amount))
-        return JSONResponse({"message": "Pool quantity increased successfully"})
+        updated_pool = interface.increase_pool_quantity(pool, float(amount))
+        return JSONResponse(serialize_resource(updated_pool))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/pool/decrease")
 async def decrease_pool_quantity(data: dict):
@@ -205,18 +182,12 @@ async def decrease_pool_quantity(data: dict):
         database_url = data["database_url"]
         pool_data = data["pool"]
         amount = data["amount"]
-
-        # Deserialize pool
         pool = deserialize_resource(pool_data)
-
-        # Decrease the pool quantity
         interface = ResourceInterface(database_url=database_url)
-        interface.decrease_pool_quantity(pool, float(amount))
-
-        return JSONResponse({"message": "Pool quantity decreased successfully"})
+        updated_pool = interface.decrease_pool_quantity(pool, float(amount))
+        return JSONResponse(serialize_resource(updated_pool))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/pool/fill")
 async def fill_pool(data: dict):
@@ -226,18 +197,12 @@ async def fill_pool(data: dict):
     try:
         database_url = data["database_url"]
         pool_data = data["pool"]
-
-        # Deserialize pool
         pool = deserialize_resource(pool_data)
-
-        # Fill the pool
         interface = ResourceInterface(database_url=database_url)
-        interface.fill_pool(pool)
-
-        return JSONResponse({"message": "Pool filled successfully"})
+        updated_pool = interface.fill_pool(pool)
+        return JSONResponse(serialize_resource(updated_pool))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/pool/empty")
 async def empty_pool(data: dict):
@@ -247,18 +212,12 @@ async def empty_pool(data: dict):
     try:
         database_url = data["database_url"]
         pool_data = data["pool"]
-
-        # Deserialize pool
         pool = deserialize_resource(pool_data)
-
-        # Empty the pool
         interface = ResourceInterface(database_url=database_url)
-        interface.empty_pool(pool)
-
-        return JSONResponse({"message": "Pool emptied successfully"})
+        updated_pool = interface.empty_pool(pool)
+        return JSONResponse(serialize_resource(updated_pool))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/plate/increase_well")
 async def increase_plate_well(data: dict):
@@ -270,18 +229,13 @@ async def increase_plate_well(data: dict):
         plate_data = data["plate"]
         well_id = data["well_id"]
         quantity = data["quantity"]
-
-        # Deserialize plate
         plate = deserialize_resource(plate_data)
-
-        # Increase the well quantity
         interface = ResourceInterface(database_url=database_url)
-        interface.increase_plate_well(plate, well_id, quantity)
-
-        return JSONResponse({"message": "Well quantity increased successfully"})
+        updated_plate = interface.increase_plate_well(plate, well_id, quantity)
+        updated_plate = interface.get_resource(resource_id = updated_plate.resource_id)
+        return JSONResponse(serialize_resource(updated_plate))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/plate/decrease_well")
 async def decrease_plate_well(data: dict):
@@ -293,40 +247,29 @@ async def decrease_plate_well(data: dict):
         plate_data = data["plate"]
         well_id = data["well_id"]
         quantity = data["quantity"]
-
-        # Deserialize plate
         plate = deserialize_resource(plate_data)
-
-        # Decrease the well quantity
         interface = ResourceInterface(database_url=database_url)
-        interface.decrease_plate_well(plate, well_id, quantity)
-
-        return JSONResponse({"message": "Well quantity decreased successfully"})
+        updated_plate = interface.decrease_plate_well(plate, well_id, quantity)
+        updated_plate = interface.get_resource(resource_id = updated_plate.resource_id)
+        return JSONResponse(serialize_resource(updated_plate))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.post("/plate/update_well")
-async def update_plate_well(data: dict):
+@app.post("/collection/update_child")
+async def update_collection_child(data: dict):
     """
-    Update a specific well in a plate.
+    Update a specific child in a collection.
     """
     try:
         database_url = data["database_url"]
-        plate_data = data["plate"]
-        well_id = data["well_id"]
+        collection_data = data["collection"]
+        key_id = data["key_id"]
         child_data = data["child"]
-
-        # Deserialize plate and child
-        plate = deserialize_resource(plate_data)
+        collection = deserialize_resource(collection_data)
         child = deserialize_resource(child_data)
-
-        # Update the well
         interface = ResourceInterface(database_url=database_url)
-        interface.update_plate_well(plate, well_id, child)
-
-        # Serialize and return the response
-        return JSONResponse({"message": "Well updated successfully"})
+        updated_collection = interface.update_collection_child(collection, key_id, child)
+        return JSONResponse(serialize_resource(updated_collection))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
