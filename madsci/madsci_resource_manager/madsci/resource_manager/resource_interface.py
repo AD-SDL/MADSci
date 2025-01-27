@@ -399,37 +399,37 @@ class ResourceInterface():
 
 if __name__ == "__main__":
     resource_interface = ResourceInterface()
-    # stack = Stack(
-    #     resource_name="stack",
-    #     resource_type="stack1",  # Make sure this matches the expected type in validation
-    #     capacity=10,
-    #     ownership=None
-    # )
-    # resource_interface.add_resource(stack) 
-    # for i in range(5):
-    #     asset = Asset(resource_name="Test plate"+str(i)) 
-    #     asset = resource_interface.add_resource(asset) 
-    #     resource_interface.push_to_stack(stack,asset)
-    # retrieved_stack = resource_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
-    # for i in range(2):
-    #     n_asset,retrieved_stack = resource_interface.pop_from_stack(retrieved_stack)
-    #     print(f"Popped asset: {n_asset}")
+    stack = Stack(
+        resource_name="stack",
+        resource_type="stack1",  # Make sure this matches the expected type in validation
+        capacity=10,
+        ownership=None
+    )
+    resource_interface.add_resource(stack) 
+    for i in range(5):
+        asset = Asset(resource_name="Test plate"+str(i)) 
+        asset = resource_interface.add_resource(asset) 
+        resource_interface.push_to_stack(stack,asset)
+    retrieved_stack = resource_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
+    for i in range(2):
+        n_asset,retrieved_stack = resource_interface.pop_from_stack(retrieved_stack)
+        print(f"Popped asset: {n_asset}")
         
-    # queue = Queue(
-    #     resource_name="queue",
-    #     resource_type="queue",  # Make sure this matches the expected type in validation
-    #     capacity=10,
-    #     ownership=None
-    # )
-    # queue = resource_interface.add_resource(queue)
-    # for i in range(5):
-    #     asset = Asset(resource_name="Test plate"+str(i)) 
-    #     asset = resource_interface.add_resource(asset) 
-    #     resource_interface.push_to_queue(queue,asset)
-    # retrieved_queue = resource_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
-    # for i in range(2):
-    #     n_asset = resource_interface.pop_from_queue(retrieved_queue)
-    # resource_interface.push_to_queue(queue,n_asset)
+    queue = Queue(
+        resource_name="queue",
+        resource_type="queue",  # Make sure this matches the expected type in validation
+        capacity=10,
+        ownership=None
+    )
+    queue = resource_interface.add_resource(queue)
+    for i in range(5):
+        asset = Asset(resource_name="Test plate"+str(i)) 
+        asset = resource_interface.add_resource(asset) 
+        resource_interface.push_to_queue(queue,asset)
+    retrieved_queue = resource_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
+    for i in range(2):
+        n_asset = resource_interface.pop_from_queue(retrieved_queue)
+    resource_interface.push_to_queue(queue,n_asset)
 
     consumable = Consumable(
         resource_name="Water",
@@ -451,23 +451,23 @@ if __name__ == "__main__":
     )
     resource_interface.add_resource(pool)
     print(pool.children)
-    # print(pool.children["Water"])
+    print(pool.children["Water"])
 
     # Example operations on the pool
-    # print(f"Initial Pool Quantity: {pool.quantity}")
-    # resource_interface.increase_pool_quantity(pool, 50.0)
-    # print(f"After Increase: {pool.quantity}")
+    print(f"Initial Pool Quantity: {pool.quantity}")
+    resource_interface.increase_pool_quantity(pool, 50.0)
+    print(f"After Increase: {pool.quantity}")
 
-    # resource_interface.decrease_pool_quantity(pool, 20.0)
-    # print(f"After Decrease: {pool.quantity}")
+    resource_interface.decrease_pool_quantity(pool, 20.0)
+    print(f"After Decrease: {pool.quantity}")
 
-    # # resource_interface.fill_pool(pool)
-    # # print(f"After Fill: {pool.quantity}")
+    resource_interface.fill_pool(pool)
+    print(f"After Fill: {pool.quantity}")
 
-    # # resource_interface.empty_pool(pool)
-    # # print(f"After Empty: {pool.quantity}")
-    # pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
-    # pool1 = resource_interface.add_resource(pool1)
+    resource_interface.empty_pool(pool)
+    print(f"After Empty: {pool.quantity}")
+    pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
+    pool1 = resource_interface.add_resource(pool1)
     # Create a Plate resource with initial children
     plate = Collection(
         resource_name="Microplate1",
@@ -476,14 +476,14 @@ if __name__ == "__main__":
     )
     resource_interface.add_resource(plate)
     print(plate.children)
-    # # Increase quantity in a well
-    # resource_interface.increase_plate_well(plate, "A1", 30)
-    # print(f"A1 Quantity after increase: {plate.children}")
+    # Increase quantity in a well
+    resource_interface.increase_plate_well(plate, "A1", 30)
+    print(f"A1 Quantity after increase: {plate.children}")
 
-    # # Decrease quantity in a well
-    # resource_interface.decrease_plate_well(plate, "A1", 20)
-    # print(f"A1 Quantity after decrease: {plate.children}")
+    # Decrease quantity in a well
+    resource_interface.decrease_plate_well(plate, "A1", 20)
+    print(f"A1 Quantity after decrease: {plate.children}")
     
-    # resource_interface.update_plate_well(plate, "A2", pool1)
-    # print(f"A2 Pool Name: {plate.children}")
+    resource_interface.update_plate_well(plate, "A2", pool1)
+    print(f"A2 Pool Name: {plate.children}")
 
