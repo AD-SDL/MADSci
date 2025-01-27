@@ -354,6 +354,10 @@ class ResourceDefinition(BaseModel, extra="allow", table=False):
         title="Parent Resource",
         description="The parent resource ID or name. If None, defaults to the owning module or workcell.",
     )
+    last_modified: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of the last modification."
+    )
     # time_created: datetime = Field(
     #     sa_column=Column(DateTime(timezone=True), server_default=func.now()),
     #     title="Time Created",
