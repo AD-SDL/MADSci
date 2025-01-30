@@ -354,22 +354,14 @@ class ResourceDefinition(BaseModel, extra="allow", table=False):
         title="Parent Resource",
         description="The parent resource ID or name. If None, defaults to the owning module or workcell.",
     )
+    date_created:datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of the date created."
+    )    
     last_modified: datetime = Field(
         default_factory=datetime.utcnow,
         description="Timestamp of the last modification."
     )
-    # time_created: datetime = Field(
-    #     sa_column=Column(DateTime(timezone=True), server_default=func.now()),
-    #     title="Time Created",
-    #     description="Timestamp when the allocation was created.",
-    # )
-    # time_updated: datetime = Field(
-    #     sa_column=Column(
-    #         DateTime(timezone=True), onupdate=func.now(), server_default=func.now()
-    #     ),
-    #     title="Time Updated",
-    #     description="Timestamp when the allocation was last updated.",
-    # )
 
     # attributes: dict = Field(
     #     title="Resource Attributes",
