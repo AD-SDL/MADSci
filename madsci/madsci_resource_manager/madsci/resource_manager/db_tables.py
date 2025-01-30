@@ -28,6 +28,25 @@ class History(SQLModel, table=True):
     removed: bool = Field(default=False, nullable=False, description="Whether the resource was removed.")
 
     @classmethod
+    def _convert_datetime(cls, obj):
+        """
+        Recursively convert datetime objects to JSON-serializable strings.
+
+        Args:
+            obj (Any): Any object, including nested dicts/lists.
+
+        Returns:
+            JSON-serializable version of the object.
+        """
+        if isinstance(obj, datetime):
+            return obj.isoformat()  # Convert datetime to string
+        elif isinstance(obj, dict):
+            return {k: cls._convert_datetime(v) for k, v in obj.items()}  # Recursively process dict
+        elif isinstance(obj, list):
+            return [cls._convert_datetime(v) for v in obj]  # Recursively process list
+        return obj  # Return unchanged if it's not a datetime
+
+    @classmethod
     def log_change(
         cls,
         session: Session,
@@ -44,14 +63,22 @@ class History(SQLModel, table=True):
             event_type (str): Type of change (created, updated, deleted).
             removed (bool): Whether the resource is removed.
         """
+        # Convert the resource to a dictionary
+        resource_data = resource.dict()
+
+        # Recursively ensure all datetime fields are JSON-serializable
+        resource_data = cls._convert_datetime(resource_data)
+
         history_entry = cls(
             resource_id=resource.resource_id,
             resource_type=resource.resource_type,
             event_type=event_type,
-            data=resource.dict(),
+            created_at=resource.date_created,
+            data=resource_data, 
             last_modified=resource.last_modified,
             removed=removed
         )
+
         session.add(history_entry)
         session.commit()
 class Asset(AssetBase, table=True):
