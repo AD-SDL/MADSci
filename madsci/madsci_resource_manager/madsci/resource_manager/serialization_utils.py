@@ -2,7 +2,7 @@ import datetime
 from typing import Any, Dict
 from db_tables import map_resource_type, ResourceBase
 
-def convert_value(value: Any) -> Any:
+def _convert_datetime(value: Any) -> Any:
     """
     Recursively convert datetime objects to ISO format strings,
     and process dictionaries and lists.
@@ -10,13 +10,13 @@ def convert_value(value: Any) -> Any:
     if isinstance(value, datetime.datetime):
         return value.isoformat()
     elif isinstance(value, dict):
-        return {k: convert_value(v) for k, v in value.items()}
+        return {k: _convert_datetime(v) for k, v in value.items()}
     elif isinstance(value, list):
-        return [convert_value(item) for item in value]
+        return [_convert_datetime(item) for item in value]
     else:
         return value
 
-def restore_value(value: Any) -> Any:
+def _restore_datetime(value: Any) -> Any:
     """
     Recursively convert ISO format strings to datetime objects.
     If conversion fails (i.e. the string is not a datetime), return the value unchanged.
@@ -28,9 +28,9 @@ def restore_value(value: Any) -> Any:
         except ValueError:
             return value
     elif isinstance(value, dict):
-        return {k: restore_value(v) for k, v in value.items()}
+        return {k: _restore_datetime(v) for k, v in value.items()}
     elif isinstance(value, list):
-        return [restore_value(item) for item in value]
+        return [_restore_datetime(item) for item in value]
     else:
         return value
 
@@ -47,17 +47,17 @@ def serialize_resource(resource: ResourceBase) -> Dict[str, Any]:
     """
     resource_dict = resource.dict()
     # Convert any datetime objects in the resource dictionary
-    resource_dict = convert_value(resource_dict)
+    resource_dict = _convert_datetime(resource_dict)
     
     if hasattr(resource, "children") and resource.children:
         if isinstance(resource.children, dict):
             resource_dict["children"] = {
-                key: serialize_resource(child) if isinstance(child, ResourceBase) else convert_value(child)
+                key: serialize_resource(child) if isinstance(child, ResourceBase) else _convert_datetime(child)
                 for key, child in resource.children.items()
             }
         elif isinstance(resource.children, list):
             resource_dict["children"] = [
-                serialize_resource(child) if isinstance(child, ResourceBase) else convert_value(child)
+                serialize_resource(child) if isinstance(child, ResourceBase) else _convert_datetime(child)
                 for child in resource.children
             ]
     return resource_dict
@@ -90,7 +90,7 @@ def deserialize_resource(data: Dict[str, Any]) -> ResourceBase:
     # For all other fields, attempt to restore datetime values.
     for key, value in data.items():
         if key != "children":
-            data[key] = restore_value(value)
+            data[key] = _restore_datetime(value)
     
     resource_class = map_resource_type(data)
     return resource_class(**data)
