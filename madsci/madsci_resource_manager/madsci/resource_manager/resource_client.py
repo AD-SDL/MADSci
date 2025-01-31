@@ -341,5 +341,4 @@ class ResourceClient:
         }
         response = requests.post(f"{self.base_url}/collection/update_child", json=payload)
         response.raise_for_status()
-        print("\n",response.json())
         return deserialize_resource(response.json())
