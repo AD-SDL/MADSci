@@ -122,14 +122,14 @@ print("Test asset added:", test_asset)
 time.sleep(1)
 
 # Remove the test resource
-removed_asset = client.remove_resource(test_asset)
+removed_asset = client.remove_resource(stack.resource_id)
 print("Resource removed:", removed_asset)
 
 # Wait again to let the removal event register in history
 time.sleep(1)
 
 # Retrieve history for the removed resource. 
-history_entries = client.get_history(resource_id=test_asset.resource_id)
+history_entries = client.get_history(resource_id=stack.resource_id,event_type="deleted")
 print("History for removed resource:")
 for entry in history_entries:
     print(entry)
