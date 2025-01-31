@@ -1,6 +1,7 @@
 """Resources Interface"""
 
 import time
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Type
 import warnings
 
@@ -12,8 +13,8 @@ from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from madsci.common.types.resource_types import ResourceBase
-from db_tables import Stack, Asset, Queue, Pool, Consumable, Collection, Grid
-
+from db_tables import Stack, Asset, Queue, Pool, Consumable, Collection, Grid, History
+from serialization_utils import deserialize_resource
 
 class ResourceInterface():
     """
@@ -189,7 +190,72 @@ class ResourceInterface():
                 f"No resource found matching name '{resource_name}', owner '{owner_name}', or type '{resource_type}'."
             )
             return None
+        
+    def get_history(
+        self,
+        resource_id: str,  # Required
+        event_type: Optional[str] = None,
+        removed: Optional[bool] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        limit: Optional[int] = 100
+    ) -> List[History]:
+        """
+        Query the History table with flexible filtering.
 
+        - If only `resource_id` is provided, fetches **all history** for that resource.
+        - If additional filters (`event_type`, `removed`, etc.) are given, applies them.
+
+        Args:
+            resource_id (str): Required. Fetch history for this resource.
+            event_type (Optional[str]): Filter by event type (`created`, `updated`, `deleted`).
+            removed (Optional[bool]): Filter by removed status.
+            start_date (Optional[datetime]): Start of the date range.
+            end_date (Optional[datetime]): End of the date range.
+            limit (Optional[int]): Maximum number of records to return (None for all records).
+
+        Returns:
+            List[History]: A list of deserialized historical resource objects.
+        """
+        with self.session as session:
+            query = select(History).where(History.resource_id == resource_id)
+
+            # Apply additional filters if provided
+            if event_type:
+                query = query.where(History.event_type == event_type)
+            if removed is not None:
+                query = query.where(History.removed == removed)
+            if start_date:
+                query = query.where(History.last_modified >= start_date)  # Changed to last_modified
+            if end_date:
+                query = query.where(History.last_modified <= end_date)  # Changed to last_modified
+
+            query = query.order_by(History.last_modified.desc())  # Sorting by last_modified
+
+            if limit:
+                query = query.limit(limit)
+
+            history_entries = session.exec(query).all()
+
+            # Deserialize the `data` field into ResourceBase objects
+            for entry in history_entries:
+                entry.data = deserialize_resource(entry.data)
+
+            return history_entries
+        
+    def restore_deleted_resource(self, resource_id: str) -> Optional[ResourceBase]:
+        """
+        Restore the latest version of a deleted resource.
+
+        Args:
+            resource_id (str): The resource ID.
+
+        Returns:
+            Optional[ResourceBase]: The latest version of the resource data, or None if not found.
+        """
+        history_entries = self.get_history(resource_id=resource_id, removed=True, limit=1)
+        return history_entries[0].data if history_entries else None
+    
     def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
         """
         Increase the quantity of a pool resource.
@@ -401,7 +467,7 @@ if __name__ == "__main__":
     resource_interface = ResourceInterface()
     stack = Stack(
         resource_name="stack",
-        resource_type="stack1",  # Make sure this matches the expected type in validation
+        resource_type="stack",  # Make sure this matches the expected type in validation
         capacity=10,
         ownership=None
     )
@@ -409,11 +475,13 @@ if __name__ == "__main__":
     for i in range(5):
         asset = Asset(resource_name="Test plate"+str(i)) 
         asset = resource_interface.add_resource(asset) 
+        time.sleep(2)
         resource_interface.push_to_stack(stack,asset)
     retrieved_stack = resource_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
     for i in range(2):
+        time.sleep(2)
         n_asset,retrieved_stack = resource_interface.pop_from_stack(retrieved_stack)
-        print(f"Popped asset: {n_asset}")
+        # print(f"Popped asset: {n_asset}")
         
     queue = Queue(
         resource_name="queue",
@@ -454,18 +522,18 @@ if __name__ == "__main__":
     # print(pool.children["Water"])
 
     # Example operations on the pool
-    print(f"Initial Pool Quantity: {pool.quantity}")
+    # print(f"Initial Pool Quantity: {pool.quantity}")
     pool = resource_interface.increase_pool_quantity(pool, 50.0)
-    print(f"After Increase: {pool.quantity}")
+    # print(f"After Increase: {pool.quantity}")
 
     pool = resource_interface.decrease_pool_quantity(pool, 20.0)
-    print(f"After Decrease: {pool.quantity}")
+    # print(f"After Decrease: {pool.quantity}")
 
     pool = resource_interface.fill_pool(pool)
-    print(f"After Fill: {pool.quantity}")
+    # print(f"After Fill: {pool.quantity}")
 
     pool = resource_interface.empty_pool(pool)
-    print(f"After Empty: {pool.quantity}")
+    # print(f"After Empty: {pool.quantity}")
     pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
     pool1 = resource_interface.add_resource(pool1)
     # Create a Plate resource with initial children
@@ -475,15 +543,28 @@ if __name__ == "__main__":
         children={"A1": pool},
     )
     resource_interface.add_resource(plate)
-    print(plate.children)
+    # print(plate.children)
     # Increase quantity in a well
     resource_interface.increase_plate_well(plate, "A1", 30)
-    print(f"A1 Quantity after increase: {plate.children}")
+    # print(f"A1 Quantity after increase: {plate.children}")
 
     # Decrease quantity in a well
     resource_interface.decrease_plate_well(plate, "A1", 20)
-    print(f"A1 Quantity after decrease: {plate.children}")
+    # print(f"A1 Quantity after decrease: {plate.children}")
     
     resource_interface.update_collection_child(plate, "A2", pool1)
-    print(f"A2 Pool Name: {plate.children}")
-
+    # print(f"A2 Pool Name: {plate.children}")
+    # history_entries = resource_interface.get_history(resource_id=stack.resource_id)
+    # for entry in history_entries:
+    #     # print(entry.data)  # Now a ResourceBase object
+    #     pass
+    # Truncate nanosecond precision to microseconds to match PostgreSQL storage
+    start_date = datetime.utcnow()- timedelta(seconds=6)
+    end_date = datetime.utcnow()
+    history_entries = resource_interface.get_history(
+        resource_id=stack.resource_id,
+        start_date=start_date,
+        end_date=end_date
+    )
+    for entry in history_entries:
+        print(entry.data)
