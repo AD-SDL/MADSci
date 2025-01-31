@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from datetime import datetime
 
 from resource_interface import ResourceInterface
 from db_tables import map_resource_type
@@ -61,6 +62,32 @@ async def update_resource(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+@app.post("/resource/remove")
+async def remove_resource(data: dict):
+    """
+    Remove a resource by moving it to the History table and deleting it from the main table.
+
+    Args:
+        data (dict): JSON payload with:
+            - `database_url` (str): The database connection string.
+            - `resource_id` (str): The ID of the resource to remove.
+
+    Returns:
+        JSONResponse: A success message or an error.
+    """
+    try:
+        database_url = data["database_url"]
+        resource_id = data["resource_id"]
+
+        interface = ResourceInterface(database_url=database_url)
+        interface.remove_resource(resource_id)
+
+        return JSONResponse({"message": f"Resource {resource_id} successfully removed."})
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/resource/get")
 async def get_resource(data: dict):
     """
@@ -83,6 +110,82 @@ async def get_resource(data: dict):
             raise HTTPException(status_code=404, detail="Resource not found")
 
         return JSONResponse(serialize_resource(resource))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@app.post("/resource/history")
+async def get_history(data: dict):
+    """
+    Retrieve the history of a resource.
+
+    Args:
+        data (dict): JSON payload with:
+            - `database_url` (str): The database connection string.
+            - `resource_id` (str): The ID of the resource.
+            - `event_type` (Optional[str]): Filter by event type (`created`, `updated`, `deleted`).
+            - `removed` (Optional[bool]): Filter by removed status.
+            - `start_date` (Optional[str]): Start date (ISO format `YYYY-MM-DDTHH:MM:SS`).
+            - `end_date` (Optional[str]): End date (ISO format `YYYY-MM-DDTHH:MM:SS`).
+            - `limit` (Optional[int]): Maximum number of records to return.
+
+    Returns:
+        JSONResponse: A list of historical resource entries.
+    """
+    try:
+        database_url = data["database_url"]
+        resource_id = data["resource_id"]
+        event_type = data.get("event_type")
+        removed = data.get("removed")
+        start_date = data.get("start_date")
+        end_date = data.get("end_date")
+        limit = data.get("limit", 100)
+
+        interface = ResourceInterface(database_url=database_url)
+
+        # Convert date strings to datetime objects
+        start_date = datetime.fromisoformat(start_date) if start_date else None
+        end_date = datetime.fromisoformat(end_date) if end_date else None
+
+        history_entries = interface.get_history(
+            resource_id=resource_id,
+            event_type=event_type,
+            removed=removed,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
+
+        return JSONResponse([serialize_resource(entry.data) for entry in history_entries])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@app.post("/resource/restore")
+async def restore_deleted_resource(data: dict):
+    """
+    Restore a previously deleted resource from the history table.
+
+    Args:
+        data (dict): JSON payload with:
+            - `database_url` (str): The database connection string.
+            - `resource_id` (str): The ID of the resource to restore.
+
+    Returns:
+        JSONResponse: The restored resource.
+    """
+    try:
+        database_url = data["database_url"]
+        resource_id = data["resource_id"]
+
+        interface = ResourceInterface(database_url=database_url)
+
+        # Fetch the most recent deleted entry
+        history_entries = interface.get_history(resource_id=resource_id, removed=True, limit=1)
+        if not history_entries:
+            raise HTTPException(status_code=404, detail=f"No deleted history found for resource ID '{resource_id}'.")
+
+        # Deserialize and restore the resource
+        restored_resource = deserialize_resource(history_entries[0].data)
+        saved_resource = interface.add_resource(restored_resource)
+
+        return JSONResponse(serialize_resource(saved_resource))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -1,7 +1,8 @@
 import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
+from datetime import datetime
 
 from serialization_utils import serialize_resource, deserialize_resource  
 
@@ -73,7 +74,66 @@ class ResourceClient:
         response = requests.post(f"{self.base_url}/resource/get", json=payload)
         response.raise_for_status()
         return deserialize_resource(response.json())
+    
+    def remove_resource(self, resource_id: str) -> Dict[str, Any]:
+        """
+        Remove a resource by moving it to the history table with `removed=True`.
+        """
+        payload = {
+            "database_url": self.database_url,
+            "resource_id": resource_id
+        }
+        response = requests.post(f"{self.base_url}/resource/remove", json=payload)
+        response.raise_for_status()
+        return response.json()
 
+    def get_history(
+        self,
+        resource_id: str,
+        event_type: Optional[str] = None,
+        removed: Optional[bool] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        limit: Optional[int] = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve the history of a resource with flexible filters.
+        """
+        payload = {
+            "database_url": self.database_url,
+            "resource_id": resource_id,
+            "event_type": event_type,
+            "removed": removed,
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+            "limit": limit,
+        }
+        response = requests.post(f"{self.base_url}/resource/history", json=payload)
+        response.raise_for_status()
+        
+        history_entries = response.json()
+
+        # Ensure `data` field is deserialized properly
+        for entry in history_entries:
+            if "data" in entry and isinstance(entry["data"], str):
+                try:
+                    entry["data"] = json.loads(entry["data"])
+                except json.JSONDecodeError:
+                    entry["data"] = None  # Handle case where data is not valid JSON
+
+        return history_entries
+    def restore_deleted_resource(self, resource_id: str) -> Dict[str, Any]:
+        """
+        Restore a deleted resource from the history table.
+        """
+        payload = {
+            "database_url": self.database_url,
+            "resource_id": resource_id
+        }
+        response = requests.post(f"{self.base_url}/resource/restore", json=payload)
+        response.raise_for_status()
+        return deserialize_resource(response.json())
+    
     def push_to_stack(self, stack, asset) -> Dict[str, Any]:
         """
         Push an asset onto a stack.

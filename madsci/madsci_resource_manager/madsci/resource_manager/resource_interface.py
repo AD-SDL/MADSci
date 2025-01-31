@@ -256,6 +256,32 @@ class ResourceInterface():
         history_entries = self.get_history(resource_id=resource_id, removed=True, limit=1)
         return history_entries[0].data if history_entries else None
     
+    def remove_resource(self, resource_id: str) -> None:
+        """
+        Remove a resource by moving it to the History table and deleting it from the main table.
+
+        This function:
+        - Fetches the resource by `resource_id`
+        - Calls `delete()` on the resource to move it to the History table
+        - Deletes the resource from the original table
+
+        Args:
+            resource_id (str): ID of the resource to remove.
+
+        Raises:
+            ValueError: If the resource does not exist.
+        """
+        with self.session as session:
+            # Retrieve the resource
+            resource = self.get_resource(resource_id=resource_id)
+            if not resource:
+                raise ValueError(f"🚨 Resource with ID '{resource_id}' not found!")
+
+            print(f"🗑 Removing Resource: {resource.resource_name} (ID: {resource_id})")
+
+            # Archive and remove the resource
+            resource.delete(session)
+
     def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
         """
         Increase the quantity of a pool resource.
@@ -475,11 +501,11 @@ if __name__ == "__main__":
     for i in range(5):
         asset = Asset(resource_name="Test plate"+str(i)) 
         asset = resource_interface.add_resource(asset) 
-        time.sleep(2)
+        # time.sleep(2)
         resource_interface.push_to_stack(stack,asset)
     retrieved_stack = resource_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
     for i in range(2):
-        time.sleep(2)
+        # time.sleep(2)
         n_asset,retrieved_stack = resource_interface.pop_from_stack(retrieved_stack)
         # print(f"Popped asset: {n_asset}")
         
@@ -554,17 +580,14 @@ if __name__ == "__main__":
     
     resource_interface.update_collection_child(plate, "A2", pool1)
     # print(f"A2 Pool Name: {plate.children}")
-    # history_entries = resource_interface.get_history(resource_id=stack.resource_id)
-    # for entry in history_entries:
-    #     # print(entry.data)  # Now a ResourceBase object
-    #     pass
-    # Truncate nanosecond precision to microseconds to match PostgreSQL storage
+
     start_date = datetime.utcnow()- timedelta(seconds=6)
     end_date = datetime.utcnow()
+
+    resource_interface.remove_resource(resource_id=stack.resource_id)
     history_entries = resource_interface.get_history(
         resource_id=stack.resource_id,
-        start_date=start_date,
-        end_date=end_date
+
     )
     for entry in history_entries:
-        print(entry.data)
+        print(entry.removed)
