@@ -193,7 +193,7 @@ class ResourceInterface():
         
     def get_history(
         self,
-        resource_id: str,  # Required
+        resource_id: str,  
         event_type: Optional[str] = None,
         removed: Optional[bool] = None,
         start_date: Optional[datetime] = None,
@@ -482,8 +482,8 @@ class ResourceInterface():
         with self.session as session:
             collection= session.query(Collection).filter_by(resource_id=collection.resource_id).first()
             resource = self.get_resource(resource_id=resource.resource_id)
-            resource = session.merge(resource)
-            collection.add_child(key, resource, session)
+            print("HERE",resource)
+            collection.add_child(key=key, resource=resource, session=session)
             session.add(collection)
             # session.commit()
             session.refresh(collection)
