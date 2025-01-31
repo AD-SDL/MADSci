@@ -482,7 +482,6 @@ class ResourceInterface():
         with self.session as session:
             collection= session.query(Collection).filter_by(resource_id=collection.resource_id).first()
             resource = self.get_resource(resource_id=resource.resource_id)
-            print("HERE",resource)
             collection.add_child(key=key, resource=resource, session=session)
             session.add(collection)
             # session.commit()
