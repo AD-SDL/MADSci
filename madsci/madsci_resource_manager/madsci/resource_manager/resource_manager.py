@@ -112,6 +112,7 @@ async def get_resource(data: dict):
         return JSONResponse(serialize_resource(resource))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/resource/history")
 async def get_history(data: dict):
     """
@@ -157,6 +158,7 @@ async def get_history(data: dict):
         return JSONResponse([serialize_resource(entry.data) for entry in history_entries])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/resource/restore")
 async def restore_deleted_resource(data: dict):
     """
