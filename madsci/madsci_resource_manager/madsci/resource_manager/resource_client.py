@@ -113,15 +113,12 @@ class ResourceClient:
         
         history_entries = response.json()
 
-        # Ensure `data` field is deserialized properly
         for entry in history_entries:
-            if "data" in entry and isinstance(entry["data"], str):
-                try:
-                    entry["data"] = json.loads(entry["data"])
-                except json.JSONDecodeError:
-                    entry["data"] = None  # Handle case where data is not valid JSON
+            if "data" in entry:
+                entry["data"] = deserialize_resource(entry["data"])
 
         return history_entries
+    
     def restore_deleted_resource(self, resource_id: str) -> Dict[str, Any]:
         """
         Restore a deleted resource from the history table.
@@ -344,4 +341,5 @@ class ResourceClient:
         }
         response = requests.post(f"{self.base_url}/collection/update_child", json=payload)
         response.raise_for_status()
+        print("\n",response.json())
         return deserialize_resource(response.json())

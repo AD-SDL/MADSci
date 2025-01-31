@@ -1,6 +1,7 @@
 
 from resource_client import ResourceClient
 from db_tables import Stack, Asset, Queue, Pool, Collection, Consumable
+import time 
 
 # Initialize the ResourcesClient with the database URL
 database_url = "postgresql://rpl:rpl@127.0.0.1:5432/resources"
@@ -108,3 +109,27 @@ print(f"A2 Pool Name: {plate.children}")
 pool.capacity = 1000
 updated_resource = client.update_resource(pool)
 print(updated_resource)
+
+print("\n=== Testing get_history, remove_resource, and restore_deleted_resource ===")
+
+# Create a test asset to remove and then restore
+test_asset = Asset(resource_name="Test Asset for Removal", resource_type="asset")
+test_asset = client.add_resource(test_asset)
+print("Test asset added:", test_asset)
+
+
+# Wait a moment to ensure the history timestamps will be distinct
+time.sleep(1)
+
+# Remove the test resource
+removed_asset = client.remove_resource(test_asset)
+print("Resource removed:", removed_asset)
+
+# Wait again to let the removal event register in history
+time.sleep(1)
+
+# Retrieve history for the removed resource. 
+history_entries = client.get_history(resource_id=test_asset.resource_id)
+print("History for removed resource:")
+for entry in history_entries:
+    print(entry)
