@@ -19,6 +19,6 @@ if __name__ == "__main__":
     lab_definition = LabDefinition.model_validate(lab_definition_loader())
     uvicorn.run(
         app,
-        host=lab_definition.server_config.host,
-        port=lab_definition.server_config.port,
+        host=lab_definition.host,
+        port=lab_definition.port,
     )

@@ -121,13 +121,6 @@ def list() -> None:
             console.print(
                 f"[bold]{lab_definition.name}[/]: {lab_definition.description} ({lab_file})",
             )
-            if lab_definition.workcells:
-                console.print("  Workcells:")
-                for name, workcell in lab_definition.workcells.items():
-                    if isinstance(workcell, str):
-                        console.print(f"    - {name}: {workcell}")
-                    else:
-                        console.print(f"    - {name}: {workcell.description}")
     else:
         print("No lab definitions found")
 

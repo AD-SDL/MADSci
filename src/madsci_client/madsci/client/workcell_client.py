@@ -54,7 +54,7 @@ class WorkcellClient:
         response.raise_for_status()
         return None
 
-    def start_workflow(
+    def submit_workflow(
         self,
         workflow: str,
         parameters: dict,
@@ -63,7 +63,7 @@ class WorkcellClient:
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
     ) -> Workflow:
-        """send a workflow to the workcell manager"""
+        """Send a workflow to the workcell manager"""
         workflow = WorkflowDefinition.from_yaml(workflow)
         WorkflowDefinition.model_validate(workflow)
         insert_parameter_values(workflow=workflow, parameters=parameters)
@@ -75,6 +75,9 @@ class WorkcellClient:
                 "workflow": workflow.model_dump_json(),
                 "parameters": json.dumps(parameters),
                 "validate_only": validate_only,
+                "ownership_info": self.ownership_info.model_dump(mode="json")
+                if self.ownership_info
+                else None,
             },
             files={
                 ("files", (str(Path(path).name), Path.open(Path(path), "rb")))
@@ -109,23 +112,23 @@ class WorkcellClient:
                     step.files[file] = Path(files[unique_filename]).name
         return files
 
-    def run_workflows_in_order(
+    def submit_workflow_sequence(
         self, workflows: list[str], parameters: list[dict[str:Any]]
     ) -> list[Workflow]:
-        """run a list of workflows in order"""
+        """Submit a list of workflows to run in a specific order"""
         wfs = []
         for i in range(len(workflows)):
-            wf = self.start_workflow(workflows[i], parameters[i], blocking=True)
+            wf = self.submit_workflow(workflows[i], parameters[i], blocking=True)
             wfs.append(wf)
         return wfs
 
-    def run_workflow_batch(
+    def submit_workflow_batch(
         self, workflows: list[str], parameters: list[dict[str:Any]]
     ) -> list[Workflow]:
-        """run a batch of workflows in no particular order"""
+        """Submit a batch of workflows to run in no particular order"""
         id_list = []
         for i in range(len(workflows)):
-            response = self.start_workflow(workflows[i], parameters[i], blocking=False)
+            response = self.submit_workflow(workflows[i], parameters[i], blocking=False)
             id_list.append(response.json()["workflow_id"])
         finished = False
         while not finished:

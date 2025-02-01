@@ -4,8 +4,10 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Optional, Union
 
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.step_types import Step
+from madsci.common.validators import ulid_validator
 from pydantic import Field, field_validator
 
 
@@ -104,7 +106,7 @@ class Workflow(WorkflowDefinition):
     """Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory={})
     """parameter values used in this workflow"""
-    experiment_id: Optional[str] = None
+    ownership_info: OwnershipInfo = Field(default_factory=OwnershipInfo)
     """ID of the experiment this workflow is a part of"""
     status: WorkflowStatus = Field(default=WorkflowStatus.QUEUED)
     """current status of the workflow"""
@@ -157,3 +159,5 @@ class Workflow(WorkflowDefinition):
         if not ids:
             raise KeyError(f"Label {label} not found in workflow run {self.run_id}")
         return ids
+
+    is_ulid = field_validator("workflow_id")(ulid_validator)

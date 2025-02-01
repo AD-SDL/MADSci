@@ -4,8 +4,16 @@ from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionResult, ActionSucceeded
+from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.abstract_node_module import action
 from madsci.node_module.rest_node_module import RestNode
+
+
+class LiquidHandlerConfig(RestNodeConfig):
+    """Configuration for the liquid handler node module."""
+
+    device_number: int = 0
+    """The device number of the liquid handler."""
 
 
 class LiquidHandlerInterface:
@@ -32,6 +40,7 @@ class LiquidHandlerNode(RestNode):
     """A fake liquid handler node module for testing."""
 
     liquid_handler: LiquidHandlerInterface = None
+    config_model = LiquidHandlerConfig
 
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""

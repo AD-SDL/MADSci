@@ -1,126 +1,195 @@
 """REST API and Server for the Experiment Manager."""
 
 import datetime
+from dataclasses import dataclass
 from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI
-from madsci.client.event_client import EventClient
+from fastapi.routing import APIRouter
+from madsci.client.event_client import EventClient, EventType
+from madsci.common.definition_loaders import manager_definition_loader
+from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
     ExperimentManagerDefinition,
 )
-from madsci.common.types.lab_types import EventManagerDefinition
+from madsci.common.types.lab_types import ManagerType
+from nicegui import ui
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
 
-class ExperimentManagerServer:
+class ExperimentServer:
     """A REST Server for managing MADSci experiments across a lab."""
 
-    experiment_manager_definition: ExperimentManagerDefinition
+    experiment_manager_definition: Optional[ExperimentManagerDefinition] = None
     db_client: MongoClient
-    db_connection: Database
-    experiment_designs: Collection
-    experiments: Collection
     app = FastAPI()
-    logger = EventClient(name=__name__)
+    logger = EventClient()
+    experiments: Collection
 
+    def __init__(
+        self,
+        experiment_manager_definition: Optional[ExperimentManagerDefinition] = None,
+        db_connection: Optional[Database] = None,
+        enable_ui: bool = True,
+    ) -> None:
+        """Initialize the Experiment Manager Server."""
+        if experiment_manager_definition is not None:
+            self.experiment_manager_definition = experiment_manager_definition
+        else:
+            # Load the experiment manager definition
+            manager_definitions = manager_definition_loader()
+            for manager in manager_definitions:
+                if manager.manager_type == ManagerType.EXPERIMENT_MANAGER:
+                    self.experiment_manager_definition = manager
 
-@ExperimentManagerServer.app.get("/")
-def root() -> Optional[EventManagerDefinition]:
-    """Get the root endpoint for the Experiment Manager's server."""
-    return ExperimentManagerServer.experiment_manager_definition
+        if self.experiment_manager_definition is None:
+            raise ValueError(
+                "No experiment manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
+            )
 
+        # * Logger
+        self.logger = EventClient(
+            self.experiment_manager_definition.event_client_config
+        )
+        self.logger.log_info(self.experiment_manager_definition)
 
-@ExperimentManagerServer.app.post("/experiment_design")
-def register_experiment_design(experiment_design: ExperimentDesign) -> ExperimentDesign:
-    """Register a new experiment_design."""
-    # * Lookup experiment_design by ID
-    experiment_design.registered_at = datetime.now()
-    ExperimentManagerServer.experiment_designs.insert_one(
-        experiment_design.model_dump(mode="json")
-    )
-    return experiment_design
+        # * DB Config
+        if db_connection is not None:
+            self.db_connection = db_connection
+        else:
+            self.db_client = MongoClient(self.experiment_manager_definition.db_url)
+            self.db_connection = self.db_client["experiment_manager"]
+        self.experiments = self.db_connection["experiments"]
 
+        # * REST Server Config
+        if enable_ui:
+            self.configure_ui(self.app)
+        self._configure_routes()
 
-@ExperimentManagerServer.app.get("/experiment_design/{experiment_design_id}")
-def get_experiment_design(experiment_design_id: str) -> Optional[ExperimentDesign]:
-    """Get an experiment_design by ID."""
-    return ExperimentManagerServer.experiment_designs.find_one(
-        {"experiment_design": experiment_design_id}
-    )
+    async def definition(self) -> Optional[ExperimentManagerDefinition]:
+        """Get the definition for the Experiment Manager."""
+        return self.experiment_manager_definition
 
+    async def get_experiment(self, experiment_id: str) -> Experiment:
+        """Get an experiment by ID."""
+        return Experiment.model_validate(
+            self.experiments.find_one({"_id": experiment_id})
+        )
 
-@ExperimentManagerServer.app.get("/experiment/{experiment_id}")
-def get_experiment(experiment_id: str) -> Experiment:
-    """Get an experiment by ID."""
-    return ExperimentManagerServer.experiments.find_one({"experiment": experiment_id})
+    async def get_experiments(self, number: int = 10) -> list[Experiment]:
+        """Get the latest experiments."""
+        experiments = (
+            self.experiments.find().sort("started_at", -1).limit(number).to_list()
+        )
+        return [Experiment.model_validate(experiment) for experiment in experiments]
 
+    async def start_experiment(
+        self,
+        experiment_design: ExperimentDesign,
+        run_name: Optional[str] = None,
+        run_description: Optional[str] = None,
+    ) -> Experiment:
+        """Start a new experiment."""
+        experiment = Experiment.from_experiment_design(
+            run_name=run_name,
+            run_description=run_description,
+            experiment_design=experiment_design,
+        )
+        experiment.started_at = datetime.datetime.now()
+        self.experiments.insert_one(experiment.to_mongo())
+        self.logger.log(
+            event=Event(
+                event_type=EventType.EXPERIMENT_START,
+                event_data={"experiment": experiment},
+            )
+        )
+        return experiment
 
-@ExperimentManagerServer.app.get("/experiments")
-def get_experiments(number: int = 10) -> list[Experiment]:
-    """Get the latest experiments."""
-    return list(
-        ExperimentManagerServer.experiments.find().sort("started_at", -1).limit(number)
-    )
+    async def end_experiment(self, experiment_id: str) -> Experiment:
+        """End an experiment by ID."""
+        experiment = Experiment.model_validate(
+            self.experiments.find_one({"_id": experiment_id})
+        )
+        if experiment is None:
+            raise ValueError(f"Experiment {experiment_id} not found.")
+        experiment.ended_at = datetime.datetime.now()
+        self.experiments.update_one(
+            {"_id": experiment_id},
+            {"$set": experiment.to_mongo()},
+        )
+        self.logger.log(
+            event=Event(
+                event_type=EventType.EXPERIMENT_COMPLETE,
+                event_data={"experiment": experiment},
+            )
+        )
+        return experiment
 
+    def start_server(self) -> None:
+        """Start the server."""
+        uvicorn.run(
+            self.app,
+            host=self.experiment_manager_definition.host,
+            port=self.experiment_manager_definition.port,
+        )
 
-@ExperimentManagerServer.app.get("/experiment_designs")
-def get_experiment_designs(number: int = 10) -> list[ExperimentDesign]:
-    """Get the latest experiment designs."""
-    return list(
-        ExperimentManagerServer.experiment_designs.find()
-        .sort("registered_at", -1)
-        .limit(number)
-    )
+    def _configure_routes(self) -> None:
+        self.router = APIRouter()
+        self.router.add_api_route("/definition", self.definition, methods=["GET"])
+        self.router.add_api_route(
+            "/experiment/{experiment_id}", self.get_experiment, methods=["GET"]
+        )
+        self.router.add_api_route("/experiments", self.get_experiments, methods=["GET"])
+        self.router.add_api_route(
+            "/experiment", self.start_experiment, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/experiment/{experiment_id}/end", self.end_experiment, methods=["POST"]
+        )
+        self.app.include_router(self.router)
+
+    def configure_ui(self, fastapi_app: FastAPI) -> None:
+        """Configure the UI for the Experiment Manager."""
+
+        @ui.page(path="/")
+        def show() -> None:
+            """Show the Experiment Manager UI."""
+            ui.label("Welcome to the Experiment Manager!")
+            ui.label(
+                f"Experiments: {[experiment.model_dump(mode='json') for experiment in self.get_experiments()]}"
+            )
+
+            def new_experiment() -> None:
+                """Create a new Experiment"""
+                experiment = self.start_experiment(
+                    experiment_design=ExperimentDesign(
+                        experiment_name="Test Experiment",
+                        experiment_description="This is a test experiment.",
+                    ),
+                    run_name="Test Run",
+                    run_description="This is a test run.",
+                )
+                ui.label(f"New Experiment: {experiment.model_dump(mode='json')}")
+
+            @dataclass
+            class NewExperiment:
+                experiment_name: str = "Test Experiment"
+                experiment_description: str = "This is a test experiment."
+
+            ui.input("Experiment Name", model=NewExperiment, field="experiment_name")
+            ui.button(text="New Experiment", on_click=new_experiment)
+
+        ui.run_with(
+            fastapi_app,
+            title="Experiment Manager",
+        )
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        ExperimentManagerServer.app,
-        host=ExperimentManagerServer.host,
-        port=ExperimentManagerServer.port,
-    )
-
-
-@ExperimentManagerServer.app.post("/experiment")
-def start_experiment(
-    experiment_design_id: str,
-    run_name: Optional[str] = None,
-    run_description: Optional[str] = None,
-) -> Experiment:
-    """Start a new experiment."""
-    experiment_design = ExperimentManagerServer.experiment_designs.find_one(
-        {"experiment_design": experiment_design_id}
-    )
-    if experiment_design is None:
-        raise ValueError(f"Experiment Design {experiment_design_id} not found.")
-    experiment = Experiment.from_experiment_design(
-        run_name=run_name,
-        run_description=run_description,
-        experiment_design=experiment_design,
-    )
-    experiment.started_at = datetime.now()
-    ExperimentManagerServer.experiments.insert_one(
-        experiment.model_dump(mode="json", exclude={"experiment_design"})
-    )
-    return experiment
-
-
-@ExperimentManagerServer.app.post("/experiment/{experiment_id}/end")
-def end_experiment(experiment_id: str) -> Experiment:
-    """End an experiment by ID."""
-    experiment = ExperimentManagerServer.experiments.find_one(
-        {"experiment": experiment_id}
-    )
-    if experiment is None:
-        raise ValueError(f"Experiment {experiment_id} not found.")
-    experiment.ended_at = datetime.now()
-    ExperimentManagerServer.experiments.update_one(
-        {"experiment": experiment_id},
-        {"$set": experiment.model_dump(mode="json", exclude={"experiment_design"})},
-    )
-    return experiment
+    server = ExperimentServer()
+    server.start_server()

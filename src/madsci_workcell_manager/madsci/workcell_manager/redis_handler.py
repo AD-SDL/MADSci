@@ -10,7 +10,6 @@ from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import Workflow
-from madsci.workcell_manager.workcell_manager_types import WorkcellManagerDefinition
 from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
 from pydantic import ValidationError
 
@@ -24,14 +23,14 @@ class WorkcellRedisHandler:
     state_change_marker = "0"
     _redis_connection: Any = None
 
-    def __init__(self, workcell_manager_definition: WorkcellManagerDefinition) -> None:
+    def __init__(self, workcell_definition: WorkcellDefinition) -> None:
         """
         Initialize a StateManager for a given workcell.
         """
-        self._workcell_name = workcell_manager_definition.plugin_config.workcell_name
-        self._redis_host = workcell_manager_definition.plugin_config.redis_host
-        self._redis_port = workcell_manager_definition.plugin_config.redis_port
-        self._redis_password = workcell_manager_definition.plugin_config.redis_password
+        self._workcell_name = workcell_definition.config.workcell_name
+        self._redis_host = workcell_definition.config.redis_host
+        self._redis_port = workcell_definition.config.redis_port
+        self._redis_password = workcell_definition.config.redis_password
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
 
     @property

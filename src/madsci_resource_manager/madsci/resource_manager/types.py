@@ -13,7 +13,7 @@ class ResourceManagerDefinition(ManagerDefinition):
         title="Plugin Type",
         description="The type of the plugin, used by other components or plugins to find matching plugins.",
     )
-    plugin_config: "ResourceManagerConfig" = Field(
+    config: "ResourceManagerConfig" = Field(
         default_factory=lambda: ResourceManagerConfig(),
         title="Plugin Configuration",
         description="The configuration for the resource manager plugin.",

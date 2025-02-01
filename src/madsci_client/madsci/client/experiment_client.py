@@ -1,9 +1,9 @@
 """Client for the MADSci Experiment Manager."""
 
-from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 import requests
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentalCampaign,
@@ -18,26 +18,12 @@ class ExperimentClient:
 
     url: AnyUrl
 
-    def __init__(self, url: Union[str, AnyUrl]) -> "ExperimentClient":
+    def __init__(
+        self, url: Union[str, AnyUrl], ownership_info: Optional[OwnershipInfo] = None
+    ) -> "ExperimentClient":
         """Create a new Experiment Client."""
         self.url = AnyUrl(url)
-
-    def register_experiment_design(
-        self, experiment_design: Union[ExperimentDesign, dict[str, Any], str, Path]
-    ) -> ExperimentDesign:
-        """Register an experiment with the Experiment Manager."""
-        if isinstance(experiment_design, dict):
-            experiment_design = ExperimentDesign.model_validate(experiment_design)
-        elif isinstance(experiment_design, (Path, str)):
-            experiment_design = ExperimentDesign.from_yaml(experiment_design)
-        response = requests.post(
-            f"{self.url}/experiment_design",
-            json=experiment_design.model_dump(mode="json"),
-            timeout=10,
-        )
-        if not response.ok:
-            response.raise_for_status()
-        return ExperimentDesign.model_validate(response.json())
+        self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
 
     def get_experiment(self, experiment_id: Union[str, ULID]) -> dict:
         """Get an experiment by ID."""
@@ -55,30 +41,9 @@ class ExperimentClient:
             response.raise_for_status()
         return [Experiment.model_validate(experiment) for experiment in response.json()]
 
-    def get_experiment_design(self, experiment_design_id: str) -> ExperimentDesign:
-        """Get an experiment design by ID."""
-        response = requests.get(
-            f"{self.url}/experiment_design/{experiment_design_id}", timeout=10
-        )
-        if not response.ok:
-            response.raise_for_status()
-        return ExperimentDesign.model_validate(response.json())
-
-    def get_experiment_designs(self, number: int = 10) -> list[ExperimentDesign]:
-        """Get a list of the latest experiment designs."""
-        response = requests.get(
-            f"{self.url}/experiment_designs", params={number: number}, timeout=10
-        )
-        if not response.ok:
-            response.raise_for_status()
-        return [
-            ExperimentDesign.model_validate(experiment_design)
-            for experiment_design in response.json()
-        ]
-
     def start_experiment(
         self,
-        experiment_design_id: str,
+        experiment_design: ExperimentDesign,
         run_name: Optional[str] = None,
         run_description: Optional[str] = None,
     ) -> Experiment:
@@ -86,7 +51,7 @@ class ExperimentClient:
         response = requests.post(
             f"{self.url}/experiment",
             json={
-                "experiment_design_id": experiment_design_id,
+                "experiment_design": experiment_design,
                 "run_name": run_name,
                 "run_description": run_description,
             },

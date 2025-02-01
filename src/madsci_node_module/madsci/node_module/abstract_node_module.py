@@ -7,13 +7,14 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional, Union, get_type_hints
 
-from madsci.client.event_client import EventClient, default_logger
+from madsci.client.event_client import (
+    EventClient,
+    default_logger,
+)
 from madsci.common.definition_loaders import (
     node_definition_loader,
 )
 from madsci.common.exceptions import (
-    ActionMissingArgumentError,
-    ActionMissingFileError,
     ActionNotImplementedError,
 )
 from madsci.common.types.action_types import (
@@ -27,21 +28,18 @@ from madsci.common.types.action_types import (
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
-from madsci.common.types.config_types import (
-    ConfigNamespaceDefinition,
-    ConfigParameterDefinition,
-)
-from madsci.common.types.event_types import Event, EventLogLevel, EventType
+from madsci.common.types.event_types import Event, EventClientConfig, EventType
 from madsci.common.types.node_types import (
     AdminCommands,
+    NodeConfig,
     NodeDefinition,
     NodeInfo,
-    NodeModuleDefinition,
     NodeSetConfigResponse,
     NodeStatus,
 )
 from madsci.common.utils import pretty_type_repr, threaded_daemon, threaded_task
 from pydantic import ValidationError
+from semver import Version
 
 
 def action(
@@ -72,22 +70,20 @@ class AbstractNode:
     Note that this class is abstract: it is intended to be inherited from, not used directly.
     """
 
-    module_definition: ClassVar[NodeModuleDefinition] = None
-    """The module definition."""
     node_definition: ClassVar[NodeDefinition] = None
     """The node definition."""
-    config: ClassVar[dict[str, Any]] = {}
-    """The configuration of the module."""
+    config: NodeConfig = NodeConfig()
+    """The configuration of the node."""
     node_status: ClassVar[NodeStatus] = NodeStatus(
         initializing=True,
     )
-    """The status of the module."""
+    """The status of the node."""
     node_state: ClassVar[dict[str, Any]] = {}
-    """The state of the module."""
+    """The state of the node."""
     action_handlers: ClassVar[dict[str, callable]] = {}
-    """The handlers for the actions that the module can perform."""
+    """The handlers for the actions that the node supports."""
     action_history: ClassVar[dict[str, ActionResult]] = {}
-    """The history of the actions that the module has performed."""
+    """The history of the actions that the node has performed."""
     status_update_interval: ClassVar[float] = 5.0
     """The interval at which the status handler is called. Overridable by config."""
     state_update_interval: ClassVar[float] = 5.0
@@ -96,25 +92,55 @@ class AbstractNode:
     """The path to the node info file. If unset, defaults to '<node_definition_path>.info.yaml'"""
     logger: ClassVar[EventClient] = EventClient()
     """The event logger for this node"""
+    module_version: ClassVar[str] = "0.0.1"
+    """The version of the module. Should match the version in the node definition."""
 
     def __init__(self) -> "AbstractNode":
-        """Initialize the module class."""
-        (self.node_definition, self.module_definition, self.config) = (
-            node_definition_loader()
+        """Initialize the node class."""
+        (self.node_definition, self.config) = node_definition_loader(
+            config_model=getattr(self, "config_model", self.config.__class__)
         )
         if self.node_definition is None:
             raise ValueError("Node definition not found, aborting node initialization")
-        if self.module_definition is None:
-            raise ValueError(
-                "Module definition not found, aborting node initialization",
-            )
+
+        # * Set general node config
+        state_update_interval = getattr(
+            self.config,
+            "state_update_interval",
+            self.state_update_interval,
+        )
+        self.state_update_interval = (
+            state_update_interval
+            if state_update_interval is not None
+            else self.state_update_interval
+        )
+        status_update_interval = getattr(
+            self.config,
+            "status_update_interval",
+            self.status_update_interval,
+        )
+        self.status_update_interval = (
+            status_update_interval
+            if status_update_interval is not None
+            else self.status_update_interval
+        )
 
         self._configure_events()
 
+        # * Check Node Version
+        if (
+            Version.parse(self.module_version).compare(
+                self.node_definition.module_version
+            )
+            < 0
+        ):
+            self.logger.log_warning(
+                "The module version does not match the node definition version. Your module may have updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
+            )
+
         # * Synthesize the node info
-        self.node_info = NodeInfo.from_node_and_module(
+        self.node_info = NodeInfo.from_node_def_and_config(
             self.node_definition,
-            self.module_definition,
             self.config,
         )
 
@@ -147,21 +173,6 @@ class AbstractNode:
             ).with_suffix(".info.yaml")
             self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
 
-        # * Add a lock for thread safety with blocking actions
-        self._action_lock = threading.Lock()
-
-    """------------------------------------------------------------------------------------------------"""
-    """Node Lifecycle and Public Methods"""
-    """------------------------------------------------------------------------------------------------"""
-
-    def start_node(self, config: dict[str, Any] = {}) -> None:
-        """Called once to start the node."""
-        if self.module_definition._definition_path:
-            self.module_definition.to_yaml(self.module_definition._definition_path)
-        else:
-            self.logger.log_warning(
-                "No definition path set for module, skipping module definition update",
-            )
         if self.node_definition._definition_path:
             self.node_definition.to_yaml(self.node_definition._definition_path)
         else:
@@ -169,17 +180,21 @@ class AbstractNode:
                 "No definition path set for node, skipping node definition update"
             )
 
-        # *Check for any required config parameters that weren't set
-        self.config = {**self.config, **config}
-        for param in self.node_definition.config.values():
-            self._check_required_config_parameter(param)
+        # * Add a lock for thread safety with blocking actions
+        self._action_lock = threading.Lock()
+
+    """------------------------------------------------------------------------------------------------"""
+    """Node Lifecycle and Public Methods"""
+    """------------------------------------------------------------------------------------------------"""
+
+    def start_node(self) -> None:
+        """Called once to start the node."""
 
         # * Update EventClient with logging parameters
         self._configure_events()
 
         # * Log startup info
         self.logger.log_info(f"{self.node_definition=}")
-        self.logger.log_info(f"{self.module_definition=}")
 
     def status_handler(self) -> None:
         """Called periodically to update the node status. Should set `self.node_status`"""
@@ -198,11 +213,11 @@ class AbstractNode:
     """------------------------------------------------------------------------------------------------"""
 
     def get_action_history(self) -> list[str]:
-        """Get the action history of the module."""
+        """Get the action history of the node."""
         return list(self.action_history.keys())
 
     def run_action(self, action_request: ActionRequest) -> ActionResult:
-        """Run an action on the module."""
+        """Run an action on the node."""
         self.node_status.running_actions.add(action_request.action_id)
         action_response = None
         arg_dict = {}
@@ -234,7 +249,7 @@ class AbstractNode:
         return action_response
 
     def get_action_result(self, action_id: str) -> ActionResult:
-        """Get the status of an action on the module."""
+        """Get the status of an action on the node."""
         if action_id in self.action_history:
             return self.action_history[action_id]
         return ActionResult(
@@ -246,25 +261,19 @@ class AbstractNode:
         )
 
     def get_status(self) -> NodeStatus:
-        """Get the status of the module."""
+        """Get the status of the node."""
         return self.node_status
 
     def set_config(self, new_config: dict[str, Any]) -> NodeSetConfigResponse:
-        """Set configuration values of the module."""
+        """Set configuration values of the node."""
         errors = []
 
-        def update_recursively(old_dict: dict, new_dict: dict) -> None:
-            for key, value in new_dict.items():
-                if isinstance(value, dict):
-                    update_recursively(old_dict[key], value)
-                else:
-                    old_dict[key] = value
+        try:
+            self.config = self.config.model_copy(update=new_config)
+        except ValidationError as e:
+            errors.append(Error.from_exception(e))
 
-        update_recursively(self.config, new_config)
-        # *Check if all required parameters are set
-        for param in self.node_definition.config.values():
-            self._check_required_config_parameter(param)
-        if hasattr(self, "reset"):
+        if not errors:
             # * Reset after a short delay to allow the response to be returned
             @threaded_task
             def schedule_reset() -> None:
@@ -278,7 +287,7 @@ class AbstractNode:
         )
 
     def run_admin_command(self, admin_command: AdminCommands) -> AdminCommandResponse:
-        """Run the specified administrative command on the module."""
+        """Run the specified administrative command on the node."""
         if self.hasattr(admin_command) and callable(
             self.__getattribute__(admin_command),
         ):
@@ -312,18 +321,18 @@ class AbstractNode:
                 success=False,
                 errors=[
                     Error(
-                        message=f"Admin command {admin_command} not implemented by this module",
+                        message=f"Admin command {admin_command} not implemented by this node",
                         error_type="AdminCommandNotImplemented",
                     ),
                 ],
             )
 
     def get_info(self) -> NodeInfo:
-        """Get information about the module."""
+        """Get information about the node."""
         return self.node_info
 
     def get_state(self) -> dict[str, Any]:
-        """Get the state of the module."""
+        """Get the state of the node."""
         return self.node_state
 
     def get_log(self) -> list[Event]:
@@ -336,18 +345,25 @@ class AbstractNode:
 
     def _configure_events(self) -> None:
         """Configure the event logger."""
-        if (madsci_event_config := self.config.get("madsci_events", None)) is not None:
-            event_server = madsci_event_config.get("event_server", None)
-            log_level = madsci_event_config.get("log_level", EventLogLevel.INFO)
-        else:
-            event_server = None
-            log_level = EventLogLevel.INFO
-        self.logger = EventClient(
+        event_client_config = EventClientConfig(
             name=f"node.{self.node_definition.node_name}",
             source=OwnershipInfo(node_id=self.node_definition.node_id),
-            event_server=event_server,
-            log_level=log_level,
         )
+        self.logger = EventClient(
+            config=event_client_config,
+        )
+        if (
+            event_client_config := getattr(self.config, "event_client_config", None)
+        ) is not None:
+            try:
+                event_client_config = EventClientConfig(**event_client_config)
+                self.logger = EventClient(
+                    config=event_client_config,
+                )
+            except ValidationError:
+                self.logger.log_warning(
+                    "Invalid event client config, using default values",
+                )
 
     def _add_action(
         self,
@@ -356,7 +372,7 @@ class AbstractNode:
         description: str,
         blocking: bool = False,
     ) -> None:
-        """Add an action to the module.
+        """Add an action to the node module.
 
         Args:
             func: The function to add as an action handler
@@ -451,11 +467,11 @@ class AbstractNode:
         self,
         action_request: ActionRequest,
     ) -> Union[ActionResult, tuple[callable, dict[str, Any]]]:
-        """Run an action on the module."""
+        """Parse the arguments for an action request."""
         action_callable = self.action_handlers.get(action_request.action_name, None)
         if action_callable is None:
             raise ActionNotImplementedError(
-                f"Action {action_request.action_name} not implemented by this module",
+                f"Action {action_request.action_name} not implemented by this node",
             )
         # * Prepare arguments for the action function.
         # * If the action function has a 'state' or 'action' parameter
@@ -489,24 +505,6 @@ class AbstractNode:
                     default_logger.log_warning(f"Ignoring unexpected file {file}")
         return arg_dict
 
-    def _check_required_args(
-        self,
-        action_request: ActionRequest,
-    ) -> None:
-        for arg in self.node_info.actions[action_request.action_name].args.values():
-            if arg.name not in action_request.args and arg.required:
-                raise ActionMissingArgumentError(
-                    f"Missing required argument '{arg.name}'",
-                )
-        for file in self.node_info.actions[action_request.action_name].files.values():
-            if (
-                not any(
-                    arg_file.filename == file.name for arg_file in action_request.files
-                )
-                and file.required
-            ):
-                raise ActionMissingFileError(f"Missing required file '{file.name}'")
-
     def _run_action(
         self,
         action_request: ActionRequest,
@@ -517,13 +515,13 @@ class AbstractNode:
         if not self.node_status.ready:
             return action_request.not_ready(
                 error=Error(
-                    message=f"Module is not ready: {self.node_status.description}",
-                    error_type="ModuleNotReady",
+                    message=f"Node is not ready: {self.node_status.description}",
+                    error_type="NodeNotReady",
                 ),
             )
         self._action_lock.acquire()
         try:
-            # * If the action is marked as blocking, set the module status to not ready for the duration of the action, otherwise release the lock immediately
+            # * If the action is marked as blocking, set the node status to not ready for the duration of the action, otherwise release the lock immediately
             if self.node_info.actions[action_request.action_name].blocking:
                 self.node_status.busy = True
                 try:
@@ -575,36 +573,13 @@ class AbstractNode:
         last_state_update = 0.0
         while True:
             try:
-                status_update_interval = self.config.get(
-                    "status_update_interval",
-                    self.status_update_interval,
-                )
-                if time.time() - last_status_update > status_update_interval:
+                if time.time() - last_status_update > self.status_update_interval:
                     last_status_update = time.time()
                     self.status_handler()
-                state_update_interval = self.config.get(
-                    "state_update_interval",
-                    self.state_update_interval,
-                )
-                if time.time() - last_state_update > state_update_interval:
+                if time.time() - last_state_update > self.state_update_interval:
                     last_state_update = time.time()
                     self.state_handler()
                 time.sleep(0.1)
             except Exception as e:
                 self._exception_handler(e)
                 time.sleep(0.1)
-
-    def _check_required_config_parameter(
-        self, param: Union[ConfigParameterDefinition, ConfigNamespaceDefinition]
-    ) -> None:
-        if isinstance(param, ConfigNamespaceDefinition):
-            for sub_param in param.parameters.values():
-                self._check_required_config_parameter(sub_param)
-            return
-        if param.required and (
-            param.name not in self.config or self.config[param.name] is None
-        ):
-            self.node_status.waiting_for_config.add(param.name)
-            self.logger.log_info(f"Required config parameter '{param.name}' not set")
-        else:
-            self.node_status.waiting_for_config.discard(param.name)
