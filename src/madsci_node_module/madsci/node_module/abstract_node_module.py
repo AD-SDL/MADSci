@@ -11,11 +11,11 @@ from madsci.client.event_client import (
     EventClient,
     default_logger,
 )
-from madsci.common.definition_loaders import (
-    node_definition_loader,
-)
 from madsci.common.exceptions import (
     ActionNotImplementedError,
+)
+from madsci.common.model_loader import (
+    node_definition_loader,
 )
 from madsci.common.types.action_types import (
     ActionArgumentDefinition,

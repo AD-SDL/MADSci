@@ -30,7 +30,6 @@ def test_experiment_definition(db_connection: Database) -> None:
     experiment_manager_server = ExperimentServer(
         experiment_manager_definition=experiment_manager_def,
         db_connection=db_connection,
-        enable_ui=False,
     )
     test_client = TestClient(experiment_manager_server.app)
     result = test_client.get("/definition").json()
@@ -44,7 +43,6 @@ def test_experiment_roundtrip(db_connection: Database) -> None:
     experiment_manager_server = ExperimentServer(
         experiment_manager_definition=experiment_manager_def,
         db_connection=db_connection,
-        enable_ui=False,
     )
     test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(
@@ -66,7 +64,6 @@ def test_get_experiments(db_connection: Database) -> None:
     experiment_manager_server = ExperimentServer(
         experiment_manager_definition=experiment_manager_def,
         db_connection=db_connection,
-        enable_ui=False,
     )
     test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(
@@ -102,7 +99,6 @@ def test_end_experiment(db_connection: Database) -> None:
     experiment_manager_server = ExperimentServer(
         experiment_manager_definition=experiment_manager_def,
         db_connection=db_connection,
-        enable_ui=False,
     )
     test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(

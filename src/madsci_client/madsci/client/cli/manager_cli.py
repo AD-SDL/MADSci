@@ -5,19 +5,22 @@ from typing import Optional
 
 import click
 from click.core import Context
+from madsci.common.types.event_types import EventManagerDefinition
+from madsci.common.types.experiment_types import ExperimentManagerDefinition
 from madsci.common.types.lab_types import (
     LabDefinition,
     ManagerDefinition,
     ManagerType,
 )
+from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.utils import (
     prompt_for_input,
+    prompt_from_list,
     prompt_yes_no,
     save_model,
     search_for_file_pattern,
     to_snake_case,
 )
-from rich import print
 from rich.console import Console
 from rich.pretty import pprint
 
@@ -87,11 +90,10 @@ def manager(ctx: Context, name: Optional[str], path: Optional[str]) -> None:
 @click.option("--path", "-p", type=str, help="The path to the manager definition file.")
 @click.option("--description", "-d", type=str, help="The description of the manager.")
 @click.option(
-    "--type",
+    "--manager_type",
     "-t",
     type=click.Choice([e.value for e in ManagerType]),
     help="The type of the manager.",
-    required=True,
 )
 @click.pass_context
 def add(
@@ -99,7 +101,7 @@ def add(
     name: Optional[str],
     path: Optional[str],
     description: Optional[str],
-    type: str,
+    manager_type: str,
 ) -> None:
     """Add a new manager."""
     if not name:
@@ -108,9 +110,16 @@ def add(
         name = prompt_for_input("Manager Name", required=True, quiet=ctx.obj.quiet)
     if not description:
         description = prompt_for_input("Manager Description", quiet=ctx.obj.quiet)
+    if not manager_type:
+        manager_type = prompt_from_list(
+            "Manager Type",
+            options=[e.value for e in ManagerType],
+            quiet=ctx.obj.quiet,
+            required=True,
+        )
 
     manager_definition = ManagerDefinition(
-        name=name, description=description, manager_type=type
+        name=name, description=description, manager_type=manager_type
     )
     console.print(manager_definition)
 
@@ -121,7 +130,13 @@ def add(
         if not path:
             path = ctx.parent.params.get("path")
         if not path:
-            default_path = Path.cwd() / f"{to_snake_case(name)}.manager.yaml"
+            if ctx.obj.lab_def and ctx.obj.lab_def._definition_path:
+                working_path = Path(ctx.obj.lab_def._definition_path).parent
+            else:
+                working_path = Path.cwd()
+            if working_path.parts[-1] != "managers":
+                working_path = working_path / "managers"
+            default_path = working_path / f"{to_snake_case(name)}.manager.yaml"
             new_path = prompt_for_input(
                 "Path to save Manager Definition file",
                 default=str(default_path),
@@ -129,7 +144,19 @@ def add(
             )
             if new_path:
                 path = Path(new_path)
-        print("Path:", path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+        if manager_type == ManagerType.EXPERIMENT_MANAGER:
+            manager_definition = ExperimentManagerDefinition(
+                **manager_definition.model_dump(mode="json")
+            )
+        elif manager_type == ManagerType.WORKCELL_MANAGER:
+            manager_definition = WorkcellDefinition(
+                **manager_definition.model_dump(mode="json")
+            )
+        elif manager_type == ManagerType.EVENT_MANAGER:
+            manager_definition = EventManagerDefinition(
+                **manager_definition.model_dump(mode="json")
+            )
         save_model(
             path=path, model=manager_definition, overwrite_check=not ctx.obj.quiet
         )

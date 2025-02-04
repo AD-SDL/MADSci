@@ -96,7 +96,8 @@ class Experiment(BaseModel):
     )
 
     @field_validator("experiment_id", mode="before")
-    def object_id_to_str(self, v: Union[str, ObjectId]) -> str:
+    @classmethod
+    def object_id_to_str(cls, v: Union[str, ObjectId]) -> str:
         """Cast ObjectID to string."""
         if isinstance(v, ObjectId):
             return str(v)

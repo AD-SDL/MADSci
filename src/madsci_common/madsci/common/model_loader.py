@@ -141,6 +141,7 @@ def load_config(
 def manager_definition_loader(
     model: type[BaseModel] = ManagerDefinition,
     definition_file_pattern: str = "*.*manager.yaml",
+    manager_type: Optional[str] = None,
 ) -> list[ManagerDefinition]:
     """Loads all Manager Definitions available in the current context"""
     manager_definitions = []
@@ -158,6 +159,48 @@ def manager_definition_loader(
         default_logger.log_error(f"Error loading manager definition(s): {e}.")
 
     # * Load from the lab manager's managers section
+    load_managers_from_lab_definition(manager_definitions)
+
+    # * Upgrade to more specific manager types, where possible
+    refined_managers = []
+    for manager in manager_definitions:
+        for manager_submodel in ManagerDefinition.__subclasses__():
+            try:
+                if to_snake_case(manager.manager_type) == to_snake_case(
+                    manager_submodel.__name__
+                ):
+                    refined_managers.append(manager_submodel.model_validate(manager))
+                    break
+            except Exception as e:
+                default_logger.log_error(
+                    f"Error loading manager definition: {e}. Manager: {manager}"
+                )
+        else:
+            refined_managers.append(manager)
+
+    if manager_type:
+        return [
+            manager
+            for manager in refined_managers
+            if to_snake_case(manager.manager_type) == to_snake_case(manager_type)
+        ]
+
+    return refined_managers
+
+def load_managers_from_lab_definition(manager_definitions: list[ManagerDefinition]) -> None:
+    """
+    Loads manager definitions from a lab definition file and appends them to the provided list.
+
+    This function attempts to load a lab manager definition using the `lab_definition_loader` function.
+    If a lab manager definition is found, it resolves the managers and appends each manager's definition
+    to the provided `manager_definitions` list.
+
+    Args:
+        manager_definitions (list[ManagerDefinition]): A list to which the loaded manager definitions will be appended.
+
+    Raises:
+        Logs an error message if an exception occurs during the loading process.
+    """
     try:
         lab_manager_definition = lab_definition_loader(search_for_file=True)
         if lab_manager_definition:
@@ -169,17 +212,3 @@ def manager_definition_loader(
                     )
     except Exception as e:
         default_logger.log_error(f"Error loading lab manager definition: {e}.")
-
-    # * Upgrade to more specific manager types, where possible
-    refined_managers = []
-    for manager in manager_definitions:
-        for manager_type in ManagerDefinition.__subclasses__():
-            if to_snake_case(manager.manager_type) == to_snake_case(
-                manager_type.__name__
-            ):
-                refined_managers.append(manager_type.model_validate(manager))
-                break
-        else:
-            refined_managers.append(manager)
-
-    return refined_managers

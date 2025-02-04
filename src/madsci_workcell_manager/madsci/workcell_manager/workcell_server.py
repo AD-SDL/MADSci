@@ -1,15 +1,17 @@
 """MADSci Workcell Manager Server."""
 
-import argparse
 import json
 import traceback
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Annotated, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
+from madsci.common.model_loader import manager_definition_loader
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import new_ulid_str
+from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -26,16 +28,8 @@ from madsci.workcell_manager.workflow_utils import (
     save_workflow_files,
 )
 
-arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument(
-    "--workcell_file",
-    type=str,
-    default="./workcells/workcell.yaml",
-    help="location of the workcell file",
-)
 
-
-async def lifespan(app: FastAPI) -> None:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """start the server functionality and initialize the state handler"""
     app.state.state_handler = WorkcellRedisHandler(workcell)
     app.state.state_handler.set_workcell(workcell)
@@ -86,7 +80,7 @@ def add_node(
         workcell.nodes[node_name] = NodeDefinition(
             node_name=node_name, node_url=node_url, node_description=node_description
         )
-        workcell.to_yaml(workcell_file)
+        workcell.to_yaml(workcell._definition_path)
     return app.state.state_handler.get_node(node_name)
 
 
@@ -286,9 +280,15 @@ async def start_workflow(
 if __name__ == "__main__":
     import uvicorn
 
-    args = arg_parser.parse_args()
-    workcell_file = args.workcell_file
-    workcell = WorkcellDefinition.from_yaml(workcell_file)
+    workcell = None
+    manager_definitions = manager_definition_loader()
+    for manager in manager_definitions:
+        if manager.manager_type == ManagerType.WORKCELL_MANAGER:
+            workcell = WorkcellDefinition(**manager.model_dump(mode="json"))
+    if workcell is None:
+        raise ValueError(
+            "No workcell manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
+        )
     uvicorn.run(
         app,
         host=workcell.config.host,

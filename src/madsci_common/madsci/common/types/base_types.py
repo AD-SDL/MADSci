@@ -2,6 +2,7 @@
 Base types for MADSci.
 """
 
+import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
@@ -34,6 +35,9 @@ class BaseModel(SQLModel, use_enum_values=True):
     _definition_path: Optional[PathLike] = PrivateAttr(
         default=None,
     )
+    """The path from which this model was loaded."""
+    _definition_file_patterns: ClassVar[list[str]] = []
+    _definition_cli_flags: ClassVar[list[str]] = ["--definition"]
     _mongo_excluded_fields: ClassVar[list[str]] = []
     """Fields to exclude from insertion into MongoDB."""
 
@@ -75,6 +79,71 @@ class BaseModel(SQLModel, use_enum_values=True):
             if field in self._mongo_excluded_fields:
                 json_data.pop(field, None)
         return json_data
+
+    @classmethod
+    def load_definition(
+            cls: type[_T],
+            default_path: Optional[PathLike] = None,
+            search_filesystem: Optional[bool] = True,
+            require_unique: Optional[bool] = False,
+            path_from_cli_arg: Optional[bool] = True,
+        ) -> _T:
+        """
+        Load a model from a definition file, optionally setting fields via
+        command line and environment variable overrides.
+        """
+        from madsci.client.event_client import default_logger
+        model_instance = None
+
+        # * Load definition via CLI argument(s) defined in model
+        if path_from_cli_arg:
+            if not cls._definition_cli_flags:
+                default_logger.log_warning("No CLI flags defined for model definition, but path_from_cli_arg requested.")
+            else:
+                parser = argparse.ArgumentParser()
+                parser.add_argument("definition", *cls._definition_cli_flags, type=str, help="Path to the model definition.")
+                args, _ = parser.parse_known_args()
+                if args.definition:
+                    try:
+                        model_instance = cls.from_yaml(args.definition)
+                    except Exception as e:
+                        default_logger.log_error(
+                            f"Failed to load model {cls.__name__} from {args.definition}: {e}"
+                        )
+
+        # * Load definition from filesystem search, looking for files matching the model's definition file pattern(s)
+        if search_filesystem and model_instance is None:
+            from madsci.common.utils import search_for_file_pattern
+            definition_files = []
+            try:
+                for pattern in cls._definition_file_patterns:
+                    definition_files.extend(search_for_file_pattern(pattern, parents=True, children=True))
+                if require_unique and len(definition_files) > 1:
+                    raise ValueError(f"Multiple definition files found for {cls.__name__}: {definition_files}")
+            except Exception as e:
+                default_logger.log_error(f"Failed to load model {cls.__name__} from filesystem search: {e}")
+
+        # * Load definition from default path
+        if model_instance is None and default_path:
+            try:
+                path = Path(default_path)
+                if path.exists():
+                    model_instance = cls.from_yaml(path)
+            except Exception as e:
+                default_logger.log_error(f"Failed to load model {cls.__name__} from {path}: {e}")
+
+        # NOTE: Add an annotation class to markup fields that are sub-models and should
+        # NOTE: have their fields overrien by the environment variables and CLI args as well (rather than
+        # NOTE: overriding the whole model via JSON string in the parent model's field)
+
+        # TODO: Set fields from environment variables
+
+        # TODO: Set fields from cli args
+
+        # * If no definition was loaded, raise an error
+        if model_instance is None:
+            raise ValueError(f"Failed to load model {cls.__name__}")
+        return model_instance
 
 
 class ModelLink(BaseModel, Generic[_T]):

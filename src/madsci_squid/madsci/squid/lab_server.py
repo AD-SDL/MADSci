@@ -2,7 +2,7 @@
 
 import uvicorn
 from fastapi import FastAPI
-from madsci.common.definition_loaders import lab_definition_loader
+from madsci.common.model_loader import lab_definition_loader
 from madsci.common.types.lab_types import LabDefinition
 from starlette.responses import JSONResponse
 

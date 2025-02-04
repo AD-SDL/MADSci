@@ -1,0 +1,7 @@
+name: Example Lab
+lab_id: 01JK6SRTKX81SD1G70X6WAJATP
+description: An example MADSci-powered autonomous laboratory
+host: 127.0.0.1
+port: 8000
+commands: {}
+managers: {}

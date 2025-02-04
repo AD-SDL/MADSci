@@ -8,7 +8,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient, EventType
-from madsci.common.definition_loaders import manager_definition_loader
+from madsci.common.model_loader import manager_definition_loader
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
@@ -27,7 +27,7 @@ class ExperimentServer:
 
     experiment_manager_definition: Optional[ExperimentManagerDefinition] = None
     db_client: MongoClient
-    app = FastAPI()
+    app = None
     logger = EventClient()
     experiments: Collection
 
@@ -38,6 +38,7 @@ class ExperimentServer:
         enable_ui: bool = True,
     ) -> None:
         """Initialize the Experiment Manager Server."""
+        self.app = FastAPI()
         if experiment_manager_definition is not None:
             self.experiment_manager_definition = experiment_manager_definition
         else:
@@ -67,9 +68,9 @@ class ExperimentServer:
         self.experiments = self.db_connection["experiments"]
 
         # * REST Server Config
-        if enable_ui:
-            self.configure_ui(self.app)
         self._configure_routes()
+        if enable_ui:
+            self._configure_ui(self.app)
 
     async def definition(self) -> Optional[ExperimentManagerDefinition]:
         """Get the definition for the Experiment Manager."""
@@ -153,35 +154,39 @@ class ExperimentServer:
         )
         self.app.include_router(self.router)
 
-    def configure_ui(self, fastapi_app: FastAPI) -> None:
+    def _configure_ui(self, fastapi_app: FastAPI) -> None:
         """Configure the UI for the Experiment Manager."""
 
         @ui.page(path="/")
-        def show() -> None:
+        async def show() -> None:
             """Show the Experiment Manager UI."""
             ui.label("Welcome to the Experiment Manager!")
-            ui.label(
-                f"Experiments: {[experiment.model_dump(mode='json') for experiment in self.get_experiments()]}"
+            experiment_dump = ui.label(
+                f"Experiments: {[experiment.model_dump(mode='json') for experiment in await self.get_experiments()]}"
             )
 
-            def new_experiment() -> None:
+            async def new_experiment() -> None:
                 """Create a new Experiment"""
-                experiment = self.start_experiment(
+                experiment = await self.start_experiment(
                     experiment_design=ExperimentDesign(
-                        experiment_name="Test Experiment",
-                        experiment_description="This is a test experiment.",
+                        **experiment_form.__dict__
                     ),
                     run_name="Test Run",
                     run_description="This is a test run.",
                 )
                 ui.label(f"New Experiment: {experiment.model_dump(mode='json')}")
+                experiment_dump.set_text(
+                    f"Experiments: {[experiment.model_dump(mode='json') for experiment in await self.get_experiments()]}"
+                )
 
             @dataclass
-            class NewExperiment:
-                experiment_name: str = "Test Experiment"
-                experiment_description: str = "This is a test experiment."
+            class ExperimentForm:
+                experiment_name: str = "New Experiment"
+                experiment_description: str = "Describe your new experiment."
 
-            ui.input("Experiment Name", model=NewExperiment, field="experiment_name")
+            experiment_form = ExperimentForm()
+            ui.input("Experiment Name").bind_value(experiment_form, "experiment_name")
+            ui.input("Experiment Description").bind_value(experiment_form,"experiment_description")
             ui.button(text="New Experiment", on_click=new_experiment)
 
         ui.run_with(

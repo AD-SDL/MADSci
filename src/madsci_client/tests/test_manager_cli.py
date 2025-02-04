@@ -39,7 +39,7 @@ def test_manager_add(runner: CliRunner, tmp_path: Path) -> None:
             "test_manager",
             "--description",
             "A test manager",
-            "--type",
+            "--manager_type",
             "event_manager",
             "--path",
             str(tmp_path / "test_manager.manager.yaml"),

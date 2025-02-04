@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.params import Body
 from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient
-from madsci.common.definition_loaders import (
+from madsci.common.model_loader import (
     manager_definition_loader,
 )
 from madsci.common.types.event_types import Event, EventManagerDefinition
