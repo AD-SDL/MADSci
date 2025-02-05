@@ -1,0 +1,47 @@
+"""Types related to datapoint types"""
+
+from typing import Any, Literal, Optional
+
+from pydantic import Field
+
+from madsci.common.types.base_types import BaseModel, ulid_factory
+
+import datetime
+
+class DataPoint(BaseModel, extra="allow"):
+    """An object to contain and locate data identified by modules"""
+
+    label: str
+    """label of this data point"""
+    step_id: Optional[str] = None
+    """step that generated the data point"""
+    workflow_id: Optional[str] = None
+    """workflow that generated the data point"""
+    experiment_id: Optional[str] = None
+    """experiment that generated the data point"""
+    campaign_id: Optional[str] = None
+    """campaign of the data point"""
+    type: str
+    """type of the datapoint, inherited from class"""
+    datapoint_id: str = Field(default_factory=ulid_factory)
+    """specific id for this data point"""
+    data_timestamp: datetime = Field(default_factory=datetime.now)
+    """time datapoint was created"""
+
+
+class LocalFileDataPoint(DataPoint):
+    """a datapoint containing a file"""
+
+    type: Literal["local_file"] = "local_file"
+    """local file"""
+    path: str
+    """path to the file"""
+
+
+class ValueDataPoint(DataPoint):
+    """a datapoint contained in the Json value"""
+
+    type: Literal["data_value"] = "data_value"
+    """data_value"""
+    value: Any
+    """value of the data point"""

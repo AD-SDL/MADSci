@@ -11,10 +11,11 @@ from typing import Optional
 from madsci.client.event_client import default_logger
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.common.types.action_types import ActionRequest, ActionResult
+from madsci.common.types.datapoint_types import LocalFileDataPoint, ValueDataPoint
 from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
-from madsci.common.types.workflow_types import WorkflowStatus
+from madsci.common.types.workflow_types import Workflow, WorkflowStatus
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 from madsci.workcell_manager.workcell_utils import (
@@ -48,7 +49,6 @@ class Engine:
         with state_handler.wc_state_lock():
             initialize_workcell(state_handler)
         time.sleep(workcell_manager_definition.config.cold_start_delay)
-
         default_logger.log_info("Engine initialized, waiting for workflows...")
         # TODO send event
 
@@ -154,6 +154,7 @@ class Engine:
             response = self.query_action_result(node, client, request, response)
         if response is None:
             response = request.failed()
+        response = self.handle_data_and_files(response)
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             if response.status in ["succeeded", "failed"]:
@@ -173,3 +174,43 @@ class Engine:
                     wf.status = WorkflowStatus.FAILED
                     wf.end_time = datetime.now()
             self.state_handler.set_workflow(wf)
+
+    def handle_data_and_files(
+        self, step: Step, wf: Workflow, response: ActionResult
+    ) -> ActionResult:
+        """create and save datapoints for data returned from step"""
+        labeled_data = {}
+        if response.data:
+            for data_key in response.data:
+                if step.data_labels is not None and data_key in step.data_labels:
+                    label = step.data_labels[data_key]
+                else:
+                    label = data_key
+                datapoint = ValueDataPoint(
+                    label=label,
+                    step_id=step.id,
+                    workflow_id=wf.workflow_id,
+                    experiment_id=wf.experiment_id,
+                    value=response.data[data_key],
+                )
+                self.data_client.send_datapoint(datapoint)
+                labeled_data[label] = datapoint.id
+        if response.files:
+            for file_key in response.files:
+                if step.data_labels is not None and file_key in step.data_labels:
+                    label = step.data_labels[file_key]
+                else:
+                    label = file_key
+                datapoint = LocalFileDataPoint(
+                    step_id=step.id,
+                    workflow_id=wf.workflow_id,
+                    experiment_id=wf.experiment_id,
+                    label=label,
+                    path=str(response.files[file_key]),
+                )
+                self.data_client.send_datapoint_file(
+                    datapoint, str(response.files[file_key])
+                )
+                labeled_data[label] = datapoint.id
+        response.data = labeled_data
+        return response

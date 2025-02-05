@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Any, ClassVar
+from zipfile import ZipFile
 
 import requests
 from madsci.client.node.abstract_node_client import (
@@ -92,6 +93,23 @@ class RestNodeClient(AbstractNodeClient):
         )
         if not response.ok:
             response.raise_for_status()
+        if response.files and len(response.files) == 1:
+            file_key = next(iter(response.files.keys()))
+            filename = response.files[file_key]
+            path = "temp" / Path(filename)
+            with Path.open(str(path), "wb") as f:
+                f.write(response.content)
+            response.files[file_key] = path
+        elif response.files and len(response.files) > 1:
+            with Path.open("temp_zip.zip", "wb") as f:
+                f.write(response.content)
+            file = ZipFile("temp_zip.zip")
+            for file_key in list(response.files.keys()):
+                filename = response.files[file_key]
+                path = "temp" / Path(filename)
+                file.extract(filename, path)
+                response.files[file_key] = path
+            file.close()
         return ActionResult.model_validate(response.json())
 
     def get_status(self) -> NodeStatus:
