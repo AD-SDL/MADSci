@@ -7,11 +7,7 @@ from fastapi import FastAPI
 from fastapi.params import Body
 from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient
-from madsci.common.model_loader import (
-    manager_definition_loader,
-)
 from madsci.common.types.event_types import Event, EventManagerDefinition
-from madsci.common.types.lab_types import ManagerType
 from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
 from pymongo.synchronous.database import Database
@@ -35,10 +31,9 @@ class EventServer:
         if event_manager_definition is not None:
             self.event_manager_definition = event_manager_definition
         else:
-            manager_definitions = manager_definition_loader()
-            for manager in manager_definitions:
-                if manager.manager_type == ManagerType.EVENT_MANAGER:
-                    self.event_manager_definition = manager
+            self.event_manager_definition = EventManagerDefinition.load_model(
+                require_unique=True
+            )
         if self.event_manager_definition is None:
             raise ValueError(
                 "No event manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"

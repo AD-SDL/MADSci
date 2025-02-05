@@ -299,11 +299,6 @@ class Node(BaseModel, arbitrary_types_allowed=True):
         title="Reserved By",
         description="Ownership unit that is reserving this node",
     )
-    config: NodeConfig = Field(
-        title="Node Configuration",
-        description="The current configuration of the node.",
-        default_factory=NodeConfig,
-    )
 
 
 class NodeInfo(NodeDefinition):

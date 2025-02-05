@@ -7,11 +7,9 @@ from datetime import datetime
 from typing import Annotated, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
-from madsci.common.model_loader import manager_definition_loader
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import new_ulid_str
-from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -281,10 +279,7 @@ if __name__ == "__main__":
     import uvicorn
 
     workcell = None
-    manager_definitions = manager_definition_loader()
-    for manager in manager_definitions:
-        if manager.manager_type == ManagerType.WORKCELL_MANAGER:
-            workcell = WorkcellDefinition(**manager.model_dump(mode="json"))
+    workcell = WorkcellDefinition.load_model(require_unique=True)
     if workcell is None:
         raise ValueError(
             "No workcell manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"

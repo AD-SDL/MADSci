@@ -8,14 +8,12 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient, EventType
-from madsci.common.model_loader import manager_definition_loader
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
     ExperimentManagerDefinition,
 )
-from madsci.common.types.lab_types import ManagerType
 from nicegui import ui
 from pymongo import MongoClient
 from pymongo.collection import Collection
@@ -42,11 +40,9 @@ class ExperimentServer:
         if experiment_manager_definition is not None:
             self.experiment_manager_definition = experiment_manager_definition
         else:
-            # Load the experiment manager definition
-            manager_definitions = manager_definition_loader()
-            for manager in manager_definitions:
-                if manager.manager_type == ManagerType.EXPERIMENT_MANAGER:
-                    self.experiment_manager_definition = manager
+            self.experiment_manager_definition = ExperimentManagerDefinition.load_model(
+                require_unique=True
+            )
 
         if self.experiment_manager_definition is None:
             raise ValueError(
@@ -168,9 +164,7 @@ class ExperimentServer:
             async def new_experiment() -> None:
                 """Create a new Experiment"""
                 experiment = await self.start_experiment(
-                    experiment_design=ExperimentDesign(
-                        **experiment_form.__dict__
-                    ),
+                    experiment_design=ExperimentDesign(**experiment_form.__dict__),
                     run_name="Test Run",
                     run_description="This is a test run.",
                 )
@@ -186,7 +180,9 @@ class ExperimentServer:
 
             experiment_form = ExperimentForm()
             ui.input("Experiment Name").bind_value(experiment_form, "experiment_name")
-            ui.input("Experiment Description").bind_value(experiment_form,"experiment_description")
+            ui.input("Experiment Description").bind_value(
+                experiment_form, "experiment_description"
+            )
             ui.button(text="New Experiment", on_click=new_experiment)
 
         ui.run_with(

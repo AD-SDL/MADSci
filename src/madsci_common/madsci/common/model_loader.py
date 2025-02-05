@@ -102,7 +102,7 @@ def load_config(
 ) -> BaseModel:
     """Load configuration values from the command line, based on the config parameters definition"""
     # * Step 1: Create an argparse parser for the node configuration definition
-    parser = argparse.ArgumentParser(description="MADSci Node Definition Loader")
+    parser = argparse.ArgumentParser(description="Node Configuration Loader")
 
     # * Step 2: Parse the command line args
     for field_name, field in config_model.__pydantic_fields__.items():
@@ -117,11 +117,6 @@ def load_config(
             default = field.default
         elif field.is_required():
             required = True
-        default = (
-            default_override
-            if default_override
-            else (field.default_factory() if field.default_factory else field.default)
-        )
         parser.add_argument(
             f"--{field_name}",
             type=str,
@@ -187,7 +182,10 @@ def manager_definition_loader(
 
     return refined_managers
 
-def load_managers_from_lab_definition(manager_definitions: list[ManagerDefinition]) -> None:
+
+def load_managers_from_lab_definition(
+    manager_definitions: list[ManagerDefinition],
+) -> None:
     """
     Loads manager definitions from a lab definition file and appends them to the provided list.
 

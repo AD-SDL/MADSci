@@ -14,9 +14,6 @@ from madsci.client.event_client import (
 from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
-from madsci.common.model_loader import (
-    node_definition_loader,
-)
 from madsci.common.types.action_types import (
     ActionArgumentDefinition,
     ActionDefinition,
@@ -72,8 +69,6 @@ class AbstractNode:
 
     node_definition: ClassVar[NodeDefinition] = None
     """The node definition."""
-    config: NodeConfig = NodeConfig()
-    """The configuration of the node."""
     node_status: ClassVar[NodeStatus] = NodeStatus(
         initializing=True,
     )
@@ -95,35 +90,21 @@ class AbstractNode:
     module_version: ClassVar[str] = "0.0.1"
     """The version of the module. Should match the version in the node definition."""
 
-    def __init__(self) -> "AbstractNode":
+    def __init__(
+        self,
+        node_definition: Optional[NodeDefinition] = None,
+        node_config: Optional[NodeConfig] = None,
+    ) -> "AbstractNode":
         """Initialize the node class."""
-        (self.node_definition, self.config) = node_definition_loader(
-            config_model=getattr(self, "config_model", self.config.__class__)
-        )
+
+        # * Load the node definition
+        if node_definition is not None:
+            self.node_definition = NodeDefinition.load_model(require_unique=True)
         if self.node_definition is None:
             raise ValueError("Node definition not found, aborting node initialization")
 
-        # * Set general node config
-        state_update_interval = getattr(
-            self.config,
-            "state_update_interval",
-            self.state_update_interval,
-        )
-        self.state_update_interval = (
-            state_update_interval
-            if state_update_interval is not None
-            else self.state_update_interval
-        )
-        status_update_interval = getattr(
-            self.config,
-            "status_update_interval",
-            self.status_update_interval,
-        )
-        self.status_update_interval = (
-            status_update_interval
-            if status_update_interval is not None
-            else self.status_update_interval
-        )
+        # * Load the node config
+        self._initialize_node_config(node_config)
 
         self._configure_events()
 
@@ -135,7 +116,7 @@ class AbstractNode:
             < 0
         ):
             self.logger.log_warning(
-                "The module version does not match the node definition version. Your module may have updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
+                "The module version in the Node Module's source code does not match the version specified in your Module Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
             )
 
         # * Synthesize the node info
@@ -342,6 +323,44 @@ class AbstractNode:
     """------------------------------------------------------------------------------------------------"""
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
+
+    def _initialize_node_config(self, node_config: Optional[NodeConfig] = None) -> None:
+        if node_config is not None:
+            self.config = node_config
+        else:
+            # * Load the config from the command line
+            if getattr(self, "config_model", None) is not None:
+                config_model = self.config_model
+            elif getattr(self, "config", None) is not None:
+                config_model = self.config.__class__
+            else:
+                config_model = NodeConfig
+            self.config = config_model.set_fields_from_cli(
+                model_instance=self.config if self.config else None,
+                override_defaults=self.node_definition.config_defaults,
+            )
+
+        # * Set general node config
+        state_update_interval = getattr(
+            self.config,
+            "state_update_interval",
+            self.state_update_interval,
+        )
+        self.state_update_interval = (
+            state_update_interval
+            if state_update_interval is not None
+            else self.state_update_interval
+        )
+        status_update_interval = getattr(
+            self.config,
+            "status_update_interval",
+            self.status_update_interval,
+        )
+        self.status_update_interval = (
+            status_update_interval
+            if status_update_interval is not None
+            else self.status_update_interval
+        )
 
     def _configure_events(self) -> None:
         """Configure the event logger."""

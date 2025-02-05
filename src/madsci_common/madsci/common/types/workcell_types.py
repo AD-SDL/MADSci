@@ -1,10 +1,16 @@
 """Types for MADSci Workcell configuration."""
 
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Annotated, ClassVar, Literal, Optional, Union
 
 from madsci.common.serializers import dict_to_list
-from madsci.common.types.base_types import BaseModel, ModelLink, PathLike, new_ulid_str
+from madsci.common.types.base_types import (
+    BaseModel,
+    LoadConfig,
+    ModelLink,
+    PathLike,
+    new_ulid_str,
+)
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.node_types import NodeDefinition
@@ -17,6 +23,20 @@ from sqlmodel.main import Field
 
 class WorkcellDefinition(BaseModel, extra="allow"):
     """Configuration for a MADSci Workcell."""
+
+    _definition_file_patterns: ClassVar[list] = [
+        "*workcell.yaml",
+        "*workcell.yml",
+        "*workcell.manager.yml",
+        "*workcell.manager.yaml",
+    ]
+    _definition_cli_flag: ClassVar[list] = [
+        "--workcell",
+        "--workcell-definition",
+        "--definition",
+        "--workcell-definition-file",
+        "-f",
+    ]
 
     name: str = Field(
         title="Workcell Name",
@@ -37,11 +57,15 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         title="Workcell Description",
         description="A description of the workcell.",
     )
-    config: "WorkcellConfig" = Field(
-        title="Workcell Configuration",
-        description="The configuration for the workcell.",
-        default_factory=lambda: WorkcellConfig(),
-    )
+    config: Annotated[
+        "WorkcellConfig",
+        Field(
+            title="Workcell Configuration",
+            description="The configuration for the workcell.",
+            default_factory=lambda: WorkcellConfig(),
+        ),
+        LoadConfig(use_fields_as_cli_args=True),
+    ]
     nodes: dict[str, Union["NodeDefinition", AnyUrl, PathLike]] = Field(
         default_factory=dict,
         title="Workcell Node URLs",

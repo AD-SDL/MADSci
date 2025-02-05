@@ -104,19 +104,27 @@ def add(
     manager_type: str,
 ) -> None:
     """Add a new manager."""
-    if not name:
-        name = ctx.parent.params.get("name")
-    if not name:
-        name = prompt_for_input("Manager Name", required=True, quiet=ctx.obj.quiet)
-    if not description:
-        description = prompt_for_input("Manager Description", quiet=ctx.obj.quiet)
-    if not manager_type:
-        manager_type = prompt_from_list(
+    name = name if name else ctx.parent.params.get("name")
+    name = (
+        name
+        if name
+        else prompt_for_input("Manager Name", required=True, quiet=ctx.obj.quiet)
+    )
+    description = (
+        description
+        if description
+        else prompt_for_input("Manager Description", quiet=ctx.obj.quiet)
+    )
+    manager_type = (
+        manager_type
+        if manager_type
+        else prompt_from_list(
             "Manager Type",
             options=[e.value for e in ManagerType],
             quiet=ctx.obj.quiet,
             required=True,
         )
+    )
 
     manager_definition = ManagerDefinition(
         name=name, description=description, manager_type=manager_type
