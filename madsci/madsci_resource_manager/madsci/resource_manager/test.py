@@ -1,6 +1,6 @@
 
-from resource_client import ResourceClient
-from db_tables import Stack, Asset, Queue, Pool, Collection, Consumable
+from madsci.client.resource_client import ResourceClient
+from madsci.madsci_resource_manager.madsci.resource_manager.resource_tables import Stack, Asset, Queue, Pool, Collection, Consumable
 import time 
 
 # Initialize the ResourcesClient with the database URL
