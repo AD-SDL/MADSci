@@ -1,12 +1,12 @@
 """Types related to datapoint types"""
 
+from datetime import datetime
 from typing import Any, Literal, Optional
 
+from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from pydantic import Field
 
-from madsci.common.types.base_types import BaseModel, ulid_factory
-
-import datetime
 
 class DataPoint(BaseModel, extra="allow"):
     """An object to contain and locate data identified by modules"""
@@ -23,7 +23,7 @@ class DataPoint(BaseModel, extra="allow"):
     """campaign of the data point"""
     type: str
     """type of the datapoint, inherited from class"""
-    datapoint_id: str = Field(default_factory=ulid_factory)
+    datapoint_id: str = Field(default_factory=new_ulid_str)
     """specific id for this data point"""
     data_timestamp: datetime = Field(default_factory=datetime.now)
     """time datapoint was created"""
@@ -45,3 +45,28 @@ class ValueDataPoint(DataPoint):
     """data_value"""
     value: Any
     """value of the data point"""
+
+
+class DataManagerDefinition(ManagerDefinition):
+    """Definition for a Squid Event Manager"""
+
+    manager_type: Literal[ManagerType.EVENT_MANAGER] = Field(
+        title="Manager Type",
+        description="The type of the event manager",
+        default=ManagerType.EVENT_MANAGER,
+    )
+    host: str = Field(
+        default="127.0.0.1",
+        title="Server Host",
+        description="The hostname or IP address of the Event Manager server.",
+    )
+    port: int = Field(
+        default=8001,
+        title="Server Port",
+        description="The port number of the Event Manager server.",
+    )
+    db_url: str = Field(
+        default="mongodb://localhost:27017",
+        title="Database URL",
+        description="The URL of the database used by the Event Manager.",
+    )

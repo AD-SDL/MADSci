@@ -9,7 +9,7 @@ from fastapi import FastAPI, Form, UploadFile
 from fastapi.params import Body
 from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient
-from madsci.common.types.datapoint_types import DataManagerDefinition, Datapoint
+from madsci.common.types.datapoint_types import DataManagerDefinition, DataPoint
 from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
 from pymongo.synchronous.database import Database
@@ -61,12 +61,12 @@ class DataServer:
         self._configure_routes()
 
     async def root(self) -> DataManagerDefinition:
-        """Return the Datapoint Manager Definition"""
+        """Return the DataPoint Manager Definition"""
         return self.data_manager_definition
 
     async def create_datapoint(
-        self, datapoint: Annotated[Datapoint, Form()], files: list[UploadFile] = []
-    ) -> Datapoint:
+        self, datapoint: Annotated[DataPoint, Form()], files: list[UploadFile] = []
+    ) -> DataPoint:
         """Create a new datapoint."""
         for file in files:
             time = datetime.now()
@@ -79,18 +79,18 @@ class DataServer:
         self.datapoints.insert_one(datapoint.model_dump(mode="json"))
         return datapoint
 
-    async def get_datapoint(self, datapoint_id: str) -> Datapoint:
+    async def get_datapoint(self, datapoint_id: str) -> DataPoint:
         """Look up an datapoint by datapoint_id"""
         return self.events.find_one({"datapoint_id": datapoint_id})
 
-    async def get_datapoints(self, number: int = 100) -> dict[str, Datapoint]:
+    async def get_datapoints(self, number: int = 100) -> dict[str, DataPoint]:
         """Get the latest datapoints"""
         datapoint_list = (
             self.datapoints.sort("data_timestamp", -1).limit(number).to_list()
         )
         return {datapoint["datapoint_id"]: datapoint for datapoint in datapoint_list}
 
-    async def query_datapoints(self, selector: Any = Body()) -> dict[str, Datapoint]:  # noqa: B008
+    async def query_datapoints(self, selector: Any = Body()) -> dict[str, DataPoint]:  # noqa: B008
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
         datapoint_list = self.datapoints.find(selector).to_list()
         return {datapoint["datapoint_id"]: datapoint for datapoint in datapoint_list}

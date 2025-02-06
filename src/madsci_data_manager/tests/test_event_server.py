@@ -7,9 +7,10 @@ a working docker installation.
 
 from fastapi.testclient import TestClient
 from madsci.common.types.event_types import Event, EventManagerDefinition, EventType
-from madsci.event_manager.event_server import EventServer
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import create_mongo_fixture
+
+from madsci_data_manager.madsci.event_manager.data_server import EventServer
 
 db_connection = create_mongo_fixture()
 
