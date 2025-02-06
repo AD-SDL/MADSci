@@ -2034,12 +2034,13 @@ files = [
 [[package]]
 name = "pytest-mock-resources"
 version = "2.12.1"
-extras = ["docker"]
+extras = ["docker", "mongo"]
 requires_python = "<4,>=3.7"
 summary = "A pytest plugin for easily instantiating reproducible mock resources."
 groups = ["dev"]
 dependencies = [
     "filelock",
+    "pymongo",
     "pytest-mock-resources==2.12.1",
     "python-on-whales>=0.22.0",
 ]

@@ -13,6 +13,8 @@ from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
     ExperimentManagerDefinition,
+    ExperimentRegistration,
+    ExperimentStatus,
 )
 from nicegui import ui
 from pymongo import MongoClient
@@ -87,15 +89,13 @@ class ExperimentServer:
 
     async def start_experiment(
         self,
-        experiment_design: ExperimentDesign,
-        run_name: Optional[str] = None,
-        run_description: Optional[str] = None,
+        experiment_request: ExperimentRegistration,
     ) -> Experiment:
         """Start a new experiment."""
         experiment = Experiment.from_experiment_design(
-            run_name=run_name,
-            run_description=run_description,
-            experiment_design=experiment_design,
+            run_name=experiment_request.run_name,
+            run_description=experiment_request.run_description,
+            experiment_design=experiment_request.experiment_design,
         )
         experiment.started_at = datetime.datetime.now()
         self.experiments.insert_one(experiment.to_mongo())
@@ -115,6 +115,7 @@ class ExperimentServer:
         if experiment is None:
             raise ValueError(f"Experiment {experiment_id} not found.")
         experiment.ended_at = datetime.datetime.now()
+        experiment.status = ExperimentStatus.COMPLETED
         self.experiments.update_one(
             {"_id": experiment_id},
             {"$set": experiment.to_mongo()},
@@ -122,6 +123,86 @@ class ExperimentServer:
         self.logger.log(
             event=Event(
                 event_type=EventType.EXPERIMENT_COMPLETE,
+                event_data={"experiment": experiment},
+            )
+        )
+        return experiment
+
+    async def continue_experiment(self, experiment_id: str) -> Experiment:
+        """Continue an experiment by ID."""
+        experiment = Experiment.model_validate(
+            self.experiments.find_one({"_id": experiment_id})
+        )
+        if experiment is None:
+            raise ValueError(f"Experiment {experiment_id} not found.")
+        experiment.status = ExperimentStatus.IN_PROGRESS
+        self.experiments.update_one(
+            {"_id": experiment_id},
+            {"$set": experiment.to_mongo()},
+        )
+        self.logger.log(
+            event=Event(
+                event_type=EventType.EXPERIMENT_CONTINUED,
+                event_data={"experiment": experiment},
+            )
+        )
+        return experiment
+
+    async def pause_experiment(self, experiment_id: str) -> Experiment:
+        """Pause an experiment by ID."""
+        experiment = Experiment.model_validate(
+            self.experiments.find_one({"_id": experiment_id})
+        )
+        if experiment is None:
+            raise ValueError(f"Experiment {experiment_id} not found.")
+        experiment.status = ExperimentStatus.PAUSED
+        self.experiments.update_one(
+            {"_id": experiment_id},
+            {"$set": experiment.to_mongo()},
+        )
+        self.logger.log(
+            event=Event(
+                event_type=EventType.EXPERIMENT_PAUSE,
+                event_data={"experiment": experiment},
+            )
+        )
+        return experiment
+
+    async def cancel_experiment(self, experiment_id: str) -> Experiment:
+        """Cancel an experiment by ID."""
+        experiment = Experiment.model_validate(
+            self.experiments.find_one({"_id": experiment_id})
+        )
+        if experiment is None:
+            raise ValueError(f"Experiment {experiment_id} not found.")
+        experiment.status = ExperimentStatus.CANCELLED
+        self.experiments.update_one(
+            {"_id": experiment_id},
+            {"$set": experiment.to_mongo()},
+        )
+        self.logger.log(
+            event=Event(
+                event_type=EventType.EXPERIMENT_CANCELLED,
+                event_data={"experiment": experiment},
+            )
+        )
+        return experiment
+
+    async def fail_experiment(self, experiment_id: str) -> Experiment:
+        """Fail an experiment by ID."""
+        experiment = Experiment.model_validate(
+            self.experiments.find_one({"_id": experiment_id})
+        )
+        if experiment is None:
+            raise ValueError(f"Experiment {experiment_id} not found.")
+        experiment.status = ExperimentStatus.FAILED
+        self.experiments.update_one(
+            {"_id": experiment_id},
+            {"$set": experiment.to_mongo()},
+        )
+        self.logger.log(
+            event=Event(
+                event_type=EventType.EXPERIMENT_FAILED,
                 event_data={"experiment": experiment},
             )
         )
@@ -147,6 +228,24 @@ class ExperimentServer:
         )
         self.router.add_api_route(
             "/experiment/{experiment_id}/end", self.end_experiment, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/experiment/{experiment_id}/continue",
+            self.continue_experiment,
+            methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/experiment/{experiment_id}/pause", self.pause_experiment, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/experiment/{experiment_id}/cancel",
+            self.cancel_experiment,
+            methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/experiment/{experiment_id}/fail",
+            self.fail_experiment,
+            methods=["POST"],
         )
         self.app.include_router(self.router)
 

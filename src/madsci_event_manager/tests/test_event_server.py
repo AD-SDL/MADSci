@@ -5,17 +5,24 @@ Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires
 a working docker installation.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.event_types import Event, EventManagerDefinition, EventType
 from madsci.event_manager.event_server import EventServer
 from pymongo.synchronous.database import Database
-from pytest_mock_resources import create_mongo_fixture
+from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
 db_connection = create_mongo_fixture()
 
 event_manager_def = EventManagerDefinition(
     name="test_event_manager",
 )
+
+
+@pytest.fixture(scope="session")
+def pmr_mongo_config() -> MongoConfig:
+    """Congifure the MongoDB fixture."""
+    return MongoConfig(image="mongo:8")
 
 
 def test_root(db_connection: Database) -> None:

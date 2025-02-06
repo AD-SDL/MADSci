@@ -1,18 +1,24 @@
 """Types for interacting with MADSci experiments and the Experiment Manager."""
 
-from typing import Any, Literal, Optional, Union
+from enum import Enum
+from typing import Any, ClassVar, Literal, Optional, Union
 
 from bson.objectid import ObjectId
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, datetime, new_ulid_str
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
-from madsci.common.types.workcell_types import WorkcellLink
 from pydantic import Field, field_validator
 
 
 class ExperimentManagerDefinition(ManagerDefinition):
     """Definition for an Experiment Manager."""
+
+    _definition_file_patterns: ClassVar[list] = [
+        "*experiment_manager.yaml",
+        "*experiment_manager.yml",
+    ]
+    _definition_cli_flags: ClassVar[list] = ["--experiment-manager", "--definition"]
 
     manager_type: Literal[ManagerType.EXPERIMENT_MANAGER] = Field(
         title="Manager Type",
@@ -53,11 +59,6 @@ class ExperimentDesign(BaseModel):
         description="A description of the experiment.",
         default=None,
     )
-    workcells: list[WorkcellLink] = Field(
-        title="Workcell Links",
-        description="Links to the workcells used by the experiment.",
-        default_factory=list,
-    )
     starting_layout: Optional[dict[str, Any]] = Field(
         title="Starting Layout",
         description="The starting layout of resources required for the experiment.",
@@ -85,6 +86,31 @@ class ExperimentDesign(BaseModel):
         )
 
 
+class ExperimentRegistration(BaseModel):
+    """Experiment Run Registration request body"""
+
+    experiment_design: ExperimentDesign
+    run_name: Optional[str] = None
+    run_description: Optional[str] = None
+
+
+class ExperimentStatus(str, Enum):
+    """Current status of an experiment run."""
+
+    IN_PROGRESS = "in_progress"
+    """Experiment is currently running."""
+    PAUSED = "paused"
+    """Experiment is not currently running."""
+    COMPLETED = "completed"
+    """Experiment run has completed."""
+    FAILED = "failed"
+    """Experiment has failed."""
+    CANCELLED = "cancelled"
+    """Experiment has been cancelled."""
+    UNKNOWN = "unknown"
+    """Experiment status is unknown."""
+
+
 class Experiment(BaseModel):
     """A MADSci experiment."""
 
@@ -103,6 +129,11 @@ class Experiment(BaseModel):
             return str(v)
         return v
 
+    status: ExperimentStatus = Field(
+        title="Experiment Status",
+        description="The status of the experiment.",
+        default=ExperimentStatus.IN_PROGRESS,
+    )
     experiment_design: Optional[ExperimentDesign] = Field(
         title="Experiment Design",
         description="The design of the experiment.",

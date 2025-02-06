@@ -15,8 +15,8 @@
 		"vscode": {
 			"settings": {
 				"python.defaultInterpreterPath": "/workspaces/MADSci/.venv/bin/python",
-				"python.terminal.activateEnvInCurrentTerminal": true
-
+				"python.terminal.activateEnvInCurrentTerminal": true,
+				"remote.autoForwardPorts": false
 			},
 			"extensions": [
 				"ms-python.python",
