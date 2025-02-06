@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:1ef553845035091126c7f158903d2b73d5bdb6e46f9c13fab5a34f4648d5b414"
+content_hash = "sha256:e36fbd8d209a878b154fbc8e5a26fc5893e98adf937a442a4e5e96bbf46d8f69"
 
 [[metadata.targets]]
 requires_python = ">=3.9.1"
@@ -982,7 +982,7 @@ files = [
 
 [[package]]
 name = "madsci-client"
-version = "0.0.2.dev5"
+version = "0.0.2.dev6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_client"
@@ -996,7 +996,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.0.2.dev5"
+version = "0.0.2.dev6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_common"
@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-event-manager"
-version = "0.0.2.dev5"
+version = "0.0.2.dev6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_event_manager"
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-manager"
-version = "0.0.2.dev5"
+version = "0.0.2.dev6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_experiment_manager"
@@ -1045,7 +1045,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-node-module"
-version = "0.0.2.dev5"
+version = "0.0.2.dev6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_node_module"
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.0.2.dev5"
+version = "0.0.2.dev6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_resource_manager"
@@ -1069,7 +1069,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.0.2.dev5"
+version = "0.0.2.dev6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_squid"
@@ -1081,7 +1081,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-workcell-manager"
-version = "0.0.2.dev5"
+version = "0.0.2.dev6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_workcell_manager"
@@ -2022,12 +2022,13 @@ files = [
 [[package]]
 name = "pytest-mock-resources"
 version = "2.12.1"
-extras = ["docker"]
+extras = ["docker", "mongo"]
 requires_python = "<4,>=3.7"
 summary = "A pytest plugin for easily instantiating reproducible mock resources."
 groups = ["dev"]
 dependencies = [
     "filelock",
+    "pymongo",
     "pytest-mock-resources==2.12.1",
     "python-on-whales>=0.22.0",
 ]

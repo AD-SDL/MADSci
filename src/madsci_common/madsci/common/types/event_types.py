@@ -130,11 +130,11 @@ class EventType(str, Enum):
     # *Experiment Events
     EXPERIMENT_CREATE = "experiment_create"
     EXPERIMENT_START = "experiment_start"
-    EXPERIMENT_STOP = "experiment_stop"
-    EXPERIMENT_CONTINUED = "experiment_continued"
-    EXPERIMENT_PAUSE = "experiment_pause"
     EXPERIMENT_COMPLETE = "experiment_complete"
-    EXPERIMENT_ABORT = "experiment_abort"
+    EXPERIMENT_FAILED = "experiment_failed"
+    EXPERIMENT_CANCELLED = "experiment_stop"
+    EXPERIMENT_PAUSE = "experiment_pause"
+    EXPERIMENT_CONTINUED = "experiment_continued"
     # *Campaign Events
     CAMPAIGN_CREATE = "campaign_create"
     CAMPAIGN_START = "campaign_start"

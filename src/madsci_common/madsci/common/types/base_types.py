@@ -151,6 +151,8 @@ class BaseModel(SQLModel, use_enum_values=True):
         from madsci.client.event_client import default_logger
         from madsci.common.utils import search_for_file_pattern
 
+        model_instance = None
+
         definition_files = []
         try:
             for pattern in cls._definition_file_patterns:
@@ -177,6 +179,8 @@ class BaseModel(SQLModel, use_enum_values=True):
         The flag(s) are determined by the class variable _definition_cli_flags.
         """
         from madsci.client.event_client import default_logger
+
+        model_instance = None
 
         if not cls._definition_cli_flags:
             default_logger.log_warning(

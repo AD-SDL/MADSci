@@ -5,21 +5,31 @@ Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires
 a working docker installation.
 """
 
+import pytest
+from fastapi import status
 from fastapi.testclient import TestClient
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
     ExperimentManagerDefinition,
+    ExperimentRegistration,
+    ExperimentStatus,
 )
 from madsci.experiment_manager.experiment_server import ExperimentServer
 from pymongo.database import Database
-from pytest_mock_resources import create_mongo_fixture
+from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
 db_connection = create_mongo_fixture()
 
 experiment_manager_def = ExperimentManagerDefinition(
     name="test_experiment_manager",
 )
+
+
+@pytest.fixture(scope="session")
+def pmr_mongo_config() -> MongoConfig:
+    """Congifure the MongoDB fixture."""
+    return MongoConfig(image="mongo:8")
 
 
 def test_experiment_definition(db_connection: Database) -> None:
@@ -49,12 +59,19 @@ def test_experiment_roundtrip(db_connection: Database) -> None:
         experiment_name="Test Experiment",
         experiment_description="This is a test experiment.",
     )
-    result = test_client.post(
-        "/experiment", json=test_experiment_design.model_dump(mode="json")
-    ).json()
-    test_experiment = Experiment.model_validate(result)
-    result = test_client.get(f"/experiment/{test_experiment.experiment_id}").json()
-    assert Experiment.model_validate(result) == test_experiment
+    payload = ExperimentRegistration(
+        experiment_design=test_experiment_design,
+        run_name="Test Run",
+        run_description="This is a test run.",
+    )
+    response = test_client.post("/experiment", json=payload.model_dump(mode="json"))
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() is not None
+    test_experiment = Experiment.model_validate(response.json())
+    response = test_client.get(f"/experiment/{test_experiment.experiment_id}")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() is not None
+    assert Experiment.model_validate(response.json()) == test_experiment
 
 
 def test_get_experiments(db_connection: Database) -> None:
@@ -71,13 +88,14 @@ def test_get_experiments(db_connection: Database) -> None:
         experiment_description="This is a test experiment.",
     )
     for i in range(10):
+        payload = ExperimentRegistration(
+            experiment_design=test_experiment_design,
+            run_name=f"Test Experiment {i}",
+            run_description=f"This is test experiment {i}.",
+        )
         response = test_client.post(
             "/experiment",
-            json=test_experiment_design.model_dump(mode="json"),
-            params={
-                "run_name": f"Test Experiment {i}",
-                "run_description": f"This is test experiment {i}.",
-            },
+            json=payload.model_dump(mode="json"),
         ).json()
         Experiment.model_validate(response)
     query_number = 5
@@ -105,11 +123,112 @@ def test_end_experiment(db_connection: Database) -> None:
         experiment_name="Test Experiment",
         experiment_description="This is a test experiment.",
     )
+    payload = ExperimentRegistration(
+        experiment_design=test_experiment_design,
+        run_name="Test Run",
+        run_description="This is a test run.",
+    )
     result = test_client.post(
-        "/experiment", json=test_experiment_design.model_dump(mode="json")
+        "/experiment", json=payload.model_dump(mode="json")
     ).json()
     test_experiment = Experiment.model_validate(result)
     result = test_client.post(f"/experiment/{test_experiment.experiment_id}/end").json()
     ended_experiment = Experiment.model_validate(result)
     assert ended_experiment.ended_at is not None
     assert ended_experiment.experiment_id == test_experiment.experiment_id
+
+
+def test_cancel_experiment(db_connection: Database) -> None:
+    """
+    Test that we can cancel an experiment by ID.
+    """
+    experiment_manager_server = ExperimentServer(
+        experiment_manager_definition=experiment_manager_def,
+        db_connection=db_connection,
+    )
+    test_client = TestClient(experiment_manager_server.app)
+    test_experiment_design = ExperimentDesign(
+        experiment_name="Test Experiment",
+        experiment_description="This is a test experiment.",
+    )
+    payload = ExperimentRegistration(
+        experiment_design=test_experiment_design,
+        run_name="Test Run",
+        run_description="This is a test run.",
+    )
+    result = test_client.post(
+        "/experiment", json=payload.model_dump(mode="json")
+    ).json()
+    test_experiment = Experiment.model_validate(result)
+    result = test_client.post(
+        f"/experiment/{test_experiment.experiment_id}/cancel"
+    ).json()
+    cancelled_experiment = Experiment.model_validate(result)
+    assert cancelled_experiment.status == ExperimentStatus.CANCELLED
+    assert cancelled_experiment.experiment_id == test_experiment.experiment_id
+
+
+def test_pause_and_resume_experiment(db_connection: Database) -> None:
+    """
+    Test that we can pause and resume an experiment by ID.
+    """
+    experiment_manager_server = ExperimentServer(
+        experiment_manager_definition=experiment_manager_def,
+        db_connection=db_connection,
+    )
+    test_client = TestClient(experiment_manager_server.app)
+    test_experiment_design = ExperimentDesign(
+        experiment_name="Test Experiment",
+        experiment_description="This is a test experiment.",
+    )
+    payload = ExperimentRegistration(
+        experiment_design=test_experiment_design,
+        run_name="Test Run",
+        run_description="This is a test run.",
+    )
+    result = test_client.post(
+        "/experiment", json=payload.model_dump(mode="json")
+    ).json()
+    test_experiment = Experiment.model_validate(result)
+    result = test_client.post(
+        f"/experiment/{test_experiment.experiment_id}/pause"
+    ).json()
+    paused_experiment = Experiment.model_validate(result)
+    assert paused_experiment.status == ExperimentStatus.PAUSED
+    assert paused_experiment.experiment_id == test_experiment.experiment_id
+    result = test_client.post(
+        f"/experiment/{test_experiment.experiment_id}/continue"
+    ).json()
+    resumed_experiment = Experiment.model_validate(result)
+    assert resumed_experiment.status == ExperimentStatus.IN_PROGRESS
+    assert resumed_experiment.experiment_id == test_experiment.experiment_id
+
+
+def test_fail_experiment(db_connection: Database) -> None:
+    """
+    Test that we can fail an experiment by ID.
+    """
+    experiment_manager_server = ExperimentServer(
+        experiment_manager_definition=experiment_manager_def,
+        db_connection=db_connection,
+    )
+    test_client = TestClient(experiment_manager_server.app)
+    test_experiment_design = ExperimentDesign(
+        experiment_name="Test Experiment",
+        experiment_description="This is a test experiment.",
+    )
+    payload = ExperimentRegistration(
+        experiment_design=test_experiment_design,
+        run_name="Test Run",
+        run_description="This is a test run.",
+    )
+    result = test_client.post(
+        "/experiment", json=payload.model_dump(mode="json")
+    ).json()
+    test_experiment = Experiment.model_validate(result)
+    result = test_client.post(
+        f"/experiment/{test_experiment.experiment_id}/fail"
+    ).json()
+    failed_experiment = Experiment.model_validate(result)
+    assert failed_experiment.status == ExperimentStatus.FAILED
+    assert failed_experiment.experiment_id == test_experiment.experiment_id

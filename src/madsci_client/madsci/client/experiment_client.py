@@ -8,6 +8,8 @@ from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentalCampaign,
     ExperimentDesign,
+    ExperimentRegistration,
+    ExperimentStatus,
 )
 from pydantic import AnyUrl
 from ulid import ULID
@@ -50,21 +52,52 @@ class ExperimentClient:
         """Start an experiment based on an ExperimentDesign."""
         response = requests.post(
             f"{self.url}/experiment",
-            json={
-                "experiment_design": experiment_design,
-                "run_name": run_name,
-                "run_description": run_description,
-            },
+            json=ExperimentRegistration(
+                experiment_design=experiment_design.model_dump(mode="json"),
+                run_name=run_name,
+                run_description=run_description,
+            ).model_dump(mode="json"),
             timeout=10,
         )
         if not response.ok:
             response.raise_for_status()
         return Experiment.model_validate(response.json())
 
-    def end_experiment(self, experiment_id: Union[str, ULID]) -> Experiment:
-        """End an experiment by ID."""
+    def end_experiment(
+        self, experiment_id: Union[str, ULID], status: Optional[ExperimentStatus] = None
+    ) -> Experiment:
+        """End an experiment by ID. Optionally, set the status."""
         response = requests.post(
-            f"{self.url}/experiment/{experiment_id}/end", timeout=10
+            f"{self.url}/experiment/{experiment_id}/end",
+            params={"status": status},
+            timeout=10,
+        )
+        if not response.ok:
+            response.raise_for_status()
+        return Experiment.model_validate(response.json())
+
+    def continue_experiment(self, experiment_id: Union[str, ULID]) -> Experiment:
+        """Continue an experiment by ID."""
+        response = requests.post(
+            f"{self.url}/experiment/{experiment_id}/continue", timeout=10
+        )
+        if not response.ok:
+            response.raise_for_status()
+        return Experiment.model_validate(response.json())
+
+    def pause_experiment(self, experiment_id: Union[str, ULID]) -> Experiment:
+        """Pause an experiment by ID."""
+        response = requests.post(
+            f"{self.url}/experiment/{experiment_id}/pause", timeout=10
+        )
+        if not response.ok:
+            response.raise_for_status()
+        return Experiment.model_validate(response.json())
+
+    def cancel_experiment(self, experiment_id: Union[str, ULID]) -> Experiment:
+        """Cancel an experiment by ID."""
+        response = requests.post(
+            f"{self.url}/experiment/{experiment_id}/cancel", timeout=10
         )
         if not response.ok:
             response.raise_for_status()

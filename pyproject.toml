@@ -22,6 +22,6 @@ fallback_version = "0.0.1"
 [dependency-groups]
 dev = [
     "pytest>=8.3.4",
-    "pytest-mock-resources[docker]>=2.12.1",
+    "pytest-mock-resources[docker,mongo]>=2.12.1",
     "ipykernel>=6.29.5",
 ]
