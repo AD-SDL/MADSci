@@ -62,11 +62,9 @@ class ResourceInterface():
         """
         with self.session as session:
             try:
-                # Ensure children are properly merged
                 if hasattr(resource, "children") and isinstance(resource.children, dict):
                     for key, child in resource.children.items():
                         if isinstance(child, ResourceBase):
-                            # Merge the child resource
                             child = session.merge(child)
                             resource.children[key] = child
 
@@ -280,7 +278,7 @@ class ResourceInterface():
             print(f"🗑 Removing Resource: {resource.resource_name} (ID: {resource_id})")
 
             # Archive and remove the resource
-            resource.delete(session)
+            resource._delete(session)
 
     def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
         """
@@ -292,7 +290,7 @@ class ResourceInterface():
         """
         with self.session as session:
             existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            existing_pool.increase_quantity(amount, session)
+            existing_pool._increase_quantity(amount, session)
             session.refresh(existing_pool)
             return existing_pool
 
@@ -306,7 +304,7 @@ class ResourceInterface():
         """
         with self.session as session:
             existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            existing_pool.decrease_quantity(amount, session)
+            existing_pool._decrease_quantity(amount, session)
             session.refresh(existing_pool)
             return existing_pool
 
@@ -319,7 +317,7 @@ class ResourceInterface():
         """
         with self.session as session:
             existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            existing_pool.empty(session)
+            existing_pool._empty(session)
             session.refresh(existing_pool)
             return existing_pool
 
@@ -332,7 +330,7 @@ class ResourceInterface():
         """
         with self.session as session:
             existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            existing_pool.fill(session)
+            existing_pool._fill(session)
             session.refresh(existing_pool)
             return existing_pool
 
@@ -354,7 +352,7 @@ class ResourceInterface():
                 )
             stack = existing_stack
             asset = session.merge(asset)
-            stack.push(asset, session)
+            stack._push(asset, session)
             # session.commit()
             session.refresh(stack)
             return stack
@@ -373,7 +371,7 @@ class ResourceInterface():
         """
         with self.session as session:
             stack = session.merge(stack)
-            asset = stack.pop(session)
+            asset = stack._pop(session)
 
             if asset:
                 updated_stack = session.query(Stack).filter_by(resource_id=stack.resource_id).first()
@@ -398,7 +396,7 @@ class ResourceInterface():
                 )
             queue = existing_queue
             asset = session.merge(asset)
-            queue.push(asset, session)
+            queue._push(asset, session)
             session.refresh(queue)
             return queue
 
@@ -416,7 +414,7 @@ class ResourceInterface():
         """
         with self.session as session:
             queue = session.merge(queue)
-            asset = queue.pop(session)
+            asset = queue._pop(session)
 
             if asset:
                 updated_queue = session.query(Queue).filter_by(resource_id=queue.resource_id).first()
@@ -482,9 +480,8 @@ class ResourceInterface():
         with self.session as session:
             collection= session.query(Collection).filter_by(resource_id=collection.resource_id).first()
             resource = self.get_resource(resource_id=resource.resource_id)
-            collection.add_child(key=key, resource=resource, session=session)
+            collection._add_child(key=key, resource=resource, session=session)
             session.add(collection)
-            # session.commit()
             session.refresh(collection)
             return collection
 
