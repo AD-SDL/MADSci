@@ -2,9 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime
 
-from resource_interface import ResourceInterface
-from db_tables import map_resource_type
-from serialization_utils import serialize_resource, deserialize_resource
+from madsci.madsci_resource_manager.madsci.resource_manager.resource_interface import ResourceInterface
+from madsci.madsci_resource_manager.madsci.resource_manager.serialization_utils import serialize_resource, deserialize_resource
 
 from madsci.resource_manager.types import (
     ResourceManagerConfig,

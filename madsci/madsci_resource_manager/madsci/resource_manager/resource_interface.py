@@ -13,8 +13,8 @@ from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from madsci.common.types.resource_types import ResourceBase
-from db_tables import Stack, Asset, Queue, Pool, Consumable, Collection, Grid, History
-from serialization_utils import deserialize_resource
+from madsci.madsci_resource_manager.madsci.resource_manager.resource_tables import Stack, Asset, Queue, Pool, Consumable, Collection, Grid, History
+from madsci.madsci_resource_manager.madsci.resource_manager.serialization_utils import deserialize_resource
 
 class ResourceInterface():
     """
