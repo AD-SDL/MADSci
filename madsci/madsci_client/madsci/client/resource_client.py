@@ -6,8 +6,6 @@ from datetime import datetime
 
 from serialization_utils import serialize_resource, deserialize_resource  
 
-# --- Resource Client ---
-
 class ResourceClient:
     def __init__(self, base_url: str, database_url: str):
         self.base_url = base_url
