@@ -805,6 +805,12 @@ class PoolBase(ContainerBase):
         title="Attributes",
         description="Custom attributes for the pool.",
     )
+class AllocationBase(ResourceBase):
+    pass
+
+class HistoryBase(ResourceBase):
+    pass 
+
 if __name__ == "__main__":
     a = ConsumableBase(resource_name="Water",resource_type="pool",quantity=50.0,ownership=None,capacity=100)
     t = PoolBase(resource_name="Test Pool",resource_description="teststes",capacity=100,ownership=None,quantity=50,children={"A":a},resource_type="pool")
