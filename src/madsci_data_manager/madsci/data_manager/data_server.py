@@ -9,7 +9,7 @@ from fastapi import FastAPI, Form, UploadFile
 from fastapi.params import Body
 from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient
-from madsci.common.types.data_types import DataManagerDefinition, Datapoint
+from madsci.common.types.datapoint_types import DataManagerDefinition, Datapoint
 from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
 from pymongo.synchronous.database import Database
