@@ -9,23 +9,12 @@ from sqlalchemy import (
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import SQLModel, Field, Session, UniqueConstraint
 
-from madsci.common.types.resource_types import discriminate_default_resources, AssetBase, StackBase, QueueBase, PoolBase, ConsumableBase, CollectionBase, ResourceBase, GridBase
+from madsci.common.types.resource_types import discriminate_default_resources, AssetBase, StackBase, QueueBase, PoolBase, ConsumableBase, CollectionBase, ResourceBase, GridBase, AllocationBase, HistoryBase
 
-class History(SQLModel, table=True):
+class History(HistoryBase, table=True):
     """
     History table for tracking resource changes.
     """
-    id: int = Field(primary_key=True)
-    resource_id: str = Field(nullable=False, index=True)
-    resource_type: str = Field(nullable=False, index=True)
-    event_type: str = Field(nullable=False, description="Type of event (e.g., created, updated, deleted).")
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    last_modified: datetime = Field(nullable=False, description="Timestamp of the original resource's last modification.")
-    data: dict = Field(
-        sa_column=Column(JSON, nullable=False),  # Define `nullable` directly in `Column`
-        description="Snapshot of the resource data."
-    )
-    removed: bool = Field(default=False, nullable=False, description="Whether the resource was removed.")
 
     @classmethod
     def _convert_datetime(cls, obj):
@@ -63,17 +52,16 @@ class History(SQLModel, table=True):
             event_type (str): Type of change (created, updated, deleted).
             removed (bool): Whether the resource is removed.
         """
-        # Convert the resource to a dictionary
         resource_data = resource.dict()
-
         # Recursively ensure all datetime fields are JSON-serializable
         resource_data = cls._convert_datetime(resource_data)
 
         history_entry = cls(
             resource_id=resource.resource_id,
             resource_type=resource.resource_type,
+            resource_name=resource.resource_name,
             event_type=event_type,
-            created_at=resource.date_created,
+            created_at=resource.created_at,
             data=resource_data, 
             last_modified=resource.last_modified,
             removed=removed
@@ -107,46 +95,13 @@ class Asset(AssetBase, table=True):
         session.delete(self)
         session.commit()
         
-class Allocation(SQLModel, table=True):
+class Allocation(AllocationBase, table=True):
     """
     Table that tracks which resource is allocated to another resource.
 
     Attributes:
         index (int): Allocation index for ordering within the parent resource.
     """
-    resource_id: str = Field(
-        title="Resource ID",
-        description="The ID of the resource being allocated.",
-        nullable=False,
-        primary_key=True,
-    )
-    resource_name: str = Field(
-        title="Resource Name",
-        description="The name of the resource being allocated.",
-        nullable=True,
-    )
-    resource_type: str = Field(
-        title="Resource Type",
-        description="The type of the resource (e.g., 'stack', 'queue').",
-        nullable=False,
-    )
-    parent: str = Field(
-        title="Parent Resource",
-        description="The ID of the resource under which this resource is allocated.",
-        nullable=False,
-    )
-    index: int = Field(
-        title="Allocation Index",
-        description="The index position of the resource in the parent resource.",
-        nullable=False,
-    )
-    index: int = Field(
-        title="Allocation Index",
-        description="The index position of the resource in the parent resource.",
-        nullable=False
-    )
-    
-
     # Composite primary key and unique constraint
     __table_args__ = (
         UniqueConstraint(
@@ -842,12 +797,3 @@ def map_resource_type(resource_data: dict):
         raise ValueError(f"No DB table class found for resource type: {inferred_type}")
     
     return db_class
-              
-if __name__ == "__main__":
-    # s= Stack(resource_name="",resource_types="",capacity=10,ownership=None)
-    # s= StackBase(resource_name="a",resource_type="a",capacity=10,ownership=None)
-    s = Stack(resource_name="a", resource_type="pool", capacity=10, ownership=None)
-    resource_class = map_resource_type(s)
-    print(resource_class)
-    
-    
