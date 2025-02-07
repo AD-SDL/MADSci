@@ -94,3 +94,4 @@ def deserialize_resource(data: Dict[str, Any]) -> ResourceBase:
     
     resource_class = map_resource_type(data)
     return resource_class(**data)
+

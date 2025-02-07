@@ -108,7 +108,7 @@ print(f"A2 Pool Name: {plate.children}")
 
 pool.capacity = 1000
 updated_resource = client.update_resource(pool)
-print(updated_resource)
+print(updated_resource.capacity)
 
 print("\n=== Testing get_history, remove_resource, and restore_deleted_resource ===")
 
@@ -119,14 +119,14 @@ print("Test asset added:", test_asset)
 
 
 # Wait a moment to ensure the history timestamps will be distinct
-time.sleep(1)
+# time.sleep(1)
 
 # Remove the test resource
 removed_asset = client.remove_resource(stack.resource_id)
 print("Resource removed:", removed_asset)
 
 # Wait again to let the removal event register in history
-time.sleep(1)
+# time.sleep(1)
 
 # Retrieve history for the removed resource. 
 history_entries = client.get_history(resource_id=stack.resource_id,event_type="deleted")
