@@ -8,7 +8,7 @@ from pydantic import Json
 from pydantic.config import ConfigDict
 from pydantic.functional_validators import field_validator, model_validator
 from pydantic.types import Discriminator, Tag
-from sqlmodel import Field, Column, DateTime
+from sqlmodel import Field, Column, SQLModel
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql import func
 from sqlalchemy.types import PickleType
@@ -17,8 +17,6 @@ from sqlalchemy.ext.mutable import MutableDict
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.validators import ulid_validator
-
-
 class ResourceType(str, Enum):
     """Type for a MADSci Resource."""
 
@@ -354,7 +352,7 @@ class ResourceDefinition(BaseModel, extra="allow", table=False):
         title="Parent Resource",
         description="The parent resource ID or name. If None, defaults to the owning module or workcell.",
     )
-    date_created:datetime = Field(
+    created_at:datetime = Field(
         default_factory=datetime.utcnow,
         description="Timestamp of the date created."
     )    
@@ -362,13 +360,6 @@ class ResourceDefinition(BaseModel, extra="allow", table=False):
         default_factory=datetime.utcnow,
         description="Timestamp of the last modification."
     )
-
-    # attributes: dict = Field(
-    #     title="Resource Attributes",
-    #     description="Additional attributes for the resource.",
-    #     default_factory=dict,
-    # )
-
     is_ulid = field_validator("resource_id")(ulid_validator)
 
 
@@ -631,11 +622,12 @@ RESOURCE_DEFINITION_MAP: dict[str, type[ResourceDefinition]] = {
 
 class ResourceBase(ResourceDefinition, extra="allow", table=False):
     """Base class for all MADSci Resources."""
-    # Might be better to put this elsewhere
-    # resource_url: str = Field(
-    #     title="Resource URL",
-    #     description="The URL of the resource.",
-    # )
+    resource_url: Optional[str] = Field(
+        title="Resource URL",
+        description="The URL of the resource.",
+        nullable=True,
+        default=None
+    )
     # ownership: Optional[OwnershipInfo] = Field(
     #     title="Ownership",
     #     description="Information about the ownership of the resource.",
@@ -799,21 +791,23 @@ class PoolBase(ContainerBase):
         title="Capacity",
         description="The capacity of the pool.",
     )
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the pool.",
-    )
+
 class AllocationBase(ResourceBase):
-    pass
+    """Base class for all MADSci Allocations"""
+    index: int = Field(
+        title="Allocation Index",
+        description="The index position of the resource in the parent resource.",
+        nullable=False
+    )
 
 class HistoryBase(ResourceBase):
-    pass 
+    """Base class for all MADSci History records"""
+    id: int = Field(primary_key=True)
+    resource_id: str = Field(nullable=False, index=True)
+    event_type: str = Field(nullable=False, description="Type of event (e.g., created, updated, deleted).")
+    data: dict = Field(
+        sa_column=Column(JSON, nullable=False),  # Define `nullable` directly in `Column`
+        description="Snapshot of the resource data."
+    )
+    removed: bool = Field(default=False, nullable=False, description="Whether the resource was removed.")
 
-if __name__ == "__main__":
-    a = ConsumableBase(resource_name="Water",resource_type="pool",quantity=50.0,ownership=None,capacity=100)
-    t = PoolBase(resource_name="Test Pool",resource_description="teststes",capacity=100,ownership=None,quantity=50,children={"A":a},resource_type="pool")
-    print(t.children["A"])
-    s = StackBase(resource_name="stack",capacity=10,ownership=None,resource_type="stack")
-    print(s)
