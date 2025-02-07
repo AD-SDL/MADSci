@@ -1,0 +1,41 @@
+[project]
+name = "madsci.event_manager"
+dynamic = ["version"]
+description = "The Modular Autonomous Discovery for Science (MADSci) Event and Logging Manager."
+authors = [
+    {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
+    {name = "Ryan D. Lewis", email = "ryan.lewis@anl.gov"},
+    {name = "Casey Stone", email = "cstone@anl.gov"},
+    {name = "Doga Ozgulbas", email = "dozgulbas@anl.gov"},
+]
+requires-python = ">=3.9.1"
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = [
+  "madsci.common[server]"
+]
+
+[project.urls]
+Homepage = "https://github.com/AD-SDL/MADSci"
+
+
+######################
+# Build Info + Tools #
+######################
+
+[project.optional-dependencies]
+test = [
+    "httpx>=0.28.1",
+    "pytest>=8.3.4",
+    "pytest-mock-resources[mongo]>=2.12.1",
+]
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.version]
+source = "scm"
+fallback_version = "0.0.0"
+
+#[dependency-groups]
+#dev = ["-e madsci-common @ file:///${PROJECT_ROOT}/../madsci_common"]
