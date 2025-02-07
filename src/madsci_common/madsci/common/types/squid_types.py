@@ -3,9 +3,9 @@
 from enum import Enum
 from typing import Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
-from madsci.common.types.workcell_types import WorkcellDefinition
-from madsci.common.validators import (
+from madsci_common.madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci_common.madsci.common.types.workcell_types import WorkcellDefinition
+from madsci_common.madsci.common.validators import (
     ulid_validator,
 )
 from pydantic.functional_validators import field_validator
@@ -131,7 +131,38 @@ class ManagerType(str, Enum):
                 return member
         raise ValueError(f"Invalid ManagerTypes: {value}")
 
+class ResourceManagerDefinition(ManagerDefinition):
+    """Definition for a MADSci Resource Manager."""
 
+    manager_type: Literal[ManagerType.RESOURCE_MANAGER] = Field(
+        title="Manager Type",
+        description="The type of the resource manager",
+        default=ManagerType.RESOURCE_MANAGER,
+    )
+    manager_config: "ResourceManagerConfig" = Field(
+        default_factory=lambda: ResourceManagerConfig(),
+        title="Manager Configuration",
+        description="The configuration for the resource manager .",
+    )
+
+class ResourceManagerConfig(BaseModel):
+    """Configuration for a MADSci Resource Manager."""
+
+    host: str = Field(
+        default="localhost",
+        title="Host",
+        description="The host to run the resource manager on.",
+    )
+    port: int = Field(
+        default=8012,
+        title="Port",
+        description="The port to run the resource manager on.",
+    )
+    db_url: str = Field(
+        default="mongodb://localhost:27017",
+        title="Database URL",
+        description="The URL of the database used by the Event Manager.",
+    )
 class EventManagerDefinition(ManagerDefinition):
     """Definition for a Squid Event Manager"""
 

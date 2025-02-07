@@ -9,7 +9,7 @@ from sqlalchemy import (
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import SQLModel, Field, Session, UniqueConstraint
 
-from madsci.common.types.resource_types import discriminate_default_resources, AssetBase, StackBase, QueueBase, PoolBase, ConsumableBase, CollectionBase, ResourceBase, GridBase, AllocationBase, HistoryBase
+from madsci_common.madsci.common.types.resource_types import discriminate_default_resources, AssetBase, StackBase, QueueBase, PoolBase, ConsumableBase, CollectionBase, ResourceBase, GridBase, AllocationBase, HistoryBase
 
 class History(HistoryBase, table=True):
     """

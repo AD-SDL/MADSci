@@ -2,14 +2,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime
 
-from madsci.madsci_resource_manager.madsci.resource_manager.resource_interface import ResourceInterface
-from madsci.madsci_resource_manager.madsci.resource_manager.serialization_utils import serialize_resource, deserialize_resource
+from madsci_resource_manager.madsci.resource_manager.resource_interface import ResourceInterface
+from madsci_resource_manager.madsci.resource_manager.serialization_utils import serialize_resource,deserialize_resource
+from madsci_common.madsci.common.types.squid_types import ResourceManagerDefinition, ResourceManagerConfig
 
 from fastapi import FastAPI
-from madsci.resource_manager.types import (
-    ResourceManagerConfig,
-    ResourceManagerDefinition,
-)
 
 app = FastAPI()
 
@@ -17,9 +14,9 @@ resource_manager_definition = ResourceManagerDefinition(
     name="Resource Manager 1",
     manager_type="resource_manager",
     description="The First MADSci Resource Manager.",
-    plugin_config=ResourceManagerConfig(),
 )
-resource_manager_definition.url = f"https://{resource_manager_definition.plugin_config.host}:{resource_manager_definition.plugin_config.port}"
+resource_manager_definition.url = f"https://{resource_manager_definition.manager_config.host}:{resource_manager_definition.manager_config.port}"
+db_url = resource_manager_definition.manager_config.db_url
 
 @app.get("/info")
 def info() -> ResourceManagerDefinition:
@@ -383,6 +380,6 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host=resource_manager_definition.plugin_config.host,
-        port=resource_manager_definition.plugin_config.port,
+        host=resource_manager_definition.manager_config.host,
+        port=resource_manager_definition.manager_config.port,
     )

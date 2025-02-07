@@ -1,6 +1,6 @@
 import datetime
 from typing import Any, Dict
-from madsci.madsci_resource_manager.madsci.resource_manager.resource_tables import map_resource_type, ResourceBase
+from  madsci_resource_manager.madsci.resource_manager.resource_tables import map_resource_type, ResourceBase
 
 def _convert_datetime(value: Any) -> Any:
     """
