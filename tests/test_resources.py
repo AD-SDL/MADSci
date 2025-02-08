@@ -10,7 +10,6 @@ from madsci.resource_manager.resource_tables import (
 )
 
 # Initialize the ResourcesClient with the database URL
-database_url = "postgresql://rpl:rpl@127.0.0.1:5432/resources"
 base_url = "http://localhost:8012"
 client = ResourceClient(base_url=base_url)
 
