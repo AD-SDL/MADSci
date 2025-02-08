@@ -1,7 +1,7 @@
 # Resource Manager Usage Guide
 
 ## Overview
-This guide explains how to interact with the Resource Manager system using the `ResourceClient`. You will learn how to create, modify, query, and manage various resource types, including stacks, queues, pools, consumables, and collections.
+This guide explains how to interact with the Resource Manager system using the `ResourceClient`. You can create, modify, query, and manage various resource types, including stacks, queues, pools, consumables, and collections.
 
 ## Setup
 Ensure you have access to the Resource Manager API and initialize the client:
