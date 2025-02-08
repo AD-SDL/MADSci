@@ -1,22 +1,30 @@
 """Resources Interface"""
 
-import time
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Type
-import warnings
-
 # Suppress SAWarnings
-warnings.filterwarnings("ignore")
-
-from sqlalchemy import text
-from sqlalchemy.exc import MultipleResultsFound
-from sqlmodel import Session, SQLModel, create_engine, select
+import logging
+import time
+import warnings
+from datetime import datetime, timedelta
+from typing import Optional
 
 from madsci.common.types.resource_types import ResourceBase
-from madsci.resource_manager.resource_tables import Stack, Asset, Queue, Pool, Consumable, Collection, Grid, History
+from madsci.resource_manager.resource_tables import (
+    Asset,
+    Collection,
+    Consumable,
+    History,
+    Pool,
+    Queue,
+    Stack,
+)
 from madsci.resource_manager.serialization_utils import deserialize_resource
+from sqlmodel import Session, SQLModel, create_engine, select
 
-class ResourceInterface():
+warnings.filterwarnings("ignore")
+logger = logging.getLogger(__name__)
+
+
+class ResourceInterface:
     """
     Interface for managing various types of resources.
 
@@ -29,7 +37,7 @@ class ResourceInterface():
         self,
         database_url: str = "postgresql://rpl:rpl@127.0.0.1:5432/resources",
         init_timeout: float = 10,
-    ):
+    ) -> None:
         """
         Initialize the ResourceInterface with a database URL.
 
@@ -42,14 +50,14 @@ class ResourceInterface():
                 self.engine = create_engine(database_url)
                 self.session = Session(self.engine)
                 SQLModel.metadata.create_all(self.engine)
-                print(f"Resources Database started on: {database_url}")
+                logger.info(f"Resources Database started on: {database_url}")
                 break
             except Exception:
-                print("Database not ready yet. Retrying...")
+                logger.error("Database not ready yet. Retrying...")
                 time.sleep(5)
                 continue
 
-    def add_resource(self, resource:ResourceBase):
+    def add_resource(self, resource: ResourceBase) -> dict:
         """
         Add a resource to the database using the add_resource method
         in ResourceContainerBase.
@@ -62,28 +70,32 @@ class ResourceInterface():
         """
         with self.session as session:
             try:
-                if hasattr(resource, "children") and isinstance(resource.children, dict):
-                    for key, child in resource.children.items():
+                if hasattr(resource, "children") and isinstance(
+                    resource.children, dict
+                ):
+                    for _key, child in resource.children.items():
                         if isinstance(child, ResourceBase):
-                            child = session.merge(child)
-                            resource.children[key] = child
+                            child = session.merge(child)  # noqa
+                            resource.children[_key] = child
 
                 resource = session.merge(resource)
                 session.commit()
                 session.refresh(resource)
-                if hasattr(resource, "children") and isinstance(resource.children, dict):
+                if hasattr(resource, "children") and isinstance(
+                    resource.children, dict
+                ):
                     resource.children = {
-                        key: self.get_resource(resource_id=child.resource_id)
-                        if isinstance(child, ResourceBase) else child
-                        for key, child in resource.children.items()
+                        _key: self.get_resource(resource_id=child.resource_id)
+                        if isinstance(child, ResourceBase)
+                        else child
+                        for _key, child in resource.children.items()
                     }
 
                 return resource
             except Exception as e:
-                print(f"Error adding resource: {e}")
-                raise
-                    
-    def update_resource(self, resource: ResourceBase):
+                logger.error(f"Error adding resource: {e}")
+
+    def update_resource(self, resource: ResourceBase) -> None:
         """
         Update or refresh a resource in the database, including its children.
 
@@ -96,8 +108,10 @@ class ResourceInterface():
         with self.session as session:
             try:
                 resource = session.merge(resource)
-                if hasattr(resource, "children") and isinstance(resource.children, dict):
-                    for key, child in resource.children.items():
+                if hasattr(resource, "children") and isinstance(
+                    resource.children, dict
+                ):
+                    for _key, child in resource.children.items():
                         if isinstance(child, ResourceBase):
                             child.parent = resource.resource_id
                             session.merge(child)
@@ -105,9 +119,9 @@ class ResourceInterface():
                 session.commit()
                 session.refresh(resource)
             except Exception as e:
-                print(f"Error refreshing resource {resource.resource_id}: {e}")
+                logger.error(f"Error refreshing resource {resource.resource_id}: {e}")
                 raise
-                
+
     def get_resource(
         self,
         resource_name: Optional[str] = None,
@@ -152,13 +166,14 @@ class ResourceInterface():
                 for r_type in resource_types:
                     resource_type = resource_type_map[r_type]
                     resource = session.exec(
-                        select(resource_type).where(resource_type.resource_id == resource_id)
+                        select(resource_type).where(
+                            resource_type.resource_id == resource_id
+                        )
                     ).first()
                     if resource:
-                        print(f"Resource found by ID: {resource.resource_id} in {r_type}")
                         return resource
 
-                print(f"No resource found with ID '{resource_id}'.")
+                logger.error(f"No resource found with ID '{resource_id}'.")
                 return None
 
             query_conditions = []
@@ -179,25 +194,22 @@ class ResourceInterface():
                     statement = statement.where(condition(resource_type))
                 resource = session.exec(statement).first()
                 if resource:
-                    print(
-                        f"Resource found: {resource.resource_name} in {r_type}."
-                    )
                     return resource
 
-            print(
+            logger.error(
                 f"No resource found matching name '{resource_name}', owner '{owner_name}', or type '{resource_type}'."
             )
             return None
-        
+
     def get_history(
         self,
-        resource_id: str,  
+        resource_id: str,
         event_type: Optional[str] = None,
         removed: Optional[bool] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: Optional[int] = 100
-    ) -> List[History]:
+        limit: Optional[int] = 100,
+    ) -> list[History]:
         """
         Query the History table with flexible filtering.
 
@@ -224,11 +236,13 @@ class ResourceInterface():
             if removed is not None:
                 query = query.where(History.removed == removed)
             if start_date:
-                query = query.where(History.last_modified >= start_date)  # Changed to last_modified
+                query = query.where(History.last_modified >= start_date)
             if end_date:
-                query = query.where(History.last_modified <= end_date)  # Changed to last_modified
+                query = query.where(History.last_modified <= end_date)
 
-            query = query.order_by(History.last_modified.desc())  # Sorting by last_modified
+            query = query.order_by(
+                History.last_modified.desc()
+            )  # Sorting by last_modified
 
             if limit:
                 query = query.limit(limit)
@@ -240,7 +254,7 @@ class ResourceInterface():
                 entry.data = deserialize_resource(entry.data)
 
             return history_entries
-        
+
     def restore_deleted_resource(self, resource_id: str) -> Optional[ResourceBase]:
         """
         Restore the latest version of a deleted resource.
@@ -251,9 +265,11 @@ class ResourceInterface():
         Returns:
             Optional[ResourceBase]: The latest version of the resource data, or None if not found.
         """
-        history_entries = self.get_history(resource_id=resource_id, removed=True, limit=1)
+        history_entries = self.get_history(
+            resource_id=resource_id, removed=True, limit=1
+        )
         return history_entries[0].data if history_entries else None
-    
+
     def remove_resource(self, resource_id: str) -> None:
         """
         Remove a resource by moving it to the History table and deleting it from the main table.
@@ -275,9 +291,9 @@ class ResourceInterface():
             if not resource:
                 raise ValueError(f"🚨 Resource with ID '{resource_id}' not found!")
 
-            print(f"🗑 Removing Resource: {resource.resource_name} (ID: {resource_id})")
-
-            # Archive and remove the resource
+            logger.info(
+                f"🗑 Removing Resource: {resource.resource_name} (ID: {resource_id})"
+            )
             resource._delete(session)
 
     def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
@@ -289,7 +305,9 @@ class ResourceInterface():
             amount (float): The amount to increase.
         """
         with self.session as session:
-            existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
+            existing_pool = (
+                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
+            )
             existing_pool._increase_quantity(amount, session)
             session.refresh(existing_pool)
             return existing_pool
@@ -303,7 +321,9 @@ class ResourceInterface():
             amount (float): The amount to decrease.
         """
         with self.session as session:
-            existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
+            existing_pool = (
+                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
+            )
             existing_pool._decrease_quantity(amount, session)
             session.refresh(existing_pool)
             return existing_pool
@@ -316,7 +336,9 @@ class ResourceInterface():
             pool (Pool): The pool resource to empty.
         """
         with self.session as session:
-            existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
+            existing_pool = (
+                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
+            )
             existing_pool._empty(session)
             session.refresh(existing_pool)
             return existing_pool
@@ -329,11 +351,12 @@ class ResourceInterface():
             pool (Pool): The pool resource to fill.
         """
         with self.session as session:
-            existing_pool= session.query(Pool).filter_by(resource_id=pool.resource_id).first()
+            existing_pool = (
+                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
+            )
             existing_pool._fill(session)
             session.refresh(existing_pool)
             return existing_pool
-
 
     def push_to_stack(self, stack: Stack, asset: Asset) -> None:
         """
@@ -344,7 +367,9 @@ class ResourceInterface():
             asset (Asset): The asset to push onto the stack.
         """
         with self.session as session:
-            existing_stack = session.query(Stack).filter_by(resource_id=stack.resource_id).first()
+            existing_stack = (
+                session.query(Stack).filter_by(resource_id=stack.resource_id).first()
+            )
 
             if not existing_stack:
                 raise ValueError(
@@ -353,7 +378,6 @@ class ResourceInterface():
             stack = existing_stack
             asset = session.merge(asset)
             stack._push(asset, session)
-            # session.commit()
             session.refresh(stack)
             return stack
 
@@ -374,10 +398,13 @@ class ResourceInterface():
             asset = stack._pop(session)
 
             if asset:
-                updated_stack = session.query(Stack).filter_by(resource_id=stack.resource_id).first()
-                return asset, updated_stack            
-            else:
-                raise ValueError("The stack is empty or the asset does not exist.")
+                updated_stack = (
+                    session.query(Stack)
+                    .filter_by(resource_id=stack.resource_id)
+                    .first()
+                )
+                return asset, updated_stack
+            raise ValueError("The stack is empty or the asset does not exist.")
 
     def push_to_queue(self, queue: Queue, asset: Asset) -> None:
         """
@@ -388,7 +415,9 @@ class ResourceInterface():
             asset (Asset): The asset to push onto the queue.
         """
         with self.session as session:
-            existing_queue = session.query(Queue).filter_by(resource_id=queue.resource_id).first()
+            existing_queue = (
+                session.query(Queue).filter_by(resource_id=queue.resource_id).first()
+            )
 
             if not existing_queue:
                 raise ValueError(
@@ -399,7 +428,6 @@ class ResourceInterface():
             queue._push(asset, session)
             session.refresh(queue)
             return queue
-
 
     def pop_from_queue(self, queue: Queue) -> tuple:
         """
@@ -417,12 +445,17 @@ class ResourceInterface():
             asset = queue._pop(session)
 
             if asset:
-                updated_queue = session.query(Queue).filter_by(resource_id=queue.resource_id).first()
-                return asset, updated_queue        
-            else:
-                raise ValueError("The queue is empty or the asset does not exist.")
+                updated_queue = (
+                    session.query(Queue)
+                    .filter_by(resource_id=queue.resource_id)
+                    .first()
+                )
+                return asset, updated_queue
+            raise ValueError("The queue is empty or the asset does not exist.")
 
-    def increase_plate_well(self, plate: Collection, well_id: str, quantity: float) -> None:
+    def increase_plate_well(
+        self, plate: Collection, well_id: str, quantity: float
+    ) -> None:
         """
         Increase the quantity of liquid in a specific well of a plate.
 
@@ -432,18 +465,26 @@ class ResourceInterface():
             quantity (float): The amount to increase the well quantity by.
         """
         with self.session as session:
-            existing_plate= session.query(Collection).filter_by(resource_id=plate.resource_id).first()
+            existing_plate = (
+                session.query(Collection)
+                .filter_by(resource_id=plate.resource_id)
+                .first()
+            )
             pool = existing_plate.children.get(well_id)
-            
+
             if not pool:
-                raise ValueError(f"No resource found in well '{well_id}' of plate {existing_plate.resource_name}.")
-            
+                raise ValueError(
+                    f"No resource found in well '{well_id}' of plate {existing_plate.resource_name}."
+                )
+
             self.increase_pool_quantity(pool=pool, amount=quantity)
             session.add(existing_plate)
             session.refresh(existing_plate)
             return existing_plate
 
-    def decrease_plate_well(self, plate: Collection, well_id: str, quantity: float) -> None:
+    def decrease_plate_well(
+        self, plate: Collection, well_id: str, quantity: float
+    ) -> None:
         """
         Decrease the quantity of liquid in a specific well of a plate.
 
@@ -453,22 +494,31 @@ class ResourceInterface():
             quantity (float): The amount to decrease the well quantity by.
         """
         with self.session as session:
-            existing_plate= session.query(Collection).filter_by(resource_id=plate.resource_id).first()
+            existing_plate = (
+                session.query(Collection)
+                .filter_by(resource_id=plate.resource_id)
+                .first()
+            )
 
             if well_id not in existing_plate.children:
-                raise KeyError(f"Well ID '{well_id}' does not exist in existing_plate '{existing_plate.resource_name}'.")
+                raise KeyError(
+                    f"Well ID '{well_id}' does not exist in existing_plate '{existing_plate.resource_name}'."
+                )
 
             pool = existing_plate.children[well_id]
             if not isinstance(pool, Pool):
-                raise TypeError("Only Pool resources are supported in existing_plate wells.")
+                raise TypeError(
+                    "Only Pool resources are supported in existing_plate wells."
+                )
 
             self.decrease_pool_quantity(pool=pool, amount=quantity)
             session.add(existing_plate)
             session.refresh(existing_plate)
-            # session.commit()
             return existing_plate
-            
-    def update_collection_child(self, collection: Collection, key: str, resource: ResourceBase) -> None:
+
+    def update_collection_child(
+        self, collection: Collection, key: str, resource: ResourceBase
+    ) -> None:
         """
         Update or add a resource in a specific well of a collection using the `add_child` method.
 
@@ -478,48 +528,58 @@ class ResourceInterface():
             resource (resource): The resource resource to associate with the well.
         """
         with self.session as session:
-            collection= session.query(Collection).filter_by(resource_id=collection.resource_id).first()
+            collection = (
+                session.query(Collection)
+                .filter_by(resource_id=collection.resource_id)
+                .first()
+            )
             resource = self.get_resource(resource_id=resource.resource_id)
             collection._add_child(key=key, resource=resource, session=session)
             session.add(collection)
             session.refresh(collection)
             return collection
 
+
 if __name__ == "__main__":
     resource_interface = ResourceInterface()
     stack = Stack(
         resource_name="stack",
-        resource_type="stack",  # Make sure this matches the expected type in validation
+        resource_type="stack",
         capacity=10,
-        ownership=None
+        ownership=None,
     )
-    resource_interface.add_resource(stack) 
-    for i in range(5):
-        asset = Asset(resource_name="Test plate"+str(i)) 
-        asset = resource_interface.add_resource(asset) 
-        # time.sleep(2)
-        resource_interface.push_to_stack(stack,asset)
-    retrieved_stack = resource_interface.get_resource(resource_id=stack.resource_id,resource_name=stack.resource_name, owner_name=stack.owner)
-    for i in range(2):
-        # time.sleep(2)
-        n_asset,retrieved_stack = resource_interface.pop_from_stack(retrieved_stack)
-        # print(f"Popped asset: {n_asset}")
-        
+    resource_interface.add_resource(stack)
+    for _i in range(5):
+        asset = Asset(resource_name="Test plate" + str(_i))
+        asset = resource_interface.add_resource(asset)
+        resource_interface.push_to_stack(stack, asset)
+    retrieved_stack = resource_interface.get_resource(
+        resource_id=stack.resource_id,
+        resource_name=stack.resource_name,
+        owner_name=stack.owner,
+    )
+    for _i in range(2):
+        n_asset, retrieved_stack = resource_interface.pop_from_stack(retrieved_stack)
+
     queue = Queue(
         resource_name="queue",
-        resource_type="queue",  # Make sure this matches the expected type in validation
+        resource_type="queue",
         capacity=10,
-        ownership=None
+        ownership=None,
     )
     queue = resource_interface.add_resource(queue)
-    for i in range(5):
-        asset = Asset(resource_name="Test plate"+str(i)) 
-        asset = resource_interface.add_resource(asset) 
-        resource_interface.push_to_queue(queue,asset)
-    retrieved_queue = resource_interface.get_resource(resource_id=queue.resource_id,resource_name=queue.resource_name, owner_name=queue.owner)
-    for i in range(2):
-        n_asset,retrieved_queue = resource_interface.pop_from_queue(retrieved_queue)
-    resource_interface.push_to_queue(queue,n_asset)
+    for _i in range(5):
+        asset = Asset(resource_name="Test plate" + str(_i))
+        asset = resource_interface.add_resource(asset)
+        resource_interface.push_to_queue(queue, asset)
+    retrieved_queue = resource_interface.get_resource(
+        resource_id=queue.resource_id,
+        resource_name=queue.resource_name,
+        owner_name=queue.owner,
+    )
+    for _i in range(2):
+        n_asset, retrieved_queue = resource_interface.pop_from_queue(retrieved_queue)
+    resource_interface.push_to_queue(queue, n_asset)
 
     consumable = Consumable(
         resource_name="Water",
@@ -536,26 +596,19 @@ if __name__ == "__main__":
         resource_name="Vial_1",
         resource_type="pool",
         capacity=500.0,
-        children = {"Water":consumable}
-         # Add the ConsumableBase to children
+        children={"Water": consumable},
+        # Add the ConsumableBase to children
     )
     pool = resource_interface.add_resource(pool)
-    # print(pool.children)
-    # print(pool.children["Water"])
 
     # Example operations on the pool
-    # print(f"Initial Pool Quantity: {pool.quantity}")
     pool = resource_interface.increase_pool_quantity(pool, 50.0)
-    # print(f"After Increase: {pool.quantity}")
 
     pool = resource_interface.decrease_pool_quantity(pool, 20.0)
-    # print(f"After Decrease: {pool.quantity}")
 
     pool = resource_interface.fill_pool(pool)
-    # print(f"After Fill: {pool.quantity}")
 
     pool = resource_interface.empty_pool(pool)
-    # print(f"After Empty: {pool.quantity}")
     pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
     pool1 = resource_interface.add_resource(pool1)
     # Create a Plate resource with initial children
@@ -565,25 +618,20 @@ if __name__ == "__main__":
         children={"A1": pool},
     )
     resource_interface.add_resource(plate)
-    # print(plate.children)
     # Increase quantity in a well
     resource_interface.increase_plate_well(plate, "A1", 30)
-    # print(f"A1 Quantity after increase: {plate.children}")
 
     # Decrease quantity in a well
     resource_interface.decrease_plate_well(plate, "A1", 20)
-    # print(f"A1 Quantity after decrease: {plate.children}")
-    
-    resource_interface.update_collection_child(plate, "A2", pool1)
-    # print(f"A2 Pool Name: {plate.children}")
 
-    start_date = datetime.utcnow()- timedelta(seconds=6)
+    resource_interface.update_collection_child(plate, "A2", pool1)
+
+    start_date = datetime.utcnow() - timedelta(seconds=6)
     end_date = datetime.utcnow()
 
     resource_interface.remove_resource(resource_id=stack.resource_id)
     history_entries = resource_interface.get_history(
         resource_id=stack.resource_id,
-
     )
-    for entry in history_entries:
-        print(entry.removed)
+    for _entry in history_entries:
+        pass

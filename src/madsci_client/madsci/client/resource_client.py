@@ -1,16 +1,23 @@
-import requests
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Any, Optional, List
+"""Fast API Client for Resources"""
+
 from datetime import datetime
+from typing import Any, Optional
 
-from madsci.resource_manager.serialization_utils import serialize_resource, deserialize_resource  
+import requests
+from madsci.resource_manager.serialization_utils import (
+    deserialize_resource,
+    serialize_resource,
+)
+
+
 class ResourceClient:
-    def __init__(self, base_url: str, database_url: str):
-        self.base_url = base_url
-        self.database_url = database_url
+    """Fast API Client for Resources"""
 
-    def add_resource(self, resource):
+    def __init__(self, base_url: str) -> None:
+        """Initial params"""
+        self.base_url = base_url
+
+    def add_resource(self, resource: dict) -> dict:
         """
         Add a resource to the server.
 
@@ -22,13 +29,12 @@ class ResourceClient:
         """
         resource_data = serialize_resource(resource)
         response = requests.post(
-            f"{self.base_url}/resource/add",
-            json={"database_url": self.database_url, "resource": resource_data},
+            f"{self.base_url}/resource/add", json={"resource": resource_data}, timeout=2
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
-        
-    def update_resource(self, resource):
+
+    def update_resource(self, resource: dict) -> dict:
         """
         Update or refresh a resource, including its children, on the server.
 
@@ -41,14 +47,19 @@ class ResourceClient:
         resource_data = serialize_resource(resource)
         response = requests.post(
             f"{self.base_url}/resource/update",
-            json={"database_url": self.database_url, "resource": resource_data},
+            json={"resource": resource_data},
+            timeout=2,
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
 
     def get_resource(
-        self, resource_name=None, owner_name=None, resource_id=None, resource_type=None
-    ):
+        self,
+        resource_name: Optional[str] = None,
+        owner_name: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+    ) -> dict:
         """
         Retrieve a resource from the database.
 
@@ -62,25 +73,25 @@ class ResourceClient:
             ResourceBase: The retrieved resource.
         """
         payload = {
-            "database_url": self.database_url,
             "resource_name": resource_name,
             "owner_name": owner_name,
             "resource_id": resource_id,
             "resource_type": resource_type,
         }
-        response = requests.post(f"{self.base_url}/resource/get", json=payload)
+        response = requests.post(
+            f"{self.base_url}/resource/get", json=payload, timeout=2
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
-    
-    def remove_resource(self, resource_id: str) -> Dict[str, Any]:
+
+    def remove_resource(self, resource_id: str) -> dict[str, Any]:
         """
         Remove a resource by moving it to the history table with `removed=True`.
         """
-        payload = {
-            "database_url": self.database_url,
-            "resource_id": resource_id
-        }
-        response = requests.post(f"{self.base_url}/resource/remove", json=payload)
+        payload = {"resource_id": resource_id}
+        response = requests.post(
+            f"{self.base_url}/resource/remove", json=payload, timeout=2
+        )
         response.raise_for_status()
         return response.json()
 
@@ -91,13 +102,12 @@ class ResourceClient:
         removed: Optional[bool] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: Optional[int] = 100
-    ) -> List[Dict[str, Any]]:
+        limit: Optional[int] = 100,
+    ) -> list[dict[str, Any]]:
         """
         Retrieve the history of a resource with flexible filters.
         """
         payload = {
-            "database_url": self.database_url,
             "resource_id": resource_id,
             "event_type": event_type,
             "removed": removed,
@@ -105,9 +115,11 @@ class ResourceClient:
             "end_date": end_date.isoformat() if end_date else None,
             "limit": limit,
         }
-        response = requests.post(f"{self.base_url}/resource/history", json=payload)
+        response = requests.post(
+            f"{self.base_url}/resource/history", json=payload, timeout=2
+        )
         response.raise_for_status()
-        
+
         history_entries = response.json()
 
         for entry in history_entries:
@@ -115,20 +127,19 @@ class ResourceClient:
                 entry["data"] = deserialize_resource(entry["data"])
 
         return history_entries
-    
-    def restore_deleted_resource(self, resource_id: str) -> Dict[str, Any]:
+
+    def restore_deleted_resource(self, resource_id: str) -> dict[str, Any]:
         """
         Restore a deleted resource from the history table.
         """
-        payload = {
-            "database_url": self.database_url,
-            "resource_id": resource_id
-        }
-        response = requests.post(f"{self.base_url}/resource/restore", json=payload)
+        payload = {"resource_id": resource_id}
+        response = requests.post(
+            f"{self.base_url}/resource/restore", json=payload, timeout=2
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
-    
-    def push_to_stack(self, stack, asset) -> Dict[str, Any]:
+
+    def push_to_stack(self, stack: dict, asset: dict) -> dict[str, Any]:
         """
         Push an asset onto a stack.
 
@@ -140,15 +151,14 @@ class ResourceClient:
             dict: Success message from the server.
         """
         payload = {
-            "database_url": self.database_url,
             "stack": serialize_resource(stack),
             "asset": serialize_resource(asset),
         }
-        response = requests.post(f"{self.base_url}/stack/push", json=payload)
+        response = requests.post(f"{self.base_url}/stack/push", json=payload, timeout=2)
         response.raise_for_status()
         return deserialize_resource(response.json())
 
-    def pop_from_stack(self, stack) :
+    def pop_from_stack(self, stack: dict) -> Any:
         """
         Pop an asset from a stack.
 
@@ -158,15 +168,17 @@ class ResourceClient:
         Returns:
             tuple: The popped asset and updated stack.
         """
-        payload = {"database_url": self.database_url, "stack": serialize_resource(stack)}
-        response = requests.post(f"{self.base_url}/stack/pop", json=payload)
+        payload = {
+            "stack": serialize_resource(stack),
+        }
+        response = requests.post(f"{self.base_url}/stack/pop", json=payload, timeout=2)
         response.raise_for_status()
         result = response.json()
         popped_asset = deserialize_resource(result["asset"])
         updated_stack = deserialize_resource(result["updated_stack"])
         return popped_asset, updated_stack
 
-    def push_to_queue(self, queue, asset) -> Dict[str, Any]:
+    def push_to_queue(self, queue: dict, asset: dict) -> dict[str, Any]:
         """
         Push an asset onto a queue.
 
@@ -178,15 +190,14 @@ class ResourceClient:
             dict: Success message from the server.
         """
         payload = {
-            "database_url": self.database_url,
             "queue": serialize_resource(queue),
             "asset": serialize_resource(asset),
         }
-        response = requests.post(f"{self.base_url}/queue/push", json=payload)
+        response = requests.post(f"{self.base_url}/queue/push", json=payload, timeout=2)
         response.raise_for_status()
         return deserialize_resource(response.json())
 
-    def pop_from_queue(self, queue) :
+    def pop_from_queue(self, queue: dict) -> Any:
         """
         Pop an asset from a queue.
 
@@ -196,15 +207,17 @@ class ResourceClient:
         Returns:
             tuple: The popped asset and updated queue.
         """
-        payload = {"database_url": self.database_url, "queue": serialize_resource(queue)}
-        response = requests.post(f"{self.base_url}/queue/pop", json=payload)
+        payload = {
+            "queue": serialize_resource(queue),
+        }
+        response = requests.post(f"{self.base_url}/queue/pop", json=payload, timeout=2)
         response.raise_for_status()
         result = response.json()
         popped_asset = deserialize_resource(result["asset"])
         updated_queue = deserialize_resource(result["updated_queue"])
         return popped_asset, updated_queue
 
-    def increase_pool_quantity(self, pool, amount: float) -> Dict[str, Any]:
+    def increase_pool_quantity(self, pool: dict, amount: float) -> dict[str, Any]:
         """
         Increase the quantity of a pool resource.
 
@@ -216,15 +229,16 @@ class ResourceClient:
             dict: Success message from the server.
         """
         payload = {
-            "database_url": self.database_url,
             "pool": serialize_resource(pool),
             "amount": amount,
         }
-        response = requests.post(f"{self.base_url}/pool/increase", json=payload)
+        response = requests.post(
+            f"{self.base_url}/pool/increase", json=payload, timeout=2
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
 
-    def decrease_pool_quantity(self, pool, amount: float) -> Dict[str, Any]:
+    def decrease_pool_quantity(self, pool: dict, amount: float) -> dict[str, Any]:
         """
         Decrease the quantity of a pool resource.
 
@@ -236,15 +250,16 @@ class ResourceClient:
             dict: Success message from the server.
         """
         payload = {
-            "database_url": self.database_url,
             "pool": serialize_resource(pool),
             "amount": amount,
         }
-        response = requests.post(f"{self.base_url}/pool/decrease", json=payload)
+        response = requests.post(
+            f"{self.base_url}/pool/decrease", json=payload, timeout=2
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
 
-    def fill_pool(self, pool) -> Dict[str, Any]:
+    def fill_pool(self, pool: dict) -> dict[str, Any]:
         """
         Fill a pool to its capacity.
 
@@ -254,12 +269,12 @@ class ResourceClient:
         Returns:
             dict: Success message from the server.
         """
-        payload = {"database_url": self.database_url, "pool": serialize_resource(pool)}
-        response = requests.post(f"{self.base_url}/pool/fill", json=payload)
+        payload = {"pool": serialize_resource(pool)}
+        response = requests.post(f"{self.base_url}/pool/fill", json=payload, timeout=2)
         response.raise_for_status()
         return deserialize_resource(response.json())
 
-    def empty_pool(self, pool) -> Dict[str, Any]:
+    def empty_pool(self, pool: dict) -> dict[str, Any]:
         """
         Empty a pool.
 
@@ -269,12 +284,14 @@ class ResourceClient:
         Returns:
             dict: Success message from the server.
         """
-        payload = {"database_url": self.database_url, "pool": serialize_resource(pool)}
-        response = requests.post(f"{self.base_url}/pool/empty", json=payload)
+        payload = {"pool": serialize_resource(pool)}
+        response = requests.post(f"{self.base_url}/pool/empty", json=payload, timeout=2)
         response.raise_for_status()
         return deserialize_resource(response.json())
-        
-    def increase_plate_well(self, plate, well_id: str, quantity: float) -> Dict[str, Any]:
+
+    def increase_plate_well(
+        self, plate: dict, well_id: str, quantity: float
+    ) -> dict[str, Any]:
         """
         Increase the quantity in a specific well of a plate.
 
@@ -287,16 +304,19 @@ class ResourceClient:
             dict: Success message from the server.
         """
         payload = {
-            "database_url": self.database_url,
             "plate": serialize_resource(plate),
             "well_id": well_id,
             "quantity": quantity,
         }
-        response = requests.post(f"{self.base_url}/plate/increase_well", json=payload)
+        response = requests.post(
+            f"{self.base_url}/plate/increase_well", json=payload, timeout=2
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
 
-    def decrease_plate_well(self, plate, well_id: str, quantity: float) -> Dict[str, Any]:
+    def decrease_plate_well(
+        self, plate: dict, well_id: str, quantity: float
+    ) -> dict[str, Any]:
         """
         Decrease the quantity in a specific well of a plate.
 
@@ -309,16 +329,19 @@ class ResourceClient:
             dict: Success message from the server.
         """
         payload = {
-            "database_url": self.database_url,
             "plate": serialize_resource(plate),
             "well_id": well_id,
             "quantity": quantity,
         }
-        response = requests.post(f"{self.base_url}/plate/decrease_well", json=payload)
+        response = requests.post(
+            f"{self.base_url}/plate/decrease_well", json=payload, timeout=2
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
 
-    def update_collection_child(self, collection, key_id: str, child):
+    def update_collection_child(
+        self, collection: dict, key_id: str, child: Any
+    ) -> dict[str, Any]:
         """
         Update a specific chhild in a collection.
 
@@ -331,11 +354,12 @@ class ResourceClient:
             ResourceBase: The updated collection resource.
         """
         payload = {
-            "database_url": self.database_url,
             "collection": serialize_resource(collection),
             "key_id": key_id,
             "child": serialize_resource(child),
         }
-        response = requests.post(f"{self.base_url}/collection/update_child", json=payload)
+        response = requests.post(
+            f"{self.base_url}/collection/update_child", json=payload, timeout=2
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())

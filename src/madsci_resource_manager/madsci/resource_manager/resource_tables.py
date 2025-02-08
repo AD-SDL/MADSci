@@ -1,22 +1,32 @@
-from typing import List
-from copy import deepcopy
-from datetime import datetime
+"""Resource table objects"""
 
-from sqlalchemy import (
-    JSON,
-    Column,
+from datetime import datetime
+from typing import Any
+
+from madsci.common.types.resource_types import (
+    AllocationBase,
+    AssetBase,
+    CollectionBase,
+    ConsumableBase,
+    GridBase,
+    HistoryBase,
+    PoolBase,
+    QueueBase,
+    ResourceBase,
+    StackBase,
+    discriminate_default_resources,
 )
 from sqlalchemy.orm.attributes import flag_modified
-from sqlmodel import SQLModel, Field, Session, UniqueConstraint
+from sqlmodel import Session, SQLModel, UniqueConstraint
 
-from madsci.common.types.resource_types import discriminate_default_resources, AssetBase, StackBase, QueueBase, PoolBase, ConsumableBase, CollectionBase, ResourceBase, GridBase, AllocationBase, HistoryBase
+
 class History(HistoryBase, table=True):
     """
     History table for tracking resource changes.
     """
 
     @classmethod
-    def _convert_datetime(cls, obj):
+    def _convert_datetime(cls, obj: dict) -> Any:
         """
         Recursively convert datetime objects to JSON-serializable strings.
 
@@ -28,9 +38,11 @@ class History(HistoryBase, table=True):
         """
         if isinstance(obj, datetime):
             return obj.isoformat()  # Convert datetime to string
-        elif isinstance(obj, dict):
-            return {k: cls._convert_datetime(v) for k, v in obj.items()}  # Recursively process dict
-        elif isinstance(obj, list):
+        if isinstance(obj, dict):
+            return {
+                k: cls._convert_datetime(v) for k, v in obj.items()
+            }  # Recursively process dict
+        if isinstance(obj, list):
             return [cls._convert_datetime(v) for v in obj]  # Recursively process list
         return obj  # Return unchanged if it's not a datetime
 
@@ -40,8 +52,8 @@ class History(HistoryBase, table=True):
         session: Session,
         resource: SQLModel,
         event_type: str,
-        removed: bool = False
-    ):
+        removed: bool = False,
+    ) -> None:
         """
         Log a resource change in the history table.
 
@@ -61,16 +73,19 @@ class History(HistoryBase, table=True):
             resource_name=resource.resource_name,
             event_type=event_type,
             created_at=resource.created_at,
-            data=resource_data, 
+            data=resource_data,
             last_modified=resource.last_modified,
-            removed=removed
+            removed=removed,
         )
 
         session.add(history_entry)
         session.commit()
+
+
 class Asset(AssetBase, table=True):
     """Asset table class"""
-    def _archive(self, session: Session, event_type: str = "updated"):
+
+    def _archive(self, session: Session, event_type: str = "updated") -> None:
         """
         Archive or update the Stack resource and log the change.
 
@@ -82,7 +97,7 @@ class Asset(AssetBase, table=True):
         session.add(self)
         session.commit()
 
-    def _delete(self, session: Session):
+    def _delete(self, session: Session) -> None:
         """
         Move the resource to the history table instead of actual deletion.
 
@@ -93,7 +108,8 @@ class Asset(AssetBase, table=True):
         History._log_change(session, self, event_type="deleted", removed=True)
         session.delete(self)
         session.commit()
-        
+
+
 class Allocation(AllocationBase, table=True):
     """
     Table that tracks which resource is allocated to another resource.
@@ -101,6 +117,7 @@ class Allocation(AllocationBase, table=True):
     Attributes:
         index (int): Allocation index for ordering within the parent resource.
     """
+
     # Composite primary key and unique constraint
     __table_args__ = (
         UniqueConstraint(
@@ -110,11 +127,16 @@ class Allocation(AllocationBase, table=True):
             name="uix_resource_allocation",
         ),
     )
-    
+
     @staticmethod
     def _allocate_to_resource(
-        resource_id: str,resource_name:str, parent: str, resource_type: str, index: int, session: Session
-    ):
+        resource_id: str,
+        resource_name: str,
+        parent: str,
+        resource_type: str,
+        index: int,
+        session: Session,
+    ) -> None:
         """
         Allocate a resource to a parent.
 
@@ -130,9 +152,7 @@ class Allocation(AllocationBase, table=True):
         """
         # Check if this resource is already allocated
         existing_allocation = (
-            session.query(Allocation)
-            .filter_by(resource_id=resource_id)
-            .first()
+            session.query(Allocation).filter_by(resource_id=resource_id).first()
         )
 
         if existing_allocation:
@@ -153,7 +173,7 @@ class Allocation(AllocationBase, table=True):
         session.commit()
 
     @staticmethod
-    def _deallocate(resource_id: str, session: Session):
+    def _deallocate(resource_id: str, session: Session) -> None:
         """
         Deallocate a resource from its current parent.
 
@@ -165,7 +185,9 @@ class Allocation(AllocationBase, table=True):
             ValueError: If the resource is not allocated to any parent.
         """
         # Fetch the allocation
-        allocation = session.query(Allocation).filter_by(resource_id=resource_id).first()
+        allocation = (
+            session.query(Allocation).filter_by(resource_id=resource_id).first()
+        )
         if not allocation:
             raise ValueError(f"Resource {resource_id} is not allocated to any parent.")
 
@@ -173,13 +195,15 @@ class Allocation(AllocationBase, table=True):
         session.delete(allocation)
         session.commit()
 
+
 class Consumable(ConsumableBase, table=True):
     """
     Consumable table class inheriting from ConsumableBase.
     Represents all consumables in the database.
     """
+
     # Fields from ConsumableBase are mapped.
-    def _archive(self, session: Session, event_type: str = "updated"):
+    def _archive(self, session: Session, event_type: str = "updated") -> None:
         """
         archive or update the Stack resource and log the change.
 
@@ -191,7 +215,7 @@ class Consumable(ConsumableBase, table=True):
         session.add(self)
         session.commit()
 
-    def _delete(self, session: Session):
+    def _delete(self, session: Session) -> None:
         """
         Move the resource to the history table instead of actual deletion.
 
@@ -202,11 +226,14 @@ class Consumable(ConsumableBase, table=True):
         History._log_change(session, self, event_type="deleted", removed=True)
         session.delete(self)
         session.commit()
+
+
 class Stack(StackBase, table=True):
     """
     Base class for stack resources with methods to push and pop assets.
     """
-    def _archive(self, session: Session, event_type: str = "updated"):
+
+    def _archive(self, session: Session, event_type: str = "updated") -> None:
         """
         archive or update the Stack resource and log the change.
 
@@ -218,7 +245,7 @@ class Stack(StackBase, table=True):
         session.add(self)
         session.commit()
 
-    def _delete(self, session: Session):
+    def _delete(self, session: Session) -> None:
         """
         Move the resource to the history table instead of actual deletion.
 
@@ -229,8 +256,8 @@ class Stack(StackBase, table=True):
         History._log_change(session, self, event_type="deleted", removed=True)
         session.delete(self)
         session.commit()
-        
-    def _get_contents(self, session: Session) -> List[Asset]:
+
+    def _get_contents(self, session: Session) -> list:
         """
         Fetch and return assets in the stack, ordered by their index.
 
@@ -249,7 +276,6 @@ class Stack(StackBase, table=True):
         # Fetch assets from the database using the allocation records
         return [session.get(Asset, alloc.resource_id) for alloc in allocations]
 
-
     def _push(self, asset: Asset, session: Session) -> int:
         """
         Push a new asset onto the stack. Assigns the next available index.
@@ -264,12 +290,14 @@ class Stack(StackBase, table=True):
         contents = self._get_contents(session)
 
         if self.capacity and len(contents) >= self.capacity:
-            raise ValueError(f"Stack {self.resource_name} is full. Capacity: {self.capacity}")
+            raise ValueError(
+                f"Stack {self.resource_name} is full. Capacity: {self.capacity}"
+            )
         self._archive(session, event_type="push")
 
         next_index = len(contents) + 1
         asset.parent = self.resource_id
-        session.add(asset)  
+        session.add(asset)
         Allocation._allocate_to_resource(
             resource_id=asset.resource_id,
             resource_name=asset.resource_name,
@@ -287,7 +315,7 @@ class Stack(StackBase, table=True):
 
         return next_index
 
-    def _pop(self, session: Session) -> Asset:
+    def _pop(self, session: Session) -> Any:
         """
         Pop the last asset from the stack.
 
@@ -316,21 +344,24 @@ class Stack(StackBase, table=True):
         flag_modified(self, "children")
         self.quantity = len(contents) - 1
         last_asset.parent = None
-        session.add(last_asset)  
-        session.add(self)  
+        session.add(last_asset)
+        session.add(self)
         session.commit()
         session.refresh(last_asset)
         session.refresh(self)
 
         return last_asset
-class Queue(QueueBase, table = True): 
+
+
+class Queue(QueueBase, table=True):
     """
     Base class for queue resources with methods to push and pop assets.
 
     Attributes:
         contents (List[Dict[str, Any]]): List of assets in the queue, stored as JSONB.
     """
-    def _archive(self, session: Session, event_type: str = "updated"):
+
+    def _archive(self, session: Session, event_type: str = "updated") -> None:
         """
         archive or update the Stack resource and log the change.
 
@@ -342,7 +373,7 @@ class Queue(QueueBase, table = True):
         session.add(self)
         session.commit()
 
-    def _delete(self, session: Session):
+    def _delete(self, session: Session) -> None:
         """
         Move the resource to the history table instead of actual deletion.
 
@@ -353,8 +384,8 @@ class Queue(QueueBase, table = True):
         History._log_change(session, self, event_type="deleted", removed=True)
         session.delete(self)
         session.commit()
-        
-    def _get_contents(self, session: Session) -> List[Asset]:
+
+    def _get_contents(self, session: Session) -> list:
         """
         Fetch and return assets in the queue, ordered by their index (FIFO).
 
@@ -387,7 +418,9 @@ class Queue(QueueBase, table = True):
         """
         contents = self._get_contents(session)
         if self.capacity and len(contents) >= self.capacity:
-            raise ValueError(f"Queue {self.resource_name} is full. Capacity: {self.capacity}")
+            raise ValueError(
+                f"Queue {self.resource_name} is full. Capacity: {self.capacity}"
+            )
         self._archive(session, event_type="push")
 
         max_index = (
@@ -398,7 +431,7 @@ class Queue(QueueBase, table = True):
         )
         next_index = int(max_index.index) + 1 if max_index else 1
         asset.parent = self.resource_id
-        session.add(asset) 
+        session.add(asset)
         Allocation._allocate_to_resource(
             resource_id=asset.resource_id,
             resource_name=asset.resource_name,
@@ -416,7 +449,7 @@ class Queue(QueueBase, table = True):
 
         return next_index
 
-    def _pop(self, session: Session) -> Asset:
+    def _pop(self, session: Session) -> Any:
         """
         Remove and return the first asset from the queue (FIFO).
 
@@ -444,19 +477,21 @@ class Queue(QueueBase, table = True):
         flag_modified(self, "children")
         self.quantity = len(contents) - 1
         first_asset.parent = None
-        session.add(first_asset) 
-        session.add(self)  
+        session.add(first_asset)
+        session.add(self)
         session.commit()
         session.refresh(first_asset)
         session.refresh(self)
 
         return first_asset
 
+
 class Pool(PoolBase, table=True):
     """
     Pool resource class with methods to manage its quantity and capacity.
     """
-    def __init__(self, **kwargs):
+
+    def __init__(self, **kwargs: dict[str, Any]) -> None:
         """
         Custom initialization for Pool.
 
@@ -464,11 +499,11 @@ class Pool(PoolBase, table=True):
         """
         super().__init__(**kwargs)
 
-        for key, resource in self.children.items():
+        for _key, resource in self.children.items():
             if isinstance(resource, ResourceBase):
                 resource.parent = self.resource_id
-                
-    def _archive(self, session: Session, event_type: str = "updated"):
+
+    def _archive(self, session: Session, event_type: str = "updated") -> None:
         """
         archive or update the Stack resource and log the change.
 
@@ -480,7 +515,7 @@ class Pool(PoolBase, table=True):
         session.add(self)
         session.commit()
 
-    def _delete(self, session: Session):
+    def _delete(self, session: Session) -> None:
         """
         Move the resource to the history table instead of actual deletion.
 
@@ -491,7 +526,7 @@ class Pool(PoolBase, table=True):
         History._log_change(session, self, event_type="deleted", removed=True)
         session.delete(self)
         session.commit()
-        
+
     def _increase_quantity(self, amount: float, session: Session) -> None:
         """
         Increase the quantity in the pool.
@@ -503,7 +538,7 @@ class Pool(PoolBase, table=True):
         Raises:
             ValueError: If the pool exceeds its capacity.
         """
-        #TODO: Children could be used to increase the amount which should reflect to the quantity of the Pool resource
+        # TODO: Children could be used to increase the amount which should reflect to the quantity of the Pool resource
         if self.capacity and self.quantity + amount > self.capacity:
             raise ValueError(
                 f"Pool {self.resource_name} exceeds its capacity. Capacity: {self.capacity}"
@@ -526,7 +561,9 @@ class Pool(PoolBase, table=True):
             ValueError: If the quantity falls below zero.
         """
         if self.quantity - amount < 0:
-            raise ValueError(f"Pool {self.resource_name} cannot have a negative quantity.")
+            raise ValueError(
+                f"Pool {self.resource_name} cannot have a negative quantity."
+            )
         self._archive(session, event_type="decrease_quantity")
 
         self.quantity -= amount
@@ -544,7 +581,9 @@ class Pool(PoolBase, table=True):
             ValueError: If the capacity is not defined.
         """
         if not self.capacity:
-            raise ValueError(f"Pool {self.resource_name} does not have a defined capacity.")
+            raise ValueError(
+                f"Pool {self.resource_name} does not have a defined capacity."
+            )
         self._archive(session, event_type="fill")
 
         self.quantity = self.capacity
@@ -562,7 +601,8 @@ class Pool(PoolBase, table=True):
         self.quantity = 0
         session.add(self)
         session.commit()
-        
+
+
 class Collection(CollectionBase, table=True):
     """
     Collection type for managing collections of resources.
@@ -571,7 +611,7 @@ class Collection(CollectionBase, table=True):
     as its children, accessed by unique keys (e.g., "A1", "B1").
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: dict[str, Any]) -> None:
         """
         Custom initialization for Collection.
 
@@ -579,11 +619,11 @@ class Collection(CollectionBase, table=True):
         """
         super().__init__(**kwargs)
 
-        for key, resource in self.children.items():
+        for _key, resource in self.children.items():
             if isinstance(resource, ResourceBase):
                 resource.parent = self.resource_id
-                
-    def _archive(self, session: Session, event_type: str = "updated"):
+
+    def _archive(self, session: Session, event_type: str = "updated") -> None:
         """
         archive or update the Stack resource and log the change.
 
@@ -595,7 +635,7 @@ class Collection(CollectionBase, table=True):
         session.add(self)
         session.commit()
 
-    def _delete(self, session: Session):
+    def _delete(self, session: Session) -> None:
         """
         Move the resource to the history table instead of actual deletion.
 
@@ -606,7 +646,7 @@ class Collection(CollectionBase, table=True):
         History._log_change(session, self, event_type="deleted", removed=True)
         session.delete(self)
         session.commit()
-        
+
     def _add_child(self, key: str, resource: ResourceBase, session: Session) -> None:
         """
         Add a resource to the Collection.
@@ -621,12 +661,12 @@ class Collection(CollectionBase, table=True):
         resource.parent = self.resource_id
         session.add(resource)
         self.children[key] = resource.dict()
-        self.quantity=len(self.children)
+        self.quantity = len(self.children)
         flag_modified(self, "children")
         session.add(self)
         session.commit()
 
-    def _remove_child(self, key: str, session: Session):
+    def _remove_child(self, key: str, session: Session) -> Any:
         """
         Remove a resource from the Collection.
 
@@ -642,30 +682,32 @@ class Collection(CollectionBase, table=True):
         self._archive(session, event_type="remove_child")
         resource = self.children.pop(key)
         flag_modified(self, "children")
-        self.quantity=len(self.children)
+        self.quantity = len(self.children)
         resource.parent = None
         session.add(resource)
         session.add(self)
         session.commit()
 
-        return resource        
+        return resource
+
+
 class Grid(GridBase, table=True):
     """
     Grid class that can hold other resource types as children.
     """
 
-    def __init__(self, **data):
+    def __init__(self, **data: dict[str, Any]) -> None:
         """
         Custom initialization to handle setting parent IDs for children resources.
         """
         children = data.pop("children", {})
         super().__init__(**data)
 
-        for key, resource in children.items():
+        for _key, resource in children.items():
             resource.parent = self.resource_id
         self.children = children
 
-    def _archive(self, session: Session, event_type: str = "updated"):
+    def _archive(self, session: Session, event_type: str = "updated") -> None:
         """
         archive or update the Stack resource and log the change.
 
@@ -677,7 +719,7 @@ class Grid(GridBase, table=True):
         session.add(self)
         session.commit()
 
-    def _delete(self, session: Session):
+    def _delete(self, session: Session) -> None:
         """
         Move the resource to the history table instead of actual deletion.
 
@@ -702,7 +744,9 @@ class Grid(GridBase, table=True):
             ValueError: If the key already exists in the children.
         """
         if key in self.children:
-            raise ValueError(f"Key '{key}' already exists in Grid {self.resource_name}.")
+            raise ValueError(
+                f"Key '{key}' already exists in Grid {self.resource_name}."
+            )
         self._archive(session, event_type="add_child")
 
         resource.parent = self.resource_id
@@ -712,7 +756,7 @@ class Grid(GridBase, table=True):
         session.add(self)
         session.commit()
 
-    def _remove_child(self, key: str, session: Session) -> ResourceBase:
+    def _remove_child(self, key: str, session: Session) -> Any:
         """
         Remove a resource from the Grid's children.
 
@@ -739,7 +783,9 @@ class Grid(GridBase, table=True):
 
         return resource
 
-    def _update_child(self, key: str, session: Session, **kwargs) -> None:
+    def _update_child(
+        self, key: str, session: Session, **kwargs: dict[str, Any]
+    ) -> None:
         """
         Update attributes of a child resource.
 
@@ -762,8 +808,8 @@ class Grid(GridBase, table=True):
 
         session.add(resource)
         session.commit()
-    
- 
+
+
 # Define a mapping of resource types to DB table classes
 DB_RESOURCE_MAP = {
     "stack": Stack,
@@ -774,7 +820,8 @@ DB_RESOURCE_MAP = {
     "consumable": Consumable,
 }
 
-def map_resource_type(resource_data: dict):
+
+def map_resource_type(resource_data: dict) -> Any:
     """
     Map a resource type to its corresponding DB table class using
     `discriminate_default_resources` to infer the resource type.
@@ -790,10 +837,10 @@ def map_resource_type(resource_data: dict):
     # Use RESOURCE_DEFINITION_MAP to validate the resource type
     if inferred_type == "resource":
         raise ValueError(f"Unknown or unsupported resource type: {inferred_type}")
-    
+
     # Map the inferred type to the DB table class
     db_class = DB_RESOURCE_MAP.get(inferred_type)
     if not db_class:
         raise ValueError(f"No DB table class found for resource type: {inferred_type}")
-    
+
     return db_class

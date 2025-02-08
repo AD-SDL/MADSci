@@ -1,23 +1,24 @@
-
+# ruff: noqa
 from madsci.client.resource_client import ResourceClient
-from madsci.resource_manager.resource_tables import Stack, Asset, Queue, Pool, Collection, Consumable
-import time 
+from madsci.resource_manager.resource_tables import (
+    Asset,
+    Collection,
+    Consumable,
+    Pool,
+    Queue,
+    Stack,
+)
 
 # Initialize the ResourcesClient with the database URL
 database_url = "postgresql://rpl:rpl@127.0.0.1:5432/resources"
-base_url = "http://localhost:8012" 
-client = ResourceClient(base_url=base_url, database_url=database_url)
+base_url = "http://localhost:8012"
+client = ResourceClient(base_url=base_url)
 
-stack = Stack(
-    resource_name="stack",
-    resource_type="stack",
-    capacity=10,
-    ownership=None
-)
+stack = Stack(resource_name="stack", resource_type="stack", capacity=10, ownership=None)
 stack = client.add_resource(stack)
 # # Add assets to the stack and push them
 for i in range(5):
-    asset = Asset(resource_name=f"Test plate {i}",resource_type="asset")
+    asset = Asset(resource_name=f"Test plate {i}", resource_type="asset")
     asset = client.add_resource(asset)
     stack = client.push_to_stack(stack, asset)
 
@@ -28,12 +29,7 @@ for _ in range(2):
     print(popped_asset)
 
 # # Create and add a queue
-queue = Queue(
-    resource_name="queue",
-    resource_type="queue",
-    capacity=10,
-    ownership=None
-)
+queue = Queue(resource_name="queue", resource_type="queue", capacity=10, ownership=None)
 queue = client.add_resource(queue)
 
 # Add assets to the queue and push them
@@ -45,7 +41,7 @@ for i in range(5):
 # Retrieve the queue and pop two assets, then push one back
 retrieved_queue = client.get_resource(resource_id=queue.resource_id)
 for _ in range(2):
-    popped_asset,retrieved_queue = client.pop_from_queue(retrieved_queue)
+    popped_asset, retrieved_queue = client.pop_from_queue(retrieved_queue)
 queue = client.push_to_queue(queue, popped_asset)
 
 # # # # Create and add a consumable resource
@@ -63,7 +59,7 @@ pool = Pool(
     resource_name="Vial_1",
     resource_type="pool",
     capacity=500.0,
-    children={"Water": consumable}
+    children={"Water": consumable},
 )
 pool = client.add_resource(pool)
 
@@ -127,8 +123,10 @@ print("Resource removed:", removed_asset)
 # Wait again to let the removal event register in history
 # time.sleep(1)
 
-# Retrieve history for the removed resource. 
-history_entries = client.get_history(resource_id=stack.resource_id,event_type="deleted")
+# Retrieve history for the removed resource.
+history_entries = client.get_history(
+    resource_id=stack.resource_id, event_type="deleted"
+)
 print("History for removed resource:")
 for entry in history_entries:
     print(entry)

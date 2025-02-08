@@ -131,6 +131,7 @@ class ManagerType(str, Enum):
                 return member
         raise ValueError(f"Invalid ManagerTypes: {value}")
 
+
 class ResourceManagerDefinition(ManagerDefinition):
     """Definition for a MADSci Resource Manager."""
 
@@ -144,6 +145,7 @@ class ResourceManagerDefinition(ManagerDefinition):
         title="Manager Configuration",
         description="The configuration for the resource manager .",
     )
+
 
 class ResourceManagerConfig(BaseModel):
     """Configuration for a MADSci Resource Manager."""
@@ -159,10 +161,12 @@ class ResourceManagerConfig(BaseModel):
         description="The port to run the resource manager on.",
     )
     db_url: str = Field(
-        default="mongodb://localhost:27017",
+        default="postgresql://rpl:rpl@127.0.0.1:5432/resources",
         title="Database URL",
-        description="The URL of the database used by the Event Manager.",
+        description="The URL of the database used by the Resource Manager.",
     )
+
+
 class EventManagerDefinition(ManagerDefinition):
     """Definition for a Squid Event Manager"""
 
