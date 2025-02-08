@@ -15,7 +15,6 @@ stack = Stack(
     ownership=None
 )
 stack = client.add_resource(stack)
-
 # # Add assets to the stack and push them
 for i in range(5):
     asset = Asset(resource_name=f"Test plate {i}",resource_type="asset")

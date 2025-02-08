@@ -266,7 +266,7 @@ class Stack(StackBase, table=True):
 
         if self.capacity and len(contents) >= self.capacity:
             raise ValueError(f"Stack {self.resource_name} is full. Capacity: {self.capacity}")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="push")
 
         next_index = len(contents) + 1
         asset.parent = self.resource_id
@@ -306,7 +306,7 @@ class Stack(StackBase, table=True):
         if not contents:
             raise ValueError(f"Stack {self.resource_name} is empty.")
         last_asset = contents[-1]
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="pop")
 
         Allocation._deallocate(
             resource_id=last_asset.resource_id,
@@ -389,7 +389,7 @@ class Queue(QueueBase, table = True):
         contents = self._get_contents(session)
         if self.capacity and len(contents) >= self.capacity:
             raise ValueError(f"Queue {self.resource_name} is full. Capacity: {self.capacity}")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="push")
 
         max_index = (
             session.query(Allocation)
@@ -434,7 +434,7 @@ class Queue(QueueBase, table = True):
 
         if not contents:
             raise ValueError(f"Queue {self.resource_name} is empty.")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="pop")
 
         first_asset = contents[0]
         Allocation._deallocate(
@@ -509,7 +509,7 @@ class Pool(PoolBase, table=True):
             raise ValueError(
                 f"Pool {self.resource_name} exceeds its capacity. Capacity: {self.capacity}"
             )
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="increase_quantity")
 
         self.quantity += amount
         session.add(self)
@@ -528,7 +528,7 @@ class Pool(PoolBase, table=True):
         """
         if self.quantity - amount < 0:
             raise ValueError(f"Pool {self.resource_name} cannot have a negative quantity.")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="decrease_quantity")
 
         self.quantity -= amount
         session.add(self)
@@ -546,7 +546,7 @@ class Pool(PoolBase, table=True):
         """
         if not self.capacity:
             raise ValueError(f"Pool {self.resource_name} does not have a defined capacity.")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="fill")
 
         self.quantity = self.capacity
         session.add(self)
@@ -559,6 +559,7 @@ class Pool(PoolBase, table=True):
         Args:
             session (Session): SQLAlchemy session for database operations.
         """
+        self._archive(session, event_type="empty")
         self.quantity = 0
         session.add(self)
         session.commit()
@@ -616,7 +617,7 @@ class Collection(CollectionBase, table=True):
             resource: The resource to add.
             session (Session): The database session for persisting changes.
         """
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="add_child")
         resource = session.merge(resource)
         resource.parent = self.resource_id
         session.add(resource)
@@ -639,7 +640,7 @@ class Collection(CollectionBase, table=True):
         """
         if key not in self.children:
             raise KeyError(f"Key '{key}' does not exist in the Collection.")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="remove_child")
         resource = self.children.pop(key)
         flag_modified(self, "children")
         self.quantity=len(self.children)
@@ -703,7 +704,7 @@ class Grid(GridBase, table=True):
         """
         if key in self.children:
             raise ValueError(f"Key '{key}' already exists in Grid {self.resource_name}.")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="add_child")
 
         resource.parent = self.resource_id
         session.add(resource)
@@ -728,7 +729,7 @@ class Grid(GridBase, table=True):
         """
         if key not in self.children:
             raise KeyError(f"Key '{key}' not found in Grid {self.resource_name}.")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="remove_child")
 
         resource = self.children.pop(key)
         flag_modified(self, "children")
@@ -753,7 +754,7 @@ class Grid(GridBase, table=True):
         """
         if key not in self.children:
             raise KeyError(f"Key '{key}' not found in Grid {self.resource_name}.")
-        self._archive(session, event_type="updated")
+        self._archive(session, event_type="update_child")
 
         resource = self.children[key]
         for attr, value in kwargs.items():
