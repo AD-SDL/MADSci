@@ -2,7 +2,7 @@
 
 from typing import Any, Optional, Union
 
-from madsci_common.madsci.common.types.base_types import BaseModel
+from madsci.common.types.base_types import BaseModel
 from pydantic import Field
 
 

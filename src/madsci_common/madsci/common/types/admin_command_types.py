@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from madsci_common.madsci.common.types.base_types import BaseModel, Error
+from madsci.common.types.base_types import BaseModel, Error
 from sqlmodel.main import Field
 
 

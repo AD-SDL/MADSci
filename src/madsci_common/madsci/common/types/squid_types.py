@@ -3,9 +3,9 @@
 from enum import Enum
 from typing import Any, Literal, Optional, Union
 
-from madsci_common.madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
-from madsci_common.madsci.common.types.workcell_types import WorkcellDefinition
-from madsci_common.madsci.common.validators import (
+from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.validators import (
     ulid_validator,
 )
 from pydantic.functional_validators import field_validator

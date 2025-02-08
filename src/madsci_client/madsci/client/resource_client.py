@@ -3,7 +3,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from madsci_resource_manager.madsci.resource_manager.serialization_utils import serialize_resource, deserialize_resource  
+
+from madsci.resource_manager.serialization_utils import serialize_resource, deserialize_resource  
 class ResourceClient:
     def __init__(self, base_url: str, database_url: str):
         self.base_url = base_url

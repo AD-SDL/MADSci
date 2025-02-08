@@ -7,9 +7,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from madsci_common.madsci.common.types.auth_types import OwnershipInfo
-from madsci_common.madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci_common.madsci.common.validators import ulid_validator
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.validators import ulid_validator
 from pydantic.functional_validators import field_validator
 from sqlmodel import Field
 

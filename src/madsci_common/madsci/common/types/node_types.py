@@ -6,15 +6,15 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from madsci_common.madsci.common.types.action_types import ActionDefinition
-from madsci_common.madsci.common.types.admin_command_types import AdminCommands
-from madsci_common.madsci.common.types.auth_types import OwnershipInfo
-from madsci_common.madsci.common.types.base_types import BaseModel, Error, new_ulid_str
-from madsci_common.madsci.common.types.config_types import (
+from madsci.common.types.action_types import ActionDefinition
+from madsci.common.types.admin_command_types import AdminCommands
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
+from madsci.common.types.config_types import (
     ConfigNamespaceDefinition,
     ConfigParameterDefinition,
 )
-from madsci_common.madsci.common.validators import ulid_validator
+from madsci.common.validators import ulid_validator
 from pydantic.fields import computed_field
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl

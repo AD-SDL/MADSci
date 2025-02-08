@@ -3,8 +3,8 @@
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from madsci_common.madsci.common.types.action_types import ActionResult, ActionStatus
-from madsci_common.madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.action_types import ActionResult, ActionStatus
+from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 from sqlmodel.main import Field
 
 

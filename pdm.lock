@@ -335,7 +335,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.1.dev19"
+version = "0.1.dev124"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_common"
@@ -354,18 +354,18 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.1.dev19"
+version = "0.1.dev124"
 extras = ["server"]
 requires_python = ">=3.9.1"
 summary = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
 groups = ["dev"]
 dependencies = [
-    "madsci-common==0.1.dev19",
+    "madsci-common==0.1.dev124",
 ]
 
 [[package]]
 name = "madsci-event-manager"
-version = "0.1.dev19"
+version = "0.1.dev124"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_event_manager"
@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-node-module"
-version = "0.1.dev19"
+version = "0.1.dev124"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_node_module"
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.1.dev19"
+version = "0.1.dev124"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_resource_manager"
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.1.dev19"
+version = "0.1.dev124"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_squid"
@@ -413,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-workcell-manager"
-version = "0.1.dev19"
+version = "0.1.dev124"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_workcell_manager"

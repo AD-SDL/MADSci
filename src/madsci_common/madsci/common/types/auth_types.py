@@ -2,8 +2,8 @@
 
 from typing import Any, Optional
 
-from madsci_common.madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci_common.madsci.common.validators import ulid_validator
+from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.validators import ulid_validator
 from pydantic import SerializationInfo, SerializerFunctionWrapHandler, model_serializer
 from pydantic.functional_validators import field_validator
 from sqlmodel.main import Field

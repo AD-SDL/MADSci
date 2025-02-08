@@ -11,9 +11,10 @@ warnings.filterwarnings("ignore")
 from sqlalchemy import text
 from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, select
-from madsci_common.madsci.common.types.resource_types import ResourceBase
-from madsci_resource_manager.madsci.resource_manager.resource_tables import Stack, Asset, Queue, Pool, Consumable, Collection, Grid, History
-from madsci_resource_manager.madsci.resource_manager.serialization_utils import deserialize_resource  
+
+from madsci.common.types.resource_types import ResourceBase
+from madsci.resource_manager.resource_tables import Stack, Asset, Queue, Pool, Consumable, Collection, Grid, History
+from madsci.resource_manager.serialization_utils import deserialize_resource
 
 class ResourceInterface():
     """

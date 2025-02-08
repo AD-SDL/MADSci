@@ -4,9 +4,9 @@ from enum import Enum
 from typing import Annotated, Any, Literal, Optional, Union, Dict
 from datetime import datetime
 
-from madsci_common.madsci.common.types.auth_types import OwnershipInfo
-from madsci_common.madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci_common.madsci.common.validators import ulid_validator
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.validators import ulid_validator
 from pydantic import Json
 from pydantic.config import ConfigDict
 from pydantic.functional_validators import field_validator, model_validator

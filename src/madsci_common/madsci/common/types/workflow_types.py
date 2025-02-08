@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Optional, Union
 
-from madsci_common.madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci_common.madsci.common.types.step_types import Step
+from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.step_types import Step
 from pydantic import Field, field_validator
 
 
