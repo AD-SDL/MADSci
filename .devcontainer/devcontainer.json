@@ -24,10 +24,8 @@
 				"charliermarsh.ruff",
 				"VisualStudioExptTeam.vscodeintellicode",
 				"aaron-bond.better-comments",
-				// "vuetifyjs.vuetify-vscode",
 				"christian-kohler.path-intellisense",
 				"nefrob.vscode-just",
-				// "Vue.volar",
 				"redhat.vscode-yaml",
 				"KevinRose.vsc-python-indent",
 				"ms-python.vscode-pylance",
@@ -45,11 +43,6 @@
 			"version": "latest",
 			"dockerDashComposeVersion": "v2.32.3"
 		},
-		"ghcr.io/devcontainers/features/python:1": {
-			"installTools": true,
-			"installJupyterlab": true,
-			"version": "3.9"
-		},
 		"ghcr.io/guiyomh/features/just:0": {
 			"version": "latest"
 		},
@@ -62,18 +55,12 @@
 		"ghcr.io/devcontainers-extra/features/pdm:2": {
 			"version": "latest"
 		},
-		"ghcr.io/devcontainers-extra/features/vue-cli:2": {
-			"version": "latest"
-		},
 		"ghcr.io/devcontainers-extra/features/pre-commit:2": {
 			"version": "latest"
 		},
 		"ghcr.io/devcontainers-extra/features/ruff:1": {
 			"version": "latest"
 		},
-		// "ghcr.io/devcontainers-extra/features/mongosh-homebrew:1": {
-		// 	"version": "latest"
-		// },
 		"ghcr.io/devcontainers/features/nix:1": {
 			"multiUser": true,
 			"version": "latest",
