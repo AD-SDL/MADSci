@@ -1,7 +1,7 @@
 """Resource table objects"""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from madsci.common.types.resource_types import (
     AllocationBase,
@@ -17,34 +17,41 @@ from madsci.common.types.resource_types import (
     discriminate_default_resources,
 )
 from sqlalchemy.orm.attributes import flag_modified
-from sqlmodel import Session, SQLModel, UniqueConstraint
+from sqlalchemy.sql.schema import FetchedValue
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlmodel import Field, Session, SQLModel, UniqueConstraint, select, text
 
 
-class History(HistoryBase, table=True):
+class ResourceTableMixin:
+    """Add default columns to all resource tables."""
+
+    created_at: Optional[datetime] = Field(
+        title="Created Datetime",
+        description="The timestamp of when the resource was created.",
+        default=None,
+        sa_type=TIMESTAMP(timezone=True),
+        sa_column_kwargs={
+            "nullable": False,
+            "server_default": text("CURRENT_TIMESTAMP"),
+        },
+    )
+    updated_at: Optional[datetime] = Field(
+        title="Updated Datetime",
+        description="The timestamp of when the resource was last updated.",
+        default=None,
+        sa_type=TIMESTAMP(timezone=True),
+        sa_column_kwargs={
+            "nullable": False,
+            "server_default": text("CURRENT_TIMESTAMP"),
+            "server_onupdate": FetchedValue(),
+        },
+    )
+
+
+class History(ResourceTableMixin, HistoryBase, table=True):
     """
     History table for tracking resource changes.
     """
-
-    @classmethod
-    def _convert_datetime(cls, obj: dict) -> Any:
-        """
-        Recursively convert datetime objects to JSON-serializable strings.
-
-        Args:
-            obj (Any): Any object, including nested dicts/lists.
-
-        Returns:
-            JSON-serializable version of the object.
-        """
-        if isinstance(obj, datetime):
-            return obj.isoformat()  # Convert datetime to string
-        if isinstance(obj, dict):
-            return {
-                k: cls._convert_datetime(v) for k, v in obj.items()
-            }  # Recursively process dict
-        if isinstance(obj, list):
-            return [cls._convert_datetime(v) for v in obj]  # Recursively process list
-        return obj  # Return unchanged if it's not a datetime
 
     @classmethod
     def _log_change(
@@ -63,18 +70,14 @@ class History(HistoryBase, table=True):
             event_type (str): Type of change (created, updated, deleted).
             removed (bool): Whether the resource is removed.
         """
-        resource_data = resource.dict()
-        # Recursively ensure all datetime fields are JSON-serializable
-        resource_data = cls._convert_datetime(resource_data)
+        resource_data = resource.model_dump(mode="json")
 
         history_entry = cls(
             resource_id=resource.resource_id,
             resource_type=resource.resource_type,
             resource_name=resource.resource_name,
             event_type=event_type,
-            created_at=resource.created_at,
             data=resource_data,
-            last_modified=resource.last_modified,
             removed=removed,
         )
 
@@ -82,17 +85,16 @@ class History(HistoryBase, table=True):
         session.commit()
 
 
-class Asset(AssetBase, table=True):
-    """Asset table class"""
+class HistoryMixin:
+    """Adds history logging support to resource tables."""
 
     def _archive(self, session: Session, event_type: str = "updated") -> None:
         """
-        Archive or update the Stack resource and log the change.
+        Archive or update the resource and log the change.
 
         Args:
             session (Session): SQLAlchemy session.
         """
-        self.last_modified = datetime.utcnow()
         History._log_change(session, self, event_type=event_type)
         session.add(self)
         session.commit()
@@ -104,13 +106,22 @@ class Asset(AssetBase, table=True):
         Args:
             session (Session): SQLAlchemy session.
         """
-        self.last_modified = datetime.utcnow()
         History._log_change(session, self, event_type="deleted", removed=True)
         session.delete(self)
         session.commit()
 
 
-class Allocation(AllocationBase, table=True):
+class Resource(ResourceTableMixin, HistoryMixin, ResourceBase, table=True):
+    """
+    Base class for all resources with common methods for archiving and deleting.
+    """
+
+
+class Asset(ResourceTableMixin, HistoryMixin, AssetBase, table=True):
+    """Asset table class"""
+
+
+class Allocation(ResourceTableMixin, AllocationBase, table=True):
     """
     Table that tracks which resource is allocated to another resource.
 
@@ -122,7 +133,7 @@ class Allocation(AllocationBase, table=True):
     __table_args__ = (
         UniqueConstraint(
             "resource_id",
-            "parent",
+            "parent_id",
             "resource_type",
             name="uix_resource_allocation",
         ),
@@ -132,7 +143,7 @@ class Allocation(AllocationBase, table=True):
     def _allocate_to_resource(
         resource_id: str,
         resource_name: str,
-        parent: str,
+        parent_id: str,
         resource_type: str,
         index: int,
         session: Session,
@@ -151,13 +162,13 @@ class Allocation(AllocationBase, table=True):
             ValueError: If the resource is already allocated to another parent.
         """
         # Check if this resource is already allocated
-        existing_allocation = (
-            session.query(Allocation).filter_by(resource_id=resource_id).first()
-        )
+        existing_allocation = session.exec(
+            select(Allocation).filter_by(resource_id=resource_id)
+        ).first()
 
         if existing_allocation:
             raise ValueError(
-                f"Resource {resource_id} is already allocated to parent {existing_allocation.parent} "
+                f"Resource {resource_id} is already allocated to parent {existing_allocation.parent_id} "
                 f"with resource type {existing_allocation.resource_type}."
             )
 
@@ -165,7 +176,7 @@ class Allocation(AllocationBase, table=True):
         new_allocation = Allocation(
             resource_id=resource_id,
             resource_name=resource_name,
-            parent=parent,
+            parent_id=parent_id,
             resource_type=resource_type,
             index=index,
         )
@@ -185,9 +196,9 @@ class Allocation(AllocationBase, table=True):
             ValueError: If the resource is not allocated to any parent.
         """
         # Fetch the allocation
-        allocation = (
-            session.query(Allocation).filter_by(resource_id=resource_id).first()
-        )
+        allocation = session.exec(
+            select(Allocation).filter_by(resource_id=resource_id)
+        ).first()
         if not allocation:
             raise ValueError(f"Resource {resource_id} is not allocated to any parent.")
 
@@ -196,66 +207,17 @@ class Allocation(AllocationBase, table=True):
         session.commit()
 
 
-class Consumable(ConsumableBase, table=True):
+class Consumable(ResourceTableMixin, HistoryMixin, ConsumableBase, table=True):
     """
     Consumable table class inheriting from ConsumableBase.
     Represents all consumables in the database.
     """
 
-    # Fields from ConsumableBase are mapped.
-    def _archive(self, session: Session, event_type: str = "updated") -> None:
-        """
-        archive or update the Stack resource and log the change.
 
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type=event_type)
-        session.add(self)
-        session.commit()
-
-    def _delete(self, session: Session) -> None:
-        """
-        Move the resource to the history table instead of actual deletion.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type="deleted", removed=True)
-        session.delete(self)
-        session.commit()
-
-
-class Stack(StackBase, table=True):
+class Stack(ResourceTableMixin, HistoryMixin, StackBase, table=True):
     """
     Base class for stack resources with methods to push and pop assets.
     """
-
-    def _archive(self, session: Session, event_type: str = "updated") -> None:
-        """
-        archive or update the Stack resource and log the change.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type=event_type)
-        session.add(self)
-        session.commit()
-
-    def _delete(self, session: Session) -> None:
-        """
-        Move the resource to the history table instead of actual deletion.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type="deleted", removed=True)
-        session.delete(self)
-        session.commit()
 
     def _get_contents(self, session: Session) -> list:
         """
@@ -267,12 +229,11 @@ class Stack(StackBase, table=True):
         Returns:
             List[Asset]: List of assets in the stack, ordered by their index.
         """
-        allocations = (
-            session.query(Allocation)
-            .filter_by(parent=self.resource_id)
+        allocations = session.exec(
+            select(Allocation)
+            .filter_by(parent_id=self.resource_id)
             .order_by(Allocation.index.asc())
-            .all()
-        )
+        ).all()
         # Fetch assets from the database using the allocation records
         return [session.get(Asset, alloc.resource_id) for alloc in allocations]
 
@@ -296,12 +257,12 @@ class Stack(StackBase, table=True):
         self._archive(session, event_type="push")
 
         next_index = len(contents) + 1
-        asset.parent = self.resource_id
+        asset.parent_id = self.resource_id
         session.add(asset)
         Allocation._allocate_to_resource(
             resource_id=asset.resource_id,
             resource_name=asset.resource_name,
-            parent=self.resource_id,
+            parent_id=self.resource_id,
             resource_type="Stack",
             index=next_index,
             session=session,
@@ -343,7 +304,7 @@ class Stack(StackBase, table=True):
         self.children.pop()
         flag_modified(self, "children")
         self.quantity = len(contents) - 1
-        last_asset.parent = None
+        last_asset.parent_id = None
         session.add(last_asset)
         session.add(self)
         session.commit()
@@ -353,37 +314,13 @@ class Stack(StackBase, table=True):
         return last_asset
 
 
-class Queue(QueueBase, table=True):
+class Queue(ResourceTableMixin, HistoryMixin, QueueBase, table=True):
     """
     Base class for queue resources with methods to push and pop assets.
 
     Attributes:
         contents (List[Dict[str, Any]]): List of assets in the queue, stored as JSONB.
     """
-
-    def _archive(self, session: Session, event_type: str = "updated") -> None:
-        """
-        archive or update the Stack resource and log the change.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type=event_type)
-        session.add(self)
-        session.commit()
-
-    def _delete(self, session: Session) -> None:
-        """
-        Move the resource to the history table instead of actual deletion.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type="deleted", removed=True)
-        session.delete(self)
-        session.commit()
 
     def _get_contents(self, session: Session) -> list:
         """
@@ -395,12 +332,11 @@ class Queue(QueueBase, table=True):
         Returns:
             List[Asset]: List of assets in the queue, ordered by their index.
         """
-        allocations = (
-            session.query(Allocation)
-            .filter_by(parent=self.resource_id)
+        allocations = session.exec(
+            select(Allocation)
+            .filter_by(parent_id=self.resource_id)
             .order_by(Allocation.index.asc())
-            .all()
-        )
+        ).all()
 
         # Fetch assets from the database using the allocation records
         return [session.get(Asset, alloc.resource_id) for alloc in allocations]
@@ -423,19 +359,18 @@ class Queue(QueueBase, table=True):
             )
         self._archive(session, event_type="push")
 
-        max_index = (
-            session.query(Allocation)
-            .filter_by(parent=self.resource_id)
+        max_index = session.exec(
+            select(Allocation)
+            .filter_by(parent_id=self.resource_id)
             .order_by(Allocation.index.desc())
-            .first()
-        )
+        ).first()
         next_index = int(max_index.index) + 1 if max_index else 1
-        asset.parent = self.resource_id
+        asset.parent_id = self.resource_id
         session.add(asset)
         Allocation._allocate_to_resource(
             resource_id=asset.resource_id,
             resource_name=asset.resource_name,
-            parent=self.resource_id,
+            parent_id=self.resource_id,
             resource_type="Queue",
             index=next_index,
             session=session,
@@ -476,7 +411,7 @@ class Queue(QueueBase, table=True):
         self.children.pop(0)
         flag_modified(self, "children")
         self.quantity = len(contents) - 1
-        first_asset.parent = None
+        first_asset.parent_id = None
         session.add(first_asset)
         session.add(self)
         session.commit()
@@ -486,7 +421,7 @@ class Queue(QueueBase, table=True):
         return first_asset
 
 
-class Pool(PoolBase, table=True):
+class Pool(ResourceTableMixin, HistoryMixin, PoolBase, table=True):
     """
     Pool resource class with methods to manage its quantity and capacity.
     """
@@ -499,33 +434,10 @@ class Pool(PoolBase, table=True):
         """
         super().__init__(**kwargs)
 
-        for _key, resource in self.children.items():
-            if isinstance(resource, ResourceBase):
-                resource.parent = self.resource_id
-
-    def _archive(self, session: Session, event_type: str = "updated") -> None:
-        """
-        archive or update the Stack resource and log the change.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type=event_type)
-        session.add(self)
-        session.commit()
-
-    def _delete(self, session: Session) -> None:
-        """
-        Move the resource to the history table instead of actual deletion.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type="deleted", removed=True)
-        session.delete(self)
-        session.commit()
+        if self.children:
+            for _key, resource in self.children.items():
+                if isinstance(resource, ResourceBase):
+                    resource.parent_id = self.resource_id
 
     def _increase_quantity(self, amount: float, session: Session) -> None:
         """
@@ -603,7 +515,7 @@ class Pool(PoolBase, table=True):
         session.commit()
 
 
-class Collection(CollectionBase, table=True):
+class Collection(ResourceTableMixin, HistoryMixin, CollectionBase, table=True):
     """
     Collection type for managing collections of resources.
 
@@ -621,31 +533,7 @@ class Collection(CollectionBase, table=True):
 
         for _key, resource in self.children.items():
             if isinstance(resource, ResourceBase):
-                resource.parent = self.resource_id
-
-    def _archive(self, session: Session, event_type: str = "updated") -> None:
-        """
-        archive or update the Stack resource and log the change.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type=event_type)
-        session.add(self)
-        session.commit()
-
-    def _delete(self, session: Session) -> None:
-        """
-        Move the resource to the history table instead of actual deletion.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type="deleted", removed=True)
-        session.delete(self)
-        session.commit()
+                resource.parent_id = self.resource_id
 
     def _add_child(self, key: str, resource: ResourceBase, session: Session) -> None:
         """
@@ -658,7 +546,7 @@ class Collection(CollectionBase, table=True):
         """
         self._archive(session, event_type="add_child")
         resource = session.merge(resource)
-        resource.parent = self.resource_id
+        resource.parent_id = self.resource_id
         session.add(resource)
         self.children[key] = resource.dict()
         self.quantity = len(self.children)
@@ -683,7 +571,7 @@ class Collection(CollectionBase, table=True):
         resource = self.children.pop(key)
         flag_modified(self, "children")
         self.quantity = len(self.children)
-        resource.parent = None
+        resource.parent_id = None
         session.add(resource)
         session.add(self)
         session.commit()
@@ -691,7 +579,7 @@ class Collection(CollectionBase, table=True):
         return resource
 
 
-class Grid(GridBase, table=True):
+class Grid(ResourceTableMixin, HistoryMixin, GridBase, table=True):
     """
     Grid class that can hold other resource types as children.
     """
@@ -704,32 +592,8 @@ class Grid(GridBase, table=True):
         super().__init__(**data)
 
         for _key, resource in children.items():
-            resource.parent = self.resource_id
+            resource.parent_id = self.resource_id
         self.children = children
-
-    def _archive(self, session: Session, event_type: str = "updated") -> None:
-        """
-        archive or update the Stack resource and log the change.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type=event_type)
-        session.add(self)
-        session.commit()
-
-    def _delete(self, session: Session) -> None:
-        """
-        Move the resource to the history table instead of actual deletion.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.last_modified = datetime.utcnow()
-        History._log_change(session, self, event_type="deleted", removed=True)
-        session.delete(self)
-        session.commit()
 
     def _add_child(self, key: str, resource: ResourceBase, session: Session) -> None:
         """
@@ -749,7 +613,7 @@ class Grid(GridBase, table=True):
             )
         self._archive(session, event_type="add_child")
 
-        resource.parent = self.resource_id
+        resource.parent_id = self.resource_id
         session.add(resource)
         self.children[key] = resource
         flag_modified(self, "children")
@@ -776,7 +640,7 @@ class Grid(GridBase, table=True):
 
         resource = self.children.pop(key)
         flag_modified(self, "children")
-        resource.parent = None
+        resource.parent_id = None
         session.add(resource)
         session.add(self)
         session.commit()

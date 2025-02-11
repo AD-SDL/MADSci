@@ -348,17 +348,20 @@ class ResourceDefinition(BaseModel, extra="allow", table=False):
         default_factory=new_ulid_str,
         primary_key=True,
     )
-    parent: Optional[str] = Field(
+    parent_id: Optional[str] = Field(
         default=None,
         title="Parent Resource",
-        description="The parent resource ID or name. If None, defaults to the owning module or workcell.",
+        description="The parent resource ID. If None, defaults to the owning module or workcell.",
     )
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Timestamp of the date created."
+    created_at: Optional[datetime] = Field(
+        title="Created Datetime",
+        description="The timestamp of when the resource was created.",
+        default=None,
     )
-    last_modified: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Timestamp of the last modification.",
+    updated_at: Optional[datetime] = Field(
+        title="Updated Datetime",
+        description="The timestamp of when the resource was last updated.",
+        default=None,
     )
     is_ulid = field_validator("resource_id")(ulid_validator)
 
@@ -589,6 +592,7 @@ RESOURCE_BASE_TYPES = [
     ContainerType.pool,
 ]
 
+
 RESOURCE_TYPE_DEFINITION_MAP: dict[str, type[ResourceTypeDefinition]] = {
     ResourceType.resource: ResourceTypeDefinition,
     ResourceType.asset: AssetResourceTypeDefinition,
@@ -618,6 +622,35 @@ RESOURCE_DEFINITION_MAP: dict[str, type[ResourceDefinition]] = {
     ContainerType.voxel_grid: VoxelGridResourceDefinition,
     ContainerType.pool: PoolResourceDefinition,
 }
+
+
+ResourceBaseTypes = Union[
+    "ResourceBase",
+    "AssetBase",
+    "ConsumableBase",
+    "DiscreteConsumableBase",
+    "ContinuousConsumableBase",
+    "ContainerBase",
+    "CollectionBase",
+    "GridBase",
+    "VoxelGridBase",
+    "StackBase",
+    "QueueBase",
+    "PoolBase",
+]
+
+
+def discriminate_resource_base_types(
+    v: Union["ResourceBaseTypes", dict[str, Any]],
+) -> "ResourceBaseTypes":
+    """Discriminate resource base types. If the resource type is not explicitly defined, default to 'resource'."""
+    if isinstance(v, dict):
+        if v.get("resource_type") in RESOURCE_BASE_TYPE_MAP:
+            return v.get("resource_type")
+        return "resource"
+    if v.resource_type in RESOURCE_BASE_TYPE_MAP:
+        return v.resource_type
+    return "resource"
 
 
 class ResourceBase(ResourceDefinition, extra="allow", table=False):
@@ -650,7 +683,7 @@ class ResourceBase(ResourceDefinition, extra="allow", table=False):
     )
 
 
-class AssetBase(AssetResourceDefinition):
+class AssetBase(ResourceBase):
     """Base class for all MADSci Assets."""
 
 
@@ -694,6 +727,18 @@ class ContainerBase(ResourceBase, table=False):
         title="Quantity",
         description="The number of assets currently in.",
     )
+    children: Optional[
+        dict[
+            str,
+            Annotated[
+                ResourceBaseTypes, Discriminator(discriminate_resource_base_types)
+            ],
+        ]
+    ] = Field(
+        title="Children",
+        description="The children of the container.",
+        default_factory=dict,
+    )
 
 
 class CollectionBase(ContainerBase):
@@ -721,7 +766,7 @@ class GridBase(ContainerBase):
 class VoxelGridBase(GridBase):
     """Base class for all MADSci Voxel Grids."""
 
-    children: dict[str, dict[str, dict[str, ResourceBase]]] = Field(
+    children: dict[str, dict[str, dict[str, "ResourceBaseTypes"]]] = Field(
         title="Children",
         description="The children of the voxel grid.",
     )
@@ -730,31 +775,28 @@ class VoxelGridBase(GridBase):
 class StackBase(ContainerBase, table=False):
     """Base class for all MADSci Stacks."""
 
-    children: Optional[list[str]] = Field(
+    children: Optional[list["ResourceBaseTypes"]] = Field(
         title="Children",
-        description="The children of the container.",
+        description="The children of the stack.",
         default_factory=list,
-        sa_type=JSON,  # Use Column(JSON) to map to SQLAlchemy's JSON type
     )
 
 
 class QueueBase(ContainerBase, table=False):
     """Base class for all MADSci Queues."""
 
-    children: Optional[list[str]] = Field(
+    children: Optional[dict[str, "ResourceBaseTypes"]] = Field(
         title="Children",
-        description="The children of the container.",
-        default_factory=list,
-        sa_type=JSON,  # Use Column(JSON) to map to SQLAlchemy's JSON type
+        description="The children of the stack.",
+        default_factory=dict,
     )
 
 
 class PoolBase(ContainerBase):
     """Base class for all MADSci Pools."""
 
-    children: Optional[dict[str, ResourceBase]] = Field(
+    children: Optional[dict[str, "ResourceBaseTypes"]] = Field(
         default_factory=dict,
-        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
         description="The children of the pool.",
     )
@@ -790,3 +832,19 @@ class HistoryBase(ResourceBase):
     removed: bool = Field(
         default=False, nullable=False, description="Whether the resource was removed."
     )
+
+
+RESOURCE_BASE_TYPE_MAP: dict[str, ResourceBaseTypes] = {
+    ResourceType.resource: ResourceBase,
+    ResourceType.asset: AssetBase,
+    ResourceType.consumable: ConsumableBase,
+    ConsumableType.discrete_consumable: DiscreteConsumableBase,
+    ConsumableType.continuous_consumable: ContinuousConsumableBase,
+    AssetType.container: ContainerBase,
+    ContainerType.stack: StackBase,
+    ContainerType.queue: QueueBase,
+    ContainerType.collection: CollectionBase,
+    ContainerType.grid: GridBase,
+    ContainerType.voxel_grid: VoxelGridBase,
+    ContainerType.pool: PoolBase,
+}

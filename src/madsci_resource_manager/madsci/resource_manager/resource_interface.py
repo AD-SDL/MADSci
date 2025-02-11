@@ -3,8 +3,7 @@
 # Suppress SAWarnings
 import logging
 import time
-import warnings
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from madsci.common.types.resource_types import ResourceBase
@@ -20,7 +19,6 @@ from madsci.resource_manager.resource_tables import (
 from madsci.resource_manager.serialization_utils import deserialize_resource
 from sqlmodel import Session, SQLModel, create_engine, select
 
-warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
 
@@ -35,8 +33,8 @@ class ResourceInterface:
 
     def __init__(
         self,
-        database_url: str = "postgresql://rpl:rpl@127.0.0.1:5432/resources",
-        init_timeout: float = 10,
+        database_url: str,
+        init_timeout: float = 10.0,
     ) -> None:
         """
         Initialize the ResourceInterface with a database URL.
@@ -94,6 +92,7 @@ class ResourceInterface:
                 return resource
             except Exception as e:
                 logger.error(f"Error adding resource: {e}")
+                raise e
 
     def update_resource(self, resource: ResourceBase) -> None:
         """
@@ -113,7 +112,7 @@ class ResourceInterface:
                 ):
                     for _key, child in resource.children.items():
                         if isinstance(child, ResourceBase):
-                            child.parent = resource.resource_id
+                            child.parent_id = resource.resource_id
                             session.merge(child)
 
                 session.commit()
@@ -236,13 +235,11 @@ class ResourceInterface:
             if removed is not None:
                 query = query.where(History.removed == removed)
             if start_date:
-                query = query.where(History.last_modified >= start_date)
+                query = query.where(History.updated_at >= start_date)
             if end_date:
-                query = query.where(History.last_modified <= end_date)
+                query = query.where(History.updated_at <= end_date)
 
-            query = query.order_by(
-                History.last_modified.desc()
-            )  # Sorting by last_modified
+            query = query.order_by(History.updated_at.desc())  # Sorting by updated_at
 
             if limit:
                 query = query.limit(limit)
@@ -305,9 +302,9 @@ class ResourceInterface:
             amount (float): The amount to increase.
         """
         with self.session as session:
-            existing_pool = (
-                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            )
+            existing_pool = session.exec(
+                select(Pool).filter_by(resource_id=pool.resource_id)
+            ).first()
             existing_pool._increase_quantity(amount, session)
             session.refresh(existing_pool)
             return existing_pool
@@ -321,9 +318,9 @@ class ResourceInterface:
             amount (float): The amount to decrease.
         """
         with self.session as session:
-            existing_pool = (
-                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            )
+            existing_pool = session.exec(
+                select(Pool).filter_by(resource_id=pool.resource_id)
+            ).first()
             existing_pool._decrease_quantity(amount, session)
             session.refresh(existing_pool)
             return existing_pool
@@ -336,9 +333,9 @@ class ResourceInterface:
             pool (Pool): The pool resource to empty.
         """
         with self.session as session:
-            existing_pool = (
-                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            )
+            existing_pool = session.exec(
+                select(Pool).filter_by(resource_id=pool.resource_id)
+            ).first()
             existing_pool._empty(session)
             session.refresh(existing_pool)
             return existing_pool
@@ -351,9 +348,9 @@ class ResourceInterface:
             pool (Pool): The pool resource to fill.
         """
         with self.session as session:
-            existing_pool = (
-                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            )
+            existing_pool = session.exec(
+                select(Pool).filter_by(resource_id=pool.resource_id)
+            ).first()
             existing_pool._fill(session)
             session.refresh(existing_pool)
             return existing_pool
@@ -367,9 +364,9 @@ class ResourceInterface:
             asset (Asset): The asset to push onto the stack.
         """
         with self.session as session:
-            existing_stack = (
-                session.query(Stack).filter_by(resource_id=stack.resource_id).first()
-            )
+            existing_stack = session.exec(
+                select(Stack).filter_by(resource_id=stack.resource_id)
+            ).first()
 
             if not existing_stack:
                 raise ValueError(
@@ -398,11 +395,9 @@ class ResourceInterface:
             asset = stack._pop(session)
 
             if asset:
-                updated_stack = (
-                    session.query(Stack)
-                    .filter_by(resource_id=stack.resource_id)
-                    .first()
-                )
+                updated_stack = session.exec(
+                    select(Stack).filter_by(resource_id=stack.resource_id)
+                ).first()
                 return asset, updated_stack
             raise ValueError("The stack is empty or the asset does not exist.")
 
@@ -415,9 +410,9 @@ class ResourceInterface:
             asset (Asset): The asset to push onto the queue.
         """
         with self.session as session:
-            existing_queue = (
-                session.query(Queue).filter_by(resource_id=queue.resource_id).first()
-            )
+            existing_queue = session.exec(
+                select(Queue).filter_by(resource_id=queue.resource_id)
+            ).first()
 
             if not existing_queue:
                 raise ValueError(
@@ -445,11 +440,9 @@ class ResourceInterface:
             asset = queue._pop(session)
 
             if asset:
-                updated_queue = (
-                    session.query(Queue)
-                    .filter_by(resource_id=queue.resource_id)
-                    .first()
-                )
+                updated_queue = session.exec(
+                    select(Queue).filter_by(resource_id=queue.resource_id)
+                ).first()
                 return asset, updated_queue
             raise ValueError("The queue is empty or the asset does not exist.")
 
@@ -465,11 +458,9 @@ class ResourceInterface:
             quantity (float): The amount to increase the well quantity by.
         """
         with self.session as session:
-            existing_plate = (
-                session.query(Collection)
-                .filter_by(resource_id=plate.resource_id)
-                .first()
-            )
+            existing_plate = session.exec(
+                select(Collection).filter_by(resource_id=plate.resource_id)
+            ).first()
             pool = existing_plate.children.get(well_id)
 
             if not pool:
@@ -494,11 +485,9 @@ class ResourceInterface:
             quantity (float): The amount to decrease the well quantity by.
         """
         with self.session as session:
-            existing_plate = (
-                session.query(Collection)
-                .filter_by(resource_id=plate.resource_id)
-                .first()
-            )
+            existing_plate = session.exec(
+                select(Collection).filter_by(resource_id=plate.resource_id)
+            ).first()
 
             if well_id not in existing_plate.children:
                 raise KeyError(
@@ -528,11 +517,9 @@ class ResourceInterface:
             resource (resource): The resource resource to associate with the well.
         """
         with self.session as session:
-            collection = (
-                session.query(Collection)
-                .filter_by(resource_id=collection.resource_id)
-                .first()
-            )
+            collection = session.exec(
+                select(Collection).filter_by(resource_id=collection.resource_id)
+            ).first()
             resource = self.get_resource(resource_id=resource.resource_id)
             collection._add_child(key=key, resource=resource, session=session)
             session.add(collection)
@@ -541,7 +528,9 @@ class ResourceInterface:
 
 
 if __name__ == "__main__":
-    resource_interface = ResourceInterface()
+    resource_interface = ResourceInterface(
+        database_url="postgresql://rpl:rpl@localhost:5432/resources"
+    )
     stack = Stack(
         resource_name="stack",
         resource_type="stack",
@@ -626,8 +615,8 @@ if __name__ == "__main__":
 
     resource_interface.update_collection_child(plate, "A2", pool1)
 
-    start_date = datetime.utcnow() - timedelta(seconds=6)
-    end_date = datetime.utcnow()
+    start_date = datetime.now(timezone.utc) - timedelta(seconds=6)
+    end_date = datetime.now(timezone.utc)
 
     resource_interface.remove_resource(resource_id=stack.resource_id)
     history_entries = resource_interface.get_history(

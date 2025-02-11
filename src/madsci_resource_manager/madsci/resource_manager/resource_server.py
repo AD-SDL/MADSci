@@ -1,6 +1,7 @@
 """Fast API Server for Resources"""
 
 import logging
+import traceback
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
@@ -45,6 +46,7 @@ async def add_resource(data: dict) -> JSONResponse:
         saved_resource = interface.add_resource(resource)
         return JSONResponse(serialize_resource(saved_resource))
     except Exception as e:
+        traceback.print_exc()
         logger.error(e)
 
 

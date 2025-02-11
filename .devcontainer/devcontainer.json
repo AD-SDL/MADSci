@@ -60,12 +60,6 @@
 		},
 		"ghcr.io/devcontainers-extra/features/ruff:1": {
 			"version": "latest"
-		},
-		"ghcr.io/devcontainers/features/nix:1": {
-			"multiUser": false,
-			"version": "latest",
-			"useAttributePath": true,
-			"packages": "jless"
 		}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
