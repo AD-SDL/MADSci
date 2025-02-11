@@ -4,8 +4,8 @@ LABEL org.opencontainers.image.description="The Modular Autonomous Discovery for
 LABEL org.opencontainers.image.licenses=MIT
 
 RUN set -eux; \
-	apt-get update; \
-	apt-get install -y gosu; \
+	apt update; \
+	apt install -y gosu; \
 	rm -rf /var/lib/apt/lists/*
 
 # User configuration

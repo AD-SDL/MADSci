@@ -1,16 +1,21 @@
+# ruff: noqa: ERA001
+
 """Types related to MADSci Resources."""
 
+from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional, Union
 
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Json
 from pydantic.config import ConfigDict
 from pydantic.functional_validators import field_validator, model_validator
 from pydantic.types import Discriminator, Tag
-from sqlmodel.main import Field
+from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.types import PickleType
+from sqlmodel import Field
 
 
 class ResourceType(str, Enum):
@@ -312,10 +317,10 @@ class PoolResourceTypeDefinition(ContainerResourceTypeDefinition):
     )
 
 
-class ResourceDefinition(BaseModel, extra="allow"):
+class ResourceDefinition(BaseModel, extra="allow", table=False):
     """Definition for a MADSci Resource."""
 
-    model_config = ConfigDict(extra="allow")
+    # model_config = ConfigDict(extra="allow") # Causes error with SQLModel and extra="allow" creates ambiguity because SQLAlchemy does not recognize undefined fields when table = True
 
     resource_name: str = Field(
         title="Resource Name",
@@ -324,6 +329,8 @@ class ResourceDefinition(BaseModel, extra="allow"):
     resource_type: str = Field(
         title="Resource Type",
         description="The type of the resource.",
+        default="",
+        nullable=False,
     )
     base_type: Optional[str] = Field(
         default=None,
@@ -339,22 +346,24 @@ class ResourceDefinition(BaseModel, extra="allow"):
         title="Resource ID",
         description="The ID of the resource.",
         default_factory=new_ulid_str,
+        primary_key=True,
     )
     parent: Optional[str] = Field(
         default=None,
         title="Parent Resource",
         description="The parent resource ID or name. If None, defaults to the owning module or workcell.",
     )
-    attributes: dict[str, Json] = Field(
-        title="Resource Attributes",
-        description="Additional attributes for the resource.",
-        default_factory=dict,
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, description="Timestamp of the date created."
     )
-
+    last_modified: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of the last modification.",
+    )
     is_ulid = field_validator("resource_id")(ulid_validator)
 
 
-class AssetResourceDefinition(ResourceDefinition):
+class AssetResourceDefinition(ResourceDefinition, table=False):
     """Definition for an asset resource."""
 
 
@@ -611,17 +620,33 @@ RESOURCE_DEFINITION_MAP: dict[str, type[ResourceDefinition]] = {
 }
 
 
-class ResourceBase(ResourceDefinition, extra="allow"):
+class ResourceBase(ResourceDefinition, extra="allow", table=False):
     """Base class for all MADSci Resources."""
 
-    resource_url: str = Field(
+    resource_url: Optional[str] = Field(
         title="Resource URL",
         description="The URL of the resource.",
+        nullable=True,
+        default=None,
     )
-    ownership: OwnershipInfo = Field(
-        title="Ownership",
-        description="Information about the ownership of the resource.",
-        default_factory=OwnershipInfo,
+    # ownership: Optional[OwnershipInfo] = Field(
+    #     title="Ownership",
+    #     description="Information about the ownership of the resource.",
+    #     default_factory=OwnershipInfo,
+    #     sa_type=JSON,
+    #     nullable=True
+    # )
+    owner: Optional[str] = Field(
+        title="Resource owner",
+        description="The owner of the resource.",
+        nullable=True,
+        default=None,
+    )
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_type=JSON,
+        title="Attributes",
+        description="Custom attributes for the asset.",
     )
 
 
@@ -632,7 +657,7 @@ class AssetBase(AssetResourceDefinition):
 class ConsumableBase(ResourceBase):
     """Base class for all MADSci Consumables."""
 
-    quantity: Optional[Union[int, float]] = Field(
+    quantity: Optional[float] = Field(
         title="Quantity",
         description="The quantity of the consumable.",
     )
@@ -656,34 +681,40 @@ class ContinuousConsumableBase(ConsumableBase):
     )
 
 
-class ContainerBase(ResourceBase):
+class ContainerBase(ResourceBase, table=False):
     """Base class for all MADSci Containers."""
 
-    children: list[ResourceBase] = Field(
-        title="Children",
-        description="The children of the container.",
-    )
     capacity: Optional[int] = Field(
         title="Capacity",
         description="The capacity of the container.",
+    )
+    quantity: int = Field(
+        default=0,
+        nullable=False,
+        title="Quantity",
+        description="The number of assets currently in.",
     )
 
 
 class CollectionBase(ContainerBase):
     """Base class for all MADSci Collections."""
 
-    children: dict[str, ResourceBase] = Field(
-        title="Keys",
-        description="The keys of the collection.",
+    children: Optional[dict[str, ResourceBase]] = Field(
+        default_factory=dict,
+        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
+        title="Children",
+        description="The children of the collection.",
     )
 
 
 class GridBase(ContainerBase):
     """Base class for all MADSci Grids."""
 
-    children: dict[str, dict[str, ResourceBase]] = Field(
+    children: Optional[dict[str, ResourceBase]] = Field(
+        default_factory=dict,
+        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
-        description="The children of the grid.",
+        description="The children of the collection.",
     )
 
 
@@ -696,22 +727,66 @@ class VoxelGridBase(GridBase):
     )
 
 
-class StackBase(ContainerBase):
+class StackBase(ContainerBase, table=False):
     """Base class for all MADSci Stacks."""
 
+    children: Optional[list[str]] = Field(
+        title="Children",
+        description="The children of the container.",
+        default_factory=list,
+        sa_type=JSON,  # Use Column(JSON) to map to SQLAlchemy's JSON type
+    )
 
-class QueueBase(ContainerBase):
+
+class QueueBase(ContainerBase, table=False):
     """Base class for all MADSci Queues."""
+
+    children: Optional[list[str]] = Field(
+        title="Children",
+        description="The children of the container.",
+        default_factory=list,
+        sa_type=JSON,  # Use Column(JSON) to map to SQLAlchemy's JSON type
+    )
 
 
 class PoolBase(ContainerBase):
     """Base class for all MADSci Pools."""
 
-    children: dict[str, ConsumableBase] = Field(
+    children: Optional[dict[str, ResourceBase]] = Field(
+        default_factory=dict,
+        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
         description="The children of the pool.",
     )
-    capacity: Optional[Union[int, float]] = Field(
+    capacity: Optional[float] = Field(
         title="Capacity",
         description="The capacity of the pool.",
+    )
+
+
+class AllocationBase(ResourceBase):
+    """Base class for all MADSci Allocations"""
+
+    index: int = Field(
+        title="Allocation Index",
+        description="The index position of the resource in the parent resource.",
+        nullable=False,
+    )
+
+
+class HistoryBase(ResourceBase):
+    """Base class for all MADSci History records"""
+
+    id: int = Field(primary_key=True)
+    resource_id: str = Field(nullable=False, index=True)
+    event_type: str = Field(
+        nullable=False, description="Type of event (e.g., created, updated, deleted)."
+    )
+    data: dict = Field(
+        sa_type=(JSON),  # Define `nullable` directly in `Column`
+        sa_column_kwargs={"nullable": False},
+        description="Snapshot of the resource data.",
+    )
+    removed: bool = Field(
+        default=False, nullable=False, description="Whether the resource was removed."
     )
