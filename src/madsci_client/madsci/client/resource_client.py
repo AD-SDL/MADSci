@@ -29,7 +29,9 @@ class ResourceClient:
         """
         resource_data = serialize_resource(resource)
         response = requests.post(
-            f"{self.base_url}/resource/add", json={"resource": resource_data}, timeout=2
+            f"{self.base_url}/resource/add",
+            json={"resource": resource_data},
+            timeout=10,
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
@@ -48,7 +50,7 @@ class ResourceClient:
         response = requests.post(
             f"{self.base_url}/resource/update",
             json={"resource": resource_data},
-            timeout=2,
+            timeout=10,
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
@@ -79,7 +81,7 @@ class ResourceClient:
             "resource_type": resource_type,
         }
         response = requests.post(
-            f"{self.base_url}/resource/get", json=payload, timeout=2
+            f"{self.base_url}/resource/get", json=payload, timeout=10
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
@@ -90,7 +92,7 @@ class ResourceClient:
         """
         payload = {"resource_id": resource_id}
         response = requests.post(
-            f"{self.base_url}/resource/remove", json=payload, timeout=2
+            f"{self.base_url}/resource/remove", json=payload, timeout=10
         )
         response.raise_for_status()
         return response.json()
@@ -116,7 +118,7 @@ class ResourceClient:
             "limit": limit,
         }
         response = requests.post(
-            f"{self.base_url}/resource/history", json=payload, timeout=2
+            f"{self.base_url}/resource/history", json=payload, timeout=10
         )
         response.raise_for_status()
 
@@ -134,7 +136,7 @@ class ResourceClient:
         """
         payload = {"resource_id": resource_id}
         response = requests.post(
-            f"{self.base_url}/resource/restore", json=payload, timeout=2
+            f"{self.base_url}/resource/restore", json=payload, timeout=10
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
@@ -154,7 +156,9 @@ class ResourceClient:
             "stack": serialize_resource(stack),
             "asset": serialize_resource(asset),
         }
-        response = requests.post(f"{self.base_url}/stack/push", json=payload, timeout=2)
+        response = requests.post(
+            f"{self.base_url}/stack/push", json=payload, timeout=10
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
 
@@ -171,7 +175,7 @@ class ResourceClient:
         payload = {
             "stack": serialize_resource(stack),
         }
-        response = requests.post(f"{self.base_url}/stack/pop", json=payload, timeout=2)
+        response = requests.post(f"{self.base_url}/stack/pop", json=payload, timeout=10)
         response.raise_for_status()
         result = response.json()
         popped_asset = deserialize_resource(result["asset"])
@@ -193,7 +197,9 @@ class ResourceClient:
             "queue": serialize_resource(queue),
             "asset": serialize_resource(asset),
         }
-        response = requests.post(f"{self.base_url}/queue/push", json=payload, timeout=2)
+        response = requests.post(
+            f"{self.base_url}/queue/push", json=payload, timeout=10
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
 
@@ -210,7 +216,7 @@ class ResourceClient:
         payload = {
             "queue": serialize_resource(queue),
         }
-        response = requests.post(f"{self.base_url}/queue/pop", json=payload, timeout=2)
+        response = requests.post(f"{self.base_url}/queue/pop", json=payload, timeout=10)
         response.raise_for_status()
         result = response.json()
         popped_asset = deserialize_resource(result["asset"])
@@ -233,7 +239,7 @@ class ResourceClient:
             "amount": amount,
         }
         response = requests.post(
-            f"{self.base_url}/pool/increase", json=payload, timeout=2
+            f"{self.base_url}/pool/increase", json=payload, timeout=10
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
@@ -254,7 +260,7 @@ class ResourceClient:
             "amount": amount,
         }
         response = requests.post(
-            f"{self.base_url}/pool/decrease", json=payload, timeout=2
+            f"{self.base_url}/pool/decrease", json=payload, timeout=10
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
@@ -270,7 +276,7 @@ class ResourceClient:
             dict: Success message from the server.
         """
         payload = {"pool": serialize_resource(pool)}
-        response = requests.post(f"{self.base_url}/pool/fill", json=payload, timeout=2)
+        response = requests.post(f"{self.base_url}/pool/fill", json=payload, timeout=10)
         response.raise_for_status()
         return deserialize_resource(response.json())
 
@@ -285,7 +291,9 @@ class ResourceClient:
             dict: Success message from the server.
         """
         payload = {"pool": serialize_resource(pool)}
-        response = requests.post(f"{self.base_url}/pool/empty", json=payload, timeout=2)
+        response = requests.post(
+            f"{self.base_url}/pool/empty", json=payload, timeout=10
+        )
         response.raise_for_status()
         return deserialize_resource(response.json())
 
@@ -309,7 +317,7 @@ class ResourceClient:
             "quantity": quantity,
         }
         response = requests.post(
-            f"{self.base_url}/plate/increase_well", json=payload, timeout=2
+            f"{self.base_url}/plate/increase_well", json=payload, timeout=10
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
@@ -334,7 +342,7 @@ class ResourceClient:
             "quantity": quantity,
         }
         response = requests.post(
-            f"{self.base_url}/plate/decrease_well", json=payload, timeout=2
+            f"{self.base_url}/plate/decrease_well", json=payload, timeout=10
         )
         response.raise_for_status()
         return deserialize_resource(response.json())
@@ -359,7 +367,7 @@ class ResourceClient:
             "child": serialize_resource(child),
         }
         response = requests.post(
-            f"{self.base_url}/collection/update_child", json=payload, timeout=2
+            f"{self.base_url}/collection/update_child", json=payload, timeout=10
         )
         response.raise_for_status()
         return deserialize_resource(response.json())

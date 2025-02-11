@@ -15,7 +15,7 @@ from pydantic.types import Discriminator, Tag
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.types import PickleType
-from sqlmodel import Column, Field
+from sqlmodel import Field
 
 
 class ResourceType(str, Enum):
@@ -633,7 +633,7 @@ class ResourceBase(ResourceDefinition, extra="allow", table=False):
     #     title="Ownership",
     #     description="Information about the ownership of the resource.",
     #     default_factory=OwnershipInfo,
-    #     sa_column=Column(JSON),
+    #     sa_type=JSON,
     #     nullable=True
     # )
     owner: Optional[str] = Field(
@@ -642,17 +642,16 @@ class ResourceBase(ResourceDefinition, extra="allow", table=False):
         nullable=True,
         default=None,
     )
+    attributes: dict = Field(
+        default_factory=dict,
+        sa_type=JSON,
+        title="Attributes",
+        description="Custom attributes for the asset.",
+    )
 
 
 class AssetBase(AssetResourceDefinition):
     """Base class for all MADSci Assets."""
-
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the asset.",
-    )
 
 
 class ConsumableBase(ResourceBase):
@@ -671,12 +670,6 @@ class DiscreteConsumableBase(ConsumableBase):
         title="Quantity",
         description="The quantity of the discrete consumable.",
     )
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the descrete consumable.",
-    )
 
 
 class ContinuousConsumableBase(ConsumableBase):
@@ -685,12 +678,6 @@ class ContinuousConsumableBase(ConsumableBase):
     quantity: float = Field(
         title="Quantity",
         description="The quantity of the continuous consumable.",
-    )
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the continuous consumable.",
     )
 
 
@@ -714,18 +701,9 @@ class CollectionBase(ContainerBase):
 
     children: Optional[dict[str, ResourceBase]] = Field(
         default_factory=dict,
-        sa_column=Column(
-            MutableDict.as_mutable(PickleType)
-        ),  # Use PickleType with MutableDict
+        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
         description="The children of the collection.",
-    )
-
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the collection.",
     )
 
 
@@ -734,17 +712,9 @@ class GridBase(ContainerBase):
 
     children: Optional[dict[str, ResourceBase]] = Field(
         default_factory=dict,
-        sa_column=Column(
-            MutableDict.as_mutable(PickleType)
-        ),  # Use PickleType with MutableDict
+        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
         description="The children of the collection.",
-    )
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the grid.",
     )
 
 
@@ -755,12 +725,6 @@ class VoxelGridBase(GridBase):
         title="Children",
         description="The children of the voxel grid.",
     )
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the voxel grid.",
-    )
 
 
 class StackBase(ContainerBase, table=False):
@@ -770,13 +734,7 @@ class StackBase(ContainerBase, table=False):
         title="Children",
         description="The children of the container.",
         default_factory=list,
-        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
-    )
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the stack.",
+        sa_type=JSON,  # Use Column(JSON) to map to SQLAlchemy's JSON type
     )
 
 
@@ -787,13 +745,7 @@ class QueueBase(ContainerBase, table=False):
         title="Children",
         description="The children of the container.",
         default_factory=list,
-        sa_column=Column(JSON),  # Use Column(JSON) to map to SQLAlchemy's JSON type
-    )
-    attributes: dict = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        title="Attributes",
-        description="Custom attributes for the queue.",
+        sa_type=JSON,  # Use Column(JSON) to map to SQLAlchemy's JSON type
     )
 
 
@@ -802,9 +754,7 @@ class PoolBase(ContainerBase):
 
     children: Optional[dict[str, ResourceBase]] = Field(
         default_factory=dict,
-        sa_column=Column(
-            MutableDict.as_mutable(PickleType)
-        ),  # Use PickleType with MutableDict
+        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
         title="Children",
         description="The children of the pool.",
     )
@@ -833,9 +783,8 @@ class HistoryBase(ResourceBase):
         nullable=False, description="Type of event (e.g., created, updated, deleted)."
     )
     data: dict = Field(
-        sa_column=Column(
-            JSON, nullable=False
-        ),  # Define `nullable` directly in `Column`
+        sa_type=(JSON),  # Define `nullable` directly in `Column`
+        sa_column_kwargs={"nullable": False},
         description="Snapshot of the resource data.",
     )
     removed: bool = Field(

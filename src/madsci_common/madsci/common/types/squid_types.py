@@ -151,7 +151,7 @@ class ResourceManagerConfig(BaseModel):
     """Configuration for a MADSci Resource Manager."""
 
     host: str = Field(
-        default="localhost",
+        default="127.0.0.1",
         title="Host",
         description="The host to run the resource manager on.",
     )

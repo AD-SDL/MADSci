@@ -52,8 +52,8 @@ class ResourceInterface:
                 SQLModel.metadata.create_all(self.engine)
                 logger.info(f"Resources Database started on: {database_url}")
                 break
-            except Exception:
-                logger.error("Database not ready yet. Retrying...")
+            except Exception as e:
+                logger.error(f"Error while creating database: {e}")
                 time.sleep(5)
                 continue
 
