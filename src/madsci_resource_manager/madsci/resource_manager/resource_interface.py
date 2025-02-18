@@ -3,20 +3,28 @@
 # Suppress SAWarnings
 import logging
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Union
 
-from madsci.common.types.resource_types import ResourceBase
-from madsci.resource_manager.resource_tables import (
-    Asset,
-    Collection,
-    Consumable,
-    History,
+from madsci.common.types.resource_types import (
+    ContainerTypeEnum,
     Pool,
-    Queue,
+    Resource,
+    ResourceBase,
+    ResourceBaseTypeEnum,
+    ResourceDataModels,
+    ResourceTypes,
     Stack,
 )
+from madsci.resource_manager.resource_tables import (
+    HistoryTable,
+    ResourceLinkTable,
+    ResourceTable,
+)
 from madsci.resource_manager.serialization_utils import deserialize_resource
+from sqlalchemy import true
+from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, select
 
 logger = logging.getLogger(__name__)
@@ -50,51 +58,64 @@ class ResourceInterface:
                 SQLModel.metadata.create_all(self.engine)
                 logger.info(f"Resources Database started on: {database_url}")
                 break
-            except Exception as e:
-                logger.error(f"Error while creating database: {e}")
+            except Exception:
+                logger.error(
+                    f"Error while creating database: \n{traceback.print_exc()}"
+                )
                 time.sleep(5)
                 continue
+        else:
+            logger.error(f"Failed to connect to database after {init_timeout} seconds.")
+            raise ConnectionError(
+                f"Failed to connect to database after {init_timeout} seconds."
+            )
 
-    def add_resource(self, resource: ResourceBase) -> dict:
+    def add_resource(
+        self, resource: ResourceTypes, commit: bool = True
+    ) -> ResourceDataModels:
         """
-        Add a resource to the database using the add_resource method
-        in ResourceContainerBase.
+        Add a resource to the database.
 
         Args:
-            resource (ResourceContainerBase): The resource to add.
+            resource (ResourceTypes): The resource to add.
 
         Returns:
-            ResourceContainerBase: The saved or existing resource.
+            ResourceDataModels: The saved or existing resource data model.
         """
         with self.session as session:
             try:
-                if hasattr(resource, "children") and isinstance(
-                    resource.children, dict
-                ):
-                    for _key, child in resource.children.items():
-                        if isinstance(child, ResourceBase):
-                            child = session.merge(child)  # noqa
-                            resource.children[_key] = child
+                resource_row = ResourceTable.from_resource(resource)
+                # * Check if the resource already exists in the database
+                existing_resource = session.exec(
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource_row.resource_id
+                    )
+                ).first()
+                if existing_resource:
+                    logger.info(
+                        f"Resource with ID '{resource_row.resource_id}' already exists in the database. No action taken."
+                    )
+                    return existing_resource.to_data_model()
 
-                resource = session.merge(resource)
-                session.commit()
-                session.refresh(resource)
-                if hasattr(resource, "children") and isinstance(
-                    resource.children, dict
-                ):
-                    resource.children = {
-                        _key: self.get_resource(resource_id=child.resource_id)
-                        if isinstance(child, ResourceBase)
-                        else child
-                        for _key, child in resource.children.items()
-                    }
+                resource_row = session.merge(resource_row)
+                if hasattr(resource, "children"):
+                    children = resource.extract_children()
+                    for key, child in children.items():
+                        child_result = self.add_resource(resource=child, commit=False)
+                        ResourceLinkTable.link_resource(
+                            resource_row.resource_id, child_result.resource_id, key
+                        )
 
-                return resource
+                if commit:
+                    session.commit()
+                    session.refresh(resource)
+
+                return resource.to_data_model()
             except Exception as e:
-                logger.error(f"Error adding resource: {e}")
+                logger.error(f"Error adding resource: \n{traceback.format_exc()}")
                 raise e
 
-    def update_resource(self, resource: ResourceBase) -> None:
+    def update_resource(self, resource: ResourceTypes) -> None:
         """
         Update or refresh a resource in the database, including its children.
 
@@ -106,99 +127,96 @@ class ResourceInterface:
         """
         with self.session as session:
             try:
-                resource = session.merge(resource)
-                if hasattr(resource, "children") and isinstance(
-                    resource.children, dict
-                ):
-                    for _key, child in resource.children.items():
-                        if isinstance(child, ResourceBase):
-                            child.parent_id = resource.resource_id
-                            session.merge(child)
+                resource_row = ResourceTable.from_resource(resource)
+                resource_row = session.merge(resource_row)
+                if hasattr(resource, "children"):
+                    children = resource.extract_children()
+                    for key, child in children.items():
+                        child_result = self.update_resource(
+                            resource=child, commit=False
+                        )
+                        link = ResourceLinkTable(
+                            parent=resource_row.resource_id,
+                            child=child_result.resource_id,
+                            key=key,
+                        )
+                        session.merge(link)
 
                 session.commit()
                 session.refresh(resource)
             except Exception as e:
-                logger.error(f"Error refreshing resource {resource.resource_id}: {e}")
+                logger.error(f"Error updating resource {resource.resource_id}: {e}")
                 raise
 
     def get_resource(
         self,
-        resource_name: Optional[str] = None,
-        owner_name: Optional[str] = None,
         resource_id: Optional[str] = None,
+        resource_name: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        owner_name: Optional[str] = None,
         resource_type: Optional[str] = None,
-    ) -> Optional[SQLModel]:
+        resource_base_type: Optional[ResourceBaseTypeEnum] = None,
+        exact_match: bool = False,
+    ) -> Optional[ResourceDataModels]:
         """
-        Retrieve a resource from the database by its name and owner_name across all resource types.
-
-        Args:
-            resource_name (str): The name of the resource to retrieve.
-            owner_name (str): The module name associated with the resource.
-            resource_id (Optional[str]): The optional ID of the resource (if provided, this will take priority).
+        Lookup a resource by field values.
 
         Returns:
-            Optional[SQLModel]: The resource if found, otherwise None.
+            Optional[ResourceDataModels]: The resource if found, otherwise None.
         """
-        if not resource_id and not (resource_name or owner_name or resource_type):
-            raise ValueError(
-                "You must provide at least one of the following: resource_id, resource_name, owner_name, or resource_type."
-            )
-
-        # Map resource type names to their respective SQLModel classes
-        resource_type_map = {
-            "stack": Stack,
-            "asset": Asset,
-            "queue": Queue,
-            "pool": Pool,
-            "collection": Collection,
-            "consumable": Consumable,
-        }
 
         with self.session as session:
-            # If resource_id is provided, prioritize searching by ID
-            if resource_id:
-                resource_types = (
-                    [resource_type]
-                    if resource_type and resource_type in resource_type_map
-                    else resource_type_map.keys()
-                )
-                for r_type in resource_types:
-                    resource_type = resource_type_map[r_type]
-                    resource = session.exec(
-                        select(resource_type).where(
-                            resource_type.resource_id == resource_id
-                        )
-                    ).first()
-                    if resource:
-                        return resource
-
-                logger.error(f"No resource found with ID '{resource_id}'.")
-                return None
-
-            query_conditions = []
-            if resource_name:
-                query_conditions.append(lambda cls: cls.resource_name == resource_name)
-            if owner_name:
-                query_conditions.append(lambda cls: cls.owner == owner_name)
-
-            resource_types = (
-                [resource_type]
-                if resource_type and resource_type in resource_type_map
-                else resource_type_map.keys()
+            # * Build the query statement
+            statement = select(ResourceTable)
+            statement = (
+                statement.where(ResourceTable.resource_id == resource_id)
+                if resource_id
+                else statement
             )
-            for r_type in resource_types:
-                resource_type = resource_type_map[r_type]
-                statement = select(resource_type)
-                for condition in query_conditions:
-                    statement = statement.where(condition(resource_type))
-                resource = session.exec(statement).first()
-                if resource:
-                    return resource
-
-            logger.error(
-                f"No resource found matching name '{resource_name}', owner '{owner_name}', or type '{resource_type}'."
+            statement = (
+                statement.where(ResourceTable.resource_name == resource_name)
+                if resource_name
+                else statement
             )
-            return None
+            statement = (
+                statement.where(ResourceTable.parent_id == parent_id)
+                if parent_id
+                else statement
+            )
+            statement = (
+                statement.where(ResourceTable.owner == owner_name)
+                if owner_name
+                else statement
+            )
+            statement = (
+                statement.where(ResourceTable.resource_type == resource_type)
+                if resource_type
+                else statement
+            )
+            statement = (
+                statement.where(ResourceTable.resource_base_type == resource_base_type)
+                if resource_base_type
+                else statement
+            )
+
+            if exact_match:
+                try:
+                    result = session.exec(statement).one_or_none()
+                except MultipleResultsFound as e:
+                    logger.error(
+                        f"Found multiple matching resources, narrow down the search criteria: {e}"
+                    )
+                    raise e
+                if result is None:
+                    logger.error("No resource found matching the provided criteria.")
+                    raise ValueError(
+                        "No resource found matching the provided criteria."
+                    )
+            else:
+                result = session.exec(statement).first()
+            if result:
+                return result.to_data_model()
+            return result
 
     def get_history(
         self,
@@ -208,8 +226,9 @@ class ResourceInterface:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         limit: Optional[int] = 100,
-    ) -> list[History]:
+    ) -> list[HistoryTable]:
         """
+        TODO
         Query the History table with flexible filtering.
 
         - If only `resource_id` is provided, fetches **all history** for that resource.
@@ -227,19 +246,21 @@ class ResourceInterface:
             List[History]: A list of deserialized historical resource objects.
         """
         with self.session as session:
-            query = select(History).where(History.resource_id == resource_id)
+            query = select(HistoryTable).where(HistoryTable.resource_id == resource_id)
 
             # Apply additional filters if provided
             if event_type:
-                query = query.where(History.event_type == event_type)
+                query = query.where(HistoryTable.event_type == event_type)
             if removed is not None:
-                query = query.where(History.removed == removed)
+                query = query.where(HistoryTable.removed == removed)
             if start_date:
-                query = query.where(History.updated_at >= start_date)
+                query = query.where(HistoryTable.updated_at >= start_date)
             if end_date:
-                query = query.where(History.updated_at <= end_date)
+                query = query.where(HistoryTable.updated_at <= end_date)
 
-            query = query.order_by(History.updated_at.desc())  # Sorting by updated_at
+            query = query.order_by(
+                HistoryTable.updated_at.desc()
+            )  # Sorting by updated_at
 
             if limit:
                 query = query.limit(limit)
@@ -252,23 +273,31 @@ class ResourceInterface:
 
             return history_entries
 
-    def restore_deleted_resource(self, resource_id: str) -> Optional[ResourceBase]:
+    def restore_removed_resource(
+        self, resource_id: str
+    ) -> Optional[ResourceDataModels]:
         """
-        Restore the latest version of a deleted resource.
+        TODO
+        Restore the latest version of a removed resource.
 
         Args:
             resource_id (str): The resource ID.
 
         Returns:
-            Optional[ResourceBase]: The latest version of the resource data, or None if not found.
+            ResourceDataModels: The restored resource
         """
-        history_entries = self.get_history(
-            resource_id=resource_id, removed=True, limit=1
-        )
-        return history_entries[0].data if history_entries else None
+        with self.session as session:
+            resource_history = session.exec(
+                select(HistoryTable)
+                .where(HistoryTable.resource_id == resource_id)
+                .where(HistoryTable.removed == true())
+                .order_by(HistoryTable.history_created_at.desc())
+            ).first()
+            # TODO: Links?
 
     def remove_resource(self, resource_id: str) -> None:
         """
+        TODO
         Remove a resource by moving it to the History table and deleting it from the main table.
 
         This function:
@@ -284,122 +313,157 @@ class ResourceInterface:
         """
         with self.session as session:
             # Retrieve the resource
-            resource = self.get_resource(resource_id=resource_id)
-            if not resource:
-                raise ValueError(f"🚨 Resource with ID '{resource_id}' not found!")
+            session.exec(
+                select(ResourceTable).where(ResourceTable.resource_id == resource_id)
+            ).one()._remove(session)
 
-            logger.info(
-                f"🗑 Removing Resource: {resource.resource_name} (ID: {resource_id})"
-            )
-            resource._delete(session)
-
-    def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
+    def change_pool_quantity(self, pool_id: str, amount: float) -> Pool:
         """
-        Increase the quantity of a pool resource.
+        Increase or decrease the quantity of a pool resource by an amount.
 
         Args:
-            pool (Pool): The pool resource to update.
-            amount (float): The amount to increase.
+            pool_id: The id of the pool resource to update.
+            amount (float): The amount to increase (positive) or decrease (negative) the current quantity.
         """
         with self.session as session:
-            existing_pool = session.exec(
-                select(Pool).filter_by(resource_id=pool.resource_id)
-            ).first()
-            existing_pool._increase_quantity(amount, session)
-            session.refresh(existing_pool)
-            return existing_pool
+            pool = session.exec(
+                select(ResourceTable).filter_by(
+                    resource_id=pool_id, base_type=ContainerTypeEnum.pool
+                )
+            ).one()
+            if pool.capacity and pool.quantity + amount > pool.capacity:
+                raise ValueError(
+                    f"Cannot increase the quantity of pool '{pool.resource_name}' beyond its capacity {pool.capacity}."
+                )
+            if pool.quantity + amount < 0:
+                raise ValueError(
+                    f"Cannot decrease the quantity of pool '{pool.resource_name}' below zero."
+                )
+            pool._archive(session, event_type="change_quantity")
+            pool.quantity += amount
+            session.merge(pool)
+            session.refresh(pool)
+            return pool.to_data_model()
 
-    def decrease_pool_quantity(self, pool: Pool, amount: float) -> None:
-        """
-        Decrease the quantity of a pool resource.
-
-        Args:
-            pool (Pool): The pool resource to update.
-            amount (float): The amount to decrease.
-        """
-        with self.session as session:
-            existing_pool = session.exec(
-                select(Pool).filter_by(resource_id=pool.resource_id)
-            ).first()
-            existing_pool._decrease_quantity(amount, session)
-            session.refresh(existing_pool)
-            return existing_pool
-
-    def empty_pool(self, pool: Pool) -> None:
+    def empty_pool(self, pool_id: str) -> Pool:
         """
         Empty the pool by setting the quantity to zero.
 
         Args:
-            pool (Pool): The pool resource to empty.
+            pool (str): The id of the pool resource to empty.
         """
         with self.session as session:
-            existing_pool = session.exec(
-                select(Pool).filter_by(resource_id=pool.resource_id)
-            ).first()
-            existing_pool._empty(session)
-            session.refresh(existing_pool)
-            return existing_pool
+            pool = session.exec(
+                select(ResourceTable).filter_by(
+                    resource_id=pool_id, base_type=ContainerTypeEnum.pool
+                )
+            ).one()
+            pool._archive(session, event_type="empty")
+            pool.quantity = 0
+            session.merge(pool)
+            session.refresh(pool)
+            return pool.to_data_model()
 
-    def fill_pool(self, pool: Pool) -> None:
+    def fill_pool(self, pool_id: str) -> Pool:
         """
         Fill the pool by setting the quantity to its capacity.
 
         Args:
-            pool (Pool): The pool resource to fill.
+            pool (Pool): The id of the pool resource to fill.
         """
         with self.session as session:
-            existing_pool = session.exec(
-                select(Pool).filter_by(resource_id=pool.resource_id)
-            ).first()
-            existing_pool._fill(session)
-            session.refresh(existing_pool)
-            return existing_pool
+            pool = session.exec(
+                select(ResourceTable).filter_by(
+                    resource_id=pool_id, base_type=ContainerTypeEnum.pool
+                )
+            ).one()
+            pool._archive(session, event_type="empty")
+            if pool.capacity is None:
+                raise ValueError(
+                    f"Cannot fill pool '{pool.resource_name}' without a capacity."
+                )
+            pool.quantity = pool.capacity
+            session.merge(pool)
+            session.refresh(pool)
+            return pool.to_data_model()
 
-    def push_to_stack(self, stack: Stack, asset: Asset) -> None:
+    def push_to_stack(
+        self, stack_id: str, child: Union[Resource, ResourceBase, str]
+    ) -> Stack:
         """
         Push an asset to the stack. Automatically adds the asset to the database if it's not already there.
 
         Args:
-            stack (Stack): The stack resource to push the asset onto.
-            asset (Asset): The asset to push onto the stack.
+            stack_id (str): The id of the stack resource to push the resource onto.
+            child (Union[Resource, ResourceBase, str]): The resource to push onto the stack (or an ID, if it already exists).
         """
         with self.session as session:
-            existing_stack = session.exec(
-                select(Stack).filter_by(resource_id=stack.resource_id)
-            ).first()
-
-            if not existing_stack:
-                raise ValueError(
-                    f"Stack '{stack.resource_name, stack.resource_id}' does not exist in the database. Please provide a valid resource."
+            stack_row = session.exec(
+                select(ResourceTable).filter_by(
+                    resource_id=stack_id, base_type=ContainerTypeEnum.stack
                 )
-            stack = existing_stack
-            asset = session.merge(asset)
-            stack._push(asset, session)
-            session.refresh(stack)
-            return stack
+            ).one()
+            stack = stack_row.to_data_model()
+            child_id = child if isinstance(child, str) else child.resource_id
+            child_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=child_id)
+            ).one_or_none()
+            if not child_row and not isinstance(child, str):
+                child = self.add_resource(child, commit=False)
+                child_row = ResourceTable.from_data_model(child)
+                child_row.refresh()
+            else:
+                raise ValueError(
+                    f"The child resource {child_id} does not exist in the database and couldn't be added."
+                )
 
-    def pop_from_stack(self, stack: Stack) -> Asset:
+            if stack_row.capacity and len(stack.children) >= stack_row.capacity:
+                raise ValueError(
+                    f"Cannot push asset '{child_row.resource_name}' to stack '{stack_row.resource_name}' because it is full."
+                )
+            ResourceLinkTable.link_resource(
+                parent=stack_row,
+                child=child_row,
+                key=len(stack.children) + 1,
+                commit=False,
+            )
+            session.commit()
+            session.refresh(stack)
+            return stack.to_data_model()
+
+    def pop_from_stack(self, stack_id: str) -> tuple[ResourceDataModels, Stack]:
         """
-        Pop an asset from a stack resource.
+        Pop a resource from a stack resource. Returns the popped resource.
 
         Args:
-            stack (Stack): The stack resource to update.
+            stack_id (str): The id of the stack resource to update.
 
         Returns:
-            Asset: The popped asset.
-            updated_stack: updated stack resource
+            resource (ResourceDataModels): The popped resource.
+            updated_stack (Stack): updated stack resource
 
         """
         with self.session as session:
-            stack = session.merge(stack)
-            asset = stack._pop(session)
+            stack_row = session.exec(
+                select(ResourceTable).filter_by(
+                    resource_id=stack_id, base_type=ContainerTypeEnum.stack
+                )
+            ).one()
+            stack = stack_row.to_data_model()
+            if not stack.children:
+                raise ValueError(f"Stack '{stack.resource_name}' is empty.")
+            child = stack.children[-1]
+            child_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=child.resource_id)
+            ).one()
 
-            if asset:
-                updated_stack = session.exec(
-                    select(Stack).filter_by(resource_id=stack.resource_id)
-                ).first()
-                return asset, updated_stack
-            raise ValueError("The stack is empty or the asset does not exist.")
+            ResourceLinkTable.unlink_resource(child=child_row, commit=False)
+
+            session.commit()
+            session.refresh()
+            return child_row.to_data_model(), stack.to_data_model()
+
+    # TODO: VVVVVVVV
 
     def push_to_queue(self, queue: Queue, asset: Asset) -> None:
         """
@@ -468,7 +532,7 @@ class ResourceInterface:
                     f"No resource found in well '{well_id}' of plate {existing_plate.resource_name}."
                 )
 
-            self.increase_pool_quantity(pool=pool, amount=quantity)
+            self.change_pool_quantity(pool=pool, amount=quantity)
             session.add(existing_plate)
             session.refresh(existing_plate)
             return existing_plate
@@ -591,7 +655,7 @@ if __name__ == "__main__":
     pool = resource_interface.add_resource(pool)
 
     # Example operations on the pool
-    pool = resource_interface.increase_pool_quantity(pool, 50.0)
+    pool = resource_interface.change_pool_quantity(pool, 50.0)
 
     pool = resource_interface.decrease_pool_quantity(pool, 20.0)
 

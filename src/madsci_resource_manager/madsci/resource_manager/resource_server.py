@@ -6,6 +6,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from madsci.common.types.resource_types import ResourceBaseTypes
 from madsci.common.types.squid_types import (
     ResourceManagerDefinition,
 )
@@ -35,7 +36,7 @@ def info() -> ResourceManagerDefinition:
 
 
 @app.post("/resource/add")
-async def add_resource(data: dict) -> JSONResponse:
+async def add_resource(data: dict) -> ResourceBaseTypes:
     """
     Add a resource to the database.
     """
@@ -43,8 +44,7 @@ async def add_resource(data: dict) -> JSONResponse:
         resource_data = data["resource"]
         resource = deserialize_resource(resource_data)
         interface = ResourceInterface(database_url=DB_URL)
-        saved_resource = interface.add_resource(resource)
-        return JSONResponse(serialize_resource(saved_resource))
+        return interface.add_resource(resource)
     except Exception as e:
         traceback.print_exc()
         logger.error(e)
@@ -294,7 +294,7 @@ async def increase_pool_quantity(data: dict) -> JSONResponse:
         amount = data["amount"]
         pool = deserialize_resource(pool_data)
         interface = ResourceInterface(database_url=DB_URL)
-        updated_pool = interface.increase_pool_quantity(pool, float(amount))
+        updated_pool = interface.change_pool_quantity(pool, float(amount))
         return JSONResponse(serialize_resource(updated_pool))
     except Exception as e:
         logger.error(e)

@@ -16,7 +16,7 @@ async def root() -> JSONResponse:
 
 
 if __name__ == "__main__":
-    lab_definition = LabDefinition.model_validate(lab_definition_loader())
+    lab_definition = LabDefinition.validate_subtype(lab_definition_loader())
     uvicorn.run(
         app,
         host=lab_definition.server_config.host,

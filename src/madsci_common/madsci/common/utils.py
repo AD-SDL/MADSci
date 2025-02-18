@@ -68,7 +68,7 @@ def search_for_file_pattern(
 def save_model(path: PathLike, model: BaseModel, overwrite_check: bool = True) -> None:
     """Save a MADSci model to a YAML file, optionally with a check to overwrite if the file already exists."""
     try:
-        model.model_validate(model)
+        model.validate_subtype(model)
     except ValidationError as e:
         raise ValueError(f"Validation error while saving model {model}: {e}") from e
     if (

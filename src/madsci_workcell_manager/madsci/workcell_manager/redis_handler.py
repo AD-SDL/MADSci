@@ -147,7 +147,7 @@ class WorkcellRedisHandler:
         """
         Returns the current workcell as a Workcell object
         """
-        return WorkcellDefinition.model_validate(self._workcell.to_dict())
+        return WorkcellDefinition.validate_subtype(self._workcell.to_dict())
 
     def set_workcell(self, workcell: WorkcellDefinition) -> None:
         """
@@ -178,7 +178,7 @@ class WorkcellRedisHandler:
         """
         Returns a workflow by ID
         """
-        return Workflow.model_validate(self._workflows[str(workflow_id)])
+        return Workflow.validate_subtype(self._workflows[str(workflow_id)])
 
     def get_all_workflows(self) -> dict[str, Workflow]:
         """
@@ -187,7 +187,7 @@ class WorkcellRedisHandler:
         valid_workflows = {}
         for workflow_id, workflow in self._workflows.to_dict().items():
             try:
-                valid_workflows[str(workflow_id)] = Workflow.model_validate(workflow)
+                valid_workflows[str(workflow_id)] = Workflow.validate_subtype(workflow)
             except ValidationError:
                 continue
         return valid_workflows
@@ -199,7 +199,7 @@ class WorkcellRedisHandler:
         if isinstance(wf, Workflow):
             wf_dump = wf.model_dump(mode="json")
         else:
-            wf_dump = Workflow.model_validate(wf).model_dump(mode="json")
+            wf_dump = Workflow.validate_subtype(wf).model_dump(mode="json")
         self._workflows[str(wf_dump["workflow_id"])] = wf_dump
         self.mark_state_changed()
 
@@ -210,7 +210,7 @@ class WorkcellRedisHandler:
         if isinstance(wf, Workflow):
             wf_dump = wf.model_dump(mode="json")
         else:
-            wf_dump = Workflow.model_validate(wf).model_dump(mode="json")
+            wf_dump = Workflow.validate_subtype(wf).model_dump(mode="json")
         self._workflows[str(wf_dump["workflow_id"])] = wf_dump
 
     def delete_workflow(self, workflow_id: Union[str, str]) -> None:
@@ -232,7 +232,7 @@ class WorkcellRedisHandler:
         """
         Returns a node by name
         """
-        return Node.model_validate(self._nodes[node_name])
+        return Node.validate_subtype(self._nodes[node_name])
 
     def get_all_nodes(self) -> dict[str, Node]:
         """
@@ -241,7 +241,7 @@ class WorkcellRedisHandler:
         valid_nodes = {}
         for node_name, node in self._nodes.to_dict().items():
             try:
-                valid_nodes[str(node_name)] = Node.model_validate(node)
+                valid_nodes[str(node_name)] = Node.validate_subtype(node)
             except ValidationError:
                 continue
         return valid_nodes
@@ -255,11 +255,11 @@ class WorkcellRedisHandler:
         if isinstance(node, Node):
             node_dump = node.model_dump(mode="json")
         elif isinstance(node, NodeDefinition):
-            node_dump = Node.model_validate(node, from_attributes=True).model_dump(
+            node_dump = Node.validate_subtype(node, from_attributes=True).model_dump(
                 mode="json"
             )
         else:
-            node_dump = Node.model_validate(node).model_dump(mode="json")
+            node_dump = Node.validate_subtype(node).model_dump(mode="json")
         self._nodes[node_name] = node_dump
         self.mark_state_changed()
 

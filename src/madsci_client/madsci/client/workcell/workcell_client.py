@@ -65,7 +65,7 @@ class WorkcellClient:
     ) -> Workflow:
         """send a workflow to the workcell manager"""
         workflow = WorkflowDefinition.from_yaml(workflow)
-        WorkflowDefinition.model_validate(workflow)
+        WorkflowDefinition.validate_subtype(workflow)
         insert_parameter_values(workflow=workflow, parameters=parameters)
         files = self._extract_files_from_workflow(workflow)
         url = self.url + "/workflows/start"

@@ -223,7 +223,7 @@ class AbstractNode:
                 action_response = action_request.succeeded()
             elif not isinstance(action_response, ActionResult):
                 try:
-                    action_response = ActionResult.model_validate(action_response)
+                    action_response = ActionResult.validate_subtype(action_response)
                 except ValidationError as e:
                     action_response = action_request.failed(
                         errors=Error.from_exception(e),

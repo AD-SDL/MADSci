@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 import requests
+from madsci.common.types.resource_types import ResourceBaseTypes
 from madsci.resource_manager.serialization_utils import (
     deserialize_resource,
     serialize_resource,
@@ -17,12 +18,12 @@ class ResourceClient:
         """Initial params"""
         self.base_url = base_url
 
-    def add_resource(self, resource: dict) -> dict:
+    def add_resource(self, resource: ResourceBaseTypes) -> dict:
         """
         Add a resource to the server.
 
         Args:
-            resource (ResourceBase): The resource to add.
+            resource (ResourceBaseTypes): The resource to add.
 
         Returns:
             ResourceBase: The added resource as returned by the server.

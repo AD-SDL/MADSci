@@ -78,7 +78,7 @@ class EventClient:
                 response.raise_for_status()
             print(response.json())
             for key, value in response.json().items():
-                events[key] = Event.model_validate(value)
+                events[key] = Event.validate_subtype(value)
             return dict(events)
         events = self.get_log()
         selected_events = {}
@@ -100,7 +100,7 @@ class EventClient:
             if not response.ok:
                 response.raise_for_status()
             for key, value in response.json().items():
-                events[key] = Event.model_validate(value)
+                events[key] = Event.validate_subtype(value)
             return dict(events)
         raise ValueError("No event server configured, cannot query events.")
 
@@ -113,7 +113,7 @@ class EventClient:
                 event = Event.model_validate_json(event)
         if isinstance(event, dict):
             with contextlib.suppress(ValidationError):
-                event = Event.model_validate(**event)
+                event = Event.validate_subtype(**event)
         if not isinstance(event, Event):
             event = self._new_event_for_log(event, level)
         event.log_level = level if level else event.log_level

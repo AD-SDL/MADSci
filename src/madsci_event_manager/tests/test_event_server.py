@@ -30,7 +30,7 @@ def test_root(db_connection: Database) -> None:
     event_manager_server._configure_routes()
     test_client = TestClient(event_manager_server.app)
     result = test_client.get("/").json()
-    EventManagerDefinition.model_validate(result)
+    EventManagerDefinition.validate_subtype(result)
 
 
 def test_roundtrip_event(db_connection: Database) -> None:
@@ -47,9 +47,9 @@ def test_roundtrip_event(db_connection: Database) -> None:
         event_data={"test": "data"},
     )
     result = test_client.post("/event", json=test_event.model_dump(mode="json")).json()
-    assert Event.model_validate(result) == test_event
+    assert Event.validate_subtype(result) == test_event
     result = test_client.get(f"/event/{test_event.event_id}").json()
-    assert Event.model_validate(result) == test_event
+    assert Event.validate_subtype(result) == test_event
 
 
 def test_get_events(db_connection: Database) -> None:
@@ -73,7 +73,7 @@ def test_get_events(db_connection: Database) -> None:
     assert len(result) == query_number
     previous_timestamp = float("inf")
     for _, value in result.items():
-        event = Event.model_validate(value)
+        event = Event.validate_subtype(value)
         # * Check that the events are in reverse-chronological order
         assert event.event_data["test"] in range(5, 10)
         assert previous_timestamp >= event.event_timestamp.timestamp()
@@ -100,5 +100,5 @@ def test_query_events(db_connection: Database) -> None:
     result = test_client.post("/events/query", json=selector).json()
     assert len(result) == test_val
     for _, value in result.items():
-        event = Event.model_validate(value)
+        event = Event.validate_subtype(value)
         assert event.event_data["test"] >= test_val

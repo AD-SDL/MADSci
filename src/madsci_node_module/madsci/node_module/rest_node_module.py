@@ -146,7 +146,7 @@ class RestNode(AbstractNode):
                     action_response=response,
                 )
             # * Otherwise, return a normal action response
-            return ActionResult.model_validate(response)
+            return ActionResult.validate_subtype(response)
 
     def get_action_result(
         self,
@@ -158,7 +158,7 @@ class RestNode(AbstractNode):
             return ActionResultWithFiles().from_action_response(
                 action_response=action_response,
             )
-        return ActionResult.model_validate(action_response)
+        return ActionResult.validate_subtype(action_response)
 
     def get_action_history(self) -> list[str]:
         """Get the action history of the node."""

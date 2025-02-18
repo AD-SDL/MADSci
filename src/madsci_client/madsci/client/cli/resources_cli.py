@@ -6,12 +6,15 @@ from typing import Optional
 import click
 from click.core import Context
 from madsci.common.types.resource_types import (
-    RESOURCE_BASE_TYPES,
-    RESOURCE_DEFINITION_MAP,
-    RESOURCE_TYPE_DEFINITION_MAP,
+    RESOURCE_TYPE_MAP,
+)
+from madsci.common.types.resource_types.custom_types import (
+    ResourceBaseTypeEnum,
+    ResourceTypeEnum,
+)
+from madsci.common.types.resource_types.definitions import (
     ResourceDefinition,
     ResourceFile,
-    ResourceType,
 )
 from madsci.common.utils import (
     prompt_for_input,
@@ -139,14 +142,14 @@ def add(
         name = prompt_for_input("Resource Type Name", required=True)
     if not description:
         description = prompt_for_input("Resource Type Description")
-    if not base_type or base_type not in [t.value for t in RESOURCE_BASE_TYPES]:
+    if not base_type or base_type not in ResourceBaseTypeEnum:
         base_type = prompt_from_list(
             "Base Type",
-            [t.value for t in RESOURCE_BASE_TYPES],
-            default=ResourceType.resource.value,
+            [e.value for e in ResourceBaseTypeEnum],
+            default=ResourceTypeEnum.resource.value,
         )
     # *Get the appropriate type definition class
-    type_def_class = RESOURCE_TYPE_DEFINITION_MAP[base_type]
+    type_def_class = RESOURCE_TYPE_MAP[base_type]["definition"]
 
     # *Create the type definition with the fields we've collected
     type_def = type_def_class(
@@ -300,18 +303,21 @@ def add_resource(ctx: ResourceContext) -> None:
     description = prompt_for_input("Resource Description")
 
     # * Combine built-in types and custom types for selection
-    available_types = list(RESOURCE_DEFINITION_MAP.keys())
+    available_types = [e.value for e in ResourceBaseTypeEnum]
     custom_types = [rt.type_name for rt in ctx.resource_file.resource_types]
     all_types = available_types + custom_types
 
     resource_type = prompt_from_list(
         "Resource Type",
         all_types,
-        default=ResourceType.resource.value,
+        default=ResourceTypeEnum.resource.value,
     )
 
     # * Create the resource definition
-    resource_def_class = RESOURCE_DEFINITION_MAP.get(resource_type, ResourceDefinition)
+    if resource_type in RESOURCE_TYPE_MAP:
+        resource_def_class = RESOURCE_TYPE_MAP[resource_type]["definition"]
+    else:
+        resource_def_class = ResourceDefinition
 
     resource_def = resource_def_class(
         resource_name=name,

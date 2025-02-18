@@ -36,7 +36,7 @@ class BaseModel(SQLModel, table=False):
     )
 
     model_config = ConfigDict(
-        validate_assignment=False,
+        validate_assignment=True,
     )
 
     def to_yaml(self, path: PathLike, **kwargs: Any) -> None:

@@ -18,7 +18,7 @@ from madsci.common.types.node_types import (
     NodeSetConfigResponse,
     NodeStatus,
 )
-from madsci.common.types.resource_types import ResourceDefinition
+from madsci.common.types.resource_types.definitions import ResourceDefinition
 from pydantic import AnyUrl
 
 
@@ -75,7 +75,7 @@ class RestNodeClient(AbstractNodeClient):
         if not rest_response.ok:
             self.logger.log_error(f"{rest_response.status_code}: {rest_response.text}")
             rest_response.raise_for_status()
-        return ActionResult.model_validate(rest_response.json())
+        return ActionResult.validate_subtype(rest_response.json())
 
     def get_action_history(self) -> list[str]:
         """Get a list of the action IDs for actions that the node has recently performed."""
@@ -92,14 +92,14 @@ class RestNodeClient(AbstractNodeClient):
         )
         if not response.ok:
             response.raise_for_status()
-        return ActionResult.model_validate(response.json())
+        return ActionResult.validate_subtype(response.json())
 
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""
         response = requests.get(f"{self.url}/status", timeout=10)
         if not response.ok:
             response.raise_for_status()
-        return NodeStatus.model_validate(response.json())
+        return NodeStatus.validate_subtype(response.json())
 
     def get_state(self) -> dict[str, Any]:
         """Get the state of the node."""
@@ -113,7 +113,7 @@ class RestNodeClient(AbstractNodeClient):
         response = requests.get(f"{self.url}/info", timeout=10)
         if not response.ok:
             response.raise_for_status()
-        return NodeInfo.model_validate(response.json())
+        return NodeInfo.validate_subtype(response.json())
 
     def set_config(self, config_dict: dict[str, Any]) -> NodeSetConfigResponse:
         """Set configuration values of the node."""
@@ -124,14 +124,14 @@ class RestNodeClient(AbstractNodeClient):
         )
         if not response.ok:
             response.raise_for_status()
-        return NodeSetConfigResponse.model_validate(response.json())
+        return NodeSetConfigResponse.validate_subtype(response.json())
 
     def send_admin_command(self, admin_command: AdminCommands) -> bool:
         """Perform an administrative command on the node."""
         response = requests.post(f"{self.url}/admin/{admin_command}", timeout=10)
         if not response.ok:
             response.raise_for_status()
-        return AdminCommandResponse.model_validate(response.json())
+        return AdminCommandResponse.validate_subtype(response.json())
 
     def get_resources(self) -> dict[str, ResourceDefinition]:
         """Get the resources of the node."""

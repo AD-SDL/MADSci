@@ -197,7 +197,7 @@ def manager_definition_loader(
     for manager in manager_definitions:
         if manager.manager_type in MANAGER_TYPE_DEFINITION_MAP:
             refined_managers.append(
-                MANAGER_TYPE_DEFINITION_MAP[manager.manager_type].model_validate(
+                MANAGER_TYPE_DEFINITION_MAP[manager.manager_type].validate_subtype(
                     manager
                 )
             )
