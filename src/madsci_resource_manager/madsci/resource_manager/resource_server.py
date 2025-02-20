@@ -294,7 +294,7 @@ async def increase_pool_quantity(data: dict) -> JSONResponse:
         amount = data["amount"]
         pool = deserialize_resource(pool_data)
         interface = ResourceInterface(database_url=DB_URL)
-        updated_pool = interface.change_pool_quantity(pool, float(amount))
+        updated_pool = interface.change_pool_quantity_by(pool, float(amount))
         return JSONResponse(serialize_resource(updated_pool))
     except Exception as e:
         logger.error(e)

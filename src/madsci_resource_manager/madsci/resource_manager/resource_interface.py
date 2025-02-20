@@ -10,7 +10,7 @@ from typing import Optional, Union
 from madsci.common.types.resource_types import (
     ContainerTypeEnum,
     Pool,
-    Resource,
+    Queue,
     ResourceBase,
     ResourceBaseTypeEnum,
     ResourceDataModels,
@@ -19,10 +19,10 @@ from madsci.common.types.resource_types import (
 )
 from madsci.resource_manager.resource_tables import (
     HistoryTable,
+    ResourceLinkHistoryTable,
     ResourceLinkTable,
     ResourceTable,
 )
-from madsci.resource_manager.serialization_utils import deserialize_resource
 from sqlalchemy import true
 from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -71,7 +71,7 @@ class ResourceInterface:
             )
 
     def add_resource(
-        self, resource: ResourceTypes, commit: bool = True
+        self, resource: ResourceTypes, add_descendants: bool = True, commit: bool = True
     ) -> ResourceDataModels:
         """
         Add a resource to the database.
@@ -84,7 +84,7 @@ class ResourceInterface:
         """
         with self.session as session:
             try:
-                resource_row = ResourceTable.from_resource(resource)
+                resource_row = ResourceTable.from_data_model(resource)
                 # * Check if the resource already exists in the database
                 existing_resource = session.exec(
                     select(ResourceTable).where(
@@ -98,10 +98,14 @@ class ResourceInterface:
                     return existing_resource.to_data_model()
 
                 resource_row = session.merge(resource_row)
-                if hasattr(resource, "children"):
+                if add_descendants and hasattr(resource, "children"):
                     children = resource.extract_children()
                     for key, child in children.items():
-                        child_result = self.add_resource(resource=child, commit=False)
+                        child_result = self.add_or_update_resource(
+                            resource=child,
+                            commit=False,
+                            add_descendants=add_descendants,
+                        )
                         ResourceLinkTable.link_resource(
                             resource_row.resource_id, child_result.resource_id, key
                         )
@@ -115,7 +119,12 @@ class ResourceInterface:
                 logger.error(f"Error adding resource: \n{traceback.format_exc()}")
                 raise e
 
-    def update_resource(self, resource: ResourceTypes) -> None:
+    def update_resource(
+        self,
+        resource: ResourceTypes,
+        update_descendants: bool = True,
+        commit: bool = True,
+    ) -> None:
         """
         Update or refresh a resource in the database, including its children.
 
@@ -127,13 +136,31 @@ class ResourceInterface:
         """
         with self.session as session:
             try:
-                resource_row = ResourceTable.from_resource(resource)
-                resource_row = session.merge(resource_row)
-                if hasattr(resource, "children"):
+                resource_row = ResourceTable.from_data_model(resource)
+                if update_descendants and hasattr(resource, "children"):
                     children = resource.extract_children()
-                    for key, child in children.items():
-                        child_result = self.update_resource(
-                            resource=child, commit=False
+                    # * Unlink old children that are not in the new children
+                    old_resource_row = session.exec(
+                        select(ResourceTable).where(
+                            ResourceTable.resource_id == resource_row.resource_id
+                        )
+                    ).first()
+                    for _, old_child in old_resource_row.children.items():
+                        if old_child.resource_id not in [
+                            c.resource_id for c in children.values()
+                        ]:
+                            ResourceLinkTable.unlink_resource(
+                                child=old_child.resource_id,
+                                session=session,
+                                commit=False,
+                            )
+                    updated_children = []
+                    for key, old_child in children.items():
+                        updated_children.append(key)
+                        child_result = self.add_or_update_resource(
+                            resource=old_child,
+                            commit=False,
+                            include_descendants=update_descendants,
                         )
                         link = ResourceLinkTable(
                             parent=resource_row.resource_id,
@@ -142,11 +169,38 @@ class ResourceInterface:
                         )
                         session.merge(link)
 
-                session.commit()
-                session.refresh(resource)
+                resource_row = session.merge(resource_row)
+
+                if commit:
+                    session.commit()
+                    session.refresh(resource)
+
+                return resource.to_data_model()
             except Exception as e:
-                logger.error(f"Error updating resource {resource.resource_id}: {e}")
-                raise
+                logger.error(f"Error updating resource: \n{traceback.format_exc()}")
+                raise e
+
+    def add_or_update_resource(
+        self,
+        resource: ResourceTypes,
+        commit: bool = True,
+        include_descendants: bool = True,
+    ) -> ResourceDataModels:
+        """Add or update a resource in the database."""
+        with self.session as session:
+            # * Check if the resource already exists in the database
+            existing_resource = session.exec(
+                select(ResourceTable).where(
+                    ResourceTable.resource_id == resource.resource_id
+                )
+            ).first()
+            if existing_resource:
+                return self.update_resource(
+                    resource, update_descendants=include_descendants, commit=commit
+                )
+            return self.add_resource(
+                resource, add_descendants=include_descendants, commit=commit
+            )
 
     def get_resource(
         self,
@@ -156,7 +210,7 @@ class ResourceInterface:
         owner_name: Optional[str] = None,
         resource_type: Optional[str] = None,
         resource_base_type: Optional[ResourceBaseTypeEnum] = None,
-        exact_match: bool = False,
+        single_match: bool = False,
     ) -> Optional[ResourceDataModels]:
         """
         Lookup a resource by field values.
@@ -199,7 +253,7 @@ class ResourceInterface:
                 else statement
             )
 
-            if exact_match:
+            if single_match:
                 try:
                     result = session.exec(statement).one_or_none()
                 except MultipleResultsFound as e:
@@ -228,7 +282,6 @@ class ResourceInterface:
         limit: Optional[int] = 100,
     ) -> list[HistoryTable]:
         """
-        TODO
         Query the History table with flexible filtering.
 
         - If only `resource_id` is provided, fetches **all history** for that resource.
@@ -243,7 +296,7 @@ class ResourceInterface:
             limit (Optional[int]): Maximum number of records to return (None for all records).
 
         Returns:
-            List[History]: A list of deserialized historical resource objects.
+            List[JSON]: A list of deserialized history table entries.
         """
         with self.session as session:
             query = select(HistoryTable).where(HistoryTable.resource_id == resource_id)
@@ -254,31 +307,23 @@ class ResourceInterface:
             if removed is not None:
                 query = query.where(HistoryTable.removed == removed)
             if start_date:
-                query = query.where(HistoryTable.updated_at >= start_date)
+                query = query.where(HistoryTable.history_created_at >= start_date)
             if end_date:
-                query = query.where(HistoryTable.updated_at <= end_date)
+                query = query.where(HistoryTable.history_created_at <= end_date)
 
-            query = query.order_by(
-                HistoryTable.updated_at.desc()
-            )  # Sorting by updated_at
+            query = query.order_by(HistoryTable.history_created_at.desc())
 
             if limit:
                 query = query.limit(limit)
 
             history_entries = session.exec(query).all()
-
-            # Deserialize the `data` field into ResourceBase objects
-            for entry in history_entries:
-                entry.data = deserialize_resource(entry.data)
-
-            return history_entries
+            return list(history_entries)
 
     def restore_removed_resource(
         self, resource_id: str
     ) -> Optional[ResourceDataModels]:
         """
-        TODO
-        Restore the latest version of a removed resource.
+        Restore the latest version of a removed resource. Note that this does not restore links at this time.
 
         Args:
             resource_id (str): The resource ID.
@@ -293,6 +338,19 @@ class ResourceInterface:
                 .where(HistoryTable.removed == true())
                 .order_by(HistoryTable.history_created_at.desc())
             ).first()
+            if resource_history is None:
+                logger.error(
+                    f"No removed resource found for ID '{resource_id}' in the History table."
+                )
+                raise ValueError(
+                    f"No removed resource found for ID '{resource_id}' in the History table."
+                )
+            resource_links = session.exec(
+                select(ResourceLinkHistoryTable).where(
+                    ResourceLinkHistoryTable.parent_history_id
+                    == resource_history.history_id
+                )
+            ).all()
             # TODO: Links?
 
     def remove_resource(self, resource_id: str) -> None:
@@ -317,7 +375,7 @@ class ResourceInterface:
                 select(ResourceTable).where(ResourceTable.resource_id == resource_id)
             ).one()._remove(session)
 
-    def change_pool_quantity(self, pool_id: str, amount: float) -> Pool:
+    def change_pool_quantity_by(self, pool_id: str, amount: float) -> Pool:
         """
         Increase or decrease the quantity of a pool resource by an amount.
 
@@ -387,8 +445,36 @@ class ResourceInterface:
             session.refresh(pool)
             return pool.to_data_model()
 
+    def set_pool_quantity(self, pool_id: str, quantity: float) -> Pool:
+        """
+        Set the quantity of a pool resource.
+
+        Args:
+            pool (Pool): The id of the pool resource to update.
+            quantity (float): The new quantity to set.
+        """
+        with self.session as session:
+            pool = session.exec(
+                select(ResourceTable).filter_by(
+                    resource_id=pool_id, base_type=ContainerTypeEnum.pool
+                )
+            ).one()
+            if pool.capacity and quantity > pool.capacity:
+                raise ValueError(
+                    f"Cannot set the quantity of pool '{pool.resource_name}' beyond its capacity {pool.capacity}."
+                )
+            if quantity < 0:
+                raise ValueError(
+                    f"Cannot set the quantity of pool '{pool.resource_name}' below zero."
+                )
+            pool._archive(session, event_type="change_quantity")
+            pool.quantity = quantity
+            session.merge(pool)
+            session.refresh(pool)
+            return pool.to_data_model()
+
     def push_to_stack(
-        self, stack_id: str, child: Union[Resource, ResourceBase, str]
+        self, stack_id: str, child: Union[ResourceDataModels, str]
     ) -> Stack:
         """
         Push an asset to the stack. Automatically adds the asset to the database if it's not already there.
@@ -460,12 +546,15 @@ class ResourceInterface:
             ResourceLinkTable.unlink_resource(child=child_row, commit=False)
 
             session.commit()
-            session.refresh()
+            session.refresh(stack)
+            session.refresh(child_row)
             return child_row.to_data_model(), stack.to_data_model()
 
     # TODO: VVVVVVVV
 
-    def push_to_queue(self, queue: Queue, asset: Asset) -> None:
+    def push_to_queue(
+        self, queue_id: str, child: Union[ResourceDataModels, str]
+    ) -> None:
         """
         Push an asset to the queue. Automatically adds the asset to the database if it's not already there.
 
@@ -474,41 +563,75 @@ class ResourceInterface:
             asset (Asset): The asset to push onto the queue.
         """
         with self.session as session:
-            existing_queue = session.exec(
-                select(Queue).filter_by(resource_id=queue.resource_id)
+            queue_row = session.exec(
+                select(ResourceTable)
+                .where(ResourceTable.base_type == ContainerTypeEnum.queue)
+                .filter_by(resource_id=queue_id)
             ).first()
-
-            if not existing_queue:
+            if not queue_row:
                 raise ValueError(
-                    f"Queue '{queue.resource_name, queue.resource_id}' does not exist in the database. Please provide a valid resource."
+                    f"Queue with ID '{queue_id}' does not exist in the database."
                 )
-            queue = existing_queue
-            asset = session.merge(asset)
-            queue._push(asset, session)
-            session.refresh(queue)
-            return queue
+            queue = queue_row.to_data_model()
 
-    def pop_from_queue(self, queue: Queue) -> tuple:
+            child_id = child if isinstance(child, str) else child.resource_id
+            child_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=child_id)
+            ).one_or_none()
+            if not child_row and not isinstance(child, str):
+                child = self.add_resource(child, commit=False)
+                child_row = ResourceTable.from_data_model(child)
+                child_row.refresh()
+            else:
+                raise ValueError(
+                    f"The child resource {child_id} does not exist in the database and couldn't be added."
+                )
+
+            if queue.capacity and len(queue_row.children) >= queue_row.capacity:
+                raise ValueError(
+                    f"Cannot push asset '{child_row.resource_name}' to queue '{queue_row.resource_name}' because it is full."
+                )
+            ResourceLinkTable.link_resource(
+                parent=queue_row,
+                child=child_row,
+                key=len(queue.children) + 1,
+                commit=False,
+            )
+            session.commit()
+            session.refresh(queue)
+            return queue.to_data_model()
+
+    def pop_from_queue(self, queue_id: str) -> tuple[ResourceDataModels, Queue]:
         """
         Pop an asset from a queue resource.
 
         Args:
-            queue (Queue): The queue resource to update.
+            queue_id (str): The id of the queue resource to update.
 
         Returns:
             Asset: The popped asset.
             updated_queue: updated queue resource
         """
         with self.session as session:
-            queue = session.merge(queue)
-            asset = queue._pop(session)
+            queue_row = session.exec(
+                select(ResourceTable)
+                .where(ResourceTable.base_type == ContainerTypeEnum.queue)
+                .filter_by(resource_id=queue_id)
+            ).one()
+            queue = queue_row.to_data_model()
+            if not queue.children:
+                raise ValueError(f"Queue '{queue.resource_name}' is empty.")
+            child = queue.children[0]
+            child_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=child.resource_id)
+            ).one()
 
-            if asset:
-                updated_queue = session.exec(
-                    select(Queue).filter_by(resource_id=queue.resource_id)
-                ).first()
-                return asset, updated_queue
-            raise ValueError("The queue is empty or the asset does not exist.")
+            ResourceLinkTable.unlink_resource(child=child, commit=False)
+
+            session.commit()
+            session.refresh(queue)
+            session.refresh(child_row)
+            return child_row.to_data_model(), queue.to_data_model()
 
     def increase_plate_well(
         self, plate: Collection, well_id: str, quantity: float
@@ -532,7 +655,7 @@ class ResourceInterface:
                     f"No resource found in well '{well_id}' of plate {existing_plate.resource_name}."
                 )
 
-            self.change_pool_quantity(pool=pool, amount=quantity)
+            self.change_pool_quantity_by(pool=pool, amount=quantity)
             session.add(existing_plate)
             session.refresh(existing_plate)
             return existing_plate
@@ -655,7 +778,7 @@ if __name__ == "__main__":
     pool = resource_interface.add_resource(pool)
 
     # Example operations on the pool
-    pool = resource_interface.change_pool_quantity(pool, 50.0)
+    pool = resource_interface.change_pool_quantity_by(pool, 50.0)
 
     pool = resource_interface.decrease_pool_quantity(pool, 20.0)
 

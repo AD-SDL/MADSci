@@ -32,6 +32,7 @@ class AssetTypeEnum(str, Enum):
 class ConsumableTypeEnum(str, Enum):
     """Type for a MADSci Consumable."""
 
+    consumable = "consumable"
     discrete_consumable = "discrete_consumable"
     continuous_consumable = "continuous_consumable"
 
@@ -39,6 +40,7 @@ class ConsumableTypeEnum(str, Enum):
 class ContainerTypeEnum(str, Enum):
     """Type for a MADSci Container."""
 
+    container = "container"
     stack = "stack"
     queue = "queue"
     collection = "collection"

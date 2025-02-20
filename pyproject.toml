@@ -17,3 +17,10 @@ dev = [
 [tool.pdm.version]
 source = "scm"
 fallback_version = "0.0.0"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-mock-resources[docker,mongo]>=2.12.1",
+    "ipykernel>=6.29.5",
+]

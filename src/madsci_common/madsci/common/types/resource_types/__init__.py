@@ -25,23 +25,27 @@ from madsci.common.types.resource_types.definitions import (
 )
 from pydantic import computed_field
 from pydantic.functional_validators import field_validator, model_validator
-from pydantic.types import Tag, datetime
+from pydantic.types import Discriminator, Tag, datetime
 from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.sql.sqltypes import String
 from sqlmodel import Field
 
-ResourceBaseTypes = Union[
-    Annotated["ResourceBase", Tag("resource")],
-    Annotated["AssetBase", Tag("asset")],
-    Annotated["ConsumableBase", Tag("consumable")],
-    Annotated["DiscreteConsumableBase", Tag("discrete_consumable")],
-    Annotated["ContinuousConsumableBase", Tag("continuous_consumable")],
-    Annotated["ContainerBase", Tag("container")],
-    Annotated["CollectionBase", Tag("collection")],
-    Annotated["GridBase", Tag("grid")],
-    Annotated["VoxelGridBase", Tag("voxel_grid")],
-    Annotated["StackBase", Tag("stack")],
-    Annotated["QueueBase", Tag("queue")],
-    Annotated["PoolBase", Tag("pool")],
+ResourceBaseTypes = Annotated[
+    Union[
+        Annotated["ResourceBase", Tag("resource")],
+        Annotated["AssetBase", Tag("asset")],
+        Annotated["ConsumableBase", Tag("consumable")],
+        Annotated["DiscreteConsumableBase", Tag("discrete_consumable")],
+        Annotated["ContinuousConsumableBase", Tag("continuous_consumable")],
+        Annotated["ContainerBase", Tag("container")],
+        Annotated["CollectionBase", Tag("collection")],
+        Annotated["GridBase", Tag("grid")],
+        Annotated["VoxelGridBase", Tag("voxel_grid")],
+        Annotated["StackBase", Tag("stack")],
+        Annotated["QueueBase", Tag("queue")],
+        Annotated["PoolBase", Tag("pool")],
+    ],
+    Discriminator("base_type"),
 ]
 
 ResourceDataModels = Union[
@@ -74,11 +78,12 @@ class ResourceBase(ResourceDefinition, extra="allow", table=False):
         nullable=True,
         default=None,
     )
-    base_type: ResourceBaseTypeEnum = Field(
+    base_type: Literal[ResourceBaseTypeEnum.resource] = Field(
         title="Resource Base Type",
         description="The base type of the resource.",
         nullable=False,
         default=ResourceBaseTypeEnum.resource,
+        sa_type=String,
     )
     owner: Optional[str] = Field(
         title="Resource owner",
@@ -102,11 +107,21 @@ class ResourceBase(ResourceDefinition, extra="allow", table=False):
         description="The timestamp of when the resource was last updated.",
         default=None,
     )
+    removed: bool = Field(
+        title="Removed",
+        description="Whether the resource has been removed from the lab.",
+        nullable=False,
+        default=False,
+    )
 
     @model_validator(mode="after")
     def validate_subtype(self) -> "ResourceBaseTypes":
         """Validate the resource data."""
-        if self.base_type and self.base_type in RESOURCE_TYPE_MAP:
+        if (
+            self.base_type
+            and self.base_type in RESOURCE_TYPE_MAP
+            and RESOURCE_TYPE_MAP[self.base_type]["base"] != self.__class__
+        ):
             return RESOURCE_TYPE_MAP[self.base_type]["base"].model_validate(self)
         return self
 
@@ -124,7 +139,7 @@ class Resource(ResourceBase):
 class AssetBase(ResourceBase):
     """Base class for all MADSci Assets."""
 
-    base_type: AssetTypeEnum = Field(
+    base_type: Literal[AssetTypeEnum.asset] = Field(
         title="Asset Base Type",
         description="The base type of the asset.",
         nullable=False,
@@ -139,7 +154,7 @@ class Asset(Resource, AssetBase):
 class ConsumableBase(ResourceBase):
     """Base class for all MADSci Consumables."""
 
-    base_type: ConsumableTypeEnum = Field(
+    base_type: Literal[ConsumableTypeEnum.consumable] = Field(
         title="Consumable Base Type",
         description="The base type of the consumable.",
         nullable=False,
@@ -197,7 +212,7 @@ class ContinuousConsumable(Resource, ContinuousConsumableBase):
 class ContainerBase(AssetBase, table=False):
     """Base class for all MADSci Containers."""
 
-    base_type: ContainerTypeEnum = Field(
+    base_type: Literal[ContainerTypeEnum.container] = Field(
         title="Container Base Type",
         description="The base type of the container.",
         nullable=False,
@@ -306,7 +321,8 @@ class Grid(Resource, GridBase):
         return quantity
 
     @field_validator("children", mode="after")
-    def validate_children_keys_no_underscores(self, value: dict) -> dict:
+    @classmethod
+    def validate_children_keys_no_underscores(cls, value: dict) -> dict:
         """Validate that the children keys do not contain underscores."""
         for key, item in value.items():
             if "_" in key:
@@ -375,7 +391,8 @@ class VoxelGrid(Resource, VoxelGridBase):
         return quantity
 
     @field_validator("children", mode="after")
-    def validate_children_keys_no_underscores(self, value: dict) -> dict:
+    @classmethod
+    def validate_children_keys_no_underscores(cls, value: dict) -> dict:
         """Validate that the children keys do not contain underscores."""
         for key, item in value.items():
             if "_" in key:
@@ -503,11 +520,11 @@ class PoolBase(ContainerBase):
 class Pool(Resource, PoolBase):
     """Data Model for a Pool."""
 
-    children: Optional[dict[str, ResourceBaseTypes],] = Field(
+    children: Optional[dict[str, ResourceBaseTypes]] = Field(
         title="Children",
         description="The children of the pool.",
         default_factory=dict,
-        discriminator="base_type",
+        # discriminator="base_type",
     )
 
     @computed_field
