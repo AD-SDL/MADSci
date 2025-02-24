@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 
 from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from pydantic import Field
 
@@ -47,13 +48,19 @@ class ValueDataPoint(DataPoint):
     """value of the data point"""
 
 
+data_types = {
+    "local_file": LocalFileDataPoint,
+    "data_value": ValueDataPoint,
+}
+
+
 class DataManagerDefinition(ManagerDefinition):
     """Definition for a Squid Event Manager"""
 
-    manager_type: Literal[ManagerType.EVENT_MANAGER] = Field(
+    manager_type: Literal[ManagerType.DATA_MANAGER] = Field(
         title="Manager Type",
         description="The type of the event manager",
-        default=ManagerType.EVENT_MANAGER,
+        default=ManagerType.DATA_MANAGER,
     )
     host: str = Field(
         default="127.0.0.1",
@@ -69,4 +76,9 @@ class DataManagerDefinition(ManagerDefinition):
         default="mongodb://localhost:27017",
         title="Database URL",
         description="The URL of the database used by the Event Manager.",
+    )
+    event_client_config: Optional[EventClientConfig] = Field(
+        title="Event Client Configuration",
+        description="The configuration for a MADSci event client.",
+        default=None,
     )

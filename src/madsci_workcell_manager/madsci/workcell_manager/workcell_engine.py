@@ -8,6 +8,7 @@ import traceback
 from datetime import datetime
 from typing import Optional
 
+from madsci.client.data_client import DataClient
 from madsci.client.event_client import default_logger
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.common.types.action_types import ActionRequest, ActionResult
@@ -46,6 +47,7 @@ class Engine:
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(self.definition.config.scheduler)
         self.scheduler = scheduler_module.Scheduler(self.definition, self.state_handler)
+        self.data_client = DataClient(self.definition.config.data_client_url)
         with state_handler.wc_state_lock():
             initialize_workcell(state_handler)
         time.sleep(workcell_manager_definition.config.cold_start_delay)
@@ -193,7 +195,7 @@ class Engine:
                     experiment_id=wf.experiment_id,
                     value=response.data[data_key],
                 )
-                self.data_client.send_datapoint(datapoint)
+                self.data_client.submit_datapoint(datapoint)
                 labeled_data[label] = datapoint.id
         if response.files:
             for file_key in response.files:
@@ -208,9 +210,7 @@ class Engine:
                     label=label,
                     path=str(response.files[file_key]),
                 )
-                self.data_client.send_datapoint_file(
-                    datapoint, str(response.files[file_key])
-                )
+                self.data_client.submit_datapoint(datapoint, datapoint.path)
                 labeled_data[label] = datapoint.id
         response.data = labeled_data
         return response
