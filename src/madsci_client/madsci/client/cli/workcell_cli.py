@@ -170,8 +170,8 @@ def create(
         )
     ):
         relative_path = path.relative_to(ctx.obj.lab.path.parent)
-        if name not in ctx.obj.lab.lab_def.workcells:
-            ctx.obj.lab.lab_def.workcells[name] = relative_path
+        if name not in ctx.obj.lab.lab_def.managers:
+            ctx.obj.lab.lab_def.managers[name] = relative_path
             save_model(ctx.obj.lab.path, ctx.obj.lab.lab_def, overwrite_check=False)
 
 
@@ -238,8 +238,8 @@ def delete(
                     f"Remove from lab [bold]{ctx.lab.lab_def.name}[/] ([italic]{ctx.lab.path}[/])?",
                     default="yes",
                 )
-            ) and ctx.workcell.name in ctx.lab.lab_def.workcells:
-                del ctx.lab.lab_def.workcells[ctx.workcell.name]
+            ) and ctx.workcell.name in ctx.lab.lab_def.managers:
+                del ctx.lab.lab_def.managers[ctx.workcell.name]
                 save_model(ctx.lab.path, ctx.lab.lab_def, overwrite_check=False)
     else:
         print(  # noqa: T201

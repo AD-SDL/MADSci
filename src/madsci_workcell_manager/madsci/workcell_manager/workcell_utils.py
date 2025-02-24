@@ -4,11 +4,25 @@ import concurrent
 import warnings
 from typing import Optional
 
+import requests
 from madsci.client.node import NODE_CLIENT_MAP, AbstractNodeClient
 from madsci.common.types.node_types import Node, NodeDefinition
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellLink
+from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 from pydantic import AnyUrl
-from redis_handler import WorkcellRedisHandler
+
+
+def resolve_workcell_link(workcell_link: WorkcellLink) -> WorkcellDefinition:
+    """Resolves the workcell link to a workcell definition"""
+    if workcell_link.definition is not None:
+        return workcell_link.definition
+    if workcell_link.url is not None:
+        return WorkcellDefinition.model_validate(
+            requests.get(workcell_link.url, timeout=10).json()
+        )
+    if workcell_link.path is not None:
+        return WorkcellDefinition.from_yaml(workcell_link.path)
+    return workcell_link.resolve()
 
 
 def initialize_workcell(

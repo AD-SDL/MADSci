@@ -29,3 +29,21 @@ class WorkflowCanceledError(Exception):
         """Initializes the exception"""
         super().__init__(message)
         self.message = message
+
+
+class ExperimentCancelledError(Exception):
+    """Raised in an experiment application when an experiment is cancelled"""
+
+    def __init__(self, message: str) -> "ExperimentCancelledError":
+        """Initializes the exception"""
+        super().__init__(message)
+        self.message = message
+
+
+class ExperimentFailedError(Exception):
+    """Raised in an experiment application when an experiment fails."""
+
+    def __init__(self, message: str) -> "ExperimentCancelledError":
+        """Initializes the exception"""
+        super().__init__(message)
+        self.message = message

@@ -6,7 +6,6 @@ from typing import Optional
 import click
 from click.core import Context
 from madsci.common.types.node_types import (
-    NODE_MODULE_CONFIG_TEMPLATES,
     NodeModuleDefinition,
     NodeType,
 )
@@ -73,12 +72,6 @@ def module(ctx: Context, name: Optional[str], path: Optional[str]) -> None:
 @click.option("--path", "-p", type=str, help="The path to the module definition file.")
 @click.option("--description", "-d", type=str, help="The description of the module.")
 @click.option("--module_type", "-t", type=str, help="The type of the module.")
-@click.option(
-    "--config_template",
-    "-c",
-    type=str,
-    help="The template of the module configuration to use.",
-)
 @click.pass_context
 def create(
     ctx: Context,
@@ -86,7 +79,6 @@ def create(
     path: Optional[str],
     description: Optional[str],
     module_type: Optional[str],
-    config_template: Optional[str],
 ) -> None:
     """Create a new module."""
     name = name if name else ctx.parent.params.get("name")
@@ -109,31 +101,11 @@ def create(
             default=NodeType.DEVICE.value,
             quiet=ctx.obj.quiet,
         )
-    config_keys = []
-    for key in NODE_MODULE_CONFIG_TEMPLATES:
-        config_keys.append(key)
-    if not config_template or config_template not in config_keys:
-        if prompt_yes_no(
-            "Do you want to use a configuration template to add configuration options to your module?",
-            default="no",
-            quiet=ctx.obj.quiet,
-        ):
-            template_name = prompt_from_list(
-                "Module Configuration Template",
-                config_keys,
-                default=config_keys[0],
-            )
-            config_template = NODE_MODULE_CONFIG_TEMPLATES[template_name]
-        else:
-            config_template = []
-    else:
-        config_template = NODE_MODULE_CONFIG_TEMPLATES[config_template]
 
     module_definition = NodeModuleDefinition(
         module_name=name,
         module_description=description,
-        module_type=module_type,
-        config=config_template,
+        node_type=module_type,
     )
     console.print(module_definition)
 
@@ -152,10 +124,7 @@ def create(
 
     console.print()
     console.print(
-        f"Created module definition: [bold]{module_definition.module_name}[/] ({path}). Next, you can define your module and add commands to control it with 'madsci module add-command'.",
-    )
-    console.print(
-        "[red]Note:[/] You need to define a node before you can use this module, see 'madsci node create'.",
+        f"Created module definition: [bold]{module_definition.module_name}[/] ({path}). Next, you can define your module with code and add commands to control it with 'madsci module add-command'.",
     )
 
 

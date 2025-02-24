@@ -1,23 +1,22 @@
-"""MADSci Node Types."""
+"MADSci Node Types."
 
 from datetime import datetime
 from enum import Enum
-from os import PathLike
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
-from madsci.common.types.config_types import (
-    ConfigNamespaceDefinition,
-    ConfigParameterDefinition,
-)
+from madsci.common.types.event_types import EventClientConfig
 from madsci.common.validators import ulid_validator
+from pydantic.config import ConfigDict
 from pydantic.fields import computed_field
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
+from pydantic_extra_types.semantic_version import SemanticVersion
+from semver import Version
 from sqlmodel.main import Field
 
 
@@ -33,6 +32,48 @@ class NodeType(str, Enum):
     TRANSFER_MANAGER = "transfer_manager"
 
 
+class NodeConfig(BaseModel):
+    """Configuration for a MADSci Node."""
+
+    model_config = ConfigDict(extra="allow")
+
+    status_update_interval: Optional[float] = Field(
+        title="Status Update Interval",
+        description="The interval in seconds at which the node should update its status.",
+        default=None,
+    )
+    state_update_interval: Optional[float] = Field(
+        title="State Update Interval",
+        description="The interval in seconds at which the node should update its state.",
+        default=None,
+    )
+    event_client_config: Optional[EventClientConfig] = Field(
+        title="Event Client Configuration",
+        description="The configuration for a MADSci event client.",
+        default=None,
+    )
+
+
+class RestNodeConfig(NodeConfig):
+    """Default Configuration for a MADSci Node that communicates over REST."""
+
+    host: str = Field(
+        title="Host",
+        description="The host of the REST API.",
+        default="127.0.0.1",
+    )
+    port: int = Field(
+        title="Port",
+        description="The port of the REST API.",
+        default=8000,
+    )
+    protocol: str = Field(
+        title="Protocol",
+        description="The protocol of the REST API, either 'http' or 'https'.",
+        default="http",
+    )
+
+
 class NodeModuleDefinition(BaseModel, extra="allow"):
     """Definition for a MADSci Node Module."""
 
@@ -40,9 +81,9 @@ class NodeModuleDefinition(BaseModel, extra="allow"):
         title="Node Module Name",
         description="The name of the node module.",
     )
-    module_type: Optional[NodeType] = Field(
-        title="Module Type",
-        description="The type of the node module.",
+    node_type: Optional[NodeType] = Field(
+        title="Node Module Type",
+        description="The type of node provided by the module.",
         default=None,
     )
     module_description: Optional[str] = Field(
@@ -50,66 +91,21 @@ class NodeModuleDefinition(BaseModel, extra="allow"):
         title="Module Description",
         description="A description of the node module.",
     )
+    module_version: SemanticVersion = Field(
+        default=Version.parse("0.0.1"),
+        title="Module Version",
+        description="The version of the node module.",
+    )
     capabilities: "NodeCapabilities" = Field(
         default_factory=lambda: NodeCapabilities(),
         title="Module Capabilities",
         description="The capabilities of the node module.",
     )
-    config: Union[
-        list[Union[ConfigParameterDefinition, ConfigNamespaceDefinition]],
-        dict[str, Union[ConfigParameterDefinition, ConfigNamespaceDefinition]],
-    ] = Field(
-        title="Module Configuration",
-        description="The configuration of the node module. These are 'default' configuration parameters inherited by all child nodes.",
-        default_factory=list,
-    )
     commands: dict[str, str] = Field(
-        title="Module Commands",
-        description="The commands that the node module supports. These are 'default' commands inherited by all child nodes.",
+        title="Node Module Commands",
+        description="The commands that the node module supports. These are 'default' commands inherited by all node instances.",
         default_factory=dict,
     )
-
-    @field_validator("config", mode="after")
-    @classmethod
-    def validate_config(
-        cls,
-        v: Union[
-            list["ConfigParameterDefinition"], dict[str, "ConfigParameterDefinition"]
-        ],
-    ) -> Union[
-        list["ConfigParameterDefinition"], dict[str, "ConfigParameterDefinition"]
-    ]:
-        """Validate the node module configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
-        if isinstance(v, dict):
-            return v
-        return {
-            param.name if hasattr(param, "name") else param.namespace: param
-            for param in v
-        }
-
-
-NODE_MODULE_CONFIG_TEMPLATES: dict[str, list[ConfigParameterDefinition]] = {
-    "REST Node": [
-        ConfigParameterDefinition(
-            name="host",
-            description="The host of the REST API.",
-            default="127.0.0.1",
-            required=True,
-        ),
-        ConfigParameterDefinition(
-            name="port",
-            description="The port of the REST API.",
-            default=8000,
-            required=True,
-        ),
-        ConfigParameterDefinition(
-            name="protocol",
-            description="The protocol of the REST API, either 'http' or 'https'.",
-            default="http",
-            required=True,
-        ),
-    ],
-}
 
 
 class NodeClientCapabilities(BaseModel):
@@ -243,7 +239,7 @@ def get_module_from_node_definition(
     raise ValueError(f"Module definition file not found at '{module_path}'")
 
 
-class NodeDefinition(BaseModel):
+class NodeDefinition(NodeModuleDefinition):
     """Definition of a MADSci Node, a unique instance of a MADSci Module."""
 
     node_name: str = Field(title="Node Name", description="The name of the node.")
@@ -262,18 +258,10 @@ class NodeDefinition(BaseModel):
         description="A description of the node.",
         default=None,
     )
-    module_definition: Optional[Union[NodeModuleDefinition, PathLike]] = Field(
-        title="Module",
-        description="Definition of the module that the node is an instance of.",
-        default=None,
-    )  # TODO: Add support for pointing to URL
-    config: Union[
-        list[Union[ConfigParameterDefinition, ConfigNamespaceDefinition]],
-        dict[str, Union[ConfigParameterDefinition, ConfigNamespaceDefinition]],
-    ] = Field(
-        title="Node Configuration",
-        description="The configuration for the node.",
-        default_factory=list,
+    config_defaults: dict[str, Any] = Field(
+        default_factory=dict,
+        title="Node Configuration Defaults",
+        description="Default values to use for configuration parameters for this particular node.",
     )
     commands: dict[str, str] = Field(
         default_factory=dict,
@@ -282,20 +270,6 @@ class NodeDefinition(BaseModel):
     )
 
     is_ulid = field_validator("node_id")(ulid_validator)
-
-    @field_validator("config", mode="after")
-    @classmethod
-    def validate_config(
-        cls,
-        v: Union[list[ConfigParameterDefinition], dict[str, ConfigParameterDefinition]],
-    ) -> Union[list[ConfigParameterDefinition], dict[str, ConfigParameterDefinition]]:
-        """Validate the node configuration, promoting a list of ConfigParameters to a dictionary for easier access."""
-        if isinstance(v, dict):
-            return v
-        return {
-            param.name if hasattr(param, "name") else param.namespace: param
-            for param in v
-        }
 
 
 class Node(BaseModel, arbitrary_types_allowed=True):
@@ -327,7 +301,7 @@ class Node(BaseModel, arbitrary_types_allowed=True):
     )
 
 
-class NodeInfo(NodeDefinition, NodeModuleDefinition):
+class NodeInfo(NodeDefinition):
     """Information about a MADSci Node."""
 
     actions: dict[str, "ActionDefinition"] = Field(
@@ -335,33 +309,28 @@ class NodeInfo(NodeDefinition, NodeModuleDefinition):
         description="The actions that the module supports.",
         default_factory=dict,
     )
-    config_values: dict[str, Any] = Field(
-        default_factory=dict,
+    config: Optional[Any] = Field(
+        default=None,
         title="Node Configuration",
-        description="The configuration of the node.",
+        description="The current configuration of the node.",
+    )
+    config_schema: Optional[dict[str, Any]] = Field(
+        title="Node Configuration Schema",
+        description="JSON Schema for the configuration of the node.",
+        default_factory=NodeConfig.model_json_schema,
     )
 
     @classmethod
-    def from_node_and_module(
+    def from_node_def_and_config(
         cls,
         node: NodeDefinition,
-        module: Optional[NodeModuleDefinition] = None,
-        config_values: Optional[dict[str, Any]] = None,
+        config: Optional[NodeConfig] = None,
     ) -> "NodeInfo":
-        """Create a NodeInfo from a NodeDefinition and a ModuleDefinition."""
-        if module is None:
-            module = get_module_from_node_definition(node)
-        if config_values is None:
-            config_values = {}
-        # * Merge the node and module configs and commands, with the node config taking precedence
-        config = {**module.config, **node.config}
-        commands = {**module.commands, **node.commands}
+        """Create a NodeInfo from a NodeDefinition and config."""
         return cls(
-            **node.model_dump(exclude={"config", "commands"}),
-            **module.model_dump(exclude={"config", "commands"}),
+            **node.model_dump(exclude={"commands"}),
             config=config,
-            commands=commands,
-            config_values=config_values,
+            config_schema=config.model_json_schema(),
         )
 
 
@@ -469,3 +438,7 @@ class NodeSetConfigResponse(BaseModel):
     """Response from a Node Set Config Request"""
 
     success: bool
+
+
+if __name__ == "__main__":
+    NodeModuleDefinition.model_json_schema()

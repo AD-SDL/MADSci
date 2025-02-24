@@ -7,23 +7,19 @@ from fastapi import FastAPI
 from fastapi.params import Body
 from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient
-from madsci.common.definition_loaders import (
-    manager_definition_loader,
-)
-from madsci.common.types.event_types import Event
-from madsci.common.types.squid_types import EventManagerDefinition, ManagerType
+from madsci.common.types.event_types import Event, EventManagerDefinition
 from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
 from pymongo.synchronous.database import Database
 
 
-class EventManagerServer:
+class EventServer:
     """A REST server for managing MADSci events across a lab."""
 
     event_manager_definition: Optional[EventManagerDefinition] = None
     db_client: MongoClient
     app = FastAPI()
-    logger = EventClient(name=__name__)
+    logger = EventClient()
     events: Collection
 
     def __init__(
@@ -35,26 +31,26 @@ class EventManagerServer:
         if event_manager_definition is not None:
             self.event_manager_definition = event_manager_definition
         else:
-            manager_definitions = manager_definition_loader()
-            for manager in manager_definitions:
-                if manager.manager_type == ManagerType.EVENT_MANAGER:
-                    self.event_manager_definition = manager
+            self.event_manager_definition = EventManagerDefinition.load_model(
+                require_unique=True
+            )
         if self.event_manager_definition is None:
             raise ValueError(
                 "No event manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
             )
 
         # * Logger
-        self.logger = EventClient(name=self.event_manager_definition.name)
+        event_manager_definition.event_client_config.event_server_url = (
+            None  # * Remove event_server_url to prevent infinite loop
+        )
+        self.logger = EventClient(event_manager_definition.event_client_config)
         self.logger.log_info(self.event_manager_definition)
 
         # * DB Config
         if db_connection is not None:
             self.events_db = db_connection
         else:
-            self.db_client = MongoClient(
-                self.event_manager_definition.manager_config.db_url
-            )
+            self.db_client = MongoClient(self.event_manager_definition.db_url)
             self.events_db = self.db_client["madsci_events"]
         self.events = self.events_db["events"]
         self.events.create_index("event_id", unique=True, background=True)
@@ -94,8 +90,8 @@ class EventManagerServer:
         """Start the server."""
         uvicorn.run(
             self.app,
-            host=self.event_manager_definition.manager_config.host,
-            port=self.event_manager_definition.manager_config.port,
+            host=self.event_manager_definition.host,
+            port=self.event_manager_definition.port,
         )
 
     def _configure_routes(self) -> None:
@@ -111,5 +107,5 @@ class EventManagerServer:
 
 
 if __name__ == "__main__":
-    server = EventManagerServer()
+    server = EventServer()
     server.start_server()

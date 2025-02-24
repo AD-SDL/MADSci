@@ -11,9 +11,9 @@ app = FastAPI()
 resource_manager_definition = ResourceManagerDefinition(
     name="Resource Manager 1",
     description="The First MADSci Resource Manager.",
-    plugin_config=ResourceManagerConfig(),
+    config=ResourceManagerConfig(),
 )
-resource_manager_definition.url = f"https://{resource_manager_definition.plugin_config.host}:{resource_manager_definition.plugin_config.port}"
+resource_manager_definition.url = f"https://{resource_manager_definition.config.host}:{resource_manager_definition.config.port}"
 
 
 @app.get("/info")
@@ -27,6 +27,6 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host=resource_manager_definition.plugin_config.host,
-        port=resource_manager_definition.plugin_config.port,
+        host=resource_manager_definition.config.host,
+        port=resource_manager_definition.config.port,
     )
