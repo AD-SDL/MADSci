@@ -23,12 +23,15 @@ from madsci.common.types.resource_types.definitions import (
     StackResourceDefinition,
     VoxelGridResourceDefinition,
 )
-from pydantic import AfterValidator, computed_field
-from pydantic.functional_validators import field_validator
+from pydantic import AfterValidator, computed_field, model_validator
 from pydantic.types import Discriminator, Tag, datetime
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql.sqltypes import String
 from sqlmodel import Field
+from typing_extensions import Self  # type: ignore
+
+PositiveInt = Annotated[int, Field(ge=0)]
+PositiveNumber = Annotated[Union[float, int], Field(ge=0)]
 
 
 class Resource(ResourceDefinition, extra="allow", table=False):
@@ -95,6 +98,7 @@ class Resource(ResourceDefinition, extra="allow", table=False):
             resource_type = resource.base_type
         return RESOURCE_TYPE_MAP[resource_type]["model"].model_validate(resource)
 
+
 class Asset(Resource):
     """Base class for all MADSci Assets."""
 
@@ -105,6 +109,7 @@ class Asset(Resource):
         default=AssetTypeEnum.asset,
     )
 
+
 class Consumable(Resource):
     """Base class for all MADSci Consumables."""
 
@@ -114,15 +119,22 @@ class Consumable(Resource):
         nullable=False,
         default=ConsumableTypeEnum.consumable,
     )
-    quantity: Union[float, int] = Field(
+    quantity: PositiveNumber = Field(
         title="Quantity",
         description="The quantity of the consumable.",
     )
-    capacity: Optional[Union[float, int]] = Field(
+    capacity: Optional[PositiveNumber] = Field(
         title="Capacity",
         description="The maximum capacity of the consumable.",
         default=None,
     )
+
+    @model_validator(mode="after")
+    def validate_consumable_quantity(self) -> Self:
+        """Validate that the quantity is less than or equal to the capacity."""
+        if self.capacity is not None and self.quantity > self.capacity:
+            raise ValueError("Quantity cannot be greater than capacity.")
+        return self
 
 
 class DiscreteConsumable(Consumable):
@@ -134,16 +146,15 @@ class DiscreteConsumable(Consumable):
         default=ConsumableTypeEnum.discrete_consumable,
         const=True,
     )
-    quantity: int = Field(
+    quantity: PositiveInt = Field(
         title="Quantity",
         description="The quantity of the discrete consumable.",
     )
-    capacity: Optional[int] = Field(
+    capacity: Optional[PositiveInt] = Field(
         title="Capacity",
         description="The maximum capacity of the discrete consumable.",
         default=None,
     )
-
 
 
 class ContinuousConsumable(Consumable):
@@ -155,11 +166,11 @@ class ContinuousConsumable(Consumable):
         default=ConsumableTypeEnum.continuous_consumable,
         const=True,
     )
-    quantity: float = Field(
+    quantity: PositiveNumber = Field(
         title="Quantity",
         description="The quantity of the continuous consumable.",
     )
-    capacity: Optional[float] = Field(
+    capacity: Optional[PositiveNumber] = Field(
         title="Capacity",
         description="The maximum capacity of the continuous consumable.",
         default=None,
@@ -175,7 +186,7 @@ class Container(Asset):
         nullable=False,
         default=ContainerTypeEnum.container,
     )
-    capacity: Optional[int] = Field(
+    capacity: Optional[PositiveInt] = Field(
         title="Capacity",
         description="The capacity of the container.",
         default=None,
@@ -198,6 +209,13 @@ class Container(Asset):
     def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
         """Populate the children of the container."""
         self.children = children
+
+    @model_validator(mode="after")
+    def validate_container_quantity(self) -> Self:
+        """Validate that the quantity is less than or equal to the capacity."""
+        if self.capacity is not None and self.quantity > self.capacity:
+            raise ValueError("Quantity cannot be greater than capacity.")
+        return self
 
 
 class Collection(Container):
@@ -228,12 +246,21 @@ class Collection(Container):
         """Populate the children of the collection."""
         self.children = children
 
+
+def single_letter_or_digit_validator(value: str) -> str:
+    """Validate that the value is a single letter or digit."""
+    if not (value.isalpha() and len(value) == 1) or value.isdigit():
+        raise ValueError("Value must be a single letter or digit.")
+    return value
+
+
 GridIndex = Union[
     int,
-    Annotated[str, AfterValidator(lambda x: (x.isalpha() and len(x) == 1) or x.isdigit())],
+    Annotated[str, AfterValidator(single_letter_or_digit_validator)],
 ]
 GridIndex2D = tuple[GridIndex, GridIndex]
 GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
+
 
 class Grid(Container):
     """Data Model for a Grid."""
@@ -252,10 +279,12 @@ class Grid(Container):
     row_dimension: int = Field(
         title="Row Dimension",
         description="The number of rows in the grid.",
+        ge=0,
     )
     column_dimension: int = Field(
         title="Column Dimension",
         description="The number of columns in the grid.",
+        ge=0,
     )
 
     @computed_field
@@ -265,18 +294,6 @@ class Grid(Container):
         for _, row_value in self.children.items():
             quantity += len(row_value)
         return quantity
-
-    @field_validator("children", mode="after")
-    @classmethod
-    def validate_children_keys_no_underscores(cls, value: dict) -> dict:
-        """Validate that the children keys do not contain underscores."""
-        for key, item in value.items():
-            if "_" in key:
-                raise ValueError("Children keys cannot contain underscores.")
-            for sub_key in item:
-                if "_" in sub_key:
-                    raise ValueError("Children keys cannot contain underscores.")
-        return value
 
     @staticmethod
     def flatten_key(key: GridIndex2D) -> str:
@@ -299,7 +316,7 @@ class Grid(Container):
         """Check if the key is within the bounds of the grid."""
         if isinstance(key, str):
             key = self.expand_key(key)
-        elif not isinstance(key, tuple) or len(key) != 2:  # noqa: PLR2004
+        elif not isinstance(key, tuple) or len(key) != 2:
             raise ValueError("Key must be a string or a 2-tuple.")
         numeric_key = []
         for index in key:
@@ -308,10 +325,9 @@ class Grid(Container):
             else:
                 numeric_key.append(string.ascii_lowercase.index(index.lower()))
         key = numeric_key
-        return not (key[0] < 0 or key[0] >= self.row_dimension) and \
-               not (key[1] < 0 or key[1] >= self.column_dimension)
-
-
+        return not (key[0] < 0 or key[0] >= self.row_dimension) and not (
+            key[1] < 0 or key[1] >= self.column_dimension
+        )
 
     def extract_children(self) -> dict[str, "ResourceDataModels"]:
         """Extract the children from the grid as a flat dictionary."""
@@ -328,6 +344,7 @@ class Grid(Container):
                 self.children[row_key] = {}
             self.children[row_key][col_key] = value
 
+
 class VoxelGrid(Grid):
     """Data Model for a Voxel Grid."""
 
@@ -337,19 +354,14 @@ class VoxelGrid(Grid):
         default=ContainerTypeEnum.voxel_grid,
         const=True,
     )
-    row_dimension: int = Field(
-        title="Row Dimension",
-        description="The number of rows in the grid.",
-    )
-    column_dimension: int = Field(
-        title="Column Dimension",
-        description="The number of columns in the grid.",
-    )
     layer_dimension: int = Field(
         title="Layer Dimension",
         description="The number of layers in the grid.",
+        ge=0,
     )
-    children: Optional[dict[GridIndex, dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]]] = Field(
+    children: Optional[
+        dict[GridIndex, dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]]
+    ] = Field(
         title="Children",
         description="The children of the voxel grid container.",
         default_factory=dict,
@@ -363,21 +375,6 @@ class VoxelGrid(Grid):
             for _, col_value in row_value.items():
                 quantity += len(col_value)
         return quantity
-
-    @field_validator("children", mode="after")
-    @classmethod
-    def validate_children_keys_no_underscores(cls, value: dict) -> dict:
-        """Validate that the children keys do not contain underscores."""
-        for key, item in value.items():
-            if "_" in key:
-                raise ValueError("Children keys cannot contain underscores.")
-            for sub_key, sub_value in item.items():
-                if "_" in sub_key:
-                    raise ValueError("Children keys cannot contain underscores.")
-                for sub_sub_key in sub_value:
-                    if "_" in sub_sub_key:
-                        raise ValueError("Children keys cannot contain underscores.")
-        return value
 
     @staticmethod
     def flatten_key(key: GridIndex3D) -> str:
@@ -402,7 +399,9 @@ class VoxelGrid(Grid):
         for row_key, row_value in self.children.items():
             for col_key, col_value in row_value.items():
                 for depth_key, depth_value in col_value.items():
-                    children_dict[self.flatten_key((row_key, col_key, depth_key))] = depth_value
+                    children_dict[self.flatten_key((row_key, col_key, depth_key))] = (
+                        depth_value
+                    )
 
     def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
         """Populate the children of the grid."""
@@ -418,7 +417,7 @@ class VoxelGrid(Grid):
         """Check if the key is within the bounds of the grid."""
         if isinstance(key, str):
             key = self.expand_key(key)
-        elif not isinstance(key, tuple) or len(key) != 3:  # noqa: PLR2004
+        elif not isinstance(key, tuple) or len(key) != 3:
             raise ValueError("Key must be a string or a 3-tuple.")
         numeric_key = []
         for index in key:
@@ -427,9 +426,11 @@ class VoxelGrid(Grid):
             else:
                 numeric_key.append(string.ascii_lowercase.index(index.lower()))
         key = numeric_key
-        return not (key[0] < 0 or key[0] >= self.row_dimension) and \
-               not (key[1] < 0 or key[1] >= self.column_dimension) and \
-               not (key[2] < 0 or key[2] >= self.layer_dimension)
+        return (
+            not (key[0] < 0 or key[0] >= self.row_dimension)
+            and not (key[1] < 0 or key[1] >= self.column_dimension)
+            and not (key[2] < 0 or key[2] >= self.layer_dimension)
+        )
 
 
 class Stack(Container):
@@ -496,6 +497,7 @@ class Queue(Container):
         """Populate the children of the queue."""
         ordered_children = sorted(children.items(), key=lambda x: int(x[0]))
         self.children = [child[1] for child in ordered_children]
+
 
 class Pool(Container):
     """Data Model for a Pool."""

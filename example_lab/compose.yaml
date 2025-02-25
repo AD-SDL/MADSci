@@ -5,9 +5,14 @@ services:
     image: mongodb/mongodb-community-server:latest
     ports:
       - 27017:27017
+  redis:
+    container_name: redis
+    image: redis:latest
+    ports:
+      - 6379:6379
   postgres:
     container_name: postgres
-    image: postgres:latest
+    image: postgres:17
     environment:
       - POSTGRES_USER=rpl
       - POSTGRES_PASSWORD=rpl
@@ -22,7 +27,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - USER_ID=1000
-      - GROUP_ID=1000
+      - GROUP_ID=100
     network_mode: host
     volumes:
       - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
@@ -30,22 +35,54 @@ services:
     command: python -m madsci.event_manager.event_server
     depends_on:
       - mongodb
-  # liquidhandler:
-  #   container_name: liquidhandler
-  #   image: madsci:latest
-  #   build:
-  #     context: ..
-  #     dockerfile: Dockerfile
-  #   environment:
-  #     - USER_ID=1000
-  #     - GROUP_ID=1000
-  #   volumes:
-  #     - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
-  #     - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
-  #   command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/default_liquidhandler.node.yaml
-  #   network_mode: host
-  #   depends_on:
-  #     - event_manager
+  workcell_manager:
+    container_name: workcell_manager
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=100
+    network_mode: host
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python -m madsci.workcell_manager.workcell_server
+    depends_on:
+      - mongodb
+  experiment_manager:
+    container_name: experiment_manager
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=100
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python -m madsci.experiment_manager.experiment_server
+    network_mode: host
+    depends_on:
+      - mongodb
+  liquidhandler:
+    container_name: liquidhandler
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/default_liquidhandler.node.yaml
+    network_mode: host
+    depends_on:
+      - event_manager
   resource_manager:
     container_name: resource_manager
     image: madsci:latest

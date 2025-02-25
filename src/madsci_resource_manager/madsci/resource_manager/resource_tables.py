@@ -1,7 +1,7 @@
 """Resource table objects"""
 
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
@@ -10,6 +10,7 @@ from madsci.common.types.resource_types import (
     ResourceTypeEnum,
 )
 from pydantic.config import ConfigDict
+from pydantic.types import Decimal
 from sqlalchemy import event
 from sqlalchemy.sql.schema import FetchedValue, UniqueConstraint
 from sqlalchemy.sql.sqltypes import TIMESTAMP, Numeric
@@ -28,6 +29,7 @@ def create_session(*args: Any, **kwargs: Any) -> Session:
     session = Session(*args, **kwargs)
     add_automated_history(session)
     return session
+
 
 def add_automated_history(session: Session) -> None:
     """
@@ -55,6 +57,7 @@ def add_automated_history(session: Session) -> None:
                 history.change_type = "Removed"
                 history.removed = True
                 session.add(history)
+
 
 class ResourceTableBase(Resource):
     """
@@ -86,14 +89,14 @@ class ResourceTableBase(Resource):
         nullable=True,
         default=None,
     )
-    quantity: Optional[Union[float, int]] = Field(
+    quantity: Optional[Decimal] = Field(
         title="Quantity",
         description="The quantity of the resource, if any.",
         nullable=True,
         default=None,
         sa_type=Numeric,
     )
-    capacity: Optional[Union[float, int]] = Field(
+    capacity: Optional[Decimal] = Field(
         title="Capacity",
         description="The maximum capacity of the resource, if any.",
         nullable=True,
@@ -105,21 +108,18 @@ class ResourceTableBase(Resource):
         description="The size of a row (used by Grids and Voxel Grids).",
         nullable=True,
         default=None,
-        sa_type=Numeric,
     )
     column_dimension: Optional[int] = Field(
         title="Column Dimension",
         description="The size of a column (used by Grids and Voxel Grids).",
         nullable=True,
         default=None,
-        sa_type=Numeric,
     )
     layer_dimension: Optional[int] = Field(
         title="Layer Dimension",
         description="The size of a layer (used by Voxel Grids).",
         nullable=True,
         default=None,
-        sa_type=Numeric,
     )
     created_at: Optional[datetime] = Field(
         title="Created Datetime",
@@ -144,8 +144,10 @@ class ResourceTableBase(Resource):
                 "model"
             ].model_validate(self.model_dump(exclude={"children"}))
         except KeyError as e:
-            raise ValueError(f"Resource Type {self.base_type} not found in RESOURCE_TYPE_MAP") from e
-        if self.children and include_children:
+            raise ValueError(
+                f"Resource Type {self.base_type} not found in RESOURCE_TYPE_MAP"
+            ) from e
+        if getattr(self, "children", None) and include_children:
             flat_children = {}
             for key, child in self.children.items():
                 flat_children[key] = child.to_data_model()
@@ -157,9 +159,7 @@ class ResourceTableBase(Resource):
         return resource
 
     @classmethod
-    def from_data_model(
-        cls, resource: ResourceDataModels
-    ) -> Self:
+    def from_data_model(cls, resource: ResourceDataModels) -> Self:
         """Create a new Resource Table entry from a resource data model."""
         return cls.model_validate(resource)
 
@@ -203,6 +203,7 @@ class ResourceTable(ResourceTableBase, table=True):
             dict: Dictionary of children resources.
         """
         return {child.key: child for child in self.children_list}
+
 
 class ResourceHistoryTable(ResourceTableBase, table=True):
     """The table for storing information about historical Resources."""

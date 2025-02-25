@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
-from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import PathLike
-from madsci.common.types.event_types import Event, EventType
+from madsci.common.types.event_types import (
+    Event,
+    EventClientConfig,
+    EventType,
+)
 from madsci.common.utils import threaded_task
 from pydantic import ValidationError
 from rich import print
@@ -19,17 +21,28 @@ from rich import print
 class EventClient:
     """A logger and event handler for MADSci system components."""
 
+    config: Optional[EventClientConfig] = None
+
     def __init__(
         self,
-        name: Optional[str] = None,
-        log_level: int = logging.INFO,
-        event_server: Optional[str] = None,
-        source: Optional[OwnershipInfo] = None,
-        log_dir: Optional[PathLike] = None,
+        config: Optional[EventClientConfig] = None,
+        **kwargs: Any,
     ) -> None:
-        """Initialize the event logger."""
-        if name:
-            self.name = name
+        """Initialize the event logger. If no config is provided, use the default config.
+
+        Keyword Arguments are used to override the values of the passed in/default config.
+        """
+        if kwargs:
+            if config:
+                [self.config.__setattr__(key, value) for key, value in kwargs.items()]
+            else:
+                self.config = EventClientConfig(**kwargs)
+        if config is not None:
+            self.config = config
+        else:
+            self.config = EventClientConfig()
+        if self.config.name:
+            self.name = self.config.name
         else:
             # * See if there's a calling class we can name after
             stack = inspect.stack()
@@ -39,17 +52,16 @@ class EventClient:
             else:
                 # * No luck, name after EventClient
                 self.name = __name__
-        self.name = name if name else __name__
         self.logger = logging.getLogger(self.name)
-        self.log_dir = Path(log_dir) if log_dir else Path.home() / ".madsci" / "logs"
+        self.log_dir = Path(self.config.log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.logfile = self.log_dir / f"{self.name}.log"
-        self.logger.setLevel(log_level)
+        self.logger.setLevel(self.config.log_level)
         if len(self.logger.handlers) == 0:
             file_handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
             self.logger.addHandler(file_handler)
-        self.event_server = event_server
-        self.source = source
+        self.event_server = self.config.event_server_url
+        self.source = self.config.source
 
     def get_log(self) -> dict[str, Event]:
         """Read the log"""
@@ -78,7 +90,7 @@ class EventClient:
                 response.raise_for_status()
             print(response.json())
             for key, value in response.json().items():
-                events[key] = Event.validate_subtype(value)
+                events[key] = Event.model_validate(value)
             return dict(events)
         events = self.get_log()
         selected_events = {}
@@ -100,7 +112,7 @@ class EventClient:
             if not response.ok:
                 response.raise_for_status()
             for key, value in response.json().items():
-                events[key] = Event.validate_subtype(value)
+                events[key] = Event.model_validate(value)
             return dict(events)
         raise ValueError("No event server configured, cannot query events.")
 
@@ -113,7 +125,7 @@ class EventClient:
                 event = Event.model_validate_json(event)
         if isinstance(event, dict):
             with contextlib.suppress(ValidationError):
-                event = Event.validate_subtype(**event)
+                event = Event.model_validate(**event)
         if not isinstance(event, Event):
             event = self._new_event_for_log(event, level)
         event.log_level = level if level else event.log_level
@@ -176,4 +188,6 @@ class EventClient:
         )
 
 
-default_logger = EventClient(name="madsci_default_log", log_level=logging.INFO)
+default_logger = EventClient(
+    config=EventClientConfig(name="madsci_default_log", log_level=logging.INFO)
+)

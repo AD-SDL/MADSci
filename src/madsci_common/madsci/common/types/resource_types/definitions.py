@@ -1,8 +1,9 @@
 """Pydantic Models for Resource Definitions, used to define default resources for a module or workcell."""
 
-from typing import Annotated, Optional, Union
+from typing import Annotated, Literal, Optional, Union
 
 from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.types.resource_types.custom_types import (
     CustomResourceTypes,
     ResourceTypeEnum,
@@ -12,6 +13,31 @@ from madsci.common.validators import ulid_validator
 from pydantic.functional_validators import field_validator, model_validator
 from pydantic.types import Tag
 from sqlmodel import Field
+
+
+class ResourceManagerDefinition(ManagerDefinition):
+    """Definition for a Resource Manager's Configuration"""
+
+    manager_type: Literal[ManagerType.RESOURCE_MANAGER] = Field(
+        title="Manager Type",
+        description="The type of the resource manager",
+        default=ManagerType.RESOURCE_MANAGER,
+    )
+    host: str = Field(
+        default="127.0.0.1",
+        title="Server Host",
+        description="The hostname or IP address of the Resource Manager server.",
+    )
+    port: int = Field(
+        default=8004,
+        title="Server Port",
+        description="The port number of the Resource Manager server.",
+    )
+    db_url: str = Field(
+        default="postgresql://rpl:rpl@localhost:5432/resources",
+        title="Database URL",
+        description="The URL of the database used by the Resource Manager.",
+    )
 
 
 class ResourceDefinition(BaseModel, table=False):

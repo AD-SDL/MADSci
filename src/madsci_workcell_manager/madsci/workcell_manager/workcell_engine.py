@@ -13,10 +13,10 @@ from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.common.types.action_types import ActionRequest, ActionResult
 from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
+from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import WorkflowStatus
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
-from madsci.workcell_manager.workcell_manager_types import WorkcellManagerDefinition
 from madsci.workcell_manager.workcell_utils import (
     find_node_client,
     initialize_workcell,
@@ -33,23 +33,21 @@ class Engine:
 
     def __init__(
         self,
-        workcell_manager_definition: WorkcellManagerDefinition,
+        workcell_manager_definition: WorkcellDefinition,
         state_handler: WorkcellRedisHandler,
     ) -> None:
         """Initialize the scheduler."""
         state_handler.clear_state(
-            clear_workflows=workcell_manager_definition.plugin_config.clear_workflows
+            clear_workflows=workcell_manager_definition.config.clear_workflows
         )
         self.definition = workcell_manager_definition
         self.state_handler = state_handler
         cancel_active_workflows(state_handler)
-        scheduler_module = importlib.import_module(
-            self.definition.plugin_config.scheduler
-        )
+        scheduler_module = importlib.import_module(self.definition.config.scheduler)
         self.scheduler = scheduler_module.Scheduler(self.definition, self.state_handler)
         with state_handler.wc_state_lock():
             initialize_workcell(state_handler)
-        time.sleep(workcell_manager_definition.plugin_config.cold_start_delay)
+        time.sleep(workcell_manager_definition.config.cold_start_delay)
 
         default_logger.log_info("Engine initialized, waiting for workflows...")
         # TODO send event
@@ -65,15 +63,12 @@ class Engine:
         heartbeat = time.time()
         while True and not self.state_handler.shutdown:
             try:
-                if (
-                    time.time() - heartbeat
-                    > self.definition.plugin_config.heartbeat_interval
-                ):
+                if time.time() - heartbeat > self.definition.config.heartbeat_interval:
                     heartbeat = time.time()
                     default_logger.log_info(f"Heartbeat: {time.time()}")
                 if (
                     time.time() - node_tick
-                    > self.definition.plugin_config.node_update_interval
+                    > self.definition.config.node_update_interval
                     or self.state_handler.has_state_changed()
                 ):
                     if not self.state_handler.paused:
@@ -81,7 +76,7 @@ class Engine:
                     node_tick = time.time()
                 if (
                     time.time() - scheduler_tick
-                    > self.definition.plugin_config.scheduler_update_interval
+                    > self.definition.config.scheduler_update_interval
                 ):
                     with self.state_handler.wc_state_lock():
                         self.scheduler.run_iteration()
@@ -90,9 +85,9 @@ class Engine:
             except Exception:
                 traceback.print_exc()
                 default_logger.log_info(
-                    f"Error in engine loop, waiting {self.definition.plugin_config.node_update_interval} seconds before trying again."
+                    f"Error in engine loop, waiting {self.definition.config.node_update_interval} seconds before trying again."
                 )
-                time.sleep(self.definition.plugin_config.node_update_interval)
+                time.sleep(self.definition.config.node_update_interval)
 
     @threaded_daemon
     def start_engine_thread(self) -> None:

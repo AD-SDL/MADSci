@@ -13,15 +13,6 @@ from pydantic.functional_validators import field_validator
 from sqlmodel import Field
 
 
-class ResourceTypeEnum(str, Enum):
-    """Type for a MADSci Resource."""
-
-    resource = "resource"
-    """The root resource type. Used when a resource type is not known or any resource type is acceptable."""
-    asset = "asset"
-    consumable = "consumable"
-
-
 class AssetTypeEnum(str, Enum):
     """Type for a MADSci Asset."""
 

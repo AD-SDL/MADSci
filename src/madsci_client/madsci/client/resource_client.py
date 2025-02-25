@@ -171,7 +171,11 @@ class ResourceClient:
         response.raise_for_status()
         return Resource.discriminate(response.json())
 
-    def push(self, resource: Union[ResourceDataModels, str], child: Union[ResourceDataModels, str]) -> ResourceDataModels:
+    def push(
+        self,
+        resource: Union[ResourceDataModels, str],
+        child: Union[ResourceDataModels, str],
+    ) -> ResourceDataModels:
         """
         Push a child resource onto a parent stack or queue.
 
@@ -182,16 +186,26 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated parent resource.
         """
-        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        resource_id = (
+            resource.resource_id
+            if isinstance(resource, ResourceDataModels)
+            else resource
+        )
         payload = PushResourceBody(
             child=child if isinstance(child, ResourceDataModels) else None,
-            child_id=child.resource_id if isinstance(child, ResourceDataModels) else child,
+            child_id=child.resource_id
+            if isinstance(child, ResourceDataModels)
+            else child,
         ).model_dump(mode="json")
-        response = requests.post(f"{self.base_url}/resource/{resource_id}/push", json=payload, timeout=10)
+        response = requests.post(
+            f"{self.base_url}/resource/{resource_id}/push", json=payload, timeout=10
+        )
         response.raise_for_status()
         return Resource.discriminate(response.json())
 
-    def pop(self, resource: Union[str, ResourceDataModels]) -> tuple[ResourceDataModels, ResourceDataModels]:
+    def pop(
+        self, resource: Union[str, ResourceDataModels]
+    ) -> tuple[ResourceDataModels, ResourceDataModels]:
         """
         Pop an asset from a stack or queue resource.
 
@@ -202,15 +216,26 @@ class ResourceClient:
             tuple[ResourceDataModels, ResourceDataModels]: The popped asset and updated stack.
         """
 
-        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
-        response = requests.post(f"{self.base_url}/resource/{resource_id}/pop", timeout=10)
+        resource_id = (
+            resource.resource_id
+            if isinstance(resource, ResourceDataModels)
+            else resource
+        )
+        response = requests.post(
+            f"{self.base_url}/resource/{resource_id}/pop", timeout=10
+        )
         response.raise_for_status()
         result = response.json()
         popped_asset = Resource.discriminate(result[0])
         updated_stack = Resource.discriminate(result[1])
         return popped_asset, updated_stack
 
-    def set_child(self, resource: Union[str, ResourceDataModels], key: Union[str, GridIndex2D, GridIndex3D], child: Union[str, ResourceDataModels]) -> ResourceDataModels:
+    def set_child(
+        self,
+        resource: Union[str, ResourceDataModels],
+        key: Union[str, GridIndex2D, GridIndex3D],
+        child: Union[str, ResourceDataModels],
+    ) -> ResourceDataModels:
         """
         Set a child resource in a parent container resource.
 
@@ -222,16 +247,28 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated parent container resource.
         """
-        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        resource_id = (
+            resource.resource_id
+            if isinstance(resource, ResourceDataModels)
+            else resource
+        )
         payload = SetChildBody(
             key=key,
             child=child,
         ).model_dump(mode="json")
-        response = requests.post(f"{self.base_url}/resource/{resource_id}/set_child", json=payload, timeout=10)
+        response = requests.post(
+            f"{self.base_url}/resource/{resource_id}/set_child",
+            json=payload,
+            timeout=10,
+        )
         response.raise_for_status()
         return Resource.discriminate(response.json())
 
-    def remove_child(self, resource: Union[str, ResourceDataModels], key: Union[str, GridIndex2D, GridIndex3D]) -> ResourceDataModels:
+    def remove_child(
+        self,
+        resource: Union[str, ResourceDataModels],
+        key: Union[str, GridIndex2D, GridIndex3D],
+    ) -> ResourceDataModels:
         """
         Remove a child resource from a parent container resource.
 
@@ -242,15 +279,25 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated parent container resource.
         """
-        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        resource_id = (
+            resource.resource_id
+            if isinstance(resource, ResourceDataModels)
+            else resource
+        )
         payload = RemoveChildBody(
             key=key,
         ).model_dump(mode="json")
-        response = requests.post(f"{self.base_url}/resource/{resource_id}/remove_child", json=payload, timeout=10)
+        response = requests.post(
+            f"{self.base_url}/resource/{resource_id}/remove_child",
+            json=payload,
+            timeout=10,
+        )
         response.raise_for_status()
         return Resource.discriminate(response.json())
 
-    def set_quantity(self, resource: Union[str, ResourceDataModels], quantity: Union[float, int]) -> ResourceDataModels:
+    def set_quantity(
+        self, resource: Union[str, ResourceDataModels], quantity: Union[float, int]
+    ) -> ResourceDataModels:
         """
         Set the quantity of a resource.
 
@@ -261,12 +308,22 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
-        response = requests.post(f"{self.base_url}/resource/{resource_id}/quantity", params={"quantity": quantity}, timeout=10)
+        resource_id = (
+            resource.resource_id
+            if isinstance(resource, ResourceDataModels)
+            else resource
+        )
+        response = requests.post(
+            f"{self.base_url}/resource/{resource_id}/quantity",
+            params={"quantity": quantity},
+            timeout=10,
+        )
         response.raise_for_status()
         return Resource.discriminate(response.json())
 
-    def set_capacity(self, resource: Union[str, ResourceDataModels], capacity: Union[float, int]) -> ResourceDataModels:
+    def set_capacity(
+        self, resource: Union[str, ResourceDataModels], capacity: Union[float, int]
+    ) -> ResourceDataModels:
         """
         Set the capacity of a resource.
 
@@ -277,12 +334,22 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
-        response = requests.post(f"{self.base_url}/resource/{resource_id}/capacity", params={"capacity": capacity}, timeout=10)
+        resource_id = (
+            resource.resource_id
+            if isinstance(resource, ResourceDataModels)
+            else resource
+        )
+        response = requests.post(
+            f"{self.base_url}/resource/{resource_id}/capacity",
+            params={"capacity": capacity},
+            timeout=10,
+        )
         response.raise_for_status()
         return Resource.discriminate(response.json())
 
-    def remove_capacity_limit(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
+    def remove_capacity_limit(
+        self, resource: Union[str, ResourceDataModels]
+    ) -> ResourceDataModels:
         """
         Remove the capacity limit of a resource.
 
@@ -292,9 +359,13 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
-        response = requests.delete(f"{self.base_url}/resource/{resource_id}/capacity", timeout=10)
+        resource_id = (
+            resource.resource_id
+            if isinstance(resource, ResourceDataModels)
+            else resource
+        )
+        response = requests.delete(
+            f"{self.base_url}/resource/{resource_id}/capacity", timeout=10
+        )
         response.raise_for_status()
         return Resource.discriminate(response.json())
-
-

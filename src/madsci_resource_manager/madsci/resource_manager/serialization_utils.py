@@ -31,4 +31,4 @@ def deserialize_resource(data: dict[str, Any]) -> Resource:
         Resource: Reconstructed resource object.
     """
     resource_class: Resource = map_resource_type(data)
-    return resource_class.validate_subtype(data)
+    return resource_class.model_validate(data)

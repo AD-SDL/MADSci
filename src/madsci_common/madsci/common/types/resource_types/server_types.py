@@ -1,6 +1,5 @@
 """Types used by the Resource Manager's Server"""
 
-
 from typing import Optional, Union
 
 from madsci.common.types.base_types import BaseModel
@@ -10,11 +9,21 @@ from madsci.common.types.resource_types import (
     ResourceDataModels,
 )
 from pydantic import model_validator
+from pydantic.config import ConfigDict
 from pydantic.types import datetime
 
 
-class ResourceGetQuery(BaseModel):
+class ResourceRequestBase(BaseModel):
+    """Base class for all resource request models."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+
+
+class ResourceGetQuery(ResourceRequestBase):
     """A request to get a resource from the database."""
+
     resource_id: Optional[str] = None
     """The ID of the resource"""
     resource_name: Optional[str] = None
@@ -30,8 +39,10 @@ class ResourceGetQuery(BaseModel):
     multiple: Optional[bool] = False
     """Whether to return multiple resources or just the first."""
 
-class ResourceHistoryGetQuery(BaseModel):
+
+class ResourceHistoryGetQuery(ResourceRequestBase):
     """A request to get the history of a resource from the database."""
+
     resource_id: Optional[str] = None
     """The ID of the resource."""
     version: Optional[int] = None
@@ -47,7 +58,8 @@ class ResourceHistoryGetQuery(BaseModel):
     limit: Optional[int] = None
     """The maximum number of entries to return."""
 
-class PushResourceBody(BaseModel):
+
+class PushResourceBody(ResourceRequestBase):
     """A request to push a resource to the database."""
 
     child_id: Optional[str] = None
@@ -60,10 +72,13 @@ class PushResourceBody(BaseModel):
     def validate_push_resource(cls, values: dict) -> dict:
         """Ensure that either a child ID or child resource data is provided."""
         if not values.get("child_id") and not values.get("child"):
-            raise ValueError("Either a child ID or child resource data must be provided.")
+            raise ValueError(
+                "Either a child ID or child resource data must be provided."
+            )
         return values
 
-class SetChildBody(BaseModel):
+
+class SetChildBody(ResourceRequestBase):
     """A request to set a child resource."""
 
     key: Union[str, GridIndex2D, GridIndex3D]
@@ -71,7 +86,8 @@ class SetChildBody(BaseModel):
     child: Union[str, ResourceDataModels]
     """The ID of the child resource or the child resource data."""
 
-class RemoveChildBody(BaseModel):
+
+class RemoveChildBody(ResourceRequestBase):
     """A request to remove a child resource."""
 
     key: Union[str, GridIndex2D, GridIndex3D]

@@ -15,8 +15,8 @@
 		"vscode": {
 			"settings": {
 				"python.defaultInterpreterPath": "/workspaces/MADSci/.venv/bin/python",
-				"python.terminal.activateEnvInCurrentTerminal": true
-
+				"python.terminal.activateEnvInCurrentTerminal": true,
+				"remote.autoForwardPorts": false
 			},
 			"extensions": [
 				"ms-python.python",
@@ -60,6 +60,11 @@
 		},
 		"ghcr.io/devcontainers-extra/features/ruff:1": {
 			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/nix:1": {
+			"multiUser": true,
+			"version": "latest",
+			"packages": "jless, mongosh"
 		}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.

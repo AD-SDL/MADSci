@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 from madsci.client.cli import root_cli
-from madsci.common.types.squid_types import ManagerDefinition, ManagerType
+from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def test_manager_add(runner: CliRunner, tmp_path: Path) -> None:
             "test_manager",
             "--description",
             "A test manager",
-            "--type",
+            "--manager_type",
             "event_manager",
             "--path",
             str(tmp_path / "test_manager.manager.yaml"),

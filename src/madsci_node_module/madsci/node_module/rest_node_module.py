@@ -22,9 +22,11 @@ from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeCapabilities,
+    NodeConfig,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
+    RestNodeConfig,
 )
 from madsci.common.utils import threaded_task
 from madsci.node_module.abstract_node_module import (
@@ -96,14 +98,17 @@ class RestNode(AbstractNode):
     capabilities: NodeCapabilities = NodeCapabilities(
         **RestNodeClient.supported_capabilities.model_dump(),
     )
+    """The capabilities of the node."""
+    config: NodeConfig = RestNodeConfig()
+    """The configuration for the node."""
 
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def start_node(self, config: dict[str, Any] = {}) -> None:
+    def start_node(self) -> None:
         """Start the node."""
-        super().start_node(config)  # *Kick off protocol agnostic-startup
+        super().start_node()  # *Kick off protocol agnostic-startup
         self._start_rest_api()
 
     """------------------------------------------------------------------------------------------------"""
@@ -146,7 +151,7 @@ class RestNode(AbstractNode):
                     action_response=response,
                 )
             # * Otherwise, return a normal action response
-            return ActionResult.validate_subtype(response)
+            return ActionResult.model_validate(response)
 
     def get_action_result(
         self,
@@ -158,7 +163,7 @@ class RestNode(AbstractNode):
             return ActionResultWithFiles().from_action_response(
                 action_response=action_response,
             )
-        return ActionResult.validate_subtype(action_response)
+        return ActionResult.model_validate(action_response)
 
     def get_action_history(self) -> list[str]:
         """Get the action history of the node."""
@@ -180,9 +185,9 @@ class RestNode(AbstractNode):
         """Get the log of the node"""
         return super().get_log()
 
-    def set_config(self, config_key: str, config_value: Any) -> NodeSetConfigResponse:
+    def set_config(self, new_config: dict[str, Any]) -> NodeSetConfigResponse:
         """Set configuration values of the node."""
-        return super().set_config(config_key, config_value)
+        return super().set_config(new_config=new_config)
 
     def run_admin_command(self, admin_command: AdminCommands) -> AdminCommandResponse:
         """Perform an administrative command on the node."""
@@ -241,12 +246,8 @@ class RestNode(AbstractNode):
 
         self.rest_api = FastAPI(lifespan=self._lifespan)
         self._configure_routes()
-        if rest_server_config := self.config.get("rest_node", None):
-            host = rest_server_config.get("host", "localhost")
-            port = rest_server_config.get("port", 2000)
-        else:
-            host = "localhost"
-            port = 2000
+        host = getattr(self.config, "host", "localhost")
+        port = getattr(self.config, "port", 2000)
         self.rest_server_process = Process(
             target=uvicorn.run,
             args=(self.rest_api,),

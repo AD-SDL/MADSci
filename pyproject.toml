@@ -13,15 +13,15 @@ dev = [
     "-e madsci.resource_manager @ file:///${PROJECT_ROOT}/src/madsci_resource_manager",
     "-e madsci.event_manager @ file:///${PROJECT_ROOT}/src/madsci_event_manager",
     "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
+    "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
 ]
 [tool.pdm.version]
 source = "scm"
-fallback_version = "0.0.0"
+fallback_version = "0.0.1"
 
 [dependency-groups]
 dev = [
     "pytest>=8.3.4",
     "pytest-mock-resources[docker,mongo]>=2.12.1",
     "ipykernel>=6.29.5",
-    "httpx",
 ]

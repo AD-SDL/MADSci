@@ -22,8 +22,11 @@ dependencies = [
     "pymongo>=4.10.1",
     "fastapi>=0.115.4",
     "uvicorn[standard]>=0.32.0",
-    "python-multipart>=0.0.17"
+    "python-multipart>=0.0.17",
+    "pydantic-extra-types>=2.10.2",
+    "semver>=3.0.4"
 ]
+
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"
@@ -38,4 +41,4 @@ build-backend = "pdm.backend"
 
 [tool.pdm.version]
 source = "scm"
-fallback_version = "0.0.0"
+fallback_version = "0.0.1"

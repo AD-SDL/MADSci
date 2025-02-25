@@ -1,6 +1,5 @@
 """Pytest unit tests for the Resource Manager's internal db interfacing logic."""
 
-
 import pytest
 from madsci.common.types.resource_types import (
     Consumable,
@@ -17,27 +16,35 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
-from pytest_mock_resources import create_postgres_fixture
+from pytest_mock_resources import PostgresConfig, create_postgres_fixture
 from sqlalchemy import Engine
 from sqlmodel import Session as SQLModelSession
+
+
+@pytest.fixture(scope="session")
+def pmr_postgres_config() -> PostgresConfig:
+    """Configure the Postgres fixture"""
+    return PostgresConfig(image="postgres:17")
+
 
 # Create a Postgres fixture
 postgres_engine = create_postgres_fixture(ResourceTable)
 
-@pytest.fixture
-def session(postgres_engine: Engine) -> SQLModelSession:
-    """Session fixture"""
-    return create_session(postgres_engine)
-
 
 @pytest.fixture
-def interface(session: SQLModelSession) -> ResourceInterface:
+def interface(postgres_engine: Engine) -> ResourceInterface:
     """Resource Table Interface Fixture"""
-    return ResourceInterface(connection = session)
+
+    def sessionmaker() -> SQLModelSession:
+        return create_session(postgres_engine)
+
+    return ResourceInterface(engine=postgres_engine, sessionmaker=sessionmaker)
+
 
 def test_create_interface(interface: ResourceInterface) -> None:
     """Test creating a resource interface"""
     assert interface
+
 
 def test_add_resource(interface: ResourceInterface) -> None:
     """Test adding a resource"""
@@ -58,11 +65,12 @@ def test_add_resource(interface: ResourceInterface) -> None:
         parent_id=resource1.parent_id,
         resource_type=resource1.resource_type,
         resource_base_type=resource1.base_type,
-        unique=True
+        unique=True,
     )
     assert resource3.resource_id == resource1.resource_id
     assert resource3.resource_name == resource1.resource_name
     assert resource3.removed is False
+
 
 def test_add_with_children(interface: ResourceInterface) -> None:
     """Test adding a resource with children"""
@@ -96,14 +104,15 @@ def test_add_with_children(interface: ResourceInterface) -> None:
     assert stack3.base_type == "stack"
     assert stack3.resource_name == stack2.resource_name
     assert isinstance(stack3, Stack)
-    assert len(stack3.children) == 2  # noqa: PLR2004
-    assert stack3.quantity == 2  # noqa: PLR2004
+    assert len(stack3.children) == 2
+    assert stack3.quantity == 2
 
     # Verify both children properties
     assert stack3.children[0].resource_id == resource1.resource_id
     assert stack3.children[0].resource_name == resource1.resource_name
     assert stack3.children[1].resource_id == resource2.resource_id
     assert stack3.children[1].resource_name == resource2.resource_name
+
 
 def test_push_to_stack(interface: ResourceInterface) -> None:
     """Test pushing a resource to a stack"""
@@ -131,8 +140,8 @@ def test_push_to_stack(interface: ResourceInterface) -> None:
     stack3 = interface.push(parent_id=stack2.resource_id, child=resource2)
 
     # Verify updated stack properties
-    assert len(stack3.children) == 2  # noqa: PLR2004
-    assert stack3.quantity == 2  # noqa: PLR2004
+    assert len(stack3.children) == 2
+    assert stack3.quantity == 2
     assert stack3.children[1].resource_id == resource2.resource_id
     assert stack3.children[1].resource_name == resource2.resource_name
     assert stack3.children[1].parent_id == stack3.resource_id
@@ -146,11 +155,12 @@ def test_push_to_stack(interface: ResourceInterface) -> None:
     stack4 = interface.push(parent_id=stack3.resource_id, child=resource3.resource_id)
 
     # Verify updated stack properties
-    assert len(stack4.children) == 3  # noqa: PLR2004
-    assert stack4.quantity == 3  # noqa: PLR2004
+    assert len(stack4.children) == 3
+    assert stack4.quantity == 3
     assert stack4.children[2].resource_id == resource3.resource_id
     assert stack4.children[2].resource_name == resource3.resource_name
     assert stack4.children[2].parent_id == stack4.resource_id
+
 
 def test_pop_from_stack(interface: ResourceInterface) -> None:
     """Test popping a resource from a stack"""
@@ -163,8 +173,8 @@ def test_pop_from_stack(interface: ResourceInterface) -> None:
 
     # Test initial stack creation with two children
     stack2 = interface.add_resource(resource=stack1)
-    assert len(stack2.children) == 2  # noqa: PLR2004
-    assert stack2.quantity == 2  # noqa: PLR2004
+    assert len(stack2.children) == 2
+    assert stack2.quantity == 2
 
     # Verify first child properties
     child1 = stack2.children[0]
@@ -186,7 +196,7 @@ def test_pop_from_stack(interface: ResourceInterface) -> None:
     child2_new, stack3 = interface.pop(parent_id=stack2.resource_id)
 
     # Verify updated stack properties
-    assert(child2_new.resource_id == resource2.resource_id)
+    assert child2_new.resource_id == resource2.resource_id
     assert len(stack3.children) == 1
     assert stack3.quantity == 1
     assert stack3.children[0].resource_id == resource1.resource_id
@@ -220,8 +230,8 @@ def test_push_to_queue(interface: ResourceInterface) -> None:
     queue3 = interface.push(parent_id=queue2.resource_id, child=resource2)
 
     # Verify updated queue properties
-    assert len(queue3.children) == 2  # noqa: PLR2004
-    assert queue3.quantity == 2  # noqa: PLR2004
+    assert len(queue3.children) == 2
+    assert queue3.quantity == 2
     assert queue3.children[1].resource_id == resource2.resource_id
     assert queue3.children[1].resource_name == resource2.resource_name
     assert queue3.children[1].parent_id == queue3.resource_id
@@ -235,11 +245,12 @@ def test_push_to_queue(interface: ResourceInterface) -> None:
     queue4 = interface.push(parent_id=queue3.resource_id, child=resource3.resource_id)
 
     # Verify updated queue properties
-    assert len(queue4.children) == 3  # noqa: PLR2004
-    assert queue4.quantity == 3  # noqa: PLR2004
+    assert len(queue4.children) == 3
+    assert queue4.quantity == 3
     assert queue4.children[2].resource_id == resource3.resource_id
     assert queue4.children[2].resource_name == resource3.resource_name
     assert queue4.children[2].parent_id == queue4.resource_id
+
 
 def test_pop_from_queue(interface: ResourceInterface) -> None:
     """Test popping a resource from a queue"""
@@ -252,8 +263,8 @@ def test_pop_from_queue(interface: ResourceInterface) -> None:
 
     # Test initial queue creation with two children
     queue2 = interface.add_resource(resource=queue1)
-    assert len(queue2.children) == 2  # noqa: PLR2004
-    assert queue2.quantity == 2  # noqa: PLR2004
+    assert len(queue2.children) == 2
+    assert queue2.quantity == 2
 
     # Verify first child properties
     child1 = queue2.children[0]
@@ -275,12 +286,13 @@ def test_pop_from_queue(interface: ResourceInterface) -> None:
     child1_new, queue3 = interface.pop(parent_id=queue2.resource_id)
 
     # Verify updated queue properties
-    assert(child1_new.resource_id == resource1.resource_id)
+    assert child1_new.resource_id == resource1.resource_id
     assert len(queue3.children) == 1
     assert queue3.quantity == 1
     assert queue3.children[0].resource_id == resource2.resource_id
     assert queue3.children[0].resource_name == resource2.resource_name
     assert queue3.children[0].parent_id == queue3.resource_id
+
 
 def test_set_child(interface: ResourceInterface) -> None:
     """Test setting a child in a container"""
@@ -293,9 +305,7 @@ def test_set_child(interface: ResourceInterface) -> None:
 
     # Test setting initial child
     container2 = interface.set_child(
-        container_id=container.resource_id,
-        key="slot1",
-        child=resource1
+        container_id=container.resource_id, key="slot1", child=resource1
     )
 
     # Verify container properties
@@ -308,29 +318,26 @@ def test_set_child(interface: ResourceInterface) -> None:
     resource2 = Resource()
     resource2 = interface.add_resource(resource=resource2)
     container3 = interface.set_child(
-        container_id=container2.resource_id,
-        key="slot2",
-        child=resource2.resource_id
+        container_id=container2.resource_id, key="slot2", child=resource2.resource_id
     )
 
     # Verify updated container properties
-    assert len(container3.children) == 2  # noqa: PLR2004
-    assert container3.quantity == 2  # noqa: PLR2004
+    assert len(container3.children) == 2
+    assert container3.quantity == 2
     assert "slot2" in container3.children
     assert container3.children["slot2"].resource_id == resource2.resource_id
 
     # Test updating existing slot
     resource3 = Resource()
     container4 = interface.set_child(
-        container_id=container3.resource_id,
-        key="slot1",
-        child=resource3
+        container_id=container3.resource_id, key="slot1", child=resource3
     )
 
     # Verify slot was updated
-    assert len(container4.children) == 2  # noqa: PLR2004
-    assert container4.quantity == 2  # noqa: PLR2004
+    assert len(container4.children) == 2
+    assert container4.quantity == 2
     assert container4.children["slot1"].resource_id == resource3.resource_id
+
 
 def test_set_child_invalid_container(interface: ResourceInterface) -> None:
     """Test setting a child in an invalid container type"""
@@ -343,11 +350,8 @@ def test_set_child_invalid_container(interface: ResourceInterface) -> None:
 
     # Attempt to set child on invalid container type
     with pytest.raises(ValueError):
-        interface.set_child(
-            container_id=stack.resource_id,
-            key="slot1",
-            child=resource
-        )
+        interface.set_child(container_id=stack.resource_id, key="slot1", child=resource)
+
 
 def test_set_child_capacity_limit(interface: ResourceInterface) -> None:
     """Test setting a child when container is at capacity"""
@@ -359,20 +363,17 @@ def test_set_child_capacity_limit(interface: ResourceInterface) -> None:
     # Add container and fill its only slot
     container = interface.add_resource(resource=container)
     container = interface.set_child(
-        container_id=container.resource_id,
-        key="slot1",
-        child=resource1
+        container_id=container.resource_id, key="slot1", child=resource1
     )
 
     # Attempt to add another child when at capacity
     with pytest.raises(ValueError) as exc_info:
         interface.set_child(
-            container_id=container.resource_id,
-            key="slot2",
-            child=resource2
+            container_id=container.resource_id, key="slot2", child=resource2
         )
 
     assert "because it is full" in str(exc_info.value)
+
 
 def test_remove_child(interface: ResourceInterface) -> None:
     """Test removing a child from a container"""
@@ -384,27 +385,20 @@ def test_remove_child(interface: ResourceInterface) -> None:
     # Add container and children
     container = interface.add_resource(resource=container)
     container = interface.set_child(
-        container_id=container.resource_id,
-        key="slot1",
-        child=resource1
+        container_id=container.resource_id, key="slot1", child=resource1
     )
     container = interface.set_child(
-        container_id=container.resource_id,
-        key="slot2",
-        child=resource2
+        container_id=container.resource_id, key="slot2", child=resource2
     )
 
     # Verify initial state
-    assert len(container.children) == 2  # noqa: PLR2004
-    assert container.quantity == 2  # noqa: PLR2004
+    assert len(container.children) == 2
+    assert container.quantity == 2
     assert "slot1" in container.children
     assert "slot2" in container.children
 
     # Remove first child
-    container = interface.remove_child(
-        container_id=container.resource_id,
-        key="slot1"
-    )
+    container = interface.remove_child(container_id=container.resource_id, key="slot1")
 
     # Verify child was removed
     assert len(container.children) == 1
@@ -412,6 +406,7 @@ def test_remove_child(interface: ResourceInterface) -> None:
     assert "slot1" not in container.children
     assert "slot2" in container.children
     assert container.children["slot2"].resource_id == resource2.resource_id
+
 
 def test_remove_child_invalid_container(interface: ResourceInterface) -> None:
     """Test removing a child from an invalid container type"""
@@ -425,10 +420,8 @@ def test_remove_child_invalid_container(interface: ResourceInterface) -> None:
 
     # Attempt to remove child from invalid container type
     with pytest.raises(ValueError):
-        interface.remove_child(
-            container_id=stack.resource_id,
-            key="0"
-        )
+        interface.remove_child(container_id=stack.resource_id, key="0")
+
 
 def test_remove_child_invalid_key(interface: ResourceInterface) -> None:
     """Test removing a child with invalid key"""
@@ -439,9 +432,9 @@ def test_remove_child_invalid_key(interface: ResourceInterface) -> None:
     # Attempt to remove non-existent child
     with pytest.raises(KeyError):
         interface.remove_child(
-            container_id=container.resource_id,
-            key="non_existent_slot"
+            container_id=container.resource_id, key="non_existent_slot"
         )
+
 
 def test_set_capacity(interface: ResourceInterface) -> None:
     """Test setting capacity of a container"""
@@ -454,7 +447,8 @@ def test_set_capacity(interface: ResourceInterface) -> None:
 
     # Get updated container
     updated_container = interface.get_resource(resource_id=container.resource_id)
-    assert updated_container.capacity == 10  # noqa: PLR2004
+    assert updated_container.capacity == 10
+
 
 def test_set_capacity_with_existing_children(interface: ResourceInterface) -> None:
     """Test setting capacity with existing children"""
@@ -466,20 +460,19 @@ def test_set_capacity_with_existing_children(interface: ResourceInterface) -> No
     for i in range(3):
         resource = Resource()
         container = interface.set_child(
-            container_id=container.resource_id,
-            key=f"slot{i}",
-            child=resource
+            container_id=container.resource_id, key=f"slot{i}", child=resource
         )
 
     # Test setting valid capacity above current quantity
     interface.set_capacity(resource_id=container.resource_id, capacity=4)
     updated_container = interface.get_resource(resource_id=container.resource_id)
-    assert updated_container.capacity == 4  # noqa: PLR2004
+    assert updated_container.capacity == 4
 
     # Test setting capacity below current quantity
     with pytest.raises(ValueError) as exc_info:
         interface.set_capacity(resource_id=container.resource_id, capacity=2)
     assert "because it currently contains" in str(exc_info.value)
+
 
 def test_set_capacity_invalid_resource(interface: ResourceInterface) -> None:
     """Test setting capacity on resource without capacity attribute"""
@@ -492,6 +485,7 @@ def test_set_capacity_invalid_resource(interface: ResourceInterface) -> None:
         interface.set_capacity(resource_id=resource.resource_id, capacity=5)
     assert "has no capacity attribute" in str(exc_info.value)
 
+
 def test_set_capacity_no_change(interface: ResourceInterface) -> None:
     """Test setting capacity to current value"""
     # Create container with initial capacity
@@ -503,7 +497,8 @@ def test_set_capacity_no_change(interface: ResourceInterface) -> None:
 
     # Verify capacity remains unchanged
     updated_container = interface.get_resource(resource_id=container.resource_id)
-    assert updated_container.capacity == 5  # noqa: PLR2004
+    assert updated_container.capacity == 5
+
 
 def test_remove_capacity_limit(interface: ResourceInterface) -> None:
     """Test removing capacity limit from a container"""
@@ -518,6 +513,7 @@ def test_remove_capacity_limit(interface: ResourceInterface) -> None:
     updated_container = interface.get_resource(resource_id=container.resource_id)
     assert updated_container.capacity is None
 
+
 def test_remove_capacity_limit_no_capacity_set(interface: ResourceInterface) -> None:
     """Test removing capacity limit when none is set"""
     # Create container with no capacity
@@ -531,6 +527,7 @@ def test_remove_capacity_limit_no_capacity_set(interface: ResourceInterface) -> 
     updated_container = interface.get_resource(resource_id=container.resource_id)
     assert updated_container.capacity is None
 
+
 def test_remove_capacity_limit_invalid_resource(interface: ResourceInterface) -> None:
     """Test removing capacity limit from resource without capacity attribute"""
     # Create regular resource without capacity
@@ -542,6 +539,7 @@ def test_remove_capacity_limit_invalid_resource(interface: ResourceInterface) ->
         interface.remove_capacity_limit(resource_id=resource.resource_id)
     assert "has no capacity attribute" in str(exc_info.value)
 
+
 def test_set_quantity(interface: ResourceInterface) -> None:
     """Test setting quantity of a container"""
     # Create container with initial quantity
@@ -549,11 +547,11 @@ def test_set_quantity(interface: ResourceInterface) -> None:
     consumable = interface.add_resource(resource=consumable)
 
     # Test changing quantity
-    interface.set_quantity(resource_id=consumable.resource_id, quantity=5)
+    updated_resource = interface.set_quantity(
+        resource_id=consumable.resource_id, quantity=5
+    )
+    assert updated_resource.quantity == 5
 
-    # Get updated container
-    updated_container = interface.get_resource(resource_id=consumable.resource_id)
-    assert updated_container.quantity == 5  # noqa: PLR2004
 
 def test_set_quantity_with_capacity(interface: ResourceInterface) -> None:
     """Test setting quantity with capacity constraint"""
@@ -562,14 +560,16 @@ def test_set_quantity_with_capacity(interface: ResourceInterface) -> None:
     consumable = interface.add_resource(resource=consumable)
 
     # Test setting valid quantity within capacity
-    interface.set_quantity(resource_id=consumable.resource_id, quantity=8)
-    updated_container = interface.get_resource(resource_id=consumable.resource_id)
-    assert updated_container.quantity == 8  # noqa: PLR2004
+    updated_resource = interface.set_quantity(
+        resource_id=consumable.resource_id, quantity=8
+    )
+    assert updated_resource.quantity == 8
 
     # Test setting quantity exceeding capacity
     with pytest.raises(ValueError) as exc_info:
         interface.set_quantity(resource_id=consumable.resource_id, quantity=15)
     assert "because it exceeds the capacity" in str(exc_info.value)
+
 
 def test_set_quantity_invalid_resource(interface: ResourceInterface) -> None:
     """Test setting quantity on resource without quantity attribute"""
@@ -581,6 +581,7 @@ def test_set_quantity_invalid_resource(interface: ResourceInterface) -> None:
     with pytest.raises(ValueError) as exc_info:
         interface.set_quantity(resource_id=resource.resource_id, quantity=5)
     assert "has no quantity attribute" in str(exc_info.value)
+
 
 def test_set_quantity_read_only(interface: ResourceInterface) -> None:
     """Test setting quantity on resource with read-only quantity property"""
@@ -594,6 +595,7 @@ def test_set_quantity_read_only(interface: ResourceInterface) -> None:
         interface.set_quantity(resource_id=stack.resource_id, quantity=5)
     assert "read-only quantity" in str(exc_info.value)
 
+
 def test_set_quantity_float_value(interface: ResourceInterface) -> None:
     """Test setting quantity with float value"""
     # Create container
@@ -601,11 +603,11 @@ def test_set_quantity_float_value(interface: ResourceInterface) -> None:
     consumable = interface.add_resource(resource=consumable)
 
     # Test setting float quantity
-    interface.set_quantity(resource_id=consumable.resource_id, quantity=3.5)
+    updated_consumable = interface.set_quantity(
+        resource_id=consumable.resource_id, quantity=3.5
+    )
+    assert updated_consumable.quantity == 3.5
 
-    # Get updated container
-    updated_container = interface.get_resource(resource_id=consumable.resource_id)
-    assert updated_container.quantity == 3.5  # noqa: PLR2004
 
 def test_set_child_grid(interface: ResourceInterface) -> None:
     """Test setting a child in a grid container"""
@@ -619,20 +621,15 @@ def test_set_child_grid(interface: ResourceInterface) -> None:
 
     # Set child in grid container
     grid = interface.set_child(
-        container_id=grid.resource_id,
-        key=(0, 0),
-        child=resource
+        container_id=grid.resource_id, key=(0, 0), child=resource
     )
 
     # Verify child was set
     assert grid.children[0][0].resource_id == resource.resource_id
 
     with pytest.raises(KeyError):
-        interface.set_child(
-            container_id=grid.resource_id,
-            key=(0, 1),
-            child=resource
-        )
+        interface.set_child(container_id=grid.resource_id, key=(0, 1), child=resource)
+
 
 def test_set_child_voxel_grid(interface: ResourceInterface) -> None:
     """Test setting a child in a voxel grid container"""
@@ -646,18 +643,13 @@ def test_set_child_voxel_grid(interface: ResourceInterface) -> None:
 
     # Set child in voxel grid container
     voxel_grid = interface.set_child(
-        container_id=voxel_grid.resource_id,
-        key=(0, 0, 0),
-        child=resource
+        container_id=voxel_grid.resource_id, key=(0, 0, 0), child=resource
     )
 
     # Verify child was set
     assert voxel_grid.children[0][0][0].resource_id == resource.resource_id
 
-
     with pytest.raises(KeyError):
         interface.set_child(
-            container_id=voxel_grid.resource_id,
-            key=(0, 0, 1),
-            child=resource
+            container_id=voxel_grid.resource_id, key=(0, 0, 1), child=resource
         )

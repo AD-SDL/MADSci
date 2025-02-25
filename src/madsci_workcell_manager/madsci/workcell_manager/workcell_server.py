@@ -1,13 +1,14 @@
 """MADSci Workcell Manager Server."""
 
-import argparse
 import json
 import traceback
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Annotated, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from madsci.common.types.action_types import ActionStatus
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
@@ -16,32 +17,21 @@ from madsci.common.types.workflow_types import (
     WorkflowDefinition,
     WorkflowStatus,
 )
-from madsci.workcell_manager.workcell_manager_types import (
-    WorkcellManagerDefinition,
-)
+from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
     copy_workflow_files,
     create_workflow,
     save_workflow_files,
 )
-from redis_handler import WorkcellRedisHandler
-from workcell_engine import Engine
-
-arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument(
-    "--workcell_file",
-    type=str,
-    default="./workcells/workcell.yaml",
-    help="location of the workcell file",
-)
 
 
-async def lifespan(app: FastAPI) -> None:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """start the server functionality and initialize the state handler"""
-    app.state.state_handler = WorkcellRedisHandler(workcell_manager_definition)
+    app.state.state_handler = WorkcellRedisHandler(workcell)
     app.state.state_handler.set_workcell(workcell)
-    engine = Engine(workcell_manager_definition, app.state.state_handler)
+    engine = Engine(workcell, app.state.state_handler)
     engine.start_engine_thread()
     yield
 
@@ -49,12 +39,7 @@ async def lifespan(app: FastAPI) -> None:
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/info")
-def info() -> WorkcellManagerDefinition:
-    """Get information about the workcell manager."""
-    return workcell_manager_definition
-
-
+@app.get("/definition")
 @app.get("/workcell")
 def get_workcell() -> WorkcellDefinition:
     """Get the currently running workcell."""
@@ -93,7 +78,7 @@ def add_node(
         workcell.nodes[node_name] = NodeDefinition(
             node_name=node_name, node_url=node_url, node_description=node_description
         )
-        workcell.to_yaml(workcell_file)
+        workcell.to_yaml(workcell._definition_path)
     return app.state.state_handler.get_node(node_name)
 
 
@@ -196,7 +181,7 @@ def resubmit_workflow(workflow_id: str) -> Workflow:
         copy_workflow_files(
             old_id=workflow_id,
             workflow=wf,
-            working_directory=workcell_manager_definition.plugin_config.workcell_directory,
+            working_directory=workcell.config.workcell_directory,
         )
         app.state.state_handler.set_workflow(wf)
     return app.state.state_handler.get_workflow(workflow_id)
@@ -218,7 +203,7 @@ def retry_workflow(workflow_id: str, index: int = -1) -> Workflow:
 @app.post("/workflows/start")
 async def start_workflow(
     workflow: Annotated[str, Form()],
-    experiment_id: Annotated[Optional[str], Form()] = None,
+    ownership_info: Annotated[Optional[str], Form()] = None,
     parameters: Annotated[Optional[str], Form()] = None,
     validate_only: Annotated[Optional[bool], Form()] = False,
     files: list[UploadFile] = [],
@@ -232,8 +217,8 @@ async def start_workflow(
     - The workflow yaml file
     parameters: Optional[Dict[str, Any]] = {}
     - Dynamic values to insert into the workflow file
-    experiment_id: str
-    - The id of the experiment this workflow is associated with
+    ownership_info: Optional[OwnershipInfo]
+    - Information about the experiments, users, etc. that own this workflow
     simulate: bool
     - whether to use real robots or not
     validate_only: bool
@@ -249,6 +234,11 @@ async def start_workflow(
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=422, detail=str(e)) from e
+
+    if ownership_info is None:
+        ownership_info = OwnershipInfo()
+    else:
+        ownership_info = OwnershipInfo.model_validate_json(ownership_info)
 
     if parameters is None:
         parameters = {}
@@ -266,14 +256,14 @@ async def start_workflow(
     wf = create_workflow(
         workflow_def=wf_def,
         workcell=workcell,
-        experiment_id=experiment_id,
+        ownership_info=ownership_info,
         parameters=parameters,
         state_handler=app.state.state_handler,
     )
 
     if not validate_only:
         wf = save_workflow_files(
-            working_directory=workcell_manager_definition.plugin_config.workcell_directory,
+            working_directory=workcell.config.workcell_directory,
             workflow=wf,
             files=files,
         )
@@ -288,17 +278,14 @@ async def start_workflow(
 if __name__ == "__main__":
     import uvicorn
 
-    args = arg_parser.parse_args()
-    workcell_file = args.workcell_file
-    workcell = WorkcellDefinition.from_yaml(workcell_file)
-    workcell_manager_definition = WorkcellManagerDefinition(
-        name="Workcell Manager 1",
-        description="The First MADSci Workcell Manager.",
-        plugin_config=workcell.config,
-        manager_type="workcell_manager",
-    )
+    workcell = None
+    workcell = WorkcellDefinition.load_model(require_unique=True)
+    if workcell is None:
+        raise ValueError(
+            "No workcell manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
+        )
     uvicorn.run(
         app,
-        host=workcell_manager_definition.plugin_config.host,
-        port=workcell_manager_definition.plugin_config.port,
+        host=workcell.config.host,
+        port=workcell.config.port,
     )
