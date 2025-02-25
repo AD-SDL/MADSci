@@ -9,7 +9,6 @@ from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
 )
 from madsci.common.types.resource_types.custom_types import (
-    ResourceBaseTypeEnum,
     ResourceTypeEnum,
 )
 from madsci.common.types.resource_types.definitions import (
@@ -142,10 +141,10 @@ def add(
         name = prompt_for_input("Resource Type Name", required=True)
     if not description:
         description = prompt_for_input("Resource Type Description")
-    if not base_type or base_type not in ResourceBaseTypeEnum:
+    if not base_type or base_type not in ResourceTypeEnum:
         base_type = prompt_from_list(
             "Base Type",
-            [e.value for e in ResourceBaseTypeEnum],
+            [e.value for e in ResourceTypeEnum],
             default=ResourceTypeEnum.resource.value,
         )
     # *Get the appropriate type definition class
@@ -303,7 +302,7 @@ def add_resource(ctx: ResourceContext) -> None:
     description = prompt_for_input("Resource Description")
 
     # * Combine built-in types and custom types for selection
-    available_types = [e.value for e in ResourceBaseTypeEnum]
+    available_types = [e.value for e in ResourceTypeEnum]
     custom_types = [rt.type_name for rt in ctx.resource_file.resource_types]
     all_types = available_types + custom_types
 

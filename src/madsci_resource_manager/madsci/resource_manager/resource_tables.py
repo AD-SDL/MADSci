@@ -1,33 +1,69 @@
 """Resource table objects"""
 
 from datetime import datetime
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
-    ResourceBase,
-    ResourceBaseTypes,
+    Resource,
     ResourceDataModels,
+    ResourceTypeEnum,
 )
 from pydantic.config import ConfigDict
 from sqlalchemy import event
 from sqlalchemy.sql.schema import FetchedValue, UniqueConstraint
 from sqlalchemy.sql.sqltypes import TIMESTAMP, Numeric
 from sqlmodel import (
+    Enum,
     Field,
     Relationship,
     Session,
     text,
 )
+from typing_extensions import Self  # type: ignore
 
 
-class ResourceTableBase(ResourceBase):
+def create_session(*args: Any, **kwargs: Any) -> Session:
+    """Create a new SQLModel session."""
+    session = Session(*args, **kwargs)
+    add_automated_history(session)
+    return session
+
+def add_automated_history(session: Session) -> None:
+    """
+    Add automated history to the session.
+
+    Args:
+        session (Session): SQLAlchemy session.
+    """
+
+    @event.listens_for(session, "before_flush")
+    def before_flush(session: Session, flush_context, instances) -> None:  # noqa: ANN001, ARG001
+        for obj in session.new:
+            if isinstance(obj, ResourceTable):
+                history = ResourceHistoryTable.model_validate(obj)
+                history.change_type = "Added"
+                session.add(history)
+        for obj in session.dirty:
+            if isinstance(obj, ResourceTable):
+                history = ResourceHistoryTable.model_validate(obj)
+                history.change_type = "Updated"
+                session.add(history)
+        for obj in session.deleted:
+            if isinstance(obj, ResourceTable):
+                history = ResourceHistoryTable.model_validate(obj)
+                history.change_type = "Removed"
+                history.removed = True
+                session.add(history)
+
+class ResourceTableBase(Resource):
     """
     Base class for all resource-based tables.
     """
 
     model_config = ConfigDict(
         validate_assignment=False,
+        extra="ignore",
     )
 
     parent_id: Optional[str] = Field(
@@ -36,6 +72,13 @@ class ResourceTableBase(ResourceBase):
         nullable=True,
         default=None,
         foreign_key="resource.resource_id",
+    )
+    base_type: str = Field(
+        title="Base Type",
+        description="The base type of the resource.",
+        nullable=False,
+        sa_type=Enum(ResourceTypeEnum),
+        default=ResourceTypeEnum.resource,
     )
     key: Optional[str] = Field(
         title="Resource Key",
@@ -96,15 +139,29 @@ class ResourceTableBase(ResourceBase):
         Returns:
             ResourceDataModels: The resource data model.
         """
-        resource: ResourceDataModels = RESOURCE_TYPE_MAP[self.base_type][
-            "model"
-        ].model_validate(**self.model_dump())
+        try:
+            resource: ResourceDataModels = RESOURCE_TYPE_MAP[self.base_type][
+                "model"
+            ].model_validate(self.model_dump(exclude={"children"}))
+        except KeyError as e:
+            raise ValueError(f"Resource Type {self.base_type} not found in RESOURCE_TYPE_MAP") from e
         if self.children and include_children:
             flat_children = {}
             for key, child in self.children.items():
                 flat_children[key] = child.to_data_model()
-            resource.children = resource.populate_children(flat_children)
+            if flat_children and hasattr(resource, "children"):
+                if hasattr(resource, "populate_children"):
+                    resource.populate_children(flat_children)
+                else:
+                    resource.children = flat_children
         return resource
+
+    @classmethod
+    def from_data_model(
+        cls, resource: ResourceDataModels
+    ) -> Self:
+        """Create a new Resource Table entry from a resource data model."""
+        return cls.model_validate(resource)
 
 
 class ResourceTable(ResourceTableBase, table=True):
@@ -147,48 +204,6 @@ class ResourceTable(ResourceTableBase, table=True):
         """
         return {child.key: child for child in self.children_list}
 
-    def _remove(self, session: Session, commit: bool = True) -> None:
-        """
-        Move the resource to the history table instead of actual deletion.
-
-        Args:
-            session (Session): SQLAlchemy session.
-        """
-        self.removed = True
-        session.merge(self)
-        if commit:
-            session.commit()
-
-    @classmethod
-    def from_data_model(
-        cls, resource: Union[ResourceDataModels, ResourceBaseTypes]
-    ) -> "ResourceTable":
-        """
-        Create a table entry from a data model.
-
-        Args:
-            ResourceTable: a SQL model entry corresponding to a row related to the .
-        """
-        return cls.model_validate(**resource.model_dump())
-
-    def to_data_model(self, include_children: bool = True) -> ResourceDataModels:
-        """
-        Convert the table entry to a data model.
-
-        Returns:
-            ResourceDataModels: The resource data model.
-        """
-        resource: ResourceDataModels = RESOURCE_TYPE_MAP[self.base_type][
-            "model"
-        ].model_validate(self.model_dump())
-        if self.children and include_children:
-            flat_children = {}
-            for key, child in self.children.items():
-                flat_children[key] = child.to_data_model()
-            resource.children = resource.populate_children(flat_children)
-        return resource
-
-
 class ResourceHistoryTable(ResourceTableBase, table=True):
     """The table for storing information about historical Resources."""
 
@@ -213,7 +228,7 @@ class ResourceHistoryTable(ResourceTableBase, table=True):
             "server_default": text("CURRENT_TIMESTAMP"),
         },
     )
-    changed: Optional[datetime] = Field(
+    changed_at: Optional[datetime] = Field(
         title="Changed Datetime",
         description="The timestamp of when the resource history was captured.",
         default=None,
@@ -224,47 +239,15 @@ class ResourceHistoryTable(ResourceTableBase, table=True):
             "server_onupdate": FetchedValue(),
         },
     )
+    change_type: str = Field(
+        title="Change Type",
+        description="Information about the change being recorded.",
+        default="",
+        nullable=False,
+    )
     parent_id: Optional[str] = Field(
         title="Parent Resource ID",
         description="The ID of the parent resource.",
         nullable=True,
         default=None,
     )
-
-    @classmethod
-    def from_data_model(
-        cls, resource: Union[ResourceDataModels, ResourceBaseTypes]
-    ) -> "ResourceHistoryTable":
-        """
-        Create a table entry from a data model.
-
-        Args:
-            ResourceTable: a SQL model entry corresponding to a row related to the .
-        """
-        return cls.model_validate(resource.model_dump())
-
-
-def add_automated_history(session: Session) -> None:
-    """
-    Add automated history to the session.
-
-    Args:
-        session (Session): SQLAlchemy session.
-    """
-
-    @event.listens_for(session, "before_flush")
-    def before_flush(session: Session, flush_context, instances) -> None:  # noqa: ANN001, ARG001
-        for obj in session.new:
-            if isinstance(obj, ResourceTable):
-                history = ResourceHistoryTable.from_data_model(obj.to_data_model())
-                session.add(history)
-        for obj in session.dirty:
-            if isinstance(obj, ResourceTable):
-                history = ResourceHistoryTable.from_data_model(obj.to_data_model())
-                session.add(history)
-        for obj in session.deleted:
-            if isinstance(obj, ResourceTable):
-                data_model = obj.to_data_model()
-                data_model.removed = True
-                history = ResourceHistoryTable.from_data_model(data_model)
-                session.add(history)

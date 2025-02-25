@@ -2,16 +2,16 @@
 
 from typing import Any
 
-from madsci.resource_manager.resource_tables import ResourceBase, map_resource_type
+from madsci.resource_manager.resource_tables import Resource, map_resource_type
 
 
-def serialize_resource(resource: ResourceBase) -> dict[str, Any]:
+def serialize_resource(resource: Resource) -> dict[str, Any]:
     """
     Recursively serialize a resource, including its `children`, converting
     datetime objects to ISO-formatted strings.
 
     Args:
-        resource (ResourceBase): The resource to serialize.
+        resource (Resource): The resource to serialize.
 
     Returns:
         dict: A serialized dictionary representation of the resource.
@@ -19,16 +19,16 @@ def serialize_resource(resource: ResourceBase) -> dict[str, Any]:
     return resource.model_dump(mode="json")
 
 
-def deserialize_resource(data: dict[str, Any]) -> ResourceBase:
+def deserialize_resource(data: dict[str, Any]) -> Resource:
     """
-    Recursively deserialize a resource dictionary into a `ResourceBase` object,
+    Recursively deserialize a resource dictionary into a `Resource` object,
     converting ISO datetime strings back to datetime objects.
 
     Args:
         data (dict): Serialized dictionary of the resource.
 
     Returns:
-        ResourceBase: Reconstructed resource object.
+        Resource: Reconstructed resource object.
     """
-    resource_class: ResourceBase = map_resource_type(data)
+    resource_class: Resource = map_resource_type(data)
     return resource_class.validate_subtype(data)

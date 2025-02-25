@@ -1,23 +1,26 @@
 """Pytest unit tests for the Resource SQL Tables"""
 
+import pytest
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
     ResourceTable,
-    add_automated_history,
+    create_session,
 )
 from pytest_mock_resources import create_postgres_fixture
-from sqlalchemy.engine.base import Engine
+from sqlalchemy import Engine
 from sqlmodel import Session as SQLModelSession
-from sqlmodel import select, true
+from sqlmodel import select
 
 # Create a Postgres fixture
 postgres_engine = create_postgres_fixture(ResourceTable)
 
+@pytest.fixture
+def session(postgres_engine: Engine) -> SQLModelSession:
+    """Session fixture"""
+    return create_session(postgres_engine)
 
-def test_insert(postgres_engine: Engine) -> None:
+def test_insert(session: SQLModelSession) -> None:
     """Test inserting a resource table entry"""
-    session = SQLModelSession(postgres_engine)
-    add_automated_history(session)
     resource1 = ResourceTable(resource_name="resource1")
     session.add(resource1)
     session.commit()
@@ -26,19 +29,47 @@ def test_insert(postgres_engine: Engine) -> None:
     assert resource1.resource_name == "resource1"
     assert resource1.removed is False
 
+def test_history(session: SQLModelSession) -> None:
+    """Test history of a resource table entry"""
+    resource1 = ResourceTable(resource_name="resource1")
+    session.add(resource1)
+    session.commit()
 
-def test_remove(postgres_engine: Engine) -> None:
+    resource1.resource_name = "resource2"
+    session.commit()
+
+    history = session.exec(
+        select(ResourceHistoryTable).where(
+            ResourceHistoryTable.resource_id == resource1.resource_id
+        ).order_by(ResourceHistoryTable.changed_at.asc())
+    ).all()
+
+    assert len(history) == 2  # noqa: PLR2004
+    assert history[0].resource_name == "resource1"
+    assert history[0].change_type == "Added"
+    assert history[1].resource_name == "resource2"
+    assert history[1].change_type == "Updated"
+
+
+def test_remove(session: SQLModelSession) -> None:
     """Test removing a resource table entry"""
-    session = SQLModelSession(postgres_engine)
-    add_automated_history(session)
     resource1 = ResourceTable(resource_name="resource1")
     session.add(resource1)
     session.commit()
 
     session.delete(resource1)
     session.commit()
-    session.exec(
+    resource1_live = session.exec(
+        select(ResourceTable).where(
+            ResourceTable.resource_id == resource1.resource_id
+        )).all()
+    assert len(resource1_live) == 0 # * deleted resource1 is removed
+    resource1_history = session.exec(
         select(ResourceHistoryTable).where(
             ResourceHistoryTable.resource_id == resource1.resource_id
-        )
-    ).where(ResourceHistoryTable.removed == true()).all()
+        ).order_by(ResourceHistoryTable.changed_at.asc())).all()
+    assert len(resource1_history) == 2 # * deleted resource1 is in history  # noqa: PLR2004
+    assert resource1_history[1].removed is True # * deleted resource1 is marked as removed
+    assert resource1_history[1].change_type == "Removed" # * deleted resource1 has removal history
+    assert resource1_history[0].removed is False # * deleted resource1 has pre-deletion history
+    assert resource1_history[0].change_type == "Added" # * deleted resource1 has pre-deletion history

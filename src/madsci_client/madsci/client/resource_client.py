@@ -1,14 +1,22 @@
 """Fast API Client for Resources"""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import requests
-from madsci.common.types.resource_types import ResourceBaseTypes
-from madsci.resource_manager.serialization_utils import (
-    deserialize_resource,
-    serialize_resource,
+from madsci.common.types.resource_types import (
+    GridIndex2D,
+    GridIndex3D,
+    ResourceDataModels,
 )
+from madsci.common.types.resource_types.server_types import (
+    PushResourceBody,
+    RemoveChildBody,
+    ResourceGetQuery,
+    ResourceHistoryGetQuery,
+    SetChildBody,
+)
+from madsci.resource_manager.resource_tables import Resource
 
 
 class ResourceClient:
@@ -18,90 +26,117 @@ class ResourceClient:
         """Initial params"""
         self.base_url = base_url
 
-    def add_resource(self, resource: ResourceBaseTypes) -> dict:
+    def add_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
         """
         Add a resource to the server.
 
         Args:
-            resource (ResourceBaseTypes): The resource to add.
+            resource (ResourceDataModels): The resource to add.
 
         Returns:
-            ResourceBase: The added resource as returned by the server.
+            Resource: The added resource as returned by the server.
         """
-        resource_data = serialize_resource(resource)
         response = requests.post(
             f"{self.base_url}/resource/add",
-            json={"resource": resource_data},
+            json={"resource": resource.model_dump(mode="json")},
             timeout=10,
         )
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
 
-    def update_resource(self, resource: dict) -> dict:
+    def update_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
         """
         Update or refresh a resource, including its children, on the server.
 
         Args:
-            resource (ResourceBase): The resource to update.
+            resource (ResourceDataModels): The resource to update.
 
         Returns:
-            ResourceBase: The updated resource as returned by the server.
+            ResourceDataModels: The updated resource as returned by the server.
         """
-        resource_data = serialize_resource(resource)
         response = requests.post(
             f"{self.base_url}/resource/update",
-            json={"resource": resource_data},
+            json={"resource": resource.model_dump(mode="json")},
             timeout=10,
         )
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
 
     def get_resource(
         self,
-        resource_name: Optional[str] = None,
-        owner_name: Optional[str] = None,
-        resource_id: Optional[str] = None,
-        resource_type: Optional[str] = None,
-    ) -> dict:
+        resource_id: str,
+    ) -> ResourceDataModels:
         """
-        Retrieve a resource from the database.
+        Retrieve a resource from the server.
 
         Args:
-            resource_name (str): Name of the resource (optional).
-            owner_name (str): Owner of the resource (optional).
-            resource_id (str): ID of the resource (optional).
-            resource_type (str): Type of the resource (optional).
+            resource_id (str): The ID of the resource to retrieve.
 
         Returns:
-            ResourceBase: The retrieved resource.
+            ResourceDataModels: The retrieved resource.
         """
-        payload = {
-            "resource_name": resource_name,
-            "owner_name": owner_name,
-            "resource_id": resource_id,
-            "resource_type": resource_type,
-        }
-        response = requests.post(
-            f"{self.base_url}/resource/get", json=payload, timeout=10
+        response = requests.get(
+            f"{self.base_url}/resource/{resource_id}",
+            timeout=10,
         )
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
+
+    def query_resource(
+        self,
+        resource_id: Optional[str] = None,
+        resource_name: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        resource_base_type: Optional[str] = None,
+        unique: Optional[bool] = False,
+        multiple: Optional[bool] = False,
+    ) -> Union[ResourceDataModels, list[ResourceDataModels]]:
+        """
+        Query for one or more resources matching specific properties.
+
+        Args:
+            resource_id (str): The ID of the resource to retrieve.
+            resource_name (str): The name of the resource to retrieve.
+            parent_id (str): The ID of the parent resource.
+            resource_type (str): The custom type of the resource.
+            resource_base_type (str): The base type of the resource.
+            unique (bool): Whether to require a unique resource or not.
+            multiple (bool): Whether to return multiple resources or just the first.
+
+        Returns:
+            Resource: The retrieved resource.
+        """
+        payload = ResourceGetQuery(
+            resource_id=resource_id,
+            resource_name=resource_name,
+            parent_id=parent_id,
+            resource_type=resource_type,
+            resource_base_type=resource_base_type,
+            unique=unique,
+            multiple=multiple,
+        ).model_dump(mode="json")
+        response = requests.post(
+            f"{self.base_url}/resource/query", json=payload, timeout=10
+        )
+        response.raise_for_status()
+        return Resource.discriminate(response.json())
 
     def remove_resource(self, resource_id: str) -> dict[str, Any]:
         """
         Remove a resource by moving it to the history table with `removed=True`.
         """
-        payload = {"resource_id": resource_id}
         response = requests.post(
-            f"{self.base_url}/resource/remove", json=payload, timeout=10
+            f"{self.base_url}/resource/{resource_id}/remove", timeout=10
         )
         response.raise_for_status()
         return response.json()
 
-    def get_history(
+    def query_history(
         self,
-        resource_id: str,
-        event_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        version: Optional[int] = None,
+        change_type: Optional[str] = None,
         removed: Optional[bool] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
@@ -110,265 +145,156 @@ class ResourceClient:
         """
         Retrieve the history of a resource with flexible filters.
         """
-        payload = {
-            "resource_id": resource_id,
-            "event_type": event_type,
-            "removed": removed,
-            "start_date": start_date.isoformat() if start_date else None,
-            "end_date": end_date.isoformat() if end_date else None,
-            "limit": limit,
-        }
+        query = ResourceHistoryGetQuery(
+            resource_id=resource_id,
+            version=version,
+            change_type=change_type,
+            removed=removed,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        ).model_dump(mode="json")
         response = requests.post(
-            f"{self.base_url}/resource/history", json=payload, timeout=10
+            f"{self.base_url}/history/query", json=query, timeout=10
         )
         response.raise_for_status()
 
-        history_entries = response.json()
-
-        for entry in history_entries:
-            if "data" in entry:
-                entry["data"] = deserialize_resource(entry["data"])
-
-        return history_entries
+        return response.json()
 
     def restore_deleted_resource(self, resource_id: str) -> dict[str, Any]:
         """
         Restore a deleted resource from the history table.
         """
-        payload = {"resource_id": resource_id}
         response = requests.post(
-            f"{self.base_url}/resource/restore", json=payload, timeout=10
+            f"{self.base_url}/resource/{resource_id}/restore", timeout=10
         )
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
 
-    def push_to_stack(self, stack: dict, asset: dict) -> dict[str, Any]:
+    def push(self, resource: Union[ResourceDataModels, str], child: Union[ResourceDataModels, str]) -> ResourceDataModels:
         """
-        Push an asset onto a stack.
+        Push a child resource onto a parent stack or queue.
 
         Args:
-            stack (ResourceBase): The stack resource.
-            asset (ResourceBase): The asset to push.
+            resource (Union[ResourceDataModels, str]): The parent resource or its ID.
+            child (Union[ResourceDataModels, str]): The child resource or its ID.
 
         Returns:
-            dict: Success message from the server.
+            ResourceDataModels: The updated parent resource.
         """
-        payload = {
-            "stack": serialize_resource(stack),
-            "asset": serialize_resource(asset),
-        }
-        response = requests.post(
-            f"{self.base_url}/stack/push", json=payload, timeout=10
-        )
+        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        payload = PushResourceBody(
+            child=child if isinstance(child, ResourceDataModels) else None,
+            child_id=child.resource_id if isinstance(child, ResourceDataModels) else child,
+        ).model_dump(mode="json")
+        response = requests.post(f"{self.base_url}/resource/{resource_id}/push", json=payload, timeout=10)
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
 
-    def pop_from_stack(self, stack: dict) -> Any:
+    def pop(self, resource: Union[str, ResourceDataModels]) -> tuple[ResourceDataModels, ResourceDataModels]:
         """
-        Pop an asset from a stack.
+        Pop an asset from a stack or queue resource.
 
         Args:
-            stack (ResourceBase): The stack resource.
+            resource (Union[str, ResourceDataModels]): The parent resource or its ID.
 
         Returns:
-            tuple: The popped asset and updated stack.
+            tuple[ResourceDataModels, ResourceDataModels]: The popped asset and updated stack.
         """
-        payload = {
-            "stack": serialize_resource(stack),
-        }
-        response = requests.post(f"{self.base_url}/stack/pop", json=payload, timeout=10)
+
+        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        response = requests.post(f"{self.base_url}/resource/{resource_id}/pop", timeout=10)
         response.raise_for_status()
         result = response.json()
-        popped_asset = deserialize_resource(result["asset"])
-        updated_stack = deserialize_resource(result["updated_stack"])
+        popped_asset = Resource.discriminate(result[0])
+        updated_stack = Resource.discriminate(result[1])
         return popped_asset, updated_stack
 
-    def push_to_queue(self, queue: dict, asset: dict) -> dict[str, Any]:
+    def set_child(self, resource: Union[str, ResourceDataModels], key: Union[str, GridIndex2D, GridIndex3D], child: Union[str, ResourceDataModels]) -> ResourceDataModels:
         """
-        Push an asset onto a queue.
+        Set a child resource in a parent container resource.
 
         Args:
-            queue (ResourceBase): The queue resource.
-            asset (ResourceBase): The asset to push.
+            resource (Union[str, ResourceDataModels]): The parent container resource or its ID.
+            key (Union[str, GridIndex2D, GridIndex3D]): The key to identify the child resource's location in the parent container.
+            child (Union[str, ResourceDataModels]): The child resource or its ID.
 
         Returns:
-            dict: Success message from the server.
+            ResourceDataModels: The updated parent container resource.
         """
-        payload = {
-            "queue": serialize_resource(queue),
-            "asset": serialize_resource(asset),
-        }
-        response = requests.post(
-            f"{self.base_url}/queue/push", json=payload, timeout=10
-        )
+        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        payload = SetChildBody(
+            key=key,
+            child=child,
+        ).model_dump(mode="json")
+        response = requests.post(f"{self.base_url}/resource/{resource_id}/set_child", json=payload, timeout=10)
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
 
-    def pop_from_queue(self, queue: dict) -> Any:
+    def remove_child(self, resource: Union[str, ResourceDataModels], key: Union[str, GridIndex2D, GridIndex3D]) -> ResourceDataModels:
         """
-        Pop an asset from a queue.
+        Remove a child resource from a parent container resource.
 
         Args:
-            queue (ResourceBase): The queue resource.
+            resource (Union[str, ResourceDataModels]): The parent container resource or its ID.
+            key (Union[str, GridIndex2D, GridIndex3D]): The key to identify the child resource's location in the parent container.
 
         Returns:
-            tuple: The popped asset and updated queue.
+            ResourceDataModels: The updated parent container resource.
         """
-        payload = {
-            "queue": serialize_resource(queue),
-        }
-        response = requests.post(f"{self.base_url}/queue/pop", json=payload, timeout=10)
+        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        payload = RemoveChildBody(
+            key=key,
+        ).model_dump(mode="json")
+        response = requests.post(f"{self.base_url}/resource/{resource_id}/remove_child", json=payload, timeout=10)
         response.raise_for_status()
-        result = response.json()
-        popped_asset = deserialize_resource(result["asset"])
-        updated_queue = deserialize_resource(result["updated_queue"])
-        return popped_asset, updated_queue
+        return Resource.discriminate(response.json())
 
-    def increase_pool_quantity(self, pool: dict, amount: float) -> dict[str, Any]:
+    def set_quantity(self, resource: Union[str, ResourceDataModels], quantity: Union[float, int]) -> ResourceDataModels:
         """
-        Increase the quantity of a pool resource.
+        Set the quantity of a resource.
 
         Args:
-            pool (ResourceBase): The pool resource.
-            amount (float): Amount to increase.
+            resource (Union[str, ResourceDataModels]): The resource or its ID.
+            quantity (Union[float, int]): The quantity to set.
 
         Returns:
-            dict: Success message from the server.
+            ResourceDataModels: The updated resource.
         """
-        payload = {
-            "pool": serialize_resource(pool),
-            "amount": amount,
-        }
-        response = requests.post(
-            f"{self.base_url}/pool/increase", json=payload, timeout=10
-        )
+        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        response = requests.post(f"{self.base_url}/resource/{resource_id}/quantity", params={"quantity": quantity}, timeout=10)
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
 
-    def decrease_pool_quantity(self, pool: dict, amount: float) -> dict[str, Any]:
+    def set_capacity(self, resource: Union[str, ResourceDataModels], capacity: Union[float, int]) -> ResourceDataModels:
         """
-        Decrease the quantity of a pool resource.
+        Set the capacity of a resource.
 
         Args:
-            pool (ResourceBase): The pool resource.
-            amount (float): Amount to decrease.
+            resource (Union[str, ResourceDataModels]): The resource or its ID.
+            capacity (Union[float, int]): The capacity to set.
 
         Returns:
-            dict: Success message from the server.
+            ResourceDataModels: The updated resource.
         """
-        payload = {
-            "pool": serialize_resource(pool),
-            "amount": amount,
-        }
-        response = requests.post(
-            f"{self.base_url}/pool/decrease", json=payload, timeout=10
-        )
+        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        response = requests.post(f"{self.base_url}/resource/{resource_id}/capacity", params={"capacity": capacity}, timeout=10)
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
 
-    def fill_pool(self, pool: dict) -> dict[str, Any]:
+    def remove_capacity_limit(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
         """
-        Fill a pool to its capacity.
+        Remove the capacity limit of a resource.
 
         Args:
-            pool (ResourceBase): The pool resource.
+            resource (Union[str, ResourceDataModels]): The resource or its ID.
 
         Returns:
-            dict: Success message from the server.
+            ResourceDataModels: The updated resource.
         """
-        payload = {"pool": serialize_resource(pool)}
-        response = requests.post(f"{self.base_url}/pool/fill", json=payload, timeout=10)
+        resource_id = resource.resource_id if isinstance(resource, ResourceDataModels) else resource
+        response = requests.delete(f"{self.base_url}/resource/{resource_id}/capacity", timeout=10)
         response.raise_for_status()
-        return deserialize_resource(response.json())
+        return Resource.discriminate(response.json())
 
-    def empty_pool(self, pool: dict) -> dict[str, Any]:
-        """
-        Empty a pool.
 
-        Args:
-            pool (ResourceBase): The pool resource.
-
-        Returns:
-            dict: Success message from the server.
-        """
-        payload = {"pool": serialize_resource(pool)}
-        response = requests.post(
-            f"{self.base_url}/pool/empty", json=payload, timeout=10
-        )
-        response.raise_for_status()
-        return deserialize_resource(response.json())
-
-    def increase_plate_well(
-        self, plate: dict, well_id: str, quantity: float
-    ) -> dict[str, Any]:
-        """
-        Increase the quantity in a specific well of a plate.
-
-        Args:
-            plate (ResourceBase): The plate resource.
-            well_id (str): The ID of the well to increase.
-            quantity (float): The amount to increase.
-
-        Returns:
-            dict: Success message from the server.
-        """
-        payload = {
-            "plate": serialize_resource(plate),
-            "well_id": well_id,
-            "quantity": quantity,
-        }
-        response = requests.post(
-            f"{self.base_url}/plate/increase_well", json=payload, timeout=10
-        )
-        response.raise_for_status()
-        return deserialize_resource(response.json())
-
-    def decrease_plate_well(
-        self, plate: dict, well_id: str, quantity: float
-    ) -> dict[str, Any]:
-        """
-        Decrease the quantity in a specific well of a plate.
-
-        Args:
-            plate (ResourceBase): The plate resource.
-            well_id (str): The ID of the well to decrease.
-            quantity (float): The amount to decrease.
-
-        Returns:
-            dict: Success message from the server.
-        """
-        payload = {
-            "plate": serialize_resource(plate),
-            "well_id": well_id,
-            "quantity": quantity,
-        }
-        response = requests.post(
-            f"{self.base_url}/plate/decrease_well", json=payload, timeout=10
-        )
-        response.raise_for_status()
-        return deserialize_resource(response.json())
-
-    def update_collection_child(
-        self, collection: dict, key_id: str, child: Any
-    ) -> dict[str, Any]:
-        """
-        Update a specific chhild in a collection.
-
-        Args:
-            collection (ResourceBase): The collection resource.
-            key_id (str): The ID of the collection key to update.
-            child (ResourceBase): The new child resource to set.
-
-        Returns:
-            ResourceBase: The updated collection resource.
-        """
-        payload = {
-            "collection": serialize_resource(collection),
-            "key_id": key_id,
-            "child": serialize_resource(child),
-        }
-        response = requests.post(
-            f"{self.base_url}/collection/update_child", json=payload, timeout=10
-        )
-        response.raise_for_status()
-        return deserialize_resource(response.json())

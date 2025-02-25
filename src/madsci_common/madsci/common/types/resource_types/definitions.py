@@ -5,7 +5,7 @@ from typing import Annotated, Optional, Union
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.resource_types.custom_types import (
     CustomResourceTypes,
-    ResourceBaseTypeEnum,
+    ResourceTypeEnum,
 )
 from madsci.common.utils import new_name_str
 from madsci.common.validators import ulid_validator
@@ -34,7 +34,7 @@ class ResourceDefinition(BaseModel, table=False):
         default="",
         nullable=False,
     )
-    base_type: Optional[ResourceBaseTypeEnum] = Field(
+    base_type: Optional[ResourceTypeEnum] = Field(
         default=None,
         title="Resource Base Type",
         description="The base type of the resource.",
@@ -205,10 +205,10 @@ class ResourceFile(BaseModel):
         """Validate resource types."""
         for resource_type in self.resource_types:
             for parent_type in resource_type.parent_types:
-                if parent_type not in ResourceBaseTypeEnum and parent_type not in [
+                if parent_type not in ResourceTypeEnum and parent_type not in [
                     resource_type.type_name for resource_type in self.resource_types
                 ]:
                     raise ValueError(
-                        f"Unknown resource parent type: {parent_type}, parent type must be one of {list(ResourceBaseTypeEnum)} or a custom defined resource type.",
+                        f"Unknown resource parent type: {parent_type}, parent type must be one of {list(ResourceTypeEnum)} or a custom defined resource type.",
                     )
         return self

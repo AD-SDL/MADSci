@@ -12,7 +12,7 @@ requires-python = ">=3.9.1"
 readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
-  "madsci.common[server]",
+  "madsci.common",
   "psycopg2-binary"
 ]
 

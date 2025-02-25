@@ -23,4 +23,5 @@ dev = [
     "pytest>=8.3.4",
     "pytest-mock-resources[docker,mongo]>=2.12.1",
     "ipykernel>=6.29.5",
+    "httpx",
 ]

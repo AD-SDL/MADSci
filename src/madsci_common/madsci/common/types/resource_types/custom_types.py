@@ -49,7 +49,7 @@ class ContainerTypeEnum(str, Enum):
     pool = "pool"
 
 
-class ResourceBaseTypeEnum(str, Enum):
+class ResourceTypeEnum(str, Enum):
     """Enum for all resource base types."""
 
     """Resource Base Types"""

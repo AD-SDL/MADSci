@@ -25,8 +25,7 @@ def new_ulid_str() -> str:
     """
     return str(ULID())
 
-
-class BaseModel(SQLModel, table=False):
+class BaseModel(SQLModel):
     """
     Parent class for all MADSci data models.
     """
