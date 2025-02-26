@@ -23,7 +23,12 @@ from madsci.common.types.resource_types.definitions import (
     StackResourceDefinition,
     VoxelGridResourceDefinition,
 )
-from pydantic import AfterValidator, computed_field, model_validator
+from pydantic import (
+    AfterValidator,
+    AnyUrl,
+    computed_field,
+    model_validator,
+)
 from pydantic.types import Discriminator, Tag, datetime
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql.sqltypes import String
@@ -37,11 +42,12 @@ PositiveNumber = Annotated[Union[float, int], Field(ge=0)]
 class Resource(ResourceDefinition, extra="allow", table=False):
     """Base class for all MADSci Resources."""
 
-    resource_url: Optional[str] = Field(
+    resource_url: Optional[AnyUrl] = Field(
         title="Resource URL",
         description="The URL of the resource.",
         nullable=True,
         default=None,
+        sa_type=String,
     )
     base_type: Literal[ResourceTypeEnum.resource] = Field(
         title="Resource Base Type",

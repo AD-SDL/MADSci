@@ -67,7 +67,7 @@ def client(test_client: TestClient) -> Generator[ResourceClient, None, None]:
         mock_requests.delete.side_effect = lambda *args, **kwargs: test_client.delete(
             *args, **kwargs
         )
-        yield ResourceClient(base_url="http://testserver")
+        yield ResourceClient(url="http://testserver")
 
 
 def test_add_resource(client: ResourceClient) -> None:
@@ -107,8 +107,8 @@ def test_remove_resource(client: ResourceClient) -> None:
     resource = Resource()
     client.add_resource(resource)
     removed_resource = client.remove_resource(resource.resource_id)
-    assert removed_resource["resource_id"] == resource.resource_id
-    assert removed_resource["removed"] is True
+    assert removed_resource.resource_id == resource.resource_id
+    assert removed_resource.removed is True
 
 
 def test_query_history(client: ResourceClient) -> None:

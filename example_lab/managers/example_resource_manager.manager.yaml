@@ -4,5 +4,5 @@ description: null
 manager_type: resource_manager
 url: null
 host: 127.0.0.1
-port: 8004
+port: 8003
 db_url: postgresql://rpl:rpl@localhost:5432/resources

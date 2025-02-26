@@ -29,7 +29,7 @@ class ResourceManagerDefinition(ManagerDefinition):
         description="The hostname or IP address of the Resource Manager server.",
     )
     port: int = Field(
-        default=8004,
+        default=8003,
         title="Server Port",
         description="The port number of the Resource Manager server.",
     )

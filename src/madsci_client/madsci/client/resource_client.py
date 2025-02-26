@@ -22,9 +22,11 @@ from madsci.resource_manager.resource_tables import Resource
 class ResourceClient:
     """Fast API Client for Resources"""
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, url: str) -> None:
         """Initial params"""
-        self.base_url = base_url
+        self.url = url
+        if self.url.endswith("/"):
+            self.url = {self.url[:-1]}
 
     def add_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
         """
@@ -37,12 +39,14 @@ class ResourceClient:
             Resource: The added resource as returned by the server.
         """
         response = requests.post(
-            f"{self.base_url}/resource/add",
+            f"{self.url}/resource/add",
             json=resource.model_dump(mode="json"),
             timeout=10,
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def update_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
         """
@@ -55,12 +59,14 @@ class ResourceClient:
             ResourceDataModels: The updated resource as returned by the server.
         """
         response = requests.post(
-            f"{self.base_url}/resource/update",
+            f"{self.url}/resource/update",
             json=resource.model_dump(mode="json"),
             timeout=10,
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def get_resource(
         self,
@@ -76,11 +82,13 @@ class ResourceClient:
             ResourceDataModels: The retrieved resource.
         """
         response = requests.get(
-            f"{self.base_url}/resource/{resource_id}",
+            f"{self.url}/resource/{resource_id}",
             timeout=10,
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def query_resource(
         self,
@@ -116,21 +124,27 @@ class ResourceClient:
             unique=unique,
             multiple=multiple,
         ).model_dump(mode="json")
-        response = requests.post(
-            f"{self.base_url}/resource/query", json=payload, timeout=10
-        )
+        response = requests.post(f"{self.url}/resource/query", json=payload, timeout=10)
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        response_json = response.json()
+        if isinstance(response_json, list):
+            resources = [Resource.discriminate(resource) for resource in response_json]
+            for resource in resources:
+                resource.resource_url = self.url
+            return resources
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def remove_resource(self, resource_id: str) -> dict[str, Any]:
         """
         Remove a resource by moving it to the history table with `removed=True`.
         """
-        response = requests.delete(
-            f"{self.base_url}/resource/{resource_id}", timeout=10
-        )
+        response = requests.delete(f"{self.url}/resource/{resource_id}", timeout=10)
         response.raise_for_status()
-        return response.json()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def query_history(
         self,
@@ -154,9 +168,7 @@ class ResourceClient:
             end_date=end_date,
             limit=limit,
         ).model_dump(mode="json")
-        response = requests.post(
-            f"{self.base_url}/history/query", json=query, timeout=10
-        )
+        response = requests.post(f"{self.url}/history/query", json=query, timeout=10)
         response.raise_for_status()
 
         return response.json()
@@ -166,10 +178,12 @@ class ResourceClient:
         Restore a deleted resource from the history table.
         """
         response = requests.post(
-            f"{self.base_url}/history/{resource_id}/restore", timeout=10
+            f"{self.url}/history/{resource_id}/restore", timeout=10
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def push(
         self,
@@ -194,10 +208,12 @@ class ResourceClient:
             child_id=child.resource_id if isinstance(child, Resource) else child,
         ).model_dump(mode="json")
         response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/push", json=payload, timeout=10
+            f"{self.url}/resource/{resource_id}/push", json=payload, timeout=10
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def pop(
         self, resource: Union[str, ResourceDataModels]
@@ -209,20 +225,20 @@ class ResourceClient:
             resource (Union[str, ResourceDataModels]): The parent resource or its ID.
 
         Returns:
-            tuple[ResourceDataModels, ResourceDataModels]: The popped asset and updated stack.
+            tuple[ResourceDataModels, ResourceDataModels]: The popped asset and updated parent.
         """
 
         resource_id = (
             resource.resource_id if isinstance(resource, Resource) else resource
         )
-        response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/pop", timeout=10
-        )
+        response = requests.post(f"{self.url}/resource/{resource_id}/pop", timeout=10)
         response.raise_for_status()
         result = response.json()
         popped_asset = Resource.discriminate(result[0])
-        updated_stack = Resource.discriminate(result[1])
-        return popped_asset, updated_stack
+        update_parent = Resource.discriminate(result[1])
+        popped_asset.resource_url = f"{self.url}/resource/{popped_asset.resource_id}"
+        update_parent.resource_url = f"{self.url}/resource/{update_parent.resource_id}"
+        return popped_asset, update_parent
 
     def set_child(
         self,
@@ -249,12 +265,14 @@ class ResourceClient:
             child=child,
         ).model_dump(mode="json")
         response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/child/set",
+            f"{self.url}/resource/{resource_id}/child/set",
             json=payload,
             timeout=10,
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def remove_child(
         self,
@@ -278,12 +296,14 @@ class ResourceClient:
             key=key,
         ).model_dump(mode="json")
         response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/child/remove",
+            f"{self.url}/resource/{resource_id}/child/remove",
             json=payload,
             timeout=10,
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def set_quantity(
         self, resource: Union[str, ResourceDataModels], quantity: Union[float, int]
@@ -302,12 +322,14 @@ class ResourceClient:
             resource.resource_id if isinstance(resource, Resource) else resource
         )
         response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/quantity",
+            f"{self.url}/resource/{resource_id}/quantity",
             params={"quantity": quantity},
             timeout=10,
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def set_capacity(
         self, resource: Union[str, ResourceDataModels], capacity: Union[float, int]
@@ -326,12 +348,14 @@ class ResourceClient:
             resource.resource_id if isinstance(resource, Resource) else resource
         )
         response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/capacity",
+            f"{self.url}/resource/{resource_id}/capacity",
             params={"capacity": capacity},
             timeout=10,
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
 
     def remove_capacity_limit(
         self, resource: Union[str, ResourceDataModels]
@@ -349,7 +373,9 @@ class ResourceClient:
             resource.resource_id if isinstance(resource, Resource) else resource
         )
         response = requests.delete(
-            f"{self.base_url}/resource/{resource_id}/capacity", timeout=10
+            f"{self.url}/resource/{resource_id}/capacity", timeout=10
         )
         response.raise_for_status()
-        return Resource.discriminate(response.json())
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
