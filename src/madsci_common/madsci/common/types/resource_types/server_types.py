@@ -4,6 +4,7 @@ from typing import Optional, Union
 
 from madsci.common.types.base_types import BaseModel
 from madsci.common.types.resource_types import (
+    GridIndex,
     GridIndex2D,
     GridIndex3D,
     ResourceDataModels,
@@ -81,7 +82,7 @@ class PushResourceBody(ResourceRequestBase):
 class SetChildBody(ResourceRequestBase):
     """A request to set a child resource."""
 
-    key: Union[str, GridIndex2D, GridIndex3D]
+    key: Union[str, GridIndex, GridIndex2D, GridIndex3D]
     """The key to identify the child resource's location in the parent container. If the parent is a grid/voxel grid, the key should be a 2D or 3D index."""
     child: Union[str, ResourceDataModels]
     """The ID of the child resource or the child resource data."""

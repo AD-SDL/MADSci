@@ -7,6 +7,7 @@ from madsci.common.types.resource_types import (
     Grid,
     Queue,
     Resource,
+    Row,
     VoxelGrid,
 )
 from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
@@ -554,6 +555,22 @@ def test_set_child_invalid_body(test_client: TestClient) -> None:
     assert response.status_code == 422  # Unprocessable Entity
 
 
+def test_set_child_row(test_client: TestClient) -> None:
+    """Test setting a child resource of a grid"""
+
+    row = Row(row_dimension=2)
+    response = test_client.post("/resource/add", json=row.model_dump(mode="json"))
+    response.raise_for_status()
+
+    resource = Resource()
+    set_body = {"key": 0, "child": resource.model_dump(mode="json")}
+    response = test_client.post(f"/resource/{row.resource_id}/child/set", json=set_body)
+    response.raise_for_status()
+
+    result = Row.model_validate(response.json())
+    assert result.children[0].resource_id == resource.resource_id
+
+
 def test_set_child_grid(test_client: TestClient) -> None:
     """Test setting a child resource in a grid"""
     # Create a grid
@@ -862,3 +879,128 @@ def test_remove_capacity_limit_no_capacity(test_client: TestClient) -> None:
     # Verify resource is unchanged
     result = Consumable.model_validate(response.json())
     assert result.capacity is None
+
+
+def test_increase_quantity(test_client: TestClient) -> None:
+    """Test increasing the quantity of a resource"""
+    # Create a resource
+    resource = Consumable(quantity=10)
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    response.raise_for_status()
+
+    # Increase quantity
+    response = test_client.post(
+        f"/resource/{resource.resource_id}/quantity/increase", params={"amount": 5}
+    )
+    response.raise_for_status()
+    result = Consumable.model_validate(response.json())
+    assert result.quantity == 15
+
+
+def test_increase_quantity_nonexistent_resource(test_client: TestClient) -> None:
+    """Test increasing quantity for a nonexistent resource"""
+    response = test_client.post(
+        "/resource/nonexistent-id/quantity/increase", params={"amount": 5}
+    )
+    assert response.status_code == 500
+
+
+def test_increase_quantity_invalid_value(test_client: TestClient) -> None:
+    """Test increasing quantity with invalid value type"""
+    # Create a resource
+    resource = Consumable(quantity=10)
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    response.raise_for_status()
+
+    # Try increasing with invalid value
+    response = test_client.post(
+        f"/resource/{resource.resource_id}/quantity/increase",
+        params={"amount": "invalid"},
+    )
+    assert response.status_code == 422  # Unprocessable Entity
+
+
+def test_decrease_quantity(test_client: TestClient) -> None:
+    """Test decreasing the quantity of a resource"""
+    # Create a resource
+    resource = Consumable(quantity=10)
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    response.raise_for_status()
+
+    # Decrease quantity
+    response = test_client.post(
+        f"/resource/{resource.resource_id}/quantity/decrease", params={"amount": 5}
+    )
+    response.raise_for_status()
+    result = Consumable.model_validate(response.json())
+    assert result.quantity == 5
+
+
+def test_decrease_quantity_nonexistent_resource(test_client: TestClient) -> None:
+    """Test decreasing quantity for a nonexistent resource"""
+    response = test_client.post(
+        "/resource/nonexistent-id/quantity/decrease", params={"amount": 5}
+    )
+    assert response.status_code == 500
+
+
+def test_decrease_quantity_invalid_value(test_client: TestClient) -> None:
+    """Test decreasing quantity with invalid value type"""
+    # Create a resource
+    resource = Consumable(quantity=10)
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    response.raise_for_status()
+
+    # Try decreasing with invalid value
+    response = test_client.post(
+        f"/resource/{resource.resource_id}/quantity/decrease",
+        params={"amount": "invalid"},
+    )
+    assert response.status_code == 422  # Unprocessable Entity
+
+
+def test_change_quantity_by(test_client: TestClient) -> None:
+    """Test changing the quantity of a resource by a given amount"""
+    # Create a resource
+    resource = Consumable(quantity=10)
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    response.raise_for_status()
+
+    # Change quantity by a positive amount
+    response = test_client.post(
+        f"/resource/{resource.resource_id}/quantity/change_by", params={"amount": 5}
+    )
+    response.raise_for_status()
+    result = Consumable.model_validate(response.json())
+    assert result.quantity == 15
+
+    # Change quantity by a negative amount
+    response = test_client.post(
+        f"/resource/{resource.resource_id}/quantity/change_by", params={"amount": -3}
+    )
+    response.raise_for_status()
+    result = Consumable.model_validate(response.json())
+    assert result.quantity == 12
+
+
+def test_change_quantity_by_nonexistent_resource(test_client: TestClient) -> None:
+    """Test changing quantity by a given amount for a nonexistent resource"""
+    response = test_client.post(
+        "/resource/nonexistent-id/quantity/change_by", params={"amount": 5}
+    )
+    assert response.status_code == 500
+
+
+def test_change_quantity_by_invalid_value(test_client: TestClient) -> None:
+    """Test changing quantity by a given amount with invalid value type"""
+    # Create a resource
+    resource = Consumable(quantity=10)
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    response.raise_for_status()
+
+    # Try changing quantity by invalid value
+    response = test_client.post(
+        f"/resource/{resource.resource_id}/quantity/change_by",
+        params={"amount": "invalid"},
+    )
+    assert response.status_code == 422  # Unprocessable Entity

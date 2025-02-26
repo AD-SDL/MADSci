@@ -407,7 +407,7 @@ class ResourceInterface:
                 select(ResourceTable).filter_by(resource_id=child_id)
             ).one_or_none()
             existing_child = session.exec(
-                select(ResourceTable).filter_by(parent_id=parent_id, key=key)
+                select(ResourceTable).filter_by(parent_id=parent_id, key=str(key))
             ).one_or_none()
             if existing_child:
                 if not update_existing:
@@ -561,6 +561,7 @@ class ResourceInterface:
                 )
             container = container_row.to_data_model()
             if container.base_type in [
+                ContainerTypeEnum.row,
                 ContainerTypeEnum.grid,
                 ContainerTypeEnum.voxel_grid,
             ]:

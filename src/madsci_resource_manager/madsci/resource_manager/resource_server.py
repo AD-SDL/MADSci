@@ -269,6 +269,81 @@ def create_resource_server(  # noqa: C901, PLR0915
             logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @app.post("/resource/{resource_id}/quantity/change_by")
+    async def change_quantity_by(
+        resource_id: str, amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Change the quantity of a resource by a given amount.
+
+        Args:
+            resource_id (str): The ID of the resource.
+            amount (Union[float, int]): The amount to change the quantity by.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            resource = resource_interface.get_resource(resource_id=resource_id)
+            if not resource:
+                raise HTTPException(status_code=404, detail="Resource not found")
+            return resource_interface.set_quantity(
+                resource_id=resource_id, quantity=resource.quantity + amount
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/quantity/increase")
+    async def increase_quantity(
+        resource_id: str, amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Increase the quantity of a resource by a given amount.
+
+        Args:
+            resource_id (str): The ID of the resource.
+            amount (Union[float, int]): The amount to increase the quantity by. Note that this is a magnitude, so negative and positive values will have the same effect.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            resource = resource_interface.get_resource(resource_id=resource_id)
+            if not resource:
+                raise HTTPException(status_code=404, detail="Resource not found")
+            return resource_interface.set_quantity(
+                resource_id=resource_id, quantity=resource.quantity + abs(amount)
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/quantity/decrease")
+    async def decrease_quantity(
+        resource_id: str, amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Decrease the quantity of a resource by a given amount.
+
+        Args:
+            resource_id (str): The ID of the resource.
+            amount (Union[float, int]): The amount to decrease the quantity by. Note that this is a magnitude, so negative and postive will have the same effect.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            resource = resource_interface.get_resource(resource_id=resource_id)
+            if not resource:
+                raise HTTPException(status_code=404, detail="Resource not found")
+            return resource_interface.set_quantity(
+                resource_id=resource_id, quantity=resource.quantity - abs(amount)
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
     @app.post("/resource/{resource_id}/capacity")
     async def set_capacity(
         resource_id: str, capacity: Union[float, int]

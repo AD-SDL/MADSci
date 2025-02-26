@@ -136,18 +136,23 @@ class CollectionResourceDefinition(ContainerResourceDefinition):
         return v
 
 
-class GridResourceDefinition(ContainerResourceDefinition):
+class RowResourceDefinition(ContainerResourceDefinition):
+    """Definition for a row resource. Rows are 1D collections of resources. They are treated as single collections (i.e. Collection[Resource])."""
+
+    default_children: Optional[dict[str, ResourceDefinition]] = Field(
+        default=None,
+        title="Default Children",
+        description="The default children to create when initializing the collection. If None, use the type's default_children.",
+    )
+
+
+class GridResourceDefinition(RowResourceDefinition):
     """Definition for a grid resource. Grids are 2D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Resource]])."""
 
     default_children: Optional[dict[str, dict[str, ResourceDefinition]]] = Field(
         default=None,
         title="Default Children",
         description="The default children to create when initializing the collection. If None, use the type's default_children.",
-    )
-    row_dimension: int = Field(
-        default=None,
-        title="Row Dimension",
-        description="The number of rows in the grid. If None, use the type's row_dimension.",
     )
     column_dimension: int = Field(
         default=None,

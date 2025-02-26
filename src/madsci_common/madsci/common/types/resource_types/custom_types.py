@@ -35,6 +35,7 @@ class ContainerTypeEnum(str, Enum):
     stack = "stack"
     queue = "queue"
     collection = "collection"
+    row = "row"
     grid = "grid"
     voxel_grid = "voxel_grid"
     pool = "pool"
@@ -59,6 +60,7 @@ class ResourceTypeEnum(str, Enum):
     stack = "stack"
     queue = "queue"
     collection = "collection"
+    row = "row"
     grid = "grid"
     voxel_grid = "voxel_grid"
     pool = "pool"
@@ -260,6 +262,10 @@ class CollectionResourceTypeDefinition(ContainerResourceTypeDefinition):
         title="Collection Base Type",
         description="The base type of the collection.",
     )
+
+
+class RowResourceTypeDefinition(ContainerResourceTypeDefinition):
+    """Definition for a MADSci Row Resource Type."""
 
 
 class GridResourceTypeDefinition(ContainerResourceTypeDefinition):

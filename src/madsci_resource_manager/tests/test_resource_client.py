@@ -194,3 +194,51 @@ def test_remove_capacity_limit(client: ResourceClient) -> None:
     client.add_resource(resource)
     updated_resource = client.remove_capacity_limit(resource)
     assert updated_resource.capacity is None
+
+
+def test_change_quantity_by_increase(client: ResourceClient) -> None:
+    """Test increasing the quantity of a resource using ResourceClient"""
+    resource = Consumable(quantity=10)
+    client.add_resource(resource)
+    updated_resource = client.change_quantity_by(resource, 5)
+    assert updated_resource.quantity == 15
+
+
+def test_change_quantity_by_decrease(client: ResourceClient) -> None:
+    """Test decreasing the quantity of a resource using ResourceClient"""
+    resource = Consumable(quantity=10)
+    client.add_resource(resource)
+    updated_resource = client.change_quantity_by(resource, -5)
+    assert updated_resource.quantity == 5
+
+
+def test_increase_quantity_positive(client: ResourceClient) -> None:
+    """Test increasing the quantity of a resource using ResourceClient with a positive amount"""
+    resource = Consumable(quantity=10)
+    client.add_resource(resource)
+    updated_resource = client.increase_quantity(resource, 5)
+    assert updated_resource.quantity == 15
+
+
+def test_increase_quantity_negative(client: ResourceClient) -> None:
+    """Test increasing the quantity of a resource using ResourceClient with a negative amount"""
+    resource = Consumable(quantity=10)
+    client.add_resource(resource)
+    updated_resource = client.increase_quantity(resource, -5)
+    assert updated_resource.quantity == 15
+
+
+def test_decrease_quantity_positive(client: ResourceClient) -> None:
+    """Test decreasing the quantity of a resource using ResourceClient with a positive amount"""
+    resource = Consumable(quantity=10)
+    client.add_resource(resource)
+    updated_resource = client.decrease_quantity(resource, 5)
+    assert updated_resource.quantity == 5
+
+
+def test_decrease_quantity_negative(client: ResourceClient) -> None:
+    """Test decreasing the quantity of a resource using ResourceClient with a negative amount"""
+    resource = Consumable(quantity=10)
+    client.add_resource(resource)
+    updated_resource = client.decrease_quantity(resource, -5)
+    assert updated_resource.quantity == 5

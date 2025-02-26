@@ -331,6 +331,84 @@ class ResourceClient:
         resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         return resource
 
+    def change_quantity_by(
+        self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Change the quantity of a resource by a given amount.
+
+        Args:
+            resource (Union[str, ResourceDataModels]): The resource or its ID.
+            amount (Union[float, int]): The quantity to change by.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        resource_id = (
+            resource.resource_id if isinstance(resource, Resource) else resource
+        )
+        response = requests.post(
+            f"{self.url}/resource/{resource_id}/quantity/change_by",
+            params={"amount": amount},
+            timeout=10,
+        )
+        response.raise_for_status()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
+
+    def increase_quantity(
+        self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Increase the quantity of a resource by a given amount.
+
+        Args:
+            resource (Union[str, ResourceDataModels]): The resource or its ID.
+            amount (Union[float, int]): The quantity to increase by. Note that this is a magnitude, so negative and positive values will have the same effect.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        resource_id = (
+            resource.resource_id if isinstance(resource, Resource) else resource
+        )
+        response = requests.post(
+            f"{self.url}/resource/{resource_id}/quantity/increase",
+            params={"amount": amount},
+            timeout=10,
+        )
+        response.raise_for_status()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
+
+    def decrease_quantity(
+        self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Decrease the quantity of a resource by a given amount.
+
+        Args:
+            resource (Union[str, ResourceDataModels]): The resource or its ID.
+            amount (Union[float, int]): The quantity to decrease by. Note that this is a magnitude, so negative and positive values will have the same effect.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        resource_id = (
+            resource.resource_id if isinstance(resource, Resource) else resource
+        )
+        response = requests.post(
+            f"{self.url}/resource/{resource_id}/quantity/decrease",
+            params={"amount": amount},
+            timeout=10,
+        )
+        response.raise_for_status()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
+
     def set_capacity(
         self, resource: Union[str, ResourceDataModels], capacity: Union[float, int]
     ) -> ResourceDataModels:

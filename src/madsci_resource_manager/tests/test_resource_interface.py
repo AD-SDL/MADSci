@@ -8,6 +8,7 @@ from madsci.common.types.resource_types import (
     Grid,
     Queue,
     Resource,
+    Row,
     Stack,
     VoxelGrid,
 )
@@ -607,6 +608,23 @@ def test_set_quantity_float_value(interface: ResourceInterface) -> None:
         resource_id=consumable.resource_id, quantity=3.5
     )
     assert updated_consumable.quantity == 3.5
+
+
+def test_set_child_row(interface: ResourceInterface) -> None:
+    """Test setting a child in a row container"""
+
+    row = Row(row_dimension=1)
+    row = interface.add_resource(resource=row)
+
+    resource = Resource()
+    row_result = interface.set_child(
+        container_id=row.resource_id, key=0, child=resource
+    )
+
+    assert row_result.children[0].resource_id == resource.resource_id
+
+    with pytest.raises(KeyError):
+        interface.set_child(container_id=row.resource_id, key=1, child=resource)
 
 
 def test_set_child_grid(interface: ResourceInterface) -> None:

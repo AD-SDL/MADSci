@@ -20,6 +20,7 @@ from madsci.common.types.resource_types.definitions import (
     PoolResourceDefinition,
     QueueResourceDefinition,
     ResourceDefinition,
+    RowResourceDefinition,
     StackResourceDefinition,
     VoxelGridResourceDefinition,
 )
@@ -268,7 +269,53 @@ GridIndex2D = tuple[GridIndex, GridIndex]
 GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 
-class Grid(Container):
+class Row(Container):
+    """Data Model for a Row"""
+
+    children: Optional[dict[GridIndex, "ResourceDataModels"]] = Field(
+        title="Children",
+        description="The children of the row container.",
+        default_factory=dict,
+    )
+    base_type: Literal[ContainerTypeEnum.row] = Field(
+        title="Container Base Type",
+        description="The base type of the row.",
+        default=ContainerTypeEnum.row,
+        const=True,
+    )
+    row_dimension: int = Field(
+        title="Row Dimension",
+        description="The number of rows in the row.",
+        ge=0,
+    )
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        return len(self.children)
+
+    @staticmethod
+    def flatten_key(key: GridIndex) -> str:
+        """Flatten the key to a string."""
+        return str(key)
+
+    @staticmethod
+    def expand_key(key: str) -> GridIndex:
+        """Expand the key to a 2-tuple."""
+        if key.isdigit():
+            return int(key)
+        return key
+
+    def check_key_bounds(self, key: Union[str, GridIndex]) -> bool:
+        """Check if the key is within the bounds of the grid."""
+        if isinstance(key, int) or str(key).isdigit():
+            key = int(key)
+        else:
+            key = string.ascii_lowercase.index(key.lower())
+        return not (key < 0 or key >= self.row_dimension)
+
+
+class Grid(Row):
     """Data Model for a Grid."""
 
     children: Optional[dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]] = Field(
@@ -281,11 +328,6 @@ class Grid(Container):
         description="The base type of the grid.",
         default=ContainerTypeEnum.grid,
         const=True,
-    )
-    row_dimension: int = Field(
-        title="Row Dimension",
-        description="The number of rows in the grid.",
-        ge=0,
     )
     column_dimension: int = Field(
         title="Column Dimension",
@@ -581,6 +623,10 @@ RESOURCE_TYPE_MAP = {
         "definition": CollectionResourceDefinition,
         "model": Collection,
     },
+    ContainerTypeEnum.row: {
+        "definition": RowResourceDefinition,
+        "model": Row,
+    },
     ContainerTypeEnum.grid: {
         "definition": GridResourceDefinition,
         "model": Grid,
@@ -604,6 +650,7 @@ ResourceDataModels = Annotated[
         Annotated[ContinuousConsumable, Tag("continuous_consumable")],
         Annotated[Container, Tag("container")],
         Annotated[Collection, Tag("collection")],
+        Annotated[Row, Tag("row")],
         Annotated[Grid, Tag("grid")],
         Annotated[VoxelGrid, Tag("voxel_grid")],
         Annotated[Stack, Tag("stack")],
@@ -626,6 +673,7 @@ ContainerDataModels = Annotated[
     Union[
         Annotated[Container, Tag("container")],
         Annotated[Collection, Tag("collection")],
+        Annotated[Row, Tag("row")],
         Annotated[Grid, Tag("grid")],
         Annotated[VoxelGrid, Tag("voxel_grid")],
         Annotated[Stack, Tag("stack")],
