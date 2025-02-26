@@ -38,7 +38,7 @@ class ResourceClient:
         """
         response = requests.post(
             f"{self.base_url}/resource/add",
-            json={"resource": resource.model_dump(mode="json")},
+            json=resource.model_dump(mode="json"),
             timeout=10,
         )
         response.raise_for_status()
@@ -56,7 +56,7 @@ class ResourceClient:
         """
         response = requests.post(
             f"{self.base_url}/resource/update",
-            json={"resource": resource.model_dump(mode="json")},
+            json=resource.model_dump(mode="json"),
             timeout=10,
         )
         response.raise_for_status()
@@ -126,8 +126,8 @@ class ResourceClient:
         """
         Remove a resource by moving it to the history table with `removed=True`.
         """
-        response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/remove", timeout=10
+        response = requests.delete(
+            f"{self.base_url}/resource/{resource_id}", timeout=10
         )
         response.raise_for_status()
         return response.json()
@@ -166,7 +166,7 @@ class ResourceClient:
         Restore a deleted resource from the history table.
         """
         response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/restore", timeout=10
+            f"{self.base_url}/history/{resource_id}/restore", timeout=10
         )
         response.raise_for_status()
         return Resource.discriminate(response.json())
@@ -187,15 +187,11 @@ class ResourceClient:
             ResourceDataModels: The updated parent resource.
         """
         resource_id = (
-            resource.resource_id
-            if isinstance(resource, ResourceDataModels)
-            else resource
+            resource.resource_id if isinstance(resource, Resource) else resource
         )
         payload = PushResourceBody(
-            child=child if isinstance(child, ResourceDataModels) else None,
-            child_id=child.resource_id
-            if isinstance(child, ResourceDataModels)
-            else child,
+            child=child if isinstance(child, Resource) else None,
+            child_id=child.resource_id if isinstance(child, Resource) else child,
         ).model_dump(mode="json")
         response = requests.post(
             f"{self.base_url}/resource/{resource_id}/push", json=payload, timeout=10
@@ -217,9 +213,7 @@ class ResourceClient:
         """
 
         resource_id = (
-            resource.resource_id
-            if isinstance(resource, ResourceDataModels)
-            else resource
+            resource.resource_id if isinstance(resource, Resource) else resource
         )
         response = requests.post(
             f"{self.base_url}/resource/{resource_id}/pop", timeout=10
@@ -248,16 +242,14 @@ class ResourceClient:
             ResourceDataModels: The updated parent container resource.
         """
         resource_id = (
-            resource.resource_id
-            if isinstance(resource, ResourceDataModels)
-            else resource
+            resource.resource_id if isinstance(resource, Resource) else resource
         )
         payload = SetChildBody(
             key=key,
             child=child,
         ).model_dump(mode="json")
         response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/set_child",
+            f"{self.base_url}/resource/{resource_id}/child/set",
             json=payload,
             timeout=10,
         )
@@ -280,15 +272,13 @@ class ResourceClient:
             ResourceDataModels: The updated parent container resource.
         """
         resource_id = (
-            resource.resource_id
-            if isinstance(resource, ResourceDataModels)
-            else resource
+            resource.resource_id if isinstance(resource, Resource) else resource
         )
         payload = RemoveChildBody(
             key=key,
         ).model_dump(mode="json")
         response = requests.post(
-            f"{self.base_url}/resource/{resource_id}/remove_child",
+            f"{self.base_url}/resource/{resource_id}/child/remove",
             json=payload,
             timeout=10,
         )
@@ -309,9 +299,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         resource_id = (
-            resource.resource_id
-            if isinstance(resource, ResourceDataModels)
-            else resource
+            resource.resource_id if isinstance(resource, Resource) else resource
         )
         response = requests.post(
             f"{self.base_url}/resource/{resource_id}/quantity",
@@ -335,9 +323,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         resource_id = (
-            resource.resource_id
-            if isinstance(resource, ResourceDataModels)
-            else resource
+            resource.resource_id if isinstance(resource, Resource) else resource
         )
         response = requests.post(
             f"{self.base_url}/resource/{resource_id}/capacity",
@@ -360,9 +346,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         resource_id = (
-            resource.resource_id
-            if isinstance(resource, ResourceDataModels)
-            else resource
+            resource.resource_id if isinstance(resource, Resource) else resource
         )
         response = requests.delete(
             f"{self.base_url}/resource/{resource_id}/capacity", timeout=10
