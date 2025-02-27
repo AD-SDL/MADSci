@@ -7,7 +7,7 @@ from typing import Optional
 
 import click
 from click.core import Context
-from madsci.common.types.squid_types import LabDefinition
+from madsci.common.types.lab_types import LabDefinition
 from madsci.common.utils import (
     prompt_for_input,
     prompt_yes_no,
@@ -121,13 +121,6 @@ def list() -> None:
             console.print(
                 f"[bold]{lab_definition.name}[/]: {lab_definition.description} ({lab_file})",
             )
-            if lab_definition.workcells:
-                console.print("  Workcells:")
-                for name, workcell in lab_definition.workcells.items():
-                    if isinstance(workcell, str):
-                        console.print(f"    - {name}: {workcell}")
-                    else:
-                        console.print(f"    - {name}: {workcell.description}")
     else:
         print("No lab definitions found")
 

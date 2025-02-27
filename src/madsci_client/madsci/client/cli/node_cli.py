@@ -1,5 +1,6 @@
 """Command Line Interface for managing MADSci Nodes."""
 
+import contextlib
 import os
 from pathlib import Path
 from typing import Optional
@@ -57,21 +58,23 @@ def find_node(name: Optional[str], path: Optional[str]) -> NodeContext:
 
     node_files = search_for_file_pattern("*.node.yaml")
     for node_file in node_files:
-        node_def = NodeDefinition.from_yaml(node_file)
-        if not name or node_def.node_name == name:
-            node_context.path = Path(node_file)
-            node_context.node_def = node_def
-            return node_context
+        with contextlib.suppress(Exception):
+            node_def = NodeDefinition.from_yaml(node_file)
+            if not name or node_def.node_name == name:
+                node_context.path = Path(node_file)
+                node_context.node_def = node_def
+                return node_context
 
     workcell_files = search_for_file_pattern("*.workcell.yaml")
     for workcell_file in workcell_files:
-        workcell_def = WorkcellDefinition.from_yaml(workcell_file)
-        node_def = find_node_in_workcell(name, workcell_def)
-        if node_def:
-            node_context.path = Path(workcell_file)
-            node_context.workcell_def = workcell_def
-            node_context.node_def = node_def
-            return node_context
+        with contextlib.suppress(Exception):
+            workcell_def = WorkcellDefinition.from_yaml(workcell_file)
+            node_def = find_node_in_workcell(name, workcell_def)
+            if node_def:
+                node_context.path = Path(workcell_file)
+                node_context.workcell_def = workcell_def
+                node_context.node_def = node_def
+                return node_context
 
     return node_context
 
@@ -144,7 +147,6 @@ def create(
     standalone: bool,
 ) -> None:
     """Create a new node."""
-    commands = {}
     name = name if name else ctx.parent.params.get("name")
     name = (
         name
@@ -172,16 +174,14 @@ def create(
             )
             try:
                 module_definition = NodeModuleDefinition.from_yaml(module_path)
-                commands = module_definition.commands
             except Exception as e:
                 console.print(f"Error loading module definition file: {e}")
                 return
 
     node_definition = NodeDefinition(
+        **module_definition.model_dump(),
         node_name=name,
         node_description=description,
-        module_definition=Path(module_path).absolute() if module_path else None,
-        commands=commands,
     )
     console.print(node_definition)
 
@@ -201,12 +201,6 @@ def create(
         if not path.parent.exists():
             console.print(f"Creating directory: {path.parent}")
             path.parent.mkdir(parents=True, exist_ok=True)
-    path = Path(path).absolute()
-    node_definition.module_definition = relative_path(
-        source=path.parent.absolute(),
-        target=Path(module_path).absolute(),
-    )
-    node_definition.config = NodeModuleDefinition.from_yaml(module_path).config
     save_model(path=path, model=node_definition, overwrite_check=not ctx.obj.quiet)
 
     # *Handle workcell integration

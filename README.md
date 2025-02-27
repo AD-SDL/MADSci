@@ -23,7 +23,17 @@ MADSci is made up of a number of different modular components, each of which can
 
 - [Clients](./src/madsci_client/README.md): A collection of clients for interacting with different parts of MADSci
 - [Event Manager](./src/madsci_event_manager/README.md): handles distributed event logging and querying across a distributed lab.
-- []
+- [Workcell Manager](./src/madsci_workcell_manager/README.md): handles coordinating and scheduling a collection of interoperating instruments, robots, and resources using Workflows.
+- [Experiment Manager](./src/madsci_experiment_manager/README.md): manages experimental runs and campaigns across a MADSci-powered lab.
+- [Resource Manager](./src/madsci_resource_manager/README.md): For tracking labware, assets, samples, and consumables in an automated or autonomous lab.
+
+## Roadmap
+
+We're working on bringing the following additional components to MADSci:
+
+- **Transfer Manager**: For coordinating resource movement in a lab.
+- **Notification Manager**: For handling notifications related to an automated or autonomous lab.
+- **Squid**: the central lab coordinator and dashboard for madsci-powered labs.
 
 
 ## Getting Started with MADSci

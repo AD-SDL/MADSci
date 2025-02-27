@@ -1,641 +1,72 @@
-# ruff: noqa: ERA001
-
 """Types related to MADSci Resources."""
 
-from datetime import datetime
-from enum import Enum
-from typing import Annotated, Any, Literal, Optional, Union
+import string
+from typing import Annotated, Literal, Optional, Union
 
-from madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci.common.validators import ulid_validator
-from pydantic import Json
-from pydantic.config import ConfigDict
-from pydantic.functional_validators import field_validator, model_validator
-from pydantic.types import Discriminator, Tag
+from madsci.common.types.resource_types.custom_types import (
+    AssetTypeEnum,
+    ConsumableTypeEnum,
+    ContainerTypeEnum,
+    ResourceTypeEnum,
+)
+from madsci.common.types.resource_types.definitions import (
+    AssetResourceDefinition,
+    CollectionResourceDefinition,
+    ConsumableResourceDefinition,
+    ContainerResourceDefinition,
+    ContinuousConsumableResourceDefinition,
+    DiscreteConsumableResourceDefinition,
+    GridResourceDefinition,
+    PoolResourceDefinition,
+    QueueResourceDefinition,
+    ResourceDefinition,
+    RowResourceDefinition,
+    StackResourceDefinition,
+    VoxelGridResourceDefinition,
+)
+from pydantic import (
+    AfterValidator,
+    AnyUrl,
+    computed_field,
+    model_validator,
+)
+from pydantic.types import Discriminator, Tag, datetime
 from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.types import PickleType
+from sqlalchemy.sql.sqltypes import String
 from sqlmodel import Field
+from typing_extensions import Self  # type: ignore
 
+PositiveInt = Annotated[int, Field(ge=0)]
+PositiveNumber = Annotated[Union[float, int], Field(ge=0)]
 
-class ResourceType(str, Enum):
-    """Type for a MADSci Resource."""
 
-    resource = "resource"
-    """The root resource type. Used when a resource type is not known or any resource type is acceptable."""
-    asset = "asset"
-    consumable = "consumable"
+class Resource(ResourceDefinition, extra="allow", table=False):
+    """Base class for all MADSci Resources. Used to track any resource that isn't well-modeled by a more specific type."""
 
-
-class AssetType(str, Enum):
-    """Type for a MADSci Asset."""
-
-    container = "container"
-    asset = "asset"
-
-
-class ConsumableType(str, Enum):
-    """Type for a MADSci Consumable."""
-
-    discrete_consumable = "discrete_consumable"
-    continuous_consumable = "continuous_consumable"
-
-
-class ContainerType(str, Enum):
-    """Type for a MADSci Container."""
-
-    stack = "stack"
-    queue = "queue"
-    collection = "collection"
-    grid = "grid"
-    voxel_grid = "voxel_grid"
-    pool = "pool"
-
-
-ResourceTypes = Union[ResourceType, AssetType, ContainerType, ConsumableType]
-
-
-class ResourceTypeDefinition(BaseModel):
-    """Definition for a MADSci Resource Type."""
-
-    model_config = ConfigDict(extra="allow")
-
-    type_name: str = Field(
-        title="Resource Type Name",
-        description="The name of the type of resource (i.e. 'plate_96_well_corningware', 'tube_rack_24', etc.).",
-    )
-    type_description: str = Field(
-        title="Resource Type Description",
-        description="A description of the custom type of the resource.",
-    )
-    base_type: Literal[ResourceType.resource] = Field(
-        default=ResourceType.resource,
-        title="Resource Base Type",
-        description="The base type of the resource.",
-    )
-    parent_types: list[str] = Field(
-        default=["resource"],
-        title="Resource Parent Types",
-        description="The parent types of the resource.",
-    )
-    custom_attributes: Optional[list["CustomResourceAttributeDefinition"]] = Field(
-        default=None,
-        title="Custom Attributes",
-        description="Custom attributes used by resources of this type.",
-    )
-
-    @field_validator("parent_types", mode="before")
-    @classmethod
-    def validate_parent_types(cls, v: Union[list[str], str]) -> list[str]:
-        """Validate parent types."""
-        if isinstance(v, str):
-            return [v]
-        return v
-
-
-class CustomResourceAttributeDefinition(BaseModel, extra="allow"):
-    """Definition for a MADSci Custom Resource Attribute."""
-
-    attribute_name: str = Field(
-        title="Attribute Name",
-        description="The name of the attribute.",
-    )
-    attribute_description: Optional[str] = Field(
-        default=None,
-        title="Attribute Description",
-        description="A description of the attribute.",
-    )
-    optional: bool = Field(
-        default=False,
-        title="Optional",
-        description="Whether the attribute is optional.",
-    )
-    default_value: Json[Any] = Field(
-        default=None,
-        title="Default Value",
-        description="The default value of the attribute.",
-    )
-
-
-class ContainerResourceTypeDefinition(ResourceTypeDefinition):
-    """Definition for a MADSci Container Resource Type."""
-
-    supported_child_types: list[str] = Field(
-        title="Supported Child Types",
-        description="The resource types for children supported by the container. If `resource` is included, the container can contain any resource type.",
-    )
-    default_capacity: Optional[Union[int, float]] = Field(
-        title="Default Capacity",
-        description="The default maximum capacity of the container. If None, the container has no capacity limit.",
-        default=None,
-    )
-    resizeable: bool = Field(
-        default=False,
-        title="Resizeable",
-        description="Whether containers of this type support different sizes. If True, the container can be resized. If False, the container is fixed size.",
-    )
-    default_children: Optional[
-        Union[list["ResourceDefinition"], dict[str, "ResourceDefinition"]]
-    ] = Field(
-        default=None,
-        title="Default Children",
-        description="The default children to create when populating the container. Takes precedence over default_child_template.",
-    )
-    default_child_template: Optional[list["ResourceDefinition"]] = Field(
-        default=None,
-        title="Default Child Template",
-        description="The default template for children to create when populating the container.",
-    )
-    base_type: Literal[AssetType.container] = Field(
-        default=AssetType.container,
-        title="Container Base Type",
-        description="The base type of the container.",
-    )
-
-
-class AssetResourceTypeDefinition(ResourceTypeDefinition):
-    """Definition for a MADSci Asset Resource Type."""
-
-    base_type: Literal[ResourceType.asset] = Field(
-        default=ResourceType.asset,
-        title="Asset Base Type",
-        description="The base type of the asset.",
-    )
-
-
-class ConsumableResourceTypeDefinition(ResourceTypeDefinition):
-    """Definition for a MADSci Consumable Resource Type."""
-
-    base_type: Literal[ResourceType.consumable] = Field(
-        default=ResourceType.consumable,
-        title="Consumable Base Type",
-        description="The base type of the consumable.",
-    )
-
-
-class DiscreteConsumableResourceTypeDefinition(ConsumableResourceTypeDefinition):
-    """Definition for a MADSci Discrete Consumable Resource Type."""
-
-    base_type: Literal[ConsumableType.discrete_consumable] = Field(
-        default=ConsumableType.discrete_consumable,
-        title="Discrete Consumable Base Type",
-        description="The base type of the discrete consumable.",
-    )
-
-
-class ContinuousConsumableResourceTypeDefinition(ConsumableResourceTypeDefinition):
-    """Definition for a MADSci Continuous Consumable Resource Type."""
-
-    base_type: Literal[ConsumableType.continuous_consumable] = Field(
-        default=ConsumableType.continuous_consumable,
-        title="Continuous Consumable Base Type",
-        description="The base type of the continuous consumable.",
-    )
-
-
-class StackResourceTypeDefinition(ContainerResourceTypeDefinition):
-    """Definition for a MADSci Stack Resource Type."""
-
-    default_child_quantity: Optional[int] = Field(
-        default=None,
-        title="Default Child Quantity",
-        description="The default number of children to create when populating the container. If None, the container will be populated with a single child.",
-    )
-    base_type: Literal[ContainerType.stack] = Field(
-        default=ContainerType.stack,
-        title="Stack Base Type",
-        description="The base type of the stack.",
-    )
-
-
-class QueueResourceTypeDefinition(ContainerResourceTypeDefinition):
-    """Definition for a MADSci Queue Resource Type."""
-
-    default_child_quantity: Optional[int] = Field(
-        default=None,
-        title="Default Child Quantity",
-        description="The default number of children to create when populating the container. If None, the container will be populated with a single child.",
-    )
-    base_type: Literal[ContainerType.queue] = Field(
-        default=ContainerType.queue,
-        title="Queue Base Type",
-        description="The base type of the queue.",
-    )
-
-
-class CollectionResourceTypeDefinition(ContainerResourceTypeDefinition):
-    """Definition for a MADSci Collection Resource Type."""
-
-    keys: Optional[list[str]] = Field(
-        title="Collection Keys",
-        description="The keys of the collection.",
-    )
-    default_children: Optional[
-        Union[list["ResourceDefinition"], dict[str, "ResourceDefinition"]]
-    ] = Field(
-        default=None,
-        title="Default Children",
-        description="The default children to create when populating the container.",
-    )
-
-    @field_validator("keys", mode="before")
-    @classmethod
-    def validate_keys(cls, v: Union[int, list[str]]) -> list[str]:
-        """Convert integer keys count to 1-indexed range."""
-        if isinstance(v, int):
-            return [str(i) for i in range(1, v + 1)]
-        return v
-
-    base_type: Literal[ContainerType.collection] = Field(
-        default=ContainerType.collection,
-        title="Collection Base Type",
-        description="The base type of the collection.",
-    )
-
-
-class GridResourceTypeDefinition(ContainerResourceTypeDefinition):
-    """Definition for a MADSci Grid Resource Type."""
-
-    rows: list[str] = Field(
-        title="Grid Rows",
-        description="The row labels for the grid.",
-    )
-    columns: list[str] = Field(
-        title="Grid Columns",
-        description="The column labels for the grid.",
-    )
-
-    @field_validator("columns", "rows", mode="before")
-    @classmethod
-    def validate_keys(cls, v: Union[int, list[str]]) -> list[str]:
-        """Convert integer keys count to 1-indexed range."""
-        if isinstance(v, int):
-            return [str(i) for i in range(1, v + 1)]
-        return v
-
-    base_type: Literal[ContainerType.grid] = Field(
-        default=ContainerType.grid,
-        title="Grid Base Type",
-        description="The base type of the grid.",
-    )
-
-
-class VoxelGridResourceTypeDefinition(GridResourceTypeDefinition):
-    """Definition for a MADSci Voxel Grid Resource Type."""
-
-    capacity: Optional[int] = Field(
-        title="Collection Capacity",
-        description="The maximum capacity of each element in the grid.",
-    )
-    planes: list[str] = Field(
-        title="Voxel Grid Planes",
-        description="The keys of the planes in the grid.",
-    )
-
-    @field_validator("columns", "rows", mode="before")
-    @classmethod
-    def validate_keys(cls, v: Union[int, list[str]]) -> list[str]:
-        """Convert integer keys count to 1-indexed range."""
-        if isinstance(v, int):
-            return [str(i) for i in range(1, v + 1)]
-        return v
-
-    base_type: Literal[ContainerType.voxel_grid] = Field(
-        default=ContainerType.voxel_grid,
-        title="Voxel Grid Base Type",
-        description="The base type of the voxel grid.",
-    )
-
-
-class PoolResourceTypeDefinition(ContainerResourceTypeDefinition):
-    """Definition for a MADSci Pool Resource Type."""
-
-    base_type: Literal[ContainerType.pool] = Field(
-        default=ContainerType.pool,
-        title="Pool Base Type",
-        description="The base type of the pool.",
-    )
-
-
-class ResourceDefinition(BaseModel, extra="allow", table=False):
-    """Definition for a MADSci Resource."""
-
-    # model_config = ConfigDict(extra="allow") # Causes error with SQLModel and extra="allow" creates ambiguity because SQLAlchemy does not recognize undefined fields when table = True
-
-    resource_name: str = Field(
-        title="Resource Name",
-        description="The name of the resource.",
-    )
-    resource_type: str = Field(
-        title="Resource Type",
-        description="The type of the resource.",
-        default="",
-        nullable=False,
-    )
-    base_type: Optional[str] = Field(
-        default=None,
-        title="Resource Base Type",
-        description="The base type of the resource.",
-    )
-    resource_description: Optional[str] = Field(
-        default=None,
-        title="Resource Description",
-        description="A description of the resource.",
-    )
-    resource_id: str = Field(
-        title="Resource ID",
-        description="The ID of the resource.",
-        default_factory=new_ulid_str,
-        primary_key=True,
-    )
-    parent: Optional[str] = Field(
-        default=None,
-        title="Parent Resource",
-        description="The parent resource ID or name. If None, defaults to the owning module or workcell.",
-    )
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Timestamp of the date created."
-    )
-    last_modified: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Timestamp of the last modification.",
-    )
-    is_ulid = field_validator("resource_id")(ulid_validator)
-
-
-class AssetResourceDefinition(ResourceDefinition, table=False):
-    """Definition for an asset resource."""
-
-
-class ConsumableResourceDefinition(ResourceDefinition):
-    """Definition for a consumable resource."""
-
-
-class DiscreteConsumableResourceDefinition(ConsumableResourceDefinition):
-    """Definition for a discrete consumable resource."""
-
-
-class ContinuousConsumableResourceDefinition(ConsumableResourceDefinition):
-    """Definition for a continuous consumable resource."""
-
-
-class ContainerResourceDefinition(ResourceDefinition):
-    """Definition for a container resource."""
-
-    capacity: Optional[Union[int, float]] = Field(
-        default=None,
-        title="Container Capacity",
-        description="The capacity of the container. If None, uses the type's default_capacity.",
-    )
-    default_children: Optional[
-        Union[list[ResourceDefinition], dict[str, ResourceDefinition]]
-    ] = Field(
-        default=None,
-        title="Default Children",
-        description="The default children to create when initializing the container. If None, use the type's default_children.",
-    )
-    default_child_template: Optional[ResourceDefinition] = Field(
-        default=None,
-        title="Default Child Template",
-        description="Template for creating child resources, supporting variable substitution. If None, use the type's default_child_template.",
-    )
-
-
-class CollectionResourceDefinition(ContainerResourceDefinition):
-    """Definition for a collection resource. Collections are used for resources that have a number of children, each with a unique key, which can be randomly accessed."""
-
-    keys: Optional[Union[int, list[str]]] = Field(
-        default=None,
-        title="Collection Keys",
-        description="The keys for the collection. Can be an integer (converted to 1-based range) or explicit list.",
-    )
-    default_children: Optional[
-        Union[list[ResourceDefinition], dict[str, ResourceDefinition]]
-    ] = Field(
-        default=None,
-        title="Default Children",
-        description="The default children to create when initializing the collection. If None, use the type's default_children.",
-    )
-
-    @field_validator("keys", mode="before")
-    @classmethod
-    def validate_keys(cls, v: Union[int, list[str], None]) -> Optional[list[str]]:
-        """Convert integer keys to 1-based range if needed."""
-        if isinstance(v, int):
-            return [str(i) for i in range(1, v + 1)]
-        return v
-
-
-class GridResourceDefinition(ContainerResourceDefinition):
-    """Definition for a grid resource. Grids are 2D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Resource]])."""
-
-    default_children: Optional[dict[str, dict[str, ResourceDefinition]]] = Field(
-        default=None,
-        title="Default Children",
-        description="The default children to create when initializing the collection. If None, use the type's default_children.",
-    )
-
-
-class VoxelGridResourceDefinition(GridResourceDefinition):
-    """Definition for a voxel grid resource. Voxel grids are 3D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Collection[Resource]]])."""
-
-    default_children: Optional[dict[str, dict[str, dict[str, ResourceDefinition]]]] = (
-        Field(
-            default=None,
-            title="Default Children",
-            description="The default children to create when initializing the collection. If None, use the type's default_children.",
-        )
-    )
-
-
-class StackResourceDefinition(ContainerResourceDefinition):
-    """Definition for a stack resource."""
-
-    default_child_quantity: Optional[int] = Field(
-        default=None,
-        title="Default Child Quantity",
-        description="The number of children to create by default. If None, use the type's default_child_quantity.",
-    )
-
-
-class QueueResourceDefinition(ContainerResourceDefinition):
-    """Definition for a queue resource."""
-
-    default_child_quantity: Optional[int] = Field(
-        default=None,
-        title="Default Child Quantity",
-        description="The number of children to create by default. If None, use the type's default_child_quantity.",
-    )
-
-
-class PoolResourceDefinition(ContainerResourceDefinition):
-    """Definition for a pool resource. Pool resources are collections of consumables with no structure (used for wells, reservoirs, etc.)."""
-
-
-ResourceTypeDefinitions = Union[
-    ResourceTypeDefinition,
-    ContainerResourceTypeDefinition,  # * container of resources: Container[Resource]
-    AssetResourceTypeDefinition,  # * trackable resource: Asset
-    ConsumableResourceTypeDefinition,  # * consumable resource: Consumable
-    StackResourceTypeDefinition,  # * stack of resources: Container[Resource]
-    QueueResourceTypeDefinition,  # * queue of resources: Container[Resource]
-    CollectionResourceTypeDefinition,  # * collection of resources: Container[Resource]
-    GridResourceTypeDefinition,  # * 2D grid of resources: Collection[Collection[Resource]]
-    VoxelGridResourceTypeDefinition,  # * 3D grid of resources: Collection[Collection[Collection[Resource]]]
-    PoolResourceTypeDefinition,  # * collection of consumables with no structure: Collection[Consumable]
-]
-
-ResourceDefinitions = Union[
-    Annotated[ResourceDefinition, Tag("resource")],
-    Annotated[AssetResourceDefinition, Tag("asset")],
-    Annotated[ContainerResourceDefinition, Tag("container")],
-    Annotated[CollectionResourceDefinition, Tag("collection")],
-    Annotated[GridResourceDefinition, Tag("grid")],
-    Annotated[VoxelGridResourceDefinition, Tag("voxel_grid")],
-    Annotated[StackResourceDefinition, Tag("stack")],
-    Annotated[QueueResourceDefinition, Tag("queue")],
-    Annotated[PoolResourceDefinition, Tag("pool")],
-]
-
-
-def discriminate_default_resources(
-    v: Union[ResourceDefinitions, dict[str, Any]],
-) -> ResourceDefinitions:
-    """Discriminate default resources. If the resource type is not explicitly defined, default to 'resource'."""
-    if isinstance(v, dict):
-        if v.get("resource_type") in RESOURCE_DEFINITION_MAP:
-            return v.get("resource_type")
-        return "resource"
-    if v.resource_type in RESOURCE_DEFINITION_MAP:
-        return v.resource_type
-    return "resource"
-
-
-class ResourceFile(BaseModel):
-    """Definition for a MADSci Resource File."""
-
-    resource_types: list[
-        Annotated[ResourceTypeDefinitions, Field(discriminator="base_type")]
-    ] = Field(
-        title="Resource Types",
-        description="The definitions of the resource types in the file.",
-        default=[],
-    )
-    default_resources: list[
-        Annotated[ResourceDefinitions, Discriminator(discriminate_default_resources)]
-    ] = Field(
-        title="Default Resources",
-        description="The definitions of the default resources in the file.",
-        default=[],
-    )
-
-    @model_validator(mode="after")
-    def validate_resource_types(self) -> "ResourceFile":
-        """Validate resource types."""
-        for resource_type in self.resource_types:
-            for parent_type in resource_type.parent_types:
-                if (
-                    parent_type not in RESOURCE_TYPE_DEFINITION_MAP
-                    and parent_type
-                    not in [
-                        resource_type.type_name for resource_type in self.resource_types
-                    ]
-                ):
-                    raise ValueError(
-                        f"Unknown resource parent type: {parent_type}, parent type must be one of {RESOURCE_TYPE_DEFINITION_MAP.keys()} or a defined resource type.",
-                    )
-        return self
-
-    @model_validator(mode="after")
-    def validate_default_resources(self) -> "ResourceFile":
-        """Validate default resources and their resource types."""
-        default_resources = []
-        for resource in self.default_resources:
-            if resource.resource_type not in RESOURCE_DEFINITION_MAP:
-                resource_type = next(
-                    (
-                        resource_type
-                        for resource_type in self.resource_types
-                        if resource_type.type_name == resource.resource_type
-                    ),
-                    None,
-                )
-                if resource_type is None:
-                    default_resources.append(resource)
-                else:
-                    default_resources.append(
-                        RESOURCE_DEFINITION_MAP[resource_type.base_type].model_validate(
-                            resource,
-                        ),
-                    )
-            else:
-                default_resources.append(resource)
-        self.__dict__["default_resources"] = default_resources
-        return self
-
-
-RESOURCE_BASE_TYPES = [
-    ResourceType.resource,
-    ResourceType.asset,
-    ResourceType.consumable,
-    ConsumableType.discrete_consumable,
-    ConsumableType.continuous_consumable,
-    AssetType.container,
-    ContainerType.stack,
-    ContainerType.queue,
-    ContainerType.collection,
-    ContainerType.grid,
-    ContainerType.voxel_grid,
-    ContainerType.pool,
-]
-
-RESOURCE_TYPE_DEFINITION_MAP: dict[str, type[ResourceTypeDefinition]] = {
-    ResourceType.resource: ResourceTypeDefinition,
-    ResourceType.asset: AssetResourceTypeDefinition,
-    AssetType.container: ContainerResourceTypeDefinition,
-    ResourceType.consumable: ConsumableResourceTypeDefinition,
-    ConsumableType.discrete_consumable: DiscreteConsumableResourceTypeDefinition,
-    ConsumableType.continuous_consumable: ContinuousConsumableResourceTypeDefinition,
-    ContainerType.stack: StackResourceTypeDefinition,
-    ContainerType.queue: QueueResourceTypeDefinition,
-    ContainerType.collection: CollectionResourceTypeDefinition,
-    ContainerType.grid: GridResourceTypeDefinition,
-    ContainerType.voxel_grid: VoxelGridResourceTypeDefinition,
-    ContainerType.pool: PoolResourceTypeDefinition,
-}
-
-RESOURCE_DEFINITION_MAP: dict[str, type[ResourceDefinition]] = {
-    ResourceType.resource: ResourceDefinition,
-    ResourceType.asset: AssetResourceDefinition,
-    AssetType.container: ContainerResourceDefinition,
-    ResourceType.consumable: ConsumableResourceDefinition,
-    ConsumableType.discrete_consumable: DiscreteConsumableResourceDefinition,
-    ConsumableType.continuous_consumable: ContinuousConsumableResourceDefinition,
-    ContainerType.stack: StackResourceDefinition,
-    ContainerType.queue: QueueResourceDefinition,
-    ContainerType.collection: CollectionResourceDefinition,
-    ContainerType.grid: GridResourceDefinition,
-    ContainerType.voxel_grid: VoxelGridResourceDefinition,
-    ContainerType.pool: PoolResourceDefinition,
-}
-
-
-class ResourceBase(ResourceDefinition, extra="allow", table=False):
-    """Base class for all MADSci Resources."""
-
-    resource_url: Optional[str] = Field(
+    resource_url: Optional[AnyUrl] = Field(
         title="Resource URL",
         description="The URL of the resource.",
         nullable=True,
         default=None,
+        sa_type=String,
     )
-    # ownership: Optional[OwnershipInfo] = Field(
-    #     title="Ownership",
-    #     description="Information about the ownership of the resource.",
-    #     default_factory=OwnershipInfo,
-    #     sa_type=JSON,
-    #     nullable=True
-    # )
+    base_type: Literal[ResourceTypeEnum.resource] = Field(
+        title="Resource Base Type",
+        description="The base type of the resource.",
+        nullable=False,
+        default=ResourceTypeEnum.resource,
+        sa_type=String,
+    )
+    parent_id: Optional[str] = Field(
+        default=None,
+        title="Parent Resource",
+        description="The parent resource ID, if any.",
+    )
+    key: Optional[str] = Field(
+        default=None,
+        title="Key",
+        description="The key of the resource in the parent container, if any.",
+    )
     owner: Optional[str] = Field(
         title="Resource owner",
         description="The owner of the resource.",
@@ -648,145 +79,606 @@ class ResourceBase(ResourceDefinition, extra="allow", table=False):
         title="Attributes",
         description="Custom attributes for the asset.",
     )
+    created_at: Optional[datetime] = Field(
+        title="Created Datetime",
+        description="The timestamp of when the resource was created.",
+        default=None,
+    )
+    updated_at: Optional[datetime] = Field(
+        title="Updated Datetime",
+        description="The timestamp of when the resource was last updated.",
+        default=None,
+    )
+    removed: bool = Field(
+        title="Removed",
+        description="Whether the resource has been removed from the lab.",
+        nullable=False,
+        default=False,
+    )
+
+    @classmethod
+    def discriminate(cls, resource: "ResourceDataModels") -> "ResourceDataModels":
+        """Discriminate the resource based on its base type."""
+        if isinstance(resource, dict):
+            resource_type = resource.get("base_type")
+        else:
+            resource_type = resource.base_type
+        return RESOURCE_TYPE_MAP[resource_type]["model"].model_validate(resource)
 
 
-class AssetBase(AssetResourceDefinition):
-    """Base class for all MADSci Assets."""
+class Asset(Resource):
+    """Base class for all MADSci Assets. These are tracked resources that aren't consumed (things like samples, labware, etc.)."""
+
+    base_type: Literal[AssetTypeEnum.asset] = Field(
+        title="Asset Base Type",
+        description="The base type of the asset.",
+        nullable=False,
+        default=AssetTypeEnum.asset,
+    )
 
 
-class ConsumableBase(ResourceBase):
-    """Base class for all MADSci Consumables."""
+class Consumable(Resource):
+    """Base class for all MADSci Consumables. These are resources that are consumed (things like reagents, pipette tips, etc.)."""
 
-    quantity: Optional[float] = Field(
+    base_type: Literal[ConsumableTypeEnum.consumable] = Field(
+        title="Consumable Base Type",
+        description="The base type of the consumable.",
+        nullable=False,
+        default=ConsumableTypeEnum.consumable,
+    )
+    quantity: PositiveNumber = Field(
         title="Quantity",
         description="The quantity of the consumable.",
     )
+    capacity: Optional[PositiveNumber] = Field(
+        title="Capacity",
+        description="The maximum capacity of the consumable.",
+        default=None,
+    )
+
+    @model_validator(mode="after")
+    def validate_consumable_quantity(self) -> Self:
+        """Validate that the quantity is less than or equal to the capacity."""
+        if self.capacity is not None and self.quantity > self.capacity:
+            raise ValueError("Quantity cannot be greater than capacity.")
+        return self
 
 
-class DiscreteConsumableBase(ConsumableBase):
-    """Base class for all MADSci Discrete Consumables."""
+class DiscreteConsumable(Consumable):
+    """Base class for all MADSci Discrete Consumables. These are consumables that are counted in whole numbers (things like pipette tips, tubes, etc.)."""
 
-    quantity: int = Field(
+    base_type: Literal[ConsumableTypeEnum.discrete_consumable] = Field(
+        title="Consumable Base Type",
+        description="The base type of the discrete consumable.",
+        default=ConsumableTypeEnum.discrete_consumable,
+        const=True,
+    )
+    quantity: PositiveInt = Field(
         title="Quantity",
         description="The quantity of the discrete consumable.",
     )
+    capacity: Optional[PositiveInt] = Field(
+        title="Capacity",
+        description="The maximum capacity of the discrete consumable.",
+        default=None,
+    )
 
 
-class ContinuousConsumableBase(ConsumableBase):
-    """Base class for all MADSci Continuous Consumables."""
+class ContinuousConsumable(Consumable):
+    """Base class for all MADSci Continuous Consumables. These are consumables that are measured in continuous quantities (things like liquids, powders, etc.)."""
 
-    quantity: float = Field(
+    base_type: Literal[ConsumableTypeEnum.continuous_consumable] = Field(
+        title="Consumable Base Type",
+        description="The base type of the continuous consumable.",
+        default=ConsumableTypeEnum.continuous_consumable,
+        const=True,
+    )
+    quantity: PositiveNumber = Field(
         title="Quantity",
         description="The quantity of the continuous consumable.",
     )
+    capacity: Optional[PositiveNumber] = Field(
+        title="Capacity",
+        description="The maximum capacity of the continuous consumable.",
+        default=None,
+    )
 
 
-class ContainerBase(ResourceBase, table=False):
-    """Base class for all MADSci Containers."""
+class Container(Asset):
+    """Data Model for a Container. A container is a resource that can hold other resources."""
 
-    capacity: Optional[int] = Field(
+    base_type: Literal[ContainerTypeEnum.container] = Field(
+        title="Container Base Type",
+        description="The base type of the container.",
+        nullable=False,
+        default=ContainerTypeEnum.container,
+    )
+    capacity: Optional[PositiveInt] = Field(
         title="Capacity",
         description="The capacity of the container.",
+        default=None,
     )
-    quantity: int = Field(
-        default=0,
-        nullable=False,
-        title="Quantity",
-        description="The number of assets currently in.",
-    )
-
-
-class CollectionBase(ContainerBase):
-    """Base class for all MADSci Collections."""
-
-    children: Optional[dict[str, ResourceBase]] = Field(
-        default_factory=dict,
-        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
-        title="Children",
-        description="The children of the collection.",
-    )
-
-
-class GridBase(ContainerBase):
-    """Base class for all MADSci Grids."""
-
-    children: Optional[dict[str, ResourceBase]] = Field(
-        default_factory=dict,
-        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
-        title="Children",
-        description="The children of the collection.",
-    )
-
-
-class VoxelGridBase(GridBase):
-    """Base class for all MADSci Voxel Grids."""
-
-    children: dict[str, dict[str, dict[str, ResourceBase]]] = Field(
-        title="Children",
-        description="The children of the voxel grid.",
-    )
-
-
-class StackBase(ContainerBase, table=False):
-    """Base class for all MADSci Stacks."""
-
-    children: Optional[list[str]] = Field(
+    children: Optional[dict[str, "ResourceDataModels"]] = Field(
         title="Children",
         description="The children of the container.",
-        default_factory=list,
-        sa_type=JSON,  # Use Column(JSON) to map to SQLAlchemy's JSON type
-    )
-
-
-class QueueBase(ContainerBase, table=False):
-    """Base class for all MADSci Queues."""
-
-    children: Optional[list[str]] = Field(
-        title="Children",
-        description="The children of the container.",
-        default_factory=list,
-        sa_type=JSON,  # Use Column(JSON) to map to SQLAlchemy's JSON type
-    )
-
-
-class PoolBase(ContainerBase):
-    """Base class for all MADSci Pools."""
-
-    children: Optional[dict[str, ResourceBase]] = Field(
         default_factory=dict,
-        sa_type=(MutableDict.as_mutable(PickleType)),  # Use PickleType with MutableDict
+    )
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        return len(self.children)
+
+    def extract_children(self) -> dict[str, "ResourceDataModels"]:
+        """Extract the children from the container as a flat dictionary."""
+        return self.children
+
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the container."""
+        self.children = children
+
+    @model_validator(mode="after")
+    def validate_container_quantity(self) -> Self:
+        """Validate that the quantity is less than or equal to the capacity."""
+        if self.capacity is not None and self.quantity > self.capacity:
+            raise ValueError("Quantity cannot be greater than capacity.")
+        return self
+
+
+class Collection(Container):
+    """Data Model for a Collection. A collection is a container that can hold other resources, and which supports random access."""
+
+    base_type: Literal[ContainerTypeEnum.collection] = Field(
+        title="Container Base Type",
+        description="The base type of the collection.",
+        default=ContainerTypeEnum.collection,
+        const=True,
+    )
+    children: Optional[dict[str, "ResourceDataModels"]] = Field(
+        title="Children",
+        description="The children of the collection.",
+        default_factory=dict,
+    )
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        return len(self.children)
+
+    def extract_children(self) -> dict[str, "ResourceDataModels"]:
+        """Extract the children from the collection as a flat dictionary."""
+        return self.children
+
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the collection."""
+        self.children = children
+
+
+def single_letter_or_digit_validator(value: str) -> str:
+    """Validate that the value is a single letter or digit."""
+    if not (value.isalpha() and len(value) == 1) or value.isdigit():
+        raise ValueError("Value must be a single letter or digit.")
+    return value
+
+
+GridIndex = Union[
+    int,
+    Annotated[str, AfterValidator(single_letter_or_digit_validator)],
+]
+GridIndex2D = tuple[GridIndex, GridIndex]
+GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
+
+
+class Row(Container):
+    """Data Model for a Row. A row is a container that can hold other resources in a single dimension and supports random access. For example, a row of tubes in a rack or a single-row microplate. Rows are indexed by integers or letters."""
+
+    children: Optional[dict[GridIndex, "ResourceDataModels"]] = Field(
+        title="Children",
+        description="The children of the row container.",
+        default_factory=dict,
+    )
+    base_type: Literal[ContainerTypeEnum.row] = Field(
+        title="Container Base Type",
+        description="The base type of the row.",
+        default=ContainerTypeEnum.row,
+        const=True,
+    )
+    row_dimension: int = Field(
+        title="Row Dimension",
+        description="The number of rows in the row.",
+        ge=0,
+    )
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        return len(self.children)
+
+    @staticmethod
+    def flatten_key(key: GridIndex) -> str:
+        """Flatten the key to a string."""
+        return str(key)
+
+    @staticmethod
+    def expand_key(key: str) -> GridIndex:
+        """Expand the key to a 2-tuple."""
+        if key.isdigit():
+            return int(key)
+        return key
+
+    def check_key_bounds(self, key: Union[str, GridIndex]) -> bool:
+        """Check if the key is within the bounds of the grid."""
+        if isinstance(key, int) or str(key).isdigit():
+            key = int(key)
+        else:
+            key = string.ascii_lowercase.index(key.lower())
+        return not (key < 0 or key >= self.row_dimension)
+
+
+class Grid(Row):
+    """Data Model for a Grid. A grid is a container that can hold other resources in two dimensions and supports random access. For example, a 96-well microplate. Grids are indexed by integers or letters."""
+
+    children: Optional[dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]] = Field(
+        title="Children",
+        description="The children of the grid container.",
+        default_factory=dict,
+    )
+    base_type: Literal[ContainerTypeEnum.grid] = Field(
+        title="Container Base Type",
+        description="The base type of the grid.",
+        default=ContainerTypeEnum.grid,
+        const=True,
+    )
+    column_dimension: int = Field(
+        title="Column Dimension",
+        description="The number of columns in the grid.",
+        ge=0,
+    )
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        quantity = 0
+        for _, row_value in self.children.items():
+            quantity += len(row_value)
+        return quantity
+
+    @staticmethod
+    def flatten_key(key: GridIndex2D) -> str:
+        """Flatten the key to a string."""
+        return "_".join([str(index) for index in key])
+
+    @staticmethod
+    def expand_key(key: str) -> GridIndex2D:
+        """Expand the key to a 2-tuple."""
+        expanded_key = key.split("_")
+        final_keys = []
+        for index in expanded_key:
+            if index.isdigit():
+                final_keys.append(int(index))
+            else:
+                final_keys.append(index)
+        return tuple(final_keys)
+
+    def check_key_bounds(self, key: Union[str, GridIndex2D]) -> bool:
+        """Check if the key is within the bounds of the grid."""
+        if isinstance(key, str):
+            key = self.expand_key(key)
+        elif not isinstance(key, tuple) or len(key) != 2:
+            raise ValueError("Key must be a string or a 2-tuple.")
+        numeric_key = []
+        for index in key:
+            if isinstance(index, int) or str(index).isdigit():
+                numeric_key.append(int(index))
+            else:
+                numeric_key.append(string.ascii_lowercase.index(index.lower()))
+        key = numeric_key
+        return not (key[0] < 0 or key[0] >= self.row_dimension) and not (
+            key[1] < 0 or key[1] >= self.column_dimension
+        )
+
+    def extract_children(self) -> dict[str, "ResourceDataModels"]:
+        """Extract the children from the grid as a flat dictionary."""
+        children_dict = {}
+        for row_key, row_value in self.children.items():
+            for col_key, col_value in row_value.items():
+                children_dict[self.flatten_key((row_key, col_key))] = col_value
+
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the grid."""
+        for key, value in children.items():
+            row_key, col_key = self.expand_key(key)
+            if row_key not in self.children:
+                self.children[row_key] = {}
+            self.children[row_key][col_key] = value
+
+
+class VoxelGrid(Grid):
+    """Data Model for a Voxel Grid. A voxel grid is a container that can hold other resources in three dimensions and supports random access. Voxel grids are indexed by integers or letters."""
+
+    base_type: Literal[ContainerTypeEnum.voxel_grid] = Field(
+        title="Container Base Type",
+        description="The base type of the voxel grid.",
+        default=ContainerTypeEnum.voxel_grid,
+        const=True,
+    )
+    layer_dimension: int = Field(
+        title="Layer Dimension",
+        description="The number of layers in the grid.",
+        ge=0,
+    )
+    children: Optional[
+        dict[GridIndex, dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]]
+    ] = Field(
+        title="Children",
+        description="The children of the voxel grid container.",
+        default_factory=dict,
+    )
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        quantity = 0
+        for _, row_value in self.children.items():
+            for _, col_value in row_value.items():
+                quantity += len(col_value)
+        return quantity
+
+    @staticmethod
+    def flatten_key(key: GridIndex3D) -> str:
+        """Flatten the key to a string."""
+        return "_".join([str(index) for index in key])
+
+    @staticmethod
+    def expand_key(key: str) -> GridIndex3D:
+        """Expand the key to a tuple."""
+        expanded_key = key.split("_")
+        final_keys = []
+        for index in expanded_key:
+            if index.isdigit():
+                final_keys.append(int(index))
+            else:
+                final_keys.append(index)
+        return final_keys
+
+    def extract_children(self) -> dict[str, "ResourceDataModels"]:
+        """Extract the children from the grid as a flat dictionary."""
+        children_dict = {}
+        for row_key, row_value in self.children.items():
+            for col_key, col_value in row_value.items():
+                for depth_key, depth_value in col_value.items():
+                    children_dict[self.flatten_key((row_key, col_key, depth_key))] = (
+                        depth_value
+                    )
+
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the grid."""
+        for key, value in children.items():
+            row_key, col_key, depth_key = self.expand_key(key)
+            if row_key not in self.children:
+                self.children[row_key] = {}
+            if col_key not in self.children[row_key]:
+                self.children[row_key][col_key] = {}
+            self.children[row_key][col_key][depth_key] = value
+
+    def check_key_bounds(self, key: Union[str, GridIndex3D]) -> bool:
+        """Check if the key is within the bounds of the grid."""
+        if isinstance(key, str):
+            key = self.expand_key(key)
+        elif not isinstance(key, tuple) or len(key) != 3:
+            raise ValueError("Key must be a string or a 3-tuple.")
+        numeric_key = []
+        for index in key:
+            if isinstance(index, int) or str(index).isdigit():
+                numeric_key.append(int(index))
+            else:
+                numeric_key.append(string.ascii_lowercase.index(index.lower()))
+        key = numeric_key
+        return (
+            not (key[0] < 0 or key[0] >= self.row_dimension)
+            and not (key[1] < 0 or key[1] >= self.column_dimension)
+            and not (key[2] < 0 or key[2] >= self.layer_dimension)
+        )
+
+
+class Stack(Container):
+    """Data Model for a Stack. A stack is a container that can hold other resources in a single dimension and supports last-in, first-out (LIFO) access. For example, a stack of plates in a vertical magazine. Stacks are indexed by integers, with 0 being the bottom."""
+
+    base_type: Literal[ContainerTypeEnum.stack] = Field(
+        title="Container Base Type",
+        description="The base type of the stack.",
+        default=ContainerTypeEnum.stack,
+        const=True,
+    )
+    children: Optional[list["ResourceDataModels"]] = Field(
+        title="Children",
+        description="The children of the stack.",
+        default_factory=list,
+    )
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        return len(self.children)
+
+    def extract_children(self) -> dict[str, "ResourceDataModels"]:
+        """Extract the children from the stack as a flat dict."""
+        children_dict = {}
+        for i in range(len(self.children)):
+            children_dict[str(i)] = self.children[i]
+        return children_dict
+
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the stack."""
+        ordered_children = sorted(children.items(), key=lambda x: int(x[0]))
+        self.children = [child[1] for child in ordered_children]
+
+
+class Queue(Container):
+    """Data Model for a Queue. A queue is a container that can hold other resources in a single dimension and supports first-in, first-out (FIFO) access. For example, a conveyer belt. Queues are indexed by integers, with 0 being the front."""
+
+    base_type: Literal[ContainerTypeEnum.queue] = Field(
+        title="Container Base Type",
+        description="The base type of the queue.",
+        default=ContainerTypeEnum.queue,
+        const=True,
+    )
+    children: Optional[list["ResourceDataModels"]] = Field(
+        title="Children",
+        description="The children of the queue.",
+        default_factory=list,
+    )
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        return len(self.children)
+
+    def extract_children(self) -> dict[str, "ResourceDataModels"]:
+        """Extract the children from the stack as a flat dict."""
+        children_dict = {}
+        for i in range(len(self.children)):
+            children_dict[str(i)] = self.children[i]
+        return children_dict
+
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the queue."""
+        ordered_children = sorted(children.items(), key=lambda x: int(x[0]))
+        self.children = [child[1] for child in ordered_children]
+
+
+class Pool(Container):
+    """Data Model for a Pool. A pool is a container for holding consumables that can be mixed or collocated. For example, a single well in a microplate, or a reservoir. Pools are indexed by string key."""
+
+    base_type: Literal[ContainerTypeEnum.pool] = Field(
+        title="Container Base Type",
+        description="The base type of the pool.",
+        default=ContainerTypeEnum.pool,
+        const=True,
+    )
+    children: Optional[dict[str, "ConsumableDataModels"]] = Field(
         title="Children",
         description="The children of the pool.",
+        default_factory=dict,
     )
     capacity: Optional[float] = Field(
         title="Capacity",
-        description="The capacity of the pool.",
+        description="The capacity of the pool as a whole.",
     )
 
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        return sum(
+            [
+                child.quantity
+                for child in self.children.values()
+                if hasattr(child, "quantity")
+            ]
+        )
 
-class AllocationBase(ResourceBase):
-    """Base class for all MADSci Allocations"""
+    def extract_children(self) -> dict[str, "ResourceDataModels"]:
+        """Extract the children from the pool as a flat dictionary."""
+        return self.children
 
-    index: int = Field(
-        title="Allocation Index",
-        description="The index position of the resource in the parent resource.",
-        nullable=False,
-    )
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the pool."""
+        self.children = children
 
 
-class HistoryBase(ResourceBase):
-    """Base class for all MADSci History records"""
+RESOURCE_TYPE_MAP = {
+    ResourceTypeEnum.resource: {
+        "definition": ResourceDefinition,
+        "model": Resource,
+    },
+    ResourceTypeEnum.asset: {
+        "definition": AssetResourceDefinition,
+        "model": Asset,
+    },
+    ResourceTypeEnum.consumable: {
+        "definition": ConsumableResourceDefinition,
+        "model": Consumable,
+    },
+    ConsumableTypeEnum.discrete_consumable: {
+        "definition": DiscreteConsumableResourceDefinition,
+        "model": DiscreteConsumable,
+    },
+    ConsumableTypeEnum.continuous_consumable: {
+        "definition": ContinuousConsumableResourceDefinition,
+        "model": ContinuousConsumable,
+    },
+    AssetTypeEnum.container: {
+        "definition": ContainerResourceDefinition,
+        "model": Container,
+    },
+    ContainerTypeEnum.stack: {
+        "definition": StackResourceDefinition,
+        "model": Stack,
+    },
+    ContainerTypeEnum.queue: {
+        "definition": QueueResourceDefinition,
+        "model": Queue,
+    },
+    ContainerTypeEnum.collection: {
+        "definition": CollectionResourceDefinition,
+        "model": Collection,
+    },
+    ContainerTypeEnum.row: {
+        "definition": RowResourceDefinition,
+        "model": Row,
+    },
+    ContainerTypeEnum.grid: {
+        "definition": GridResourceDefinition,
+        "model": Grid,
+    },
+    ContainerTypeEnum.voxel_grid: {
+        "definition": VoxelGridResourceDefinition,
+        "model": VoxelGrid,
+    },
+    ContainerTypeEnum.pool: {
+        "definition": PoolResourceDefinition,
+        "model": Pool,
+    },
+}
 
-    id: int = Field(primary_key=True)
-    resource_id: str = Field(nullable=False, index=True)
-    event_type: str = Field(
-        nullable=False, description="Type of event (e.g., created, updated, deleted)."
-    )
-    data: dict = Field(
-        sa_type=(JSON),  # Define `nullable` directly in `Column`
-        sa_column_kwargs={"nullable": False},
-        description="Snapshot of the resource data.",
-    )
-    removed: bool = Field(
-        default=False, nullable=False, description="Whether the resource was removed."
-    )
+ResourceDataModels = Annotated[
+    Union[
+        Annotated[Resource, Tag("resource")],
+        Annotated[Asset, Tag("asset")],
+        Annotated[Consumable, Tag("consumable")],
+        Annotated[DiscreteConsumable, Tag("discrete_consumable")],
+        Annotated[ContinuousConsumable, Tag("continuous_consumable")],
+        Annotated[Container, Tag("container")],
+        Annotated[Collection, Tag("collection")],
+        Annotated[Row, Tag("row")],
+        Annotated[Grid, Tag("grid")],
+        Annotated[VoxelGrid, Tag("voxel_grid")],
+        Annotated[Stack, Tag("stack")],
+        Annotated[Queue, Tag("queue")],
+        Annotated[Pool, Tag("pool")],
+    ],
+    Discriminator("base_type"),
+]
+
+ConsumableDataModels = Annotated[
+    Union[
+        Annotated[Consumable, Tag("consumable")],
+        Annotated[DiscreteConsumable, Tag("discrete_consumable")],
+        Annotated[ContinuousConsumable, Tag("continuous_consumable")],
+    ],
+    Discriminator("base_type"),
+]
+
+ContainerDataModels = Annotated[
+    Union[
+        Annotated[Container, Tag("container")],
+        Annotated[Collection, Tag("collection")],
+        Annotated[Row, Tag("row")],
+        Annotated[Grid, Tag("grid")],
+        Annotated[VoxelGrid, Tag("voxel_grid")],
+        Annotated[Stack, Tag("stack")],
+        Annotated[Queue, Tag("queue")],
+        Annotated[Pool, Tag("pool")],
+    ],
+    Discriminator("base_type"),
+]

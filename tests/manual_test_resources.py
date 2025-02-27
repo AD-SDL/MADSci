@@ -1,6 +1,6 @@
 # ruff: noqa
 from madsci.client.resource_client import ResourceClient
-from madsci.resource_manager.resource_tables import (
+from madsci.common.types.resource_types import (
     Asset,
     Collection,
     Consumable,
@@ -10,8 +10,8 @@ from madsci.resource_manager.resource_tables import (
 )
 
 # Initialize the ResourcesClient with the database URL
-base_url = "http://localhost:8012"
-client = ResourceClient(base_url=base_url)
+base_url = "http://localhost:8003"
+client = ResourceClient(url=base_url)
 
 stack = Stack(resource_name="stack", resource_type="stack", capacity=10, ownership=None)
 stack = client.add_resource(stack)
@@ -19,12 +19,12 @@ stack = client.add_resource(stack)
 for i in range(5):
     asset = Asset(resource_name=f"Test plate {i}", resource_type="asset")
     asset = client.add_resource(asset)
-    stack = client.push_to_stack(stack, asset)
+    stack = client.push(stack, asset)
 
 # # # Retrieve the stack and pop two assets
-retrieved_stack = client.get_resource(resource_id=stack.resource_id)
+retrieved_stack = client.query_resource(resource_id=stack.resource_id)
 for _ in range(2):
-    popped_asset, retrieved_stack = client.pop_from_stack(retrieved_stack)
+    popped_asset, retrieved_stack = client.pop(retrieved_stack)
     print(popped_asset)
 
 # # Create and add a queue
@@ -35,13 +35,13 @@ queue = client.add_resource(queue)
 for i in range(5):
     asset = Asset(resource_name=f"Test plate {i}", resource_type="asset")
     asset = client.add_resource(asset)
-    queue = client.push_to_queue(queue, asset)
+    queue = client.push(queue, asset)
 
 # Retrieve the queue and pop two assets, then push one back
-retrieved_queue = client.get_resource(resource_id=queue.resource_id)
+retrieved_queue = client.query_resource(resource_id=queue.resource_id)
 for _ in range(2):
-    popped_asset, retrieved_queue = client.pop_from_queue(retrieved_queue)
-queue = client.push_to_queue(queue, popped_asset)
+    popped_asset, retrieved_queue = client.pop(retrieved_queue)
+queue = client.push(queue, popped_asset)
 
 # # # # Create and add a consumable resource
 consumable = Consumable(
@@ -123,7 +123,7 @@ print("Resource removed:", removed_asset)
 # time.sleep(1)
 
 # Retrieve history for the removed resource.
-history_entries = client.get_history(
+history_entries = client.query_history(
     resource_id=stack.resource_id, event_type="deleted"
 )
 print("History for removed resource:")

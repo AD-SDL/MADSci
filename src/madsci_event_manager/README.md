@@ -48,7 +48,7 @@ services:
 
 ```bash
 # Create an Event Manager Definition
-madsci manager add --type event_manager
+madsci manager add -t event_manager
 # Start the database and Event Manager Server
 docker compose up
 # OR

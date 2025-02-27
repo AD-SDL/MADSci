@@ -15,7 +15,7 @@ from madsci.common.types.node_types import (
     NodeSetConfigResponse,
     NodeStatus,
 )
-from madsci.common.types.resource_types import ResourceDefinition
+from madsci.common.types.resource_types.definitions import ResourceDefinition
 from pydantic import AnyUrl
 
 

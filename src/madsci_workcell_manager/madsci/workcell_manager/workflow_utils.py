@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from fastapi import UploadFile
 from madsci.client.event_client import default_logger
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -71,7 +72,7 @@ def create_workflow(
     workflow_def: WorkflowDefinition,
     workcell: WorkcellDefinition,
     state_handler: WorkcellRedisHandler,
-    experiment_id: Optional[str] = None,
+    ownership_info: Optional[OwnershipInfo] = None,
     parameters: Optional[dict[str, Any]] = None,
 ) -> Workflow:
     """Pulls the workcell and builds a list of dictionary steps to be executed
@@ -87,8 +88,8 @@ def create_workflow(
     parameters: Dict
         The input to the workflow
 
-    experiment_path: PathLike
-        The path to the data of the experiment for the workflow
+    ownership_info: OwnershipInfo
+        Information on the owner(s) of the workflow
 
     simulate: bool
         Whether or not to use real robots
@@ -103,7 +104,7 @@ def create_workflow(
     wf_dict.update(
         {
             "label": workflow_def.name,
-            "experiment_id": experiment_id,
+            "ownership_info": ownership_info.model_dump(mode="json"),
             "parameter_values": parameters,
         }
     )

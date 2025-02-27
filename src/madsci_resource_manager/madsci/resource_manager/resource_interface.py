@@ -3,24 +3,32 @@
 # Suppress SAWarnings
 import logging
 import time
-import warnings
-from datetime import datetime, timedelta
-from typing import Optional
+import traceback
+from collections.abc import Generator
+from contextlib import contextmanager
+from datetime import datetime
+from typing import Optional, Union
 
-from madsci.common.types.resource_types import ResourceBase
-from madsci.resource_manager.resource_tables import (
-    Asset,
+from madsci.common.types.resource_types import (
     Collection,
-    Consumable,
-    History,
-    Pool,
+    ConsumableTypeEnum,
+    Container,
+    ContainerDataModels,
+    ContainerTypeEnum,
     Queue,
+    ResourceDataModels,
+    ResourceTypeEnum,
     Stack,
 )
-from madsci.resource_manager.serialization_utils import deserialize_resource
-from sqlmodel import Session, SQLModel, create_engine, select
+from madsci.resource_manager.resource_tables import (
+    ResourceHistoryTable,
+    ResourceTable,
+    create_session,
+)
+from sqlalchemy import true
+from sqlalchemy.exc import MultipleResultsFound
+from sqlmodel import Session, SQLModel, create_engine, func, select
 
-warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
 
@@ -35,8 +43,11 @@ class ResourceInterface:
 
     def __init__(
         self,
-        database_url: str = "postgresql://rpl:rpl@127.0.0.1:5432/resources",
-        init_timeout: float = 10,
+        url: Optional[str] = None,
+        engine: Optional[str] = None,
+        sessionmaker: Optional[callable] = None,
+        session: Optional[Session] = None,
+        init_timeout: float = 10.0,
     ) -> None:
         """
         Initialize the ResourceInterface with a database URL.
@@ -47,169 +58,267 @@ class ResourceInterface:
         start_time = time.time()
         while time.time() - start_time < init_timeout:
             try:
-                self.engine = create_engine(database_url)
-                self.session = Session(self.engine)
-                SQLModel.metadata.create_all(self.engine)
-                logger.info(f"Resources Database started on: {database_url}")
+                self.url = url
+                self.engine = engine
+                self.sessionmaker = sessionmaker
+                self.session = session
+
+                if not (self.url or self.engine or self.sessionmaker or self.session):
+                    raise ValueError(
+                        "At least one of url, engine, sessionmaker, or session must be provided."
+                    )
+                if self.url and not self.engine:
+                    self.engine = create_engine(self.url)
+                if not self.engine and self.session:
+                    self.engine = self.session.bind
+                self.sessionmaker = self.sessionmaker or create_session
+                if self.engine:
+                    SQLModel.metadata.create_all(self.engine)
+                logger.info("Initialized Resource Interface.")
                 break
-            except Exception as e:
-                logger.error(f"Error while creating database: {e}")
+            except Exception:
+                logger.error(
+                    f"Error while creating/connecting to database: \n{traceback.print_exc()}"
+                )
                 time.sleep(5)
                 continue
+        else:
+            logger.error(f"Failed to connect to database after {init_timeout} seconds.")
+            raise ConnectionError(
+                f"Failed to connect to database after {init_timeout} seconds."
+            )
 
-    def add_resource(self, resource: ResourceBase) -> dict:
+    @contextmanager
+    def get_session(
+        self, session: Optional[Session] = None
+    ) -> Generator[Session, None, None]:
+        """Fetch a useable session."""
+        if session:
+            yield session
+        elif self.session:
+            yield self.session
+        else:
+            session = self.sessionmaker()
+            try:
+                yield session
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+
+    def add_resource(
+        self,
+        resource: ResourceDataModels,
+        add_descendants: bool = True,
+        parent_session: Optional[Session] = None,
+    ) -> ResourceDataModels:
         """
-        Add a resource to the database using the add_resource method
-        in ResourceContainerBase.
+        Add a resource to the database.
 
         Args:
-            resource (ResourceContainerBase): The resource to add.
+            resource (ResourceDataModels): The resource to add.
 
         Returns:
-            ResourceContainerBase: The saved or existing resource.
+            ResourceDataModels: The saved or existing resource data model.
         """
-        with self.session as session:
-            try:
-                if hasattr(resource, "children") and isinstance(
-                    resource.children, dict
-                ):
-                    for _key, child in resource.children.items():
-                        if isinstance(child, ResourceBase):
-                            child = session.merge(child)  # noqa
-                            resource.children[_key] = child
+        try:
+            with self.get_session(parent_session) as session:
+                resource_row = ResourceTable.from_data_model(resource)
+                # * Check if the resource already exists in the database
+                existing_resource = session.exec(
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource_row.resource_id
+                    )
+                ).first()
+                if existing_resource:
+                    logger.info(
+                        f"Resource with ID '{resource_row.resource_id}' already exists in the database. No action taken."
+                    )
+                    return existing_resource.to_data_model()
 
-                resource = session.merge(resource)
+                session.add(resource_row)
+                if add_descendants and getattr(resource, "children", None):
+                    children = resource.extract_children()
+                    for key, child in children.items():
+                        child.parent_id = resource_row.resource_id
+                        child.key = key
+                        self.add_or_update_resource(
+                            resource=child,
+                            include_descendants=add_descendants,
+                            parent_session=session,
+                        )
                 session.commit()
-                session.refresh(resource)
-                if hasattr(resource, "children") and isinstance(
-                    resource.children, dict
-                ):
-                    resource.children = {
-                        _key: self.get_resource(resource_id=child.resource_id)
-                        if isinstance(child, ResourceBase)
-                        else child
-                        for _key, child in resource.children.items()
-                    }
+                session.refresh(resource_row)
+                return resource_row.to_data_model()
+        except Exception as e:
+            logger.error(f"Error adding resource: \n{traceback.format_exc()}")
+            raise e
 
-                return resource
-            except Exception as e:
-                logger.error(f"Error adding resource: {e}")
-
-    def update_resource(self, resource: ResourceBase) -> None:
+    def update_resource(
+        self,
+        resource: ResourceDataModels,
+        update_descendants: bool = True,
+        parent_session: Optional[Session] = None,
+    ) -> None:
         """
         Update or refresh a resource in the database, including its children.
 
         Args:
-            resource (ResourceBase): The resource to refresh.
+            resource (Resource): The resource to refresh.
 
         Returns:
             None
         """
-        with self.session as session:
-            try:
-                resource = session.merge(resource)
-                if hasattr(resource, "children") and isinstance(
-                    resource.children, dict
-                ):
-                    for _key, child in resource.children.items():
-                        if isinstance(child, ResourceBase):
-                            child.parent = resource.resource_id
-                            session.merge(child)
-
+        try:
+            with self.get_session(parent_session) as session:
+                existing_row = session.exec(
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource.resource_id
+                    )
+                ).one()
+                resource_row = session.merge(
+                    existing_row.model_copy(
+                        update=resource.model_dump(
+                            exclude={"children", "created_at", "updated_at"}
+                        ),
+                        deep=True,
+                    )
+                )
+                if update_descendants and hasattr(resource, "children"):
+                    resource_row.children_list = []
+                    children = resource.extract_children()
+                    for key, child in children.items():
+                        child.parent_id = resource_row.resource_id
+                        child.key = key
+                        self.add_or_update_resource(
+                            resource=child,
+                            include_descendants=update_descendants,
+                            parent_session=session,
+                        )
                 session.commit()
-                session.refresh(resource)
-            except Exception as e:
-                logger.error(f"Error refreshing resource {resource.resource_id}: {e}")
-                raise
+                session.refresh(resource_row)
+                return resource_row.to_data_model()
+        except Exception as e:
+            logger.error(f"Error updating resource: \n{traceback.format_exc()}")
+            raise e
+
+    def add_or_update_resource(
+        self,
+        resource: ResourceDataModels,
+        include_descendants: bool = True,
+        parent_session: Optional[Session] = None,
+    ) -> ResourceDataModels:
+        """Add or update a resource in the database."""
+        with self.get_session(parent_session) as session:
+            existing_resource = session.exec(
+                select(ResourceTable).where(
+                    ResourceTable.resource_id == resource.resource_id
+                )
+            ).first()
+            if existing_resource:
+                return self.update_resource(
+                    resource,
+                    update_descendants=include_descendants,
+                    parent_session=session,
+                )
+            return self.add_resource(
+                resource, add_descendants=include_descendants, parent_session=session
+            )
 
     def get_resource(
         self,
-        resource_name: Optional[str] = None,
-        owner_name: Optional[str] = None,
         resource_id: Optional[str] = None,
+        resource_name: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        owner_name: Optional[str] = None,
         resource_type: Optional[str] = None,
-    ) -> Optional[SQLModel]:
+        resource_base_type: Optional[ResourceTypeEnum] = None,
+        unique: bool = False,
+        multiple: bool = False,
+    ) -> Optional[Union[list[ResourceDataModels], ResourceDataModels]]:
         """
-        Retrieve a resource from the database by its name and owner_name across all resource types.
-
-        Args:
-            resource_name (str): The name of the resource to retrieve.
-            owner_name (str): The module name associated with the resource.
-            resource_id (Optional[str]): The optional ID of the resource (if provided, this will take priority).
+        Get the resource(s) that match the specified properties (unless `unique` is specified,
+        in which case an exception is raised if more than one result is found).
 
         Returns:
-            Optional[SQLModel]: The resource if found, otherwise None.
+            Optional[Union[list[ResourceDataModels], ResourceDataModels]]: The resource(s), if found, otherwise None.
         """
-        if not resource_id and not (resource_name or owner_name or resource_type):
-            raise ValueError(
-                "You must provide at least one of the following: resource_id, resource_name, owner_name, or resource_type."
+        with self.get_session() as session:
+            # * Build the query statement
+            statement = select(ResourceTable)
+            statement = (
+                statement.where(ResourceTable.resource_id == resource_id)
+                if resource_id
+                else statement
+            )
+            statement = (
+                statement.where(ResourceTable.resource_name == resource_name)
+                if resource_name
+                else statement
+            )
+            statement = (
+                statement.where(ResourceTable.parent_id == parent_id)
+                if parent_id
+                else statement
+            )
+            statement = (
+                statement.where(ResourceTable.owner == owner_name)
+                if owner_name
+                else statement
+            )
+            statement = (
+                statement.where(ResourceTable.resource_type == resource_type)
+                if resource_type
+                else statement
+            )
+            statement = (
+                statement.where(ResourceTable.base_type == resource_base_type)
+                if resource_base_type
+                else statement
             )
 
-        # Map resource type names to their respective SQLModel classes
-        resource_type_map = {
-            "stack": Stack,
-            "asset": Asset,
-            "queue": Queue,
-            "pool": Pool,
-            "collection": Collection,
-            "consumable": Consumable,
-        }
-
-        with self.session as session:
-            # If resource_id is provided, prioritize searching by ID
-            if resource_id:
-                resource_types = (
-                    [resource_type]
-                    if resource_type and resource_type in resource_type_map
-                    else resource_type_map.keys()
-                )
-                for r_type in resource_types:
-                    resource_type = resource_type_map[r_type]
-                    resource = session.exec(
-                        select(resource_type).where(
-                            resource_type.resource_id == resource_id
-                        )
-                    ).first()
-                    if resource:
-                        return resource
-
-                logger.error(f"No resource found with ID '{resource_id}'.")
-                return None
-
-            query_conditions = []
-            if resource_name:
-                query_conditions.append(lambda cls: cls.resource_name == resource_name)
-            if owner_name:
-                query_conditions.append(lambda cls: cls.owner == owner_name)
-
-            resource_types = (
-                [resource_type]
-                if resource_type and resource_type in resource_type_map
-                else resource_type_map.keys()
-            )
-            for r_type in resource_types:
-                resource_type = resource_type_map[r_type]
-                statement = select(resource_type)
-                for condition in query_conditions:
-                    statement = statement.where(condition(resource_type))
-                resource = session.exec(statement).first()
-                if resource:
-                    return resource
-
-            logger.error(
-                f"No resource found matching name '{resource_name}', owner '{owner_name}', or type '{resource_type}'."
-            )
+            if unique:
+                try:
+                    result = session.exec(statement).one_or_none()
+                except MultipleResultsFound as e:
+                    logger.error(
+                        f"Result is not unique, narrow down the search criteria: {e}"
+                    )
+                    raise e
+            elif multiple:
+                return [
+                    result.to_data_model() for result in session.exec(statement).all()
+                ]
+            else:
+                result = session.exec(statement).first()
+            if result:
+                return result.to_data_model()
             return None
 
-    def get_history(
+    def remove_resource(
+        self, resource_id: str, parent_session: Optional[Session] = None
+    ) -> ResourceDataModels:
+        """Remove a resource from the database."""
+        with self.get_session(parent_session) as session:
+            resource = session.exec(
+                select(ResourceTable).where(ResourceTable.resource_id == resource_id)
+            ).one()
+            resource.removed = True
+            session.delete(resource)
+            return resource.to_data_model()
+
+    def query_history(
         self,
-        resource_id: str,
-        event_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        version: Optional[int] = None,
+        change_type: Optional[str] = None,
         removed: Optional[bool] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         limit: Optional[int] = 100,
-    ) -> list[History]:
+    ) -> list[ResourceHistoryTable]:
         """
         Query the History table with flexible filtering.
 
@@ -218,6 +327,7 @@ class ResourceInterface:
 
         Args:
             resource_id (str): Required. Fetch history for this resource.
+            version (Optional[int]): Fetch a specific version of the resource.
             event_type (Optional[str]): Filter by event type (`created`, `updated`, `deleted`).
             removed (Optional[bool]): Filter by removed status.
             start_date (Optional[datetime]): Start of the date range.
@@ -225,413 +335,429 @@ class ResourceInterface:
             limit (Optional[int]): Maximum number of records to return (None for all records).
 
         Returns:
-            List[History]: A list of deserialized historical resource objects.
+            List[JSON]: A list of deserialized history table entries.
         """
-        with self.session as session:
-            query = select(History).where(History.resource_id == resource_id)
+        with self.get_session() as session:
+            query = select(ResourceHistoryTable)
 
             # Apply additional filters if provided
-            if event_type:
-                query = query.where(History.event_type == event_type)
+            if resource_id:
+                query = query.where(ResourceHistoryTable.resource_id == resource_id)
+            if change_type:
+                query = query.where(ResourceHistoryTable.change_type == change_type)
+            if version:
+                query = query.where(ResourceHistoryTable.version == version)
             if removed is not None:
-                query = query.where(History.removed == removed)
+                query = query.where(ResourceHistoryTable.removed == removed)
             if start_date:
-                query = query.where(History.last_modified >= start_date)
+                query = query.where(ResourceHistoryTable.changed_at >= start_date)
             if end_date:
-                query = query.where(History.last_modified <= end_date)
+                query = query.where(ResourceHistoryTable.changed_at <= end_date)
 
-            query = query.order_by(
-                History.last_modified.desc()
-            )  # Sorting by last_modified
+            query = query.order_by(ResourceHistoryTable.version.desc())
 
             if limit:
                 query = query.limit(limit)
 
             history_entries = session.exec(query).all()
+            return [history_entry.model_dump() for history_entry in history_entries]
 
-            # Deserialize the `data` field into ResourceBase objects
-            for entry in history_entries:
-                entry.data = deserialize_resource(entry.data)
-
-            return history_entries
-
-    def restore_deleted_resource(self, resource_id: str) -> Optional[ResourceBase]:
+    def restore_resource(
+        self, resource_id: str, parent_session: Session = None
+    ) -> Optional[ResourceDataModels]:
         """
-        Restore the latest version of a deleted resource.
+        Restore the latest version of a removed resource. This attempts to restore the child resources as well, if any.
+
 
         Args:
             resource_id (str): The resource ID.
+            restore_children (bool): Whether to restore the child resources as well.
 
         Returns:
-            Optional[ResourceBase]: The latest version of the resource data, or None if not found.
+            Optional[ResourceDataModels]: The restored resource, if any
         """
-        history_entries = self.get_history(
-            resource_id=resource_id, removed=True, limit=1
-        )
-        return history_entries[0].data if history_entries else None
-
-    def remove_resource(self, resource_id: str) -> None:
-        """
-        Remove a resource by moving it to the History table and deleting it from the main table.
-
-        This function:
-        - Fetches the resource by `resource_id`
-        - Calls `delete()` on the resource to move it to the History table
-        - Deletes the resource from the original table
-
-        Args:
-            resource_id (str): ID of the resource to remove.
-
-        Raises:
-            ValueError: If the resource does not exist.
-        """
-        with self.session as session:
-            # Retrieve the resource
-            resource = self.get_resource(resource_id=resource_id)
-            if not resource:
-                raise ValueError(f"🚨 Resource with ID '{resource_id}' not found!")
-
-            logger.info(
-                f"🗑 Removing Resource: {resource.resource_name} (ID: {resource_id})"
-            )
-            resource._delete(session)
-
-    def increase_pool_quantity(self, pool: Pool, amount: float) -> None:
-        """
-        Increase the quantity of a pool resource.
-
-        Args:
-            pool (Pool): The pool resource to update.
-            amount (float): The amount to increase.
-        """
-        with self.session as session:
-            existing_pool = (
-                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            )
-            existing_pool._increase_quantity(amount, session)
-            session.refresh(existing_pool)
-            return existing_pool
-
-    def decrease_pool_quantity(self, pool: Pool, amount: float) -> None:
-        """
-        Decrease the quantity of a pool resource.
-
-        Args:
-            pool (Pool): The pool resource to update.
-            amount (float): The amount to decrease.
-        """
-        with self.session as session:
-            existing_pool = (
-                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            )
-            existing_pool._decrease_quantity(amount, session)
-            session.refresh(existing_pool)
-            return existing_pool
-
-    def empty_pool(self, pool: Pool) -> None:
-        """
-        Empty the pool by setting the quantity to zero.
-
-        Args:
-            pool (Pool): The pool resource to empty.
-        """
-        with self.session as session:
-            existing_pool = (
-                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            )
-            existing_pool._empty(session)
-            session.refresh(existing_pool)
-            return existing_pool
-
-    def fill_pool(self, pool: Pool) -> None:
-        """
-        Fill the pool by setting the quantity to its capacity.
-
-        Args:
-            pool (Pool): The pool resource to fill.
-        """
-        with self.session as session:
-            existing_pool = (
-                session.query(Pool).filter_by(resource_id=pool.resource_id).first()
-            )
-            existing_pool._fill(session)
-            session.refresh(existing_pool)
-            return existing_pool
-
-    def push_to_stack(self, stack: Stack, asset: Asset) -> None:
-        """
-        Push an asset to the stack. Automatically adds the asset to the database if it's not already there.
-
-        Args:
-            stack (Stack): The stack resource to push the asset onto.
-            asset (Asset): The asset to push onto the stack.
-        """
-        with self.session as session:
-            existing_stack = (
-                session.query(Stack).filter_by(resource_id=stack.resource_id).first()
-            )
-
-            if not existing_stack:
-                raise ValueError(
-                    f"Stack '{stack.resource_name, stack.resource_id}' does not exist in the database. Please provide a valid resource."
+        with self.get_session(parent_session) as session:
+            resource_history = session.exec(
+                select(ResourceHistoryTable)
+                .where(ResourceHistoryTable.resource_id == resource_id)
+                .where(ResourceHistoryTable.removed == true())
+                .order_by(ResourceHistoryTable.version.desc())
+            ).first()
+            if resource_history is None:
+                logger.error(
+                    f"No removed resource found for ID '{resource_id}' in the History table."
                 )
-            stack = existing_stack
-            asset = session.merge(asset)
-            stack._push(asset, session)
-            session.refresh(stack)
-            return stack
+                return None
+            resource_history.removed = False
+            restored_row = ResourceTable.from_data_model(
+                resource_history.to_data_model()
+            )
+            for child_id in resource_history.child_ids:
+                child_history = session.exec(
+                    select(ResourceHistoryTable)
+                    .where(ResourceHistoryTable.resource_id == child_id)
+                    .where(ResourceHistoryTable.removed == true())
+                    .order_by(
+                        func.abs(
+                            func.extract(
+                                "epoch",
+                                ResourceHistoryTable.changed_at
+                                - resource_history.changed_at,
+                            )
+                        )
+                    )
+                ).first()
+                if child_history:
+                    self.restore_resource(
+                        child_history.resource_id, parent_session=session
+                    )
+            session.add(restored_row)
+            return resource_history.to_data_model()
 
-    def pop_from_stack(self, stack: Stack) -> Asset:
+    def add_child(
+        self,
+        parent_id: str,
+        key: str,
+        child: Union[ResourceDataModels, str],
+        update_existing: bool = True,
+        parent_session: Optional[Session] = None,
+    ) -> None:
+        """Adds a child to a parent resource, or updates an existing child if update_existing is set."""
+        with self.get_session(parent_session) as session:
+            child_id = child if isinstance(child, str) else child.resource_id
+            child_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=child_id)
+            ).one_or_none()
+            existing_child = session.exec(
+                select(ResourceTable).filter_by(parent_id=parent_id, key=str(key))
+            ).one_or_none()
+            if existing_child:
+                if not update_existing:
+                    raise ValueError(
+                        f"Child with key '{key}' already exists for parent '{parent_id}'. Set update_existing=True to update the existing child."
+                    )
+                if existing_child.resource_id == child_id:
+                    child.parent_id = parent_id
+                    child.key = str(key)
+                    self.update_resource(
+                        child, update_descendants=True, parent_session=session
+                    )
+                else:
+                    existing_child.parent_id = None
+                    existing_child.key = None
+                    session.merge(existing_child)
+            if child_row:
+                child_row.parent_id = parent_id
+                child_row.key = str(key)
+                session.merge(child_row)
+            elif not isinstance(child, str):
+                child.parent_id = parent_id
+                child.key = str(key)
+                child = self.add_resource(child, parent_session=session)
+                child_row = ResourceTable.from_data_model(child)
+            else:
+                raise ValueError(
+                    f"The child resource {child_id} does not exist in the database and must be added. Alternatively, provide a ResourceDataModels object instead of the ID, to have the object added automatically."
+                )
+
+    def push(
+        self, parent_id: str, child: Union[ResourceDataModels, str]
+    ) -> Union[Stack, Queue]:
         """
-        Pop an asset from a stack resource.
+        Push a resource to a stack or queue. Automatically adds the child to the database if it's not already there.
 
         Args:
-            stack (Stack): The stack resource to update.
+            parent_id (str): The id of the stack or queue resource to push the resource onto.
+            child (Union[ResourceDataModels, str]): The resource to push onto the stack (or an ID, if it already exists).
 
         Returns:
-            Asset: The popped asset.
-            updated_stack: updated stack resource
-
+            updated_parent: The updated stack or queue resource.
         """
-        with self.session as session:
-            stack = session.merge(stack)
-            asset = stack._pop(session)
-
-            if asset:
-                updated_stack = (
-                    session.query(Stack)
-                    .filter_by(resource_id=stack.resource_id)
-                    .first()
-                )
-                return asset, updated_stack
-            raise ValueError("The stack is empty or the asset does not exist.")
-
-    def push_to_queue(self, queue: Queue, asset: Asset) -> None:
-        """
-        Push an asset to the queue. Automatically adds the asset to the database if it's not already there.
-
-        Args:
-            queue (Queue): The queue resource to push the asset onto.
-            asset (Asset): The asset to push onto the queue.
-        """
-        with self.session as session:
-            existing_queue = (
-                session.query(Queue).filter_by(resource_id=queue.resource_id).first()
-            )
-
-            if not existing_queue:
+        with self.get_session() as session:
+            parent_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=parent_id)
+            ).one()
+            if parent_row.base_type not in [
+                ContainerTypeEnum.stack,
+                ContainerTypeEnum.queue,
+            ]:
                 raise ValueError(
-                    f"Queue '{queue.resource_name, queue.resource_id}' does not exist in the database. Please provide a valid resource."
+                    f"Resource '{parent_row.resource_name}' with type {parent_row.base_type} is not a stack or queue resource."
                 )
-            queue = existing_queue
-            asset = session.merge(asset)
-            queue._push(asset, session)
-            session.refresh(queue)
-            return queue
+            parent = parent_row.to_data_model()
+            if parent.capacity and len(parent.children) >= parent_row.capacity:
+                raise ValueError(
+                    f"Cannot push resource '{child.resource_name} ({child.resource_id})' to container '{parent_row.resource_name} ({parent_row.resource_id})' because it is full."
+                )
+            self.add_child(
+                parent_id=parent_id,
+                key=str(len(parent.children)),
+                child=child,
+                update_existing=False,
+                parent_session=session,
+            )
+            session.commit()
+            session.refresh(parent_row)
 
-    def pop_from_queue(self, queue: Queue) -> tuple:
+            return parent_row.to_data_model()
+
+    def pop(self, parent_id: str) -> tuple[ResourceDataModels, Union[Stack, Queue]]:
         """
-        Pop an asset from a queue resource.
+        Pop a resource from a Stack or Queue. Returns the popped resource.
 
         Args:
-            queue (Queue): The queue resource to update.
+            parent_id (str): The id of the stack or queue resource to update.
 
         Returns:
-            Asset: The popped asset.
-            updated_queue: updated queue resource
+            child (ResourceDataModels): The popped resource.
+
+            updated_parent (Union[Stack, Queue]): updated parent container
+
         """
-        with self.session as session:
-            queue = session.merge(queue)
-            asset = queue._pop(session)
-
-            if asset:
-                updated_queue = (
-                    session.query(Queue)
-                    .filter_by(resource_id=queue.resource_id)
-                    .first()
-                )
-                return asset, updated_queue
-            raise ValueError("The queue is empty or the asset does not exist.")
-
-    def increase_plate_well(
-        self, plate: Collection, well_id: str, quantity: float
-    ) -> None:
-        """
-        Increase the quantity of liquid in a specific well of a plate.
-
-        Args:
-            plate (Collection): The plate resource to update.
-            well_id (str): The well ID to increase the quantity for.
-            quantity (float): The amount to increase the well quantity by.
-        """
-        with self.session as session:
-            existing_plate = (
-                session.query(Collection)
-                .filter_by(resource_id=plate.resource_id)
-                .first()
-            )
-            pool = existing_plate.children.get(well_id)
-
-            if not pool:
+        with self.get_session() as session:
+            parent_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=parent_id)
+            ).one()
+            if parent_row.base_type not in [
+                ContainerTypeEnum.stack,
+                ContainerTypeEnum.queue,
+            ]:
                 raise ValueError(
-                    f"No resource found in well '{well_id}' of plate {existing_plate.resource_name}."
+                    f"Resource '{parent_row.resource_name}' with type {parent_row.base_type} is not a stack or queue resource."
                 )
+            parent = parent_row.to_data_model()
+            if not parent.children:
+                raise ValueError(f"Container '{parent.resource_name}' is empty.")
+            if parent.base_type == ContainerTypeEnum.stack:
+                child = parent.children[-1]
+            elif parent.base_type == ContainerTypeEnum.queue:
+                child = parent.children[0]
+            else:
+                raise ValueError(
+                    f"Resource '{parent.resource_name}' with type {parent.base_type} is not a stack or queue resource."
+                )
+            child_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=child.resource_id)
+            ).one()
+            child_row.parent_id = None
+            child_row.key = None
+            session.merge(child_row)
+            session.commit()
+            session.refresh(parent_row)
+            session.refresh(child_row)
 
-            self.increase_pool_quantity(pool=pool, amount=quantity)
-            session.add(existing_plate)
-            session.refresh(existing_plate)
-            return existing_plate
+            return child_row.to_data_model(), parent_row.to_data_model()
 
-    def decrease_plate_well(
-        self, plate: Collection, well_id: str, quantity: float
-    ) -> None:
+    def set_child(
+        self,
+        container_id: str,
+        key: Union[str, tuple],
+        child: Union[ResourceDataModels, str],
+    ) -> ContainerDataModels:
         """
-        Decrease the quantity of liquid in a specific well of a plate.
+        Set the child of a container at a particular key/location. Automatically adds the child to the database if it's not already there.
+        Only works for Container or Collection resources.
 
         Args:
-            plate (Plate): The plate resource to update.
-            well_id (str): The well ID to decrease the quantity for.
-            quantity (float): The amount to decrease the well quantity by.
+            container_id (str): The id of the collection resource to update.
+            key (str): The key of the child to update.
+            child (Union[Resource, str]): The child resource to update.
+
+        Returns:
+            ContainerDataModels: The updated container resource.
         """
-        with self.session as session:
-            existing_plate = (
-                session.query(Collection)
-                .filter_by(resource_id=plate.resource_id)
-                .first()
+        with self.get_session() as session:
+            container_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=container_id)
+            ).one()
+            if container_row.base_type in ContainerTypeEnum:
+                raise ValueError(
+                    f"Resource '{container_row.resource_name}' with type {container_row.base_type} is not a container."
+                )
+            if container_row.base_type in [
+                ContainerTypeEnum.stack,
+                ContainerTypeEnum.queue,
+            ]:
+                raise ValueError(
+                    f"Resource '{container_row.resource_name}' with type {container_row.base_type} does not support random access, use `.push` instead."
+                )
+            container = container_row.to_data_model()
+            if container.base_type in [
+                ContainerTypeEnum.row,
+                ContainerTypeEnum.grid,
+                ContainerTypeEnum.voxel_grid,
+            ]:
+                if isinstance(key, str):
+                    key = container.expand_key(key)
+                if not container.check_key_bounds(key):
+                    raise KeyError(key)
+                key = container.flatten_key(key)
+            elif (
+                container.capacity
+                and container.quantity >= container.capacity
+                and key not in container.children
+            ):
+                raise ValueError(
+                    f"Cannot add child '{child.resource_name}' to container '{container.resource_name}' because it is full."
+                )
+            self.add_child(
+                parent_id=container_id, key=key, child=child, parent_session=session
             )
+            session.commit()
+            session.refresh(container_row)
+            return container_row.to_data_model()
 
-            if well_id not in existing_plate.children:
-                raise KeyError(
-                    f"Well ID '{well_id}' does not exist in existing_plate '{existing_plate.resource_name}'."
-                )
-
-            pool = existing_plate.children[well_id]
-            if not isinstance(pool, Pool):
-                raise TypeError(
-                    "Only Pool resources are supported in existing_plate wells."
-                )
-
-            self.decrease_pool_quantity(pool=pool, amount=quantity)
-            session.add(existing_plate)
-            session.refresh(existing_plate)
-            return existing_plate
-
-    def update_collection_child(
-        self, collection: Collection, key: str, resource: ResourceBase
-    ) -> None:
-        """
-        Update or add a resource in a specific well of a collection using the `add_child` method.
+    def remove_child(self, container_id: str, key: str) -> Union[Collection, Container]:
+        """Remove the child of a container at a particular key/location.
 
         Args:
-            collection (Collection): The collection resource to update.
-            collection (str): The well ID to update or add.
-            resource (resource): The resource resource to associate with the well.
+            container_id (str): The id of the collection resource to update.
+            key (str): The key of the child to remove.
+
+        Returns:
+            Union[Container, Collection]: The updated container or collection resource.
         """
-        with self.session as session:
-            collection = (
-                session.query(Collection)
-                .filter_by(resource_id=collection.resource_id)
-                .first()
-            )
-            resource = self.get_resource(resource_id=resource.resource_id)
-            collection._add_child(key=key, resource=resource, session=session)
-            session.add(collection)
-            session.refresh(collection)
-            return collection
+        with self.get_session() as session:
+            container_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=container_id)
+            ).one()
+            if container_row.base_type in ContainerTypeEnum:
+                raise ValueError(
+                    f"Resource '{container_row.resource_name}' with type {container_row.base_type} is not a container."
+                )
+            if container_row.base_type in [
+                ContainerTypeEnum.stack,
+                ContainerTypeEnum.queue,
+            ]:
+                raise ValueError(
+                    f"Resource '{container_row.resource_name}' with type {container_row.base_type} does not support random access, use `.pop` instead."
+                )
+            container = container_row.to_data_model()
+            if container.base_type in [
+                ContainerTypeEnum.row,
+                ContainerTypeEnum.grid,
+                ContainerTypeEnum.voxel_grid,
+            ]:
+                key = container.flatten_key(key)
+            child = container.children[key]
+            child_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=child.resource_id)
+            ).one()
+            child_row.parent_id = None
+            child_row.key = None
+            session.merge(child_row)
+            session.commit()
+            session.refresh(container_row)
+            return container_row.to_data_model()
 
+    def set_capacity(
+        self, resource_id: str, capacity: Union[int, float]
+    ) -> ResourceDataModels:
+        """Change the capacity of a resource."""
+        with self.get_session() as session:
+            resource_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=resource_id)
+            ).one()
+            resource = resource_row.to_data_model()
+            if not hasattr(resource, "capacity"):
+                raise ValueError(
+                    f"Resource '{resource.resource_name}' with type {resource.base_type} has no capacity attribute."
+                )
+            if capacity < resource.quantity:
+                raise ValueError(
+                    f"Cannot set capacity of resource '{resource.resource_name}' to {capacity} because it currently contains {resource.quantity}."
+                )
+            if resource.capacity == capacity:
+                logger.info(
+                    f"Capacity of container '{resource.resource_name}' is already set to {capacity}. No action taken."
+                )
+                return resource_row.to_data_model()
+            resource_row.capacity = capacity
+            session.merge(resource_row)
+            session.commit()
+            return resource_row.to_data_model()
 
-if __name__ == "__main__":
-    resource_interface = ResourceInterface()
-    stack = Stack(
-        resource_name="stack",
-        resource_type="stack",
-        capacity=10,
-        ownership=None,
-    )
-    resource_interface.add_resource(stack)
-    for _i in range(5):
-        asset = Asset(resource_name="Test plate" + str(_i))
-        asset = resource_interface.add_resource(asset)
-        resource_interface.push_to_stack(stack, asset)
-    retrieved_stack = resource_interface.get_resource(
-        resource_id=stack.resource_id,
-        resource_name=stack.resource_name,
-        owner_name=stack.owner,
-    )
-    for _i in range(2):
-        n_asset, retrieved_stack = resource_interface.pop_from_stack(retrieved_stack)
+    def remove_capacity_limit(self, resource_id: str) -> ResourceDataModels:
+        """Remove the capacity limit of a resource."""
+        with self.get_session() as session:
+            resource_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=resource_id)
+            ).one()
+            resource = resource_row.to_data_model()
+            if not hasattr(resource, "capacity"):
+                raise ValueError(
+                    f"Resource '{resource.resource_name}' with type {resource.base_type} has no capacity attribute."
+                )
+            if resource.capacity is None:
+                logger.info(
+                    f"Container '{resource.resource_name}' has no capacity limit set. No action taken."
+                )
+                return resource_row.to_data_model()
+            resource_row.capacity = None
+            session.merge(resource_row)
+            session.commit()
+            return resource_row.to_data_model()
 
-    queue = Queue(
-        resource_name="queue",
-        resource_type="queue",
-        capacity=10,
-        ownership=None,
-    )
-    queue = resource_interface.add_resource(queue)
-    for _i in range(5):
-        asset = Asset(resource_name="Test plate" + str(_i))
-        asset = resource_interface.add_resource(asset)
-        resource_interface.push_to_queue(queue, asset)
-    retrieved_queue = resource_interface.get_resource(
-        resource_id=queue.resource_id,
-        resource_name=queue.resource_name,
-        owner_name=queue.owner,
-    )
-    for _i in range(2):
-        n_asset, retrieved_queue = resource_interface.pop_from_queue(retrieved_queue)
-    resource_interface.push_to_queue(queue, n_asset)
+    def set_quantity(
+        self, resource_id: str, quantity: Union[int, float]
+    ) -> ResourceDataModels:
+        """Change the quantity of a consumable resource."""
+        with self.get_session() as session:
+            resource_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=resource_id)
+            ).one()
+            resource = resource_row.to_data_model()
+            if not hasattr(resource, "quantity"):
+                raise ValueError(
+                    f"Resource '{resource.resource_name}' with type {resource.base_type} has no quantity attribute."
+                )
+            if resource.capacity and quantity > resource.capacity:
+                raise ValueError(
+                    f"Cannot set quantity of consumable '{resource.resource_name}' to {quantity} because it exceeds the capacity of {resource.capacity}."
+                )
+            try:
+                resource.quantity = quantity  # * Check that the quantity attribute is not read-only (this is important, because ResourceTable doesn't validate this, whereas the ResourceDataModels do)
+                resource_row.quantity = quantity
+            except AttributeError as e:
+                raise ValueError(
+                    f"Resource '{resource.resource_name}' with type {resource.base_type} has a read-only quantity attribute."
+                ) from e
+            session.merge(resource_row)
+            session.commit()
+            return resource_row.to_data_model()
 
-    consumable = Consumable(
-        resource_name="Water",
-        resource_type="consumable",
-        quantity=50.0,
-        ownership=None,
-        capacity=100,
-    )
-    # Add the ConsumableBase to the database
-    resource_interface.add_resource(consumable)
+    def empty(self, resource_id: str) -> ResourceDataModels:
+        """Empty the contents of a container or consumable resource."""
+        with self.get_session() as session:
+            resource_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=resource_id)
+            ).one()
+            resource = resource_row.to_data_model()
+            if resource.base_type in ContainerTypeEnum:
+                for child in resource.children.values():
+                    self.remove_resource(child.resource_id, parent_session=session)
+            elif resource.base_type in ConsumableTypeEnum:
+                resource_row.quantity = 0
+            session.commit()
+            session.refresh(resource_row)
+            return resource_row.to_data_model()
 
-    # # Create a Pool resource
-    pool = Pool(
-        resource_name="Vial_1",
-        resource_type="pool",
-        capacity=500.0,
-        children={"Water": consumable},
-        # Add the ConsumableBase to children
-    )
-    pool = resource_interface.add_resource(pool)
-
-    # Example operations on the pool
-    pool = resource_interface.increase_pool_quantity(pool, 50.0)
-
-    pool = resource_interface.decrease_pool_quantity(pool, 20.0)
-
-    pool = resource_interface.fill_pool(pool)
-
-    pool = resource_interface.empty_pool(pool)
-    pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
-    pool1 = resource_interface.add_resource(pool1)
-    # Create a Plate resource with initial children
-    plate = Collection(
-        resource_name="Microplate1",
-        resource_type="collection",
-        children={"A1": pool},
-    )
-    resource_interface.add_resource(plate)
-    # Increase quantity in a well
-    resource_interface.increase_plate_well(plate, "A1", 30)
-
-    # Decrease quantity in a well
-    resource_interface.decrease_plate_well(plate, "A1", 20)
-
-    resource_interface.update_collection_child(plate, "A2", pool1)
-
-    start_date = datetime.utcnow() - timedelta(seconds=6)
-    end_date = datetime.utcnow()
-
-    resource_interface.remove_resource(resource_id=stack.resource_id)
-    history_entries = resource_interface.get_history(
-        resource_id=stack.resource_id,
-    )
-    for _entry in history_entries:
-        pass
+    def fill(self, resource_id: str) -> ResourceDataModels:
+        """Fill a consumable resource to capacity."""
+        with self.get_session() as session:
+            resource_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=resource_id)
+            ).one()
+            resource = resource_row.to_data_model()
+            if resource.base_type not in ConsumableTypeEnum:
+                raise ValueError(
+                    f"Resource '{resource.resource_name}' with type {resource.base_type} is not a consumable."
+                )
+            if not resource.capacity:
+                raise ValueError(
+                    f"Resource '{resource.resource_name}' has no capacity limit set, please set a capacity or use set_quantity."
+                )
+            resource_row.quantity = resource.capacity
+            session.merge(resource_row)
+            session.commit()
+            return resource_row.to_data_model()

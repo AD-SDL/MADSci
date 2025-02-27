@@ -1,410 +1,440 @@
 """Fast API Server for Resources"""
 
 import logging
-from datetime import datetime
+from typing import Optional, Union
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from madsci.common.types.squid_types import (
-    ResourceManagerDefinition,
+from fastapi import FastAPI
+from fastapi.exceptions import HTTPException
+from fastapi.params import Body
+from madsci.common.types.resource_types import (
+    ContainerDataModels,
+    Queue,
+    ResourceDataModels,
+    Stack,
+)
+from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
+from madsci.common.types.resource_types.server_types import (
+    PushResourceBody,
+    RemoveChildBody,
+    ResourceGetQuery,
+    ResourceHistoryGetQuery,
+    SetChildBody,
 )
 from madsci.resource_manager.resource_interface import ResourceInterface
-from madsci.resource_manager.serialization_utils import (
-    deserialize_resource,
-    serialize_resource,
-)
+from madsci.resource_manager.resource_tables import ResourceHistoryTable
+from sqlalchemy.exc import NoResultFound
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
 
-resource_manager_definition = ResourceManagerDefinition(
-    name="Resource Manager 1",
-    manager_type="resource_manager",
-    description="The First MADSci Resource Manager.",
-)
-resource_manager_definition.url = f"https://{resource_manager_definition.manager_config.host}:{resource_manager_definition.manager_config.port}"
-DB_URL = resource_manager_definition.manager_config.db_url
+def create_resource_server(  # noqa: C901, PLR0915
+    resource_manager_definition: Optional[ResourceManagerDefinition] = None,
+    resource_interface: Optional[ResourceInterface] = None,
+) -> FastAPI:
+    """Creates a Resource Manager's REST server."""
 
+    if not resource_manager_definition:
+        resource_manager_definition = ResourceManagerDefinition.load_model()
+    if not resource_interface:
+        resource_interface = ResourceInterface(url=resource_manager_definition.db_url)
 
-@app.get("/info")
-def info() -> ResourceManagerDefinition:
-    """Get information about the resource manager."""
-    return resource_manager_definition
+    app = FastAPI()
 
+    @app.get("/info")
+    def info() -> ResourceManagerDefinition:
+        """Get information about the resource manager."""
+        return resource_manager_definition
 
-@app.post("/resource/add")
-async def add_resource(data: dict) -> JSONResponse:
-    """
-    Add a resource to the database.
-    """
-    try:
-        resource_data = data["resource"]
-        resource = deserialize_resource(resource_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        saved_resource = interface.add_resource(resource)
-        return JSONResponse(serialize_resource(saved_resource))
-    except Exception as e:
-        logger.error(e)
+    @app.post("/resource/add")
+    async def add_resource(
+        resource: ResourceDataModels = Body(..., discriminator="base_type"),  # noqa: B008
+    ) -> ResourceDataModels:
+        """
+        Add a new resource to the Resource Manager.
+        """
+        try:
+            return resource_interface.add_resource(resource)
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @app.post("/resource/update")
+    async def update_resource(
+        resource: ResourceDataModels = Body(..., discriminator="base_type"),  # noqa: B008
+    ) -> ResourceDataModels:
+        """
+        Update or refresh a resource in the database, including its children.
+        """
+        try:
+            return resource_interface.update_resource(resource)
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
-@app.post("/resource/update")
-async def update_resource(data: dict) -> JSONResponse:
-    """
-    Update or refresh a resource in the database, including its children.
-    """
-    try:
-        resource_data = data["resource"]
+    @app.delete("/resource/{resource_id}")
+    async def remove_resource(resource_id: str) -> ResourceDataModels:
+        """
+        Marks a resource as removed. This will remove the resource from the active resources table,
+        but it will still be available in the history table.
+        """
+        try:
+            return resource_interface.remove_resource(resource_id)
+        except NoResultFound as e:
+            logger.info(f"Resource not found: {resource_id}")
+            raise HTTPException(status_code=404, detail="Resource not found") from e
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
-        # Deserialize the resource
-        resource = deserialize_resource(resource_data)
+    @app.get("/resource/{resource_id}")
+    async def get_resource(resource_id: str) -> ResourceDataModels:
+        """
+        Retrieve a resource from the database by ID.
+        """
+        try:
+            resource = resource_interface.get_resource(resource_id=resource_id)
+            if not resource:
+                raise HTTPException(status_code=404, detail="Resource not found")
 
-        # Update the resource in the database
-        interface = ResourceInterface(database_url=DB_URL)
-        interface.update_resource(resource)
+            return resource
+        except Exception as e:
+            logger.error(e)
+            raise
 
-        # Serialize and return the updated resource
-        return JSONResponse(serialize_resource(resource))
-    except Exception as e:
-        logger.error(e)
-
-
-@app.post("/resource/remove")
-async def remove_resource(data: dict) -> JSONResponse:
-    """
-    Remove a resource by moving it to the History table and deleting it from the main table.
-
-    Args:
-        data (dict): JSON payload with:
-            - `database_url` (str): The database connection string.
-            - `resource_id` (str): The ID of the resource to remove.
-
-    Returns:
-        JSONResponse: A success message or an error.
-    """
-    try:
-        resource_id = data["resource_id"]
-
-        interface = ResourceInterface(database_url=DB_URL)
-        interface.remove_resource(resource_id)
-
-        return JSONResponse(
-            {"message": f"Resource {resource_id} successfully removed."}
-        )
-    except ValueError as e:
-        logger.error(e)
-    except Exception as e:
-        logger.error(e)
-
-
-@app.post("/resource/get")
-async def get_resource(data: dict) -> JSONResponse:
-    """
-    Retrieve a resource from the database using optional parameters.
-    """
-    try:
-        resource_name = data.get("resource_name")
-        owner_name = data.get("owner_name")
-        resource_id = data.get("resource_id")
-        resource_type = data.get("resource_type")
-        interface = ResourceInterface(database_url=DB_URL)
-        resource = interface.get_resource(
-            resource_name=resource_name,
-            owner_name=owner_name,
-            resource_id=resource_id,
-            resource_type=resource_type,
-        )
-        if not resource:
-            raise HTTPException(status_code=404, detail="Resource not found")
-
-        return JSONResponse(serialize_resource(resource))
-    except Exception as e:
-        logger.error(e)
-
-
-@app.post("/resource/history")
-async def get_history(data: dict) -> JSONResponse:
-    """
-    Retrieve the history of a resource.
-
-    Args:
-        data (dict): JSON payload with:
-            - `database_url` (str): The database connection string.
-            - `resource_id` (str): The ID of the resource.
-            - `event_type` (Optional[str]): Filter by event type (`created`, `updated`, `deleted`).
-            - `removed` (Optional[bool]): Filter by removed status.
-            - `start_date` (Optional[str]): Start date (ISO format `YYYY-MM-DDTHH:MM:SS`).
-            - `end_date` (Optional[str]): End date (ISO format `YYYY-MM-DDTHH:MM:SS`).
-            - `limit` (Optional[int]): Maximum number of records to return.
-
-    Returns:
-        JSONResponse: A list of historical resource entries.
-    """
-    try:
-        resource_id = data["resource_id"]
-        event_type = data.get("event_type")
-        removed = data.get("removed")
-        start_date = data.get("start_date")
-        end_date = data.get("end_date")
-        limit = data.get("limit", 100)
-
-        interface = ResourceInterface(database_url=DB_URL)
-
-        # Convert date strings to datetime objects
-        start_date = datetime.fromisoformat(start_date) if start_date else None
-        end_date = datetime.fromisoformat(end_date) if end_date else None
-
-        history_entries = interface.get_history(
-            resource_id=resource_id,
-            event_type=event_type,
-            removed=removed,
-            start_date=start_date,
-            end_date=end_date,
-            limit=limit,
-        )
-
-        return JSONResponse(
-            [serialize_resource(entry.data) for entry in history_entries]
-        )
-    except Exception as e:
-        logger.error(e)
-
-
-@app.post("/resource/restore")
-async def restore_deleted_resource(data: dict) -> JSONResponse:
-    """
-    Restore a previously deleted resource from the history table.
-
-    Args:
-        data (dict): JSON payload with:
-            - `database_url` (str): The database connection string.
-            - `resource_id` (str): The ID of the resource to restore.
-
-    Returns:
-        JSONResponse: The restored resource.
-    """
-    try:
-        resource_id = data["resource_id"]
-
-        interface = ResourceInterface(database_url=DB_URL)
-
-        # Fetch the most recent deleted entry
-        history_entries = interface.get_history(
-            resource_id=resource_id, removed=True, limit=1
-        )
-        if not history_entries:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No deleted history found for resource ID '{resource_id}'.",
+    @app.post("/resource/query")
+    async def query_resource(query: ResourceGetQuery = Body(...)) -> ResourceDataModels:  # noqa: B008
+        """
+        Retrieve a resource from the database based on the specified parameters.
+        """
+        try:
+            resource = resource_interface.get_resource(
+                **query.model_dump(exclude_none=True),
             )
+            if not resource:
+                raise HTTPException(status_code=404, detail="Resource not found")
 
-        # Deserialize and restore the resource
-        restored_resource = deserialize_resource(history_entries[0].data)
-        saved_resource = interface.add_resource(restored_resource)
+            return resource
+        except Exception as e:
+            logger.error(e)
+            raise e
 
-        return JSONResponse(serialize_resource(saved_resource))
-    except Exception as e:
-        logger.error(e)
+    @app.post("/history/query")
+    async def query_history(
+        query: ResourceHistoryGetQuery = Body(...),  # noqa: B008
+    ) -> list[ResourceHistoryTable]:
+        """
+        Retrieve the history of a resource.
 
+        Args:
+            query (ResourceHistoryGetQuery): The query parameters.
 
-@app.post("/stack/push")
-async def push_to_stack(data: dict) -> JSONResponse:
-    """
-    Push an asset onto a stack.
-    """
-    try:
-        stack_data = data["stack"]
-        asset_data = data["asset"]
-        stack = deserialize_resource(stack_data)
-        asset = deserialize_resource(asset_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_stack = interface.push_to_stack(stack, asset)
-        return JSONResponse(serialize_resource(updated_stack))
-    except Exception as e:
-        logger.error(e)
+        Returns:
+            list[ResourceHistoryTable]: A list of historical resource entries.
+        """
+        try:
+            return resource_interface.query_history(
+                **query.model_dump(exclude_none=True)
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @app.post("/history/{resource_id}/restore")
+    async def restore_deleted_resource(resource_id: str) -> ResourceDataModels:
+        """
+        Restore a previously deleted resource from the history table.
 
-@app.post("/stack/pop")
-async def pop_from_stack(data: dict) -> JSONResponse:
-    """
-    Pop an asset from a stack.
-    """
-    try:
-        stack_data = data["stack"]
-        stack = deserialize_resource(stack_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        popped_asset, updated_stack = interface.pop_from_stack(stack)
-        return JSONResponse(
-            {
-                "asset": serialize_resource(popped_asset),
-                "updated_stack": serialize_resource(updated_stack),
-            }
-        )
-    except Exception as e:
-        logger.error(e)
+        Args:
+            resource_id (str): the id of the resource to restore.
 
+        Returns:
+            ResourceDataModels: The restored resource.
+        """
+        try:
+            # Fetch the most recent deleted entry
+            restored_resource = resource_interface.restore_resource(
+                resource_id=resource_id
+            )
+            if not restored_resource:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No removed resource with ID '{resource_id}'.",
+                )
 
-@app.post("/queue/push")
-async def push_to_queue(data: dict) -> JSONResponse:
-    """
-    Push an asset onto a queue.
-    """
-    try:
-        queue_data = data["queue"]
-        asset_data = data["asset"]
-        queue = deserialize_resource(queue_data)
-        asset = deserialize_resource(asset_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_queue = interface.push_to_queue(queue, asset)
+            return restored_resource
+        except Exception as e:
+            logger.error(e)
+            raise e
 
-        return JSONResponse(serialize_resource(updated_queue))
-    except Exception as e:
-        logger.error(e)
+    @app.post("/resource/{resource_id}/push")
+    async def push(resource_id: str, body: PushResourceBody) -> Union[Stack, Queue]:
+        """
+        Push a resource onto a stack or queue.
 
+        Args:
+            resource_id (str): The ID of the stack or queue to push the resource onto.
+            body (PushResourceBody): The resource to push onto the stack or queue, or the ID of an existing resource.
 
-@app.post("/queue/pop")
-async def pop_from_queue(data: dict) -> JSONResponse:
-    """
-    Pop an asset from a queue.
-    """
-    try:
-        queue_data = data["queue"]
-        queue = deserialize_resource(queue_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        popped_asset, updated_queue = interface.pop_from_queue(queue)
-        return JSONResponse(
-            {
-                "asset": serialize_resource(popped_asset),
-                "updated_queue": serialize_resource(updated_queue),
-            }
-        )
-    except Exception as e:
-        logger.error(e)
+        Returns:
+            Union[Stack, Queue]: The updated stack or queue.
+        """
+        try:
+            return resource_interface.push(
+                parent_id=resource_id, child=body.child if body.child else body.child_id
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @app.post("/resource/{resource_id}/pop")
+    async def pop(resource_id: str) -> tuple[ResourceDataModels, Union[Stack, Queue]]:
+        """
+        Pop an asset from a stack or queue.
 
-@app.post("/pool/increase")
-async def increase_pool_quantity(data: dict) -> JSONResponse:
-    """
-    Increase the quantity of a pool resource.
-    """
-    try:
-        pool_data = data["pool"]
-        amount = data["amount"]
-        pool = deserialize_resource(pool_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_pool = interface.increase_pool_quantity(pool, float(amount))
-        return JSONResponse(serialize_resource(updated_pool))
-    except Exception as e:
-        logger.error(e)
+        Args:
+            resource_id (str): The ID of the stack or queue to pop the asset from.
 
+        Returns:
+            tuple[ResourceDataModels, Union[Stack, Queue]]: The popped asset and the updated stack or queue.
+        """
+        try:
+            return resource_interface.pop(parent_id=resource_id)
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
-@app.post("/pool/decrease")
-async def decrease_pool_quantity(data: dict) -> JSONResponse:
-    """
-    Decrease the quantity of a pool resource.
-    """
-    try:
-        pool_data = data["pool"]
-        amount = data["amount"]
-        pool = deserialize_resource(pool_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_pool = interface.decrease_pool_quantity(pool, float(amount))
-        return JSONResponse(serialize_resource(updated_pool))
-    except Exception as e:
-        logger.error(e)
+    @app.post("/resource/{resource_id}/child/set")
+    async def set_child(resource_id: str, body: SetChildBody) -> ContainerDataModels:
+        """
+        Set a child resource for a parent resource. Must be a container type that supports random access.
 
+        Args:
+            resource_id (str): The ID of the parent resource.
+            body (SetChildBody): The body of the request.
 
-@app.post("/pool/fill")
-async def fill_pool(data: dict) -> JSONResponse:
-    """
-    Fill a pool resource to its maximum capacity.
-    """
-    try:
-        pool_data = data["pool"]
-        pool = deserialize_resource(pool_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_pool = interface.fill_pool(pool)
-        return JSONResponse(serialize_resource(updated_pool))
-    except Exception as e:
-        logger.error(e)
+        Returns:
+            ResourceDataModels: The updated parent resource.
+        """
+        try:
+            return resource_interface.set_child(
+                container_id=resource_id, key=body.key, child=body.child
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @app.post("/resource/{resource_id}/child/remove")
+    async def remove_child(
+        resource_id: str, body: RemoveChildBody
+    ) -> ContainerDataModels:
+        """
+        Remove a child resource from a parent resource. Must be a container type that supports random access.
 
-@app.post("/pool/empty")
-async def empty_pool(data: dict) -> JSONResponse:
-    """
-    Empty a pool resource by setting its quantity to zero.
-    """
-    try:
-        pool_data = data["pool"]
-        pool = deserialize_resource(pool_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_pool = interface.empty_pool(pool)
-        return JSONResponse(serialize_resource(updated_pool))
-    except Exception as e:
-        logger.error(e)
+        Args:
+            resource_id (str): The ID of the parent resource.
+            body (RemoveChildBody): The body of the request.
 
+        Returns:
+            ResourceDataModels: The updated parent resource.
+        """
+        try:
+            return resource_interface.remove_child(
+                container_id=resource_id, key=body.key
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
-@app.post("/plate/increase_well")
-async def increase_plate_well(data: dict) -> JSONResponse:
-    """
-    Increase the quantity in a specific well of a plate.
-    """
-    try:
-        plate_data = data["plate"]
-        well_id = data["well_id"]
-        quantity = data["quantity"]
-        plate = deserialize_resource(plate_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_plate = interface.increase_plate_well(plate, well_id, quantity)
-        updated_plate = interface.get_resource(resource_id=updated_plate.resource_id)
-        return JSONResponse(serialize_resource(updated_plate))
-    except Exception as e:
-        logger.error(e)
+    @app.post("/resource/{resource_id}/quantity")
+    async def set_quantity(
+        resource_id: str, quantity: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Set the quantity of a resource.
 
+        Args:
+            resource_id (str): The ID of the resource.
+            quantity (Union[float, int]): The quantity to set.
 
-@app.post("/plate/decrease_well")
-async def decrease_plate_well(data: dict) -> JSONResponse:
-    """
-    Decrease the quantity in a specific well of a plate.
-    """
-    try:
-        plate_data = data["plate"]
-        well_id = data["well_id"]
-        quantity = data["quantity"]
-        plate = deserialize_resource(plate_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_plate = interface.decrease_plate_well(plate, well_id, quantity)
-        updated_plate = interface.get_resource(resource_id=updated_plate.resource_id)
-        return JSONResponse(serialize_resource(updated_plate))
-    except Exception as e:
-        logger.error(e)
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            return resource_interface.set_quantity(
+                resource_id=resource_id, quantity=quantity
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @app.post("/resource/{resource_id}/quantity/change_by")
+    async def change_quantity_by(
+        resource_id: str, amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Change the quantity of a resource by a given amount.
 
-@app.post("/collection/update_child")
-async def update_collection_child(data: dict) -> JSONResponse:
-    """
-    Update a specific child in a collection.
-    """
-    try:
-        collection_data = data["collection"]
-        key_id = data["key_id"]
-        child_data = data["child"]
-        collection = deserialize_resource(collection_data)
-        child = deserialize_resource(child_data)
-        interface = ResourceInterface(database_url=DB_URL)
-        updated_collection = interface.update_collection_child(
-            collection, key_id, child
-        )
-        return JSONResponse(serialize_resource(updated_collection))
-    except Exception as e:
-        logger.error(e)
+        Args:
+            resource_id (str): The ID of the resource.
+            amount (Union[float, int]): The amount to change the quantity by.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            resource = resource_interface.get_resource(resource_id=resource_id)
+            if not resource:
+                raise HTTPException(status_code=404, detail="Resource not found")
+            return resource_interface.set_quantity(
+                resource_id=resource_id, quantity=resource.quantity + amount
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/quantity/increase")
+    async def increase_quantity(
+        resource_id: str, amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Increase the quantity of a resource by a given amount.
+
+        Args:
+            resource_id (str): The ID of the resource.
+            amount (Union[float, int]): The amount to increase the quantity by. Note that this is a magnitude, so negative and positive values will have the same effect.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            resource = resource_interface.get_resource(resource_id=resource_id)
+            if not resource:
+                raise HTTPException(status_code=404, detail="Resource not found")
+            return resource_interface.set_quantity(
+                resource_id=resource_id, quantity=resource.quantity + abs(amount)
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/quantity/decrease")
+    async def decrease_quantity(
+        resource_id: str, amount: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Decrease the quantity of a resource by a given amount.
+
+        Args:
+            resource_id (str): The ID of the resource.
+            amount (Union[float, int]): The amount to decrease the quantity by. Note that this is a magnitude, so negative and positive values will have the same effect.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            resource = resource_interface.get_resource(resource_id=resource_id)
+            if not resource:
+                raise HTTPException(status_code=404, detail="Resource not found")
+            return resource_interface.set_quantity(
+                resource_id=resource_id, quantity=resource.quantity - abs(amount)
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/capacity")
+    async def set_capacity(
+        resource_id: str, capacity: Union[float, int]
+    ) -> ResourceDataModels:
+        """
+        Set the capacity of a resource.
+
+        Args:
+            resource_id (str): The ID of the resource.
+            capacity (Union[float, int]): The capacity to set.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            return resource_interface.set_capacity(
+                resource_id=resource_id, capacity=capacity
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.delete("/resource/{resource_id}/capacity")
+    async def remove_capacity_limit(resource_id: str) -> ResourceDataModels:
+        """
+        Remove the capacity limit of a resource.
+
+        Args:
+            resource_id (str): The ID of the resource.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            return resource_interface.remove_capacity_limit(resource_id=resource_id)
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/empty")
+    async def empty_resource(resource_id: str) -> ResourceDataModels:
+        """
+        Empty the contents of a container or consumable resource.
+
+        Args:
+            resource_id (str): The ID of the resource.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            return resource_interface.empty(resource_id=resource_id)
+        except NoResultFound as e:
+            logger.info(f"Resource not found: {resource_id}")
+            raise HTTPException(status_code=404, detail="Resource not found") from e
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/fill")
+    async def fill_resource(resource_id: str) -> ResourceDataModels:
+        """
+        Fill a consumable resource to capacity.
+
+        Args:
+            resource_id (str): The ID of the resource.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            return resource_interface.fill(resource_id=resource_id)
+        except NoResultFound as e:
+            logger.info(f"Resource not found: {resource_id}")
+            raise HTTPException(status_code=404, detail="Resource not found") from e
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return app
 
 
 if __name__ == "__main__":
     import uvicorn
 
+    resource_manager_definition = ResourceManagerDefinition.load_model()
+    resource_interface = ResourceInterface(url=resource_manager_definition.db_url)
+    app = create_resource_server(
+        resource_manager_definition=resource_manager_definition,
+        resource_interface=resource_interface,
+    )
     uvicorn.run(
         app,
-        host=resource_manager_definition.manager_config.host,
-        port=resource_manager_definition.manager_config.port,
+        host=resource_manager_definition.host,
+        port=resource_manager_definition.port,
     )
