@@ -1,10 +1,21 @@
 """Types for MADSci Workcell configuration."""
 
-from typing import Optional, Union
+from pathlib import Path
+from typing import Annotated, ClassVar, Literal, Optional, Union
 
-from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.serializers import dict_to_list
+from madsci.common.types.base_types import (
+    BaseModel,
+    LoadConfig,
+    ModelLink,
+    PathLike,
+    new_ulid_str,
+)
+from madsci.common.types.event_types import EventClientConfig
+from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.node_types import NodeDefinition
-from madsci.common.validators import ulid_validator
+from madsci.common.validators import create_dict_promoter, ulid_validator
+from pydantic import computed_field, field_serializer
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
@@ -13,9 +24,28 @@ from sqlmodel.main import Field
 class WorkcellDefinition(BaseModel, extra="allow"):
     """Configuration for a MADSci Workcell."""
 
+    _definition_file_patterns: ClassVar[list] = [
+        "*workcell.yaml",
+        "*workcell.yml",
+        "*workcell.manager.yml",
+        "*workcell.manager.yaml",
+    ]
+    _definition_cli_flag: ClassVar[list] = [
+        "--workcell",
+        "--workcell-definition",
+        "--definition",
+        "--workcell-definition-file",
+        "-f",
+    ]
+
     name: str = Field(
         title="Workcell Name",
         description="The name of the workcell.",
+    )
+    manager_type: Literal[ManagerType.WORKCELL_MANAGER] = Field(
+        title="Manager Type",
+        description="The type of manager",
+        default=ManagerType.WORKCELL_MANAGER,
     )
     workcell_id: str = Field(
         title="Workcell ID",
@@ -27,32 +57,47 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         title="Workcell Description",
         description="A description of the workcell.",
     )
-    config: "WorkcellConfig" = Field(
-        title="Workcell Configuration",
-        description="The configuration for the workcell.",
-        default_factory=lambda: WorkcellConfig(),
-    )
+    config: Annotated[
+        "WorkcellConfig",
+        Field(
+            title="Workcell Configuration",
+            description="The configuration for the workcell.",
+            default_factory=lambda: WorkcellConfig(),
+        ),
+        LoadConfig(use_fields_as_cli_args=True),
+    ]
     nodes: dict[str, Union["NodeDefinition", AnyUrl, PathLike]] = Field(
         default_factory=dict,
         title="Workcell Node URLs",
         description="The URL, path, or definition for each node in the workcell.",
     )
 
+    @computed_field
+    @property
+    def workcell_directory(self) -> Path:
+        """The directory for the workcell."""
+        return Path(self.config.workcells_directory) / self.name
+
     is_ulid = field_validator("workcell_id")(ulid_validator)
-    """
-    TODO: Do we need this validator?
-    is_dict = field_validator("nodes", mode="before")(create_dict_promoter("node_name"))
-    """
+    validate_nodes_to_dict = field_validator("nodes", mode="before")(
+        create_dict_promoter("node_name")
+    )
+    serialize_nodes_to_list = field_serializer("nodes")(dict_to_list)
+
+
+class WorkcellLink(ModelLink):
+    """Link to a MADSci Workcell Definition."""
+
+    definition: Optional[WorkcellDefinition] = Field(
+        title="Workcell Definition",
+        description="The actual definition of the workcell.",
+        default=None,
+    )
 
 
 class WorkcellConfig(BaseModel):
     """Configuration for a MADSci Workcell."""
 
-    workcell_name: str = Field(
-        default="Workcell 1",
-        title="Name",
-        description="The name of the workcell.",
-    )
     host: str = Field(
         default="127.0.0.1",
         title="Host",
@@ -63,10 +108,10 @@ class WorkcellConfig(BaseModel):
         title="Port",
         description="The port to run the workcell manager on.",
     )
-    workcell_directory: str = Field(
-        default="/.MADsci/Workcell",
-        title="Workcell Directory",
-        description="Directory to save workflow files",
+    workcells_directory: Optional[PathLike] = Field(
+        title="Workcells Directory",
+        description="Directory used to store workcell-related files in. Defaults to ~/.madsci/workcells. Workcell-related filess will be stored in a sub-folder with the workcell name.",
+        default_factory=lambda: Path.home() / ".madsci" / "workcells",
     )
     redis_host: str = Field(
         default="localhost",
@@ -82,6 +127,11 @@ class WorkcellConfig(BaseModel):
         default=None,
         title="Redis Password",
         description="The password for the redis server.",
+    )
+    event_client_config: Optional[EventClientConfig] = Field(
+        default=None,
+        title="Event Client Configuration",
+        description="The configuration for a MADSci event client.",
     )
     scheduler_update_interval: float = Field(
         default=2.0,

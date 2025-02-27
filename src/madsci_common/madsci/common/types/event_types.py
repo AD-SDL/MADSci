@@ -5,10 +5,12 @@ Event types for the MADSci system.
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.validators import ulid_validator
 from pydantic.functional_validators import field_validator
 from sqlmodel import Field
@@ -62,6 +64,36 @@ class EventLogLevel(int, Enum):
     CRITICAL = logging.CRITICAL
 
 
+class EventClientConfig(BaseModel):
+    """Configuration for an Event Client."""
+
+    name: Optional[str] = Field(
+        title="Event Client Name",
+        description="The name of the event client.",
+        default=None,
+    )
+    event_server_url: Optional[str] = Field(
+        title="Event Server URL",
+        description="The URL of the event server.",
+        default=None,
+    )
+    log_level: int = Field(
+        title="Event Client Log Level",
+        description="The log level of the event client.",
+        default=EventLogLevel.INFO,
+    )
+    source: Optional[OwnershipInfo] = Field(
+        title="Source",
+        description="Information about the source of the event client.",
+        default=None,
+    )
+    log_dir: PathLike = Field(
+        title="Log Directory",
+        description="The directory to store logs in.",
+        default_factory=lambda: Path.home() / ".madsci" / "logs",
+    )
+
+
 class EventType(str, Enum):
     """The type of an event."""
 
@@ -98,11 +130,11 @@ class EventType(str, Enum):
     # *Experiment Events
     EXPERIMENT_CREATE = "experiment_create"
     EXPERIMENT_START = "experiment_start"
-    EXPERIMENT_STOP = "experiment_stop"
-    EXPERIMENT_CONTINUED = "experiment_continued"
-    EXPERIMENT_PAUSE = "experiment_pause"
     EXPERIMENT_COMPLETE = "experiment_complete"
-    EXPERIMENT_ABORT = "experiment_abort"
+    EXPERIMENT_FAILED = "experiment_failed"
+    EXPERIMENT_CANCELLED = "experiment_stop"
+    EXPERIMENT_PAUSE = "experiment_pause"
+    EXPERIMENT_CONTINUED = "experiment_continued"
     # *Campaign Events
     CAMPAIGN_CREATE = "campaign_create"
     CAMPAIGN_START = "campaign_start"
@@ -116,3 +148,33 @@ class EventType(str, Enum):
             if member.lower() == value:
                 return member
         raise ValueError(f"Invalid ManagerTypes: {value}")
+
+
+class EventManagerDefinition(ManagerDefinition):
+    """Definition for a Squid Event Manager"""
+
+    manager_type: Literal[ManagerType.EVENT_MANAGER] = Field(
+        title="Manager Type",
+        description="The type of the event manager",
+        default=ManagerType.EVENT_MANAGER,
+    )
+    host: str = Field(
+        default="127.0.0.1",
+        title="Server Host",
+        description="The hostname or IP address of the Event Manager server.",
+    )
+    port: int = Field(
+        default=8001,
+        title="Server Port",
+        description="The port number of the Event Manager server.",
+    )
+    db_url: str = Field(
+        default="mongodb://localhost:27017",
+        title="Database URL",
+        description="The URL of the database used by the Event Manager.",
+    )
+    event_client_config: "EventClientConfig" = Field(
+        default_factory=lambda: EventClientConfig(),
+        title="Event Client Configuration",
+        description="The configuration for a MADSci event client. This is used by the event manager to log it's own events/logs. Note that the event_server_url is ignored.",
+    )

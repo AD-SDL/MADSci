@@ -18,7 +18,7 @@ from madsci.common.types.node_types import (
     NodeSetConfigResponse,
     NodeStatus,
 )
-from madsci.common.types.resource_types import ResourceDefinition
+from madsci.common.types.resource_types.definitions import ResourceDefinition
 from pydantic import AnyUrl
 
 
@@ -115,11 +115,11 @@ class RestNodeClient(AbstractNodeClient):
             response.raise_for_status()
         return NodeInfo.model_validate(response.json())
 
-    def set_config(self, config_dict: dict[str, Any]) -> NodeSetConfigResponse:
-        """Set configuration values of the node."""
+    def set_config(self, new_config: dict[str, Any]) -> NodeSetConfigResponse:
+        """Update configuration values of the node."""
         response = requests.post(
             f"{self.url}/config",
-            json=config_dict,
+            json=new_config,
             timeout=60,
         )
         if not response.ok:

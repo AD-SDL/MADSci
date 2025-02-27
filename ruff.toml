@@ -98,6 +98,7 @@ ignore = [
     "ANN401", # Don't flag Any types
     "COM812", # Don't fight over trailing commas
     "PLR0913", # Allow for a reasonable number of arguments
+    "PLR2004", # Magic value used in comparison
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.

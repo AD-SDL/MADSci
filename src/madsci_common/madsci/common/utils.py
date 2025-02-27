@@ -2,6 +2,7 @@
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -11,6 +12,12 @@ from pydantic_core._pydantic_core import PydanticUndefined
 from rich.console import Console
 
 console = Console()
+
+
+def utcnow() -> datetime:
+    """Return the current UTC time."""
+
+    return datetime.now(timezone.utc)
 
 
 def to_snake_case(name: str) -> str:
