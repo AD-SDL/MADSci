@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Optional, Union
 
 import requests
+
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,

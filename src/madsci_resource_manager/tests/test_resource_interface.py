@@ -1,6 +1,10 @@
 """Pytest unit tests for the Resource Manager's internal db interfacing logic."""
 
 import pytest
+from pytest_mock_resources import PostgresConfig, create_postgres_fixture
+from sqlalchemy import Engine
+from sqlmodel import Session as SQLModelSession
+
 from madsci.common.types.resource_types import (
     Consumable,
     Container,
@@ -17,9 +21,6 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
-from sqlmodel import Session as SQLModelSession
 
 
 @pytest.fixture(scope="session")
@@ -671,3 +672,69 @@ def test_set_child_voxel_grid(interface: ResourceInterface) -> None:
         interface.set_child(
             container_id=voxel_grid.resource_id, key=(0, 0, 1), child=resource
         )
+
+
+def test_remove_resource(interface: ResourceInterface) -> None:
+    """Test removing a resource"""
+    resource = Resource()
+    resource = interface.add_resource(resource=resource)
+    removed_resource = interface.remove_resource(resource_id=resource.resource_id)
+    assert removed_resource.resource_id == resource.resource_id
+    assert removed_resource.removed is True
+
+    fetched_resource = interface.get_resource(resource_id=resource.resource_id)
+    assert fetched_resource is None
+
+
+def test_remove_resource_with_children(interface: ResourceInterface) -> None:
+    """Test removing a resource with children"""
+    stack = Stack()
+    resource1 = Resource()
+    stack.children.append(resource1)
+    stack = interface.add_resource(resource=stack)
+
+    removed_stack = interface.remove_resource(resource_id=stack.resource_id)
+    assert removed_stack.resource_id == stack.resource_id
+    assert removed_stack.removed is True
+
+    fetched_stack = interface.get_resource(resource_id=stack.resource_id)
+    assert fetched_stack is None
+
+    fetched_child = interface.get_resource(resource_id=resource1.resource_id)
+    assert fetched_child is None
+
+
+def test_restore_resource(interface: ResourceInterface) -> None:
+    """Test restoring a removed resource"""
+    resource = Resource()
+    resource = interface.add_resource(resource=resource)
+    interface.remove_resource(resource_id=resource.resource_id)
+
+    restored_resource = interface.restore_resource(resource_id=resource.resource_id)
+    assert restored_resource.resource_id == resource.resource_id
+    assert restored_resource.removed is False
+
+    fetched_resource = interface.get_resource(resource_id=resource.resource_id)
+    assert fetched_resource.resource_id == resource.resource_id
+    assert fetched_resource.removed is False
+
+
+def test_restore_resource_with_children(interface: ResourceInterface) -> None:
+    """Test restoring a removed resource with children"""
+    stack = Stack()
+    resource1 = Resource()
+    stack.children.append(resource1)
+    stack = interface.add_resource(resource=stack)
+    interface.remove_resource(resource_id=stack.resource_id)
+
+    restored_stack = interface.restore_resource(resource_id=stack.resource_id)
+    assert restored_stack.resource_id == stack.resource_id
+    assert restored_stack.removed is False
+
+    fetched_stack = interface.get_resource(resource_id=stack.resource_id)
+    assert fetched_stack.resource_id == stack.resource_id
+    assert fetched_stack.removed is False
+
+    fetched_child = interface.get_resource(resource_id=resource1.resource_id)
+    assert fetched_child.resource_id == resource1.resource_id
+    assert fetched_child.removed is False

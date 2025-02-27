@@ -7,6 +7,11 @@ from typing import Optional
 import uvicorn
 from fastapi import FastAPI
 from fastapi.routing import APIRouter
+from nicegui import ui
+from pymongo import MongoClient
+from pymongo.collection import Collection
+from pymongo.database import Database
+
 from madsci.client.event_client import EventClient, EventType
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
@@ -16,10 +21,6 @@ from madsci.common.types.experiment_types import (
     ExperimentRegistration,
     ExperimentStatus,
 )
-from nicegui import ui
-from pymongo import MongoClient
-from pymongo.collection import Collection
-from pymongo.database import Database
 
 
 class ExperimentServer:

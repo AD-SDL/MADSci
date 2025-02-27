@@ -2,8 +2,9 @@
 
 from typing import Any, Optional, Union
 
-from madsci.common.types.base_types import BaseModel
 from pydantic import Field
+
+from madsci.common.types.base_types import BaseModel
 
 
 class ConfigParameterDefinition(BaseModel, extra="allow"):

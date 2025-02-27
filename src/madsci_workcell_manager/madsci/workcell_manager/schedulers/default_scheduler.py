@@ -1,7 +1,8 @@
 """Default MADSci Workcell scheduler"""
 
-from madsci.common.types.step_types import Step
 from schedulers.scheduler import AbstractScheduler
+
+from madsci.common.types.step_types import Step
 
 
 class Scheduler(AbstractScheduler):

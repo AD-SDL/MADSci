@@ -1,6 +1,11 @@
 """Automated pytest unit tests for the madsci resource manager's REST server."""
 
 import pytest
+from pytest_mock_resources import PostgresConfig, create_postgres_fixture
+from sqlalchemy import Engine
+from sqlmodel import Session as SQLModelSession
+from starlette.testclient import TestClient
+
 from madsci.common.types.resource_types import (
     Consumable,
     Container,
@@ -21,10 +26,6 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
-from sqlmodel import Session as SQLModelSession
-from starlette.testclient import TestClient
 
 
 @pytest.fixture(scope="session")

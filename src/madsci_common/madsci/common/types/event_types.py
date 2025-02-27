@@ -8,12 +8,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Optional
 
+from pydantic.functional_validators import field_validator
+from sqlmodel import Field
+
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.validators import ulid_validator
-from pydantic.functional_validators import field_validator
-from sqlmodel import Field
 
 
 class Event(BaseModel):

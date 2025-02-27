@@ -14,6 +14,8 @@ from zipfile import ZipFile
 from fastapi.applications import FastAPI
 from fastapi.datastructures import UploadFile
 from fastapi.routing import APIRouter
+from starlette.responses import FileResponse
+
 from madsci.client.node.rest_node_client import RestNodeClient
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.admin_command_types import AdminCommandResponse
@@ -32,7 +34,6 @@ from madsci.common.utils import threaded_task
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
-from starlette.responses import FileResponse
 
 
 def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:

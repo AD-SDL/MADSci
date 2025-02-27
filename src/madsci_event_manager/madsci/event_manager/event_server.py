@@ -6,11 +6,12 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.params import Body
 from fastapi.routing import APIRouter
-from madsci.client.event_client import EventClient
-from madsci.common.types.event_types import Event, EventManagerDefinition
 from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
 from pymongo.synchronous.database import Database
+
+from madsci.client.event_client import EventClient
+from madsci.common.types.event_types import Event, EventManagerDefinition
 
 
 class EventServer:

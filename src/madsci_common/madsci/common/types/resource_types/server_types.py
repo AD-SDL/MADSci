@@ -2,6 +2,10 @@
 
 from typing import Optional, Union
 
+from pydantic import model_validator
+from pydantic.config import ConfigDict
+from pydantic.types import datetime
+
 from madsci.common.types.base_types import BaseModel
 from madsci.common.types.resource_types import (
     GridIndex,
@@ -9,9 +13,6 @@ from madsci.common.types.resource_types import (
     GridIndex3D,
     ResourceDataModels,
 )
-from pydantic import model_validator
-from pydantic.config import ConfigDict
-from pydantic.types import datetime
 
 
 class ResourceRequestBase(BaseModel):

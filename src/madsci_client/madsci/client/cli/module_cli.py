@@ -5,6 +5,9 @@ from typing import Optional
 
 import click
 from click.core import Context
+from rich.console import Console
+from rich.pretty import pprint
+
 from madsci.common.types.node_types import (
     NodeModuleDefinition,
     NodeType,
@@ -17,8 +20,6 @@ from madsci.common.utils import (
     search_for_file_pattern,
     to_snake_case,
 )
-from rich.console import Console
-from rich.pretty import pprint
 
 console = Console()
 

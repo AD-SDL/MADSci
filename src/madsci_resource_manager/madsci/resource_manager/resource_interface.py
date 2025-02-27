@@ -9,6 +9,10 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional, Union
 
+from sqlalchemy import true
+from sqlalchemy.exc import MultipleResultsFound
+from sqlmodel import Session, SQLModel, create_engine, func, select
+
 from madsci.common.types.resource_types import (
     Collection,
     Container,
@@ -24,9 +28,6 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
-from sqlalchemy import true
-from sqlalchemy.exc import MultipleResultsFound
-from sqlmodel import Session, SQLModel, create_engine, select
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +239,7 @@ class ResourceInterface:
         multiple: bool = False,
     ) -> Optional[Union[list[ResourceDataModels], ResourceDataModels]]:
         """
-        Get the resource(s) that match the specified properites (unless `unique` is specified,
+        Get the resource(s) that match the specified properties (unless `unique` is specified,
         in which case an exception is raised if more than one result is found).
 
         Returns:
@@ -296,9 +297,11 @@ class ResourceInterface:
                 return result.to_data_model()
             return None
 
-    def remove_resource(self, resource_id: str) -> ResourceDataModels:
+    def remove_resource(
+        self, resource_id: str, parent_session: Optional[Session] = None
+    ) -> ResourceDataModels:
         """Remove a resource from the database."""
-        with self.get_session() as session:
+        with self.get_session(parent_session) as session:
             resource = session.exec(
                 select(ResourceTable).where(ResourceTable.resource_id == resource_id)
             ).one()
@@ -359,20 +362,21 @@ class ResourceInterface:
             history_entries = session.exec(query).all()
             return [history_entry.model_dump() for history_entry in history_entries]
 
-    def restore_resource(self, resource_id: str) -> Optional[ResourceDataModels]:
+    def restore_resource(
+        self, resource_id: str, parent_session: Session = None
+    ) -> Optional[ResourceDataModels]:
         """
-        Restore the latest version of a removed resource. Note that this does not restore parent-child relationships at this time,
-        so the resource is guarantee to be orphaned.
+        Restore the latest version of a removed resource. This attempts to restore the child resources as well, if any.
 
-        TODO: Is there a rational strategy for restoring parent-child relationships?
 
         Args:
             resource_id (str): The resource ID.
+            restore_children (bool): Whether to restore the child resources as well.
 
         Returns:
             Optional[ResourceDataModels]: The restored resource, if any
         """
-        with self.get_session() as session:
+        with self.get_session(parent_session) as session:
             resource_history = session.exec(
                 select(ResourceHistoryTable)
                 .where(ResourceHistoryTable.resource_id == resource_id)
@@ -385,10 +389,28 @@ class ResourceInterface:
                 )
                 return None
             resource_history.removed = False
-            resource_history.parent_id = None  # * Remove parent ID to avoid conflicts
             restored_row = ResourceTable.from_data_model(
                 resource_history.to_data_model()
             )
+            for child_id in resource_history.child_ids:
+                child_history = session.exec(
+                    select(ResourceHistoryTable)
+                    .where(ResourceHistoryTable.resource_id == child_id)
+                    .where(ResourceHistoryTable.removed == true())
+                    .order_by(
+                        func.abs(
+                            func.extract(
+                                "epoch",
+                                ResourceHistoryTable.changed_at
+                                - resource_history.changed_at,
+                            )
+                        )
+                    )
+                ).first()
+                if child_history:
+                    self.restore_resource(
+                        child_history.resource_id, parent_session=session
+                    )
             session.add(restored_row)
             return resource_history.to_data_model()
 
@@ -612,6 +634,7 @@ class ResourceInterface:
                 )
             container = container_row.to_data_model()
             if container.base_type in [
+                ContainerTypeEnum.row,
                 ContainerTypeEnum.grid,
                 ContainerTypeEnum.voxel_grid,
             ]:

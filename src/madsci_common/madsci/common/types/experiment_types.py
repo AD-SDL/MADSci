@@ -4,11 +4,12 @@ from enum import Enum
 from typing import Any, ClassVar, Literal, Optional, Union
 
 from bson.objectid import ObjectId
+from pydantic import Field, field_validator
+
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, datetime, new_ulid_str
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
-from pydantic import Field, field_validator
 
 
 class ExperimentManagerDefinition(ManagerDefinition):

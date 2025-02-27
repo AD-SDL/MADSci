@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import UploadFile
+
 from madsci.client.event_client import default_logger
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.step_types import Step

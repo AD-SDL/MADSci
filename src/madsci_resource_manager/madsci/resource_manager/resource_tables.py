@@ -3,18 +3,13 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from madsci.common.types.resource_types import (
-    RESOURCE_TYPE_MAP,
-    Resource,
-    ResourceDataModels,
-    ResourceTypeEnum,
-)
 from pydantic.config import ConfigDict
 from pydantic.types import Decimal
 from sqlalchemy import event
 from sqlalchemy.sql.schema import FetchedValue, UniqueConstraint
 from sqlalchemy.sql.sqltypes import TIMESTAMP, Numeric
 from sqlmodel import (
+    JSON,
     Enum,
     Field,
     Relationship,
@@ -22,6 +17,13 @@ from sqlmodel import (
     text,
 )
 from typing_extensions import Self  # type: ignore
+
+from madsci.common.types.resource_types import (
+    RESOURCE_TYPE_MAP,
+    Resource,
+    ResourceDataModels,
+    ResourceTypeEnum,
+)
 
 
 def create_session(*args: Any, **kwargs: Any) -> Session:
@@ -53,10 +55,31 @@ def add_automated_history(session: Session) -> None:
                 session.add(history)
         for obj in session.deleted:
             if isinstance(obj, ResourceTable):
+                child_ids = delete_descendants(session, obj)
                 history = ResourceHistoryTable.model_validate(obj)
                 history.change_type = "Removed"
                 history.removed = True
+                history.child_ids = child_ids
                 session.add(history)
+
+
+def delete_descendants(session: Session, resource_entry: "ResourceTable") -> list[str]:
+    """
+    Recursively delete all children of a resource entry.
+    Args:
+        session (Session): SQLAlchemy session.
+        resource_entry (ResourceTable): The resource entry.
+    """
+    child_ids = [child.resource_id for child in resource_entry.children_list]
+    for child in resource_entry.children_list:
+        grandchild_ids = delete_descendants(session, child)
+        history = ResourceHistoryTable.model_validate(child)
+        history.change_type = "Removed"
+        history.removed = True
+        history.child_ids = grandchild_ids
+        session.add(history)
+        session.delete(child)
+    return child_ids
 
 
 class ResourceTableBase(Resource):
@@ -251,4 +274,11 @@ class ResourceHistoryTable(ResourceTableBase, table=True):
         description="The ID of the parent resource.",
         nullable=True,
         default=None,
+    )
+    child_ids: Optional[list[str]] = Field(
+        title="Child Resource IDs",
+        description="The IDs of the child resources that were removed along with this resource (if any).",
+        nullable=True,
+        default=None,
+        sa_type=JSON,
     )

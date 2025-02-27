@@ -3,6 +3,18 @@
 import string
 from typing import Annotated, Literal, Optional, Union
 
+from pydantic import (
+    AfterValidator,
+    AnyUrl,
+    computed_field,
+    model_validator,
+)
+from pydantic.types import Discriminator, Tag, datetime
+from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.sql.sqltypes import String
+from sqlmodel import Field
+from typing_extensions import Self  # type: ignore
+
 from madsci.common.types.resource_types.custom_types import (
     AssetTypeEnum,
     ConsumableTypeEnum,
@@ -24,17 +36,6 @@ from madsci.common.types.resource_types.definitions import (
     StackResourceDefinition,
     VoxelGridResourceDefinition,
 )
-from pydantic import (
-    AfterValidator,
-    AnyUrl,
-    computed_field,
-    model_validator,
-)
-from pydantic.types import Discriminator, Tag, datetime
-from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.sql.sqltypes import String
-from sqlmodel import Field
-from typing_extensions import Self  # type: ignore
 
 PositiveInt = Annotated[int, Field(ge=0)]
 PositiveNumber = Annotated[Union[float, int], Field(ge=0)]

@@ -6,15 +6,15 @@ from typing import Optional, Union
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.params import Body
+from sqlalchemy.exc import NoResultFound
+
 from madsci.common.types.resource_types import (
     ContainerDataModels,
     Queue,
     ResourceDataModels,
     Stack,
 )
-from madsci.common.types.resource_types.definitions import (
-    ResourceManagerDefinition,
-)
+from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
 from madsci.common.types.resource_types.server_types import (
     PushResourceBody,
     RemoveChildBody,
@@ -24,7 +24,6 @@ from madsci.common.types.resource_types.server_types import (
 )
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_tables import ResourceHistoryTable
-from sqlalchemy.exc import NoResultFound
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +327,7 @@ def create_resource_server(  # noqa: C901, PLR0915
 
         Args:
             resource_id (str): The ID of the resource.
-            amount (Union[float, int]): The amount to decrease the quantity by. Note that this is a magnitude, so negative and postive will have the same effect.
+            amount (Union[float, int]): The amount to decrease the quantity by. Note that this is a magnitude, so negative and positive will have the same effect.
 
         Returns:
             ResourceDataModels: The updated resource.
