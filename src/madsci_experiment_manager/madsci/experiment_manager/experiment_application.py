@@ -4,8 +4,6 @@ import time
 from contextlib import contextmanager
 from typing import Optional
 
-from pydantic import AnyUrl
-
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
@@ -15,6 +13,7 @@ from madsci.common.types.experiment_types import (
     ExperimentStatus,
 )
 from madsci.common.utils import threaded_daemon
+from pydantic import AnyUrl
 
 
 class ExperimentApplication:

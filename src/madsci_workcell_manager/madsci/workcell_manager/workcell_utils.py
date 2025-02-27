@@ -5,12 +5,11 @@ import warnings
 from typing import Optional
 
 import requests
-from pydantic import AnyUrl
-
 from madsci.client.node import NODE_CLIENT_MAP, AbstractNodeClient
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellLink
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from pydantic import AnyUrl
 
 
 def resolve_workcell_link(workcell_link: WorkcellLink) -> WorkcellDefinition:

@@ -3,6 +3,12 @@
 from datetime import datetime
 from typing import Any, Optional
 
+from madsci.common.types.resource_types import (
+    RESOURCE_TYPE_MAP,
+    Resource,
+    ResourceDataModels,
+    ResourceTypeEnum,
+)
 from pydantic.config import ConfigDict
 from pydantic.types import Decimal
 from sqlalchemy import event
@@ -17,13 +23,6 @@ from sqlmodel import (
     text,
 )
 from typing_extensions import Self  # type: ignore
-
-from madsci.common.types.resource_types import (
-    RESOURCE_TYPE_MAP,
-    Resource,
-    ResourceDataModels,
-    ResourceTypeEnum,
-)
 
 
 def create_session(*args: Any, **kwargs: Any) -> Session:

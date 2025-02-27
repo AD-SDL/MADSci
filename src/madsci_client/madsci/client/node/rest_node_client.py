@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import requests
-from pydantic import AnyUrl
-
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
 )
@@ -21,6 +19,7 @@ from madsci.common.types.node_types import (
     NodeStatus,
 )
 from madsci.common.types.resource_types.definitions import ResourceDefinition
+from pydantic import AnyUrl
 
 
 class RestNodeClient(AbstractNodeClient):

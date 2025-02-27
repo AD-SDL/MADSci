@@ -4,12 +4,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Optional, Union
 
-from pydantic import Field, field_validator
-
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.step_types import Step
 from madsci.common.validators import ulid_validator
+from pydantic import Field, field_validator
 
 
 class WorkflowStatus(str, Enum):

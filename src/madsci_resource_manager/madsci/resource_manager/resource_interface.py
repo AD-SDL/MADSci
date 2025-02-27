@@ -9,12 +9,9 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional, Union
 
-from sqlalchemy import true
-from sqlalchemy.exc import MultipleResultsFound
-from sqlmodel import Session, SQLModel, create_engine, func, select
-
 from madsci.common.types.resource_types import (
     Collection,
+    ConsumableTypeEnum,
     Container,
     ContainerDataModels,
     ContainerTypeEnum,
@@ -28,6 +25,9 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
+from sqlalchemy import true
+from sqlalchemy.exc import MultipleResultsFound
+from sqlmodel import Session, SQLModel, create_engine, func, select
 
 logger = logging.getLogger(__name__)
 
@@ -722,6 +722,42 @@ class ResourceInterface:
                 raise ValueError(
                     f"Resource '{resource.resource_name}' with type {resource.base_type} has a read-only quantity attribute."
                 ) from e
+            session.merge(resource_row)
+            session.commit()
+            return resource_row.to_data_model()
+
+    def empty(self, resource_id: str) -> ResourceDataModels:
+        """Empty the contents of a container or consumable resource."""
+        with self.get_session() as session:
+            resource_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=resource_id)
+            ).one()
+            resource = resource_row.to_data_model()
+            if resource.base_type in ContainerTypeEnum:
+                for child in resource.children.values():
+                    self.remove_resource(child.resource_id, parent_session=session)
+            elif resource.base_type in ConsumableTypeEnum:
+                resource_row.quantity = 0
+            session.commit()
+            session.refresh(resource_row)
+            return resource_row.to_data_model()
+
+    def fill(self, resource_id: str) -> ResourceDataModels:
+        """Fill a consumable resource to capacity."""
+        with self.get_session() as session:
+            resource_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=resource_id)
+            ).one()
+            resource = resource_row.to_data_model()
+            if resource.base_type not in ConsumableTypeEnum:
+                raise ValueError(
+                    f"Resource '{resource.resource_name}' with type {resource.base_type} is not a consumable."
+                )
+            if not resource.capacity:
+                raise ValueError(
+                    f"Resource '{resource.resource_name}' has no capacity limit set, please set a capacity or use set_quantity."
+                )
+            resource_row.quantity = resource.capacity
             session.merge(resource_row)
             session.commit()
             return resource_row.to_data_model()

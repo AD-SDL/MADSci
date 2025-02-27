@@ -1,10 +1,6 @@
 """Pytest unit tests for the Resource Manager's internal db interfacing logic."""
 
 import pytest
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
-from sqlmodel import Session as SQLModelSession
-
 from madsci.common.types.resource_types import (
     Consumable,
     Container,
@@ -21,6 +17,9 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
+from pytest_mock_resources import PostgresConfig, create_postgres_fixture
+from sqlalchemy import Engine
+from sqlmodel import Session as SQLModelSession
 
 
 @pytest.fixture(scope="session")
@@ -738,3 +737,72 @@ def test_restore_resource_with_children(interface: ResourceInterface) -> None:
     fetched_child = interface.get_resource(resource_id=resource1.resource_id)
     assert fetched_child.resource_id == resource1.resource_id
     assert fetched_child.removed is False
+
+
+def test_empty_container(interface: ResourceInterface) -> None:
+    """Test emptying a container"""
+    container = Container()
+    resource1 = Resource()
+    resource2 = Resource()
+    container = interface.add_resource(resource=container)
+    container = interface.set_child(
+        container_id=container.resource_id, key="slot1", child=resource1
+    )
+    container = interface.set_child(
+        container_id=container.resource_id, key="slot2", child=resource2
+    )
+
+    # Verify initial state
+    assert len(container.children) == 2
+    assert container.quantity == 2
+
+    # Empty the container
+    emptied_container = interface.empty(resource_id=container.resource_id)
+
+    # Verify container is empty
+    assert len(emptied_container.children) == 0
+    assert emptied_container.quantity == 0
+
+
+def test_empty_consumable(interface: ResourceInterface) -> None:
+    """Test emptying a consumable"""
+    consumable = Consumable(quantity=10)
+    consumable = interface.add_resource(resource=consumable)
+
+    # Verify initial state
+    assert consumable.quantity == 10
+
+    # Empty the consumable
+    emptied_consumable = interface.empty(resource_id=consumable.resource_id)
+
+    # Verify consumable is empty
+    assert emptied_consumable.quantity == 0
+
+
+def test_fill_consumable(interface: ResourceInterface) -> None:
+    """Test filling a consumable"""
+    consumable = Consumable(quantity=5, capacity=10)
+    consumable = interface.add_resource(resource=consumable)
+
+    # Verify initial state
+    assert consumable.quantity == 5
+
+    # Fill the consumable
+    filled_consumable = interface.fill(resource_id=consumable.resource_id)
+
+    # Verify consumable is filled to capacity
+    assert filled_consumable.quantity == 10
+
+
+def test_fill_consumable_no_capacity(interface: ResourceInterface) -> None:
+    """Test filling a consumable with no capacity set"""
+    consumable = Consumable(quantity=5)
+    consumable = interface.add_resource(resource=consumable)
+
+    # Verify initial state
+    assert consumable.quantity == 5
+
+    # Attempt to fill the consumable without capacity
+    with pytest.raises(ValueError) as exc_info:
+        interface.fill(resource_id=consumable.resource_id)
+    assert "has no capacity limit set" in str(exc_info.value)

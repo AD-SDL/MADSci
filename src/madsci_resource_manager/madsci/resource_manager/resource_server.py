@@ -6,8 +6,6 @@ from typing import Optional, Union
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.params import Body
-from sqlalchemy.exc import NoResultFound
-
 from madsci.common.types.resource_types import (
     ContainerDataModels,
     Queue,
@@ -24,6 +22,7 @@ from madsci.common.types.resource_types.server_types import (
 )
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_tables import ResourceHistoryTable
+from sqlalchemy.exc import NoResultFound
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +326,7 @@ def create_resource_server(  # noqa: C901, PLR0915
 
         Args:
             resource_id (str): The ID of the resource.
-            amount (Union[float, int]): The amount to decrease the quantity by. Note that this is a magnitude, so negative and positive will have the same effect.
+            amount (Union[float, int]): The amount to decrease the quantity by. Note that this is a magnitude, so negative and positive values will have the same effect.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -378,6 +377,46 @@ def create_resource_server(  # noqa: C901, PLR0915
         """
         try:
             return resource_interface.remove_capacity_limit(resource_id=resource_id)
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/empty")
+    async def empty_resource(resource_id: str) -> ResourceDataModels:
+        """
+        Empty the contents of a container or consumable resource.
+
+        Args:
+            resource_id (str): The ID of the resource.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            return resource_interface.empty(resource_id=resource_id)
+        except NoResultFound as e:
+            logger.info(f"Resource not found: {resource_id}")
+            raise HTTPException(status_code=404, detail="Resource not found") from e
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/{resource_id}/fill")
+    async def fill_resource(resource_id: str) -> ResourceDataModels:
+        """
+        Fill a consumable resource to capacity.
+
+        Args:
+            resource_id (str): The ID of the resource.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        try:
+            return resource_interface.fill(resource_id=resource_id)
+        except NoResultFound as e:
+            logger.info(f"Resource not found: {resource_id}")
+            raise HTTPException(status_code=404, detail="Resource not found") from e
         except Exception as e:
             logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e

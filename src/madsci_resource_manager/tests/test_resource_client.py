@@ -4,11 +4,6 @@ from collections.abc import Generator
 from unittest.mock import patch
 
 import pytest
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
-from sqlmodel import Session as SQLModelSession
-from starlette.testclient import TestClient
-
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.resource_types import Consumable
 from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
@@ -20,6 +15,10 @@ from madsci.resource_manager.resource_interface import (
 )
 from madsci.resource_manager.resource_server import create_resource_server
 from madsci.resource_manager.resource_tables import Resource, create_session
+from pytest_mock_resources import PostgresConfig, create_postgres_fixture
+from sqlalchemy import Engine
+from sqlmodel import Session as SQLModelSession
+from starlette.testclient import TestClient
 
 
 @pytest.fixture(scope="session")
@@ -243,3 +242,29 @@ def test_decrease_quantity_negative(client: ResourceClient) -> None:
     client.add_resource(resource)
     updated_resource = client.decrease_quantity(resource, -5)
     assert updated_resource.quantity == 5
+
+
+def test_empty_consumable(client: ResourceClient) -> None:
+    """Test emptying a consumable using ResourceClient"""
+    resource = Consumable(quantity=10)
+    client.add_resource(resource)
+    emptied_resource = client.empty(resource)
+    assert emptied_resource.quantity == 0
+
+
+def test_empty_container(client: ResourceClient) -> None:
+    """Test emptying a container using ResourceClient"""
+    container = Container()
+    client.add_resource(container)
+    resource = Resource()
+    client.set_child(container, "test_key", resource)
+    emptied_container = client.empty(container)
+    assert len(emptied_container.children) == 0
+
+
+def test_fill_resource(client: ResourceClient) -> None:
+    """Test filling a resource using ResourceClient"""
+    resource = Consumable(quantity=0, capacity=10)
+    client.add_resource(resource)
+    filled_resource = client.fill(resource)
+    assert filled_resource.quantity == filled_resource.capacity

@@ -2,9 +2,8 @@
 
 from enum import Enum
 
-from sqlmodel.main import Field
-
 from madsci.common.types.base_types import BaseModel, Error
+from sqlmodel.main import Field
 
 
 class AdminCommands(str, Enum):

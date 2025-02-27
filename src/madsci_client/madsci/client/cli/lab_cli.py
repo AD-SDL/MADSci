@@ -7,10 +7,6 @@ from typing import Optional
 
 import click
 from click.core import Context
-from rich import print
-from rich.console import Console
-from rich.pretty import pprint
-
 from madsci.common.types.lab_types import LabDefinition
 from madsci.common.utils import (
     prompt_for_input,
@@ -19,6 +15,9 @@ from madsci.common.utils import (
     search_for_file_pattern,
     to_snake_case,
 )
+from rich import print
+from rich.console import Console
+from rich.pretty import pprint
 
 console = Console()
 

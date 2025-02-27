@@ -4,8 +4,6 @@ import argparse
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from pydantic.fields import PydanticUndefined
-
 from madsci.client.event_client import default_logger
 from madsci.common.types.base_types import BaseModel
 from madsci.common.types.lab_types import (
@@ -19,6 +17,7 @@ from madsci.common.types.node_types import (
     get_module_from_node_definition,
 )
 from madsci.common.utils import search_for_file_pattern, to_snake_case
+from pydantic.fields import PydanticUndefined
 
 
 def madsci_definition_loader(

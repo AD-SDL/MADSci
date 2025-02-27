@@ -6,11 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from madsci.common.types.base_types import BaseModel, PathLike
 from pydantic import ValidationError
 from pydantic_core._pydantic_core import PydanticUndefined
 from rich.console import Console
-
-from madsci.common.types.base_types import BaseModel, PathLike
 
 console = Console()
 

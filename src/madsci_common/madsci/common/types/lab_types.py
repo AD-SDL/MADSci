@@ -4,15 +4,14 @@ from enum import Enum
 from pathlib import Path
 from typing import ClassVar, Optional
 
-from pydantic import ConfigDict
-from pydantic.functional_validators import field_validator
-from pydantic.networks import AnyUrl
-from sqlmodel.main import Field
-
 from madsci.common.types.base_types import BaseModel, ModelLink, PathLike, new_ulid_str
 from madsci.common.validators import (
     ulid_validator,
 )
+from pydantic import ConfigDict
+from pydantic.functional_validators import field_validator
+from pydantic.networks import AnyUrl
+from sqlmodel.main import Field
 
 
 class LabDefinition(BaseModel):

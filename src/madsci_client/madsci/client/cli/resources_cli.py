@@ -5,9 +5,6 @@ from typing import Optional
 
 import click
 from click.core import Context
-from rich.console import Console
-from rich.pretty import pprint
-
 from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
 )
@@ -26,6 +23,8 @@ from madsci.common.utils import (
     save_model,
     search_for_file_pattern,
 )
+from rich.console import Console
+from rich.pretty import pprint
 
 console = Console()
 

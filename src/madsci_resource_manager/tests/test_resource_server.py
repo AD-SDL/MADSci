@@ -1,11 +1,6 @@
 """Automated pytest unit tests for the madsci resource manager's REST server."""
 
 import pytest
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
-from sqlmodel import Session as SQLModelSession
-from starlette.testclient import TestClient
-
 from madsci.common.types.resource_types import (
     Consumable,
     Container,
@@ -26,6 +21,10 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
+from pytest_mock_resources import PostgresConfig, create_postgres_fixture
+from sqlalchemy import Engine
+from sqlmodel import Session as SQLModelSession
+from starlette.testclient import TestClient
 
 
 @pytest.fixture(scope="session")
@@ -1005,3 +1004,35 @@ def test_change_quantity_by_invalid_value(test_client: TestClient) -> None:
         params={"amount": "invalid"},
     )
     assert response.status_code == 422  # Unprocessable Entity
+
+
+def test_empty_resource(test_client: TestClient) -> None:
+    """Test emptying the contents of a container or consumable resource"""
+    # Create a consumable resource with quantity
+    resource = Consumable(quantity=10)
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    response.raise_for_status()
+
+    # Empty the resource
+    response = test_client.post(f"/resource/{resource.resource_id}/empty")
+    response.raise_for_status()
+
+    # Verify the resource is empty
+    result = Consumable.model_validate(response.json())
+    assert result.quantity == 0
+
+
+def test_fill_resource(test_client: TestClient) -> None:
+    """Test filling a consumable resource to capacity"""
+    # Create a consumable resource with capacity
+    resource = Consumable(quantity=5, capacity=10)
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    response.raise_for_status()
+
+    # Fill the resource
+    response = test_client.post(f"/resource/{resource.resource_id}/fill")
+    response.raise_for_status()
+
+    # Verify the resource is filled to capacity
+    result = Consumable.model_validate(response.json())
+    assert result.quantity == 10

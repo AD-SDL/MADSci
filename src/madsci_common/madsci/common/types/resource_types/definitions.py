@@ -2,10 +2,6 @@
 
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic.functional_validators import field_validator, model_validator
-from pydantic.types import Tag
-from sqlmodel import Field
-
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.types.resource_types.custom_types import (
@@ -14,6 +10,9 @@ from madsci.common.types.resource_types.custom_types import (
 )
 from madsci.common.utils import new_name_str
 from madsci.common.validators import ulid_validator
+from pydantic.functional_validators import field_validator, model_validator
+from pydantic.types import Tag
+from sqlmodel import Field
 
 
 class ResourceManagerDefinition(ManagerDefinition):

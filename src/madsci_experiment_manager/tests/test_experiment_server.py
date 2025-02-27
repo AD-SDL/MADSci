@@ -8,9 +8,6 @@ a working docker installation.
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from pymongo.database import Database
-from pytest_mock_resources import MongoConfig, create_mongo_fixture
-
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -19,6 +16,8 @@ from madsci.common.types.experiment_types import (
     ExperimentStatus,
 )
 from madsci.experiment_manager.experiment_server import ExperimentServer
+from pymongo.database import Database
+from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
 db_connection = create_mongo_fixture()
 

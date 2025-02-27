@@ -6,13 +6,12 @@ import warnings
 from typing import Any, Callable, Union
 
 import redis
-from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
-from pydantic import ValidationError
-
 from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import Workflow
+from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
+from pydantic import ValidationError
 
 
 class WorkcellRedisHandler:

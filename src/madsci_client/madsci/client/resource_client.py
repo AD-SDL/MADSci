@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Any, Optional, Union
 
 import requests
-
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -453,6 +452,50 @@ class ResourceClient:
         )
         response = requests.delete(
             f"{self.url}/resource/{resource_id}/capacity", timeout=10
+        )
+        response.raise_for_status()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
+
+    def empty(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
+        """
+        Empty the contents of a container or consumable resource.
+
+        Args:
+            resource (Union[str, ResourceDataModels]): The resource or its ID.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        resource_id = (
+            resource.resource_id if isinstance(resource, Resource) else resource
+        )
+        response = requests.post(
+            f"{self.url}/resource/{resource_id}/empty",
+            timeout=10,
+        )
+        response.raise_for_status()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
+
+    def fill(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
+        """
+        Fill a consumable resource to capacity.
+
+        Args:
+            resource (Union[str, ResourceDataModels]): The resource or its ID.
+
+        Returns:
+            ResourceDataModels: The updated resource.
+        """
+        resource_id = (
+            resource.resource_id if isinstance(resource, Resource) else resource
+        )
+        response = requests.post(
+            f"{self.url}/resource/{resource_id}/fill",
+            timeout=10,
         )
         response.raise_for_status()
         resource = Resource.discriminate(response.json())

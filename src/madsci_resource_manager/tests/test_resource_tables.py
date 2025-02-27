@@ -1,16 +1,15 @@
 """Pytest unit tests for the Resource SQL Tables"""
 
 import pytest
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
-from sqlmodel import Session as SQLModelSession
-from sqlmodel import select
-
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
     ResourceTable,
     create_session,
 )
+from pytest_mock_resources import PostgresConfig, create_postgres_fixture
+from sqlalchemy import Engine
+from sqlmodel import Session as SQLModelSession
+from sqlmodel import select
 
 
 @pytest.fixture(scope="session")

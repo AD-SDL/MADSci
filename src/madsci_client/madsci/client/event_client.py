@@ -8,15 +8,14 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
-from pydantic import ValidationError
-from rich import print
-
 from madsci.common.types.event_types import (
     Event,
     EventClientConfig,
     EventType,
 )
 from madsci.common.utils import threaded_task
+from pydantic import ValidationError
+from rich import print
 
 
 class EventClient:
