@@ -41,7 +41,7 @@ PositiveNumber = Annotated[Union[float, int], Field(ge=0)]
 
 
 class Resource(ResourceDefinition, extra="allow", table=False):
-    """Base class for all MADSci Resources."""
+    """Base class for all MADSci Resources. Used to track any resource that isn't well-modeled by a more specific type."""
 
     resource_url: Optional[AnyUrl] = Field(
         title="Resource URL",
@@ -107,7 +107,7 @@ class Resource(ResourceDefinition, extra="allow", table=False):
 
 
 class Asset(Resource):
-    """Base class for all MADSci Assets."""
+    """Base class for all MADSci Assets. These are tracked resources that aren't consumed (things like samples, labware, etc.)."""
 
     base_type: Literal[AssetTypeEnum.asset] = Field(
         title="Asset Base Type",
@@ -118,7 +118,7 @@ class Asset(Resource):
 
 
 class Consumable(Resource):
-    """Base class for all MADSci Consumables."""
+    """Base class for all MADSci Consumables. These are resources that are consumed (things like reagents, pipette tips, etc.)."""
 
     base_type: Literal[ConsumableTypeEnum.consumable] = Field(
         title="Consumable Base Type",
@@ -145,7 +145,7 @@ class Consumable(Resource):
 
 
 class DiscreteConsumable(Consumable):
-    """Base class for all MADSci Discrete Consumables."""
+    """Base class for all MADSci Discrete Consumables. These are consumables that are counted in whole numbers (things like pipette tips, tubes, etc.)."""
 
     base_type: Literal[ConsumableTypeEnum.discrete_consumable] = Field(
         title="Consumable Base Type",
@@ -165,7 +165,7 @@ class DiscreteConsumable(Consumable):
 
 
 class ContinuousConsumable(Consumable):
-    """Base class for all MADSci Continuous Consumables."""
+    """Base class for all MADSci Continuous Consumables. These are consumables that are measured in continuous quantities (things like liquids, powders, etc.)."""
 
     base_type: Literal[ConsumableTypeEnum.continuous_consumable] = Field(
         title="Consumable Base Type",
@@ -185,7 +185,7 @@ class ContinuousConsumable(Consumable):
 
 
 class Container(Asset):
-    """Data Model for a Container."""
+    """Data Model for a Container. A container is a resource that can hold other resources."""
 
     base_type: Literal[ContainerTypeEnum.container] = Field(
         title="Container Base Type",
@@ -226,7 +226,7 @@ class Container(Asset):
 
 
 class Collection(Container):
-    """Data Model for a Collection."""
+    """Data Model for a Collection. A collection is a container that can hold other resources, and which supports random access."""
 
     base_type: Literal[ContainerTypeEnum.collection] = Field(
         title="Container Base Type",
@@ -270,7 +270,7 @@ GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 
 class Row(Container):
-    """Data Model for a Row"""
+    """Data Model for a Row. A row is a container that can hold other resources in a single dimension and supports random access. For example, a row of tubes in a rack or a single-row microplate. Rows are indexed by integers or letters."""
 
     children: Optional[dict[GridIndex, "ResourceDataModels"]] = Field(
         title="Children",
@@ -316,7 +316,7 @@ class Row(Container):
 
 
 class Grid(Row):
-    """Data Model for a Grid."""
+    """Data Model for a Grid. A grid is a container that can hold other resources in two dimensions and supports random access. For example, a 96-well microplate. Grids are indexed by integers or letters."""
 
     children: Optional[dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]] = Field(
         title="Children",
@@ -394,7 +394,7 @@ class Grid(Row):
 
 
 class VoxelGrid(Grid):
-    """Data Model for a Voxel Grid."""
+    """Data Model for a Voxel Grid. A voxel grid is a container that can hold other resources in three dimensions and supports random access. Voxel grids are indexed by integers or letters."""
 
     base_type: Literal[ContainerTypeEnum.voxel_grid] = Field(
         title="Container Base Type",
@@ -482,7 +482,7 @@ class VoxelGrid(Grid):
 
 
 class Stack(Container):
-    """Data Model for a Stack."""
+    """Data Model for a Stack. A stack is a container that can hold other resources in a single dimension and supports last-in, first-out (LIFO) access. For example, a stack of plates in a vertical magazine. Stacks are indexed by integers, with 0 being the bottom."""
 
     base_type: Literal[ContainerTypeEnum.stack] = Field(
         title="Container Base Type",
@@ -515,7 +515,7 @@ class Stack(Container):
 
 
 class Queue(Container):
-    """Data Model for a Queue."""
+    """Data Model for a Queue. A queue is a container that can hold other resources in a single dimension and supports first-in, first-out (FIFO) access. For example, a conveyer belt. Queues are indexed by integers, with 0 being the front."""
 
     base_type: Literal[ContainerTypeEnum.queue] = Field(
         title="Container Base Type",
@@ -548,7 +548,7 @@ class Queue(Container):
 
 
 class Pool(Container):
-    """Data Model for a Pool."""
+    """Data Model for a Pool. A pool is a container for holding consumables that can be mixed or collocated. For example, a single well in a microplate, or a reservoir. Pools are indexed by string key."""
 
     base_type: Literal[ContainerTypeEnum.pool] = Field(
         title="Container Base Type",
