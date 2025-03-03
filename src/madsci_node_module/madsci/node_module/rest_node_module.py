@@ -40,7 +40,7 @@ def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
     return {
         "x-madsci-action-id": action_response.action_id,
         "x-madsci-status": str(action_response.status),
-        "x-madsci-data": json.dumps(action_response.data),
+        "x-madsci-datapoints": json.dumps(action_response.datapoints),
         "x-madsci-error": json.dumps(action_response.error),
         "x-madsci-files": json.dumps(action_response.files),
     }
@@ -54,7 +54,7 @@ def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
         status=ActionStatus(headers["x-wei-status"]),
         errors=json.loads(headers["x-wei-error"]),
         files=json.loads(headers["x-wei-files"]),
-        data=json.loads(headers["x-wei-data"]),
+        datapoints=json.loads(headers["x-wei-datapoints"]),
     )
 
 

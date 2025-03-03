@@ -1,6 +1,7 @@
 """Automated pytest unit tests for the madsci resource client."""
 
 from collections.abc import Generator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -58,15 +59,24 @@ def test_client(interface: ResourceInterface) -> TestClient:
 def client(test_client: TestClient) -> Generator[ResourceClient, None, None]:
     """Fixture for ResourceClient patched to use TestClient"""
     with patch("madsci.client.resource_client.requests") as mock_requests:
-        mock_requests.post.side_effect = lambda *args, **kwargs: test_client.post(
-            *args, **kwargs
-        )
-        mock_requests.get.side_effect = lambda *args, **kwargs: test_client.get(
-            *args, **kwargs
-        )
-        mock_requests.delete.side_effect = lambda *args, **kwargs: test_client.delete(
-            *args, **kwargs
-        )
+
+        def post_no_timeout(*args: Any, **kwargs: Any) -> Any:
+            kwargs.pop("timeout", None)
+            return test_client.post(*args, **kwargs)
+
+        mock_requests.post.side_effect = post_no_timeout
+
+        def get_no_timeout(*args: Any, **kwargs: Any) -> Any:
+            kwargs.pop("timeout", None)
+            return test_client.get(*args, **kwargs)
+
+        mock_requests.get.side_effect = get_no_timeout
+
+        def delete_no_timeout(*args: Any, **kwargs: Any) -> Any:
+            kwargs.pop("timeout", None)
+            return test_client.delete(*args, **kwargs)
+
+        mock_requests.delete.side_effect = delete_no_timeout
         yield ResourceClient(url="http://testserver")
 
 

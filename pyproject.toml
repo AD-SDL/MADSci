@@ -14,6 +14,7 @@ dev = [
     "-e madsci.event_manager @ file:///${PROJECT_ROOT}/src/madsci_event_manager",
     "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
     "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
+    "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
 ]
 [tool.pdm.version]
 source = "scm"
