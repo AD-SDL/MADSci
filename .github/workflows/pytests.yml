@@ -1,15 +1,15 @@
 name: Pytest Automated Tests
 
 on:
-  push:
+  push: # *Don't run for every push, only for main branch and tags
     branches: ["main"]
     tags: ["*"]
-  pull_request:
+  pull_request: # *Run for every PR
     types: [opened, synchronize, reopened, edited]
     branches: ["*"]
   schedule: # Run every Tuesday at 12:00
     - cron: '0 12 * * 2'
-  workflow_dispatch:
+  workflow_dispatch: # * Run manually
 
 jobs:
   run_pytest:
@@ -28,4 +28,4 @@ jobs:
       - name: Install dependencies and initialize everything
         run: just init
       - name: Test with pytest
-        run: . .venv/bin/activate && pytest
+        run: pdm run -v pytest

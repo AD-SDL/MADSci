@@ -1,7 +1,7 @@
 [project]
-name = "madsci.event_manager"
-dynamic = ["version"]
-description = "The Modular Autonomous Discovery for Science (MADSci) Event and Logging Manager."
+name = "madsci.data_manager"
+version = "0.0.3"
+description = "The Modular Autonomous Discovery for Science (MADSci) Data Manager."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
     {name = "Ryan D. Lewis", email = "ryan.lewis@anl.gov"},
@@ -26,7 +26,3 @@ Homepage = "https://github.com/AD-SDL/MADSci"
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
-
-[tool.pdm.version]
-source = "scm"
-fallback_version = "0.0.2"

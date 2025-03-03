@@ -1,8 +1,9 @@
 [project]
 name = "madsci"
+version = "0.0.3"
 dependencies = []
+readme="README.md"
 requires-python = ">=3.9.1"
-dynamic = ["version"]
 
 [tool.pdm.dev-dependencies]
 dev = [
@@ -20,6 +21,3 @@ dev = [
     "ipykernel>=6.29.5",
     "pre-commit>=4",
 ]
-[tool.pdm.version]
-source = "scm"
-fallback_version = "0.0.2"

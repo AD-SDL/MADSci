@@ -1,10 +1,10 @@
 name: Pre-Commit Checks
 
 on:
-  push:
+  push: # Run for every push
     branches: ["*"]
     tags: ["*"]
-  workflow_dispatch:
+  workflow_dispatch: # Run manually
 
 jobs:
   pre-commit:

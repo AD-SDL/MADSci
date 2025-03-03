@@ -1,6 +1,6 @@
 [project]
 name = "madsci.common"
-dynamic = ["version"]
+version = "0.0.3"
 description = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -38,7 +38,3 @@ Homepage = "https://github.com/AD-SDL/MADSci"
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
-
-[tool.pdm.version]
-source = "scm"
-fallback_version = "0.0.2"
