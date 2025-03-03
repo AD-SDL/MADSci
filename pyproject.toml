@@ -18,7 +18,7 @@ dev = [
 ]
 [tool.pdm.version]
 source = "scm"
-fallback_version = "0.0.1"
+fallback_version = "0.0.2"
 
 [dependency-groups]
 dev = [
