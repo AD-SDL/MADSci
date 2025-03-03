@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import BaseModel, Error, PathLike, new_ulid_str
+from madsci.common.types.datapoint_types import DataPoint
 from pydantic.functional_validators import field_validator, model_validator
 from sqlmodel.main import Field
 
@@ -160,8 +161,8 @@ class ActionResult(BaseModel):
         description="A dictionary of files produced by the step.",
         default_factory=dict,
     )
-    datapoints: dict[str, PathLike] = Field(
-        title="Step Files",
+    datapoints: dict[str, DataPoint] = Field(
+        title="Data Points",
         description="A dictionary of datapoints sent to the data manager by the step.",
         default_factory=dict,
     )

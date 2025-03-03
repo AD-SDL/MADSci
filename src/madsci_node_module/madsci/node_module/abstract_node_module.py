@@ -209,7 +209,7 @@ class AbstractNode:
             self._exception_handler(e, set_node_error=False)
             action_response = action_request.failed(errors=Error.from_exception(e))
         try:
-            self._run_action(action_request, arg_dict)
+            action_response = self._run_action(action_request, arg_dict)
         except Exception as e:
             self._exception_handler(e)
             action_response = action_request.failed(errors=Error.from_exception(e))
