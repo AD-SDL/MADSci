@@ -7,7 +7,7 @@ init:
   @which pdm || echo "pdm not found, you'll need to install it: https://github.com/pdm-project/pdm"
   @pdm install
   @#test -e .env || cp .env.example .env
-  @(which source || $(pdm venv activate)) || true
+  @. .venv/bin/activate
   @pre-commit install
   @pre-commit autoupdate
 
