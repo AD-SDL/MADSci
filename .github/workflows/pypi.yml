@@ -1,0 +1,33 @@
+name: PyPi Publish
+on:
+  push: # *Run for semver tagged releases
+    tags: [ 'v*' ]
+  workflow_dispatch: # Manually trigger the workflow
+
+jobs:
+  publish_pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout code
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - name: Setup PDM
+        uses: pdm-project/setup-pdm@v3
+        with:
+          python-version: 3.9
+      - run: pdm install
+      - run: pdm publish -p src/madsci_common
+      - run: pdm publish -p src/madsci_client
+      - run: pdm publish -p src/madsci_node_module
+      - run: pdm publish -p src/madsci_event_manager
+      - run: pdm publish -p src/madsci_resource_manager
+      - run: pdm publish -p src/madsci_experiment_manager
+      - run: pdm publish -p src/madsci_workcell_manager
+      - run: pdm publish -p src/madsci_data_manager

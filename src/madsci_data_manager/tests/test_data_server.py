@@ -67,7 +67,7 @@ def test_roundtrip_datapoint(db_connection: Database) -> None:
     assert ValueDataPoint.model_validate(result) == test_datapoint
 
 
-def test_roundtrip_file_datapoint(db_connection: Database) -> None:
+def test_roundtrip_file_datapoint(db_connection: Database, tmp_path: Path) -> None:
     """
     Test that we can send and then retrieve an datapoint by ID.
     """
@@ -76,9 +76,13 @@ def test_roundtrip_file_datapoint(db_connection: Database) -> None:
     )
     data_manager_server._configure_routes()
     test_client = TestClient(data_manager_server.app)
+    test_file = Path(tmp_path) / "test.txt"
+    test_file.parent.mkdir(parents=True, exist_ok=True)
+    with test_file.open("w") as f:
+        f.write("test")
     test_datapoint = FileDataPoint(
         label="test",
-        path="/workspaces/MADSci/src/madsci_data_manager/tests/test_data_server.py",
+        path=test_file,
     )
     result = test_client.post(
         "/datapoint",
