@@ -76,7 +76,7 @@ class FileDataPoint(DataPoint):
 
     data_type: Literal[DataPointTypeEnum.FILE] = DataPointTypeEnum.FILE
     """The type of the data point, in this case a file"""
-    path: str
+    path: PathLike
     """Path to the file"""
 
 
