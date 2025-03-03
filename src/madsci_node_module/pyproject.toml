@@ -1,7 +1,7 @@
 
 [project]
 name = "madsci.node_module"
-version = "0.0.3"
+version = "0.0.4"
 description = "The Modular Autonomous Discovery for Science (MADSci) Node Module Helper Classes."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -27,3 +27,6 @@ Homepage = "https://github.com/AD-SDL/MADSci"
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+
+[tool.pdm.build]
+includes = ["madsci/"]
