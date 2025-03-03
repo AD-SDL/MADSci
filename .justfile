@@ -7,9 +7,8 @@ init:
   @which pdm || echo "pdm not found, you'll need to install it: https://github.com/pdm-project/pdm"
   @pdm install
   @#test -e .env || cp .env.example .env
-  @OSTYPE="" && . .venv/bin/activate
-  @pre-commit install
-  @pre-commit autoupdate
+  @OSTYPE="" . .venv/bin/activate
+  @which pre-commit && pre-commit install && pre-commit autoupdate || true
 
 # Run the pre-commit checks
 checks:
