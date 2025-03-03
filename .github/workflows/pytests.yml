@@ -19,4 +19,4 @@ jobs:
       - name: Install dependencies and initialize everything
         run: just init
       - name: Test with pytest
-        run: pytest
+        run: . .venv/bin/activate && pytest
