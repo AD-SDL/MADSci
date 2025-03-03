@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
-    LocalFileDataPoint,
+    FileDataPoint,
     ValueDataPoint,
 )
 from pymongo.synchronous.database import Database
@@ -76,7 +76,7 @@ def test_roundtrip_file_datapoint(db_connection: Database) -> None:
     )
     data_manager_server._configure_routes()
     test_client = TestClient(data_manager_server.app)
-    test_datapoint = LocalFileDataPoint(
+    test_datapoint = FileDataPoint(
         label="test",
         path="/workspaces/MADSci/src/madsci_data_manager/tests/test_data_server.py",
     )
@@ -93,9 +93,9 @@ def test_roundtrip_file_datapoint(db_connection: Database) -> None:
             )
         },
     ).json()
-    assert LocalFileDataPoint.model_validate(result).label == test_datapoint.label
+    assert FileDataPoint.model_validate(result).label == test_datapoint.label
     result = test_client.get(f"/datapoint/{test_datapoint.datapoint_id}").json()
-    assert LocalFileDataPoint.model_validate(result).label == test_datapoint.label
+    assert FileDataPoint.model_validate(result).label == test_datapoint.label
 
 
 def test_get_datapoints(db_connection: Database) -> None:

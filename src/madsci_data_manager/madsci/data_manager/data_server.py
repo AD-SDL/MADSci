@@ -13,7 +13,7 @@ from fastapi.routing import APIRouter
 from madsci.client.event_client import EventClient
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
-    data_types,
+    DataPoint,
 )
 from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
@@ -71,10 +71,15 @@ class DataServer:
     ) -> Any:
         """Create a new datapoint."""
         data = json.loads(datapoint)
-        datapoint = data_types[data["type"]].model_validate(data)
+        datapoint = DataPoint.discriminate(data)
         for file in files:
             time = datetime.now()
-            path = Path(str(time.year)) / str(time.month) / str(time.day)
+            path = (
+                Path(self.data_manager_definition.file_storage_path).resolve()
+                / str(time.year)
+                / str(time.month)
+                / str(time.day)
+            )
             path.mkdir(parents=True, exist_ok=True)
             final_path = path / (datapoint.datapoint_id + "_" + file.filename)
             with Path.open(final_path, "wb") as f:
@@ -87,7 +92,7 @@ class DataServer:
     async def get_datapoint(self, datapoint_id: str) -> Any:
         """Look up an datapoint by datapoint_id"""
         datapoint = self.datapoints.find_one({"datapoint_id": datapoint_id})
-        return data_types[datapoint["type"]].model_validate(datapoint)
+        return DataPoint.discriminate(datapoint)
 
     async def get_datapoints(self, number: int = 100) -> dict[str, Any]:
         """Get the latest datapoints"""
@@ -95,9 +100,7 @@ class DataServer:
             self.datapoints.find({}).sort("data_timestamp", -1).limit(number).to_list()
         )
         return {
-            datapoint["datapoint_id"]: data_types[datapoint["type"]].model_validate(
-                datapoint
-            )
+            datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 
@@ -105,17 +108,15 @@ class DataServer:
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
         datapoint_list = self.datapoints.find(selector).to_list()
         return {
-            datapoint["datapoint_id"]: data_types[datapoint["type"]].model_validate(
-                datapoint
-            )
+            datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 
     async def get_datapoint_value(self, datapoint_id: str) -> Response:
         """Returns a specific data point's value."""
         datapoint = self.datapoints.find_one({"datapoint_id": datapoint_id})
-        datapoint = data_types[datapoint["type"]].model_validate(datapoint)
-        if datapoint.type == "local_file":
+        datapoint = DataPoint.discriminate(datapoint)
+        if datapoint.type == "file":
             return FileResponse(datapoint.path)
         return JSONResponse({"value": datapoint.value})
 

@@ -7,7 +7,6 @@ import requests
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.datapoint_types import (
     DataPoint,
-    data_types,
 )
 from pydantic import AnyUrl
 from ulid import ULID
@@ -30,8 +29,7 @@ class DataClient:
         response = requests.get(f"{self.url}/datapoint/{datapoint_id}", timeout=10)
         if not response.ok:
             response.raise_for_status()
-        response = response.json()
-        return data_types[response["type"]].model_validate(response)
+        return DataPoint.discriminate(response.json())
 
     def get_datapoint_value(self, datapoint_id: Union[str, ULID]) -> Any:
         """Get an datapoint value by ID."""
@@ -68,14 +66,11 @@ class DataClient:
         )
         if not response.ok:
             response.raise_for_status()
-        return [
-            data_types[datapoint["type"]].model_validate(datapoint)
-            for datapoint in response.json()
-        ]
+        return [DataPoint.discriminate(datapoint) for datapoint in response.json()]
 
     def submit_datapoint(self, datapoint: DataPoint) -> DataPoint:
         """Submit a Datapoint object"""
-        if datapoint.type == "local_file":
+        if datapoint.data_type == "file":
             files = {
                 (
                     "files",
@@ -95,5 +90,4 @@ class DataClient:
         )
         if not response.ok:
             response.raise_for_status()
-        datapoint = response.json()
-        return data_types[datapoint["type"]].model_validate(datapoint)
+        return DataPoint.discriminate(response.json())

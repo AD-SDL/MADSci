@@ -12,7 +12,7 @@ from madsci.client.data_client import DataClient
 from madsci.client.event_client import default_logger
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.common.types.action_types import ActionRequest, ActionResult
-from madsci.common.types.datapoint_types import LocalFileDataPoint, ValueDataPoint
+from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
@@ -203,7 +203,7 @@ class Engine:
                     label = step.data_labels[file_key]
                 else:
                     label = file_key
-                datapoint = LocalFileDataPoint(
+                datapoint = FileDataPoint(
                     step_id=step.id,
                     workflow_id=wf.workflow_id,
                     experiment_id=wf.experiment_id,
