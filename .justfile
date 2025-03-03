@@ -5,7 +5,7 @@ default:
 # initialize the project
 init:
   @which pdm || echo "pdm not found, you'll need to install it: https://github.com/pdm-project/pdm"
-  @pdm install
+  @pdm install -G:all
   @#test -e .env || cp .env.example .env
   @OSTYPE="" . .venv/bin/activate
   @which pre-commit && pre-commit install && pre-commit autoupdate || true
