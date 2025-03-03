@@ -8,9 +8,6 @@ init: hooks
   @pdm install
   @#test -e .env || cp .env.example .env
   @(which source || $(pdm venv activate)) || true
-
-# Install the pre-commit hooks
-hooks:
   @pre-commit install
   @pre-commit autoupdate
 
