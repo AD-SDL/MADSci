@@ -2,7 +2,7 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 from madsci.common.types.base_types import BaseModel, ModelLink, PathLike, new_ulid_str
 from madsci.common.validators import (
@@ -78,6 +78,7 @@ class ManagerDefinition(BaseModel):
     """Definition for a Squid Manager."""
 
     model_config = ConfigDict(extra="allow")
+    _definition_file_patterns: ClassVar[list[str]] = ["*.manager.yaml"]
 
     name: str = Field(
         title="Manager Name",

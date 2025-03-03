@@ -10,6 +10,15 @@ services:
     image: redis:latest
     ports:
       - 6379:6379
+  postgres:
+    container_name: postgres
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=rpl
+      - POSTGRES_PASSWORD=rpl
+      - POSTGRES_DB=resources
+    ports:
+      - 5432:5432
   event_manager:
     container_name: event_manager
     image: madsci:latest
@@ -74,3 +83,19 @@ services:
     network_mode: host
     depends_on:
       - event_manager
+  resource_manager:
+    container_name: resource_manager
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python -m madsci.resource_manager.resource_server
+    network_mode: host
+    depends_on:
+      - postgres

@@ -165,7 +165,13 @@ class BaseModel(SQLModel, use_enum_values=True):
                 )
             if len(definition_files) == 0:
                 raise FileNotFoundError(f"No definition files found for {cls.__name__}")
-            model_instance = cls.from_yaml(definition_files[0])
+            for definition_file in definition_files:
+                try:
+                    model_instance = cls.from_yaml(definition_file)
+                except Exception as e:
+                    default_logger.log_error(
+                        f"Failed to load model {cls.__name__} from {definition_file}: {e}"
+                    )
         except Exception as e:
             default_logger.log_error(
                 f"Failed to load model {cls.__name__} from filesystem search: {e}"
