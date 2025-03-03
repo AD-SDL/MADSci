@@ -2,6 +2,9 @@ name: Pre-Commit Checks
 
 on:
   push:
+    branches: ["*"]
+    tags: ["*"]
+  workflow_dispatch:
 
 jobs:
   pre-commit:
