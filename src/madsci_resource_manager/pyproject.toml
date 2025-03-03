@@ -31,6 +31,3 @@ build-backend = "pdm.backend"
 [tool.pdm.version]
 source = "scm"
 fallback_version = "0.0.2"
-
-#[dependency-groups]
-#dev = ["-e madsci-common @ file:///${PROJECT_ROOT}/../madsci_common"]
