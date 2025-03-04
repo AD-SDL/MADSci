@@ -7,7 +7,10 @@ from typing import Optional
 
 import click
 from click.core import Context
-from madsci.common.types.node_types import NodeDefinition, NodeModuleDefinition
+from rich.console import Console
+from rich.pretty import pprint
+
+from madsci.common.types.node_types import NodeDefinition, NodeType
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.utils import (
     PathLike,
@@ -19,8 +22,6 @@ from madsci.common.utils import (
     search_for_file_pattern,
     to_snake_case,
 )
-from rich.console import Console
-from rich.pretty import pprint
 
 console = Console()
 
@@ -37,6 +38,29 @@ class NodeContext:
 
 
 pass_node = click.make_pass_decorator(NodeContext)
+
+
+def find_node_template(name: Optional[str], path: Optional[str]) -> NodeContext:
+    """Find a node template by name or path."""
+    node_context = NodeContext()
+
+    if path:
+        node_context.path = Path(path)
+        if node_context.path.exists():
+            if path.endswith(".node.template.yaml"):
+                node_context.node_def = NodeDefinition.from_yaml(path)
+            return node_context
+
+    node_template_files = search_for_file_pattern("*.node.template.yaml")
+    for node_template_file in node_template_files:
+        with contextlib.suppress(Exception):
+            node_def = NodeDefinition.from_yaml(node_template_file)
+            if not name or node_def.node_name == name:
+                node_context.path = Path(node_template_file)
+                node_context.node_def = node_def
+                return node_context
+
+    return node_context
 
 
 def find_node(name: Optional[str], path: Optional[str]) -> NodeContext:
@@ -119,16 +143,14 @@ def node(ctx: Context, name: Optional[str], path: Optional[str]) -> None:
 )
 @click.option("--description", "-d", type=str, help="The description of the node.")
 @click.option(
-    "--module_name",
-    "-m",
+    "--template_name",
     type=str,
-    help="The name of the module to use for the node.",
+    help="The name of the node template to use for the node.",
 )
 @click.option(
-    "--module_path",
-    "-m",
+    "--template_path",
     type=str,
-    help="Path to the module definition file to use for the node.",
+    help="Path to the node definition template file to use for the node.",
 )
 @click.option(
     "--standalone",
@@ -136,15 +158,22 @@ def node(ctx: Context, name: Optional[str], path: Optional[str]) -> None:
     is_flag=True,
     help="Don't add node to any workcell.",
 )
+@click.option(
+    "--is_template",
+    "-t",
+    is_flag=True,
+    help="Create a node template.",
+)
 @click.pass_context
 def create(
     ctx: Context,
     name: Optional[str],
     path: Optional[str],
     description: Optional[str],
-    module_name: Optional[str],
-    module_path: Optional[str],
+    template_name: Optional[str],
+    template_path: Optional[str],
     standalone: bool,
+    is_template: bool,
 ) -> None:
     """Create a new node."""
     name = name if name else ctx.parent.params.get("name")
@@ -158,31 +187,37 @@ def create(
         if description
         else prompt_for_input("Node Description", quiet=ctx.obj.quiet)
     )
-    if module_name or module_path:
-        from madsci.client.cli.module_cli import find_module
+    template_definition = get_template_definition(ctx, template_name, template_path)
+    if not template_definition and (template_name or template_path):
+        return
 
-        module_path = find_module(module_name, module_path).path
+    if not template_definition:
+        module_name = prompt_for_input(
+            "Module Name",
+            required=True,
+            quiet=ctx.obj.quiet,
+        )
+        node_type = prompt_from_list(
+            "Node Type",
+            required=False,
+            options=[node_type.value for node_type in NodeType],
+            default=None,
+            quiet=ctx.obj.quiet,
+        )
+        node_definition = NodeDefinition(
+            node_name=name,
+            node_description=description,
+            is_template=is_template,
+            module_name=module_name,
+            node_type=node_type,
+        )
     else:
-        modules = search_for_file_pattern("*.module.yaml")
-        if modules:
-            module_path = prompt_from_list(
-                prompt="Module Definition Files",
-                options=modules,
-                default=modules[0],
-                required=True,
-                quiet=ctx.obj.quiet,
-            )
-            try:
-                module_definition = NodeModuleDefinition.from_yaml(module_path)
-            except Exception as e:
-                console.print(f"Error loading module definition file: {e}")
-                return
-
-    node_definition = NodeDefinition(
-        **module_definition.model_dump(),
-        node_name=name,
-        node_description=description,
-    )
+        node_definition = NodeDefinition(
+            **template_definition.model_dump(exclude={"node_id", "is_template"}),
+            node_name=name,
+            node_description=description,
+            is_template=is_template,
+        )
     console.print(node_definition)
 
     path = path if path else ctx.parent.params.get("path")
@@ -204,12 +239,46 @@ def create(
     save_model(path=path, model=node_definition, overwrite_check=not ctx.obj.quiet)
 
     # *Handle workcell integration
-    if not standalone and prompt_yes_no(
-        "Add node to a workcell?",
-        default=True,
-        quiet=ctx.obj.quiet,
+    if (
+        not standalone
+        and not is_template
+        and prompt_yes_no(
+            "Add node to a workcell?",
+            default=True,
+            quiet=ctx.obj.quiet,
+        )
     ):
         add_node_to_workcell(ctx, name, path, node_definition)
+
+
+def get_template_definition(
+    ctx: Context, template_name: Optional[str], template_path: Optional[str]
+) -> Optional[NodeDefinition]:
+    """Get a node template definition, if applicable."""
+    template_definition = None
+    if template_name or template_path:
+        node_template = find_node_template(template_name, template_path)
+        if node_template.node_def:
+            template_definition = node_template.node_def
+        else:
+            console.print(
+                f"Node template not found: {template_name or template_path}",
+            )
+    else:
+        node_templates = search_for_file_pattern("*.node.template.yaml")
+        if node_templates:
+            template_path = prompt_from_list(
+                prompt="Node Definition Template Files",
+                options=node_templates,
+                default=None,
+                required=False,
+                quiet=ctx.obj.quiet,
+            )
+            try:
+                template_definition = NodeDefinition.from_yaml(template_path)
+            except Exception as e:
+                console.print(f"Error creating node from template: {e}")
+    return template_definition
 
 
 def add_node_to_workcell(

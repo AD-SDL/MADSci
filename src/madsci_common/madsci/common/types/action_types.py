@@ -4,10 +4,11 @@ import json
 from enum import Enum
 from typing import Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import BaseModel, Error, PathLike, new_ulid_str
-from madsci.common.types.datapoint_types import DataPoint
 from pydantic.functional_validators import field_validator, model_validator
 from sqlmodel.main import Field
+
+from madsci.common.types.base_types import BaseModel, Error, PathLike, new_ulid_str
+from madsci.common.types.datapoint_types import DataPoint
 
 
 class ActionStatus(str, Enum):
@@ -23,7 +24,7 @@ class ActionStatus(str, Enum):
 
 
 class ActionRequest(BaseModel):
-    """Request to perform an action on a module"""
+    """Request to perform an action on a node"""
 
     action_id: str = Field(
         title="Action ID",
@@ -277,7 +278,7 @@ class ActionDefinition(BaseModel):
 
 
 class ActionArgumentDefinition(BaseModel):
-    """Defines an argument for a module action"""
+    """Defines an argument for a node action"""
 
     name: str = Field(
         title="Argument Name",
@@ -302,7 +303,7 @@ class ActionArgumentDefinition(BaseModel):
 
 
 class ActionFileDefinition(BaseModel):
-    """Defines a file for a module action"""
+    """Defines a file for a node action"""
 
     name: str = Field(
         title="File Name",
@@ -319,7 +320,7 @@ class ActionFileDefinition(BaseModel):
 
 
 class ActionResultDefinition(BaseModel):
-    """Defines a result for a module action"""
+    """Defines a result for a node action"""
 
     result_label: str = Field(
         title="Result Label",
@@ -337,7 +338,7 @@ class ActionResultDefinition(BaseModel):
 
 
 class FileActionResultDefinition(ActionResultDefinition):
-    """Defines a file result for a module action"""
+    """Defines a file result for a node action"""
 
     result_type: Literal["file"] = Field(
         title="Result Type",
@@ -347,7 +348,7 @@ class FileActionResultDefinition(ActionResultDefinition):
 
 
 class JSONActionResultDefinition(ActionResultDefinition):
-    """Defines a JSON result for a module action"""
+    """Defines a JSON result for a node action"""
 
     result_type: Literal["json"] = Field(
         title="Result Type",

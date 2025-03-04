@@ -14,6 +14,7 @@ from madsci.client.event_client import (
     EventClient,
     default_logger,
 )
+from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
@@ -31,6 +32,7 @@ from madsci.common.types.base_types import Error
 from madsci.common.types.event_types import Event, EventClientConfig, EventType
 from madsci.common.types.node_types import (
     AdminCommands,
+    NodeClientCapabilities,
     NodeConfig,
     NodeDefinition,
     NodeInfo,
@@ -90,6 +92,10 @@ class AbstractNode:
     """The event logger for this node"""
     module_version: ClassVar[str] = "0.0.1"
     """The version of the module. Should match the version in the node definition."""
+    supported_capabilities: ClassVar[NodeClientCapabilities] = (
+        AbstractNodeClient.supported_capabilities
+    )
+    """The default supported capabilities of this node module class."""
 
     def __init__(
         self,
@@ -103,6 +109,10 @@ class AbstractNode:
             self.node_definition = NodeDefinition.load_model(require_unique=True)
         if self.node_definition is None:
             raise ValueError("Node definition not found, aborting node initialization")
+        if self.node_definition.is_template:
+            raise ValueError(
+                "Node definition is a template, please use a specific node definition instead."
+            )
 
         # * Load the node config
         self._initialize_node_config(node_config)
@@ -117,25 +127,18 @@ class AbstractNode:
             < 0
         ):
             self.logger.log_warning(
-                "The module version in the Node Module's source code does not match the version specified in your Module Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
+                "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
             )
+
+        # * Combine the node definition and classes's capabilities
+        self._populate_capabilities()
 
         # * Synthesize the node info
         self.node_info = NodeInfo.from_node_def_and_config(
             self.node_definition, self.config
         )
 
-        # * Add the admin commands to the node info
-        self.node_info.capabilities.admin_commands = set.union(
-            self.node_info.capabilities.admin_commands,
-            {
-                admin_command.value
-                for admin_command in AdminCommands
-                if hasattr(self, admin_command.value)
-                and callable(self.__getattribute__(admin_command.value))
-            },
-        )
-        # * Add the action decorators to the node
+        # * Add the action decorators to the node (and node info)
         for action_callable in self.__class__.__dict__.values():
             if hasattr(action_callable, "__is_madsci_action__"):
                 self._add_action(
@@ -145,21 +148,8 @@ class AbstractNode:
                     blocking=action_callable.__madsci_action_blocking__,
                 )
 
-        # * Save the node info
-        if self.node_info_path:
-            self.node_info.to_yaml(self.node_info_path)
-        elif self.node_definition._definition_path:
-            self.node_info_path = Path(
-                self.node_definition._definition_path,
-            ).with_suffix(".info.yaml")
-            self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
-
-        if self.node_definition._definition_path:
-            self.node_definition.to_yaml(self.node_definition._definition_path)
-        else:
-            self.logger.log_warning(
-                "No definition path set for node, skipping node definition update"
-            )
+        # * Save the node info and update definition, if possible
+        self._update_node_info_and_definition()
 
         # * Add a lock for thread safety with blocking actions
         self._action_lock = threading.Lock()
@@ -605,3 +595,41 @@ class AbstractNode:
             except Exception as e:
                 self._exception_handler(e)
                 time.sleep(0.1)
+
+    def _populate_capabilities(self) -> None:
+        """Populate the node capabilities based on the node definition and the supported capabilities of the class."""
+        for field in self.supported_capabilities.__fields__:
+            if getattr(self.node_definition.capabilities, field) is None:
+                setattr(
+                    self.node_definition.capabilities,
+                    field,
+                    getattr(self.supported_capabilities, field),
+                )
+
+        # * Add the admin commands to the node info
+        self.node_definition.capabilities.admin_commands = set.union(
+            self.node_definition.capabilities.admin_commands,
+            {
+                admin_command.value
+                for admin_command in AdminCommands
+                if hasattr(self, admin_command.value)
+                and callable(self.__getattribute__(admin_command.value))
+            },
+        )
+
+    def _update_node_info_and_definition(self) -> None:
+        """Update the node info and definition files."""
+        if self.node_info_path:
+            self.node_info.to_yaml(self.node_info_path)
+        elif self.node_definition._definition_path:
+            self.node_info_path = Path(
+                self.node_definition._definition_path,
+            ).with_suffix(".info.yaml")
+            self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
+
+        if self.node_definition._definition_path:
+            self.node_definition.to_yaml(self.node_definition._definition_path)
+        else:
+            self.logger.log_warning(
+                "No definition path set for node, skipping node definition update"
+            )

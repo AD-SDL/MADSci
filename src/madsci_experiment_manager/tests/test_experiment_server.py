@@ -8,6 +8,9 @@ a working docker installation.
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from pymongo.database import Database
+from pytest_mock_resources import MongoConfig, create_mongo_fixture
+
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -15,9 +18,7 @@ from madsci.common.types.experiment_types import (
     ExperimentRegistration,
     ExperimentStatus,
 )
-from madsci.experiment_manager.experiment_server import ExperimentServer
-from pymongo.database import Database
-from pytest_mock_resources import MongoConfig, create_mongo_fixture
+from madsci.experiment_manager.experiment_server import create_experiment_server
 
 db_connection = create_mongo_fixture()
 
@@ -32,29 +33,29 @@ def pmr_mongo_config() -> MongoConfig:
     return MongoConfig(image="mongo:8")
 
 
-def test_experiment_definition(db_connection: Database) -> None:
+@pytest.fixture()
+def test_client(db_connection: Database) -> TestClient:
+    """Test client fixture for the Experiment Manager's server."""
+    app = create_experiment_server(
+        experiment_manager_definition=experiment_manager_def,
+        db_connection=db_connection,
+    )
+    return TestClient(app)
+
+
+def test_experiment_definition(test_client: TestClient) -> None:
     """
     Test the definition endpoint for the Experiment Manager's server.
     Should return an ExperimentManagerDefinition.
     """
-    experiment_manager_server = ExperimentServer(
-        experiment_manager_definition=experiment_manager_def,
-        db_connection=db_connection,
-    )
-    test_client = TestClient(experiment_manager_server.app)
     result = test_client.get("/definition").json()
     ExperimentManagerDefinition.model_validate(result)
 
 
-def test_experiment_roundtrip(db_connection: Database) -> None:
+def test_experiment_roundtrip(test_client: TestClient) -> None:
     """
     Test that we can send and then retrieve an experiment by ID.
     """
-    experiment_manager_server = ExperimentServer(
-        experiment_manager_definition=experiment_manager_def,
-        db_connection=db_connection,
-    )
-    test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(
         experiment_name="Test Experiment",
         experiment_description="This is a test experiment.",
@@ -74,15 +75,10 @@ def test_experiment_roundtrip(db_connection: Database) -> None:
     assert Experiment.model_validate(response.json()) == test_experiment
 
 
-def test_get_experiments(db_connection: Database) -> None:
+def test_get_experiments(test_client: TestClient) -> None:
     """
     Test that we can retrieve all experiments and they are returned as a list in reverse-chronological order, with the correct number of experiments.
     """
-    experiment_manager_server = ExperimentServer(
-        experiment_manager_definition=experiment_manager_def,
-        db_connection=db_connection,
-    )
-    test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(
         experiment_name="Test Experiment",
         experiment_description="This is a test experiment.",
@@ -110,15 +106,10 @@ def test_get_experiments(db_connection: Database) -> None:
         previous_timestamp = experiment.started_at.timestamp()
 
 
-def test_end_experiment(db_connection: Database) -> None:
+def test_end_experiment(test_client: TestClient) -> None:
     """
     Test that we can end an experiment by ID.
     """
-    experiment_manager_server = ExperimentServer(
-        experiment_manager_definition=experiment_manager_def,
-        db_connection=db_connection,
-    )
-    test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(
         experiment_name="Test Experiment",
         experiment_description="This is a test experiment.",
@@ -138,15 +129,10 @@ def test_end_experiment(db_connection: Database) -> None:
     assert ended_experiment.experiment_id == test_experiment.experiment_id
 
 
-def test_cancel_experiment(db_connection: Database) -> None:
+def test_cancel_experiment(test_client: TestClient) -> None:
     """
     Test that we can cancel an experiment by ID.
     """
-    experiment_manager_server = ExperimentServer(
-        experiment_manager_definition=experiment_manager_def,
-        db_connection=db_connection,
-    )
-    test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(
         experiment_name="Test Experiment",
         experiment_description="This is a test experiment.",
@@ -168,15 +154,10 @@ def test_cancel_experiment(db_connection: Database) -> None:
     assert cancelled_experiment.experiment_id == test_experiment.experiment_id
 
 
-def test_pause_and_resume_experiment(db_connection: Database) -> None:
+def test_pause_and_resume_experiment(test_client: TestClient) -> None:
     """
     Test that we can pause and resume an experiment by ID.
     """
-    experiment_manager_server = ExperimentServer(
-        experiment_manager_definition=experiment_manager_def,
-        db_connection=db_connection,
-    )
-    test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(
         experiment_name="Test Experiment",
         experiment_description="This is a test experiment.",
@@ -204,15 +185,10 @@ def test_pause_and_resume_experiment(db_connection: Database) -> None:
     assert resumed_experiment.experiment_id == test_experiment.experiment_id
 
 
-def test_fail_experiment(db_connection: Database) -> None:
+def test_fail_experiment(test_client: TestClient) -> None:
     """
     Test that we can fail an experiment by ID.
     """
-    experiment_manager_server = ExperimentServer(
-        experiment_manager_definition=experiment_manager_def,
-        db_connection=db_connection,
-    )
-    test_client = TestClient(experiment_manager_server.app)
     test_experiment_design = ExperimentDesign(
         experiment_name="Test Experiment",
         experiment_description="This is a test experiment.",

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import UploadFile
+
 from madsci.client.event_client import default_logger
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.step_types import Step
@@ -20,7 +21,7 @@ from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
     """
-    Validates that the nodes in the workflow.flowdef are in the workcell.modules
+    Validates that the nodes in the workflow.flowdef are in the workcell.nodes
     """
     for node_name in [step.node for step in workflow.flowdef]:
         if node_name not in workcell.nodes:
@@ -32,7 +33,7 @@ def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
 
 
 def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool, str]:
-    """Check if a step is valid based on the module's about"""
+    """Check if a step is valid based on the node's info"""
     if step.node in state_handler.get_all_nodes():
         node = state_handler.get_node(step.node)
         info = node.info

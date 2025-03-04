@@ -2,6 +2,8 @@
 
 from typing import Any, ClassVar
 
+from pydantic import AnyUrl
+
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
@@ -16,7 +18,6 @@ from madsci.common.types.node_types import (
     NodeStatus,
 )
 from madsci.common.types.resource_types.definitions import ResourceDefinition
-from pydantic import AnyUrl
 
 
 class AbstractNodeClient:
@@ -55,7 +56,7 @@ class AbstractNodeClient:
         raise NotImplementedError("get_state is not implemented by this client")
 
     def get_info(self) -> NodeInfo:
-        """Get information about the node and module."""
+        """Get information about the node."""
         raise NotImplementedError("get_info is not implemented by this client")
 
     def set_config(self, config_dict: dict[str, Any]) -> NodeSetConfigResponse:

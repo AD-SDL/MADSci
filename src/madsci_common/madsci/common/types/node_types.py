@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any, ClassVar, Optional
 
 from pydantic import SerializationInfo, SerializerFunctionWrapHandler, model_serializer
@@ -35,7 +34,7 @@ class NodeType(str, Enum):
 
 
 class NodeConfig(BaseModel):
-    """Configuration for a MADSci Node."""
+    """Basic Configuration for a MADSci Node."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -76,96 +75,62 @@ class RestNodeConfig(NodeConfig):
     )
 
 
-class NodeModuleDefinition(BaseModel, extra="allow"):
-    """Definition for a MADSci Node Module."""
-
-    module_name: str = Field(
-        title="Node Module Name",
-        description="The name of the node module.",
-    )
-    node_type: Optional[NodeType] = Field(
-        title="Node Module Type",
-        description="The type of node provided by the module.",
-        default=None,
-    )
-    module_description: Optional[str] = Field(
-        default=None,
-        title="Module Description",
-        description="A description of the node module.",
-    )
-    module_version: SemanticVersion = Field(
-        default=Version.parse("0.0.1"),
-        title="Module Version",
-        description="The version of the node module.",
-    )
-    capabilities: "NodeCapabilities" = Field(
-        default_factory=lambda: NodeCapabilities(),
-        title="Module Capabilities",
-        description="The capabilities of the node module.",
-    )
-    commands: dict[str, str] = Field(
-        title="Node Module Commands",
-        description="The commands that the node module supports. These are 'default' commands inherited by all node instances.",
-        default_factory=dict,
-    )
-
-
 class NodeClientCapabilities(BaseModel):
     """Capabilities of a MADSci Node Client. Default values are None, meaning the capability is not explicitly set. If a capability is set to False, it is explicitly not supported."""
 
     get_info: Optional[bool] = Field(
         default=None,
-        title="Module Info",
+        title="Node Info",
         description="Whether the node supports querying its info.",
     )
     get_state: Optional[bool] = Field(
         default=None,
-        title="Module State",
+        title="Node State",
         description="Whether the node supports querying its state.",
     )
     get_status: Optional[bool] = Field(
         default=None,
-        title="Module Status",
+        title="Node Status",
         description="Whether the node supports querying its status.",
     )
     send_action: Optional[bool] = Field(
         default=None,
-        title="Module Send Action",
+        title="Node Send Action",
         description="Whether the node supports sending actions.",
     )
     get_action_result: Optional[bool] = Field(
         default=None,
-        title="Module Get Action",
+        title="Node Get Action",
         description="Whether the node supports querying the status of an action.",
     )
     get_action_history: Optional[bool] = Field(
         default=None,
-        title="Module Get Actions",
+        title="Node Get Actions",
         description="Whether the node supports querying the history of actions.",
     )
     action_files: Optional[bool] = Field(
         default=None,
-        title="Module Action Files",
+        title="Node Action Files",
         description="Whether the node supports sending action files.",
     )
     send_admin_commands: Optional[bool] = Field(
         default=None,
-        title="Module Send Admin Commands",
+        title="Node Send Admin Commands",
         description="Whether the node supports sending admin commands.",
     )
     set_config: Optional[bool] = Field(
         default=None,
-        title="Module Set Config",
+        title="Node Set Config",
         description="Whether the node supports setting configuration.",
     )
     get_resources: Optional[bool] = Field(
         default=None,
-        title="Module Get Resources",
+        title="Node Get Resources",
         description="Whether the node supports querying its resources.",
     )
     get_log: Optional[bool] = Field(
         default=None,
-        title="Module Get Log",
+        title="Node Get Log",
         description="Whether the node supports querying its log.",
     )
 
@@ -183,82 +148,29 @@ class NodeCapabilities(NodeClientCapabilities):
 
     events: Optional[bool] = Field(
         default=None,
-        title="Module Events",
-        description="Whether the module supports raising MADSci events.",
+        title="Node Events",
+        description="Whether the node supports raising MADSci events.",
     )
     resources: Optional[bool] = Field(
         default=None,
-        title="Module Resources",
-        description="Whether the module supports MADSci-compatible resource management.",
+        title="Node Resources",
+        description="Whether the node supports MADSci-compatible resource management.",
     )
     admin_commands: set[AdminCommands] = Field(
         default=set(),
-        title="Module Admin Commands",
-        description="Which admin commands the module supports, if any.",
+        title="Node Admin Commands",
+        description="Which admin commands the node supports, if any.",
     )
 
 
-def get_module_from_node_definition(
-    node_definition: "NodeDefinition",
-) -> Optional[NodeModuleDefinition]:
-    """Get the module definition from a node definition.
-
-    Args:
-        node_definition: The node definition to get the module definition from
-
-    Returns:
-        The module definition, or None if not found
-
-    Raises:
-        ValueError: If the module definition path cannot be resolved
-    """
-    if node_definition.module_definition is None:
-        return None
-
-    # * If it's already a ModuleDefinition instance, return it
-    if isinstance(node_definition.module_definition, NodeModuleDefinition):
-        return node_definition.module_definition
-
-    # * Otherwise treat it as a path
-    module_path = Path(str(node_definition.module_definition))
-
-    # * If path is relative, try to resolve it
-    if not module_path.is_absolute():
-        # * First try relative to node definition path if set
-        if node_definition._definition_path:
-            resolved_path = Path(node_definition._definition_path).parent / module_path
-            if resolved_path.exists():
-                return NodeModuleDefinition.from_yaml(resolved_path)
-
-        # * Otherwise try relative to current working directory
-        cwd_path = Path.cwd() / module_path
-        if cwd_path.exists():
-            return NodeModuleDefinition.from_yaml(cwd_path)
-
-        raise ValueError(
-            f"Could not resolve module definition path '{module_path}'. "
-            f"Tried:\n"
-            f"  - {resolved_path if node_definition._definition_path else 'No node definition path set'}\n"
-            f"  - {cwd_path}",
-        )
-
-    # * For absolute paths, just try to load directly
-    if module_path.exists():
-        return NodeModuleDefinition.from_yaml(module_path)
-
-    raise ValueError(f"Module definition file not found at '{module_path}'")
-
-
-class NodeDefinition(NodeModuleDefinition):
-    """Definition of a MADSci Node, a unique instance of a MADSci Module."""
+class NodeDefinition(BaseModel):
+    """Definition of a MADSci Node, a unique instance of a MADSci Node Module."""
 
     _definition_file_patterns: ClassVar[list[str]] = ["*.node.yaml"]
 
     node_name: str = Field(title="Node Name", description="The name of the node.")
     node_id: str = Field(
-        title="Node ID",
-        description="The ID of the node.",
-        default_factory=new_ulid_str,
+        title="Node ID", description="The ID of the node.", default_factory=new_ulid_str
     )
     node_url: Optional[AnyUrl] = Field(
         title="Node URL",
@@ -270,18 +182,52 @@ class NodeDefinition(NodeModuleDefinition):
         description="A description of the node.",
         default=None,
     )
+    node_type: Optional[NodeType] = Field(
+        title="Node Type",
+        description="The type of thing this node provides an interface for.",
+        default=None,
+    )
+    module_name: str = Field(
+        title="Node Module Name",
+        description="The name of the node module.",
+    )
+    module_version: SemanticVersion = Field(
+        default=Version.parse("0.0.1"),
+        title="Module Version",
+        description="The version of the node module.",
+    )
+    capabilities: "NodeCapabilities" = Field(
+        default_factory=lambda: NodeCapabilities(),
+        title="Node Capabilities",
+        description="The capabilities of the node.",
+    )
+    commands: dict[str, str] = Field(
+        title="Node Commands",
+        description="The commands that the node supports. These can be used to stop, start, or otherwise administrate the node(s).",
+        default_factory=dict,
+    )
+    is_template: bool = Field(
+        default=False,
+        title="Is Template",
+        description="Whether this is a template definition.",
+    )
     config_defaults: dict[str, Any] = Field(
         default_factory=dict,
         title="Node Configuration Defaults",
         description="Default values to use for configuration parameters for this particular node.",
     )
-    commands: dict[str, str] = Field(
-        default_factory=dict,
-        title="Commands",
-        description="Commands for operating the node.",
-    )
 
     is_ulid = field_validator("node_id")(ulid_validator)
+
+    @model_serializer(mode="wrap")
+    def exclude_node_id_on_templates(
+        self, nxt: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        """Exclude node_id on templates."""
+        serialized = nxt(self, info)
+        if self.is_template:
+            serialized.pop("node_id")
+        return serialized
 
 
 class Node(BaseModel, arbitrary_types_allowed=True):
@@ -293,7 +239,7 @@ class Node(BaseModel, arbitrary_types_allowed=True):
     )
     status: Optional["NodeStatus"] = Field(
         default=None,
-        title="Module Status",
+        title="Node Status",
         description="The status of the node. Set to None if the node does not support status reporting or the status is unknown (e.g. if it hasn't reported/responded to status requests).",
     )
     info: Optional["NodeInfo"] = Field(
@@ -306,7 +252,7 @@ class Node(BaseModel, arbitrary_types_allowed=True):
         title="Node State",
         description="Detailed nodes specific state information",
     )
-    reserved_by: Optional["Reservation"] = Field(
+    reserved_by: Optional["NodeReservation"] = Field(
         default=None,
         title="Reserved By",
         description="Ownership unit that is reserving this node",
@@ -317,8 +263,8 @@ class NodeInfo(NodeDefinition):
     """Information about a MADSci Node."""
 
     actions: dict[str, "ActionDefinition"] = Field(
-        title="Module Actions",
-        description="The actions that the module supports.",
+        title="Node Actions",
+        description="The actions that the node supports.",
         default_factory=dict,
     )
     config: Optional[Any] = Field(
@@ -438,19 +384,31 @@ class NodeStatus(BaseModel):
         return "Node is ready"
 
 
-class Reservation(BaseModel):
-    """a reservation of a module"""
+class NodeReservation(BaseModel):
+    """Reservation of a MADSci Node."""
 
-    owned_by: OwnershipInfo
-
-    started: datetime
+    owned_by: OwnershipInfo = Field(
+        title="Owned By",
+        description="Who has ownership of the reservation.",
+    )
+    created: datetime = Field(
+        title="Created Datetime",
+        description="When the reservation was created.",
+    )
+    start: datetime = Field(
+        title="Start Datetime",
+        description="When the reservation starts.",
+    )
+    end: datetime = Field(
+        title="End Datetime",
+        description="When the reservation ends.",
+    )
 
 
 class NodeSetConfigResponse(BaseModel):
     """Response from a Node Set Config Request"""
 
-    success: bool
-
-
-if __name__ == "__main__":
-    NodeModuleDefinition.model_json_schema()
+    success: bool = Field(
+        title="Success",
+        description="Whether the config was successfully set.",
+    )

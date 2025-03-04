@@ -1,5 +1,0 @@
-module_name: liquidhandler
-node_type: device
-module_description: null
-capabilities:
-commands: {}
