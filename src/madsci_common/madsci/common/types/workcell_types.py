@@ -38,9 +38,10 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         "-f",
     ]
 
-    name: str = Field(
+    workcell_name: str = Field(
         title="Workcell Name",
         description="The name of the workcell.",
+        alias="name",
     )
     manager_type: Literal[ManagerType.WORKCELL_MANAGER] = Field(
         title="Manager Type",
@@ -76,7 +77,7 @@ class WorkcellDefinition(BaseModel, extra="allow"):
     @property
     def workcell_directory(self) -> Path:
         """The directory for the workcell."""
-        return Path(self.config.workcells_directory) / self.name
+        return Path(self.config.workcells_directory) / self.workcell_name
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
     validate_nodes_to_dict = field_validator("nodes", mode="before")(
@@ -167,4 +168,9 @@ class WorkcellConfig(BaseModel):
         default="madsci.workcell_manager.schedulers.default_scheduler",
         title="scheduler",
         description="Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use",
+    )
+    data_client_url: Optional[AnyUrl] = Field(
+        default=None,
+        title="Data Client URL",
+        description="The URL for the data client.",
     )

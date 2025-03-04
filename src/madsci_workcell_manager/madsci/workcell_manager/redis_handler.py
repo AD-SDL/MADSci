@@ -3,7 +3,7 @@ State management for the WorkcellManager
 """
 
 import warnings
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 
 import redis
 from madsci.common.types.base_types import new_ulid_str
@@ -23,14 +23,19 @@ class WorkcellRedisHandler:
     state_change_marker = "0"
     _redis_connection: Any = None
 
-    def __init__(self, workcell_definition: WorkcellDefinition) -> None:
+    def __init__(
+        self,
+        workcell_definition: WorkcellDefinition,
+        redis_connection: Optional[Any] = None,
+    ) -> None:
         """
         Initialize a StateManager for a given workcell.
         """
-        self._workcell_name = workcell_definition.config.workcell_name
+        self._workcell_name = workcell_definition.workcell_name
         self._redis_host = workcell_definition.config.redis_host
         self._redis_port = workcell_definition.config.redis_port
         self._redis_password = workcell_definition.config.redis_password
+        self._redis_connection = redis_connection
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
 
     @property
