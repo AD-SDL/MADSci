@@ -1,0 +1,11 @@
+module_name: liquidhandler
+node_type: null
+module_description: null
+module_version: 0.0.1
+capabilities:
+commands: {}
+node_name: liquidhandler_1
+node_id: 01JNGWPGJW8CW578ARREMQ3NXD
+node_url: null
+node_description: The first liquidhandler in the example setup
+config_defaults: {}

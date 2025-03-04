@@ -7,6 +7,9 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional, Union, get_type_hints
 
+from pydantic import ValidationError
+from semver import Version
+
 from madsci.client.event_client import (
     EventClient,
     default_logger,
@@ -35,8 +38,6 @@ from madsci.common.types.node_types import (
     NodeStatus,
 )
 from madsci.common.utils import pretty_type_repr, threaded_daemon, threaded_task
-from pydantic import ValidationError
-from semver import Version
 
 
 def action(
@@ -98,7 +99,7 @@ class AbstractNode:
         """Initialize the node class."""
 
         # * Load the node definition
-        if node_definition is not None:
+        if node_definition is None:
             self.node_definition = NodeDefinition.load_model(require_unique=True)
         if self.node_definition is None:
             raise ValueError("Node definition not found, aborting node initialization")
@@ -121,8 +122,7 @@ class AbstractNode:
 
         # * Synthesize the node info
         self.node_info = NodeInfo.from_node_def_and_config(
-            self.node_definition,
-            self.config,
+            self.node_definition, self.config
         )
 
         # * Add the admin commands to the node info
@@ -330,10 +330,13 @@ class AbstractNode:
         else:
             # * Load the config from the command line
             if getattr(self, "config_model", None) is not None:
+                # * If the node has a config model, use it to set the config
                 config_model = self.config_model
             elif getattr(self, "config", None) is not None:
+                # * If the node has a config attribute, use it's class to set the config
                 config_model = self.config.__class__
             else:
+                # * If the node has neither, use the default NodeConfig model
                 config_model = NodeConfig
             self.config = config_model.set_fields_from_cli(
                 model_instance=self.config if self.config else None,

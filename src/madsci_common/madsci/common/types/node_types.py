@@ -3,14 +3,9 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
-from madsci.common.types.action_types import ActionDefinition
-from madsci.common.types.admin_command_types import AdminCommands
-from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
-from madsci.common.types.event_types import EventClientConfig
-from madsci.common.validators import ulid_validator
+from pydantic import SerializationInfo, SerializerFunctionWrapHandler, model_serializer
 from pydantic.config import ConfigDict
 from pydantic.fields import computed_field
 from pydantic.functional_validators import field_validator
@@ -18,6 +13,13 @@ from pydantic.networks import AnyUrl
 from pydantic_extra_types.semantic_version import SemanticVersion
 from semver import Version
 from sqlmodel.main import Field
+
+from madsci.common.types.action_types import ActionDefinition
+from madsci.common.types.admin_command_types import AdminCommands
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
+from madsci.common.types.event_types import EventClientConfig
+from madsci.common.validators import ulid_validator
 
 
 class NodeType(str, Enum):
@@ -109,75 +111,83 @@ class NodeModuleDefinition(BaseModel, extra="allow"):
 
 
 class NodeClientCapabilities(BaseModel):
-    """Capabilities of a MADSci Node Client."""
+    """Capabilities of a MADSci Node Client. Default values are None, meaning the capability is not explicitly set. If a capability is set to False, it is explicitly not supported."""
 
-    get_info: bool = Field(
-        default=False,
+    get_info: Optional[bool] = Field(
+        default=None,
         title="Module Info",
         description="Whether the node supports querying its info.",
     )
-    get_state: bool = Field(
-        default=False,
+    get_state: Optional[bool] = Field(
+        default=None,
         title="Module State",
         description="Whether the node supports querying its state.",
     )
-    get_status: bool = Field(
-        default=False,
+    get_status: Optional[bool] = Field(
+        default=None,
         title="Module Status",
         description="Whether the node supports querying its status.",
     )
-    send_action: bool = Field(
-        default=False,
+    send_action: Optional[bool] = Field(
+        default=None,
         title="Module Send Action",
         description="Whether the node supports sending actions.",
     )
-    get_action_result: bool = Field(
-        default=False,
+    get_action_result: Optional[bool] = Field(
+        default=None,
         title="Module Get Action",
         description="Whether the node supports querying the status of an action.",
     )
-    get_action_history: bool = Field(
-        default=False,
+    get_action_history: Optional[bool] = Field(
+        default=None,
         title="Module Get Actions",
         description="Whether the node supports querying the history of actions.",
     )
-    action_files: bool = Field(
-        default=False,
+    action_files: Optional[bool] = Field(
+        default=None,
         title="Module Action Files",
         description="Whether the node supports sending action files.",
     )
-    send_admin_commands: bool = Field(
-        default=False,
+    send_admin_commands: Optional[bool] = Field(
+        default=None,
         title="Module Send Admin Commands",
         description="Whether the node supports sending admin commands.",
     )
-    set_config: bool = Field(
-        default=False,
+    set_config: Optional[bool] = Field(
+        default=None,
         title="Module Set Config",
         description="Whether the node supports setting configuration.",
     )
-    get_resources: bool = Field(
-        default=False,
+    get_resources: Optional[bool] = Field(
+        default=None,
         title="Module Get Resources",
         description="Whether the node supports querying its resources.",
     )
-    get_log: bool = Field(
-        default=False,
+    get_log: Optional[bool] = Field(
+        default=None,
         title="Module Get Log",
         description="Whether the node supports querying its log.",
     )
+
+    @model_serializer(mode="wrap")
+    def exclude_unset_by_default(
+        self, nxt: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        """Exclude unset fields by default."""
+        serialized = nxt(self, info)
+        return {k: v for k, v in serialized.items() if v is not None}
 
 
 class NodeCapabilities(NodeClientCapabilities):
     """Capabilities of a MADSci Node."""
 
-    events: bool = Field(
-        default=False,
+    events: Optional[bool] = Field(
+        default=None,
         title="Module Events",
         description="Whether the module supports raising MADSci events.",
     )
-    resources: bool = Field(
-        default=False,
+    resources: Optional[bool] = Field(
+        default=None,
         title="Module Resources",
         description="Whether the module supports MADSci-compatible resource management.",
     )
@@ -241,6 +251,8 @@ def get_module_from_node_definition(
 
 class NodeDefinition(NodeModuleDefinition):
     """Definition of a MADSci Node, a unique instance of a MADSci Module."""
+
+    _definition_file_patterns: ClassVar[list[str]] = ["*.node.yaml"]
 
     node_name: str = Field(title="Node Name", description="The name of the node.")
     node_id: str = Field(
