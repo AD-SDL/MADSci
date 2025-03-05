@@ -28,7 +28,9 @@ from madsci.workcell_manager.workflow_utils import (
 
 
 def create_workcell_server(  # noqa: C901, PLR0915
-    workcell: WorkcellDefinition, redis_connection: Optional[Any] = None
+    workcell: WorkcellDefinition,
+    redis_connection: Optional[Any] = None,
+    start_engine: bool = True,
 ) -> FastAPI:
     """Creates a Workcell Manager's REST server."""
 
@@ -37,8 +39,9 @@ def create_workcell_server(  # noqa: C901, PLR0915
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
         """Start the REST server and initialize the state handler and engine"""
         state_handler.set_workcell(workcell)
-        engine = Engine(workcell, state_handler)
-        engine.start_engine_thread()
+        if start_engine:
+            engine = Engine(workcell, state_handler)
+            engine.start_engine_thread()
         yield
 
     app = FastAPI(lifespan=lifespan)
@@ -116,7 +119,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Get info on a specific workflow."""
         return state_handler.get_workflow(workflow_id)
 
-    @app.get("/workflows/pause/{workflow_id}")
+    @app.post("/workflows/pause/{workflow_id}")
     def pause_workflow(workflow_id: str) -> Workflow:
         """Pause a specific workflow."""
         with state_handler.wc_state_lock():
@@ -130,7 +133,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
         return state_handler.get_workflow(workflow_id)
 
-    @app.get("/workflows/resume/{workflow_id}")
+    @app.post("/workflows/resume/{workflow_id}")
     def resume_workflow(workflow_id: str) -> Workflow:
         """Resume a paused workflow."""
         with state_handler.wc_state_lock():
@@ -143,7 +146,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.set_workflow(wf)
         return state_handler.get_workflow(workflow_id)
 
-    @app.get("/workflows/cancel/{workflow_id}")
+    @app.post("/workflows/cancel/{workflow_id}")
     def cancel_workflow(workflow_id: str) -> Workflow:
         """Cancel a specific workflow."""
         with state_handler.wc_state_lock():
@@ -155,7 +158,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             state_handler.set_workflow(wf)
         return state_handler.get_workflow(workflow_id)
 
-    @app.get("/workflows/resubmit/{workflow_id}")
+    @app.post("/workflows/resubmit/{workflow_id}")
     def resubmit_workflow(workflow_id: str) -> Workflow:
         """resubmit a previous workflow as a new workflow."""
         with state_handler.wc_state_lock():
@@ -173,17 +176,21 @@ def create_workcell_server(  # noqa: C901, PLR0915
             copy_workflow_files(
                 old_id=workflow_id,
                 workflow=wf,
-                working_directory=workcell.config.workcell_directory,
+                working_directory=workcell.workcell_directory,
             )
             state_handler.set_workflow(wf)
-        return state_handler.get_workflow(workflow_id)
+        return state_handler.get_workflow(wf.workflow_id)
 
-    @app.post("/workflows/retry")
+    @app.post("/workflows/retry/{workflow_id}")
     def retry_workflow(workflow_id: str, index: int = -1) -> Workflow:
         """Retry an existing workflow from a specific step."""
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
-            if wf.status in ["completed", "failed"]:
+            if wf.status in [
+                WorkflowStatus.COMPLETED,
+                WorkflowStatus.FAILED,
+                WorkflowStatus.CANCELLED,
+            ]:
                 if index >= 0:
                     wf.step_index = index
                 wf.status = WorkflowStatus.QUEUED
@@ -253,7 +260,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
         if not validate_only:
             wf = save_workflow_files(
-                working_directory=workcell.config.workcell_directory,
+                working_directory=workcell.workcell_directory,
                 workflow=wf,
                 files=files,
             )
