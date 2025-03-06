@@ -1,5 +1,5 @@
 """
-Test the Event Manager's REST server.
+Test the Data Manager's REST server.
 
 Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires_
 a working docker installation.
@@ -14,10 +14,9 @@ from madsci.common.types.datapoint_types import (
     FileDataPoint,
     ValueDataPoint,
 )
+from madsci.data_manager.data_server import create_data_server
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
-
-from madsci_data_manager.madsci.data_manager.data_server import DataServer
 
 db_connection = create_mongo_fixture()
 
@@ -28,33 +27,32 @@ data_manager_def = DataManagerDefinition(
 
 @pytest.fixture(scope="session")
 def pmr_mongo_config() -> MongoConfig:
-    """Congifure the MongoDB fixture."""
+    """Configure the MongoDB fixture."""
     return MongoConfig(image="mongo:8")
 
 
-def test_root(db_connection: Database) -> None:
-    """
-    Test the root endpoint for the Event_Manager's server.
-    Should return an EventManagerDefinition.
-    """
-    data_manager_server = DataServer(
-        data_manager_definition=data_manager_def, db_connection=db_connection
+@pytest.fixture
+def test_client(db_connection: Database) -> TestClient:
+    """Data Server Test Client Fixture"""
+    app = create_data_server(
+        data_manager_definition=data_manager_def, db_client=db_connection
     )
-    data_manager_server._configure_routes()
-    test_client = TestClient(data_manager_server.app)
+    return TestClient(app)
+
+
+def test_root(test_client: TestClient) -> None:
+    """
+    Test the root endpoint for the Data Manager's server.
+    Should return a DataManagerDefinition.
+    """
     result = test_client.get("/").json()
     DataManagerDefinition.model_validate(result)
 
 
-def test_roundtrip_datapoint(db_connection: Database) -> None:
+def test_roundtrip_datapoint(test_client: TestClient) -> None:
     """
-    Test that we can send and then retrieve an datapoint by ID.
+    Test that we can send and then retrieve a datapoint by ID.
     """
-    data_manager_server = DataServer(
-        data_manager_definition=data_manager_def, db_connection=db_connection
-    )
-    data_manager_server._configure_routes()
-    test_client = TestClient(data_manager_server.app)
     test_datapoint = ValueDataPoint(
         label="test",
         value=5,
@@ -65,17 +63,14 @@ def test_roundtrip_datapoint(db_connection: Database) -> None:
     assert ValueDataPoint.model_validate(result) == test_datapoint
     result = test_client.get(f"/datapoint/{test_datapoint.datapoint_id}").json()
     assert ValueDataPoint.model_validate(result) == test_datapoint
+    value = test_client.get(f"/datapoint/{test_datapoint.datapoint_id}/value")
+    assert value.json() == test_datapoint.value
 
 
-def test_roundtrip_file_datapoint(db_connection: Database, tmp_path: Path) -> None:
+def test_roundtrip_file_datapoint(test_client: TestClient, tmp_path: Path) -> None:
     """
-    Test that we can send and then retrieve an datapoint by ID.
+    Test that we can send and then retrieve a datapoint by ID.
     """
-    data_manager_server = DataServer(
-        data_manager_definition=data_manager_def, db_connection=db_connection
-    )
-    data_manager_server._configure_routes()
-    test_client = TestClient(data_manager_server.app)
     test_file = Path(tmp_path) / "test.txt"
     test_file.parent.mkdir(parents=True, exist_ok=True)
     with test_file.open("w") as f:
@@ -100,17 +95,14 @@ def test_roundtrip_file_datapoint(db_connection: Database, tmp_path: Path) -> No
     assert FileDataPoint.model_validate(result).label == test_datapoint.label
     result = test_client.get(f"/datapoint/{test_datapoint.datapoint_id}").json()
     assert FileDataPoint.model_validate(result).label == test_datapoint.label
+    value = test_client.get(f"/datapoint/{test_datapoint.datapoint_id}/value")
+    assert value.content == b"test"
 
 
-def test_get_datapoints(db_connection: Database) -> None:
+def test_get_datapoints(test_client: TestClient) -> None:
     """
     Test that we can retrieve all datapoints and they are returned as a dictionary in reverse-chronological order, with the correct number of datapoints.
     """
-    data_manager_server = DataServer(
-        data_manager_definition=data_manager_def, db_connection=db_connection
-    )
-    data_manager_server._configure_routes()
-    test_client = TestClient(data_manager_server.app)
     for i in range(10):
         test_datapoint = ValueDataPoint(
             label="test_" + str(i),
@@ -132,15 +124,10 @@ def test_get_datapoints(db_connection: Database) -> None:
         previous_timestamp = datapoint.data_timestamp.timestamp()
 
 
-def test_query_datapoints(db_connection: Database) -> None:
+def test_query_datapoints(test_client: TestClient) -> None:
     """
     Test querying events based on a selector.
     """
-    data_manager_server = DataServer(
-        data_manager_definition=data_manager_def, db_connection=db_connection
-    )
-    data_manager_server._configure_routes()
-    test_client = TestClient(data_manager_server.app)
     for i in range(10, 20):
         test_datapoint = ValueDataPoint(
             label="test_" + str(i),

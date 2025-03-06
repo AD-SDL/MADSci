@@ -1,6 +1,7 @@
 """Client for the MADSci Experiment Manager."""
 
 import warnings
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -20,7 +21,7 @@ class DataClient:
 
     def __init__(
         self,
-        url: Optional[Union[str, AnyUrl]],
+        url: Optional[Union[str, AnyUrl]] = None,
         ownership_info: Optional[OwnershipInfo] = None,
     ) -> "DataClient":
         """Create a new Datapoint Client."""
@@ -38,21 +39,25 @@ class DataClient:
         """Get an datapoint by ID."""
         if self.url is None:
             return self._local_datapoints[datapoint_id]
-        response = requests.get(f"{self.url}/datapoint/{datapoint_id}", timeout=10)
-        if not response.ok:
-            response.raise_for_status()
+        response = requests.get(f"{self.url}datapoint/{datapoint_id}", timeout=10)
+        response.raise_for_status()
         return DataPoint.discriminate(response.json())
 
     def get_datapoint_value(self, datapoint_id: Union[str, ULID]) -> Any:
-        """Get an datapoint value by ID."""
+        """Get an datapoint value by ID. If the datapoint is JSON, returns the JSON data.
+        Otherwise, returns the raw data as bytes."""
         if self.url is None:
-            return self._local_datapoints[datapoint_id].value
-        response = requests.get(
-            f"{self.url}/datapoint/{datapoint_id}/value", timeout=10
-        )
-        if not response.ok:
-            response.raise_for_status()
-        return response.content
+            if hasattr(self._local_datapoints[datapoint_id], "value"):
+                return self._local_datapoints[datapoint_id].value
+            if hasattr(self._local_datapoints[datapoint_id], "path"):
+                with Path.open(self._local_datapoints[datapoint_id].path, "rb") as f:
+                    return f.read()
+        response = requests.get(f"{self.url}datapoint/{datapoint_id}/value", timeout=10)
+        response.raise_for_status()
+        try:
+            return response.json()
+        except JSONDecodeError:
+            return response.content
 
     def save_datapoint_value(
         self, datapoint_id: Union[str, ULID], output_filepath: str
@@ -69,11 +74,8 @@ class DataClient:
                 with Path.open(output_filepath, "w") as f:
                     f.write(str(self._local_datapoints[datapoint_id].value))
             return
-        response = requests.get(
-            f"{self.url}/datapoint/{datapoint_id}/value", timeout=10
-        )
-        if not response.ok:
-            response.raise_for_status()
+        response = requests.get(f"{self.url}datapoint/{datapoint_id}/value", timeout=10)
+        response.raise_for_status()
         try:
             with Path.open(output_filepath, "w") as f:
                 f.write(str(response.json()["value"]))
@@ -90,10 +92,9 @@ class DataClient:
                 key=lambda x: x.datapoint_id, reverse=True
             )[:number]
         response = requests.get(
-            f"{self.url}/datapoints", params={number: number}, timeout=10
+            f"{self.url}datapoints", params={number: number}, timeout=10
         )
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         return [DataPoint.discriminate(datapoint) for datapoint in response.json()]
 
     def submit_datapoint(self, datapoint: DataPoint) -> DataPoint:
@@ -119,6 +120,22 @@ class DataClient:
             files=files,
             timeout=10,
         )
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         return DataPoint.discriminate(response.json())
+
+    def query_datapoints(self, selector: Any) -> dict[str, DataPoint]:
+        """Query datapoints based on a selector."""
+        if self.url is None:
+            return {
+                datapoint_id: datapoint
+                for datapoint_id, datapoint in self._local_datapoints.items()
+                if selector(datapoint)
+            }
+        response = requests.post(
+            f"{self.url}datapoints/query", json=selector, timeout=10
+        )
+        response.raise_for_status()
+        return {
+            datapoint_id: DataPoint.discriminate(datapoint)
+            for datapoint_id, datapoint in response.json().items()
+        }
