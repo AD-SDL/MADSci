@@ -12,8 +12,6 @@ from madsci.event_manager.event_server import create_event_server
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
-db_connection = create_mongo_fixture()
-
 event_manager_def = EventManagerDefinition(
     name="test_event_manager",
 )
@@ -22,7 +20,10 @@ event_manager_def = EventManagerDefinition(
 @pytest.fixture(scope="session")
 def pmr_mongo_config() -> MongoConfig:
     """Configure the MongoDB fixture."""
-    return MongoConfig(image="mongo:8")
+    return MongoConfig(image="mongo:8.0")
+
+
+db_connection = create_mongo_fixture()
 
 
 @pytest.fixture

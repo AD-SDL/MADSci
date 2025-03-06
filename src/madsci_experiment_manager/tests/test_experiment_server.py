@@ -19,8 +19,6 @@ from madsci.experiment_manager.experiment_server import create_experiment_server
 from pymongo.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
-db_connection = create_mongo_fixture()
-
 experiment_manager_def = ExperimentManagerDefinition(
     name="test_experiment_manager",
 )
@@ -29,7 +27,10 @@ experiment_manager_def = ExperimentManagerDefinition(
 @pytest.fixture(scope="session")
 def pmr_mongo_config() -> MongoConfig:
     """Congifure the MongoDB fixture."""
-    return MongoConfig(image="mongo:8")
+    return MongoConfig(image="mongo:8.0")
+
+
+db_connection = create_mongo_fixture()
 
 
 @pytest.fixture()

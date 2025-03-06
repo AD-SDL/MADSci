@@ -106,6 +106,8 @@ class AbstractNode:
         # * Load the node definition
         if node_definition is None:
             self.node_definition = NodeDefinition.load_model(require_unique=True)
+        else:
+            self.node_definition = node_definition
         if self.node_definition is None:
             raise ValueError("Node definition not found, aborting node initialization")
         if self.node_definition.is_template:
@@ -597,7 +599,7 @@ class AbstractNode:
 
     def _populate_capabilities(self) -> None:
         """Populate the node capabilities based on the node definition and the supported capabilities of the class."""
-        for field in self.supported_capabilities.__fields__:
+        for field in self.supported_capabilities.model_fields:
             if getattr(self.node_definition.capabilities, field) is None:
                 setattr(
                     self.node_definition.capabilities,

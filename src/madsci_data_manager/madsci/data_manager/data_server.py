@@ -44,7 +44,7 @@ def create_data_server(  # noqa: C901
         for file in files:
             time = datetime.now()
             path = (
-                Path(data_manager_definition.file_storage_path).resolve()
+                Path(data_manager_definition.file_storage_path).resolve().expanduser()
                 / str(time.year)
                 / str(time.month)
                 / str(time.day)

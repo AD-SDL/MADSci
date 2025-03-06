@@ -22,7 +22,7 @@ from starlette.testclient import TestClient
 @pytest.fixture(scope="session")
 def pmr_mongo_config() -> MongoConfig:
     """Configure the Mongo fixture"""
-    return MongoConfig(image="mongo:latest")
+    return MongoConfig(image="mongo:8.0")
 
 
 # Create a Mongo fixture

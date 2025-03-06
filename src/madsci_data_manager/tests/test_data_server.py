@@ -18,8 +18,6 @@ from madsci.data_manager.data_server import create_data_server
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
-db_connection = create_mongo_fixture()
-
 data_manager_def = DataManagerDefinition(
     name="test_data_manager",
 )
@@ -28,7 +26,10 @@ data_manager_def = DataManagerDefinition(
 @pytest.fixture(scope="session")
 def pmr_mongo_config() -> MongoConfig:
     """Configure the MongoDB fixture."""
-    return MongoConfig(image="mongo:8")
+    return MongoConfig(image="mongo:8.0")
+
+
+db_connection = create_mongo_fixture()
 
 
 @pytest.fixture
