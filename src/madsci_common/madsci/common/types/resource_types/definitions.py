@@ -1,4 +1,4 @@
-"""Pydantic Models for Resource Definitions, used to define default resources for a module or workcell."""
+"""Pydantic Models for Resource Definitions, used to define default resources for a node or workcell."""
 
 from typing import Annotated, Literal, Optional, Union
 

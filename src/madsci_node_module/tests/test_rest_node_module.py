@@ -1,15 +1,21 @@
-"""A test REST Node for validating the madsci.node_module package."""
+"""Automated pytest unit tests for the RestNode class."""
 
+import time
+import unittest
 from typing import Optional
 
+import pytest
+from fastapi.testclient import TestClient
 from madsci.client.event_client import EventClient
-from madsci.common.types.node_types import RestNodeConfig
+from madsci.common.types.node_types import NodeDefinition, RestNodeConfig
 from madsci.node_module.abstract_node_module import action
 from madsci.node_module.rest_node_module import RestNode
 
 
 class TestNodeConfig(RestNodeConfig):
     """Configuration for the test node module."""
+
+    __test__ = False
 
     test_required_param: int
     """A required parameter."""
@@ -21,6 +27,8 @@ class TestNodeConfig(RestNodeConfig):
 
 class TestNodeInterface:
     """A fake test interface for testing."""
+
+    __test__ = False
 
     status_code: int = 0
 
@@ -40,18 +48,24 @@ class TestNodeInterface:
 class TestNode(RestNode):
     """A test node module for automated testing."""
 
+    __test__ = False
+
     test_interface: TestNodeInterface = None
     config_model = TestNodeConfig
 
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
+        self.logger.log("Node initializing...")
         self.test_interface = TestNodeInterface(logger=self.logger)
+        self.startup_has_run = True
         self.logger.log("Test node initialized!")
 
     def shutdown_handler(self) -> None:
         """Called to shutdown the node. Should be used to close connections to devices or release any other resources."""
         self.logger.log("Shutting down")
+        self.shutdown_has_run = True
         del self.test_interface
+        self.logger.log("Shutdown complete.")
 
     def state_handler(self) -> dict[str, int]:
         """Periodically called to get the current state of the node."""
@@ -74,6 +88,49 @@ class TestNode(RestNode):
         )
 
 
-if __name__ == "__main__":
-    test_node = TestNode()
-    test_node.start_node()
+@pytest.fixture
+def test_node() -> TestNode:
+    """Return a RestNode instance for testing."""
+    node_definition = NodeDefinition(
+        node_name="Test Node 1",
+        module_name="test_node",
+        description="A test node module for automated testing.",
+    )
+
+    with unittest.mock.patch(
+        "sys.argv", ["program_name", "--test_required_param", "1"]
+    ):
+        return TestNode(node_definition=node_definition)
+
+
+@pytest.fixture
+def test_client(test_node: TestNode) -> TestClient:
+    """Return a TestClient instance for testing."""
+
+    test_node.start_node(testing=True)
+
+    return TestClient(test_node.rest_api)
+
+
+def test_lifecycle_handlers(test_node: TestNode) -> None:
+    """Test the startup_handler and shutdown_handler methods."""
+
+    assert not hasattr(test_node, "startup_has_run")
+    assert not hasattr(test_node, "shutdown_has_run")
+    assert test_node.test_interface is None
+
+    test_node.start_node(testing=True)
+
+    with TestClient(test_node.rest_api) as client:
+        assert test_node.startup_has_run
+        assert not hasattr(test_node, "shutdown_has_run")
+        assert test_node.test_interface is not None
+
+        response = client.get("/status")
+        assert response.status_code == 200
+
+    time.sleep(1)
+
+    assert test_node.startup_has_run
+    assert test_node.shutdown_has_run
+    assert test_node.test_interface is None

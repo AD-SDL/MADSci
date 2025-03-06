@@ -127,7 +127,7 @@ class RestNodeClient(AbstractNodeClient):
         return response.json()
 
     def get_info(self) -> NodeInfo:
-        """Get information about the node and module."""
+        """Get information about the node."""
         response = requests.get(f"{self.url}/info", timeout=10)
         if not response.ok:
             response.raise_for_status()

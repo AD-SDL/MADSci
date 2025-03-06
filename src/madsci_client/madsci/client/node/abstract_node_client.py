@@ -55,7 +55,7 @@ class AbstractNodeClient:
         raise NotImplementedError("get_state is not implemented by this client")
 
     def get_info(self) -> NodeInfo:
-        """Get information about the node and module."""
+        """Get information about the node."""
         raise NotImplementedError("get_info is not implemented by this client")
 
     def set_config(self, config_dict: dict[str, Any]) -> NodeSetConfigResponse:

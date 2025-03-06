@@ -7,7 +7,7 @@ from sqlmodel.main import Field
 
 
 class AdminCommands(str, Enum):
-    """Valid Admin Commands to send to a Module"""
+    """Valid Admin Commands to send to a Node"""
 
     SAFETY_STOP = "safety_stop"
     RESET = "reset"

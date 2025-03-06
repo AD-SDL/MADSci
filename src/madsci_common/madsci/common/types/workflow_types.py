@@ -68,7 +68,7 @@ class WorkflowDefinition(BaseModel):
     """Information about the flow"""
     parameters: Optional[list[WorkflowParameter]] = Field(default_factory=list)
     """Inputs to the workflow"""
-    flowdef: list[Step]
+    flowdef: list[Step] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
 
     @field_validator("flowdef", mode="after")

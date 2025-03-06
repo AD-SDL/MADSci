@@ -11,8 +11,7 @@ from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
 import yaml
 from pydantic import AnyUrl, model_validator
 from pydantic.config import ConfigDict
-from pydantic.fields import PrivateAttr
-from pydantic.functional_validators import PydanticUndefined
+from pydantic.fields import PrivateAttr, PydanticUndefined
 from sqlmodel import SQLModel
 from sqlmodel.main import Field
 from ulid import ULID
@@ -135,7 +134,11 @@ class BaseModel(SQLModel, use_enum_values=True):
         # TODO: Set fields from environment variables
 
         if set_fields_from_cli:
+            definition_path = (
+                model_instance._definition_path if model_instance else None
+            )
             model_instance = cls.set_fields_from_cli(model_instance)
+            model_instance._definition_path = definition_path
 
         # * If no definition was loaded, raise an error
         if model_instance is None:
@@ -228,7 +231,11 @@ class BaseModel(SQLModel, use_enum_values=True):
         parser = argparse.ArgumentParser()
         if model_instance is not None:
             # * Use existing model instance fields as defaults, if provided
-            override_defaults.update(model_instance.model_dump(mode="json"))
+            override_defaults.update(
+                model_instance.model_dump(
+                    mode="json", exclude_unset=True, exclude_defaults=True
+                )
+            )
         field_hierarchy = cls._parser_from_fields(parser, override_defaults)
         args, _ = parser.parse_known_args()
         return cls._from_cli_args(args, field_hierarchy)
@@ -238,13 +245,14 @@ class BaseModel(SQLModel, use_enum_values=True):
         cls: type[_T],
         parser: argparse.ArgumentParser,
         override_defaults: dict[str, Any] = {},
-    ) -> None:
+    ) -> dict[str, str]:
         """
         Extract CLI arguments from this model's fields. Adds arguments to the passed-in ArgumentParser, and returns a nested dictionary mapping arg keys to fields.
         """
         field_hierarchy = {}
         for field_name, field in cls.__pydantic_fields__.items():
             for info in field.metadata:
+                # * Check if the field is a model that we should use the sub-fields of
                 if isinstance(info, LoadConfig) and info.use_fields_as_cli_args:
                     # * Add sub-model fields as individual CLI arguments
                     field_hierarchy[field_name] = field.annotation.parser_from_fields(
@@ -252,14 +260,14 @@ class BaseModel(SQLModel, use_enum_values=True):
                     )
                     break
             else:
-                # * Add the field as a CLI argument
+                # * Otherwise, add the field as a CLI argument
                 default = None
                 required = False
                 if field_name in override_defaults:
                     default = override_defaults[field_name]
                 elif field.default_factory:
                     default = field.default_factory()
-                elif field.default and field.default != PydanticUndefined:
+                elif field.default != PydanticUndefined:
                     default = field.default
                 elif field.is_required():
                     required = True
