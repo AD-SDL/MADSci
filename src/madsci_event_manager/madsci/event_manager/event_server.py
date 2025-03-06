@@ -5,10 +5,9 @@ from typing import Any, Optional
 import uvicorn
 from fastapi import FastAPI
 from fastapi.params import Body
+from madsci.common.types.event_types import Event, EventManagerDefinition
 from pymongo import MongoClient
 from pymongo.synchronous.database import Database
-
-from madsci.common.types.event_types import Event, EventManagerDefinition
 
 
 def create_event_server(

@@ -2,8 +2,6 @@
 
 from typing import Any, ClassVar
 
-from pydantic import AnyUrl
-
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
@@ -18,6 +16,7 @@ from madsci.common.types.node_types import (
     NodeStatus,
 )
 from madsci.common.types.resource_types.definitions import ResourceDefinition
+from pydantic import AnyUrl
 
 
 class AbstractNodeClient:
