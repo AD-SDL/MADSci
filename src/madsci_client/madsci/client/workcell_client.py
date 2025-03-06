@@ -28,7 +28,7 @@ class WorkcellClient:
     ) -> "WorkcellClient":
         """initialize the client"""
         self.url = workcell_manager_url
-        self.working_directory = Path(working_directory)
+        self.working_directory = Path(working_directory).resolve()
         self.ownership_info = ownership_info
 
     def query_workflow(self, workflow_id: str) -> Optional[Workflow]:

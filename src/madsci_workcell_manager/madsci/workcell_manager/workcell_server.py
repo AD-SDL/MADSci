@@ -2,7 +2,7 @@
 
 import json
 import traceback
-from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Annotated, Any, Optional, Union
 
@@ -36,7 +36,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
     state_handler = WorkcellRedisHandler(workcell, redis_connection=redis_connection)
 
-    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
         """Start the REST server and initialize the state handler and engine"""
         state_handler.set_workcell(workcell)
         if start_engine:
