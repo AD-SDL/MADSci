@@ -43,6 +43,9 @@ def test_client(test_node: TestNode) -> TestClient:
 
     test_node.start_node(testing=True)
 
+    while test_node.test_interface is None:
+        time.sleep(0.01)
+
     return TestClient(test_node.rest_api)
 
 

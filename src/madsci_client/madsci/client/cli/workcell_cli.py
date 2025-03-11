@@ -6,7 +6,7 @@ from typing import Optional
 import click
 from click import Context
 from madsci.client.cli.lab_cli import LabContext, find_lab
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellLink
 from madsci.common.utils import (
     prompt_for_input,
     prompt_yes_no,
@@ -171,7 +171,7 @@ def create(
     ):
         relative_path = path.relative_to(ctx.obj.lab.path.parent)
         if name not in ctx.obj.lab.lab_def.managers:
-            ctx.obj.lab.lab_def.managers[name] = relative_path
+            ctx.obj.lab.lab_def.managers[name] = WorkcellLink(path=relative_path)
             save_model(ctx.obj.lab.path, ctx.obj.lab.lab_def, overwrite_check=False)
 
 
