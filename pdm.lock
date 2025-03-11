@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:d03909a321b5a648cc82f140694a80d967cc81dea1f1dfd418ba484a500d8681"
+content_hash = "sha256:04235a77c5cadcd78cdd6a00558e57f1d6563fb74b3640d4e3a51be9e0abe2ea"
 
 [[metadata.targets]]
 requires_python = ">=3.9.1"
@@ -2179,7 +2179,7 @@ files = [
 
 [[package]]
 name = "pytest-mock-resources"
-version = "2.12.1"
+version = "2.12.2"
 requires_python = "<4,>=3.7"
 summary = "A pytest plugin for easily instantiating reproducible mock resources."
 groups = ["dev"]
@@ -2190,13 +2190,13 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "pytest_mock_resources-2.12.1-py3-none-any.whl", hash = "sha256:788d9b72d9155d3cd49c281da26527e23ca3511136b1594bbc7ee95ef19be236"},
-    {file = "pytest_mock_resources-2.12.1.tar.gz", hash = "sha256:f95c231e5dd957b5f48caf60141a43f57bbe7182d6e4d09a806a78e8d060f9b3"},
+    {file = "pytest_mock_resources-2.12.2-py3-none-any.whl", hash = "sha256:2077c0ee799b13438722cf86f64dd0c45b63ff924908be30d29e031c373111e1"},
+    {file = "pytest_mock_resources-2.12.2.tar.gz", hash = "sha256:523cce5d3621d42d1e90b5cc91c5f70c699798bf148410fe7edc0dde8f25115f"},
 ]
 
 [[package]]
 name = "pytest-mock-resources"
-version = "2.12.1"
+version = "2.12.2"
 extras = ["docker", "mongo"]
 requires_python = "<4,>=3.7"
 summary = "A pytest plugin for easily instantiating reproducible mock resources."
@@ -2204,12 +2204,12 @@ groups = ["dev"]
 dependencies = [
     "filelock",
     "pymongo",
-    "pytest-mock-resources==2.12.1",
+    "pytest-mock-resources==2.12.2",
     "python-on-whales>=0.22.0",
 ]
 files = [
-    {file = "pytest_mock_resources-2.12.1-py3-none-any.whl", hash = "sha256:788d9b72d9155d3cd49c281da26527e23ca3511136b1594bbc7ee95ef19be236"},
-    {file = "pytest_mock_resources-2.12.1.tar.gz", hash = "sha256:f95c231e5dd957b5f48caf60141a43f57bbe7182d6e4d09a806a78e8d060f9b3"},
+    {file = "pytest_mock_resources-2.12.2-py3-none-any.whl", hash = "sha256:2077c0ee799b13438722cf86f64dd0c45b63ff924908be30d29e031c373111e1"},
+    {file = "pytest_mock_resources-2.12.2.tar.gz", hash = "sha256:523cce5d3621d42d1e90b5cc91c5f70c699798bf148410fe7edc0dde8f25115f"},
 ]
 
 [[package]]

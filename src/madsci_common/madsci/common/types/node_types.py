@@ -314,6 +314,11 @@ class NodeStatus(BaseModel):
         title="Node Locked",
         description="Whether the node is locked, preventing it from accepting any actions.",
     )
+    stopped: bool = Field(
+        default=False,
+        title="Node Stopped",
+        description="Whether the node has been stopped (e.g. due to a safety stop).",
+    )
     errored: bool = Field(
         default=False,
         title="Node Errored",
@@ -348,6 +353,8 @@ class NodeStatus(BaseModel):
         if self.busy:
             ready = False
         if self.locked:
+            ready = False
+        if self.stopped:
             ready = False
         if self.errored:
             ready = False

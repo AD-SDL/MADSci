@@ -2,7 +2,6 @@
 
 import inspect
 import threading
-import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional, Union, get_type_hints
@@ -36,30 +35,50 @@ from madsci.common.types.node_types import (
     NodeSetConfigResponse,
     NodeStatus,
 )
-from madsci.common.utils import pretty_type_repr, threaded_daemon, threaded_task
+from madsci.common.utils import pretty_type_repr, repeat_on_interval, threaded_daemon
 from pydantic import ValidationError
 from semver import Version
 
 
 def action(
-    func: Callable,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    blocking: bool = False,
+    *args: Any,
+    **kwargs: Any,
 ) -> Callable:
-    """Decorator to mark a method as an action handler."""
-    func.__is_madsci_action__ = True
+    """
+    Decorator to mark a method as an action handler.
 
-    # *Use provided action_name or function name
-    if name is None:
-        name = func.__name__
-    # * Use provided description or function docstring
-    if description is None:
-        description = func.__doc__
-    func.__madsci_action_name__ = name
-    func.__madsci_action_description__ = description
-    func.__madsci_action_blocking__ = blocking
-    return func
+    This decorator adds metadata to the decorated function, indicating that it is
+    an action handler within the MADSci framework. The metadata includes the action
+    name, description, and whether the action is blocking.
+
+    Keyword Args:
+        name (str, optional): The name of the action. Defaults to the function name.
+        description (str, optional): A description of the action. Defaults to the function docstring.
+        blocking (bool, optional): Indicates if the action is blocking. Defaults to False.
+
+    Returns:
+        Callable: The decorated function with added metadata.
+    """
+
+    def decorator(func: Callable) -> Callable:
+        if not isinstance(func, Callable):
+            raise ValueError("The action decorator must be used on a callable object")
+        func.__is_madsci_action__ = True
+
+        # *Use provided action_name or function name
+        name = kwargs.get("name", func.__name__)
+        # * Use provided description or function docstring
+        description = kwargs.get("description", func.__doc__)
+        blocking = kwargs.get("blocking", False)
+        func.__madsci_action_name__ = name
+        func.__madsci_action_description__ = description
+        func.__madsci_action_blocking__ = blocking
+        return func
+
+    # * If the decorator is used without arguments, return the decorator function
+    if len(args) == 1 and callable(args[0]):
+        return decorator(args[0])
+    return decorator
 
 
 class AbstractNode:
@@ -79,7 +98,7 @@ class AbstractNode:
     """The state of the node."""
     action_handlers: ClassVar[dict[str, callable]] = {}
     """The handlers for the actions that the node supports."""
-    action_history: ClassVar[dict[str, ActionResult]] = {}
+    action_history: ClassVar[dict[str, list[ActionResult]]] = {}
     """The history of the actions that the node has performed."""
     status_update_interval: ClassVar[float] = 5.0
     """The interval at which the status handler is called. Overridable by config."""
@@ -166,7 +185,12 @@ class AbstractNode:
         self._configure_events()
 
         # * Log startup info
-        self.logger.log_info(f"{self.node_definition=}")
+        self.logger.log_debug(f"{self.node_definition=}")
+
+        # * Kick off the startup logic in a separate thread
+        # * This allows implementations to start servers, listeners, etc.
+        # * in parrallel
+        self._startup()
 
     def status_handler(self) -> None:
         """Called periodically to update the node status. Should set `self.node_status`"""
@@ -184,51 +208,85 @@ class AbstractNode:
     """Interface Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def get_action_history(self) -> list[str]:
-        """Get the action history of the node."""
-        return list(self.action_history.keys())
+    def get_action_history(
+        self, action_id: Optional[str] = None
+    ) -> dict[str, list[ActionResult]]:
+        """Get the action history for the node or a specific action run."""
+        if action_id:
+            history_entry = self.action_history.get(action_id, None)
+            if history_entry is None:
+                history_entry = [
+                    ActionResult(
+                        status=ActionStatus.UNKNOWN,
+                        errors=Error(
+                            message=f"Action history for action with id '{action_id}' not found",
+                            error_type="ActionHistoryNotFound",
+                        ),
+                    )
+                ]
+            return {action_id: history_entry}
+        return self.action_history
 
     def run_action(self, action_request: ActionRequest) -> ActionResult:
         """Run an action on the node."""
         self.node_status.running_actions.add(action_request.action_id)
         action_response = None
         arg_dict = {}
+        self._extend_action_history(action_request.not_started())
         try:
+            # * Parse the action arguments and check for required arguments
             arg_dict = self._parse_action_args(action_request)
             self._check_required_args(action_request)
         except Exception as e:
-            self._exception_handler(e, set_node_error=False)
-            action_response = action_request.failed(errors=Error.from_exception(e))
-        try:
-            action_response = self._run_action(action_request, arg_dict)
-        except Exception as e:
-            self._exception_handler(e)
+            # * If there was an error in parsing the action arguments, log the error and return a failed action response
+            # * but don't set the node to errored
+            self._exception_handler(e, set_node_errored=False)
             action_response = action_request.failed(errors=Error.from_exception(e))
         else:
-            if action_response is None:
-                # * Assume success if no return value and no exception
-                action_response = action_request.succeeded()
-            elif not isinstance(action_response, ActionResult):
-                try:
-                    action_response = ActionResult.model_validate(action_response)
-                except ValidationError as e:
-                    action_response = action_request.failed(
-                        errors=Error.from_exception(e),
-                    )
+            try:
+                # * Run the action
+                self._extend_action_history(action_request.running())
+                action_response = self._run_action(action_request, arg_dict)
+            except Exception as e:
+                # * If there was an error in running the action, log the error and return a failed action response
+                # * and set the node to errored, as the node has failed to run a supposedly valid action request
+                self._exception_handler(e)
+                action_response = action_request.failed(errors=Error.from_exception(e))
+            else:
+                # * Validate the action result if it is not already an ActionResult
+                if action_response is None:
+                    # * Assume success if no return value and no exception
+                    action_response = action_request.succeeded()
+                elif isinstance(action_response, ActionResult):
+                    # * Ensure the action ID is set correctly on the result
+                    action_response.action_id = action_request.action_id
+                else:
+                    try:
+                        action_response = ActionResult.model_validate(action_response)
+                        action_response.action_id = action_request.action_id
+                    except ValidationError as e:
+                        # * If the action response is not a valid ActionResult, log the error and return a failed action response
+                        # * and set the node to errored, as this implies a bug in the node implementation
+                        self._exception_handler(e)
+                        action_response = action_request.failed(
+                            errors=Error.from_exception(e),
+                        )
         finally:
+            # * Regardless of the outcome, remove the action from the running actions set
+            # * and update the action history
             self.node_status.running_actions.discard(action_request.action_id)
-            self.action_history[action_request.action_id] = action_response
+            self._extend_action_history(action_response)
         return action_response
 
     def get_action_result(self, action_id: str) -> ActionResult:
-        """Get the status of an action on the node."""
-        if action_id in self.action_history:
-            return self.action_history[action_id]
+        """Get the most up-to-date result of an action on the node."""
+        if action_id in self.action_history and len(self.action_history[action_id]) > 0:
+            return self.action_history[action_id][-1]
         return ActionResult(
-            status=ActionStatus.FAILED,
+            status=ActionStatus.UNKNOWN,
             errors=Error(
-                message=f"Action with id '{action_id}' not found",
-                error_type="ActionNotFound",
+                message=f"Action history for action with id '{action_id}' not found",
+                error_type="ActionHistoryNotFound",
             ),
         )
 
@@ -238,29 +296,18 @@ class AbstractNode:
 
     def set_config(self, new_config: dict[str, Any]) -> NodeSetConfigResponse:
         """Set configuration values of the node."""
-        errors = []
 
         try:
             self.config = self.config.model_copy(update=new_config)
+            return NodeSetConfigResponse(
+                success=True,
+            )
         except ValidationError as e:
-            errors.append(Error.from_exception(e))
-
-        if not errors:
-            # * Reset after a short delay to allow the response to be returned
-            @threaded_task
-            def schedule_reset() -> None:
-                time.sleep(2)
-                self.reset()
-
-            schedule_reset()
-        return NodeSetConfigResponse(
-            success=len(errors) == 0,
-            errors=errors,
-        )
+            return NodeSetConfigResponse(success=True, errors=Error.from_exception(e))
 
     def run_admin_command(self, admin_command: AdminCommands) -> AdminCommandResponse:
         """Run the specified administrative command on the node."""
-        if self.hasattr(admin_command) and callable(
+        if hasattr(self, admin_command) and callable(
             self.__getattribute__(admin_command),
         ):
             try:
@@ -307,9 +354,25 @@ class AbstractNode:
         """Get the state of the node."""
         return self.node_state
 
-    def get_log(self) -> list[Event]:
+    def get_log(self) -> dict[str, Event]:
         """Return the log of the node"""
         return self.logger.get_log()
+
+    """------------------------------------------------------------------------------------------------"""
+    """Admin Commands"""
+    """------------------------------------------------------------------------------------------------"""
+
+    def lock(self) -> bool:
+        """Admin command to lock the node."""
+        self.node_status.locked = True
+        self.logger.log_info("Node locked")
+        return True
+
+    def unlock(self) -> bool:
+        """Admin command to unlock the node."""
+        self.node_status.locked = False
+        self.logger.log_info("Node unlocked")
+        return True
 
     """------------------------------------------------------------------------------------------------"""
     """Internal and Private Methods"""
@@ -366,10 +429,20 @@ class AbstractNode:
             config=event_client_config,
         )
         if (
-            event_client_config := getattr(self.config, "event_client_config", None)
+            new_event_client_config := getattr(self.config, "event_client_config", None)
         ) is not None:
             try:
-                event_client_config = EventClientConfig(**event_client_config)
+                event_client_config = EventClientConfig.model_validate(
+                    new_event_client_config
+                )
+                if not event_client_config.name:
+                    event_client_config.name = f"node.{self.node_definition.node_name}"
+                if not event_client_config.source:
+                    event_client_config.source = OwnershipInfo(
+                        node_id=self.node_definition.node_id
+                    )
+                else:
+                    event_client_config.source.node_id = self.node_definition.node_id
                 self.logger = EventClient(
                     config=event_client_config,
                 )
@@ -527,7 +600,7 @@ class AbstractNode:
         # * Perform the action here and return result
         if not self.node_status.ready:
             return action_request.not_ready(
-                error=Error(
+                errors=Error(
                     message=f"Node is not ready: {self.node_status.description}",
                     error_type="NodeNotReady",
                 ),
@@ -569,9 +642,9 @@ class AbstractNode:
             ),
         )
 
-    def _exception_handler(self, e: Exception, set_node_error: bool = True) -> None:
+    def _exception_handler(self, e: Exception, set_node_errored: bool = True) -> None:
         """Handle an exception."""
-        self.node_status.errored = set_node_error
+        self.node_status.errored = set_node_errored
         madsci_error = Error.from_exception(e)
         self.node_status.errors.append(madsci_error)
         self.logger.log_error(
@@ -579,23 +652,19 @@ class AbstractNode:
         )
         self.logger.log_error(traceback.format_exc())
 
-    @threaded_daemon
-    def _loop_handler(self) -> None:
-        """Handles calling periodic handlers, like the status and state handlers"""
-        last_status_update = 0.0
-        last_state_update = 0.0
-        while True:
-            try:
-                if time.time() - last_status_update > self.status_update_interval:
-                    last_status_update = time.time()
-                    self.status_handler()
-                if time.time() - last_state_update > self.state_update_interval:
-                    last_state_update = time.time()
-                    self.state_handler()
-                time.sleep(0.1)
-            except Exception as e:
-                self._exception_handler(e)
-                time.sleep(0.1)
+    def _update_status(self) -> None:
+        """Update the node status."""
+        try:
+            self.status_handler()
+        except Exception as e:
+            self._exception_handler(e)
+
+    def _update_state(self) -> None:
+        """Update the node state."""
+        try:
+            self.state_handler()
+        except Exception as e:
+            self._exception_handler(e)
 
     def _populate_capabilities(self) -> None:
         """Populate the node capabilities based on the node definition and the supported capabilities of the class."""
@@ -619,7 +688,7 @@ class AbstractNode:
         )
 
     def _update_node_info_and_definition(self) -> None:
-        """Update the node info and definition files."""
+        """Update the node info and definition files, if possible."""
         if self.node_info_path:
             self.node_info.to_yaml(self.node_info_path)
         elif self.node_definition._definition_path:
@@ -634,3 +703,55 @@ class AbstractNode:
             self.logger.log_warning(
                 "No definition path set for node, skipping node definition update"
             )
+
+    def _check_required_args(self, action_request: ActionRequest) -> None:
+        """Check that all required arguments are present in the action request."""
+        missing_args = [
+            arg_name
+            for arg_name, arg_def in self.node_info.actions[
+                action_request.action_name
+            ].args.items()
+            if arg_def.required and arg_name not in action_request.args
+        ]
+        if missing_args:
+            raise ValueError(
+                f"Missing required arguments for action '{action_request.action_name}': {missing_args}"
+            )
+
+    @threaded_daemon
+    def _startup(self) -> None:
+        """The startup thread for the REST API."""
+        try:
+            # * Create a clean status and mark the node as initializing
+            self.node_status.initializing = True
+            self.node_status.errored = False
+            self.node_status.locked = False
+            self.node_status.paused = False
+            self.node_status.stopped = False
+            self.startup_handler()
+            # * Start status and state update loops
+            repeat_on_interval(self.status_update_interval, self._update_status)
+            repeat_on_interval(self.state_update_interval, self._update_state)
+
+        except Exception as exception:
+            # * Handle any exceptions that occurred during startup
+            self._exception_handler(exception)
+            self.node_status.errored = True
+        finally:
+            # * Mark the node as no longer initializing
+            self.logger.log(f"Startup complete for node {self.node_info.node_name}.")
+            self.node_status.initializing = False
+
+    def _extend_action_history(self, action_result: ActionResult) -> None:
+        """Extend the action history with a new action result."""
+        existing_history = self.action_history.get(action_result.action_id, None)
+        if existing_history is None:
+            self.action_history[action_result.action_id] = [action_result]
+        else:
+            self.action_history[action_result.action_id].append(action_result)
+        self.logger.log_info(
+            Event(
+                event_type=EventType.ACTION_STATUS_CHANGE,
+                event_data=action_result,
+            )
+        )

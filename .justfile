@@ -37,3 +37,9 @@ pdm-install-all:
 # Build the python package
 pdm-build:
   @pdm build
+
+# Run automated tests
+test:
+  @pytest
+tests: test
+pytest: test

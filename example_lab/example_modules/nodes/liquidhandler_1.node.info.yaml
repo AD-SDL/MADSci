@@ -18,20 +18,39 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
+  - safety_stop
   - shutdown
+  - lock
+  - cancel
+  - unlock
   - reset
+  - resume
+  - pause
 commands: {}
 is_template: false
 config_defaults: {}
 actions:
-  run_command:
-    name: run_command
-    description: Run a command on the liquid handler.
+  test_action:
+    name: test_action
+    description: A test action.
     args:
-      command:
-        name: command
+      test_param:
+        name: test_param
         description: ''
-        type: str
+        type: int
+        required: true
+        default: null
+    files: {}
+    results: {}
+    blocking: false
+  test_action_fail:
+    name: test_action_fail
+    description: A test action that fails.
+    args:
+      test_param:
+        name: test_param
+        description: ''
+        type: int
         required: true
         default: null
     files: {}
@@ -42,9 +61,11 @@ config:
   state_update_interval: null
   event_client_config: null
   host: 127.0.0.1
-  port: 8000
+  port: 8080
   protocol: http
-  device_number: 0
+  test_required_param: 1
+  test_optional_param: null
+  test_default_param: 42
 config_schema:
   $defs:
     EventClientConfig:
@@ -144,7 +165,7 @@ config_schema:
       title: OwnershipInfo
       type: object
   additionalProperties: true
-  description: Configuration for the liquid handler node module.
+  description: Configuration for the test node module.
   properties:
     status_update_interval:
       anyOf:
@@ -182,9 +203,20 @@ config_schema:
       description: The protocol of the REST API, either 'http' or 'https'.
       title: Protocol
       type: string
-    device_number:
-      default: 0
-      title: Device Number
+    test_required_param:
+      title: Test Required Param
       type: integer
-  title: LiquidHandlerConfig
+    test_optional_param:
+      anyOf:
+      - type: integer
+      - type: 'null'
+      default: null
+      title: Test Optional Param
+    test_default_param:
+      default: 42
+      title: Test Default Param
+      type: integer
+  required:
+  - test_required_param
+  title: TestNodeConfig
   type: object

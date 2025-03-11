@@ -1,11 +1,12 @@
 """Types for MADSci Actions."""
 
-import json
+from datetime import datetime
 from enum import Enum
 from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import BaseModel, Error, PathLike, new_ulid_str
 from madsci.common.types.datapoint_types import DataPoint
+from madsci.common.utils import localnow
 from pydantic.functional_validators import field_validator, model_validator
 from sqlmodel.main import Field
 
@@ -20,6 +21,7 @@ class ActionStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     PAUSED = "paused"
+    UNKNOWN = "unknown"
 
 
 class ActionRequest(BaseModel):
@@ -47,16 +49,6 @@ class ActionRequest(BaseModel):
         default_factory=dict,
     )
     """Files sent along with the action"""
-
-    @field_validator("args", mode="before")
-    @classmethod
-    def validate_args(cls, v: Any) -> Any:
-        """Validate the args field of the action request. If it's a string, it's parsed as JSON."""
-        if isinstance(v, str):
-            v = json.loads(v)
-        if v is None:
-            return {}
-        return v
 
     def failed(
         self,
@@ -133,6 +125,51 @@ class ActionRequest(BaseModel):
             files=files,
         )
 
+    def paused(
+        self,
+        errors: Union[Error, list[Error], str] = [],
+        data: dict[str, Any] = {},
+        files: dict[str, PathLike] = {},
+    ) -> "ActionResult":
+        """Create an ActionResult response"""
+        return ActionResult(
+            action_id=self.action_id,
+            status=ActionStatus.PAUSED,
+            errors=errors,
+            data=data,
+            files=files,
+        )
+
+    def not_started(
+        self,
+        errors: Union[Error, list[Error], str] = [],
+        data: dict[str, Any] = {},
+        files: dict[str, PathLike] = {},
+    ) -> "ActionResult":
+        """Create an ActionResult response"""
+        return ActionResult(
+            action_id=self.action_id,
+            status=ActionStatus.NOT_STARTED,
+            errors=errors,
+            data=data,
+            files=files,
+        )
+
+    def unknown(
+        self,
+        errors: Union[Error, list[Error], str] = [],
+        data: dict[str, Any] = {},
+        files: dict[str, PathLike] = {},
+    ) -> "ActionResult":
+        """Create an ActionResult response"""
+        return ActionResult(
+            action_id=self.action_id,
+            status=ActionStatus.UNKNOWN,
+            errors=errors,
+            data=data,
+            files=files,
+        )
+
 
 class ActionResult(BaseModel):
     """Result of an action."""
@@ -149,7 +186,7 @@ class ActionResult(BaseModel):
     errors: list[Error] = Field(
         title="Step Error",
         description="An error message(s) if the step failed.",
-        default=list,
+        default_factory=list,
     )
     data: dict[str, Any] = Field(
         title="Step Data",
@@ -166,6 +203,29 @@ class ActionResult(BaseModel):
         description="A dictionary of datapoints sent to the data manager by the step.",
         default_factory=dict,
     )
+    history_created_at: Optional[datetime] = Field(
+        title="History Created At",
+        description="The time the history was updated.",
+        default_factory=localnow,
+    )
+
+    @field_validator("errors", mode="before")
+    @classmethod
+    def ensure_list_of_errors(cls, v: Any) -> Any:
+        """Ensure that errors is a list of MADSci Errors"""
+        if isinstance(v, str):
+            return [Error(message=v)]
+        if isinstance(v, Error):
+            return [v]
+        if isinstance(v, Exception):
+            return [Error.from_exception(v)]
+        if isinstance(v, list):
+            for i, item in enumerate(v):
+                if isinstance(item, str):
+                    v[i] = Error(message=item)
+                elif isinstance(item, Exception):
+                    v[i] = Error.from_exception(item)
+        return v
 
 
 class ActionSucceeded(ActionResult):
@@ -196,6 +256,24 @@ class ActionNotReady(ActionResult):
     """Response from an action that is not ready to be run."""
 
     status: Literal[ActionStatus.NOT_READY] = ActionStatus.NOT_READY
+
+
+class ActionPaused(ActionResult):
+    """Response from an action that is paused."""
+
+    status: Literal[ActionStatus.PAUSED] = ActionStatus.PAUSED
+
+
+class ActionNotStarted(ActionResult):
+    """Response from an action that has not started."""
+
+    status: Literal[ActionStatus.NOT_STARTED] = ActionStatus.NOT_STARTED
+
+
+class ActionUnknown(ActionResult):
+    """Response from an action that has an unknown status."""
+
+    status: Literal[ActionStatus.UNKNOWN] = ActionStatus.UNKNOWN
 
 
 class ActionDefinition(BaseModel):
