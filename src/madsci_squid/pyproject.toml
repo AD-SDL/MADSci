@@ -1,6 +1,6 @@
 [project]
 name = "madsci.squid"
-version = "0.1.0"
+version = "0.1.1"
 description = "The Modular Autonomous Discovery for Science (MADSci) Control Server and Scheduler, aka Squid."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},

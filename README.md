@@ -2,7 +2,7 @@
 
 ## 🚧Under Construction🚧
 
-MADSci is currently in the very early stages of development. You're currently viewing Alpha Release 1.
+MADSci is currently in the very early stages of development. You're currently viewing Alpha Release 2.
 
 If you're looking to start building your autonomous lab and just can't wait, consider taking a look at MADSci's predecessor, [the Workflow Execution Interface](https://github.com/AD-SDL/wei)
 
