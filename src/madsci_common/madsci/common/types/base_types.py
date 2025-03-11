@@ -255,7 +255,7 @@ class BaseModel(SQLModel, use_enum_values=True):
                 # * Check if the field is a model that we should use the sub-fields of
                 if isinstance(info, LoadConfig) and info.use_fields_as_cli_args:
                     # * Add sub-model fields as individual CLI arguments
-                    field_hierarchy[field_name] = field.annotation.parser_from_fields(
+                    field_hierarchy[field_name] = field.annotation._parser_from_fields(
                         parser, override_defaults.get(field_name, {})
                     )
                     break
