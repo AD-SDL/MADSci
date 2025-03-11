@@ -79,7 +79,10 @@ class ActionResultWithFiles(FileResponse):
         ) as temp_zipfile_path:
             temp_zip = ZipFile(temp_zipfile_path, "w")
             for file in action_response.files:
-                temp_zip.write(action_response.files[file])
+                temp_zip.write(
+                    action_response.files[file],
+                    PureWindowsPath(action_response.files[file]).name,
+                )
                 action_response.files[file] = str(
                     PureWindowsPath(action_response.files[file]).name,
                 )
