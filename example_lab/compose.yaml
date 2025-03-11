@@ -2,12 +2,12 @@ name: madsci_example_lab
 services:
   mongodb:
     container_name: mongodb
-    image: mongodb/mongodb-community-server:latest
+    image: mongodb/mongodb:8.0
     ports:
       - 27017:27017
   redis:
     container_name: redis
-    image: redis:latest
+    image: redis:7.4
     ports:
       - 6379:6379
   postgres:

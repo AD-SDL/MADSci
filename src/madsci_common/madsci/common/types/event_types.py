@@ -140,6 +140,8 @@ class EventType(str, Enum):
     CAMPAIGN_START = "campaign_start"
     CAMPAIGN_COMPLETE = "campaign_complete"
     CAMPAIGN_ABORT = "campaign_abort"
+    # *Action Events
+    ACTION_STATUS_CHANGE = "action_status_change"
 
     @classmethod
     def _missing_(cls, value: str) -> "EventType":

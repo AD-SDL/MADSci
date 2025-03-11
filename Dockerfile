@@ -32,9 +32,7 @@ COPY src/ /home/${CONTAINER_USER}/MADSci/src
 
 WORKDIR /home/${CONTAINER_USER}/MADSci
 RUN --mount=type=cache,target=/root/.cache \
-    pdm install -g -p . --check && \
-	pdm install -g -p src/madsci_common --check && \
-	pdm sync  -g -p .
+    pdm install -G:all -g -p . --check
 
 COPY madsci-entrypoint.sh /madsci-entrypoint.sh
 RUN chmod +x /madsci-entrypoint.sh

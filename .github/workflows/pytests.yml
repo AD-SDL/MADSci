@@ -1,0 +1,31 @@
+name: Pytest Automated Tests
+
+on:
+  push: # *Don't run for every push, only for main branch and tags
+    branches: ["main"]
+    tags: ["*"]
+  pull_request: # *Run for every PR
+    types: [opened, synchronize, reopened, edited]
+    branches: ["*"]
+  schedule: # Run every Tuesday at 12:00
+    - cron: '0 12 * * 2'
+  workflow_dispatch: # * Run manually
+
+jobs:
+  run_pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout code
+      - name: Setup PDM
+        uses: pdm-project/setup-pdm@v3
+        with:
+          python-version: 3.9
+      - name: Install dependencies
+        run: pdm install
+      - uses: extractions/setup-just@v2
+        name: Setup Just
+      - name: Install dependencies and initialize everything
+        run: just init
+      - name: Test with pytest
+        run: pdm run -v pytest

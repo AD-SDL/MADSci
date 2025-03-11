@@ -20,6 +20,12 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def localnow() -> datetime:
+    """Return the current local time."""
+
+    return datetime.now().astimezone()
+
+
 def to_snake_case(name: str) -> str:
     """Convert a string to snake case.
 
@@ -51,7 +57,7 @@ def search_for_file_pattern(
         A list of paths to the files that match the pattern.
     """
 
-    start_dir = Path.cwd() if not start_dir else Path(start_dir).resolve()
+    start_dir = Path.cwd() if not start_dir else Path(start_dir).resolve().expanduser()
 
     results = []
     if children:
@@ -406,3 +412,15 @@ def pretty_type_repr(type_hint: Any) -> str:
             type_name += pretty_type_repr(subtype)
         type_name += "]"
     return type_name
+
+
+@threaded_daemon
+def repeat_on_interval(
+    interval: float, func: callable, *args: Any, **kwargs: Any
+) -> None:
+    """Repeat a function on an interval."""
+    import time
+
+    while True:
+        func(*args, **kwargs)
+        time.sleep(interval)

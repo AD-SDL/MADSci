@@ -4,10 +4,9 @@ import json
 import shutil
 import tempfile
 import time
-from collections.abc import Generator
+from contextlib import asynccontextmanager
 from multiprocessing import Process
 from pathlib import Path, PureWindowsPath
-from threading import Thread
 from typing import Any, Optional, Union
 from zipfile import ZipFile
 
@@ -15,13 +14,17 @@ from fastapi.applications import FastAPI
 from fastapi.datastructures import UploadFile
 from fastapi.routing import APIRouter
 from madsci.client.node.rest_node_client import RestNodeClient
-from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.action_types import (
+    ActionRequest,
+    ActionResult,
+    ActionStatus,
+)
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error, new_ulid_str
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
     AdminCommands,
-    NodeCapabilities,
+    NodeClientCapabilities,
     NodeConfig,
     NodeInfo,
     NodeSetConfigResponse,
@@ -32,6 +35,7 @@ from madsci.common.utils import threaded_task
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
+from pydantic import AnyUrl
 from starlette.responses import FileResponse
 
 
@@ -59,7 +63,7 @@ def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
 
 
 class ActionResultWithFiles(FileResponse):
-    """Action response from a REST-based module."""
+    """Action response from a REST-based node."""
 
     def from_action_response(self, action_response: ActionResult) -> ActionResult:
         """Create an ActionResultWithFiles from an ActionResult."""
@@ -75,7 +79,10 @@ class ActionResultWithFiles(FileResponse):
         ) as temp_zipfile_path:
             temp_zip = ZipFile(temp_zipfile_path, "w")
             for file in action_response.files:
-                temp_zip.write(action_response.files[file])
+                temp_zip.write(
+                    action_response.files[file],
+                    PureWindowsPath(action_response.files[file]).name,
+                )
                 action_response.files[file] = str(
                     PureWindowsPath(action_response.files[file]).name,
                 )
@@ -95,10 +102,10 @@ class RestNode(AbstractNode):
     """Whether the node should restart the REST server."""
     exit_flag = False
     """Whether the node should exit."""
-    capabilities: NodeCapabilities = NodeCapabilities(
-        **RestNodeClient.supported_capabilities.model_dump(),
+    supported_capabilities: NodeClientCapabilities = (
+        RestNodeClient.supported_capabilities
     )
-    """The capabilities of the node."""
+    """The default supported capabilities of this node module class."""
     config: NodeConfig = RestNodeConfig()
     """The configuration for the node."""
 
@@ -106,10 +113,22 @@ class RestNode(AbstractNode):
     """Node Lifecycle and Public Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def start_node(self) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> "RestNode":
+        """Initialize the node class."""
+        super().__init__(*args, **kwargs)
+        host = getattr(self.config, "host", "localhost")
+        port = getattr(self.config, "port", 2000)
+        scheme = getattr(self.config, "protocol", "http")
+        self.node_info.node_url = AnyUrl.build(
+            scheme=scheme,
+            host=host,
+            port=port,
+        )
+
+    def start_node(self, testing: bool = False) -> None:
         """Start the node."""
         super().start_node()  # *Kick off protocol agnostic-startup
-        self._start_rest_api()
+        self._start_rest_api(testing=testing)
 
     """------------------------------------------------------------------------------------------------"""
     """Interface Methods"""
@@ -165,9 +184,11 @@ class RestNode(AbstractNode):
             )
         return ActionResult.model_validate(action_response)
 
-    def get_action_history(self) -> list[str]:
-        """Get the action history of the node."""
-        return super().get_action_history()
+    def get_action_history(
+        self, action_id: Optional[str] = None
+    ) -> dict[str, list[ActionResult]]:
+        """Get the action history of the node, or of a specific action."""
+        return super().get_action_history(action_id)
 
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""
@@ -181,7 +202,7 @@ class RestNode(AbstractNode):
         """Get the state of the node."""
         return super().get_state()
 
-    def get_log(self) -> list[Event]:
+    def get_log(self) -> dict[str, Event]:
         """Get the log of the node"""
         return super().get_log()
 
@@ -202,8 +223,9 @@ class RestNode(AbstractNode):
         try:
             self.restart_flag = True  # * Restart the REST server
             self.shutdown_handler()
-            self.startup_handler(self.config)
+            self._startup()
         except Exception as exception:
+            self._exception_handler(exception)
             return AdminCommandResponse(
                 success=False,
                 errors=[Error.from_exception(exception)],
@@ -222,7 +244,11 @@ class RestNode(AbstractNode):
             def shutdown_server() -> None:
                 """Shutdown the REST server."""
                 time.sleep(2)
-                self.rest_server_process.terminate()
+                if (
+                    hasattr(self, "rest_server_process")
+                    and self.rest_server_process is not None
+                ):
+                    self.rest_server_process.terminate()
                 self.exit_flag = True
 
             shutdown_server()
@@ -240,7 +266,7 @@ class RestNode(AbstractNode):
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def _start_rest_api(self) -> None:
+    def _start_rest_api(self, testing: bool = False) -> None:
         """Start the REST API for the node."""
         import uvicorn
 
@@ -248,48 +274,27 @@ class RestNode(AbstractNode):
         self._configure_routes()
         host = getattr(self.config, "host", "localhost")
         port = getattr(self.config, "port", 2000)
-        self.rest_server_process = Process(
-            target=uvicorn.run,
-            args=(self.rest_api,),
-            kwargs={"host": host, "port": port},
-            daemon=True,
-        )
-        self.rest_server_process.start()
-        while True:
-            time.sleep(1)
-            if self.restart_flag:
-                self.rest_server_process.terminate()
-                self.restart_flag = False
-                self._start_rest_api()
-                break
-            if self.exit_flag:
-                break
+        if not testing:
+            self.rest_server_process = Process(
+                target=uvicorn.run,
+                args=(self.rest_api,),
+                kwargs={"host": host, "port": port},
+                daemon=True,
+            )
+            self.rest_server_process.start()
+            while True:
+                time.sleep(1)
+                if self.restart_flag:
+                    self.rest_server_process.terminate()
+                    self.restart_flag = False
+                    self._start_rest_api(testing=testing)
+                    break
+                if self.exit_flag:
+                    break
 
-    def _startup_thread(self) -> None:
-        """The startup thread for the REST API."""
-        try:
-            # * Create a clean status and mark the node as initializing
-            self.node_status.initializing = True
-            self.node_status.errored = False
-            self.node_status.locked = False
-            self.node_status.paused = False
-            self.startup_handler()
-        except Exception as exception:
-            # * Handle any exceptions that occurred during startup
-            self._exception_handler(exception)
-            self.node_status.errored = True
-        finally:
-            # * Mark the node as no longer initializing
-            self.logger.log(f"Startup complete for node {self.node_info.node_name}.")
-            self.node_status.initializing = False
-
-    def _lifespan(self, app: FastAPI) -> Generator[None, None, None]:  # noqa: ARG002
+    @asynccontextmanager
+    async def _lifespan(self, app: FastAPI):  # noqa: ANN202, ARG002
         """The lifespan of the REST API."""
-        # * Run startup on a separate thread so it doesn't block the rest server from starting
-        # * (module won't accept actions until startup is complete)
-        Thread(target=self._startup_thread, daemon=True).start()
-        self._loop_handler()
-
         yield
 
         try:
@@ -323,6 +328,11 @@ class RestNode(AbstractNode):
             "/admin/{admin_command}",
             self.run_admin_command,
             methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/log",
+            self.get_log,
+            methods=["GET"],
         )
         self.rest_api.include_router(self.router)
 

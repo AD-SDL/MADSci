@@ -12,6 +12,7 @@ from madsci.common.types.lab_types import (
     ManagerDefinition,
     ManagerType,
 )
+from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.utils import (
     prompt_for_input,
@@ -153,21 +154,25 @@ def add(
             if new_path:
                 path = Path(new_path)
                 path.parent.mkdir(parents=True, exist_ok=True)
-        if manager_type == ManagerType.EXPERIMENT_MANAGER:
-            manager_definition = ExperimentManagerDefinition(
-                **manager_definition.model_dump(mode="json")
-            )
-        elif manager_type == ManagerType.WORKCELL_MANAGER:
-            manager_definition = WorkcellDefinition(
-                **manager_definition.model_dump(mode="json")
-            )
-        elif manager_type == ManagerType.EVENT_MANAGER:
-            manager_definition = EventManagerDefinition(
-                **manager_definition.model_dump(mode="json")
-            )
+        manager_definition = promote_manager_definition(manager_definition)
         save_model(
             path=path, model=manager_definition, overwrite_check=not ctx.obj.quiet
         )
+
+
+def promote_manager_definition(
+    manager_definition: ManagerDefinition,
+) -> ManagerDefinition:
+    """Promote a manager definition to a more specific type."""
+    if manager_definition.manager_type == ManagerType.EXPERIMENT_MANAGER:
+        return ExperimentManagerDefinition(**manager_definition.model_dump(mode="json"))
+    if manager_definition.manager_type == ManagerType.WORKCELL_MANAGER:
+        return WorkcellDefinition(**manager_definition.model_dump(mode="json"))
+    if manager_definition.manager_type == ManagerType.EVENT_MANAGER:
+        return EventManagerDefinition(**manager_definition.model_dump(mode="json"))
+    if manager_definition.manager_type == ManagerType.RESOURCE_MANAGER:
+        return ResourceManagerDefinition(**manager_definition.model_dump(mode="json"))
+    return manager_definition
 
 
 @manager.command()

@@ -2,7 +2,7 @@
 
 ## 🚧Under Construction🚧
 
-MADSci is currently in the very early stages of development. We're planning to have an Alpha release shortly.
+MADSci is currently in the very early stages of development. You're currently viewing Alpha Release 1.
 
 If you're looking to start building your autonomous lab and just can't wait, consider taking a look at MADSci's predecessor, [the Workflow Execution Interface](https://github.com/AD-SDL/wei)
 
@@ -21,18 +21,20 @@ MADSci is a modular, autonomous, and scalable framework for scientific discovery
 
 MADSci is made up of a number of different modular components, each of which can be used independently to fulfill specific needs, or composed to build more complex and capable systems. Below we link to specific documentation for each system component.
 
-- [Clients](./src/madsci_client/README.md): A collection of clients for interacting with different parts of MADSci
+- [Clients](./src/madsci_client/README.md): A collection of clients for interacting with different subsystems of MADSci
 - [Event Manager](./src/madsci_event_manager/README.md): handles distributed event logging and querying across a distributed lab.
 - [Workcell Manager](./src/madsci_workcell_manager/README.md): handles coordinating and scheduling a collection of interoperating instruments, robots, and resources using Workflows.
 - [Experiment Manager](./src/madsci_experiment_manager/README.md): manages experimental runs and campaigns across a MADSci-powered lab.
 - [Resource Manager](./src/madsci_resource_manager/README.md): For tracking labware, assets, samples, and consumables in an automated or autonomous lab.
+- [Data Manager](./src/madsci_data_manager/README.md): handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis)
 
 ## Roadmap
 
 We're working on bringing the following additional components to MADSci:
 
-- **Transfer Manager**: For coordinating resource movement in a lab.
 - **Notification Manager**: For handling notifications related to an automated or autonomous lab.
+- **Auth Manager**: For handling authentication and user and group management for an autonomous lab.
+- **Transfer Manager**: For coordinating resource movement in a lab.
 - **Squid**: the central lab coordinator and dashboard for madsci-powered labs.
 
 

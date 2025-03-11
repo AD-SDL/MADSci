@@ -36,8 +36,8 @@ class AbstractNodeClient:
         """Perform an action on the node."""
         raise NotImplementedError("send_action not implemented by this client")
 
-    def get_action_history(self) -> list[str]:
-        """Get a list of the action IDs for actions that the node has recently performed."""
+    def get_action_history(self) -> dict[str, list[ActionResult]]:
+        """Get the history of a specific action, or all actions run by the node."""
         raise NotImplementedError(
             "get_action_history is not implemented by this client"
         )
@@ -55,7 +55,7 @@ class AbstractNodeClient:
         raise NotImplementedError("get_state is not implemented by this client")
 
     def get_info(self) -> NodeInfo:
-        """Get information about the node and module."""
+        """Get information about the node."""
         raise NotImplementedError("get_info is not implemented by this client")
 
     def set_config(self, config_dict: dict[str, Any]) -> NodeSetConfigResponse:
@@ -72,7 +72,7 @@ class AbstractNodeClient:
         """Get the resources of the node."""
         raise NotImplementedError("get_resources is not implemented by this client")
 
-    def get_log(self) -> list[Event]:
+    def get_log(self) -> dict[str, Event]:
         """Get the log of the node."""
         raise NotImplementedError("get_log is not implemented by this client")
 

@@ -1,6 +1,6 @@
 [project]
 name = "madsci.squid"
-dynamic = ["version"]
+version = "0.1.0"
 description = "The Modular Autonomous Discovery for Science (MADSci) Control Server and Scheduler, aka Squid."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -27,9 +27,5 @@ Homepage = "https://github.com/AD-SDL/MADSci"
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
-[tool.pdm.version]
-source = "scm"
-fallback_version = "0.0.1"
-
-#[dependency-groups]
-#dev = ["-e madsci-common @ file:///${PROJECT_ROOT}/../madsci_common"]
+[tool.pdm.build]
+includes = ["madsci/"]

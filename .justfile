@@ -3,16 +3,12 @@ default:
   @just --list --justfile {{justfile()}}
 
 # initialize the project
-init: hooks
+init:
   @which pdm || echo "pdm not found, you'll need to install it: https://github.com/pdm-project/pdm"
-  @pdm install
+  @pdm install -G:all
   @#test -e .env || cp .env.example .env
-  @(which source || $(pdm venv activate)) || true
-
-# Install the pre-commit hooks
-hooks:
-  @pre-commit install
-  @pre-commit autoupdate
+  @OSTYPE="" . .venv/bin/activate
+  @which pre-commit && pre-commit install && pre-commit autoupdate || true
 
 # Run the pre-commit checks
 checks:
@@ -41,3 +37,9 @@ pdm-install-all:
 # Build the python package
 pdm-build:
   @pdm build
+
+# Run automated tests
+test:
+  @pytest
+tests: test
+pytest: test

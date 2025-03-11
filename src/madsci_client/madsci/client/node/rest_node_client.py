@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Optional
 from zipfile import ZipFile
 
 import requests
@@ -78,11 +78,14 @@ class RestNodeClient(AbstractNodeClient):
             rest_response.raise_for_status()
         return ActionResult.model_validate(rest_response.json())
 
-    def get_action_history(self) -> list[str]:
-        """Get a list of the action IDs for actions that the node has recently performed."""
-        response = requests.get(f"{self.url}/action", timeout=10)
-        if not response.ok:
-            response.raise_for_status()
+    def get_action_history(
+        self, action_id: Optional[str] = None
+    ) -> dict[str, list[ActionResult]]:
+        """Get the history of a single action performed on the node, or every action, if no action_id is specified."""
+        response = requests.get(
+            f"{self.url}/action", params={"action_id": action_id}, timeout=10
+        )
+        response.raise_for_status()
         return response.json()
 
     def get_action_result(self, action_id: str) -> ActionResult:
@@ -127,7 +130,7 @@ class RestNodeClient(AbstractNodeClient):
         return response.json()
 
     def get_info(self) -> NodeInfo:
-        """Get information about the node and module."""
+        """Get information about the node."""
         response = requests.get(f"{self.url}/info", timeout=10)
         if not response.ok:
             response.raise_for_status()
@@ -158,7 +161,7 @@ class RestNodeClient(AbstractNodeClient):
         )
         # TODO: Implement get_resources endpoint
 
-    def get_log(self) -> list[Event]:
+    def get_log(self) -> dict[str, Event]:
         """Get the log from the node"""
         response = requests.get(f"{self.url}/log", timeout=10)
         if not response.ok:

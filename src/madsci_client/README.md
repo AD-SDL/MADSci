@@ -24,7 +24,6 @@ Options:
 Commands:
   lab       Manage labs.
   manager   Manage lab system managers.
-  module    Manage modules.
   node      Manage nodes.
   resource  Manage resources.
   tui       Open Textual TUI.

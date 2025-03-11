@@ -76,7 +76,7 @@ class FileDataPoint(DataPoint):
 
     data_type: Literal[DataPointTypeEnum.FILE] = DataPointTypeEnum.FILE
     """The type of the data point, in this case a file"""
-    path: str
+    path: PathLike
     """Path to the file"""
 
 
@@ -130,7 +130,7 @@ class DataManagerDefinition(ManagerDefinition):
         description="The hostname or IP address of the Data Manager server.",
     )
     port: int = Field(
-        default=8001,
+        default=8004,
         title="Server Port",
         description="The port number of the Data Manager server.",
     )

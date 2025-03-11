@@ -1,8 +1,9 @@
-"""Pydantic Models for Resource Definitions, used to define default resources for a module or workcell."""
+"""Pydantic Models for Resource Definitions, used to define default resources for a node or workcell."""
 
 from typing import Annotated, Literal, Optional, Union
 
 from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.types.resource_types.custom_types import (
     CustomResourceTypes,
@@ -37,6 +38,11 @@ class ResourceManagerDefinition(ManagerDefinition):
         default="postgresql://rpl:rpl@localhost:5432/resources",
         title="Database URL",
         description="The URL of the database used by the Resource Manager.",
+    )
+    event_client_config: Optional[EventClientConfig] = Field(
+        default=None,
+        title="Event Client Configuration",
+        description="Configuration for the event client.",
     )
 
 

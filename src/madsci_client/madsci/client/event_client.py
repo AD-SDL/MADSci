@@ -57,11 +57,21 @@ class EventClient:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.logfile = self.log_dir / f"{self.name}.log"
         self.logger.setLevel(self.config.log_level)
-        if len(self.logger.handlers) == 0:
-            file_handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
-            self.logger.addHandler(file_handler)
+        for handler in self.logger.handlers:
+            if isinstance(handler, logging.FileHandler) and handler.baseFilename == str(
+                self.logfile
+            ):
+                self.logger.removeHandler(handler)
+        file_handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
+        self.logger.addHandler(file_handler)
         self.event_server = self.config.event_server_url
         self.source = self.config.source
+        self.log_debug(
+            Event(
+                event_type=EventType.LOG_INFO,
+                event_data=f"Event logger {self.name} initialized.",
+            )
+        )
 
     def get_log(self) -> dict[str, Event]:
         """Read the log"""
