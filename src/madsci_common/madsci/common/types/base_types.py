@@ -318,6 +318,7 @@ class ModelLink(BaseModel, Generic[_T]):
     definition: Optional[_T] = Field(
         title="Model Definition",
         description="The actual definition of the model.",
+        default=None,
     )
 
     @model_validator(mode="after")
