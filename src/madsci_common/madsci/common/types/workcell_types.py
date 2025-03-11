@@ -86,7 +86,7 @@ class WorkcellDefinition(BaseModel, extra="allow"):
     serialize_nodes_to_list = field_serializer("nodes")(dict_to_list)
 
 
-class WorkcellLink(ModelLink):
+class WorkcellLink(ModelLink[WorkcellDefinition]):
     """Link to a MADSci Workcell Definition."""
 
     definition: Optional[WorkcellDefinition] = Field(
