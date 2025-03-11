@@ -43,3 +43,7 @@ test:
   @pytest
 tests: test
 pytest: test
+
+# Build docker image
+docker-build:
+  @docker build -t ghcr.io/ad-sdl/madsci:dev .
