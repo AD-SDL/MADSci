@@ -153,7 +153,7 @@ def add(
             )
             if new_path:
                 path = Path(new_path)
-                path.parent.mkdir(parents=True, exist_ok=True)
+                path.resolve().expanduser().parent.mkdir(parents=True, exist_ok=True)
         manager_definition = promote_manager_definition(manager_definition)
         save_model(
             path=path, model=manager_definition, overwrite_check=not ctx.obj.quiet

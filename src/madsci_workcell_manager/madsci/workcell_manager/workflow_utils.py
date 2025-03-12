@@ -131,15 +131,19 @@ def save_workflow_files(
 
     get_workflow_inputs_directory(
         workflow_id=workflow.workflow_id, working_directory=working_directory
-    ).mkdir(parents=True, exist_ok=True)
+    ).resolve().expanduser().mkdir(parents=True, exist_ok=True)
     if files:
         for file in files:
             file_path = (
-                get_workflow_inputs_directory(
-                    working_directory=working_directory,
-                    workflow_id=workflow.workflow_id,
+                (
+                    get_workflow_inputs_directory(
+                        working_directory=working_directory,
+                        workflow_id=workflow.workflow_id,
+                    )
+                    / file.filename
                 )
-                / file.filename
+                .resolve()
+                .expanduser()
             )
             with Path.open(file_path, "wb") as f:
                 f.write(file.file.read())

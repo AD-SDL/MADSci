@@ -54,7 +54,7 @@ class EventClient:
                 self.name = __name__
         self.logger = logging.getLogger(self.name)
         self.log_dir = Path(self.config.log_dir)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir.resolve().expanduser().mkdir(parents=True, exist_ok=True)
         self.logfile = self.log_dir / f"{self.name}.log"
         self.logger.setLevel(self.config.log_level)
         for handler in self.logger.handlers:

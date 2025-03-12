@@ -232,9 +232,9 @@ def create(
         )
         if new_path:
             path = Path(new_path)
-        if not path.parent.exists():
+        if not path.resolve().expanduser().parent.exists():
             console.print(f"Creating directory: {path.parent}")
-            path.parent.mkdir(parents=True, exist_ok=True)
+            path.resolve().expanduser().parent.mkdir(parents=True, exist_ok=True)
     save_model(path=path, model=node_definition, overwrite_check=not ctx.obj.quiet)
 
     # *Handle workcell integration

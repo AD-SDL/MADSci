@@ -15,7 +15,7 @@ from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.node_types import NodeDefinition
 from madsci.common.validators import create_dict_promoter, ulid_validator
-from pydantic import AliasChoices, computed_field, field_serializer
+from pydantic import computed_field, field_serializer
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
@@ -39,9 +39,7 @@ class WorkcellDefinition(BaseModel, extra="allow"):
     ]
 
     workcell_name: str = Field(
-        title="Workcell Name",
-        description="The name of the workcell.",
-        alias=AliasChoices("name", "workcell_name"),
+        title="Workcell Name", description="The name of the workcell."
     )
     manager_type: Literal[ManagerType.WORKCELL_MANAGER] = Field(
         title="Manager Type",

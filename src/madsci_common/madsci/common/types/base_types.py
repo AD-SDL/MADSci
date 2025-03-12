@@ -66,7 +66,7 @@ class BaseModel(SQLModel, use_enum_values=True):
 
         kwargs are passed to model_dump_json
         """
-        with Path(path).open(mode="w") as fp:
+        with Path(path).resolve().expanduser().open(mode="w") as fp:
             yaml.dump(
                 self.model_dump(mode="json", by_alias=by_alias, **kwargs),
                 fp,
@@ -79,7 +79,7 @@ class BaseModel(SQLModel, use_enum_values=True):
         """
         Allows all derived data models to be loaded from yaml.
         """
-        with Path(path).open() as fp:
+        with Path(path).resolve().expanduser().open() as fp:
             raw_data = yaml.safe_load(fp)
         model_instance = cls.model_validate(raw_data)
         model_instance._definition_path = path

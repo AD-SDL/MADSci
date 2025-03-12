@@ -153,8 +153,8 @@ def create(
     else:
         path = Path(path)
 
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.resolve().expanduser().exists():
+        path.resolve().expanduser().parent.mkdir(parents=True, exist_ok=True)
     save_model(path, workcell, overwrite_check=not ctx.obj.quiet and not yes)
 
     if (

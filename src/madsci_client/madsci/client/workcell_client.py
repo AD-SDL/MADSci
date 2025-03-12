@@ -80,7 +80,13 @@ class WorkcellClient:
                 else None,
             },
             files={
-                ("files", (str(Path(path).name), Path.open(Path(path), "rb")))
+                (
+                    "files",
+                    (
+                        str(Path(path).name),
+                        Path.open(Path(path).resolve().expanduser(), "rb"),
+                    ),
+                )
                 for _, path in files.items()
             },
             timeout=10,
