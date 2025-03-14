@@ -13,6 +13,7 @@ from madsci.common.types.base_types import (
 )
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerType
+from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import NodeDefinition
 from madsci.common.validators import create_dict_promoter, ulid_validator
 from pydantic import computed_field, field_serializer
@@ -70,6 +71,11 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         title="Workcell Node URLs",
         description="The URL, path, or definition for each node in the workcell.",
     )
+    locations: list[Location] = Field(
+        default_factory=list,
+        title="Workcell Locations",
+        description="The Locations used in the workcell.",
+    )
 
     @computed_field
     @property
@@ -110,7 +116,7 @@ class WorkcellConfig(BaseModel):
     workcells_directory: Optional[PathLike] = Field(
         title="Workcells Directory",
         description="Directory used to store workcell-related files in. Defaults to ~/.madsci/workcells. Workcell-related filess will be stored in a sub-folder with the workcell name.",
-        default_factory=lambda: Path.home() / ".madsci" / "workcells",
+        default_factory=lambda: Path("~") / ".madsci" / "workcells",
     )
     redis_host: str = Field(
         default="localhost",
@@ -167,8 +173,13 @@ class WorkcellConfig(BaseModel):
         title="scheduler",
         description="Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use",
     )
-    data_client_url: Optional[AnyUrl] = Field(
+    data_server_url: Optional[AnyUrl] = Field(
         default=None,
         title="Data Client URL",
         description="The URL for the data client.",
+    )
+    resource_server_url: Optional[AnyUrl] = Field(
+        default=None,
+        title="Resource Server URL",
+        description="The URL for the resource server.",
     )

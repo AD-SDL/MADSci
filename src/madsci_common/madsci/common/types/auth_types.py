@@ -72,6 +72,13 @@ class OwnershipInfo(BaseModel):
         serialized = nxt(self, info)
         return {k: v for k, v in serialized.items() if v is not None}
 
+    def check(self, other: "OwnershipInfo") -> bool:
+        """Check if this ownership is the same as another."""
+        for key in self.model_dump(exclude={"auth_id"}, exclude_none=True):
+            if getattr(self, key) != getattr(other, key):
+                return False
+        return True
+
 
 class UserInfo(BaseModel):
     """Information about a user."""

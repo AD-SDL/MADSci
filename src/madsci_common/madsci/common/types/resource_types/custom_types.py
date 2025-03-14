@@ -32,6 +32,7 @@ class ContainerTypeEnum(str, Enum):
     """Type for a MADSci Container."""
 
     container = "container"
+    slot = "slot"
     stack = "stack"
     queue = "queue"
     collection = "collection"
@@ -57,6 +58,7 @@ class ResourceTypeEnum(str, Enum):
     continuous_consumable = "continuous_consumable"
 
     """Container Resource Base Types"""
+    slot = "slot"
     stack = "stack"
     queue = "queue"
     collection = "collection"
@@ -332,6 +334,16 @@ class PoolResourceTypeDefinition(ContainerResourceTypeDefinition):
     )
 
 
+class SlotTypeDefinition(ContainerResourceTypeDefinition):
+    """Definition for a MADSci Slot Resource Type."""
+
+    base_type: Literal[ContainerTypeEnum.slot] = Field(
+        default=ContainerTypeEnum.slot,
+        title="Slot Base Type",
+        description="The base type of the slot.",
+    )
+
+
 CustomResourceTypes = Union[
     Annotated[ResourceTypeDefinition, Tag("resource")],  # * resource: Resource
     Annotated[
@@ -351,6 +363,9 @@ CustomResourceTypes = Union[
         CollectionResourceTypeDefinition, Tag("collection")
     ],  # * collection of resources: Container[Resource]
     Annotated[
+        RowResourceTypeDefinition, Tag("row")
+    ],  # * row of resources: Collection[Resource]
+    Annotated[
         GridResourceTypeDefinition, Tag("grid")
     ],  # * 2D grid of resources: Collection[Collection[Resource]]
     Annotated[
@@ -359,4 +374,7 @@ CustomResourceTypes = Union[
     Annotated[
         PoolResourceTypeDefinition, Tag("pool")
     ],  # * collection of consumables with no structure: Collection[Consumable]
+    Annotated[
+        SlotTypeDefinition, Tag("slot")
+    ],  # * slot for a single resource: Container[Resource]
 ]

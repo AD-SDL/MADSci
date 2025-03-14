@@ -47,7 +47,7 @@ class Engine:
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(self.definition.config.scheduler)
         self.scheduler = scheduler_module.Scheduler(self.definition, self.state_handler)
-        self.data_client = DataClient(self.definition.config.data_client_url)
+        self.data_client = DataClient(self.definition.config.data_server_url)
         with state_handler.wc_state_lock():
             initialize_workcell(state_handler)
         time.sleep(workcell_manager_definition.config.cold_start_delay)
@@ -81,12 +81,14 @@ class Engine:
                     > self.definition.config.scheduler_update_interval
                 ):
                     with self.state_handler.wc_state_lock():
-                        self.scheduler.run_iteration()
+                        self.scheduler.run_iteration(
+                            workflows=self.state_handler.get_all_workflows()
+                        )
                         self.run_next_step()
                         scheduler_tick = time.time()
             except Exception:
                 traceback.print_exc()
-                default_logger.log_info(
+                default_logger.log_error(
                     f"Error in engine loop, waiting {self.definition.config.node_update_interval} seconds before trying again."
                 )
                 time.sleep(self.definition.config.node_update_interval)
@@ -97,7 +99,7 @@ class Engine:
         self.spin()
 
     def run_next_step(self) -> None:
-        """runs the next step in the workflow with the highest priority"""
+        """Runs the next step in the workflow with the highest priority"""
         workflows = self.state_handler.get_all_workflows()
         ready_workflows = filter(
             lambda wf: wf.scheduler_metadata.ready_to_run, workflows.values()
@@ -135,7 +137,7 @@ class Engine:
 
     @threaded_daemon
     def run_step(self, workflow_id: str, step: Step) -> None:
-        """run a step in a seperate thread"""
+        """Run a step in a seperate thread"""
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             wf.steps[wf.step_index].start_time = datetime.now()
@@ -147,7 +149,9 @@ class Engine:
         response = None
         try:
             request = ActionRequest(
-                action_name=step.action, args=step.args, files=step.files
+                action_name=step.action,
+                args={**step.args, **step.locations},
+                files=step.files,
             )
             response = client.send_action(request)
         except Exception:
@@ -165,7 +169,7 @@ class Engine:
                 wf.steps[wf.step_index].end_time = datetime.now()
                 if response.status == "succeeded":
                     new_index = wf.step_index + 1
-                    if new_index == len(wf.flowdef):
+                    if new_index == len(wf.steps):
                         wf.status = WorkflowStatus.COMPLETED
                         wf.end_time = datetime.now()
                     else:

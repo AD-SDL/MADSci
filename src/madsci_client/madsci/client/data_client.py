@@ -68,7 +68,7 @@ class DataClient:
         self, datapoint_id: Union[str, ULID], output_filepath: str
     ) -> None:
         """Get an datapoint value by ID."""
-        output_filepath = Path(output_filepath).resolve().expanduser()
+        output_filepath = Path(output_filepath).expanduser()
         if self.url is None:
             if self._local_datapoints[datapoint_id].data_type == "file":
                 import shutil
@@ -87,9 +87,7 @@ class DataClient:
                 f.write(str(response.json()["value"]))
 
         except Exception:
-            Path(output_filepath).resolve().expanduser().parent.mkdir(
-                parents=True, exist_ok=True
-            )
+            Path(output_filepath).expanduser().parent.mkdir(parents=True, exist_ok=True)
             with Path.open(output_filepath, "wb") as f:
                 f.write(response.content)
 
@@ -116,7 +114,7 @@ class DataClient:
                     "files",
                     (
                         str(Path(datapoint.path).name),
-                        Path.open(Path(datapoint.path).resolve().expanduser(), "rb"),
+                        Path.open(Path(datapoint.path).expanduser(), "rb"),
                     ),
                 )
             }

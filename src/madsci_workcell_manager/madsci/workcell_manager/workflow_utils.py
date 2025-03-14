@@ -1,6 +1,7 @@
 """Utility function for the workcell manager."""
 
 import shutil
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -8,6 +9,7 @@ from typing import Any, Optional
 from fastapi import UploadFile
 from madsci.client.event_client import default_logger
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.location_types import Location
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -20,15 +22,11 @@ from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
     """
-    Validates that the nodes in the workflow.flowdef are in the workcell.nodes
+    Validates that the nodes in the workflow.step are in the workcell.nodes
     """
-    for node_name in [step.node for step in workflow.flowdef]:
+    for node_name in [step.node for step in workflow.steps]:
         if node_name not in workcell.nodes:
             raise ValueError(f"Node {node_name} not in Workcell {workcell.name}")
-
-
-def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
-    """Allow the user to put location names instead of joint angle value"""
 
 
 def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool, str]:
@@ -109,18 +107,35 @@ def create_workflow(
         }
     )
     wf = Workflow(**wf_dict)
+    wf.step_definitions = workflow_def.steps
     steps = []
-    for step in workflow_def.flowdef:
-        replace_locations(workcell, step)
-        valid, validation_string = validate_step(step, state_handler=state_handler)
+    for step in workflow_def.steps:
+        working_step = deepcopy(step)
+        replace_locations(workcell, working_step)
+        valid, validation_string = validate_step(
+            working_step, state_handler=state_handler
+        )
         default_logger.log_info(validation_string)
         if not valid:
             raise ValueError(validation_string)
-        steps.append(step)
+        steps.append(working_step)
 
     wf.steps = steps
     wf.submitted_time = datetime.now()
     return wf
+
+
+def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
+    """Replaces the location names with the location objects"""
+    for location_arg, location_name_or_object in step.locations.items():
+        if isinstance(location_name_or_object, Location):
+            step.locations[location_arg] = location_name_or_object
+        elif location_name_or_object in workcell.locations:
+            step.locations[location_arg] = workcell.locations[location_name_or_object]
+        else:
+            raise ValueError(
+                f"Location {location_name_or_object} not in Workcell {workcell.name}"
+            )
 
 
 def save_workflow_files(
@@ -131,20 +146,16 @@ def save_workflow_files(
 
     get_workflow_inputs_directory(
         workflow_id=workflow.workflow_id, working_directory=working_directory
-    ).resolve().expanduser().mkdir(parents=True, exist_ok=True)
+    ).expanduser().mkdir(parents=True, exist_ok=True)
     if files:
         for file in files:
             file_path = (
-                (
-                    get_workflow_inputs_directory(
-                        working_directory=working_directory,
-                        workflow_id=workflow.workflow_id,
-                    )
-                    / file.filename
+                get_workflow_inputs_directory(
+                    working_directory=working_directory,
+                    workflow_id=workflow.workflow_id,
                 )
-                .resolve()
-                .expanduser()
-            )
+                / file.filename
+            ).expanduser()
             with Path.open(file_path, "wb") as f:
                 f.write(file.file.read())
             for step in workflow.steps:
@@ -177,7 +188,7 @@ def get_workflow_inputs_directory(
     workflow_id: Optional[str] = None, working_directory: Optional[str] = None
 ) -> Path:
     """returns a directory name for the workflows inputs"""
-    return Path(working_directory) / "Workflows" / workflow_id / "Inputs"
+    return Path(working_directory).expanduser() / "Workflows" / workflow_id / "Inputs"
 
 
 def cancel_workflow(wf: Workflow, state_handler: WorkcellRedisHandler) -> None:

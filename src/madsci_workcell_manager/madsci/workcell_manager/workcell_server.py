@@ -53,6 +53,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Get the currently running workcell."""
         return state_handler.get_workcell()
 
+    @app.get("/state")
+    def get_state() -> dict:
+        """Get the current state of the workcell."""
+        return state_handler.get_state()
+
     @app.get("/nodes")
     def get_nodes() -> dict[str, Node]:
         """Get info on the nodes in the workcell."""

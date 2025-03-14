@@ -1,7 +1,9 @@
 """Location types for MADSci."""
 
+from datetime import datetime
 from typing import Optional
 
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field
@@ -22,42 +24,53 @@ class Location(BaseModel):
         default_factory=new_ulid_str,
     )
     description: Optional[str] = Field(
-        title="Description",
+        title="Location Description",
         description="A description of the location.",
         default=None,
     )
-    poses: list["Pose"] = Field(
-        title="Poses",
-        description="A dictionary of poses representing the location. Keys are node names.",
+    lookup: dict[str, Json] = Field(
+        title="Location Representation Map",
+        description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
         default=[],
     )
     resource_id: Optional[str] = Field(
         title="Resource ID",
-        description="The resource ID linked to the location, typically a container ID.",
+        description="The resource ID linked to the location, typically a container.",
+        default=None,
+    )
+    reservation: Optional["LocationReservation"] = Field(
+        title="Location Reservation",
+        description="The reservation for the location.",
         default=None,
     )
 
-    is_ulid = field_validator("lab_id")(ulid_validator)
+    is_ulid = field_validator("location_id")(ulid_validator)
 
 
-class Pose(BaseModel):
-    """A pose for a location in in the lab."""
+class LocationReservation(BaseModel):
+    """Reservation of a MADSci Location."""
 
-    node_id: str = Field(title="Node ID", description="The ID of the node in the lab.")
-    pose_id: str = Field(
-        title="Pose ID",
-        description="The ID of the pose.",
-        default_factory=new_ulid_str,
+    owned_by: OwnershipInfo = Field(
+        title="Owned By",
+        description="Who has ownership of the reservation.",
     )
-    pose_name: str = Field(title="Pose Name", description="The name of the pose.")
-    pose_description: Optional[str] = Field(
-        title="Pose Description",
-        description="A description of the pose.",
-        default=None,
+    created: datetime = Field(
+        title="Created Datetime",
+        description="When the reservation was created.",
     )
-    pose_value: Json = Field(
-        title="Pose Value",
-        description="The value of the pose. Any JSON serializable object, representing the pose.",
+    start: datetime = Field(
+        title="Start Datetime",
+        description="When the reservation starts.",
+    )
+    end: datetime = Field(
+        title="End Datetime",
+        description="When the reservation ends.",
     )
 
-    is_ulid = field_validator("pose_id")(ulid_validator)
+    def check(self, ownership: OwnershipInfo) -> bool:
+        """Check if the reservation is 1.) active or not, and 2.) owned by the given ownership."""
+        return not (
+            not self.owned_by.check(ownership)
+            and self.start <= datetime.now()
+            and self.end >= datetime.now()
+        )
