@@ -8,10 +8,11 @@ from madsci.common.types.resource_types import (
     Queue,
     Resource,
     Row,
+    Stack,
     VoxelGrid,
 )
 from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
-from madsci.resource_manager.resource_interface import ResourceInterface, Stack
+from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_server import (
     ResourceGetQuery,
     ResourceHistoryGetQuery,

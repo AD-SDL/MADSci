@@ -10,6 +10,7 @@ from madsci.common.types.resource_types import (
     ContainerDataModels,
     Queue,
     ResourceDataModels,
+    Slot,
     Stack,
 )
 from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
@@ -167,7 +168,9 @@ def create_resource_server(  # noqa: C901, PLR0915
             raise e
 
     @app.post("/resource/{resource_id}/push")
-    async def push(resource_id: str, body: PushResourceBody) -> Union[Stack, Queue]:
+    async def push(
+        resource_id: str, body: PushResourceBody
+    ) -> Union[Stack, Queue, Slot]:
         """
         Push a resource onto a stack or queue.
 
@@ -176,7 +179,7 @@ def create_resource_server(  # noqa: C901, PLR0915
             body (PushResourceBody): The resource to push onto the stack or queue, or the ID of an existing resource.
 
         Returns:
-            Union[Stack, Queue]: The updated stack or queue.
+            Union[Stack, Queue, Slot]: The updated stack or queue.
         """
         try:
             return resource_interface.push(
@@ -187,7 +190,9 @@ def create_resource_server(  # noqa: C901, PLR0915
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.post("/resource/{resource_id}/pop")
-    async def pop(resource_id: str) -> tuple[ResourceDataModels, Union[Stack, Queue]]:
+    async def pop(
+        resource_id: str,
+    ) -> tuple[ResourceDataModels, Union[Stack, Queue, Slot]]:
         """
         Pop an asset from a stack or queue.
 
@@ -195,7 +200,7 @@ def create_resource_server(  # noqa: C901, PLR0915
             resource_id (str): The ID of the stack or queue to pop the asset from.
 
         Returns:
-            tuple[ResourceDataModels, Union[Stack, Queue]]: The popped asset and the updated stack or queue.
+            tuple[ResourceDataModels, Union[Stack, Queue, Slot]]: The popped asset and the updated stack or queue.
         """
         try:
             return resource_interface.pop(parent_id=resource_id)
