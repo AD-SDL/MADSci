@@ -5,7 +5,7 @@ import shutil
 import tempfile
 import time
 from contextlib import asynccontextmanager
-from multiprocessing import Process
+from multiprocess import Process
 from pathlib import Path, PureWindowsPath
 from typing import Any, Optional, Union
 from zipfile import ZipFile
@@ -265,19 +265,19 @@ class RestNode(AbstractNode):
     """------------------------------------------------------------------------------------------------"""
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
+    def _run_uvicorn(self, host: str, port:str):
+        import uvicorn
+        self.rest_api = FastAPI(lifespan=self._lifespan)
+        self._configure_routes()
+        uvicorn.run(self.rest_api, host=host, port=port)
 
     def _start_rest_api(self, testing: bool = False) -> None:
         """Start the REST API for the node."""
-        import uvicorn
-
-        self.rest_api = FastAPI(lifespan=self._lifespan)
-        self._configure_routes()
         host = getattr(self.config, "host", "localhost")
         port = getattr(self.config, "port", 2000)
         if not testing:
             self.rest_server_process = Process(
-                target=uvicorn.run,
-                args=(self.rest_api,),
+                target=self._run_uvicorn,
                 kwargs={"host": host, "port": port},
                 daemon=True,
             )
@@ -334,8 +334,8 @@ class RestNode(AbstractNode):
             self.get_log,
             methods=["GET"],
         )
-        self.rest_api.include_router(self.router)
-
+        #self.rest_api.include_router(self.router)
+        return self.router
 
 if __name__ == "__main__":
     RestNode().start_node()

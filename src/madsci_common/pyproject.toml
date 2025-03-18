@@ -24,7 +24,8 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "python-multipart>=0.0.17",
     "pydantic-extra-types>=2.10.2",
-    "semver>=3.0.4"
+    "semver>=3.0.4",
+    "multiprocess >= 0.70.17"
 ]
 
 
