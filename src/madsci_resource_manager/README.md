@@ -24,6 +24,7 @@ MADSci Resource Manager supports various resource types, including:
 - **Row**: Single-dimensional containers.
 - **Grid**: Two-dimensional containers.
 - **VoxelGrid**: Three-dimensional containers.
+- **Slot**: A container that supports exactly zero or one child. Ideal for things like plate nests.
 - **Stack**: Single-dimensional containers supporting LIFO access.
 - **Queue**: Single-dimensional containers supporting FIFO access.
 - **Pool**: Containers for holding consumables that are mixed or collocated.
@@ -146,7 +147,6 @@ history = client.query_history(start_date=datetime.now(), change_type="Updated")
 print(history)
 ```
 
-
 #### Restoring a Deleted Resource
 
 ```python
@@ -249,4 +249,31 @@ print(emptied_resource)
 filled_resource = client.fill(resource=added_consumable)
 print(filled_resource)
 ```
-````
+
+### Slot
+
+A `Slot` is a container that can hold exactly one resource. It is useful for scenarios where a single resource needs to be tracked in a specific location, such as a plate nest.
+
+#### Adding a Slot
+
+```python
+from madsci.common.types.resource_types import Slot
+
+slot = Slot(resource_name="Sample Slot")
+added_slot = client.add_resource(slot)
+print(added_slot)
+```
+
+#### Pushing a Resource to a Slot
+
+```python
+pushed_resource = client.push(resource=added_slot, child=added_resource)
+print(pushed_resource)
+```
+
+#### Popping a Resource from a Slot
+
+```python
+popped_resource, updated_slot = client.pop(resource=added_slot)
+print(popped_resource, updated_slot)
+```

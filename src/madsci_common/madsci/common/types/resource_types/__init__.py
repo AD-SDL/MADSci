@@ -21,6 +21,7 @@ from madsci.common.types.resource_types.definitions import (
     QueueResourceDefinition,
     ResourceDefinition,
     RowResourceDefinition,
+    SlotResourceDefinition,
     StackResourceDefinition,
     VoxelGridResourceDefinition,
 )
@@ -204,6 +205,10 @@ class Container(Asset):
         default_factory=dict,
     )
 
+    def get_child(self, key: str) -> Optional["ResourceDataModels"]:
+        """Get a child from the container."""
+        return self.children.get(key, None)
+
     @computed_field
     def quantity(self) -> int:
         """Calculate the quantity of assets in the container."""
@@ -240,6 +245,10 @@ class Collection(Container):
         default_factory=dict,
     )
 
+    def get_child(self, key: str) -> Optional["ResourceDataModels"]:
+        """Get a child from the container."""
+        return self.children.get(key, None)
+
     @computed_field
     def quantity(self) -> int:
         """Calculate the quantity of assets in the container."""
@@ -269,6 +278,13 @@ GridIndex2D = tuple[GridIndex, GridIndex]
 GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 
+def numericize_index(key: Union[str, GridIndex]) -> GridIndex:
+    """Convert a key to a numeric value."""
+    if isinstance(key, int) or str(key).isdigit():
+        return int(key)
+    return string.ascii_lowercase.index(key.lower())
+
+
 class Row(Container):
     """Data Model for a Row. A row is a container that can hold other resources in a single dimension and supports random access. For example, a row of tubes in a rack or a single-row microplate. Rows are indexed by integers or letters."""
 
@@ -294,6 +310,10 @@ class Row(Container):
         """Calculate the quantity of assets in the container."""
         return len(self.children)
 
+    def get_child(self, key: GridIndex) -> Optional["ResourceDataModels"]:
+        """Get a child from the Row."""
+        return self.children.get(numericize_index(key), None)
+
     @staticmethod
     def flatten_key(key: GridIndex) -> str:
         """Flatten the key to a string."""
@@ -308,10 +328,7 @@ class Row(Container):
 
     def check_key_bounds(self, key: Union[str, GridIndex]) -> bool:
         """Check if the key is within the bounds of the grid."""
-        if isinstance(key, int) or str(key).isdigit():
-            key = int(key)
-        else:
-            key = string.ascii_lowercase.index(key.lower())
+        key = numericize_index(key)
         return not (key < 0 or key >= self.row_dimension)
 
 
@@ -343,6 +360,13 @@ class Grid(Row):
             quantity += len(row_value)
         return quantity
 
+    def get_child(self, key: GridIndex2D) -> Optional["ResourceDataModels"]:
+        """Get a child from the Grid."""
+        row = self.children.get(numericize_index(key[0]), None)
+        if row is None:
+            return None
+        return row.get(numericize_index(key[1]), None)
+
     @staticmethod
     def flatten_key(key: GridIndex2D) -> str:
         """Flatten the key to a string."""
@@ -368,10 +392,7 @@ class Grid(Row):
             raise ValueError("Key must be a string or a 2-tuple.")
         numeric_key = []
         for index in key:
-            if isinstance(index, int) or str(index).isdigit():
-                numeric_key.append(int(index))
-            else:
-                numeric_key.append(string.ascii_lowercase.index(index.lower()))
+            numeric_key.append(numericize_index(index))
         key = numeric_key
         return not (key[0] < 0 or key[0] >= self.row_dimension) and not (
             key[1] < 0 or key[1] >= self.column_dimension
@@ -424,6 +445,16 @@ class VoxelGrid(Grid):
                 quantity += len(col_value)
         return quantity
 
+    def get_child(self, key: GridIndex3D) -> Optional["ResourceDataModels"]:
+        """Get a child from the Voxel Grid."""
+        row = self.children.get(numericize_index(key[0]), None)
+        if row is None:
+            return None
+        col = row.get(numericize_index(key[1]), None)
+        if col is None:
+            return None
+        return col.get(numericize_index(key[2]), None)
+
     @staticmethod
     def flatten_key(key: GridIndex3D) -> str:
         """Flatten the key to a string."""
@@ -469,16 +500,59 @@ class VoxelGrid(Grid):
             raise ValueError("Key must be a string or a 3-tuple.")
         numeric_key = []
         for index in key:
-            if isinstance(index, int) or str(index).isdigit():
-                numeric_key.append(int(index))
-            else:
-                numeric_key.append(string.ascii_lowercase.index(index.lower()))
+            numeric_key.append(numericize_index(index))
         key = numeric_key
         return (
             not (key[0] < 0 or key[0] >= self.row_dimension)
             and not (key[1] < 0 or key[1] >= self.column_dimension)
             and not (key[2] < 0 or key[2] >= self.layer_dimension)
         )
+
+
+class Slot(Container):
+    """Data Model for a Slot. A slot is a container that can hold a single resource."""
+
+    base_type: Literal[ContainerTypeEnum.slot] = Field(
+        title="Container Base Type",
+        description="The base type of the slot.",
+        default=ContainerTypeEnum.slot,
+        const=True,
+    )
+    children: Optional[list["ResourceDataModels"]] = Field(
+        title="Children",
+        description="The children of the slot.",
+        default_factory=list,
+    )
+    capacity: Literal[1] = Field(
+        title="Capacity",
+        description="The capacity of the slot.",
+        default=1,
+        const=1,
+    )
+
+    def get_child(self, key: Optional[int] = None) -> Optional["ResourceDataModels"]:
+        """Get the child from the slot."""
+        if key is not None and key != 0:
+            return None
+        return self.child
+
+    @computed_field
+    def quantity(self) -> int:
+        """Calculate the quantity of assets in the container."""
+        return len(self.children)
+
+    @property
+    def child(self) -> Optional["ResourceDataModels"]:
+        """Get the child from the slot."""
+        return self.children[0] if self.children else None
+
+    def extract_children(self) -> dict[str, "ResourceDataModels"]:
+        """Extract the children from the stack as a flat dict."""
+        return {"0": self.child} if self.child else {}
+
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the stack."""
+        self.children = [children["0"]] if "0" in children else []
 
 
 class Stack(Container):
@@ -500,6 +574,13 @@ class Stack(Container):
     def quantity(self) -> int:
         """Calculate the quantity of assets in the container."""
         return len(self.children)
+
+    def get_child(self, key: int) -> Optional["ResourceDataModels"]:
+        """Get a child from the container."""
+        key = int(key)
+        if key < 0 or key >= len(self.children):
+            return None
+        return self.children[key]
 
     def extract_children(self) -> dict[str, "ResourceDataModels"]:
         """Extract the children from the stack as a flat dict."""
@@ -534,6 +615,13 @@ class Queue(Container):
         """Calculate the quantity of assets in the container."""
         return len(self.children)
 
+    def get_child(self, key: int) -> Optional["ResourceDataModels"]:
+        """Get a child from the container."""
+        key = int(key)
+        if key < 0 or key >= len(self.children):
+            return None
+        return self.children[key]
+
     def extract_children(self) -> dict[str, "ResourceDataModels"]:
         """Extract the children from the stack as a flat dict."""
         children_dict = {}
@@ -565,6 +653,10 @@ class Pool(Container):
         title="Capacity",
         description="The capacity of the pool as a whole.",
     )
+
+    def get_child(self, key: str) -> Optional["ResourceDataModels"]:
+        """Get a child from the container."""
+        return self.children.get(key, None)
 
     @computed_field
     def quantity(self) -> int:
@@ -639,6 +731,10 @@ RESOURCE_TYPE_MAP = {
         "definition": PoolResourceDefinition,
         "model": Pool,
     },
+    ContainerTypeEnum.slot: {
+        "definition": SlotResourceDefinition,
+        "model": Slot,
+    },
 }
 
 ResourceDataModels = Annotated[
@@ -656,6 +752,7 @@ ResourceDataModels = Annotated[
         Annotated[Stack, Tag("stack")],
         Annotated[Queue, Tag("queue")],
         Annotated[Pool, Tag("pool")],
+        Annotated[Slot, Tag("slot")],
     ],
     Discriminator("base_type"),
 ]
@@ -679,6 +776,7 @@ ContainerDataModels = Annotated[
         Annotated[Stack, Tag("stack")],
         Annotated[Queue, Tag("queue")],
         Annotated[Pool, Tag("pool")],
+        Annotated[Slot, Tag("slot")],
     ],
     Discriminator("base_type"),
 ]

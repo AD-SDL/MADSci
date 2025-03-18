@@ -1,28 +1,13 @@
 """Types for MADSci Steps."""
 
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.condition_types import Conditions
+from madsci.common.types.location_types import Location
 from sqlmodel.main import Field
-
-
-class Condition(BaseModel):
-    """A model for the conditions a step needs to be run"""
-
-    resource: str = Field(
-        title="Condition Target Resource",
-        description="The resource targeted by the condition",
-    )
-    field: str = Field(
-        title="Condition Target Field",
-        description="The field in the target resource targeted by the condition",
-    )
-    value: Any = Field(
-        title="Condition Target Resource",
-        description="The resource targeted by the condition",
-    )
 
 
 class StepDefinition(BaseModel):
@@ -48,11 +33,16 @@ class StepDefinition(BaseModel):
         default_factory=dict,
     )
     files: dict[str, PathLike] = Field(
-        title="Step Files",
-        description="Files to be used in the step.",
+        title="Step File Arguments",
+        description="Files to be used in the step. Key is the name of the file argument, value is the path to the file.",
         default_factory=dict,
     )
-    conditions: list[Condition] = Field(
+    locations: dict[str, Union[str, Location]] = Field(
+        title="Step Location Arguments",
+        description="Locations to be used in the step. Key is the name of the argument, value is the name of the location, or a Location object.",
+        default_factory=dict,
+    )
+    conditions: list[Conditions] = Field(
         title="Step Conditions",
         description="Conditions for running the step",
         default_factory=list,

@@ -6,7 +6,7 @@ from typing import Any, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci.common.types.step_types import Step
+from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.validators import ulid_validator
 from pydantic import Field, field_validator
 
@@ -68,10 +68,10 @@ class WorkflowDefinition(BaseModel):
     """Information about the flow"""
     parameters: Optional[list[WorkflowParameter]] = Field(default_factory=list)
     """Inputs to the workflow"""
-    flowdef: list[Step] = Field(default_factory=list)
+    steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
 
-    @field_validator("flowdef", mode="after")
+    @field_validator("steps", mode="after")
     @classmethod
     def ensure_data_label_uniqueness(cls, v: Any) -> Any:
         """Ensure that the names of the arguments and files are unique"""
@@ -89,8 +89,11 @@ class SchedulerMetadata(BaseModel):
     """Scheduler information"""
 
     ready_to_run: bool = False
-    """whether or not the next step in the workflow is ready to run"""
+    """Whether or not the next step in the workflow is ready to run"""
     priority: int = 0
+    """Used to rank workflows when deciding which to run next. Higher is more important"""
+    reasons: list[str] = Field(default_factory=list)
+    """Allow the scheduler to provide reasons for its decisions"""
 
 
 class Workflow(WorkflowDefinition):
@@ -124,6 +127,8 @@ class Workflow(WorkflowDefinition):
     """Duration of the workflow's run"""
     paused: Optional[bool] = False
     """whether or not the workflow is paused"""
+    step_definitions: list[StepDefinition] = Field(default_factory=list)
+    """The original step definitions for the workflow"""
 
     def get_step_by_name(self, name: str) -> Step:
         """Return the step object by its name"""

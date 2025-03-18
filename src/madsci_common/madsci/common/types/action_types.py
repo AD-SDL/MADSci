@@ -295,10 +295,12 @@ class ActionDefinition(BaseModel):
         description="The arguments of the action.",
         default_factory=dict,
     )
-    files: Union[dict[str, PathLike], list[PathLike]] = Field(
-        title="Action File Arguments",
-        description="The file arguments of the action.",
-        default_factory=dict,
+    files: Union[dict[str, "ActionFileDefinition"], list["ActionFileDefinition"]] = (
+        Field(
+            title="Action File Arguments",
+            description="The file arguments of the action.",
+            default_factory=dict,
+        )
     )
     results: Union[
         dict[str, "ActionResultDefinition"],

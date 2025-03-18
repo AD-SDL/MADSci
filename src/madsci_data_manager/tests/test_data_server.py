@@ -73,7 +73,7 @@ def test_roundtrip_file_datapoint(test_client: TestClient, tmp_path: Path) -> No
     Test that we can send and then retrieve a datapoint by ID.
     """
     test_file = Path(tmp_path) / "test.txt"
-    test_file.parent.mkdir(parents=True, exist_ok=True)
+    test_file.expanduser().parent.mkdir(parents=True, exist_ok=True)
     with test_file.open("w") as f:
         f.write("test")
     test_datapoint = FileDataPoint(

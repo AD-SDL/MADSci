@@ -5,6 +5,7 @@ from typing import Optional
 
 import click
 from click.core import Context
+from madsci.common.types.datapoint_types import DataManagerDefinition
 from madsci.common.types.event_types import EventManagerDefinition
 from madsci.common.types.experiment_types import ExperimentManagerDefinition
 from madsci.common.types.lab_types import (
@@ -153,7 +154,7 @@ def add(
             )
             if new_path:
                 path = Path(new_path)
-                path.parent.mkdir(parents=True, exist_ok=True)
+                path.expanduser().parent.mkdir(parents=True, exist_ok=True)
         manager_definition = promote_manager_definition(manager_definition)
         save_model(
             path=path, model=manager_definition, overwrite_check=not ctx.obj.quiet
@@ -172,6 +173,8 @@ def promote_manager_definition(
         return EventManagerDefinition(**manager_definition.model_dump(mode="json"))
     if manager_definition.manager_type == ManagerType.RESOURCE_MANAGER:
         return ResourceManagerDefinition(**manager_definition.model_dump(mode="json"))
+    if manager_definition.manager_type == ManagerType.DATA_MANAGER:
+        return DataManagerDefinition(**manager_definition.model_dump(mode="json"))
     return manager_definition
 
 

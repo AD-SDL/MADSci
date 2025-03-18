@@ -17,6 +17,6 @@ config:
   clear_workflows: false
   cold_start_delay: 0
   scheduler: madsci.workcell_manager.schedulers.default_scheduler
-  data_client_url: http://localhost:8003
+  data_server_url: http://localhost:8003
 nodes: []
 workcell_directory: ~/.madsci/workcells/Example Workcell

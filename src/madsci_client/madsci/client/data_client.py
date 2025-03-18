@@ -50,7 +50,12 @@ class DataClient:
             if hasattr(self._local_datapoints[datapoint_id], "value"):
                 return self._local_datapoints[datapoint_id].value
             if hasattr(self._local_datapoints[datapoint_id], "path"):
-                with Path.open(self._local_datapoints[datapoint_id].path, "rb") as f:
+                with (
+                    Path(self._local_datapoints[datapoint_id].path)
+                    .resolve()
+                    .expanduser()
+                    .open("rb") as f
+                ):
                     return f.read()
         response = requests.get(f"{self.url}datapoint/{datapoint_id}/value", timeout=10)
         response.raise_for_status()
@@ -63,6 +68,7 @@ class DataClient:
         self, datapoint_id: Union[str, ULID], output_filepath: str
     ) -> None:
         """Get an datapoint value by ID."""
+        output_filepath = Path(output_filepath).expanduser()
         if self.url is None:
             if self._local_datapoints[datapoint_id].data_type == "file":
                 import shutil
@@ -71,17 +77,17 @@ class DataClient:
                     self._local_datapoints[datapoint_id].path, output_filepath
                 )
             else:
-                with Path.open(output_filepath, "w") as f:
+                with Path(output_filepath).open("w") as f:
                     f.write(str(self._local_datapoints[datapoint_id].value))
             return
         response = requests.get(f"{self.url}datapoint/{datapoint_id}/value", timeout=10)
         response.raise_for_status()
         try:
-            with Path.open(output_filepath, "w") as f:
+            with Path(output_filepath).open("w") as f:
                 f.write(str(response.json()["value"]))
 
         except Exception:
-            Path(output_filepath).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_filepath).expanduser().parent.mkdir(parents=True, exist_ok=True)
             with Path.open(output_filepath, "wb") as f:
                 f.write(response.content)
 
@@ -108,7 +114,7 @@ class DataClient:
                     "files",
                     (
                         str(Path(datapoint.path).name),
-                        Path.open(Path(datapoint.path), "rb"),
+                        Path.open(Path(datapoint.path).expanduser(), "rb"),
                     ),
                 )
             }

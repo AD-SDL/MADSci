@@ -1,6 +1,7 @@
 """REST-based node client implementation."""
 
 import json
+import tempfile
 from pathlib import Path
 from typing import Any, ClassVar, Optional
 from zipfile import ZipFile
@@ -54,16 +55,19 @@ class RestNodeClient(AbstractNodeClient):
         files = []
         try:
             files = [
-                ("files", (file, Path(path).open("rb")))  # noqa: SIM115
+                ("files", (file, Path(path).expanduser().open("rb")))
                 for file, path in action_request.files.items()
             ]
             self.logger.log_debug(files)
+
+            serialized_args = action_request.model_dump(mode="json")["args"]
+            self.logger.log_debug(serialized_args)
 
             rest_response = requests.post(
                 f"{self.url}/action",
                 params={
                     "action_name": action_request.action_name,
-                    "args": json.dumps(action_request.args),
+                    "args": json.dumps(serialized_args),
                     "action_id": action_request.action_id,
                 },
                 files=files,
@@ -99,20 +103,21 @@ class RestNodeClient(AbstractNodeClient):
         if response.files and len(response.files) == 1:
             file_key = next(iter(response.files.keys()))
             filename = response.files[file_key]
-            path = "temp" / Path(filename)
-            with Path.open(str(path), "wb") as f:
-                f.write(response.content)
-            response.files[file_key] = path
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                temp_file.write(response.content)
+                temp_path = Path(temp_file.name)
+            response.files[file_key] = temp_path
         elif response.files and len(response.files) > 1:
-            with Path.open("temp_zip.zip", "wb") as f:
-                f.write(response.content)
-            file = ZipFile("temp_zip.zip")
-            for file_key in list(response.files.keys()):
-                filename = response.files[file_key]
-                path = "temp" / Path(filename)
-                file.extract(filename, path)
-                response.files[file_key] = path
-            file.close()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_zip:
+                temp_zip.write(response.content)
+                temp_zip_path = Path(temp_zip.name)
+            with ZipFile(temp_zip_path) as zip_file:
+                for file_key in list(response.files.keys()):
+                    filename = response.files[file_key]
+                    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                        temp_file.write(zip_file.read(filename))
+                        temp_path = Path(temp_file.name)
+                    response.files[file_key] = temp_path
         return ActionResult.model_validate(response.json())
 
     def get_status(self) -> NodeStatus:

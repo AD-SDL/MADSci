@@ -90,7 +90,7 @@ class EventClientConfig(BaseModel):
     log_dir: PathLike = Field(
         title="Log Directory",
         description="The directory to store logs in.",
-        default_factory=lambda: Path.home() / ".madsci" / "logs",
+        default_factory=lambda: Path("~") / ".madsci" / "logs",
     )
 
 

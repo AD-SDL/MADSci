@@ -66,7 +66,7 @@ class BaseModel(SQLModel, use_enum_values=True):
 
         kwargs are passed to model_dump_json
         """
-        with Path(path).open(mode="w") as fp:
+        with Path(path).expanduser().open(mode="w") as fp:
             yaml.dump(
                 self.model_dump(mode="json", by_alias=by_alias, **kwargs),
                 fp,
@@ -79,7 +79,7 @@ class BaseModel(SQLModel, use_enum_values=True):
         """
         Allows all derived data models to be loaded from yaml.
         """
-        with Path(path).open() as fp:
+        with Path(path).expanduser().open() as fp:
             raw_data = yaml.safe_load(fp)
         model_instance = cls.model_validate(raw_data)
         model_instance._definition_path = path
@@ -162,19 +162,23 @@ class BaseModel(SQLModel, use_enum_values=True):
                 definition_files.extend(
                     search_for_file_pattern(pattern, parents=True, children=True)
                 )
-            if require_unique and len(definition_files) > 1:
-                raise ValueError(
-                    f"Multiple definition files found for {cls.__name__}: {definition_files}"
-                )
-            if len(definition_files) == 0:
-                raise FileNotFoundError(f"No definition files found for {cls.__name__}")
+            validated_definitions = []
             for definition_file in definition_files:
                 try:
-                    model_instance = cls.from_yaml(definition_file)
+                    validated_definitions.append(cls.from_yaml(definition_file))
                 except Exception as e:
-                    default_logger.log_error(
+                    default_logger.log_debug(
                         f"Failed to load model {cls.__name__} from {definition_file}: {e}"
                     )
+            if require_unique and len(validated_definitions) > 1:
+                raise ValueError(
+                    f"Multiple definitions found for {cls.__name__}: {[vd._definition_path for vd in validated_definitions]}"
+                )
+            if len(validated_definitions) == 0:
+                raise FileNotFoundError(
+                    f"No valid definition files found for {cls.__name__}"
+                )
+            model_instance = validated_definitions[0]
         except Exception as e:
             default_logger.log_error(
                 f"Failed to load model {cls.__name__} from filesystem search: {e}"
@@ -247,15 +251,15 @@ class BaseModel(SQLModel, use_enum_values=True):
         override_defaults: dict[str, Any] = {},
     ) -> dict[str, str]:
         """
-        Extract CLI arguments from this model's fields. Adds arguments to the passed-in ArgumentParser, and returns a nested dictionary mapping arg keys to fields.
+        Extract CLI arguments from this model's fields. Adds arguments to the passed-in ArgumentParser, and returns a nested dictionary mapping arg keys to fields for later reconstruction.
         """
         field_hierarchy = {}
         for field_name, field in cls.__pydantic_fields__.items():
+            # * Check if the field is a model that we should use the sub-fields of
             for info in field.metadata:
-                # * Check if the field is a model that we should use the sub-fields of
                 if isinstance(info, LoadConfig) and info.use_fields_as_cli_args:
-                    # * Add sub-model fields as individual CLI arguments
-                    field_hierarchy[field_name] = field.annotation.parser_from_fields(
+                    # * Add sub-model's fields as individual CLI arguments
+                    field_hierarchy[field_name] = field.annotation._parser_from_fields(
                         parser, override_defaults.get(field_name, {})
                     )
                     break
@@ -273,7 +277,6 @@ class BaseModel(SQLModel, use_enum_values=True):
                     required = True
                 parser.add_argument(
                     f"--{field_name}",
-                    type=str,
                     help=field.description,
                     default=default,
                     required=required,
@@ -286,7 +289,7 @@ class BaseModel(SQLModel, use_enum_values=True):
         cls: type[_T], args: argparse.Namespace, field_hierarchy: dict
     ) -> _T:
         """
-        Create a model instance from CLI arguments. Recursively evaluate sub-models as needed.
+        Create a model instance from CLI arguments. Recursively construct sub-models as needed.
         """
         field_values = {}
         for field_name, _ in cls.__pydantic_fields__.items():

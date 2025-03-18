@@ -1,13 +1,12 @@
 """Client for performing workcell actions"""
 
-import copy
 import json
-import re
 import time
 from pathlib import Path
 from typing import Any, Optional
 
 import requests
+from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.workflow_types import (
@@ -28,7 +27,7 @@ class WorkcellClient:
     ) -> "WorkcellClient":
         """initialize the client"""
         self.url = workcell_manager_url
-        self.working_directory = Path(working_directory).resolve().expanduser()
+        self.working_directory = Path(working_directory).expanduser()
         self.ownership_info = ownership_info
 
     def query_workflow(self, workflow_id: str) -> Optional[Workflow]:
@@ -80,7 +79,13 @@ class WorkcellClient:
                 else None,
             },
             files={
-                ("files", (str(Path(path).name), Path.open(Path(path), "rb")))
+                (
+                    "files",
+                    (
+                        str(Path(path).name),
+                        Path.open(Path(path).expanduser(), "rb"),
+                    ),
+                )
                 for _, path in files.items()
             },
             timeout=10,
@@ -100,7 +105,7 @@ class WorkcellClient:
         Returns a dictionary of files from a workflow
         """
         files = {}
-        for step in workflow.flowdef:
+        for step in workflow.steps:
             if step.files:
                 for file, path in step.files.items():
                     unique_filename = f"{step.step_id}_{file}"
@@ -257,6 +262,12 @@ class WorkcellClient:
         response = requests.get(url, timeout=100)
         return response.json()
 
+    def get_workcell_state(self) -> dict:
+        """Get the full state of the workcell"""
+        url = f"{self.url}/state"
+        response = requests.get(url, timeout=10)
+        return response.json()
+
 
 def insert_parameter_values(
     workflow: WorkflowDefinition, parameters: dict[str, Any]
@@ -273,78 +284,11 @@ def insert_parameter_values(
                     + " not provided, and no default value is defined."
                 )
     steps = []
-    for step in workflow.flowdef:
+    for step in workflow.steps:
         for key, val in iter(step):
             if type(val) is str:
                 setattr(step, key, value_substitution(val, parameters))
 
         step.args = walk_and_replace(step.args, parameters)
         steps.append(step)
-    workflow.flowdef = steps
-
-
-def walk_and_replace(
-    args: dict[str, Any], input_parameters: dict[str, Any]
-) -> dict[str, Any]:
-    """Recursively walk the arguments and replace all parameters"""
-    new_args = copy.deepcopy(args)
-    for key, val in args.items():
-        if type(val) is str:
-            new_args[key] = value_substitution(val, input_parameters)
-        elif type(args[key]) is dict:
-            new_args[key] = walk_and_replace(val, input_parameters)
-        if type(key) is str:
-            new_key = value_substitution(key, input_parameters)
-            new_args[new_key] = new_args[key]
-            if key is not new_key:
-                new_args.pop(key, None)
-    return new_args
-
-
-def value_substitution(input_string: str, input_parameters: dict[str, Any]) -> str:
-    """Perform $-string substitution on input string, returns string with substituted values"""
-    # * Check if the string is a simple parameter reference
-    if type(input_string) is str and re.match(r"^\$[A-z0-9_\-]*$", input_string):
-        if input_string.strip("$") in input_parameters:
-            input_string = input_parameters[input_string.strip("$")]
-        else:
-            raise ValueError(
-                "Unknown parameter:"
-                + input_string
-                + ", please define it in the parameters section of the Workflow Definition."
-            )
-    else:
-        # * Replace all parameter references contained in the string
-        working_string = input_string
-        for match in re.findall(r"((?<!\$)\$(?!\$)[A-z0-9_\-\{]*)(\})", input_string):
-            if match[0][1] == "{":
-                param_name = match[0].strip("$")
-                param_name = param_name.strip("{")
-                working_string = re.sub(
-                    r"((?<!\$)\$(?!\$)[A-z0-9_\-\{]*)(\})",
-                    str(input_parameters[param_name]),
-                    working_string,
-                )
-                input_string = working_string
-            else:
-                raise SyntaxError(
-                    "forgot opening { in parameter insertion: " + match[0] + "}"
-                )
-        for match in re.findall(
-            r"((?<!\$)\$(?!\$)[A-z0-9_\-]*)(?![A-z0-9_\-])", input_string
-        ):
-            param_name = match.strip("$")
-            if param_name in input_parameters:
-                working_string = re.sub(
-                    r"((?<!\$)\$(?!\$)[A-z0-9_\-]*)(?![A-z0-9_\-])",
-                    str(input_parameters[param_name]),
-                    working_string,
-                )
-                input_string = working_string
-            else:
-                raise ValueError(
-                    "Unknown parameter:"
-                    + param_name
-                    + ", please define it in the parameters section of the Workflow Definition."
-                )
-    return input_string
+    workflow.steps = steps

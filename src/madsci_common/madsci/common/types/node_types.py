@@ -251,10 +251,10 @@ class Node(BaseModel, arbitrary_types_allowed=True):
         title="Node State",
         description="Detailed nodes specific state information",
     )
-    reserved_by: Optional["NodeReservation"] = Field(
+    reservation: Optional["NodeReservation"] = Field(
         default=None,
-        title="Reserved By",
-        description="Ownership unit that is reserving this node",
+        title="Node Reservation",
+        description="Information about the current reservation of the node, if any",
     )
 
 
@@ -409,6 +409,14 @@ class NodeReservation(BaseModel):
         title="End Datetime",
         description="When the reservation ends.",
     )
+
+    def check(self, ownership: OwnershipInfo) -> bool:
+        """Check if the reservation is 1.) active or not, and 2.) owned by the given ownership."""
+        return not (
+            not self.owned_by.check(ownership)
+            and self.start <= datetime.now()
+            and self.end >= datetime.now()
+        )
 
 
 class NodeSetConfigResponse(BaseModel):

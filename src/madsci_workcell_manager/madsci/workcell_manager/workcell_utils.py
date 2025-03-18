@@ -22,7 +22,7 @@ def resolve_workcell_link(workcell_link: WorkcellLink) -> WorkcellDefinition:
         )
     if workcell_link.path is not None:
         return WorkcellDefinition.from_yaml(workcell_link.path)
-    return workcell_link.resolve().expanduser()
+    return workcell_link.expanduser()
 
 
 def initialize_workcell(

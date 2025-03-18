@@ -18,6 +18,7 @@ from madsci.common.types.resource_types import (
     Queue,
     ResourceDataModels,
     ResourceTypeEnum,
+    Slot,
     Stack,
 )
 from madsci.resource_manager.resource_tables import (
@@ -462,9 +463,9 @@ class ResourceInterface:
 
     def push(
         self, parent_id: str, child: Union[ResourceDataModels, str]
-    ) -> Union[Stack, Queue]:
+    ) -> Union[Stack, Queue, Slot]:
         """
-        Push a resource to a stack or queue. Automatically adds the child to the database if it's not already there.
+        Push a resource to a stack, queue, or slot. Automatically adds the child to the database if it's not already there.
 
         Args:
             parent_id (str): The id of the stack or queue resource to push the resource onto.
@@ -480,9 +481,10 @@ class ResourceInterface:
             if parent_row.base_type not in [
                 ContainerTypeEnum.stack,
                 ContainerTypeEnum.queue,
+                ContainerTypeEnum.slot,
             ]:
                 raise ValueError(
-                    f"Resource '{parent_row.resource_name}' with type {parent_row.base_type} is not a stack or queue resource."
+                    f"Resource '{parent_row.resource_name}' with type {parent_row.base_type} is not a stack, slot, or queue resource."
                 )
             parent = parent_row.to_data_model()
             if parent.capacity and len(parent.children) >= parent_row.capacity:
@@ -501,9 +503,11 @@ class ResourceInterface:
 
             return parent_row.to_data_model()
 
-    def pop(self, parent_id: str) -> tuple[ResourceDataModels, Union[Stack, Queue]]:
+    def pop(
+        self, parent_id: str
+    ) -> tuple[ResourceDataModels, Union[Stack, Queue, Slot]]:
         """
-        Pop a resource from a Stack or Queue. Returns the popped resource.
+        Pop a resource from a Stack, Queue, or Slot. Returns the popped resource.
 
         Args:
             parent_id (str): The id of the stack or queue resource to update.
@@ -511,7 +515,7 @@ class ResourceInterface:
         Returns:
             child (ResourceDataModels): The popped resource.
 
-            updated_parent (Union[Stack, Queue]): updated parent container
+            updated_parent (Union[Stack, Queue, Slot]): updated parent container
 
         """
         with self.get_session() as session:
@@ -521,20 +525,21 @@ class ResourceInterface:
             if parent_row.base_type not in [
                 ContainerTypeEnum.stack,
                 ContainerTypeEnum.queue,
+                ContainerTypeEnum.slot,
             ]:
                 raise ValueError(
-                    f"Resource '{parent_row.resource_name}' with type {parent_row.base_type} is not a stack or queue resource."
+                    f"Resource '{parent_row.resource_name}' with type {parent_row.base_type} is not a stack, slot, or queue resource."
                 )
             parent = parent_row.to_data_model()
             if not parent.children:
                 raise ValueError(f"Container '{parent.resource_name}' is empty.")
             if parent.base_type == ContainerTypeEnum.stack:
                 child = parent.children[-1]
-            elif parent.base_type == ContainerTypeEnum.queue:
+            elif parent.base_type in [ContainerTypeEnum.queue, ContainerTypeEnum.slot]:
                 child = parent.children[0]
             else:
                 raise ValueError(
-                    f"Resource '{parent.resource_name}' with type {parent.base_type} is not a stack or queue resource."
+                    f"Resource '{parent.resource_name}' with type {parent.base_type} is not a stack, slot, or queue resource."
                 )
             child_row = session.exec(
                 select(ResourceTable).filter_by(resource_id=child.resource_id)
@@ -577,6 +582,7 @@ class ResourceInterface:
             if container_row.base_type in [
                 ContainerTypeEnum.stack,
                 ContainerTypeEnum.queue,
+                ContainerTypeEnum.slot,
             ]:
                 raise ValueError(
                     f"Resource '{container_row.resource_name}' with type {container_row.base_type} does not support random access, use `.push` instead."
@@ -628,6 +634,7 @@ class ResourceInterface:
             if container_row.base_type in [
                 ContainerTypeEnum.stack,
                 ContainerTypeEnum.queue,
+                ContainerTypeEnum.slot,
             ]:
                 raise ValueError(
                     f"Resource '{container_row.resource_name}' with type {container_row.base_type} does not support random access, use `.pop` instead."

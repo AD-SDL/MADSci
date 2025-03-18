@@ -57,7 +57,7 @@ def search_for_file_pattern(
         A list of paths to the files that match the pattern.
     """
 
-    start_dir = Path.cwd() if not start_dir else Path(start_dir).resolve().expanduser()
+    start_dir = Path.cwd() if not start_dir else Path(start_dir).expanduser()
 
     results = []
     if children:

@@ -183,6 +183,18 @@ class VoxelGridResourceDefinition(GridResourceDefinition):
     )
 
 
+class SlotResourceDefinition(ContainerResourceDefinition):
+    """Definition for a slot resource."""
+
+    default_child_quantity: Optional[int] = Field(
+        default=None,
+        title="Default Child Quantity",
+        description="The number of children to create by default. If None, use the type's default_child_quantity.",
+        ge=0,
+        le=1,
+    )
+
+
 class StackResourceDefinition(ContainerResourceDefinition):
     """Definition for a stack resource."""
 

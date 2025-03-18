@@ -9,6 +9,7 @@ from madsci.common.types.resource_types import (
     Queue,
     Resource,
     Row,
+    Slot,
     Stack,
     VoxelGrid,
 )
@@ -806,3 +807,33 @@ def test_fill_consumable_no_capacity(interface: ResourceInterface) -> None:
     with pytest.raises(ValueError) as exc_info:
         interface.fill(resource_id=consumable.resource_id)
     assert "has no capacity limit set" in str(exc_info.value)
+
+
+def test_push_pop_slot(interface: ResourceInterface) -> None:
+    """Test pushing to and popping from a slot with capacity of 1"""
+    # Create a slot with capacity 1
+    slot = Slot()
+    slot = interface.add_resource(resource=slot)
+
+    # Create a resource and push it to the slot
+    resource1 = Resource()
+    slot = interface.push(parent_id=slot.resource_id, child=resource1)
+
+    # Verify slot properties after push
+    assert len(slot.children) == 1
+    assert slot.quantity == 1
+    assert slot.children[0].resource_id == resource1.resource_id
+
+    # Attempt to push another resource to the full slot
+    resource2 = Resource()
+    with pytest.raises(ValueError) as exc_info:
+        interface.push(parent_id=slot.resource_id, child=resource2)
+    assert "because it is full" in str(exc_info.value)
+
+    # Pop the resource from the slot
+    popped_resource, slot = interface.pop(parent_id=slot.resource_id)
+
+    # Verify slot properties after pop
+    assert popped_resource.resource_id == resource1.resource_id
+    assert len(slot.children) == 0
+    assert slot.quantity == 0
