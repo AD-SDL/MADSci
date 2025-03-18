@@ -66,8 +66,8 @@ class ResourceDefinition(BaseModel, table=False):
         default="",
         nullable=False,
     )
-    base_type: Optional[ResourceTypeEnum] = Field(
-        default=None,
+    base_type: Literal[ResourceTypeEnum.resource] = Field(
+        default=ResourceTypeEnum.resource,
         title="Resource Base Type",
         description="The base type of the resource.",
     )
@@ -82,22 +82,51 @@ class ResourceDefinition(BaseModel, table=False):
 class AssetResourceDefinition(ResourceDefinition, table=False):
     """Definition for an asset resource."""
 
+    base_type: Literal[ResourceTypeEnum.asset] = Field(
+        default=ResourceTypeEnum.asset,
+        title="Resource Base Type",
+        description="The base type of the asset.",
+    )
+
 
 class ConsumableResourceDefinition(ResourceDefinition):
     """Definition for a consumable resource."""
+
+    base_type: Literal[ResourceTypeEnum.consumable] = Field(
+        default=ResourceTypeEnum.consumable,
+        title="Resource Base Type",
+        description="The base type of the consumable.",
+    )
 
 
 class DiscreteConsumableResourceDefinition(ConsumableResourceDefinition):
     """Definition for a discrete consumable resource."""
 
+    base_type: Literal[ResourceTypeEnum.discrete_consumable] = Field(
+        default=ResourceTypeEnum.discrete_consumable,
+        title="Resource Base Type",
+        description="The base type of the consumable.",
+    )
+
 
 class ContinuousConsumableResourceDefinition(ConsumableResourceDefinition):
     """Definition for a continuous consumable resource."""
+
+    base_type: Literal[ResourceTypeEnum.continuous_consumable] = Field(
+        default=ResourceTypeEnum.continuous_consumable,
+        title="Resource Base Type",
+        description="The base type of the continuous consumable.",
+    )
 
 
 class ContainerResourceDefinition(ResourceDefinition):
     """Definition for a container resource."""
 
+    base_type: Literal[ResourceTypeEnum.container] = Field(
+        default=ResourceTypeEnum.container,
+        title="Resource Base Type",
+        description="The base type of the container.",
+    )
     capacity: Optional[Union[int, float]] = Field(
         default=None,
         title="Container Capacity",
@@ -120,6 +149,11 @@ class ContainerResourceDefinition(ResourceDefinition):
 class CollectionResourceDefinition(ContainerResourceDefinition):
     """Definition for a collection resource. Collections are used for resources that have a number of children, each with a unique key, which can be randomly accessed."""
 
+    base_type: Literal[ResourceTypeEnum.collection] = Field(
+        default=ResourceTypeEnum.collection,
+        title="Resource Base Type",
+        description="The base type of the collection.",
+    )
     keys: Optional[Union[int, list[str]]] = Field(
         default=None,
         title="Collection Keys",
@@ -145,6 +179,11 @@ class CollectionResourceDefinition(ContainerResourceDefinition):
 class RowResourceDefinition(ContainerResourceDefinition):
     """Definition for a row resource. Rows are 1D collections of resources. They are treated as single collections (i.e. Collection[Resource])."""
 
+    base_type: Literal[ResourceTypeEnum.row] = Field(
+        default=ResourceTypeEnum.row,
+        title="Resource Base Type",
+        description="The base type of the row.",
+    )
     default_children: Optional[dict[str, ResourceDefinition]] = Field(
         default=None,
         title="Default Children",
@@ -155,6 +194,11 @@ class RowResourceDefinition(ContainerResourceDefinition):
 class GridResourceDefinition(RowResourceDefinition):
     """Definition for a grid resource. Grids are 2D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Resource]])."""
 
+    base_type: Literal[ResourceTypeEnum.grid] = Field(
+        default=ResourceTypeEnum.grid,
+        title="Resource Base Type",
+        description="The base type of the grid.",
+    )
     default_children: Optional[dict[str, dict[str, ResourceDefinition]]] = Field(
         default=None,
         title="Default Children",
@@ -170,6 +214,11 @@ class GridResourceDefinition(RowResourceDefinition):
 class VoxelGridResourceDefinition(GridResourceDefinition):
     """Definition for a voxel grid resource. Voxel grids are 3D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Collection[Resource]]])."""
 
+    base_type: Literal[ResourceTypeEnum.voxel_grid] = Field(
+        default=ResourceTypeEnum.voxel_grid,
+        title="Resource Base Type",
+        description="The base type of the voxel grid.",
+    )
     default_children: Optional[dict[str, dict[str, dict[str, ResourceDefinition]]]] = (
         Field(
             default=None,
@@ -186,6 +235,11 @@ class VoxelGridResourceDefinition(GridResourceDefinition):
 class SlotResourceDefinition(ContainerResourceDefinition):
     """Definition for a slot resource."""
 
+    base_type: Literal[ResourceTypeEnum.slot] = Field(
+        default=ResourceTypeEnum.slot,
+        title="Resource Base Type",
+        description="The base type of the slot.",
+    )
     default_child_quantity: Optional[int] = Field(
         default=None,
         title="Default Child Quantity",
@@ -198,6 +252,11 @@ class SlotResourceDefinition(ContainerResourceDefinition):
 class StackResourceDefinition(ContainerResourceDefinition):
     """Definition for a stack resource."""
 
+    base_type: Literal[ResourceTypeEnum.stack] = Field(
+        default=ResourceTypeEnum.stack,
+        title="Resource Base Type",
+        description="The base type of the stack.",
+    )
     default_child_quantity: Optional[int] = Field(
         default=None,
         title="Default Child Quantity",
@@ -208,6 +267,11 @@ class StackResourceDefinition(ContainerResourceDefinition):
 class QueueResourceDefinition(ContainerResourceDefinition):
     """Definition for a queue resource."""
 
+    base_type: Literal[ResourceTypeEnum.queue] = Field(
+        default=ResourceTypeEnum.queue,
+        title="Resource Base Type",
+        description="The base type of the queue.",
+    )
     default_child_quantity: Optional[int] = Field(
         default=None,
         title="Default Child Quantity",
@@ -217,6 +281,12 @@ class QueueResourceDefinition(ContainerResourceDefinition):
 
 class PoolResourceDefinition(ContainerResourceDefinition):
     """Definition for a pool resource. Pool resources are collections of consumables with no structure (used for wells, reservoirs, etc.)."""
+
+    base_type: Literal[ResourceTypeEnum.pool] = Field(
+        default=ResourceTypeEnum.pool,
+        title="Resource Base Type",
+        description="The base type of the pool.",
+    )
 
 
 ResourceDefinitions = Union[
