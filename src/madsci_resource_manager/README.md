@@ -24,6 +24,7 @@ MADSci Resource Manager supports various resource types, including:
 - **Row**: Single-dimensional containers.
 - **Grid**: Two-dimensional containers.
 - **VoxelGrid**: Three-dimensional containers.
+- **Slot**: container which supports exactly zero or one child. Ideal for things like plate nests.
 - **Stack**: Single-dimensional containers supporting LIFO access.
 - **Queue**: Single-dimensional containers supporting FIFO access.
 - **Pool**: Containers for holding consumables that are mixed or collocated.
