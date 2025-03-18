@@ -159,8 +159,8 @@ class ContainerResourceTypeDefinition(ResourceTypeDefinition):
         title="Default Child Template",
         description="The default template for children to create when populating the container.",
     )
-    base_type: Literal[AssetTypeEnum.container] = Field(
-        default=AssetTypeEnum.container,
+    base_type: Literal[ResourceTypeEnum.container] = Field(
+        default=ResourceTypeEnum.container,
         title="Container Base Type",
         description="The base type of the container.",
     )
@@ -189,8 +189,8 @@ class ConsumableResourceTypeDefinition(ResourceTypeDefinition):
 class DiscreteConsumableResourceTypeDefinition(ConsumableResourceTypeDefinition):
     """Definition for a MADSci Discrete Consumable Resource Type."""
 
-    base_type: Literal[ConsumableTypeEnum.discrete_consumable] = Field(
-        default=ConsumableTypeEnum.discrete_consumable,
+    base_type: Literal[ResourceTypeEnum.discrete_consumable] = Field(
+        default=ResourceTypeEnum.discrete_consumable,
         title="Discrete Consumable Base Type",
         description="The base type of the discrete consumable.",
     )
@@ -199,8 +199,8 @@ class DiscreteConsumableResourceTypeDefinition(ConsumableResourceTypeDefinition)
 class ContinuousConsumableResourceTypeDefinition(ConsumableResourceTypeDefinition):
     """Definition for a MADSci Continuous Consumable Resource Type."""
 
-    base_type: Literal[ConsumableTypeEnum.continuous_consumable] = Field(
-        default=ConsumableTypeEnum.continuous_consumable,
+    base_type: Literal[ResourceTypeEnum.continuous_consumable] = Field(
+        default=ResourceTypeEnum.continuous_consumable,
         title="Continuous Consumable Base Type",
         description="The base type of the continuous consumable.",
     )
@@ -214,8 +214,8 @@ class StackResourceTypeDefinition(ContainerResourceTypeDefinition):
         title="Default Child Quantity",
         description="The default number of children to create when populating the container. If None, the container will be populated with a single child.",
     )
-    base_type: Literal[ContainerTypeEnum.stack] = Field(
-        default=ContainerTypeEnum.stack,
+    base_type: Literal[ResourceTypeEnum.stack] = Field(
+        default=ResourceTypeEnum.stack,
         title="Stack Base Type",
         description="The base type of the stack.",
     )
@@ -229,8 +229,8 @@ class QueueResourceTypeDefinition(ContainerResourceTypeDefinition):
         title="Default Child Quantity",
         description="The default number of children to create when populating the container. If None, the container will be populated with a single child.",
     )
-    base_type: Literal[ContainerTypeEnum.queue] = Field(
-        default=ContainerTypeEnum.queue,
+    base_type: Literal[ResourceTypeEnum.queue] = Field(
+        default=ResourceTypeEnum.queue,
         title="Queue Base Type",
         description="The base type of the queue.",
     )
@@ -250,6 +250,11 @@ class CollectionResourceTypeDefinition(ContainerResourceTypeDefinition):
         title="Default Children",
         description="The default children to create when populating the container.",
     )
+    base_type: Literal[ResourceTypeEnum.collection] = Field(
+        default=ResourceTypeEnum.collection,
+        title="Collection Base Type",
+        description="The base type of the collection.",
+    )
 
     @field_validator("keys", mode="before")
     @classmethod
@@ -259,15 +264,15 @@ class CollectionResourceTypeDefinition(ContainerResourceTypeDefinition):
             return [str(i) for i in range(1, v + 1)]
         return v
 
-    base_type: Literal[ContainerTypeEnum.collection] = Field(
-        default=ContainerTypeEnum.collection,
-        title="Collection Base Type",
-        description="The base type of the collection.",
-    )
-
 
 class RowResourceTypeDefinition(ContainerResourceTypeDefinition):
     """Definition for a MADSci Row Resource Type."""
+
+    base_type: Literal[ResourceTypeEnum.row] = Field(
+        default=ResourceTypeEnum.row,
+        title="Row Base Type",
+        description="The base type of the row.",
+    )
 
 
 class GridResourceTypeDefinition(ContainerResourceTypeDefinition):
@@ -281,6 +286,11 @@ class GridResourceTypeDefinition(ContainerResourceTypeDefinition):
         title="Grid Columns",
         description="The column labels for the grid.",
     )
+    base_type: Literal[ResourceTypeEnum.grid] = Field(
+        default=ResourceTypeEnum.grid,
+        title="Grid Base Type",
+        description="The base type of the grid.",
+    )
 
     @field_validator("columns", "rows", mode="before")
     @classmethod
@@ -289,12 +299,6 @@ class GridResourceTypeDefinition(ContainerResourceTypeDefinition):
         if isinstance(v, int):
             return [str(i) for i in range(1, v + 1)]
         return v
-
-    base_type: Literal[ContainerTypeEnum.grid] = Field(
-        default=ContainerTypeEnum.grid,
-        title="Grid Base Type",
-        description="The base type of the grid.",
-    )
 
 
 class VoxelGridResourceTypeDefinition(GridResourceTypeDefinition):
@@ -308,6 +312,11 @@ class VoxelGridResourceTypeDefinition(GridResourceTypeDefinition):
         title="Voxel Grid Planes",
         description="The keys of the planes in the grid.",
     )
+    base_type: Literal[ResourceTypeEnum.voxel_grid] = Field(
+        default=ResourceTypeEnum.voxel_grid,
+        title="Voxel Grid Base Type",
+        description="The base type of the voxel grid.",
+    )
 
     @field_validator("columns", "rows", mode="before")
     @classmethod
@@ -317,18 +326,12 @@ class VoxelGridResourceTypeDefinition(GridResourceTypeDefinition):
             return [str(i) for i in range(1, v + 1)]
         return v
 
-    base_type: Literal[ContainerTypeEnum.voxel_grid] = Field(
-        default=ContainerTypeEnum.voxel_grid,
-        title="Voxel Grid Base Type",
-        description="The base type of the voxel grid.",
-    )
-
 
 class PoolResourceTypeDefinition(ContainerResourceTypeDefinition):
     """Definition for a MADSci Pool Resource Type."""
 
-    base_type: Literal[ContainerTypeEnum.pool] = Field(
-        default=ContainerTypeEnum.pool,
+    base_type: Literal[ResourceTypeEnum.pool] = Field(
+        default=ResourceTypeEnum.pool,
         title="Pool Base Type",
         description="The base type of the pool.",
     )
@@ -337,8 +340,8 @@ class PoolResourceTypeDefinition(ContainerResourceTypeDefinition):
 class SlotTypeDefinition(ContainerResourceTypeDefinition):
     """Definition for a MADSci Slot Resource Type."""
 
-    base_type: Literal[ContainerTypeEnum.slot] = Field(
-        default=ContainerTypeEnum.slot,
+    base_type: Literal[ResourceTypeEnum.slot] = Field(
+        default=ResourceTypeEnum.slot,
         title="Slot Base Type",
         description="The base type of the slot.",
     )
