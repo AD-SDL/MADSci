@@ -36,6 +36,7 @@ fi
 
 # *Best-effort attempt to align permissions for the default data directory
 mkdir -p /home/${CONTAINER_USER}/.madsci
+mkdir -p /home/${CONTAINER_USER}/.madsci/logs
 chown $USER_ID:$GROUP_ID /home/${CONTAINER_USER}/.madsci || true
 chown $USER_ID:$GROUP_ID /home/${CONTAINER_USER}/.madsci/logs || true
 

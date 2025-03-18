@@ -242,11 +242,12 @@ class ResourceFile(BaseModel):
         description="The definitions of the resource types in the file.",
         default=[],
     )
-    default_resources: list[ResourceDefinitions] = Field(
+    default_resources: list[
+        Annotated[ResourceDefinitions, Field(discriminator="base_type")]
+    ] = Field(
         title="Default Resources",
         description="The definitions of the default resources in the file.",
         default=[],
-        discriminator="base_type",
     )
 
     @model_validator(mode="after")

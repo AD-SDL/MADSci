@@ -15,7 +15,7 @@ from madsci.common.types.node_types import (
     NodeSetConfigResponse,
     NodeStatus,
 )
-from madsci.common.types.resource_types.definitions import ResourceDefinition
+from madsci.common.types.resource_types import ResourceDataModels
 from pydantic import AnyUrl
 
 
@@ -68,7 +68,7 @@ class AbstractNodeClient:
             "send_admin_command is not implemented by this client"
         )
 
-    def get_resources(self) -> dict[str, ResourceDefinition]:
+    def get_resources(self) -> dict[str, ResourceDataModels]:
         """Get the resources of the node."""
         raise NotImplementedError("get_resources is not implemented by this client")
 
