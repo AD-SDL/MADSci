@@ -40,34 +40,27 @@ from starlette.responses import FileResponse
 
 def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
     """Converts the response to a dictionary of headers"""
+    for key in action_response.files:
+        action_response.files[key] = str(action_response.files[key])
     return {
         "x-madsci-action-id": action_response.action_id,
-        "x-madsci-status": str(action_response.status),
+        "x-madsci-status": action_response.status.value,
         "x-madsci-datapoints": json.dumps(action_response.datapoints),
-        "x-madsci-error": json.dumps(action_response.error),
+        "x-madsci-errors": json.dumps(action_response.errors),
         "x-madsci-files": json.dumps(action_response.files),
     }
 
 
-def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
-    """Creates an ActionResult from the headers of a file response"""
-
-    return ActionResult(
-        action_id=headers["x-madsci-action-id"],
-        status=ActionStatus(headers["x-wei-status"]),
-        errors=json.loads(headers["x-wei-error"]),
-        files=json.loads(headers["x-wei-files"]),
-        datapoints=json.loads(headers["x-wei-datapoints"]),
-    )
 
 
 class ActionResultWithFiles(FileResponse):
     """Action response from a REST-based node."""
 
-    def from_action_response(self, action_response: ActionResult) -> ActionResult:
+    @classmethod
+    def from_action_response(cls, action_response: ActionResult) -> ActionResult:
         """Create an ActionResultWithFiles from an ActionResult."""
         if len(action_response.files) == 1:
-            return super().__init__(
+            return ActionResultWithFiles(
                 path=next(iter(action_response.files.values())),
                 headers=action_response_to_headers(action_response),
             )
@@ -86,7 +79,7 @@ class ActionResultWithFiles(FileResponse):
                     PureWindowsPath(action_response.files[file]).name,
                 )
 
-            return super().__init__(
+            return ActionResultWithFiles(
                 path=temp_zipfile_path,
                 headers=action_response_to_headers(action_response),
             )
@@ -180,7 +173,7 @@ class RestNode(AbstractNode):
             )
             # * Return a file response if there are files to be returned
             if response.files:
-                return ActionResultWithFiles().from_action_response(
+                return ActionResultWithFiles.from_action_response(
                     action_response=response,
                 )
             # * Otherwise, return a normal action response
@@ -193,7 +186,7 @@ class RestNode(AbstractNode):
         """Get the status of an action on the node."""
         action_response = super().get_action_result(action_id)
         if action_response.files:
-            return ActionResultWithFiles().from_action_response(
+            return ActionResultWithFiles.from_action_response(
                 action_response=action_response,
             )
         return ActionResult.model_validate(action_response)
