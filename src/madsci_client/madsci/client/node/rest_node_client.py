@@ -7,6 +7,7 @@ from typing import Any, ClassVar, Optional
 from zipfile import ZipFile
 
 import requests
+from fastapi.responses import FileResponse
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
@@ -23,7 +24,6 @@ from madsci.common.types.node_types import (
 )
 from madsci.common.types.resource_types.definitions import ResourceDefinition
 from pydantic import AnyUrl
-from fastapi.responses import FileResponse
 
 
 def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
@@ -37,27 +37,31 @@ def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
         datapoints=json.loads(headers["x-madsci-datapoints"]),
     )
 
-def process_file_response(rest_response: FileResponse):
+
+def process_file_response(rest_response: FileResponse) -> ActionResult:
+    """Process a file rest response, saving files and getting headers"""
     response = action_response_from_headers(rest_response.headers)
     if response.files and len(response.files) == 1:
-            file_key = next(iter(response.files.keys()))
-            filename = response.files[file_key]
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                temp_file.write(rest_response.content)
-                temp_path = Path(temp_file.name)
-            response.files[file_key] = temp_path
+        file_key = next(iter(response.files.keys()))
+        filename = response.files[file_key]
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(rest_response.content)
+            temp_path = Path(temp_file.name)
+        response.files[file_key] = temp_path
     elif response.files and len(response.files) > 1:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_zip:
-                temp_zip.write(rest_response.content)
-                temp_zip_path = Path(temp_zip.name)
-            with ZipFile(temp_zip_path) as zip_file:
-                for file_key in list(response.files.keys()):
-                    filename = response.files[file_key]
-                    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                        temp_file.write(zip_file.read(filename))
-                        temp_path = Path(temp_file.name)
-                    response.files[file_key] = temp_path
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_zip:
+            temp_zip.write(rest_response.content)
+            temp_zip_path = Path(temp_zip.name)
+        with ZipFile(temp_zip_path) as zip_file:
+            for file_key in list(response.files.keys()):
+                filename = response.files[file_key]
+                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                    temp_file.write(zip_file.read(filename))
+                    temp_path = Path(temp_file.name)
+                response.files[file_key] = temp_path
     return response
+
+
 class RestNodeClient(AbstractNodeClient):
     """REST-based node client."""
 
@@ -142,13 +146,11 @@ class RestNodeClient(AbstractNodeClient):
         )
         if not rest_response.ok:
             rest_response.raise_for_status()
-        print(rest_response.headers)
         if "x-madsci-status" in rest_response.headers:
             response = process_file_response(rest_response)
         else:
             response = ActionResult.model_validate(response.json())
         return response
-
 
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""

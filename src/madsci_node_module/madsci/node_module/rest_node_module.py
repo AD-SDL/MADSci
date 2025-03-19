@@ -16,7 +16,6 @@ from madsci.client.node.rest_node_client import RestNodeClient
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
-    ActionStatus,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error, new_ulid_str
@@ -49,8 +48,6 @@ def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
         "x-madsci-errors": json.dumps(action_response.errors),
         "x-madsci-files": json.dumps(action_response.files),
     }
-
-
 
 
 class ActionResultWithFiles(FileResponse):
