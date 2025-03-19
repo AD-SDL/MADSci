@@ -7,10 +7,12 @@ from madsci.common.types.condition_types import (
 from madsci.common.types.resource_types import Container
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import Workflow
-from madsci.workcell_manager.schedulers.default_scheduler import Scheduler
+from madsci.workcell_manager.schedulers.scheduler import AbstractScheduler
 
 
-def evaluate_condition_checks(step: Step, wf: Workflow, scheduler: Scheduler) -> None:
+def evaluate_condition_checks(
+    step: Step, wf: Workflow, scheduler: AbstractScheduler
+) -> None:
     """Check if the specified conditions for the step are met"""
     for condition in step.conditions:
         if isinstance(condition, ResourceInLocationCondition):
@@ -22,7 +24,7 @@ def evaluate_condition_checks(step: Step, wf: Workflow, scheduler: Scheduler) ->
 
 
 def evaluate_resource_in_location_condition(
-    condition: ResourceInLocationCondition, wf: Workflow, scheduler: Scheduler
+    condition: ResourceInLocationCondition, wf: Workflow, scheduler: AbstractScheduler
 ) -> None:
     """Check if a resource is present in a specified location"""
     location = scheduler.workcell.locations[condition.location]
@@ -55,7 +57,7 @@ def evaluate_resource_in_location_condition(
 
 
 def evaluate_no_resource_in_location_condition(
-    condition: NoResourceInLocationCondition, wf: Workflow, scheduler: Scheduler
+    condition: NoResourceInLocationCondition, wf: Workflow, scheduler: AbstractScheduler
 ) -> None:
     """Check if a resource is not present in a specified location"""
     location = scheduler.workcell.locations[condition.location]

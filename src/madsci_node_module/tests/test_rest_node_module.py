@@ -11,7 +11,7 @@ from madsci.common.types.action_types import (
     ActionStatus,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.event_types import Event, EventClientConfig
+from madsci.common.types.event_types import Event, EventClientConfig, EventLogLevel
 from madsci.common.types.node_types import NodeDefinition, NodeInfo, NodeStatus
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
@@ -32,6 +32,7 @@ def test_node(tmpdir: Path) -> TestNode:
             test_required_param=1,
             event_client_config=EventClientConfig(
                 log_dir=Path(tmpdir),
+                log_level=EventLogLevel.DEBUG,
             ),
         ),
     )
@@ -42,9 +43,6 @@ def test_client(test_node: TestNode) -> TestClient:
     """Return a TestClient instance for testing."""
 
     test_node.start_node(testing=True)
-
-    while test_node.test_interface is None:
-        time.sleep(0.01)
 
     return TestClient(test_node.rest_api)
 
@@ -78,6 +76,7 @@ def test_lock_and_unlock(test_client: TestClient) -> None:
     """Test the admin commands."""
 
     with test_client as client:
+        time.sleep(0.1)
         response = client.post("/admin/lock")
         assert response.status_code == 200
         validated_response = AdminCommandResponse.model_validate(response.json())
@@ -102,6 +101,7 @@ def test_lock_and_unlock(test_client: TestClient) -> None:
 def test_pause_and_resume(test_client: TestClient) -> None:
     """Test the pause and resume commands."""
     with test_client as client:
+        time.sleep(0.1)
         response = client.post("/admin/pause")
         assert response.status_code == 200
         validated_response = AdminCommandResponse.model_validate(response.json())
@@ -127,6 +127,7 @@ def test_safety_stop_and_reset(test_client: TestClient) -> None:
     """Test the safety_stop and reset commands."""
 
     with test_client as client:
+        time.sleep(0.1)
         response = client.post("/admin/safety_stop")
         assert response.status_code == 200
         validated_response = AdminCommandResponse.model_validate(response.json())
@@ -148,6 +149,7 @@ def test_shutdown(test_node: TestNode) -> None:
     test_node.start_node(testing=True)
 
     with TestClient(test_node.rest_api) as client:
+        time.sleep(0.5)
         response = client.post("/admin/shutdown")
         assert response.status_code == 200
         validated_response = AdminCommandResponse.model_validate(response.json())
@@ -159,6 +161,7 @@ def test_shutdown(test_node: TestNode) -> None:
 def test_run_action(test_client: TestClient) -> None:
     """Test the test_action command."""
     with test_client as client:
+        time.sleep(0.5)
         response = client.post(
             "/action",
             params={
@@ -184,6 +187,7 @@ def test_run_action_fail(test_client: TestClient) -> None:
     """Test the test_action_fail command."""
 
     with test_client as client:
+        time.sleep(0.5)
         response = client.post(
             "/action",
             params={"action_name": "test_fail", "args": json.dumps({"test_param": 1})},
@@ -198,6 +202,7 @@ def test_run_action_fail(test_client: TestClient) -> None:
 def test_get_status(test_client: TestClient) -> None:
     """Test the get_status command."""
     with test_client as client:
+        time.sleep(0.5)
         response = client.get("/status")
         assert response.status_code == 200
         assert NodeStatus.model_validate(response.json()).ready is True
@@ -206,6 +211,7 @@ def test_get_status(test_client: TestClient) -> None:
 def test_get_state(test_client: TestClient) -> None:
     """Test the get_state command."""
     with test_client as client:
+        time.sleep(0.5)
         response = client.get("/state")
         assert response.status_code == 200
         assert response.json() == {"test_status_code": 0}
@@ -214,6 +220,7 @@ def test_get_state(test_client: TestClient) -> None:
 def test_get_info(test_client: TestClient) -> None:
     """Test the get_info command."""
     with test_client as client:
+        time.sleep(0.5)
         response = client.get("/info")
         assert response.status_code == 200
         node_info = NodeInfo.model_validate(response.json())
@@ -232,6 +239,7 @@ def test_get_info(test_client: TestClient) -> None:
 def test_get_action_result(test_client: TestClient) -> None:
     """Test the get_action_result command."""
     with test_client as client:
+        time.sleep(0.5)
         response = client.post(
             "/action",
             params={
@@ -259,6 +267,7 @@ def test_get_action_result(test_client: TestClient) -> None:
 def test_get_action_history(test_client: TestClient) -> None:
     """Test the get_action_history command."""
     with test_client as client:
+        time.sleep(0.5)
         response = client.get("/action")
         assert response.status_code == 200
         action_history = response.json()
@@ -330,6 +339,7 @@ def test_get_action_history(test_client: TestClient) -> None:
 def test_get_log(test_client: TestClient) -> None:
     """Test the get_log command."""
     with test_client as client:
+        time.sleep(0.5)
         response = client.post(
             "/action",
             params={

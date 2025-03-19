@@ -34,7 +34,6 @@ from madsci.common.utils import threaded_task
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
-from multiprocess import Process
 from pydantic import AnyUrl
 from starlette.responses import FileResponse
 
@@ -127,8 +126,23 @@ class RestNode(AbstractNode):
 
     def start_node(self, testing: bool = False) -> None:
         """Start the node."""
-        super().start_node()  # *Kick off protocol agnostic-startup
-        self._start_rest_api(testing=testing)
+        host = getattr(self.config, "host", "localhost")
+        port = getattr(self.config, "port", 2000)
+        if not testing:
+            self.logger.log_debug("Running node in production mode")
+            import uvicorn
+
+            self.rest_api = FastAPI(lifespan=self._lifespan)
+            self._configure_routes()
+            uvicorn.run(self.rest_api, host=host, port=port)
+            if self.restart_flag:
+                self.start_node(testing=testing)
+            if self.exit_flag:
+                return
+        else:
+            self.logger.log_debug("Running node in test mode")
+            self.rest_api = FastAPI(lifespan=self._lifespan)
+            self._configure_routes()
 
     """------------------------------------------------------------------------------------------------"""
     """Interface Methods"""
@@ -266,40 +280,11 @@ class RestNode(AbstractNode):
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def _run_uvicorn(self, host: str, port: str) -> None:
-        import uvicorn
-
-        self.rest_api = FastAPI(lifespan=self._lifespan)
-        self._configure_routes()
-        uvicorn.run(self.rest_api, host=host, port=port)
-
-    def _start_rest_api(self, testing: bool = False) -> None:
-        """Start the REST API for the node."""
-        host = getattr(self.config, "host", "localhost")
-        port = getattr(self.config, "port", 2000)
-        if not testing:
-            self.rest_server_process = Process(
-                target=self._run_uvicorn,
-                kwargs={"host": host, "port": port},
-                daemon=True,
-            )
-            self.rest_server_process.start()
-            while True:
-                time.sleep(1)
-                if self.restart_flag:
-                    self.rest_server_process.terminate()
-                    self.restart_flag = False
-                    self._start_rest_api(testing=testing)
-                    break
-                if self.exit_flag:
-                    break
-        if testing:
-            self.rest_api = FastAPI(lifespan=self._lifespan)
-            self._configure_routes()
-
     @asynccontextmanager
     async def _lifespan(self, app: FastAPI):  # noqa: ANN202, ARG002
         """The lifespan of the REST API."""
+        super().start_node()
+
         yield
 
         try:

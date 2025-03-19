@@ -5,7 +5,7 @@ on:
     branches: ["main"]
     tags: ["*"]
   pull_request: # *Run for every PR
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
     branches: ["*"]
   schedule: # Run every Tuesday at 12:00
     - cron: '0 12 * * 2'
