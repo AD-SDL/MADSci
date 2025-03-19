@@ -7,12 +7,13 @@ from typing import Any, ClassVar, Optional
 from zipfile import ZipFile
 
 import requests
+from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
 )
 from madsci.common.types.action_types import ActionRequest, ActionResult
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.event_types import Event
+from madsci.common.types.event_types import Event, EventClientConfig
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -46,9 +47,12 @@ class RestNodeClient(AbstractNodeClient):
         get_resources=False,
     )
 
-    def __init__(self, url: AnyUrl) -> "RestNodeClient":
+    def __init__(
+        self, url: AnyUrl, event_client_config: Optional[EventClientConfig] = None
+    ) -> "RestNodeClient":
         """Initialize the client."""
         super().__init__(url)
+        self.logger = EventClient(config=event_client_config)
 
     def send_action(self, action_request: ActionRequest) -> ActionResult:
         """Perform an action on the node."""
