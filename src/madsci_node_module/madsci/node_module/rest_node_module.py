@@ -334,8 +334,8 @@ class RestNode(AbstractNode):
             self.get_log,
             methods=["GET"],
         )
-        #self.rest_api.include_router(self.router)
-        return self.router
+        self.rest_api.include_router(self.router)
+
 
 if __name__ == "__main__":
     RestNode().start_node()
