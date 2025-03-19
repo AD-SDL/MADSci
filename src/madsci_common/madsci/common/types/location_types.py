@@ -31,7 +31,7 @@ class Location(BaseModel):
     lookup: dict[str, Json] = Field(
         title="Location Representation Map",
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
-        default=[],
+        default={},
     )
     resource_id: Optional[str] = Field(
         title="Resource ID",

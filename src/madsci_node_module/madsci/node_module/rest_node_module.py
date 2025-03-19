@@ -5,7 +5,6 @@ import shutil
 import tempfile
 import time
 from contextlib import asynccontextmanager
-from multiprocessing import Process
 from pathlib import Path, PureWindowsPath
 from typing import Any, Optional, Union
 from zipfile import ZipFile
@@ -35,6 +34,7 @@ from madsci.common.utils import threaded_task
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
+from multiprocess import Process
 from pydantic import AnyUrl
 from starlette.responses import FileResponse
 

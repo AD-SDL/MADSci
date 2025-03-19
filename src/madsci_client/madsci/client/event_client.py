@@ -135,7 +135,7 @@ class EventClient:
                 event = Event.model_validate_json(event)
         if isinstance(event, dict):
             with contextlib.suppress(ValidationError):
-                event = Event.model_validate(**event)
+                event = Event.model_validate(event)
         if not isinstance(event, Event):
             event = self._new_event_for_log(event, level)
         event.log_level = level if level else event.log_level
