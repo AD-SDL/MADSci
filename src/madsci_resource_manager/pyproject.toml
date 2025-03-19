@@ -13,6 +13,7 @@ readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
   "madsci.common",
+  "madsci.client",
   "psycopg2-binary"
 ]
 

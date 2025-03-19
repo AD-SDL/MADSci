@@ -13,6 +13,7 @@ readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
   "madsci.common",
+  "madsci.client",
   "nicegui>=2.10.1"
 ]
 

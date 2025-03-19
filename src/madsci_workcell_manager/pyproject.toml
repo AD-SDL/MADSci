@@ -13,11 +13,9 @@ readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
   "madsci.common",
-  "fastapi",
+  "madsci.client",
   "redis",
   "pottery",
-  "uvicorn",
-  "python-multipart"
 ]
 
 [project.urls]
