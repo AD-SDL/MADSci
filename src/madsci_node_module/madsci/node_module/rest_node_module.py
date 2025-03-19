@@ -266,18 +266,20 @@ class RestNode(AbstractNode):
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def _start_rest_api(self, testing: bool = False) -> None:
-        """Start the REST API for the node."""
+    def _run_uvicorn(self, host: str, port: str) -> None:
         import uvicorn
 
         self.rest_api = FastAPI(lifespan=self._lifespan)
         self._configure_routes()
+        uvicorn.run(self.rest_api, host=host, port=port)
+
+    def _start_rest_api(self, testing: bool = False) -> None:
+        """Start the REST API for the node."""
         host = getattr(self.config, "host", "localhost")
         port = getattr(self.config, "port", 2000)
         if not testing:
             self.rest_server_process = Process(
-                target=uvicorn.run,
-                args=(self.rest_api,),
+                target=self._run_uvicorn,
                 kwargs={"host": host, "port": port},
                 daemon=True,
             )
@@ -291,6 +293,9 @@ class RestNode(AbstractNode):
                     break
                 if self.exit_flag:
                     break
+        if testing:
+            self.rest_api = FastAPI(lifespan=self._lifespan)
+            self._configure_routes()
 
     @asynccontextmanager
     async def _lifespan(self, app: FastAPI):  # noqa: ANN202, ARG002
