@@ -125,7 +125,7 @@ class RestNodeClient(AbstractNodeClient):
             response = process_file_response(rest_response)
 
         else:
-            response = ActionResult.model_validate(response.json())
+            response = ActionResult.model_validate(rest_response.json())
         return response
 
     def get_action_history(
@@ -149,7 +149,7 @@ class RestNodeClient(AbstractNodeClient):
         if "x-madsci-status" in rest_response.headers:
             response = process_file_response(rest_response)
         else:
-            response = ActionResult.model_validate(response.json())
+            response = ActionResult.model_validate(rest_response.json())
         return response
 
     def get_status(self) -> NodeStatus:
