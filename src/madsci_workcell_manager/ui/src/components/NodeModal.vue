@@ -182,7 +182,7 @@ function set_text(action: any) {
       "action : ").concat(action.name).concat("\n\t").concat(
         "args : \n\t\t").concat(cleanArgs(input_args)).concat("checks : null \n\tcomment: a comment! \n\t")
   var args: { [k: string]: any } = {};
-  
+
   input_args.forEach(function (arg: any) {
 
     if (arg.value === undefined) {

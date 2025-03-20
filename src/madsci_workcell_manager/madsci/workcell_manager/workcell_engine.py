@@ -155,7 +155,7 @@ class Engine:
             )
             response = client.send_action(request)
         except Exception as e:
-            default_logger.log_info("request had exception: %f" % str(e))
+            default_logger.log_info(f"request had exception: {e!s}")
         finally:
             default_logger.log_info("querying result")
             response = self.query_action_result(node, client, request, response)

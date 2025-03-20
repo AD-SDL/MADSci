@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Annotated, Any, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
@@ -27,7 +28,7 @@ from madsci.workcell_manager.workflow_utils import (
     create_workflow,
     save_workflow_files,
 )
-from fastapi.middleware.cors import CORSMiddleware
+
 
 def create_workcell_server(  # noqa: C901, PLR0915
     workcell: WorkcellDefinition,
@@ -279,11 +280,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
     ui_files_path = Path("/home/madsci/ui/dist")
     app.mount("/", StaticFiles(directory=ui_files_path, html=True))
     app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     return app
