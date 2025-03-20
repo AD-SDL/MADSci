@@ -48,6 +48,7 @@ services:
     volumes:
       - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
       - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/src/madsci_workcell_manager/ui:/home/madsci/ui
     command: python -m madsci.workcell_manager.workcell_server
     depends_on:
       - redis

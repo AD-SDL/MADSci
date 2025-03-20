@@ -4,9 +4,11 @@ import json
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi.staticfiles import StaticFiles
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import new_ulid_str
@@ -274,6 +276,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.set_workflow(wf)
         return wf
 
+    ui_files_path = Path("/home/madsci/ui")
+    app.mount("/", StaticFiles(directory=ui_files_path, html=True))
     return app
 
 
