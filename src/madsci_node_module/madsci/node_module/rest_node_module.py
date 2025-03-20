@@ -16,7 +16,6 @@ from madsci.client.node.rest_node_client import RestNodeClient
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
-    ActionStatus,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error, new_ulid_str
@@ -34,41 +33,31 @@ from madsci.common.utils import threaded_task
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
-from multiprocess import Process
 from pydantic import AnyUrl
 from starlette.responses import FileResponse
 
 
 def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
     """Converts the response to a dictionary of headers"""
+    for key in action_response.files:
+        action_response.files[key] = str(action_response.files[key])
     return {
         "x-madsci-action-id": action_response.action_id,
-        "x-madsci-status": str(action_response.status),
+        "x-madsci-status": action_response.status.value,
         "x-madsci-datapoints": json.dumps(action_response.datapoints),
-        "x-madsci-error": json.dumps(action_response.error),
+        "x-madsci-errors": json.dumps(action_response.errors),
         "x-madsci-files": json.dumps(action_response.files),
     }
-
-
-def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
-    """Creates an ActionResult from the headers of a file response"""
-
-    return ActionResult(
-        action_id=headers["x-madsci-action-id"],
-        status=ActionStatus(headers["x-wei-status"]),
-        errors=json.loads(headers["x-wei-error"]),
-        files=json.loads(headers["x-wei-files"]),
-        datapoints=json.loads(headers["x-wei-datapoints"]),
-    )
 
 
 class ActionResultWithFiles(FileResponse):
     """Action response from a REST-based node."""
 
-    def from_action_response(self, action_response: ActionResult) -> ActionResult:
+    @classmethod
+    def from_action_response(cls, action_response: ActionResult) -> ActionResult:
         """Create an ActionResultWithFiles from an ActionResult."""
         if len(action_response.files) == 1:
-            return super().__init__(
+            return ActionResultWithFiles(
                 path=next(iter(action_response.files.values())),
                 headers=action_response_to_headers(action_response),
             )
@@ -87,7 +76,7 @@ class ActionResultWithFiles(FileResponse):
                     PureWindowsPath(action_response.files[file]).name,
                 )
 
-            return super().__init__(
+            return ActionResultWithFiles(
                 path=temp_zipfile_path,
                 headers=action_response_to_headers(action_response),
             )
@@ -127,8 +116,23 @@ class RestNode(AbstractNode):
 
     def start_node(self, testing: bool = False) -> None:
         """Start the node."""
-        super().start_node()  # *Kick off protocol agnostic-startup
-        self._start_rest_api(testing=testing)
+        host = getattr(self.config, "host", "localhost")
+        port = getattr(self.config, "port", 2000)
+        if not testing:
+            self.logger.log_debug("Running node in production mode")
+            import uvicorn
+
+            self.rest_api = FastAPI(lifespan=self._lifespan)
+            self._configure_routes()
+            uvicorn.run(self.rest_api, host=host, port=port)
+            if self.restart_flag:
+                self.start_node(testing=testing)
+            if self.exit_flag:
+                return
+        else:
+            self.logger.log_debug("Running node in test mode")
+            self.rest_api = FastAPI(lifespan=self._lifespan)
+            self._configure_routes()
 
     """------------------------------------------------------------------------------------------------"""
     """Interface Methods"""
@@ -166,7 +170,7 @@ class RestNode(AbstractNode):
             )
             # * Return a file response if there are files to be returned
             if response.files:
-                return ActionResultWithFiles().from_action_response(
+                return ActionResultWithFiles.from_action_response(
                     action_response=response,
                 )
             # * Otherwise, return a normal action response
@@ -179,7 +183,7 @@ class RestNode(AbstractNode):
         """Get the status of an action on the node."""
         action_response = super().get_action_result(action_id)
         if action_response.files:
-            return ActionResultWithFiles().from_action_response(
+            return ActionResultWithFiles.from_action_response(
                 action_response=action_response,
             )
         return ActionResult.model_validate(action_response)
@@ -266,40 +270,11 @@ class RestNode(AbstractNode):
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def _run_uvicorn(self, host: str, port: str) -> None:
-        import uvicorn
-
-        self.rest_api = FastAPI(lifespan=self._lifespan)
-        self._configure_routes()
-        uvicorn.run(self.rest_api, host=host, port=port)
-
-    def _start_rest_api(self, testing: bool = False) -> None:
-        """Start the REST API for the node."""
-        host = getattr(self.config, "host", "localhost")
-        port = getattr(self.config, "port", 2000)
-        if not testing:
-            self.rest_server_process = Process(
-                target=self._run_uvicorn,
-                kwargs={"host": host, "port": port},
-                daemon=True,
-            )
-            self.rest_server_process.start()
-            while True:
-                time.sleep(1)
-                if self.restart_flag:
-                    self.rest_server_process.terminate()
-                    self.restart_flag = False
-                    self._start_rest_api(testing=testing)
-                    break
-                if self.exit_flag:
-                    break
-        if testing:
-            self.rest_api = FastAPI(lifespan=self._lifespan)
-            self._configure_routes()
-
     @asynccontextmanager
     async def _lifespan(self, app: FastAPI):  # noqa: ANN202, ARG002
         """The lifespan of the REST API."""
+        super().start_node()
+
         yield
 
         try:

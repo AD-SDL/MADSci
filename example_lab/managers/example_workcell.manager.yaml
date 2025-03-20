@@ -1,4 +1,4 @@
-name: Example Workcell
+workcell_name: Example Workcell
 manager_type: workcell_manager
 workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
 description: null

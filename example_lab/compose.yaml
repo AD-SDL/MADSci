@@ -50,7 +50,7 @@ services:
       - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
     command: python -m madsci.workcell_manager.workcell_server
     depends_on:
-      - mongodb
+      - redis
   experiment_manager:
     container_name: experiment_manager
     image: madsci:latest
