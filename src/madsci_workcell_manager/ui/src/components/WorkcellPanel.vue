@@ -15,7 +15,7 @@
       <v-container class="pa-1" fluid>
         <v-row dense wrap justify-content="space-evenly">
           <v-col cols="12" md="6" lg="6" xl="6">
-            <ModulesPanel :modules="workcell_state.modules" :main_url="main_url" :wc_state="workcell_state" />
+            <NodesPanel :nodes="workcell_state.nodes" :main_url="main_url" :wc_state="workcell_state" />
             <LocationsPanel :locations="workcell_state.locations" />
           </v-col>
           <v-col cols="12" md="6" lg="6" xl="6">

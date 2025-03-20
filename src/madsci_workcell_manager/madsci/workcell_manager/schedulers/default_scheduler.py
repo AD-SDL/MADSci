@@ -36,7 +36,7 @@ class Scheduler(AbstractScheduler):
                     self.resource_checks(step, wf)
                     self.node_checks(step, wf)
                     evaluate_condition_checks(
-                        step, wf, self.workcell_definition, self.state_handler
+                        step, wf, self.workcell_definition
                     )
                     wf.scheduler_metadata.priority = priority
                     priority -= 1

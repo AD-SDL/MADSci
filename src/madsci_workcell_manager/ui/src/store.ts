@@ -28,18 +28,18 @@ async function get_events(experiment_id: string) {
     return Object.values(await ((await fetch(main_url.value.concat("/experiments/".concat(experiment_id).concat("/events"))))).json());
 }
 watchEffect(async () => {
-    state_url.value = main_url.value.concat("/wc/state")
+    state_url.value = main_url.value.concat("/state")
 
     experiments_url.value = main_url.value.concat("/experiments/all")
     campaigns_url.value = main_url.value.concat("/campaigns/all")
-    workcell_info_url.value = main_url.value.concat("/wc/")
+    workcell_info_url.value = main_url.value.concat("/workcell")
     events_url.value = main_url.value.concat("/events/all")
 
     setInterval(updateWorkcellState, 1000)
     setInterval(updateWorkflows, 1000)
-    setInterval(updateExperiments, 10000)
-    setInterval(updateCampaigns, 10000);
-    setInterval(updateEvents, 10000);
+    // setInterval(updateExperiments, 10000)
+    // setInterval(updateCampaigns, 10000);
+    // setInterval(updateEvents, 10000);
 
     async function updateExperiments() {
         experiments.value = await ((await fetch(experiments_url.value)).json());
@@ -68,22 +68,22 @@ watchEffect(async () => {
 })
 
 function get_status(value: any) {
-    if(value["ERROR"] && value["ERROR"] != false)  {
-        return "ERROR"
+    if(value["error"] && value["error"] != false)  {
+        return "error"
     }
-    if(value["CANCELLED"] && value["CANCELLED"] != false)  {
-        return "CANCELLED"
+    if(value["cancelled"] && value["cancelled"] != false)  {
+        return "cancelled"
     }
-    if(value["LOCKED"] && value["LOCKED"] != false)  {
-        return "LOCKED"
+    if(value["locked"] && value["locked"] != false)  {
+        return "locked"
     }
-    if(value["PAUSED"] && value["PAUSED"] != false) {
-        return "PAUSED"
+    if(value["paused"] && value["paused"] != false) {
+        return "paused"
     }
-    if(value["BUSY"] && value["BUSY"]) {
-        return "BUSY"
+    if(value["busy"] && value["busy"]) {
+        return "busy"
     } else {
-        return "READY"
+        return "ready"
     }
 }
 

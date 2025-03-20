@@ -80,7 +80,7 @@ services:
     volumes:
       - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
       - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
-    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/default_liquidhandler.node.yaml
+    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/liquidhandler_1.node.yaml
     network_mode: host
     depends_on:
       - event_manager

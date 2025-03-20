@@ -84,10 +84,6 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         return Path(self.config.workcells_directory) / self.workcell_name
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
-    validate_nodes_to_dict = field_validator("nodes", mode="before")(
-        create_dict_promoter("node_name")
-    )
-    serialize_nodes_to_list = field_serializer("nodes")(dict_to_list)
 
 
 class WorkcellLink(ModelLink[WorkcellDefinition]):

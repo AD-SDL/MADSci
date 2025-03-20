@@ -6,12 +6,7 @@
     <v-tab :value="2">
       Workflows
     </v-tab>
-    <v-tab :value="3">
-      Experiments
-    </v-tab>
-    <!-- <v-tab :value="4">Events</v-tab>
-        <v-tab :value="5">Admin</v-tab>
-        <v-tab :value="6">Resources</v-tab> -->
+
   </v-tabs>
   <v-window v-model="tab">
     <v-window-item :key="1" :value="1">
@@ -29,11 +24,6 @@
           <WorkflowTable/>
           </v-card-text>
         </v-card>
-      </v-container>
-    </v-window-item>
-    <v-window-item :key="3" :value="3">
-      <v-container class="pa-1 ma-1 justify-center" fluid>
-        <Experiments/>
       </v-container>
     </v-window-item>
   </v-window>
@@ -56,35 +46,35 @@ export default {
 </script>
 
 <style>
-.module_indicator {
+.node_indicator {
   color: white;
   border-radius: 5px;
     padding: 3px;
   }
 
 .wf_status_completed,
-.module_status_IDLE,
-.module_status_READY {
+.node_status_idle,
+.node_status_ready {
   background-color: green;
 }
 
 .wf_status_running,
-.module_status_BUSY {
+.node_status_busy {
   background-color: blue;
 }
 
 .wf_status_failed,
-.module_status_ERROR {
+.node_status_error {
   background-color: red;
 }
 
 .wf_status_unknown,
-.module_status_UNKNOWN {
+.node_status_unknown {
   background-color: darkslategray;
 }
 
 .wf_status_new,
-.module_status_INIT {
+.node_status_init {
   background-color: aquamarine;
   color: black;
 }
@@ -92,7 +82,7 @@ export default {
 .wf_status_queued,
 .wf_status_paused,
 .wf_status_in_progress,
-.module_status_PAUSED {
+.node_status_paused {
   background-color: gold;
   color: black;
 }
@@ -102,13 +92,13 @@ export default {
   color: black;
 }
 
-.module_status_LOCKED {
+.node_status_locked {
   background-color: darkslategray;
   color: white;
 }
 
 .wf_status_cancelled,
-.module_status_CANCELLED {
+.node_status_cancelled {
   background-color: darkorange;
   color: black;
 }

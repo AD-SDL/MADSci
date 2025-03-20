@@ -3,47 +3,47 @@
     <v-card>
       <v-card-title>
         <div class="d-flex align-center w-100">
-          <h2 class="title py-3 my-3">Module: {{ modal_title }}</h2>
+          <h2 class="title py-3 my-3">Node: {{ modal_title }}</h2>
 
-          <!-- Display pause/resume button only if module has 'pause' and 'resume' admin actions -->
-          <template v-if="wc_state.modules[modal_title].about.admin_commands.includes('pause') && wc_state.modules[modal_title].about.admin_commands.includes('resume')">
+          <!-- Display pause/resume button only if node has 'pause' and 'resume' admin actions -->
+          <template v-if="wc_state.nodes[modal_title].info.capabilities.admin_commands.includes('pause') && wc_state.nodes[modal_title].info.capabilities.admin_commands.includes('resume')">
             <PauseResumeButton
-              :module="modal_title"
-              :module_status="wc_state.modules[modal_title].state.status"
+              :node="modal_title"
+              :node_status="wc_state.nodes[modal_title].state.status"
               class="ml-2" />
           </template>
 
           <CancelButton
-            :module="modal_title"
-            :module_status="wc_state.modules[modal_title].state.status"
+            :node="modal_title"
+            :node_status="wc_state.nodes[modal_title].state.status"
             class="ml-2" />
 
           <ResetButton
-            :module="modal_title"
-            :module_status="wc_state.modules[modal_title].state.status"
+            :node="modal_title"
+            :node_status="wc_state.nodes[modal_title].state.status"
             class="ml-2" />
 
           <LockUnlockButton
-            :module="modal_title"
-            :module_status="wc_state.modules[modal_title].state.status"
+            :node="modal_title"
+            :node_status="wc_state.nodes[modal_title].state.status"
             class="ml-2" />
 
-          <template v-if="wc_state.modules[modal_title].about.admin_commands.includes('shutdown')">
+          <template v-if="wc_state.nodes[modal_title].info.capabilities.admin_commands.includes('shutdown')">
             <ShutdownButton
-              :module="modal_title"
-              :module_status="wc_state.modules[modal_title].state.status"
+              :node="modal_title"
+              :node_status="wc_state.nodes[modal_title].state.status"
               class="ml-2"/>
           </template>
 
-          <template v-if="wc_state.modules[modal_title].about.admin_commands.includes('safety_stop')">
+          <template v-if="wc_state.nodes[modal_title].info.capabilities.admin_commands.includes('safety_stop')">
             <SafetyStopButton
-              :module="modal_title"
-              :module_status="wc_state.modules[modal_title].state.status"
+              :node="modal_title"
+              :node_status="wc_state.nodes[modal_title].state.status"
               class="ml-2"/>
           </template>
         </div>
-        <v-sheet class="pa-2 rounded-lg text-md-center text-white" :class="'module_status_' + get_status(wc_state.modules[modal_title].state.status)">
-          {{ Object.entries(wc_state.modules[modal_title].state.status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }}
+        <v-sheet class="pa-2 rounded-lg text-md-center text-white" :class="'node_status_' + get_status(wc_state.nodes[modal_title].status)">
+          {{ Object.entries(wc_state.nodes[modal_title].status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }}
         </v-sheet>
       </v-card-title>
 
@@ -59,7 +59,8 @@
                 <h5>Description</h5>
                 <p class="py-1 my-1">{{ action.description }}</p>
                 <h5>Arguments</h5>
-                <v-data-table :headers="arg_headers" :items="action.args" hover items-per-page="-1"
+                <v-data-table :headers="arg_headers" :items="Object.keys(action.args).map(function(key){
+    return action.args[key];})" hover items-per-page="-1"
                   no-data-text="No Arguments" density="compact">
                   <!-- eslint-disable vue/no-parsing-error-->
                   <template v-slot:item="{ item }: { item: any }">
@@ -119,10 +120,10 @@
             <v-row dense wrap justify-content="space-evenly">
               <v-col cols="12" md="6" lg="4" xl="3">
                 <h3>State</h3>
-                <vue-json-pretty :data="wc_state.modules[modal_title].state"></vue-json-pretty>
+                <vue-json-pretty :data="wc_state.nodes[modal_title].state"></vue-json-pretty>
               </v-col>
               <v-col cols="12" md="6" lg="4" xl="3">
-                <h3>About</h3>
+                <h3>Info</h3>
                 <vue-json-pretty :data="modal_text" :deep="1"></vue-json-pretty>
               </v-col>
               <v-col cols="12" md="6" lg="4" xl="3">
@@ -174,12 +175,15 @@ const text = ref()
 const json_text = ref()
 
 function set_text(action: any) {
+  var input_args = Object.keys(action.args).map(function(key){
+    return action.args[key];});
   text.value = "- name : ".concat(action.name).concat("\n\t").concat(
-    "module : ").concat(props.modal_text.name).concat("\n\t").concat(
+    "node : ").concat(props.modal_title).concat("\n\t").concat(
       "action : ").concat(action.name).concat("\n\t").concat(
-        "args : \n\t\t").concat(cleanArgs(action.args)).concat("checks : null \n\tcomment: a comment! \n\t")
+        "args : \n\t\t").concat(cleanArgs(input_args)).concat("checks : null \n\tcomment: a comment! \n\t")
   var args: { [k: string]: any } = {};
-  action.args.forEach(function (arg: any) {
+  
+  input_args.forEach(function (arg: any) {
 
     if (arg.value === undefined) {
       args[arg.name] = arg.default
@@ -195,7 +199,7 @@ function set_text(action: any) {
   )
   json_text.value = {
     "name": action.name,
-    "module": props.modal_title,
+    "node": props.modal_title,
     "action": action.name,
     "args": args,
     "checks": null,
@@ -207,14 +211,16 @@ async function send_wf(action: any) {
   wf.name = action.name
   wf.metadata = {
     "author": "dashboard",
-    "info": "testing module",
+    "info": "testing node",
     "version": "0"
 
   }
-  wf.modules = [props.modal_title]
+  wf.nodes = [props.modal_title]
   const formData = new FormData();
   var args: { [k: string]: any } = {};
-  action.args.forEach(function (arg: any) {
+  var input_args = Object.keys(action.args).map(function(key){
+    return action.args[key];});
+  input_args.forEach(function (arg: any) {
 
     if (arg.value === undefined) {
       args[arg.name] = arg.default
@@ -229,7 +235,9 @@ async function send_wf(action: any) {
 
   })
   var files: { [k: string]: any } = {};
-  action.files.forEach(function (file: any) {
+  var input_files = Object.keys(action.files).map(function(key){
+    return action.files[key];});
+  input_files.forEach(function (file: any) {
     if (file.value === undefined) {
       files[file.name] = ""
     }
@@ -238,9 +246,9 @@ async function send_wf(action: any) {
       files[file.name] = file.value.name
     }
   })
-  wf.flowdef = [{
+  wf.steps = [{
     "name": action.name,
-    "module": props.modal_title,
+    "node": props.modal_title,
     "action": action.name,
     "args": args,
     "checks": null,
@@ -248,23 +256,12 @@ async function send_wf(action: any) {
     "files": files
   }]
   formData.append("workflow", JSON.stringify(wf))
-  var formData2 = new FormData();
-  formData2.append("json", JSON.stringify({ "experiment_name": action.name }))
-  var info: any = await (await fetch(props.main_url.concat('/experiments/'), {
-    method: "POST",
-    body: JSON.stringify({ "experiment_name": action.name }),
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  }
-  )).json()
-  formData.append("experiment_id", info["experiment_id"])
-  action.files.forEach(function (file: any) {
+  input_files.forEach(function (file: any) {
     if (file.value) {
       formData.append("files", file.value)
     }
   })
-  fetch(props.main_url.concat('/runs/start'), {
+  fetch(props.main_url.concat('/workflows/start'), {
     method: "POST",
     body: formData
   });

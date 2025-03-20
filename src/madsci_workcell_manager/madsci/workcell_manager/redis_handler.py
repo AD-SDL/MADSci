@@ -97,10 +97,10 @@ class WorkcellRedisHandler:
         Return a dict containing the current state of the workcell.
         """
         return {
-            "status": self.wc_status,
+            #"status": self.wc_status,
             "error": self.error,
             "nodes": self._nodes.to_dict(),
-            "workflows": self._workflow_runs.to_dict(),
+            "workflows": self._workflows.to_dict(),
             "workcell": self._workcell.to_dict(),
             "paused": self.paused,
             "locked": self.locked,

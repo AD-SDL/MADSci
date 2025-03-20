@@ -27,7 +27,7 @@ from madsci.workcell_manager.workflow_utils import (
     create_workflow,
     save_workflow_files,
 )
-
+from fastapi.middleware.cors import CORSMiddleware
 
 def create_workcell_server(  # noqa: C901, PLR0915
     workcell: WorkcellDefinition,
@@ -276,8 +276,16 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.set_workflow(wf)
         return wf
 
-    ui_files_path = Path("/home/madsci/ui")
+    ui_files_path = Path("/home/madsci/ui/dist")
     app.mount("/", StaticFiles(directory=ui_files_path, html=True))
+    app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    )
+
     return app
 
 
