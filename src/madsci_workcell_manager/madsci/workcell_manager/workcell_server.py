@@ -4,7 +4,6 @@ import json
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated, Any, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
@@ -277,8 +276,10 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.set_workflow(wf)
         return wf
 
-    ui_files_path = Path("/home/madsci/ui/dist")
-    app.mount("/", StaticFiles(directory=ui_files_path, html=True))
+    if workcell.config.static_files_path is not None:
+        app.mount(
+            "/", StaticFiles(directory=workcell.config.static_files_path, html=True)
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

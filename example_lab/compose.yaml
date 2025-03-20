@@ -49,7 +49,7 @@ services:
       - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
       - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
       - ${LOCAL_WORKSPACE_FOLDER:-../}/src/madsci_workcell_manager/ui:/home/madsci/ui
-    command: python -m madsci.workcell_manager.workcell_server
+    command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 2
     depends_on:
       - redis
   experiment_manager:

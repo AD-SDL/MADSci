@@ -178,3 +178,8 @@ class WorkcellConfig(BaseModel):
         title="Resource Server URL",
         description="The URL for the resource server.",
     )
+    static_files_path: Optional[str] = Field(
+        default=None,
+        title="Static Files Path",
+        description="Path to the static dashboard files",
+    )
