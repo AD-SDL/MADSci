@@ -245,6 +245,32 @@ class BaseModel(SQLModel, use_enum_values=True):
         return cls._from_cli_args(args, field_hierarchy)
 
     @classmethod
+    def _add_to_parser(
+        cls: type[_T],
+        field: Any,
+        field_name: str,
+        parser: argparse.ArgumentParser,
+        override_defaults: dict[str, Any] = {},
+    ) -> None:
+        """adds arguments to parser"""
+        default = None
+        required = False
+        if field_name in override_defaults:
+            default = override_defaults[field_name]
+        elif field.default_factory:
+            default = field.default_factory()
+        elif field.default != PydanticUndefined:
+            default = field.default
+        elif field.is_required():
+            required = True
+        parser.add_argument(
+            f"--{field_name}",
+            help=field.description,
+            default=default,
+            required=required,
+        )
+
+    @classmethod
     def _parser_from_fields(
         cls: type[_T],
         parser: argparse.ArgumentParser,
@@ -259,28 +285,14 @@ class BaseModel(SQLModel, use_enum_values=True):
             for info in field.metadata:
                 if isinstance(info, LoadConfig) and info.use_fields_as_cli_args:
                     # * Add sub-model's fields as individual CLI arguments
+                    cls._add_to_parser(field, field_name, parser, override_defaults)
                     field_hierarchy[field_name] = field.annotation._parser_from_fields(
                         parser, override_defaults.get(field_name, {})
                     )
                     break
             else:
                 # * Otherwise, add the field as a CLI argument
-                default = None
-                required = False
-                if field_name in override_defaults:
-                    default = override_defaults[field_name]
-                elif field.default_factory:
-                    default = field.default_factory()
-                elif field.default != PydanticUndefined:
-                    default = field.default
-                elif field.is_required():
-                    required = True
-                parser.add_argument(
-                    f"--{field_name}",
-                    help=field.description,
-                    default=default,
-                    required=required,
-                )
+                cls._add_to_parser(field, field_name, parser, override_defaults)
                 field_hierarchy[field_name] = field_name
         return field_hierarchy
 
@@ -297,7 +309,7 @@ class BaseModel(SQLModel, use_enum_values=True):
                 if isinstance(field_hierarchy.get(field_name), dict):
                     field_values[field_name] = cls.__pydantic_fields__[
                         field_name
-                    ].annotation.from_cli_args(args, field_hierarchy[field_name])
+                    ].annotation._from_cli_args(args, field_hierarchy[field_name])
                 else:
                     field_values[field_name] = getattr(args, field_name)
         return cls(**field_values)

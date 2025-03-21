@@ -18,5 +18,7 @@ config:
   cold_start_delay: 0
   scheduler: madsci.workcell_manager.schedulers.default_scheduler
   data_server_url: http://localhost:8003
-nodes: []
+  static_files_path: /home/madsci/ui/dist
+nodes:
+   liquidhandler_1: http://localhost:8000
 workcell_directory: ~/.madsci/workcells/Example Workcell

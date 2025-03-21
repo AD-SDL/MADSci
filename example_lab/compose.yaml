@@ -48,7 +48,8 @@ services:
     volumes:
       - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
       - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
-    command: python -m madsci.workcell_manager.workcell_server
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/src/madsci_workcell_manager/ui:/home/madsci/ui
+    command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 2
     depends_on:
       - redis
   experiment_manager:
@@ -79,7 +80,7 @@ services:
     volumes:
       - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
       - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
-    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/default_liquidhandler.node.yaml
+    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/liquidhandler_1.node.yaml
     network_mode: host
     depends_on:
       - event_manager

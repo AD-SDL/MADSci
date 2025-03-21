@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Annotated, Any, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import new_ulid_str
@@ -273,6 +275,18 @@ def create_workcell_server(  # noqa: C901, PLR0915
             with state_handler.wc_state_lock():
                 state_handler.set_workflow(wf)
         return wf
+
+    if workcell.config.static_files_path is not None:
+        app.mount(
+            "/", StaticFiles(directory=workcell.config.static_files_path, html=True)
+        )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     return app
 

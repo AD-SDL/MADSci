@@ -3,7 +3,6 @@
 from pathlib import Path
 from typing import Annotated, ClassVar, Literal, Optional, Union
 
-from madsci.common.serializers import dict_to_list
 from madsci.common.types.base_types import (
     BaseModel,
     LoadConfig,
@@ -15,8 +14,8 @@ from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import NodeDefinition
-from madsci.common.validators import create_dict_promoter, ulid_validator
-from pydantic import computed_field, field_serializer
+from madsci.common.validators import ulid_validator
+from pydantic import computed_field
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
@@ -84,10 +83,6 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         return Path(self.config.workcells_directory) / self.workcell_name
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
-    validate_nodes_to_dict = field_validator("nodes", mode="before")(
-        create_dict_promoter("node_name")
-    )
-    serialize_nodes_to_list = field_serializer("nodes")(dict_to_list)
 
 
 class WorkcellLink(ModelLink[WorkcellDefinition]):
@@ -182,4 +177,9 @@ class WorkcellConfig(BaseModel):
         default=None,
         title="Resource Server URL",
         description="The URL for the resource server.",
+    )
+    static_files_path: Optional[str] = Field(
+        default=None,
+        title="Static Files Path",
+        description="Path to the static dashboard files",
     )

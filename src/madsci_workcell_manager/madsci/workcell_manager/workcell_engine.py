@@ -154,13 +154,16 @@ class Engine:
                 files=step.files,
             )
             response = client.send_action(request)
-        except Exception:
-            default_logger.log_info("request had exception")
+        except Exception as e:
+            default_logger.log_info(f"request had exception: {e!s}")
         finally:
+            default_logger.log_info("querying result")
             response = self.query_action_result(node, client, request, response)
+        default_logger.log_info("done querying result")
         if response is None:
             response = request.failed()
-        response = self.handle_data_and_files(response)
+        response = self.handle_data_and_files(step, wf, response)
+        default_logger.log_info("handled data and files")
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             if response.status in ["succeeded", "failed"]:
