@@ -5,9 +5,8 @@ import shutil
 import tempfile
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Any, Optional, Union
-from zipfile import ZipFile
 
 from fastapi.applications import FastAPI
 from fastapi.datastructures import UploadFile
@@ -33,53 +32,8 @@ from madsci.common.utils import threaded_task
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
+from madsci.node_module.helpers import ActionResultWithFiles
 from pydantic import AnyUrl
-from starlette.responses import FileResponse
-
-
-def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
-    """Converts the response to a dictionary of headers"""
-    for key in action_response.files:
-        action_response.files[key] = str(action_response.files[key])
-    return {
-        "x-madsci-action-id": action_response.action_id,
-        "x-madsci-status": action_response.status.value,
-        "x-madsci-datapoints": json.dumps(action_response.datapoints),
-        "x-madsci-errors": json.dumps(action_response.errors),
-        "x-madsci-files": json.dumps(action_response.files),
-    }
-
-
-class ActionResultWithFiles(FileResponse):
-    """Action response from a REST-based node."""
-
-    @classmethod
-    def from_action_response(cls, action_response: ActionResult) -> ActionResult:
-        """Create an ActionResultWithFiles from an ActionResult."""
-        if len(action_response.files) == 1:
-            return ActionResultWithFiles(
-                path=next(iter(action_response.files.values())),
-                headers=action_response_to_headers(action_response),
-            )
-
-        with tempfile.NamedTemporaryFile(
-            suffix=".zip",
-            delete=False,
-        ) as temp_zipfile_path:
-            temp_zip = ZipFile(temp_zipfile_path, "w")
-            for file in action_response.files:
-                temp_zip.write(
-                    action_response.files[file],
-                    PureWindowsPath(action_response.files[file]).name,
-                )
-                action_response.files[file] = str(
-                    PureWindowsPath(action_response.files[file]).name,
-                )
-
-            return ActionResultWithFiles(
-                path=temp_zipfile_path,
-                headers=action_response_to_headers(action_response),
-            )
 
 
 class RestNode(AbstractNode):
