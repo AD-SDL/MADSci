@@ -13,6 +13,7 @@ from madsci.client.event_client import default_logger
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.common.types.action_types import ActionRequest, ActionResult
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
+from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
@@ -148,9 +149,18 @@ class Engine:
         client = find_node_client(node.node_url)
         response = None
         try:
+            location_args = {}
+            for key, location in step.locations.items():
+                location_payload = location.lookup
+                location_args[key] = LocationArgument(
+                    location=location_payload, resource_id=location.resource_id
+                )
+
+            # Merge with step.args
+            args = {**step.args, **location_args}
             request = ActionRequest(
                 action_name=step.action,
-                args={**step.args, **step.locations},
+                args=args,
                 files=step.files,
             )
             response = client.send_action(request)
