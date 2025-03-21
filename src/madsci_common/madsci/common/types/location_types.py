@@ -75,8 +75,12 @@ class LocationReservation(BaseModel):
         )
 
 
+class LocationArgumentDefinition(BaseModel):
+    """Location Argument Definition for use in NodeInfo"""
+
+
 class LocationArgument(BaseModel):
-    """Location Argument for MADSCI nodes."""
+    """Location Argument to be used by MADSCI nodes."""
 
     location: Any
     """Details about the Location relevant to this node"""
