@@ -222,7 +222,7 @@ class Engine:
                 default_logger.log_info("presub")
                 self.data_client.submit_datapoint(datapoint)
                 default_logger.log_info("postsub")
-                
+
                 labeled_data[label] = datapoint.datapoint_id
         response.data = labeled_data
         return response
