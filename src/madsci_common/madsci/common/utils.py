@@ -4,7 +4,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Annotated, Any, Optional, Union, get_args, get_origin
 
 from madsci.common.types.base_types import BaseModel, PathLike
 from pydantic import ValidationError
@@ -403,13 +403,20 @@ def threaded_daemon(func: callable) -> callable:
 
 def pretty_type_repr(type_hint: Any) -> str:
     """Returns a pretty string representation of a type hint, including subtypes."""
-    type_name = type_hint.__name__
+    type_name = getattr(type_hint, "__name__", None)
+    if type_name is None:
+        if get_origin(type_hint):
+            type_name = get_origin(type_hint).__name__
+        else:
+            type_name = str(type_hint)
     if (
         "__args__" in dir(type_hint) and type_hint.__args__
     ):  # * If the type has subtype info
         type_name += "["
         for subtype in type_hint.__args__:
             type_name += pretty_type_repr(subtype)
+            type_name += ", "
+        type_name = type_name[:-2]
         type_name += "]"
     return type_name
 
@@ -424,3 +431,13 @@ def repeat_on_interval(
     while True:
         func(*args, **kwargs)
         time.sleep(interval)
+
+
+def is_optional(type_hint: Any) -> bool:
+    """Check if a type hint is Optional."""
+    return get_origin(type_hint) is Union and type(None) in get_args(type_hint)
+
+
+def is_annotated(type_hint: Any) -> bool:
+    """Check if a type hint is an annotated type."""
+    return get_origin(type_hint) is Annotated

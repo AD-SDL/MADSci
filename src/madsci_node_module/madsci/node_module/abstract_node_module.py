@@ -4,7 +4,17 @@ import inspect
 import threading
 import traceback
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Optional, Union, get_type_hints
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    ClassVar,
+    Optional,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from madsci.client.event_client import (
     EventClient,
@@ -35,50 +45,14 @@ from madsci.common.types.node_types import (
     NodeSetConfigResponse,
     NodeStatus,
 )
-from madsci.common.utils import pretty_type_repr, repeat_on_interval, threaded_daemon
+from madsci.common.utils import (
+    is_optional,
+    pretty_type_repr,
+    repeat_on_interval,
+    threaded_daemon,
+)
 from pydantic import ValidationError
 from semver import Version
-
-
-def action(
-    *args: Any,
-    **kwargs: Any,
-) -> Callable:
-    """
-    Decorator to mark a method as an action handler.
-
-    This decorator adds metadata to the decorated function, indicating that it is
-    an action handler within the MADSci framework. The metadata includes the action
-    name, description, and whether the action is blocking.
-
-    Keyword Args:
-        name (str, optional): The name of the action. Defaults to the function name.
-        description (str, optional): A description of the action. Defaults to the function docstring.
-        blocking (bool, optional): Indicates if the action is blocking. Defaults to False.
-
-    Returns:
-        Callable: The decorated function with added metadata.
-    """
-
-    def decorator(func: Callable) -> Callable:
-        if not isinstance(func, Callable):
-            raise ValueError("The action decorator must be used on a callable object")
-        func.__is_madsci_action__ = True
-
-        # *Use provided action_name or function name
-        name = kwargs.get("name", func.__name__)
-        # * Use provided description or function docstring
-        description = kwargs.get("description", func.__doc__)
-        blocking = kwargs.get("blocking", False)
-        func.__madsci_action_name__ = name
-        func.__madsci_action_description__ = description
-        func.__madsci_action_blocking__ = blocking
-        return func
-
-    # * If the decorator is used without arguments, return the decorator function
-    if len(args) == 1 and callable(args[0]):
-        return decorator(args[0])
-    return decorator
 
 
 class AbstractNode:
@@ -483,7 +457,11 @@ class AbstractNode:
                 func,
                 include_extras=True,
             ).items():
+                self.logger.log_debug(
+                    f"Adding parameter {parameter_name} of type {parameter_type} to action {action_name}",
+                )
                 if parameter_name == "return":
+                    # * Skip the return parameter
                     continue
                 if (
                     parameter_name not in action_def.args
@@ -494,34 +472,39 @@ class AbstractNode:
                     description = ""
                     annotated_as_file = False
                     annotated_as_arg = False
+                    # * If the type hint is Optional, extract the inner type
+                    if is_optional(type_hint):
+                        type_hint = get_args(type_hint)[0]
                     # * If the type hint is an Annotated type, extract the type and description
                     # * Description here means the first string metadata in the Annotated type
-                    if type_hint.__name__ == "Annotated":
-                        type_hint = get_type_hints(func, include_extras=False)[
-                            parameter_name
-                        ]
+                    if get_origin(type_hint) == Annotated:
                         description = next(
                             (
                                 metadata
-                                for metadata in parameter_type.__metadata__
+                                for metadata in type_hint.__metadata__
                                 if isinstance(metadata, str)
                             ),
                             "",
                         )
                         annotated_as_file = any(
                             isinstance(metadata, ActionFileDefinition)
-                            for metadata in parameter_type.__metadata__
+                            for metadata in type_hint.__metadata__
                         )
                         annotated_as_arg = not any(
                             isinstance(metadata, ActionArgumentDefinition)
-                            for metadata in parameter_type.__metadata__
+                            for metadata in type_hint.__metadata__
                         )
                         if annotated_as_file and annotated_as_arg:
                             raise ValueError(
                                 f"Parameter '{parameter_name}' is annotated as both a file and an argument. This is not allowed.",
                             )
+                        type_hint = get_args(type_hint)[0]
+                    # * Another Optional check after Annotated type extraction
+                    if is_optional(type_hint):
+                        type_hint = get_args(type_hint)[0]
+                    # * If the type hint is a file type, add it to the files list
                     if annotated_as_file or (
-                        type_hint.__name__
+                        getattr(type_hint, "__name__", None)
                         in ["Path", "PurePath", "PosixPath", "WindowsPath"]
                         and not annotated_as_arg
                     ):
@@ -531,6 +514,7 @@ class AbstractNode:
                             required=True,
                             description=description,
                         )
+                    # * Otherwise, add it to the args list
                     else:
                         parameter_info = signature.parameters[parameter_name]
                         # * Add an arg to the action
@@ -539,12 +523,13 @@ class AbstractNode:
                             if parameter_info.default == inspect.Parameter.empty
                             else parameter_info.default
                         )
+                        is_required = parameter_info.default == inspect.Parameter.empty
 
                         action_def.args[parameter_name] = ActionArgumentDefinition(
                             name=parameter_name,
                             type=pretty_type_repr(type_hint),
                             default=default,
-                            required=default is None,
+                            required=is_required,
                             description=description,
                         )
         self.node_info.actions[action_name] = action_def
