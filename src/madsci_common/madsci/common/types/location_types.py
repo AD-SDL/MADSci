@@ -1,14 +1,13 @@
 """Location types for MADSci."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field
 from pydantic.functional_validators import field_validator
-from pydantic.types import Json
 
 
 class Location(BaseModel):
@@ -28,7 +27,7 @@ class Location(BaseModel):
         description="A description of the location.",
         default=None,
     )
-    lookup: dict[str, Json] = Field(
+    lookup: dict[str, Any] = Field(
         title="Location Representation Map",
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
         default={},

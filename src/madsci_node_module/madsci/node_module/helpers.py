@@ -38,7 +38,9 @@ def action(
         func.__is_madsci_action__ = True
 
         # *Use provided action_name or function name
-        name = kwargs.get("name", func.__name__)
+        name = kwargs.get("name")
+        if not name:
+            name = kwargs.get("action_name", func.__name__)
         # * Use provided description or function docstring
         description = kwargs.get("description", func.__doc__)
         blocking = kwargs.get("blocking", False)
