@@ -7,6 +7,7 @@ import requests
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
+    Resource,
     ResourceDataModels,
 )
 from madsci.common.types.resource_types.server_types import (
@@ -16,7 +17,6 @@ from madsci.common.types.resource_types.server_types import (
     ResourceHistoryGetQuery,
     SetChildBody,
 )
-from madsci.resource_manager.resource_tables import Resource
 
 
 class ResourceClient:
