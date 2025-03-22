@@ -6,14 +6,11 @@ import importlib
 import time
 import traceback
 from datetime import datetime
-from typing import Optional
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import default_logger
-from madsci.client.node.abstract_node_client import AbstractNodeClient
-from madsci.common.types.action_types import ActionRequest, ActionResult
+from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
-from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import Workflow, WorkflowStatus
@@ -113,28 +110,6 @@ class Engine:
             self.state_handler.set_workflow(next_wf)
             self.run_step(next_wf.workflow_id, next_wf.steps[next_wf.step_index])
 
-    def query_action_result(
-        self,
-        node: Node,
-        client: AbstractNodeClient,
-        request: ActionRequest,
-        response: Optional[ActionResult] = None,
-    ) -> ActionResult:
-        """retry an action if it fails"""
-        if node.info.capabilities.get_action_result:
-            while response is None or response.status not in [
-                "not_ready",
-                "succeeded",
-                "failed",
-            ]:
-                try:
-                    response = client.get_action_result(request.action_id)
-                    time.sleep(5)
-                except Exception:
-                    time.sleep(5)
-            return response
-        return response
-
     @threaded_daemon
     def run_step(self, workflow_id: str, step: Step) -> None:
         """Run a step in a seperate thread"""
@@ -153,36 +128,55 @@ class Engine:
                 args={**step.args, **step.locations},
                 files=step.files,
             )
-            response = client.send_action(request)
+            response = client.send_action(request, await_result=False)
         except Exception as e:
-            default_logger.log_info(f"request had exception: {e!s}")
-        finally:
-            default_logger.log_info("querying result")
-            response = self.query_action_result(node, client, request, response)
-        default_logger.log_info("done querying result")
-        if response is None:
-            response = request.failed()
-        response = self.handle_data_and_files(step, wf, response)
-        default_logger.log_info("handled data and files")
-        with self.state_handler.wc_state_lock():
-            wf = self.state_handler.get_workflow(workflow_id)
-            if response.status in ["succeeded", "failed"]:
-                wf.steps[wf.step_index].status = response.status
-                wf.steps[wf.step_index].results[response.action_id] = response
-                wf.steps[wf.step_index].end_time = datetime.now()
-                if response.status == "succeeded":
-                    new_index = wf.step_index + 1
-                    if new_index == len(wf.steps):
-                        wf.status = WorkflowStatus.COMPLETED
-                        wf.end_time = datetime.now()
-                    else:
-                        wf.step_index = new_index
-                        if wf.status == WorkflowStatus.RUNNING:
-                            wf.status = WorkflowStatus.IN_PROGRESS
-                if response.status == "failed":
-                    wf.status = WorkflowStatus.FAILED
+            default_logger.log_error(f"Action Request had exception: {e!s}")
+        self.handle_response(workflow_id, response)
+        default_logger.log_debug("Handled data and files")
+        while response.status not in [
+            ActionStatus.NOT_READY,
+            ActionStatus.SUCCEEDED,
+            ActionStatus.FAILED,
+            ActionStatus.UNKNOWN,
+            ActionStatus.CANCELLED,
+        ]:
+            response = client.get_action_result(response.action_id)
+            self.handle_response(workflow_id, step, response)
+            time.sleep(0.1)
+        if response.status in [
+            ActionStatus.SUCCEEDED,
+            ActionStatus.FAILED,
+            ActionStatus.UNKNOWN,
+        ]:
+            wf.steps[wf.step_index].status = response.status
+            wf.steps[wf.step_index].results[response.action_id] = response
+            wf.steps[wf.step_index].end_time = datetime.now()
+            if response.status == ActionStatus.SUCCEEDED:
+                new_index = wf.step_index + 1
+                if new_index == len(wf.steps):
+                    wf.status = WorkflowStatus.COMPLETED
                     wf.end_time = datetime.now()
+                else:
+                    wf.step_index = new_index
+                    if wf.status == WorkflowStatus.RUNNING:
+                        wf.status = WorkflowStatus.IN_PROGRESS
+            if response.status == ActionStatus.FAILED:
+                wf.status = WorkflowStatus.FAILED
+                wf.end_time = datetime.now()
+        with self.state_handler.wc_state_lock():
             self.state_handler.set_workflow(wf)
+
+    def handle_response(
+        self, workflow_id: str, step: Step, response: ActionResult
+    ) -> None:
+        """Handle the response from the node"""
+        if response is not None:
+            wf = self.state_handler.get_workflow(workflow_id)
+            response = self.handle_data_and_files(step, wf, response)
+            wf.steps[wf.step_index].status = response.status
+            wf.steps[wf.step_index].results[response.action_id] = response
+            with self.state_handler.wc_state_lock():
+                self.state_handler.set_workflow(wf)
 
     def handle_data_and_files(
         self, step: Step, wf: Workflow, response: ActionResult

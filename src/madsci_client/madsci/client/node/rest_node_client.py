@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, ClassVar, Optional
 from zipfile import ZipFile
@@ -54,7 +55,12 @@ class RestNodeClient(AbstractNodeClient):
         super().__init__(url)
         self.logger = EventClient(config=event_client_config)
 
-    def send_action(self, action_request: ActionRequest) -> ActionResult:
+    def send_action(
+        self,
+        action_request: ActionRequest,
+        await_result: bool = True,
+        timeout: Optional[float] = None,
+    ) -> ActionResult:
         """Perform an action on the node."""
         files = []
         try:
@@ -86,9 +92,10 @@ class RestNodeClient(AbstractNodeClient):
             rest_response.raise_for_status()
         if "x-madsci-status" in rest_response.headers:
             response = process_file_response(rest_response)
-
         else:
             response = ActionResult.model_validate(rest_response.json())
+        if await_result:
+            response = self.await_action_result(response.action_id, timeout=timeout)
         return response
 
     def get_action_history(
@@ -114,6 +121,28 @@ class RestNodeClient(AbstractNodeClient):
         else:
             response = ActionResult.model_validate(rest_response.json())
         return response
+
+    def await_action_result(
+        self, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """Wait for an action to complete and return the result. Optionally, specify a timeout in seconds."""
+        start_time = time.time()
+        interval = 0.1
+        while True:
+            if timeout is not None and time.time() - start_time > timeout:
+                raise TimeoutError("Timed out waiting for action to complete.")
+            response = self.get_action_result(action_id)
+            if response.status not in [
+                ActionStatus.NOT_READY,
+                ActionStatus.SUCCEEDED,
+                ActionStatus.FAILED,
+                ActionStatus.UNKNOWN,
+                ActionStatus.CANCELLED,
+            ]:
+                time.sleep(interval)
+                interval *= 2 if interval < 10 else 10  # * Capped Exponential backoff
+                continue
+            return response
 
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""

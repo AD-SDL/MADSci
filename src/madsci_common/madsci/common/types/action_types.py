@@ -315,6 +315,11 @@ class ActionDefinition(BaseModel):
         description="Whether the action is blocking.",
         default=False,
     )
+    asynchronous: bool = Field(
+        title="Asynchronous",
+        description="Whether the action is asynchronous, and will return a 'running' status immediately rather than waiting for the action to complete before returning. This should be used for long-running actions (e.g. actions that take more than a few seconds to complete).",
+        default=True,
+    )
 
     @field_validator("args", mode="after")
     @classmethod

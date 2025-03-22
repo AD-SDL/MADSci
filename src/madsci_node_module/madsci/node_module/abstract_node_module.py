@@ -204,7 +204,6 @@ class AbstractNode:
     def run_action(self, action_request: ActionRequest) -> ActionResult:
         """Run an action on the node."""
         self.node_status.running_actions.add(action_request.action_id)
-        action_response = None
         arg_dict = {}
         self._extend_action_history(action_request.not_started())
         try:
@@ -215,42 +214,37 @@ class AbstractNode:
             # * If there was an error in parsing the action arguments, log the error and return a failed action response
             # * but don't set the node to errored
             self._exception_handler(e, set_node_errored=False)
-            action_response = action_request.failed(errors=Error.from_exception(e))
+            self._extend_action_history(
+                action_request.failed(errors=Error.from_exception(e))
+            )
         else:
-            try:
-                # * Run the action
-                self._extend_action_history(action_request.running())
-                action_response = self._run_action(action_request, arg_dict)
-            except Exception as e:
-                # * If there was an error in running the action, log the error and return a failed action response
-                # * and set the node to errored, as the node has failed to run a supposedly valid action request
-                self._exception_handler(e)
-                action_response = action_request.failed(errors=Error.from_exception(e))
+            if not self.node_status.ready:
+                self._extend_action_history(
+                    action_request.not_ready(
+                        errors=Error(
+                            message=f"Node is not ready: {self.node_status.description}",
+                            error_type="NodeNotReady",
+                        ),
+                    )
+                )
             else:
-                # * Validate the action result if it is not already an ActionResult
-                if action_response is None:
-                    # * Assume success if no return value and no exception
-                    action_response = action_request.succeeded()
-                elif isinstance(action_response, ActionResult):
-                    # * Ensure the action ID is set correctly on the result
-                    action_response.action_id = action_request.action_id
-                else:
-                    try:
-                        action_response = ActionResult.model_validate(action_response)
-                        action_response.action_id = action_request.action_id
-                    except ValidationError as e:
-                        # * If the action response is not a valid ActionResult, log the error and return a failed action response
-                        # * and set the node to errored, as this implies a bug in the node implementation
-                        self._exception_handler(e)
-                        action_response = action_request.failed(
-                            errors=Error.from_exception(e),
-                        )
-        finally:
-            # * Regardless of the outcome, remove the action from the running actions set
-            # * and update the action history
-            self.node_status.running_actions.discard(action_request.action_id)
-            self._extend_action_history(action_response)
-        return action_response
+                try:
+                    # * Run the action in a separate thread
+                    self._extend_action_history(action_request.running())
+                    self._action_thread(
+                        action_request,
+                        self.action_handlers.get(action_request.action_name),
+                        arg_dict,
+                    )
+                except Exception as e:
+                    # * If there was an error in running the action, log the error and return a failed action response
+                    # * and set the node to errored, as the node has failed to run a supposedly valid action request
+                    self._exception_handler(e)
+                    self._extend_action_history(
+                        action_request.failed(errors=Error.from_exception(e))
+                    )
+
+        return self.get_action_result(action_request.action_id)
 
     def get_action_result(self, action_id: str) -> ActionResult:
         """Get the most up-to-date result of an action on the node."""
@@ -576,20 +570,13 @@ class AbstractNode:
                     default_logger.log_warning(f"Ignoring unexpected file {file}")
         return arg_dict
 
-    def _run_action(
+    @threaded_daemon
+    def _action_thread(
         self,
         action_request: ActionRequest,
+        action_callable: callable,
         arg_dict: dict[str, Any],
-    ) -> ActionResult:
-        action_callable = self.action_handlers.get(action_request.action_name, None)
-        # * Perform the action here and return result
-        if not self.node_status.ready:
-            return action_request.not_ready(
-                errors=Error(
-                    message=f"Node is not ready: {self.node_status.description}",
-                    error_type="NodeNotReady",
-                ),
-            )
+    ) -> None:
         self._action_lock.acquire()
         try:
             # * If the action is marked as blocking, set the node status to not ready for the duration of the action, otherwise release the lock immediately
@@ -611,21 +598,23 @@ class AbstractNode:
                     self._exception_handler(e)
                     result = action_request.failed(errors=Error.from_exception(e))
         finally:
+            self.node_status.running_actions.discard(action_request.action_id)
             if self._action_lock.locked():
                 self._action_lock.release()
         if isinstance(result, ActionResult):
             # * Make sure the action ID is set correctly on the result
             result.action_id = action_request.action_id
-            return result
-        if result is None:
-            # *Assume success if no return value and no exception
-            return action_request.succeeded()
-        # * Return a failure if the action returns something unexpected
-        return action_request.failed(
-            errors=Error(
-                message=f"Action '{action_request.action_name}' returned an unexpected value: {result}",
-            ),
-        )
+        else:
+            try:
+                result = ActionResult.model_validate(result)
+                result.action_id = action_request.action_id
+            except ValidationError:
+                result = action_request.unknown(
+                    errors=Error(
+                        message=f"Action '{action_request.action_name}' returned an unexpected value: {result}. Expected an ActionResult.",
+                    ),
+                )
+        self._extend_action_history(result)
 
     def _exception_handler(self, e: Exception, set_node_errored: bool = True) -> None:
         """Handle an exception."""

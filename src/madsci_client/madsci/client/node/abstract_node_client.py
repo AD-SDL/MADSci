@@ -1,6 +1,6 @@
 """Base node client implementation."""
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Optional
 
 from madsci.common.types.action_types import (
     ActionRequest,
@@ -32,7 +32,12 @@ class AbstractNodeClient:
         """Initialize the client."""
         self.url = url
 
-    def send_action(self, action_request: ActionRequest) -> ActionResult:
+    def send_action(
+        self,
+        action_request: ActionRequest,
+        await_result: bool = True,
+        timeout: Optional[float] = None,
+    ) -> ActionResult:
         """Perform an action on the node."""
         raise NotImplementedError("send_action not implemented by this client")
 
@@ -45,6 +50,14 @@ class AbstractNodeClient:
     def get_action_result(self, action_id: str) -> ActionResult:
         """Get the status of an action on the node."""
         raise NotImplementedError("get_action_result is not implemented by this client")
+
+    def await_action_result(
+        self, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """Wait for an action to complete and return the result. Optionally, specify a timeout in seconds."""
+        raise NotImplementedError(
+            "await_action_result is not implemented by this client"
+        )
 
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""
