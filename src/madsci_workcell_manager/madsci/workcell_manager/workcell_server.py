@@ -257,7 +257,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     detail="Parameters must be a dictionary with string keys",
                 )
         workcell = state_handler.get_workcell()
-
         wf = create_workflow(
             workflow_def=wf_def,
             workcell=workcell,
