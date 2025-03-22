@@ -11,6 +11,7 @@ from typing import Optional
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import default_logger
 from madsci.client.node.abstract_node_client import AbstractNodeClient
+from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionRequest, ActionResult
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.node_types import Node
@@ -48,9 +49,12 @@ class Engine:
         scheduler_module = importlib.import_module(self.definition.config.scheduler)
         self.scheduler = scheduler_module.Scheduler(self.definition, self.state_handler)
         self.data_client = DataClient(self.definition.config.data_server_url)
+        self.resource_client = ResourceClient(
+            self.definition.config.resource_server_url
+        )
         default_logger.log_info(self.data_client.url)
         with state_handler.wc_state_lock():
-            initialize_workcell(state_handler)
+            initialize_workcell(state_handler, self.resource_client)
         time.sleep(workcell_manager_definition.config.cold_start_delay)
         default_logger.log_info("Engine initialized, waiting for workflows...")
         # TODO send event

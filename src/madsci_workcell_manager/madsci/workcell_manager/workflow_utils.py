@@ -1,5 +1,6 @@
 """Utility function for the workcell manager."""
 
+import copy
 import shutil
 from copy import deepcopy
 from datetime import datetime
@@ -10,6 +11,7 @@ from fastapi import UploadFile
 from madsci.client.event_client import default_logger
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.location_types import Location
+from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -111,7 +113,8 @@ def create_workflow(
     steps = []
     for step in workflow_def.steps:
         working_step = deepcopy(step)
-        replace_locations(workcell, working_step)
+        nodes = state_handler.get_all_nodes()
+        replace_locations(workcell, working_step, nodes)
         valid, validation_string = validate_step(
             working_step, state_handler=state_handler
         )
@@ -125,17 +128,51 @@ def create_workflow(
     return wf
 
 
-def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
+def replace_locations(
+    workcell: WorkcellDefinition, step: Step, nodes: dict[str, Node]
+) -> None:
     """Replaces the location names with the location objects"""
     for location_arg, location_name_or_object in step.locations.items():
         if isinstance(location_name_or_object, Location):
-            step.locations[location_arg] = location_name_or_object
-        elif location_name_or_object in workcell.locations:
-            step.locations[location_arg] = workcell.locations[location_name_or_object]
+            step.locations[location_arg] = location_name_or_object.lookup[step.node]
+        elif location_name_or_object in [
+            location.location_name for location in workcell.locations
+        ]:
+            target_loc = next(
+                (
+                    location
+                    for location in workcell.locations
+                    if location.location_name == location_name_or_object
+                ),
+                None,
+            )
+            node_location = copy.deepcopy(target_loc.lookup[step.node])
+            node_location["resource_id"] = target_loc.resource_id
+            step.locations[location_arg] = node_location
         else:
             raise ValueError(
                 f"Location {location_name_or_object} not in Workcell {workcell.name}"
             )
+    for argument, value in step.args.items():
+        try:
+            if (
+                nodes[step.node].info.actions[step.action].args[argument].type
+                == "NodeLocation"
+            ):
+                target_loc = next(
+                    (
+                        location
+                        for location in workcell.locations
+                        if location.location_name == value
+                    ),
+                    None,
+                )
+                node_location = copy.deepcopy(target_loc.lookup[step.node])
+                node_location["resource_id"] = target_loc.resource_id
+                step.args[argument] = node_location
+
+        except Exception:
+            step.args[argument] = step.args[argument]
 
 
 def save_workflow_files(
