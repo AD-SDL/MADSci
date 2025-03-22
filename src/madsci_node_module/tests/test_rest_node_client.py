@@ -75,7 +75,7 @@ def test_send_action(mock_post: MagicMock, rest_node_client: RestNodeClient) -> 
             "action_id": action_request.action_id,
         },
         files=[],
-        timeout=10,
+        timeout=60,
     )
 
 

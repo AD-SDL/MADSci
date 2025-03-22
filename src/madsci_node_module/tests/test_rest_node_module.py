@@ -226,14 +226,71 @@ def test_get_info(test_client: TestClient) -> None:
         node_info = NodeInfo.model_validate(response.json())
         assert node_info.node_name == "Test Node 1"
         assert node_info.module_name == "test_node"
-        assert len(node_info.actions) == 2
+        assert len(node_info.actions) == 4
         assert node_info.actions["test_action"].description == "A test action."
         assert node_info.actions["test_action"].args["test_param"].required
         assert node_info.actions["test_action"].args["test_param"].type == "int"
         assert node_info.actions["test_fail"].description == "A test action that fails."
         assert node_info.actions["test_fail"].args["test_param"].required
         assert node_info.actions["test_fail"].args["test_param"].type == "int"
-        assert node_info.config_schema
+        assert (
+            node_info.actions["test_optional_param_action"].args["test_param"].required
+        )
+        assert (
+            node_info.actions["test_optional_param_action"].args["test_param"].type
+            == "int"
+        )
+        assert (
+            not node_info.actions["test_optional_param_action"]
+            .args["optional_param"]
+            .required
+        )
+        assert (
+            node_info.actions["test_optional_param_action"].args["optional_param"].type
+            == "str"
+        )
+        assert (
+            node_info.actions["test_optional_param_action"]
+            .args["optional_param"]
+            .default
+            == ""
+        )
+        assert (
+            not node_info.actions["test_annotation_action"].args["test_param"].required
+        )
+        assert (
+            node_info.actions["test_annotation_action"].args["test_param"].type == "int"
+        )
+        assert (
+            node_info.actions["test_annotation_action"].args["test_param"].description
+            == "Description"
+        )
+        assert (
+            not node_info.actions["test_annotation_action"]
+            .args["test_param_2"]
+            .required
+        )
+        assert (
+            node_info.actions["test_annotation_action"].args["test_param_2"].type
+            == "int"
+        )
+        assert (
+            node_info.actions["test_annotation_action"].args["test_param_2"].description
+            == "Description 2"
+        )
+        assert (
+            not node_info.actions["test_annotation_action"]
+            .args["test_param_3"]
+            .required
+        )
+        assert (
+            node_info.actions["test_annotation_action"].args["test_param_3"].type
+            == "int"
+        )
+        assert (
+            node_info.actions["test_annotation_action"].args["test_param_3"].description
+            == "Description 3"
+        )
 
 
 def test_get_action_result(test_client: TestClient) -> None:
@@ -356,3 +413,35 @@ def test_get_log(test_client: TestClient) -> None:
         assert len(response.json()) > 0
         for _, entry in response.json().items():
             Event.model_validate(entry)
+
+
+def test_optional_param_action_with_optional_param(test_client: TestClient) -> None:
+    """Test the test_optional_param_action command with the optional parameter."""
+    with test_client as client:
+        time.sleep(0.5)
+        response = client.post(
+            "/action",
+            params={
+                "action_name": "test_optional_param_action",
+                "args": json.dumps({"test_param": 1, "optional_param": "test_value"}),
+            },
+        )
+        assert response.status_code == 200
+        result = ActionResult.model_validate(response.json())
+        assert result.status == ActionStatus.SUCCEEDED
+
+
+def test_optional_param_action_without_optional_param(test_client: TestClient) -> None:
+    """Test the test_optional_param_action command without the optional parameter."""
+    with test_client as client:
+        time.sleep(0.5)
+        response = client.post(
+            "/action",
+            params={
+                "action_name": "test_optional_param_action",
+                "args": json.dumps({"test_param": 1}),
+            },
+        )
+        assert response.status_code == 200
+        result = ActionResult.model_validate(response.json())
+        assert result.status == ActionStatus.SUCCEEDED

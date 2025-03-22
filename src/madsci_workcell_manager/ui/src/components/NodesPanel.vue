@@ -1,6 +1,6 @@
 <template>
   <div>
-    <NodeModal :modal_title="modal_title" :modal_text="modal_text" :main_url="main_url" :wc_state="wc_state"
+    <NodeModal :modal_title="modal_title" :modal_text="modal_text" :main_url="main_url" :wc_state="wc_state" :locations='locations'
       v-model="modal" />
     <v-card class="pa-1 ma-1" title="Nodes">
       <v-card-text>
@@ -34,7 +34,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { get_status } from '../store';
-const props = defineProps(['nodes', 'wc_state', 'main_url'])
+const props = defineProps(['nodes', 'wc_state', 'main_url', 'locations'])
 const modal_title = ref()
 const modal = ref(false)
 const modal_text = ref()

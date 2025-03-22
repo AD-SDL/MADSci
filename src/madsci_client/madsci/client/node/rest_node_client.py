@@ -75,7 +75,7 @@ class RestNodeClient(AbstractNodeClient):
                     "action_id": action_request.action_id,
                 },
                 files=files,
-                timeout=10,
+                timeout=60,
             )
         finally:
             # * Ensure files are closed
