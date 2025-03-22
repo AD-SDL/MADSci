@@ -67,10 +67,15 @@ class Step(StepDefinition):
         description="The status of the step.",
         default=ActionStatus.NOT_STARTED,
     )
-    results: dict[str, ActionResult] = Field(
-        title="Step Results",
-        description="The results of the step.",
-        default_factory=dict,
+    result: Optional[ActionResult] = Field(
+        title="Latest Step Result",
+        description="The result of the latest action run.",
+        default=None,
+    )
+    history: list[ActionResult] = Field(
+        title="Step History",
+        description="The history of the results of the step.",
+        default_factory=list,
     )
     start_time: Optional[datetime] = None
     """Time the step started running"""

@@ -8,6 +8,7 @@ from madsci.client.node.rest_node_client import RestNodeClient
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
+    ActionRunning,
     ActionStatus,
     ActionSucceeded,
     new_ulid_str,
@@ -55,15 +56,17 @@ def test_get_info(mock_get: MagicMock, rest_node_client: RestNodeClient) -> None
 
 
 @patch("requests.post")
-def test_send_action(mock_post: MagicMock, rest_node_client: RestNodeClient) -> None:
-    """Test the send_action method."""
+def test_send_action_no_await(
+    mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test the send_action method without awaiting."""
     mock_response = MagicMock()
     mock_response.ok = True
     mock_response.json.return_value = ActionSucceeded().model_dump(mode="json")
     mock_post.return_value = mock_response
 
     action_request = ActionRequest(action_name="test_action", args={}, files={})
-    result = rest_node_client.send_action(action_request)
+    result = rest_node_client.send_action(action_request, await_result=False)
     assert isinstance(result, ActionResult)
     assert result.status == ActionStatus.SUCCEEDED
     assert result.action_id == mock_response.json.return_value["action_id"]
@@ -76,6 +79,44 @@ def test_send_action(mock_post: MagicMock, rest_node_client: RestNodeClient) -> 
         },
         files=[],
         timeout=60,
+    )
+
+
+@patch("requests.post")
+@patch("requests.get")
+def test_send_action_await(
+    mock_get: MagicMock, mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test the send_action method with awaiting."""
+    mock_post_response = MagicMock()
+    mock_post_response.ok = True
+    mock_post_response.json.return_value = ActionRunning().model_dump(mode="json")
+    mock_post.return_value = mock_post_response
+    mock_get_response = MagicMock()
+    mock_get_response.ok = True
+    mock_get_response.json.return_value = ActionSucceeded(
+        action_id=mock_post_response.json.return_value["action_id"]
+    ).model_dump(mode="json")
+    mock_get.return_value = mock_get_response
+
+    action_request = ActionRequest(action_name="test_action", args={}, files={})
+    result = rest_node_client.send_action(action_request)
+    assert isinstance(result, ActionResult)
+    assert result.status == ActionStatus.SUCCEEDED
+    assert result.action_id == mock_post_response.json.return_value["action_id"]
+    mock_post.assert_called_once_with(
+        "http://localhost:2000/action",
+        params={
+            "action_name": "test_action",
+            "args": json.dumps({}),
+            "action_id": action_request.action_id,
+        },
+        files=[],
+        timeout=60,
+    )
+    mock_get.assert_called_once_with(
+        f"http://localhost:2000/action/{mock_get_response.json.return_value['action_id']}",
+        timeout=10,
     )
 
 

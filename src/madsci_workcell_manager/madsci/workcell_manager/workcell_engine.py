@@ -8,9 +8,10 @@ import traceback
 from datetime import datetime
 
 from madsci.client.data_client import DataClient
-from madsci.client.event_client import default_logger
+from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
@@ -42,6 +43,7 @@ class Engine:
         )
         self.definition = workcell_manager_definition
         self.state_handler = state_handler
+        self.logger = EventClient(self.definition.config.event_client_config)
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(self.definition.config.scheduler)
         self.scheduler = scheduler_module.Scheduler(self.definition, self.state_handler)
@@ -49,11 +51,11 @@ class Engine:
         self.resource_client = ResourceClient(
             self.definition.config.resource_server_url
         )
-        default_logger.log_info(self.data_client.url)
+        self.logger.log_debug(self.data_client.url)
         with state_handler.wc_state_lock():
             initialize_workcell(state_handler, self.resource_client)
         time.sleep(workcell_manager_definition.config.cold_start_delay)
-        default_logger.log_info("Engine initialized, waiting for workflows...")
+        self.logger.log_info("Engine initialized, waiting for workflows...")
         # TODO send event
 
     def spin(self) -> None:
@@ -64,12 +66,8 @@ class Engine:
         update_active_nodes(self.state_handler)
         node_tick = time.time()
         scheduler_tick = time.time()
-        heartbeat = time.time()
         while True and not self.state_handler.shutdown:
             try:
-                if time.time() - heartbeat > self.definition.config.heartbeat_interval:
-                    heartbeat = time.time()
-                    default_logger.log_info(f"Heartbeat: {time.time()}")
                 if (
                     time.time() - node_tick
                     > self.definition.config.node_update_interval
@@ -90,7 +88,7 @@ class Engine:
                         scheduler_tick = time.time()
             except Exception:
                 traceback.print_exc()
-                default_logger.log_error(
+                self.logger.log_error(
                     f"Error in engine loop, waiting {self.definition.config.node_update_interval} seconds before trying again."
                 )
                 time.sleep(self.definition.config.node_update_interval)
@@ -102,61 +100,87 @@ class Engine:
 
     def run_next_step(self) -> None:
         """Runs the next step in the workflow with the highest priority"""
-        workflows = self.state_handler.get_all_workflows()
-        ready_workflows = filter(
-            lambda wf: wf.scheduler_metadata.ready_to_run, workflows.values()
-        )
-        sorted_ready_workflows = sorted(
-            ready_workflows, key=lambda wf: wf.scheduler_metadata.priority, reverse=True
-        )
-        if len(sorted_ready_workflows) > 0:
-            next_wf = sorted_ready_workflows[0]
-            next_wf.status = WorkflowStatus.RUNNING
-            self.state_handler.set_workflow(next_wf)
-            self.run_step(next_wf.workflow_id, next_wf.steps[next_wf.step_index])
+        next_wf = None
+        with self.state_handler.wc_state_lock():
+            workflows = self.state_handler.get_all_workflows()
+            ready_workflows = filter(
+                lambda wf: wf.scheduler_metadata.ready_to_run, workflows.values()
+            )
+            sorted_ready_workflows = sorted(
+                ready_workflows,
+                key=lambda wf: wf.scheduler_metadata.priority,
+                reverse=True,
+            )
+            if len(sorted_ready_workflows) > 0:
+                next_wf = sorted_ready_workflows[0]
+                next_wf.status = WorkflowStatus.RUNNING
+                if next_wf.step_index == 0:
+                    next_wf.start_time = datetime.now()
+                self.state_handler.set_workflow(next_wf)
+        if next_wf:
+            self.run_step(next_wf.workflow_id)
 
     @threaded_daemon
-    def run_step(self, workflow_id: str, step: Step) -> None:
+    def run_step(self, workflow_id: str) -> None:
         """Run a step in a seperate thread"""
-        with self.state_handler.wc_state_lock():
-            wf = self.state_handler.get_workflow(workflow_id)
-            wf.steps[wf.step_index].start_time = datetime.now()
-            if wf.step_index == 0:
-                wf.start_time = datetime.now()
-            self.state_handler.set_workflow(wf)
+        # * Prepare the step
+        wf = self.state_handler.get_workflow(workflow_id)
+        step = wf.steps[wf.step_index]
+        step.start_time = datetime.now()
+        self.log_info(f"Running step {step.step_id} in workflow {workflow_id}")
         node = self.state_handler.get_node(step.node)
         client = find_node_client(node.node_url)
+        wf = self.update_step(wf, step)
+
+        # * Send the action request
         response = None
+        request = ActionRequest(
+            action_name=step.action,
+            args={**step.args, **step.locations},
+            files=step.files,
+        )
+        action_id = request.action_id
         try:
-            request = ActionRequest(
-                action_name=step.action,
-                args={**step.args, **step.locations},
-                files=step.files,
-            )
             response = client.send_action(request, await_result=False)
+            self.handle_response(wf, step, response)
         except Exception as e:
-            default_logger.log_error(f"Action Request had exception: {e!s}")
-        self.handle_response(workflow_id, response)
-        default_logger.log_debug("Handled data and files")
-        while response.status not in [
-            ActionStatus.NOT_READY,
-            ActionStatus.SUCCEEDED,
-            ActionStatus.FAILED,
-            ActionStatus.UNKNOWN,
-            ActionStatus.CANCELLED,
-        ]:
-            response = client.get_action_result(response.action_id)
-            self.handle_response(workflow_id, step, response)
-            time.sleep(0.1)
-        if response.status in [
-            ActionStatus.SUCCEEDED,
-            ActionStatus.FAILED,
-            ActionStatus.UNKNOWN,
-        ]:
-            wf.steps[wf.step_index].status = response.status
-            wf.steps[wf.step_index].results[response.action_id] = response
-            wf.steps[wf.step_index].end_time = datetime.now()
-            if response.status == ActionStatus.SUCCEEDED:
+            self.logger.log_error(
+                f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+            )
+            if response:
+                response.errors.append(Error.from_exception(e))
+
+        action_id = response.action_id if response else action_id
+
+        # * Periodically query the action status until complete, updating the workflow as needed
+        interval = 0.1
+        while response is not None and response.status.is_terminal:
+            try:
+                response = client.get_action_result(action_id)
+                self.handle_response(wf, step, response)
+                if response is not None and response.status.is_terminal:
+                    break
+                time.sleep(interval)  # * Exponential backoff with cap
+                interval = interval * 2 if interval < 10 else 10
+            except Exception as e:
+                self.logger.log_error(
+                    f"Querying action {action_id} for step {step.step_id} resulted in exception: {e!s}"
+                )
+                if response:
+                    response.errors.append(Error.from_exception(e))
+                break
+
+        # * Finalize the step
+        self.finalize_step(workflow_id, step)
+        self.log_info(f"Completed step {step.step_id} in workflow {workflow_id}")
+
+    def finalize_step(self, workflow_id: str, step: Step) -> None:
+        """Finalize the step, updating the workflow based on the results (setting status, updating index, etc.)"""
+        with self.state_handler.wc_state_lock():
+            wf = self.state_handler.get_workflow(workflow_id)
+            step.end_time = datetime.now()
+            wf[step.step_index] = step
+            if step.status == ActionStatus.SUCCEEDED:
                 new_index = wf.step_index + 1
                 if new_index == len(wf.steps):
                     wf.status = WorkflowStatus.COMPLETED
@@ -165,23 +189,30 @@ class Engine:
                     wf.step_index = new_index
                     if wf.status == WorkflowStatus.RUNNING:
                         wf.status = WorkflowStatus.IN_PROGRESS
-            if response.status == ActionStatus.FAILED:
+            if step.status == ActionStatus.FAILED:
                 wf.status = WorkflowStatus.FAILED
                 wf.end_time = datetime.now()
-        with self.state_handler.wc_state_lock():
-            self.state_handler.set_workflow(wf)
+            if step.status == ActionStatus.CANCELLED:
+                wf.status = WorkflowStatus.CANCELLED
+                wf.end_time = datetime.now()
+                self.state_handler.set_workflow(wf)
 
-    def handle_response(
-        self, workflow_id: str, step: Step, response: ActionResult
-    ) -> None:
+    def update_step(self, wf: Workflow, step: Step) -> None:
+        """Update the step in the workflow"""
+        with self.state_handler.wc_state_lock():
+            wf = self.state_handler.get_workflow(wf.workflow_id)
+            wf.steps[wf.step_index] = step
+            self.state_handler.set_workflow(wf)
+        return wf
+
+    def handle_response(self, wf: Workflow, step: Step, response: ActionResult) -> None:
         """Handle the response from the node"""
         if response is not None:
-            wf = self.state_handler.get_workflow(workflow_id)
             response = self.handle_data_and_files(step, wf, response)
-            wf.steps[wf.step_index].status = response.status
-            wf.steps[wf.step_index].results[response.action_id] = response
-            with self.state_handler.wc_state_lock():
-                self.state_handler.set_workflow(wf)
+            step.status = response.status
+            step.result = response
+            step.history.append(response)
+            wf = self.update_step(wf, step)
 
     def handle_data_and_files(
         self, step: Step, wf: Workflow, response: ActionResult
@@ -216,9 +247,13 @@ class Engine:
                     label=label,
                     path=str(response.files[file_key]),
                 )
-                default_logger.log_info("presub")
+                self.logger.log_debug(
+                    "Submitting datapoint: " + str(datapoint.datapoint_id)
+                )
                 self.data_client.submit_datapoint(datapoint)
-                default_logger.log_info("postsub")
+                self.logger.log_debug(
+                    "Submitted datapoint: " + str(datapoint.datapoint_id)
+                )
 
                 labeled_data[label] = datapoint.datapoint_id
         response.data = labeled_data

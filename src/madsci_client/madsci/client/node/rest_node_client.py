@@ -94,7 +94,7 @@ class RestNodeClient(AbstractNodeClient):
             response = process_file_response(rest_response)
         else:
             response = ActionResult.model_validate(rest_response.json())
-        if await_result:
+        if await_result and not response.status.is_terminal:
             response = self.await_action_result(response.action_id, timeout=timeout)
         return response
 
@@ -132,15 +132,11 @@ class RestNodeClient(AbstractNodeClient):
             if timeout is not None and time.time() - start_time > timeout:
                 raise TimeoutError("Timed out waiting for action to complete.")
             response = self.get_action_result(action_id)
-            if response.status not in [
-                ActionStatus.NOT_READY,
-                ActionStatus.SUCCEEDED,
-                ActionStatus.FAILED,
-                ActionStatus.UNKNOWN,
-                ActionStatus.CANCELLED,
-            ]:
+            if not response.status.is_terminal:
                 time.sleep(interval)
-                interval *= 2 if interval < 10 else 10  # * Capped Exponential backoff
+                interval = (
+                    interval * 2 if interval < 10 else 10
+                )  # * Capped Exponential backoff
                 continue
             return response
 

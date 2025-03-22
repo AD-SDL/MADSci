@@ -143,11 +143,6 @@ class WorkcellConfig(BaseModel):
         title="Node Update Interval",
         description="The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval",
     )
-    heartbeat_interval: float = Field(
-        default=2.0,
-        title="Heartbeat Interval",
-        description="The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval",
-    )
     auto_start: bool = Field(
         default=True,
         title="Auto Start",

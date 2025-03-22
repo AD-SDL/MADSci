@@ -23,6 +23,17 @@ class ActionStatus(str, Enum):
     PAUSED = "paused"
     UNKNOWN = "unknown"
 
+    @property
+    def is_terminal(self) -> bool:
+        """Check if the status is terminal"""
+        return self in [
+            ActionStatus.SUCCEEDED,
+            ActionStatus.FAILED,
+            ActionStatus.CANCELLED,
+            ActionStatus.UNKNOWN,
+            ActionStatus.NOT_READY,
+        ]
+
 
 class ActionRequest(BaseModel):
     """Request to perform an action on a node"""
