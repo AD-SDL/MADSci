@@ -3,9 +3,9 @@ manager_type: workcell_manager
 workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
 description: null
 config:
-  host: 127.0.0.1
+  host: 0.0.0.0
   port: 8013
-  workcells_directory: /home/vscode/.madsci/workcells
+  workcells_directory: /home/madsci/.madsci/workcells
   redis_host: localhost
   redis_port: 6379
   redis_password: null
