@@ -2,6 +2,7 @@
 Engine Class and associated helpers and data
 """
 
+import copy
 import importlib
 import time
 import traceback
@@ -98,7 +99,7 @@ class Engine:
         """Spins the engine in its own thread"""
         self.spin()
 
-    def run_next_step(self) -> None:
+    def run_next_step(self, await_step_completion: bool = False) -> None:
         """Runs the next step in the workflow with the highest priority"""
         next_wf = None
         with self.state_handler.wc_state_lock():
@@ -117,8 +118,16 @@ class Engine:
                 if next_wf.step_index == 0:
                     next_wf.start_time = datetime.now()
                 self.state_handler.set_workflow(next_wf)
-        if next_wf:
-            self.run_step(next_wf.workflow_id)
+        if (
+            next_wf
+            and len(next_wf.steps) > 0
+            and next_wf.step_index < len(next_wf.steps)
+        ):
+            thread = self.run_step(next_wf.workflow_id)
+            if await_step_completion:
+                thread.join()
+        else:
+            self.logger.log_info("No workflows ready to run")
 
     @threaded_daemon
     def run_step(self, workflow_id: str) -> None:
@@ -127,7 +136,7 @@ class Engine:
         wf = self.state_handler.get_workflow(workflow_id)
         step = wf.steps[wf.step_index]
         step.start_time = datetime.now()
-        self.log_info(f"Running step {step.step_id} in workflow {workflow_id}")
+        self.logger.log_info(f"Running step {step.step_id} in workflow {workflow_id}")
         node = self.state_handler.get_node(step.node)
         client = find_node_client(node.node_url)
         wf = self.update_step(wf, step)
@@ -172,7 +181,7 @@ class Engine:
 
         # * Finalize the step
         self.finalize_step(workflow_id, step)
-        self.log_info(f"Completed step {step.step_id} in workflow {workflow_id}")
+        self.logger.log_info(f"Completed step {step.step_id} in workflow {workflow_id}")
 
     def finalize_step(self, workflow_id: str, step: Step) -> None:
         """Finalize the step, updating the workflow based on the results (setting status, updating index, etc.)"""
@@ -219,6 +228,10 @@ class Engine:
     ) -> ActionResult:
         """create and save datapoints for data returned from step"""
         labeled_data = {}
+        ownership_info = copy.deepcopy(wf.ownership_info)
+        ownership_info.step_id = step.step_id
+        ownership_info.node_id = self.state_handler.get_node(step.node).node_id
+        ownership_info.workflow_id = wf.workflow_id
         if response.data:
             for data_key in response.data:
                 if step.data_labels is not None and data_key in step.data_labels:
@@ -227,9 +240,7 @@ class Engine:
                     label = data_key
                 datapoint = ValueDataPoint(
                     label=label,
-                    step_id=step.step_id,
-                    workflow_id=wf.workflow_id,
-                    experiment_id=wf.ownership_info.experiment_id,
+                    ownership_info=ownership_info,
                     value=response.data[data_key],
                 )
                 self.data_client.submit_datapoint(datapoint)
@@ -241,10 +252,8 @@ class Engine:
                 else:
                     label = file_key
                 datapoint = FileDataPoint(
-                    step_id=step.step_id,
-                    workflow_id=wf.workflow_id,
-                    experiment_id=wf.ownership_info.experiment_id,
                     label=label,
+                    ownership_info=ownership_info,
                     path=str(response.files[file_key]),
                 )
                 self.logger.log_debug(

@@ -53,6 +53,16 @@ class OwnershipInfo(BaseModel):
         description="The ID of the lab that owns the object.",
         default=None,
     )
+    step_id: Optional[str] = Field(
+        title="Step ID",
+        description="The ID of the step that owns the object.",
+        default=None,
+    )
+    workflow_id: Optional[str] = Field(
+        title="Workflow ID",
+        description="The ID of the workflow that owns the object.",
+        default=None,
+    )
 
     is_ulid = field_validator(
         "user_id",
