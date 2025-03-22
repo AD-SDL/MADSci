@@ -15,8 +15,8 @@
       <v-container class="pa-1" fluid>
         <v-row dense wrap justify-content="space-evenly">
           <v-col cols="12" md="6" lg="6" xl="6">
-            <NodesPanel :nodes="workcell_state.nodes" :main_url="main_url" :wc_state="workcell_state" />
-            <LocationsPanel :locations="workcell_state.locations" />
+            <NodesPanel :nodes="workcell_state.nodes" :main_url="main_url" :wc_state="workcell_state" :locations="workcell_info.locations"/>
+            <LocationsPanel :locations="workcell_info.locations" />
           </v-col>
           <v-col cols="12" md="6" lg="6" xl="6">
             <WorkflowsPanel :wc_state="workcell_state" :wfs="workflows" @view-workflows="$emit('view-workflows')" />

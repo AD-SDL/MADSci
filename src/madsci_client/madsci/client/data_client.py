@@ -121,7 +121,7 @@ class DataClient:
         else:
             files = {}
         response = requests.post(
-            "/datapoint",
+            f"{self.url}datapoint",
             data={"datapoint": datapoint.model_dump_json()},
             files=files,
             timeout=10,

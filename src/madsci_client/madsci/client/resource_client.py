@@ -25,15 +25,15 @@ class ResourceClient:
     def __init__(self, url: str) -> None:
         """Initial params"""
         self.url = url
-        if self.url.endswith("/"):
-            self.url = {self.url[:-1]}
+        if str(self.url).endswith("/"):
+            self.url = str(self.url)[:-1]
 
-    def add_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
+    def add_resource(self, resource: Resource) -> Resource:
         """
         Add a resource to the server.
 
         Args:
-            resource (ResourceDataModels): The resource to add.
+            resource (Resource): The resource to add.
 
         Returns:
             Resource: The added resource as returned by the server.

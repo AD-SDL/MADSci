@@ -98,7 +98,7 @@ class Resource(ResourceDefinition, extra="allow", table=False):
     )
 
     @classmethod
-    def discriminate(cls, resource: "ResourceDataModels") -> "ResourceDataModels":
+    def discriminate(cls, resource: dict) -> "Resource":
         """Discriminate the resource based on its base type."""
         if isinstance(resource, dict):
             resource_type = resource.get("base_type")

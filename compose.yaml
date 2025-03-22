@@ -1,0 +1,13 @@
+name: madsci
+services:
+  madsci:
+    container_name: madsci
+    image: madsci
+    build:
+      context: .
+      dockerfile: Dockerfile
+      tags:
+        - madsci:latest
+        - madsci:dev
+    privileged: true
+    env_file: .env
