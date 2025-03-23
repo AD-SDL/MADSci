@@ -70,7 +70,7 @@ def initialize_workcell_resources(
             for dict_location in wc_yaml["locations"]:
                 if dict_location["location_name"] == location.location_name:
                     dict_location["resource"]["resource_id"] = resource.resource_id
-            with workcell._definition_path.open() as f:
+            with workcell._definition_path.open(mode="w") as f:
                 yaml.dump(wc_yaml, f, default_flow_style=False)
 
 
