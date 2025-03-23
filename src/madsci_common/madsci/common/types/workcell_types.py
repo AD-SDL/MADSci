@@ -178,3 +178,8 @@ class WorkcellConfig(BaseModel):
         title="Static Files Path",
         description="Path to the static dashboard files",
     )
+    get_action_result_retries: int = Field(
+        default=3,
+        title="Get Action Result Retries",
+        description="Number of times to retry getting an action result",
+    )

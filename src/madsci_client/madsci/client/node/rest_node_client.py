@@ -127,7 +127,7 @@ class RestNodeClient(AbstractNodeClient):
     ) -> ActionResult:
         """Wait for an action to complete and return the result. Optionally, specify a timeout in seconds."""
         start_time = time.time()
-        interval = 0.1
+        interval = 0.25
         while True:
             if timeout is not None and time.time() - start_time > timeout:
                 raise TimeoutError("Timed out waiting for action to complete.")
@@ -135,7 +135,7 @@ class RestNodeClient(AbstractNodeClient):
             if not response.status.is_terminal:
                 time.sleep(interval)
                 interval = (
-                    interval * 2 if interval < 10 else 10
+                    interval * 1.5 if interval < 10 else 10
                 )  # * Capped Exponential backoff
                 continue
             return response

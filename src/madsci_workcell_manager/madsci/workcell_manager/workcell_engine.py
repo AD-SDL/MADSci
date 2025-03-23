@@ -7,6 +7,7 @@ import importlib
 import time
 import traceback
 from datetime import datetime
+from typing import Optional
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
@@ -128,62 +129,91 @@ class Engine:
 
     @threaded_daemon
     def run_step(self, workflow_id: str) -> None:
-        """Run a step in a seperate thread"""
-        # * Prepare the step
-        wf = self.state_handler.get_workflow(workflow_id)
-        step = wf.steps[wf.step_index]
-        step.start_time = datetime.now()
-        self.logger.log_info(f"Running step {step.step_id} in workflow {workflow_id}")
-        node = self.state_handler.get_node(step.node)
-        client = find_node_client(node.node_url)
-        wf = self.update_step(wf, step)
-
-        # * Send the action request
-        response = None
-        request = ActionRequest(
-            action_name=step.action,
-            args={**step.args, **step.locations},
-            files=step.files,
-        )
-        action_id = request.action_id
+        """Run a step in a standalone thread, updating the workflow as needed"""
         try:
-            response = client.send_action(request, await_result=False)
-            self.handle_response(wf, step, response)
-        except Exception as e:
-            self.logger.log_error(
-                f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+            # * Prepare the step
+            wf = self.state_handler.get_workflow(workflow_id)
+            step = wf.steps[wf.step_index]
+            step.start_time = datetime.now()
+            self.logger.log_info(
+                f"Running step {step.step_id} in workflow {workflow_id}"
             )
-            if response:
-                response.errors.append(Error.from_exception(e))
+            node = self.state_handler.get_node(step.node)
+            client = find_node_client(node.node_url)
+            wf = self.update_step(wf, step)
 
-        action_id = response.action_id if response else action_id
+            # * Send the action request
+            response = None
+            request = ActionRequest(
+                action_name=step.action,
+                args={**step.args, **step.locations},
+                files=step.files,
+            )
+            action_id = request.action_id
+            try:
+                response = client.send_action(request, await_result=False)
+            except Exception as e:
+                self.logger.log_error(
+                    f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                )
+                if response is None:
+                    response = request.unknown(errors=[Error.from_exception(e)])
+                else:
+                    response.errors.append(Error.from_exception(e))
 
-        # * Periodically query the action status until complete, updating the workflow as needed
-        # * If the node or client supports get_action_result, query the action result
-        if node.info.capabilities.get_action_result is True or (
-            node.info.capabilities.get_action_result is None
-            and client.supported_capabilities.get_action_result is True
-        ):
-            interval = 0.1
-            while response is not None and response.status.is_terminal:
+            response = self.handle_response(wf, step, response)
+            action_id = response.action_id
+
+            # * Periodically query the action status until complete, updating the workflow as needed
+            # * If the node or client supports get_action_result, query the action result
+            interval = 0.25
+            retry_count = 0
+            while not response.status.is_terminal:
+                if node.info.capabilities.get_action_result is False or (
+                    node.info.capabilities.get_action_result is None
+                    and client.supported_capabilities.get_action_result is False
+                ):
+                    self.logger.log_warning(
+                        f"While running Step {step.step_id} of workflow {workflow_id}, send_action returned a non-terminal response {response}. However, node {step.node} does not support querying an action result."
+                    )
+                    break
                 try:
+                    time.sleep(interval)  # * Exponential backoff with cap
+                    interval = interval * 1.5 if interval < 10 else 10
                     response = client.get_action_result(action_id)
                     self.handle_response(wf, step, response)
-                    if response is not None and response.status.is_terminal:
+                    if (
+                        response.status.is_terminal
+                        or response.status == ActionStatus.UNKNOWN
+                    ):
+                        # * If the action is terminal or unknown, break out of the loop
+                        # * If the action is unknown, that means the node does not have a record of the action
                         break
-                    time.sleep(interval)  # * Exponential backoff with cap
-                    interval = interval * 2 if interval < 10 else 10
                 except Exception as e:
                     self.logger.log_error(
                         f"Querying action {action_id} for step {step.step_id} resulted in exception: {e!s}"
                     )
-                    if response:
+                    if response is None:
+                        response = request.unknown(errors=[Error.from_exception(e)])
+                    else:
                         response.errors.append(Error.from_exception(e))
-                    break
+                    self.handle_response(wf, step, response)
+                    if retry_count >= self.definition.config.get_action_result_retries:
+                        self.logger.log_error(
+                            f"Exceeded maximum number of retries for querying action {action_id} for step {step.step_id}"
+                        )
+                        break
+                    retry_count += 1
 
-        # * Finalize the step
-        self.finalize_step(workflow_id, step)
-        self.logger.log_info(f"Completed step {step.step_id} in workflow {workflow_id}")
+            # * Finalize the step
+            self.finalize_step(workflow_id, step)
+            self.logger.log_info(
+                f"Completed step {step.step_id} in workflow {workflow_id}"
+            )
+        except Exception as e:
+            self.logger.log_error(
+                f"Running step in workflow {workflow_id} triggered unhandled exception: {e!s}"
+            )
 
     def finalize_step(self, workflow_id: str, step: Step) -> None:
         """Finalize the step, updating the workflow based on the results (setting status, updating index, etc.)"""
@@ -216,7 +246,9 @@ class Engine:
             self.state_handler.set_workflow(wf)
         return wf
 
-    def handle_response(self, wf: Workflow, step: Step, response: ActionResult) -> None:
+    def handle_response(
+        self, wf: Workflow, step: Step, response: Optional[ActionResult]
+    ) -> Optional[ActionResult]:
         """Handle the response from the node"""
         if response is not None:
             response = self.handle_data_and_files(step, wf, response)
@@ -224,6 +256,7 @@ class Engine:
             step.result = response
             step.history.append(response)
             wf = self.update_step(wf, step)
+        return response
 
     def handle_data_and_files(
         self, step: Step, wf: Workflow, response: ActionResult

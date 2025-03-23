@@ -30,7 +30,6 @@ class ActionStatus(str, Enum):
             ActionStatus.SUCCEEDED,
             ActionStatus.FAILED,
             ActionStatus.CANCELLED,
-            ActionStatus.UNKNOWN,
             ActionStatus.NOT_READY,
         ]
 

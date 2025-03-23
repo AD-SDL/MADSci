@@ -12,7 +12,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
-from madsci.common.types.node_types import Node, NodeInfo
+from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellConfig, WorkcellDefinition
 from madsci.common.types.workflow_types import Workflow, WorkflowStatus
@@ -228,3 +228,86 @@ def test_handle_data_and_files_with_files(engine: Engine) -> None:
         assert isinstance(submitted_datapoint, FileDataPoint)
         assert submitted_datapoint.label == "label1"
         assert submitted_datapoint.path == "/path/to/file"
+
+
+def test_run_step_send_action_exception_then_get_action_result_success(
+    engine: Engine, mock_state_handler: MagicMock
+) -> None:
+    """Test run_step where send_action raises an exception but get_action_result succeeds."""
+    step = Step(name="Test Step 1", action="test_action", node="node1", args={})
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+        step_index=0,
+        status=WorkflowStatus.RUNNING,
+        ownership_info=OwnershipInfo(),
+    )
+    mock_state_handler.get_workflow.return_value = workflow
+    mock_state_handler.get_node.return_value = Node(
+        node_url="http://node-url",
+        info=NodeInfo(
+            node_name="Test Node",
+            module_name="test_module",
+            capabilities=NodeCapabilities(get_action_result=True),
+        ),
+    )
+
+    with patch(
+        "madsci.workcell_manager.workcell_engine.find_node_client"
+    ) as mock_client:
+        mock_client.return_value.send_action.side_effect = Exception(
+            "send_action failed"
+        )
+        mock_client.return_value.get_action_result.return_value = ActionResult(
+            status=ActionStatus.SUCCEEDED
+        )
+
+        thread = engine.run_step(workflow.workflow_id)
+        thread.join()
+
+        step = mock_state_handler.set_workflow.call_args[0][0].steps[0]
+        assert step.status == ActionStatus.SUCCEEDED
+        assert step.result is not None
+        assert step.result.status == ActionStatus.SUCCEEDED
+        mock_client.return_value.get_action_result.assert_called_once()
+
+
+def test_run_step_send_action_and_get_action_result_fail(
+    engine: Engine, mock_state_handler: MagicMock
+) -> None:
+    """Test run_step where both send_action and get_action_result fail."""
+    step = Step(name="Test Step 1", action="test_action", node="node1", args={})
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+        step_index=0,
+        status=WorkflowStatus.RUNNING,
+        ownership_info=OwnershipInfo(),
+    )
+    mock_state_handler.get_workflow.return_value = workflow
+    mock_state_handler.get_node.return_value = Node(
+        node_url="http://node-url",
+        info=NodeInfo(
+            node_name="Test Node",
+            module_name="test_module",
+            capabilities=NodeCapabilities(get_action_result=True),
+        ),
+    )
+
+    with patch(
+        "madsci.workcell_manager.workcell_engine.find_node_client"
+    ) as mock_client:
+        mock_client.return_value.send_action.side_effect = Exception(
+            "send_action failed"
+        )
+        mock_client.return_value.get_action_result.side_effect = Exception(
+            "get_action_result failed"
+        )
+
+        thread = engine.run_step(workflow.workflow_id)
+        thread.join()
+
+        step = mock_state_handler.set_workflow.call_args[0][0].steps[0]
+        assert step.status == ActionStatus.UNKNOWN
+        assert step.result.status == ActionStatus.UNKNOWN
+        mock_client.return_value.get_action_result.assert_called()
