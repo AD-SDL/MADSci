@@ -6,84 +6,111 @@ from madsci.common.types.condition_types import (
 )
 from madsci.common.types.resource_types import Container
 from madsci.common.types.step_types import Step
-from madsci.common.types.workflow_types import Workflow
+from madsci.common.types.workflow_types import SchedulerMetadata
 from madsci.workcell_manager.schedulers.scheduler import AbstractScheduler
 
 
 def evaluate_condition_checks(
-    step: Step, wf: Workflow, scheduler: AbstractScheduler
-) -> None:
+    step: Step, scheduler: AbstractScheduler, metadata: SchedulerMetadata
+) -> SchedulerMetadata:
     """Check if the specified conditions for the step are met"""
     for condition in step.conditions:
         if isinstance(condition, ResourceInLocationCondition):
-            evaluate_resource_in_location_condition(condition, wf, scheduler)
+            metadata = evaluate_resource_in_location_condition(
+                condition, scheduler, metadata
+            )
         elif isinstance(condition, NoResourceInLocationCondition):
-            evaluate_no_resource_in_location_condition(condition, wf, scheduler)
+            metadata = evaluate_no_resource_in_location_condition(
+                condition, scheduler, metadata
+            )
         else:
             raise ValueError(f"Unknown condition type {condition.condition_type}")
+    return metadata
 
 
 def evaluate_resource_in_location_condition(
-    condition: ResourceInLocationCondition, wf: Workflow, scheduler: AbstractScheduler
-) -> None:
+    condition: ResourceInLocationCondition,
+    scheduler: AbstractScheduler,
+    metadata: SchedulerMetadata,
+) -> SchedulerMetadata:
     """Check if a resource is present in a specified location"""
-    location = scheduler.workcell.locations[condition.location]
-    if location.resource_id is None:
-        wf.scheduler_metadata.ready_to_run = False
-        wf.scheduler_metadata.reasons.append(
-            f"Location {location.name} cannot provide resource presence information."
+    location = next(
+        (
+            loc
+            for loc in scheduler.workcell_definition.locations
+            if loc.location_name == condition.location
+        ),
+        None,
+    )
+    if location is None:
+        metadata.ready_to_run = False
+        metadata.reasons.append(f"Location {condition.location} not found.")
+    elif location.resource is None:
+        metadata.ready_to_run = False
+        metadata.reasons.append(
+            f"Location {location.location_name} cannot provide resource presence information."
         )
     elif scheduler.resource_client is None:
-        wf.scheduler_metadata.ready_to_run = False
-        wf.scheduler_metadata.reasons.append("Resource client is not available.")
+        metadata.ready_to_run = False
+        metadata.reasons.append("Resource client is not available.")
     else:
-        container = scheduler.resource_client.get_resource(location.resource_id)
+        container = scheduler.resource_client.get_resource(location.resource)
         if not isinstance(container, Container):
-            wf.scheduler_metadata.ready_to_run = False
-            wf.scheduler_metadata.reasons.append(
+            metadata.ready_to_run = False
+            metadata.reasons.append(
                 f"Resource {container.resource_id} is not a container."
             )
-            return
-        if len(container.children) == 0:
-            wf.scheduler_metadata.ready_to_run = False
-            wf.scheduler_metadata.reasons.append(
-                f"Resource {container.resource_id} is empty."
-            )
+            return metadata
+        if condition.key is None and len(container.children) == 0:
+            metadata.ready_to_run = False
+            metadata.reasons.append(f"Resource {container.resource_id} is empty.")
         if condition.key is not None and container.get_child(condition.key) is None:
-            wf.scheduler_metadata.ready_to_run = False
-            wf.scheduler_metadata.reasons.append(
+            metadata.ready_to_run = False
+            metadata.reasons.append(
                 f"Resource {container.resource_id} does not contain a child with key {condition.key}."
             )
+    return metadata
 
 
 def evaluate_no_resource_in_location_condition(
-    condition: NoResourceInLocationCondition, wf: Workflow, scheduler: AbstractScheduler
-) -> None:
+    condition: NoResourceInLocationCondition,
+    scheduler: AbstractScheduler,
+    metadata: SchedulerMetadata,
+) -> SchedulerMetadata:
     """Check if a resource is not present in a specified location"""
-    location = scheduler.workcell.locations[condition.location]
-    if location.resource_id is None:
-        wf.scheduler_metadata.ready_to_run = False
-        wf.scheduler_metadata.reasons.append(
-            f"Location {location.name} cannot provide resource presence information."
+    location = next(
+        (
+            loc
+            for loc in scheduler.workcell_definition.locations
+            if loc.location_name == condition.location
+        ),
+        None,
+    )
+    if location is None:
+        metadata.ready_to_run = False
+        metadata.reasons.append(f"Location {condition.location} not found.")
+    elif location.resource is None:
+        metadata.ready_to_run = False
+        metadata.reasons.append(
+            f"Location {location.location_name} cannot provide resource presence information."
         )
     elif scheduler.resource_client is None:
-        wf.scheduler_metadata.ready_to_run = False
-        wf.scheduler_metadata.reasons.append("Resource client is not available.")
+        metadata.ready_to_run = False
+        metadata.reasons.append("Resource client is not available.")
     else:
-        container = scheduler.resource_client.get_resource(location.resource_id)
+        container = scheduler.resource_client.get_resource(location.resource)
         if not isinstance(container, Container):
-            wf.scheduler_metadata.ready_to_run = False
-            wf.scheduler_metadata.reasons.append(
+            metadata.ready_to_run = False
+            metadata.reasons.append(
                 f"Resource {container.resource_id} is not a container."
             )
-            return
-        if len(container.children) > 0:
-            wf.scheduler_metadata.ready_to_run = False
-            wf.scheduler_metadata.reasons.append(
-                f"Resource {container.resource_id} is not empty."
-            )
+            return metadata
+        if condition.key is None and len(container.children) > 0:
+            metadata.ready_to_run = False
+            metadata.reasons.append(f"Resource {container.resource_id} is not empty.")
         if condition.key is not None and container.get_child(condition.key) is not None:
-            wf.scheduler_metadata.ready_to_run = False
-            wf.scheduler_metadata.reasons.append(
+            metadata.ready_to_run = False
+            metadata.reasons.append(
                 f"Resource {container.resource_id} contains a child with key {condition.key} ({container.get_child(condition.key).resource_id})."
             )
+    return metadata

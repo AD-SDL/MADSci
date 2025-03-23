@@ -1,10 +1,11 @@
 """Location types for MADSci."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.resource_types import ResourceDataModels
 from madsci.common.validators import ulid_validator
 from pydantic import Field
 from pydantic.functional_validators import field_validator
@@ -32,7 +33,7 @@ class Location(BaseModel):
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
         default={},
     )
-    resource: Optional[Any] = Field(
+    resource: Optional[Union[ResourceDataModels, str]] = Field(
         title="Resource",
         description="The Resource associated with the location",
         default=None,

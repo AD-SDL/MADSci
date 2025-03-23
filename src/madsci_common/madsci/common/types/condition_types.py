@@ -35,12 +35,11 @@ class ResourceInLocationCondition(Condition):
     condition_type: Literal[ConditionTypeEnum.RESOURCE_PRESENT] = Field(
         title="Condition Type",
         description="The type of condition to check",
-        const=ConditionTypeEnum.RESOURCE_PRESENT,
+        default=ConditionTypeEnum.RESOURCE_PRESENT,
     )
-    location: Optional[str] = Field(
+    location: str = Field(
         title="Location",
         description="The name or ID of the location to check for a resource in",
-        default=None,
     )
     key: Optional[Union[str, int, GridIndex, GridIndex2D, GridIndex3D]] = Field(
         title="Key",
@@ -55,12 +54,11 @@ class NoResourceInLocationCondition(Condition):
     condition_type: Literal[ConditionTypeEnum.NO_RESOURCE_PRESENT] = Field(
         title="Condition Type",
         description="The type of condition to check",
-        const=ConditionTypeEnum.NO_RESOURCE_PRESENT,
+        default=ConditionTypeEnum.NO_RESOURCE_PRESENT,
     )
-    location: Optional[str] = Field(
+    location: str = Field(
         title="Location",
         description="The name or ID of the location to check for a resource in",
-        default=None,
     )
     key: Optional[Union[str, int, GridIndex, GridIndex2D, GridIndex3D]] = Field(
         title="Key",

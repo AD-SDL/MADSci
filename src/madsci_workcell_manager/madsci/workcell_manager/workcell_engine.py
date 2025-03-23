@@ -17,7 +17,10 @@ from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
-from madsci.common.types.workflow_types import Workflow, WorkflowStatus
+from madsci.common.types.workflow_types import (
+    Workflow,
+    WorkflowStatus,
+)
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 from madsci.workcell_manager.workcell_utils import (
@@ -59,7 +62,6 @@ class Engine:
             initialize_workcell(state_handler, self.resource_client)
         time.sleep(workcell_manager_definition.config.cold_start_delay)
         self.logger.log_info("Engine initialized, waiting for workflows...")
-        # TODO send event
 
     @threaded_daemon
     def spin(self) -> None:
@@ -85,11 +87,25 @@ class Engine:
                     > self.definition.config.scheduler_update_interval
                 ):
                     with self.state_handler.wc_state_lock():
-                        self.scheduler.run_iteration(
-                            workflows=self.state_handler.get_all_workflows()
+                        workflows = self.state_handler.get_all_workflows()
+                        filtered_workflows = [
+                            wf
+                            for wf in workflows.values()
+                            if wf.status
+                            in {WorkflowStatus.QUEUED, WorkflowStatus.IN_PROGRESS}
+                        ]
+                        workflow_metadata_map = self.scheduler.run_iteration(
+                            workflows=filtered_workflows
                         )
-                        self.run_next_step()
-                        scheduler_tick = time.time()
+                        for workflow_id, workflow in workflows.items():
+                            if workflow_id in workflow_metadata_map:
+                                workflow.scheduler_metadata = workflow_metadata_map[
+                                    workflow_id
+                                ]
+                                self.state_handler.set_workflow(workflow)
+                            self.state_handler.set_workflow(workflow)
+                    self.run_next_step()
+                    scheduler_tick = time.time()
             except Exception:
                 traceback.print_exc()
                 self.logger.log_error(
