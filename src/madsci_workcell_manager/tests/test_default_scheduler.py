@@ -179,3 +179,92 @@ def test_workflow_paused(mock_scheduler: Scheduler, workflows: list[Workflow]) -
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     assert not result[workflows[0].workflow_id].ready_to_run
     assert "Workflow is paused" in result[workflows[0].workflow_id].reasons
+
+
+def test_workflow_running(mock_scheduler: Scheduler, workflows: list[Workflow]) -> None:
+    """Test that running workflows are marked as not ready to run"""
+    workflows[0].status = WorkflowStatus.RUNNING
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert not result[workflows[0].workflow_id].ready_to_run
+    assert "Workflow is already running" in result[workflows[0].workflow_id].reasons
+
+
+def test_workflow_status_failed(
+    mock_scheduler: Scheduler, workflows: list[Workflow]
+) -> None:
+    """Test that workflows with an error status are not ready to run"""
+    workflows[0].status = WorkflowStatus.FAILED
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert not result[workflows[0].workflow_id].ready_to_run
+    assert (
+        f"Workflow status must be '{WorkflowStatus.QUEUED}' or '{WorkflowStatus.IN_PROGRESS}' to run, not {WorkflowStatus.FAILED}"
+        in result[workflows[0].workflow_id].reasons[0]
+    )
+
+
+def test_workflow_status_completed(
+    mock_scheduler: Scheduler, workflows: list[Workflow]
+) -> None:
+    """Test that completed workflows are not ready to run"""
+    workflows[0].status = WorkflowStatus.COMPLETED
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert not result[workflows[0].workflow_id].ready_to_run
+    assert (
+        f"Workflow status must be '{WorkflowStatus.QUEUED}' or '{WorkflowStatus.IN_PROGRESS}' to run, not {WorkflowStatus.COMPLETED}"
+        in result[workflows[0].workflow_id].reasons[0]
+    )
+
+
+def test_workflow_status_cancelled(
+    mock_scheduler: Scheduler, workflows: list[Workflow]
+) -> None:
+    """Test that cancelled workflows are not ready to run"""
+    workflows[0].status = WorkflowStatus.CANCELLED
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert not result[workflows[0].workflow_id].ready_to_run
+    assert (
+        f"Workflow status must be '{WorkflowStatus.QUEUED}' or '{WorkflowStatus.IN_PROGRESS}' to run, not {WorkflowStatus.CANCELLED}"
+        in result[workflows[0].workflow_id].reasons[0]
+    )
+
+
+def test_workflow_status_in_progress(
+    mock_scheduler: Scheduler, workflows: list[Workflow]
+) -> None:
+    """Test that in progress workflows are ready to run"""
+    workflows[0].status = WorkflowStatus.IN_PROGRESS
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert result[workflows[0].workflow_id].ready_to_run
+
+
+def test_workflow_status_queued(
+    mock_scheduler: Scheduler, workflows: list[Workflow]
+) -> None:
+    """Test that queued workflows are ready to run"""
+    workflows[0].status = WorkflowStatus.QUEUED
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert result[workflows[0].workflow_id].ready_to_run
+
+
+def test_node_status_abnormal(
+    mock_scheduler: Scheduler, workflows: list[Workflow]
+) -> None:
+    """Test that workflows are not ready to run if the node is in an error state"""
+    mock_scheduler.state_handler.get_node.return_value = Node(
+        node_url="http://test_node",
+        status=NodeStatus(errored=True),
+        info=NodeInfo(
+            node_name="test_node",
+            module_name="test_module",
+        ),
+    )
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert not result[workflows[0].workflow_id].ready_to_run
+    assert (
+        "Node test_node not ready: Node is in an error state"
+        in result[workflows[0].workflow_id].reasons[0]
+    )
+
+
+# TODO: Test Location Reservation
+# TODO: Test Node Reservation

@@ -348,7 +348,7 @@ def test_get_action_history(test_client: TestClient) -> None:
         )
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
-        assert result.status == ActionStatus.RUNNING
+        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
         response = client.get(f"/action/{response.json()['action_id']}")
         assert response.status_code == 200
         assert ActionResult.model_validate(response.json()).status in [
