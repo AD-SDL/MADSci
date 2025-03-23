@@ -1,24 +1,32 @@
-workcell_name: Example Workcell
-manager_type: workcell_manager
-workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
-description: null
 config:
-  host: 127.0.0.1
-  port: 8013
-  workcells_directory: /home/vscode/.madsci/workcells
-  redis_host: localhost
-  redis_port: 6379
-  redis_password: null
-  event_client_config: null
-  scheduler_update_interval: 2.0
-  node_update_interval: 1.0
-  heartbeat_interval: 2.0
   auto_start: true
   clear_workflows: false
   cold_start_delay: 0
-  scheduler: madsci.workcell_manager.schedulers.default_scheduler
   data_server_url: http://localhost:8003
+  event_client_config: null
+  heartbeat_interval: 2.0
+  host: 0.0.0.0
+  node_update_interval: 1.0
+  port: 8013
+  redis_host: localhost
+  redis_password: null
+  redis_port: 6379
+  resource_server_url: http://localhost:8004
+  scheduler: madsci.workcell_manager.schedulers.default_scheduler
+  scheduler_update_interval: 2.0
   static_files_path: /home/madsci/ui/dist
+  workcells_directory: /home/madsci/.madsci/workcells
+description: null
+locations:
+- location_name: test1
+  lookup: {}
+  resource:
+    base_type: stack
+    capacity: 20
+    resource_id: 01JQ02ZRQG9DM1F6YGKMV0ABVQ
+manager_type: workcell_manager
 nodes:
-   liquidhandler_1: http://localhost:8000
+  liquidhandler_1: http://localhost:8000
 workcell_directory: ~/.madsci/workcells/Example Workcell
+workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
+workcell_name: Example Workcell

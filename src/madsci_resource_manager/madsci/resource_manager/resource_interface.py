@@ -100,6 +100,8 @@ class ResourceInterface:
             yield self.session
         else:
             session = self.sessionmaker()
+            logger.error(session)
+            session.bind = self.engine
             try:
                 yield session
                 session.commit()

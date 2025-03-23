@@ -48,6 +48,26 @@ class ResourceClient:
         resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         return resource
 
+    def add_or_update_resource(self, resource: Resource) -> Resource:
+        """
+        Add a resource to the server.
+
+        Args:
+            resource (Resource): The resource to add.
+
+        Returns:
+            Resource: The added resource as returned by the server.
+        """
+        response = requests.post(
+            f"{self.url}/resource/add_or_update",
+            json=resource.model_dump(mode="json"),
+            timeout=10,
+        )
+        response.raise_for_status()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
+
     def update_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
         """
         Update or refresh a resource, including its children, on the server.
