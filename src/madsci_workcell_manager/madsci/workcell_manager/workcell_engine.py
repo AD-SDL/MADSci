@@ -54,7 +54,11 @@ class Engine:
         )
         default_logger.log_info(self.data_client.url)
         with state_handler.wc_state_lock():
-            initialize_workcell(state_handler, self.resource_client)
+            initialize_workcell(
+                state_handler,
+                self.resource_client,
+                workcell=workcell_manager_definition,
+            )
         time.sleep(workcell_manager_definition.config.cold_start_delay)
         default_logger.log_info("Engine initialized, waiting for workflows...")
         # TODO send event

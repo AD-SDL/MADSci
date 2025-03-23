@@ -5,6 +5,7 @@ import warnings
 from typing import Optional
 
 import requests
+import yaml
 from madsci.client.node import NODE_CLIENT_MAP, AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.node_types import Node, NodeDefinition
@@ -40,6 +41,7 @@ def initialize_workcell(
         workcell = state_manager.get_workcell()
     initialize_workcell_nodes(workcell, state_manager)
     initialize_workcell_resources(workcell, resource_client)
+    state_manager.set_workcell(workcell)
 
 
 def initialize_workcell_nodes(
@@ -62,7 +64,14 @@ def initialize_workcell_resources(
         if location.resource is not None:
             resource = Resource.discriminate(location.resource)
             resource = resource_client.add_resource(resource)
-            workcell.location.resource = resource
+            location.resource = resource
+            with workcell._definition_path.open() as f:
+                wc_yaml = yaml.safe_load(f)
+            for dict_location in wc_yaml["locations"]:
+                if dict_location["location_name"] == location.location_name:
+                    dict_location["resource"]["resource_id"] = resource.resource_id
+            with workcell._definition_path.open() as f:
+                yaml.dump(wc_yaml, f, default_flow_style=False)
 
 
 def find_node_client(url: str) -> AbstractNodeClient:

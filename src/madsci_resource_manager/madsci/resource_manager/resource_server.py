@@ -33,12 +33,12 @@ def create_resource_server(  # noqa: C901, PLR0915
     resource_interface: Optional[ResourceInterface] = None,
 ) -> FastAPI:
     """Creates a Resource Manager's REST server."""
-
     if not resource_manager_definition:
         resource_manager_definition = ResourceManagerDefinition.load_model()
     if not resource_interface:
         resource_interface = ResourceInterface(url=resource_manager_definition.db_url)
-
+        logger.info(resource_interface)
+        logger.info(resource_interface.session)
     app = FastAPI()
 
     @app.get("/info")
@@ -55,6 +55,19 @@ def create_resource_server(  # noqa: C901, PLR0915
         """
         try:
             return resource_interface.add_resource(resource)
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/resource/add_or_update")
+    async def add_or_update_resource(
+        resource: ResourceDataModels = Body(..., discriminator="base_type"),  # noqa: B008
+    ) -> ResourceDataModels:
+        """
+        Add a new resource to the Resource Manager.
+        """
+        try:
+            return resource_interface.add_or_update_resource(resource)
         except Exception as e:
             logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
