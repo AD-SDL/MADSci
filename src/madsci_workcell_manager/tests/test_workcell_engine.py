@@ -1,9 +1,18 @@
 """Automated unit tests for the Workcell Engine, using pytest."""
 
+import copy
 from unittest.mock import MagicMock, patch
 
 import pytest
-from madsci.common.types.action_types import ActionResult, ActionStatus
+from madsci.common.types.action_types import (
+    ActionFailed,
+    ActionResult,
+    ActionStatus,
+    ActionSucceeded,
+)
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
+from madsci.common.types.node_types import Node, NodeInfo
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellConfig, WorkcellDefinition
 from madsci.common.types.workflow_types import Workflow, WorkflowStatus
@@ -32,6 +41,13 @@ def mock_workcell_definition() -> WorkcellDefinition:
 def mock_state_handler() -> MagicMock:
     """Fixture for a mock WorkcellRedisHandler."""
     handler = MagicMock(spec=WorkcellRedisHandler)
+    handler.get_node.return_value = Node(
+        node_url="http://node-url",
+        info=NodeInfo(
+            node_name="Test Node",
+            module_name="test_module",
+        ),
+    )
     handler.get_all_workflows.return_value = {}
     handler.has_state_changed.return_value = False
     handler.shutdown = False
@@ -92,47 +108,123 @@ def test_run_step(engine: Engine, mock_state_handler: MagicMock) -> None:
         steps=[step],
         step_index=0,
         status=WorkflowStatus.RUNNING,
+        ownership_info=OwnershipInfo(),
     )
     mock_state_handler.get_workflow.return_value = workflow
-    mock_state_handler.get_node.return_value = MagicMock(node_url="http://node-url")
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"
     ) as mock_client:
         mock_client.return_value.send_action.return_value = ActionResult(
-            action_id="action1", status=ActionStatus.SUCCEEDED
+            status=ActionStatus.SUCCEEDED
         )
-        engine.run_step(workflow.workflow_id)
+        thread = engine.run_step(workflow.workflow_id)
+        thread.join()
+        step = mock_state_handler.set_workflow.call_args[0][0].steps[0]
         assert step.start_time is not None
+        assert step.end_time is not None
+        assert step.status == ActionStatus.SUCCEEDED
+        assert step.result is not None
+        assert step.result.status == ActionStatus.SUCCEEDED
         mock_state_handler.set_workflow.assert_called()
 
 
 def test_finalize_step_success(engine: Engine, mock_state_handler: MagicMock) -> None:
     """Test finalizing a successful step."""
-    step = Step(step_id="step1", status=ActionStatus.SUCCEEDED)
+    step = Step(name="Test Step 1", action="test_action", node="node1", args={})
     workflow = Workflow(
-        workflow_id="wf1",
+        name="Test Workflow",
         steps=[step],
         step_index=0,
         status=WorkflowStatus.RUNNING,
     )
     mock_state_handler.get_workflow.return_value = workflow
-    engine.finalize_step("wf1", step)
-    assert workflow.status == WorkflowStatus.COMPLETED
-    assert workflow.end_time is not None
-    mock_state_handler.set_workflow.assert_called_with(workflow)
+    updated_step = copy.deepcopy(step)
+    updated_step.status = ActionStatus.SUCCEEDED
+    updated_step.result = ActionSucceeded()
+
+    engine.finalize_step(workflow.workflow_id, updated_step)
+
+    assert mock_state_handler.set_workflow.call_count == 1
+    finalized_workflow = mock_state_handler.set_workflow.call_args[0][0]
+    assert finalized_workflow.status == WorkflowStatus.COMPLETED
+    assert finalized_workflow.end_time is not None
+    assert finalized_workflow.steps[0].status == ActionStatus.SUCCEEDED
 
 
 def test_finalize_step_failure(engine: Engine, mock_state_handler: MagicMock) -> None:
     """Test finalizing a failed step."""
-    step = Step(step_id="step1", status=ActionStatus.FAILED)
+    step = Step(name="Test Step 1", action="test_action", node="node1", args={})
     workflow = Workflow(
-        workflow_id="wf1",
+        name="Test Workflow",
         steps=[step],
         step_index=0,
         status=WorkflowStatus.RUNNING,
     )
     mock_state_handler.get_workflow.return_value = workflow
-    engine.finalize_step("wf1", step)
-    assert workflow.status == WorkflowStatus.FAILED
-    assert workflow.end_time is not None
-    mock_state_handler.set_workflow.assert_called_with(workflow)
+    updated_step = copy.deepcopy(step)
+    updated_step.status = ActionStatus.FAILED
+    updated_step.result = ActionFailed()
+
+    engine.finalize_step(workflow.workflow_id, updated_step)
+
+    finalized_workflow = mock_state_handler.set_workflow.call_args[0][0]
+    assert finalized_workflow.status == WorkflowStatus.FAILED
+    assert finalized_workflow.end_time is not None
+    assert finalized_workflow.steps[0].status == ActionStatus.FAILED
+
+
+def test_handle_data_and_files_with_data(engine: Engine) -> None:
+    """Test handle_data_and_files with data points."""
+    step = Step(
+        name="Test Step",
+        action="test_action",
+        node="node1",
+        args={},
+        data_labels={"key1": "label1"},
+    )
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+        step_index=0,
+        status=WorkflowStatus.RUNNING,
+    )
+    action_result = ActionSucceeded(data={"key1": 42})
+
+    with patch.object(engine.data_client, "submit_datapoint") as mock_submit:
+        updated_result = engine.handle_data_and_files(step, workflow, action_result)
+        assert "label1" in updated_result.data
+        mock_submit.assert_called_once()
+        submitted_datapoint = mock_submit.call_args[0][0]
+        assert isinstance(submitted_datapoint, ValueDataPoint)
+        assert submitted_datapoint.label == "label1"
+        assert submitted_datapoint.value == 42
+
+
+def test_handle_data_and_files_with_files(engine: Engine) -> None:
+    """Test handle_data_and_files with file points."""
+    step = Step(
+        name="Test Step",
+        action="test_action",
+        node="node1",
+        args={},
+        data_labels={"file1": "label1"},
+    )
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+        step_index=0,
+        status=WorkflowStatus.RUNNING,
+    )
+    action_result = ActionSucceeded(files={"file1": "/path/to/file"})
+
+    with (
+        patch.object(engine.data_client, "submit_datapoint") as mock_submit,
+        patch("pathlib.Path.exists", return_value=True),
+    ):
+        updated_result = engine.handle_data_and_files(step, workflow, action_result)
+        assert "label1" in updated_result.data
+        mock_submit.assert_called_once()
+        submitted_datapoint = mock_submit.call_args[0][0]
+        assert isinstance(submitted_datapoint, FileDataPoint)
+        assert submitted_datapoint.label == "label1"
+        assert submitted_datapoint.path == "/path/to/file"

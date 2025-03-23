@@ -71,6 +71,9 @@ class OwnershipInfo(BaseModel):
         "project_id",
         "node_id",
         "workcell_id",
+        "step_id",
+        "lab_id",
+        "workflow_id",
         mode="after",
     )(ulid_validator)
 

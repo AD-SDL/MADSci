@@ -82,10 +82,10 @@ class EventClientConfig(BaseModel):
         description="The log level of the event client.",
         default=EventLogLevel.INFO,
     )
-    source: Optional[OwnershipInfo] = Field(
+    source: OwnershipInfo = Field(
         title="Source",
         description="Information about the source of the event client.",
-        default=None,
+        default_factory=OwnershipInfo,
     )
     log_dir: PathLike = Field(
         title="Log Directory",

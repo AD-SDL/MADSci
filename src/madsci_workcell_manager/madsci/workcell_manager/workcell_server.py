@@ -44,7 +44,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         state_handler.set_workcell(workcell)
         if start_engine:
             engine = Engine(workcell, state_handler)
-            engine.start_engine_thread()
+            engine.spin()
         yield
 
     app = FastAPI(lifespan=lifespan)
