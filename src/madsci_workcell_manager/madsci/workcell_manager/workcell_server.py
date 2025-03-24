@@ -23,7 +23,7 @@ from madsci.common.types.workflow_types import (
     WorkflowStatus,
 )
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
-from madsci.workcell_manager.workcell_engine import Engine, initialize_workcell
+from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
     copy_workflow_files,
@@ -49,8 +49,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             engine.spin()
         else:
             with state_handler.wc_state_lock():
-                initialize_workcell(
-                    state_manager=state_handler,
+                state_handler.initialize_workcell_state(
                     resource_client=ResourceClient(
                         url=workcell.config.resource_server_url
                     )
@@ -77,7 +76,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Get info on the nodes in the workcell."""
         return state_handler.get_nodes()
 
-    @app.get("/nodes/{node_name}")
+    @app.get("/node/{node_name}")
     def get_node(node_name: str) -> Union[Node, str]:
         """Get information about about a specific node."""
         try:
@@ -86,7 +85,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             return "Node not found!"
         return node
 
-    @app.post("/nodes/add_node")
+    @app.post("/node")
     def add_node(
         node_name: str,
         node_url: str,
@@ -257,10 +256,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
             traceback.print_exc()
             raise HTTPException(status_code=422, detail=str(e)) from e
 
-        if ownership_info is None:
-            ownership_info = OwnershipInfo()
-        else:
-            ownership_info = OwnershipInfo.model_validate_json(ownership_info)
+        ownership_info = (
+            OwnershipInfo.model_validate_json(ownership_info)
+            if ownership_info
+            else OwnershipInfo()
+        )
 
         if parameters is None:
             parameters = {}
@@ -303,7 +303,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
     ) -> Location:
         """Add a location to the workcell's location list"""
         with state_handler.wc_state_lock():
-            state_handler.set_location(location.location_id, location)
+            state_handler.set_location(location)
         return state_handler.get_location(location.location_id)
 
     @app.get("/location/{location_id}")
@@ -327,7 +327,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         with state_handler.wc_state_lock():
             location = state_handler.get_location(location_id)
             location.resource_id = resource_id
-            state_handler.set_location(location_id, location)
+            state_handler.set_location(location)
         return state_handler.get_location(location_id)
 
     if workcell.config.static_files_path is not None:

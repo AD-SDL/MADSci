@@ -24,7 +24,6 @@ from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 from madsci.workcell_manager.workcell_utils import (
     find_node_client,
-    initialize_workcell,
     update_active_nodes,
 )
 from madsci.workcell_manager.workflow_utils import cancel_active_workflows
@@ -56,8 +55,7 @@ class Engine:
         )
         self.logger.log_debug(self.data_client.url)
         with state_handler.wc_state_lock():
-            initialize_workcell(
-                state_handler,
+            state_handler.initialize_workcell_state(
                 self.resource_client,
             )
         time.sleep(workcell_definition.config.cold_start_delay)

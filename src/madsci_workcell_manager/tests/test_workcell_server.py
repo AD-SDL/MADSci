@@ -57,7 +57,7 @@ def test_add_node(test_client: TestClient) -> None:
         node_name = "test_node"
         node_url = "http://localhost:8000"
         response = client.post(
-            "/nodes/add_node",
+            "/node",
             params={
                 "node_name": node_name,
                 "node_url": node_url,
@@ -68,6 +68,17 @@ def test_add_node(test_client: TestClient) -> None:
         assert response.status_code == 200
         node = Node.model_validate(response.json())
         assert node.node_url == AnyUrl(node_url)
+
+        response = client.get("/node/test_node")
+        assert response.status_code == 200
+        node = Node.model_validate(response.json())
+        assert node.node_url == AnyUrl(node_url)
+
+        response = client.get("/nodes")
+        assert response.status_code == 200
+        assert isinstance(response.json(), dict)
+        assert len(response.json()) == 1
+        assert node_name in response.json()
 
 
 def test_send_admin_command(test_client: TestClient) -> None:

@@ -67,6 +67,9 @@ class WorkcellRedisHandler:
         updated_workcell = self.get_workcell_definition()
         if self._workcell_definition_path is not None:
             updated_workcell.to_yaml(self._workcell_definition_path)
+        status = self.get_workcell_status()
+        status.initializing = False
+        self.set_workcell_status(status)
         self.mark_state_changed()
 
     def initialize_locations_and_resources(
@@ -96,7 +99,7 @@ class WorkcellRedisHandler:
             except KeyError:
                 # * Create new location if it doesn't exist
                 self.set_location(Location.model_validate(location_definition))
-            self._workcell_definition.locations[index] = location_definition
+            workcell.locations[index] = location_definition
         self.set_workcell_definition(workcell)
 
     @property
