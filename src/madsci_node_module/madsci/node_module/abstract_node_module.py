@@ -36,7 +36,10 @@ from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.event_types import Event, EventClientConfig, EventType
-from madsci.common.types.location_types import LocationArgument
+from madsci.common.types.location_types import (
+    LocationArgument,
+    LocationArgumentDefinition,
+)
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -526,13 +529,22 @@ class AbstractNode:
                         )
                         is_required = parameter_info.default == inspect.Parameter.empty
 
-                        action_def.args[parameter_name] = ActionArgumentDefinition(
-                            name=parameter_name,
-                            type=pretty_type_repr(type_hint),
-                            default=default,
-                            required=is_required,
-                            description=description,
-                        )
+                        if type_hint is LocationArgument:
+                            action_def.args[parameter_name] = (
+                                LocationArgumentDefinition(
+                                    name=parameter_name,
+                                    required=is_required,
+                                    description=description,
+                                )
+                            )
+                        else:
+                            action_def.args[parameter_name] = ActionArgumentDefinition(
+                                name=parameter_name,
+                                type=pretty_type_repr(type_hint),
+                                default=default,
+                                required=is_required,
+                                description=description,
+                            )
         self.node_info.actions[action_name] = action_def
 
     def _parse_action_args(
