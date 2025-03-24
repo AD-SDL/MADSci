@@ -36,6 +36,7 @@ from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.event_types import Event, EventClientConfig, EventType
+from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -574,6 +575,40 @@ class AbstractNode:
                     arg_dict[file] = action_request.files[file]
                 else:
                     default_logger.log_warning(f"Ignoring unexpected file {file}")
+
+        # Validate any arguments that expect a LocationArgument
+
+        return self._validate_location_arguments(action_callable, arg_dict)
+
+    def _validate_location_arguments(
+        self,
+        action_callable: Callable,
+        arg_dict: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Validate and convert any arguments expected as LocationArgument.
+
+        If the action function declares a parameter with type LocationArgument and the
+        corresponding value in arg_dict is a dictionary (e.g., from a deserialized JSON payload),
+        this function uses Pydantic's model_validate to reconstruct a valid LocationArgument instance.
+
+        Raises:
+            ValueError: If the input dictionary fails LocationArgument validation.
+
+        Returns:
+            dict[str, Any]: The updated argument dictionary with validated LocationArgument objects.
+        """
+        type_hints = get_type_hints(action_callable)
+        for name, expected_type in type_hints.items():
+            if expected_type is LocationArgument and isinstance(
+                arg_dict.get(name), dict
+            ):
+                try:
+                    arg_dict[name] = LocationArgument.model_validate(arg_dict[name])
+                except ValidationError as e:
+                    raise ValueError(
+                        f"Invalid LocationArgument for parameter '{name}': {e}"
+                    ) from e
         return arg_dict
 
     def _run_action(
