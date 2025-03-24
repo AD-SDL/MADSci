@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import ClassVar, Optional
 
-from madsci.common.types.base_types import BaseModel, ModelLink, PathLike, new_ulid_str
+from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 from madsci.common.validators import (
     ulid_validator,
 )
@@ -43,7 +43,12 @@ class LabDefinition(BaseModel):
         title="Commands",
         description="Commands for operating the lab.",
     )
-    managers: dict[str, ModelLink["ManagerDefinition"]] = Field(
+    static_files_path: str = Field(
+        default=None,
+        title="Static Files Path",
+        description="Path to the static files for the lab manager",
+    )
+    managers: dict[str, AnyUrl] = Field(
         default_factory=dict,
         title="Manager Model Links",
         description="Links to definitions for Managers used by the lab.",

@@ -95,11 +95,17 @@ class Engine:
                         workflow_metadata_map = self.scheduler.run_iteration(
                             workflows=filtered_workflows
                         )
+
                         for workflow_id, workflow in workflows.items():
                             if workflow_id in workflow_metadata_map:
                                 workflow.scheduler_metadata = workflow_metadata_map[
                                     workflow_id
                                 ]
+                                self.state_handler.set_workflow(
+                                    workflow, mark_state_changed=False
+                                )
+                            else:
+                                workflow.scheduler_metadata.ready_to_run = False
                                 self.state_handler.set_workflow(
                                     workflow, mark_state_changed=False
                                 )
@@ -126,6 +132,7 @@ class Engine:
                 key=lambda wf: wf.scheduler_metadata.priority,
                 reverse=True,
             )
+
             if len(sorted_ready_workflows) > 0:
                 next_wf = sorted_ready_workflows[0]
                 next_wf.status = WorkflowStatus.RUNNING
