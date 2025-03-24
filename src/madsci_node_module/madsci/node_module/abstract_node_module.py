@@ -521,7 +521,7 @@ class AbstractNode:
 
                         action_def.args[parameter_name] = ActionArgumentDefinition(
                             name=parameter_name,
-                            type=pretty_type_repr(type_hint),
+                            argument_type=pretty_type_repr(type_hint),
                             default=default,
                             required=is_required,
                             description=description,

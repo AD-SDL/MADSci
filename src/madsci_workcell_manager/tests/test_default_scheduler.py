@@ -10,7 +10,7 @@ from madsci.common.types.condition_types import (
     NoResourceInLocationCondition,
     ResourceInLocationCondition,
 )
-from madsci.common.types.location_types import Location
+from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.node_types import Node, NodeInfo, NodeStatus
 from madsci.common.types.resource_types import Slot
 from madsci.common.types.step_types import Step
@@ -29,13 +29,13 @@ def mock_scheduler() -> Generator[Scheduler, None, None]:
     mock_workcell_definition = WorkcellDefinition(
         workcell_name="test workcell",
         locations=[
-            Location(
+            LocationDefinition(
                 location_name="loc1",
-                resource=None,
+                resource_id=None,
             ),
-            Location(
+            LocationDefinition(
                 location_name="loc2",
-                resource=None,
+                resource_id=None,
             ),
         ],
     )
@@ -48,6 +48,16 @@ def mock_scheduler() -> Generator[Scheduler, None, None]:
             module_name="test_module",
         ),
     )
+    mock_state_handler.get_locations.return_value = [
+        Location(
+            location_name="loc1",
+            resource_id=None,
+        ),
+        Location(
+            location_name="loc2",
+            resource_id=None,
+        ),
+    ]
     scheduler = Scheduler(mock_workcell_definition, mock_state_handler)
     yield scheduler
 
@@ -118,8 +128,8 @@ def test_condition_checking_no_resource_info_for_location(
     metadata = result[workflows[0].workflow_id]
     assert not metadata.ready_to_run
     assert len(metadata.reasons) > 0
-    assert "cannot provide resource presence information" in metadata.reasons[0]
-    assert "cannot provide resource presence information" in metadata.reasons[1]
+    assert "does not have an attached container resource" in metadata.reasons[0]
+    assert "does not have an attached container resource" in metadata.reasons[1]
 
 
 def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None:
@@ -145,8 +155,12 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
     mock_scheduler.resource_client = MagicMock()
     test_slot = Slot()
     mock_scheduler.resource_client.get_resource.return_value = test_slot
-    mock_scheduler.workcell_definition.locations[0].resource = test_slot
-    mock_scheduler.workcell_definition.locations[1].resource = test_slot
+    mock_scheduler.state_handler.get_locations.return_value[
+        0
+    ].resource_id = test_slot.resource_id
+    mock_scheduler.state_handler.get_locations.return_value[
+        1
+    ].resource_id = test_slot.resource_id
 
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     metadata = result[workflows[0].workflow_id]

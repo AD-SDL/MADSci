@@ -78,7 +78,7 @@ def test_send_admin_command(test_client: TestClient) -> None:
         assert isinstance(response.json(), list)
 
 
-def test_get_all_workflows(test_client: TestClient) -> None:
+def test_get_workflows(test_client: TestClient) -> None:
     """Test the /workflows endpoint."""
     with test_client as client:
         response = client.get("/workflows")

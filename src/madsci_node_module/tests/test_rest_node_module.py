@@ -239,15 +239,19 @@ def test_get_info(test_client: TestClient) -> None:
         assert len(node_info.actions) == 4
         assert node_info.actions["test_action"].description == "A test action."
         assert node_info.actions["test_action"].args["test_param"].required
-        assert node_info.actions["test_action"].args["test_param"].type == "int"
+        assert (
+            node_info.actions["test_action"].args["test_param"].argument_type == "int"
+        )
         assert node_info.actions["test_fail"].description == "A test action that fails."
         assert node_info.actions["test_fail"].args["test_param"].required
-        assert node_info.actions["test_fail"].args["test_param"].type == "int"
+        assert node_info.actions["test_fail"].args["test_param"].argument_type == "int"
         assert (
             node_info.actions["test_optional_param_action"].args["test_param"].required
         )
         assert (
-            node_info.actions["test_optional_param_action"].args["test_param"].type
+            node_info.actions["test_optional_param_action"]
+            .args["test_param"]
+            .argument_type
             == "int"
         )
         assert (
@@ -256,7 +260,9 @@ def test_get_info(test_client: TestClient) -> None:
             .required
         )
         assert (
-            node_info.actions["test_optional_param_action"].args["optional_param"].type
+            node_info.actions["test_optional_param_action"]
+            .args["optional_param"]
+            .argument_type
             == "str"
         )
         assert (
@@ -269,7 +275,8 @@ def test_get_info(test_client: TestClient) -> None:
             not node_info.actions["test_annotation_action"].args["test_param"].required
         )
         assert (
-            node_info.actions["test_annotation_action"].args["test_param"].type == "int"
+            node_info.actions["test_annotation_action"].args["test_param"].argument_type
+            == "int"
         )
         assert (
             node_info.actions["test_annotation_action"].args["test_param"].description
@@ -281,7 +288,9 @@ def test_get_info(test_client: TestClient) -> None:
             .required
         )
         assert (
-            node_info.actions["test_annotation_action"].args["test_param_2"].type
+            node_info.actions["test_annotation_action"]
+            .args["test_param_2"]
+            .argument_type
             == "int"
         )
         assert (
@@ -294,7 +303,9 @@ def test_get_info(test_client: TestClient) -> None:
             .required
         )
         assert (
-            node_info.actions["test_annotation_action"].args["test_param_3"].type
+            node_info.actions["test_annotation_action"]
+            .args["test_param_3"]
+            .argument_type
             == "int"
         )
         assert (

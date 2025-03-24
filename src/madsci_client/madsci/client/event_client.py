@@ -52,7 +52,8 @@ class EventClient:
             else:
                 # * No luck, name after EventClient
                 self.name = __name__
-        self.logger = logging.getLogger(self.name)
+        self.name = str(self.name)
+        self.logger = logging.getLogger()
         self.log_dir = Path(self.config.log_dir).expanduser()
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.logfile = self.log_dir / f"{self.name}.log"
@@ -80,9 +81,9 @@ class EventClient:
             for line in log.readlines():
                 try:
                     event = Event.model_validate_json(line)
-                    events[event.event_id] = event
                 except ValidationError:
-                    events.append(Event(event_type=EventType.UNKNOWN, event_data=line))
+                    event = Event(event_type=EventType.UNKNOWN, event_data=line)
+                events[event.event_id] = event
         return events
 
     def get_events(self, number: int = 100, level: int = -1) -> dict[str, Event]:

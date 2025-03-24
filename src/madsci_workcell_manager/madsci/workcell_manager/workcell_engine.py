@@ -16,7 +16,6 @@ from madsci.common.types.action_types import ActionRequest, ActionResult, Action
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowStatus,
@@ -39,32 +38,29 @@ class Engine:
 
     def __init__(
         self,
-        workcell_manager_definition: WorkcellDefinition,
         state_handler: WorkcellRedisHandler,
     ) -> None:
         """Initialize the scheduler."""
-        state_handler.clear_state(
-            clear_workflows=workcell_manager_definition.config.clear_workflows
-        )
-        self.definition = workcell_manager_definition
         self.state_handler = state_handler
-        self.logger = EventClient(self.definition.config.event_client_config)
-        self.logger.source.workcell_id = self.definition.workcell_id
+        workcell_definition = state_handler.get_workcell_definition()
+        self.logger = EventClient(workcell_definition.config.event_client_config)
+        self.logger.source.workcell_id = workcell_definition.workcell_id
         cancel_active_workflows(state_handler)
-        scheduler_module = importlib.import_module(self.definition.config.scheduler)
-        self.scheduler = scheduler_module.Scheduler(self.definition, self.state_handler)
-        self.data_client = DataClient(self.definition.config.data_server_url)
+        scheduler_module = importlib.import_module(workcell_definition.config.scheduler)
+        self.scheduler = scheduler_module.Scheduler(
+            workcell_definition, self.state_handler
+        )
+        self.data_client = DataClient(workcell_definition.config.data_server_url)
         self.resource_client = ResourceClient(
-            self.definition.config.resource_server_url
+            workcell_definition.config.resource_server_url
         )
         self.logger.log_debug(self.data_client.url)
         with state_handler.wc_state_lock():
             initialize_workcell(
                 state_handler,
                 self.resource_client,
-                workcell=workcell_manager_definition,
             )
-        time.sleep(workcell_manager_definition.config.cold_start_delay)
+        time.sleep(workcell_definition.config.cold_start_delay)
         self.logger.log_info("Engine initialized, waiting for workflows...")
 
     @threaded_daemon
@@ -78,20 +74,20 @@ class Engine:
         scheduler_tick = time.time()
         while True and not self.state_handler.shutdown:
             try:
+                self.workcell_definition = self.state_handler.get_workcell_definition()
                 if (
                     time.time() - node_tick
-                    > self.definition.config.node_update_interval
+                    > self.workcell_definition.config.node_update_interval
                     or self.state_handler.has_state_changed()
                 ):
-                    if not self.state_handler.paused:
-                        update_active_nodes(self.state_handler)
+                    update_active_nodes(self.state_handler)
                     node_tick = time.time()
                 if (
                     time.time() - scheduler_tick
-                    > self.definition.config.scheduler_update_interval
+                    > self.workcell_definition.config.scheduler_update_interval
                 ):
                     with self.state_handler.wc_state_lock():
-                        workflows = self.state_handler.get_all_workflows()
+                        workflows = self.state_handler.get_workflows()
                         filtered_workflows = [
                             wf
                             for wf in workflows.values()
@@ -106,22 +102,24 @@ class Engine:
                                 workflow.scheduler_metadata = workflow_metadata_map[
                                     workflow_id
                                 ]
-                                self.state_handler.set_workflow(workflow)
-                            self.state_handler.set_workflow(workflow)
-                    self.run_next_step()
-                    scheduler_tick = time.time()
+                                self.state_handler.set_workflow(
+                                    workflow, mark_state_changed=False
+                                )
+                    if self.state_handler.get_workcell_status().ok:
+                        self.run_next_step()
+                        scheduler_tick = time.time()
             except Exception:
                 traceback.print_exc()
                 self.logger.log_error(
-                    f"Error in engine loop, waiting {self.definition.config.node_update_interval} seconds before trying again."
+                    f"Error in engine loop, waiting {self.workcell_definition.config.node_update_interval} seconds before trying again."
                 )
-                time.sleep(self.definition.config.node_update_interval)
+                time.sleep(self.workcell_definition.config.node_update_interval)
 
     def run_next_step(self, await_step_completion: bool = False) -> None:
         """Runs the next step in the workflow with the highest priority"""
         next_wf = None
         with self.state_handler.wc_state_lock():
-            workflows = self.state_handler.get_all_workflows()
+            workflows = self.state_handler.get_workflows()
             ready_workflows = filter(
                 lambda wf: wf.scheduler_metadata.ready_to_run, workflows.values()
             )
@@ -218,7 +216,10 @@ class Engine:
                     else:
                         response.errors.append(Error.from_exception(e))
                     self.handle_response(wf, step, response)
-                    if retry_count >= self.definition.config.get_action_result_retries:
+                    if (
+                        retry_count
+                        >= self.workcell_definition.config.get_action_result_retries
+                    ):
                         self.logger.log_error(
                             f"Exceeded maximum number of retries for querying action {action_id} for step {step.step_id}"
                         )

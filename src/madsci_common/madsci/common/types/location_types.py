@@ -1,18 +1,18 @@
 """Location types for MADSci."""
 
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
-from madsci.common.types.resource_types import ResourceDataModels
+from madsci.common.types.resource_types.definitions import ResourceDefinitions
 from madsci.common.validators import ulid_validator
 from pydantic import Field
 from pydantic.functional_validators import field_validator
 
 
-class Location(BaseModel):
-    """A location in the lab."""
+class LocationDefinition(BaseModel):
+    """The Definition of a Workcell Location."""
 
     location_name: str = Field(
         title="Location Name",
@@ -33,11 +33,23 @@ class Location(BaseModel):
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
         default={},
     )
-    resource: Optional[Union[ResourceDataModels, str]] = Field(
+    resource_definition: Optional[ResourceDefinitions] = Field(
         title="Resource",
-        description="The Resource associated with the location",
+        description="Definition of the Resource to be associated with this location (if any) on location initialization.",
         default=None,
     )
+    resource_id: Optional[str] = Field(
+        title="Resource ID",
+        description="The ID of an existing Resource associated with the location, if any. If not provided, a new Resource will be created based on the resource_definition, if one is provided. If not, no Resource will be associated with the location.",
+        default=None,
+    )
+
+    is_ulid = field_validator("location_id")(ulid_validator)
+
+
+class Location(LocationDefinition):
+    """A location in the lab."""
+
     reservation: Optional["LocationReservation"] = Field(
         title="Location Reservation",
         description="The reservation for the location.",

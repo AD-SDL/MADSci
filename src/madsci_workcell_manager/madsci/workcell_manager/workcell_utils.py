@@ -2,7 +2,6 @@
 
 import concurrent
 import warnings
-from typing import Optional
 
 import requests
 import yaml
@@ -31,17 +30,15 @@ def resolve_workcell_link(workcell_link: WorkcellLink) -> WorkcellDefinition:
 def initialize_workcell(
     state_manager: WorkcellRedisHandler,
     resource_client: ResourceClient,
-    workcell: Optional[WorkcellDefinition] = None,
 ) -> None:
     """
     Initializes the state of the workcell from the workcell definition.
     """
 
-    if not workcell:
-        workcell = state_manager.get_workcell()
+    workcell = state_manager.get_workcell_definition()
     initialize_workcell_nodes(workcell, state_manager)
     initialize_workcell_resources(workcell, resource_client)
-    state_manager.set_workcell(workcell)
+    state_manager.set_workcell_definition(workcell)
 
 
 def initialize_workcell_nodes(
@@ -75,7 +72,7 @@ def initialize_workcell_resources(
 
 
 def find_node_client(url: str) -> AbstractNodeClient:
-    """finds the right client for the node url provided"""
+    """Finds the appropriate node client based on a given node url"""
     for client in NODE_CLIENT_MAP.values():
         if client.validate_url(url):
             return client(url)
@@ -89,7 +86,7 @@ def update_active_nodes(state_manager: WorkcellRedisHandler) -> None:
     """Update all active nodes in the workcell."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         node_futures = []
-        for node_name, node in state_manager.get_all_nodes().items():
+        for node_name, node in state_manager.get_nodes().items():
             node_future = executor.submit(update_node, node_name, node, state_manager)
             node_futures.append(node_future)
 

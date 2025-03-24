@@ -38,9 +38,11 @@ def mock_workcell_definition() -> WorkcellDefinition:
 
 
 @pytest.fixture
-def mock_state_handler() -> MagicMock:
+def mock_state_handler(mock_workcell_definition: WorkcellDefinition) -> MagicMock:
     """Fixture for a mock WorkcellRedisHandler."""
     handler = MagicMock(spec=WorkcellRedisHandler)
+    handler._workcell_definition = mock_workcell_definition
+    handler.get_workcell_definition.return_value = mock_workcell_definition
     handler.get_node.return_value = Node(
         node_url="http://node-url",
         info=NodeInfo(
@@ -48,7 +50,7 @@ def mock_state_handler() -> MagicMock:
             module_name="test_module",
         ),
     )
-    handler.get_all_workflows.return_value = {}
+    handler.get_workflows.return_value = {}
     handler.has_state_changed.return_value = False
     handler.shutdown = False
     handler.paused = False
@@ -56,29 +58,29 @@ def mock_state_handler() -> MagicMock:
 
 
 @pytest.fixture
-def engine(
-    mock_workcell_definition: WorkcellDefinition, mock_state_handler: MagicMock
-) -> Engine:
+def engine(mock_state_handler: MagicMock) -> Engine:
     """Fixture for the Engine instance."""
     with patch(
         "madsci.workcell_manager.workcell_engine.importlib.import_module"
     ) as mock_import:
         mock_import.return_value.Scheduler = MagicMock()
-        return Engine(mock_workcell_definition, mock_state_handler)
+        return Engine(mock_state_handler)
 
 
 def test_engine_initialization(engine: Engine, mock_state_handler: MagicMock) -> None:
     """Test the initialization of the Engine."""
-    mock_state_handler.clear_state.assert_called_once()
-    assert engine.definition.workcell_name == "Test Workcell"
     assert engine.state_handler == mock_state_handler
+    assert engine.logger is not None
+    assert engine.data_client is not None
+    assert engine.resource_client is not None
+    assert engine.scheduler is not None
 
 
 def test_run_next_step_no_ready_workflows(
     engine: Engine, mock_state_handler: MagicMock
 ) -> None:
     """Test run_next_step when no workflows are ready."""
-    mock_state_handler.get_all_workflows.return_value = {}
+    mock_state_handler.get_workflows.return_value = {}
     engine.run_next_step()
     mock_state_handler.set_workflow.assert_not_called()
 
@@ -94,7 +96,7 @@ def test_run_next_step_with_ready_workflow(
         step_index=0,
         status=WorkflowStatus.QUEUED,
     )
-    mock_state_handler.get_all_workflows.return_value = {workflow.workflow_id: workflow}
+    mock_state_handler.get_workflows.return_value = {workflow.workflow_id: workflow}
     engine.run_next_step()
     assert workflow.status == WorkflowStatus.RUNNING
     mock_state_handler.set_workflow.assert_called_once_with(workflow)

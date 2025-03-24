@@ -78,6 +78,17 @@ class ResourceDefinition(BaseModel, table=False):
     )
     is_ulid = field_validator("resource_id")(ulid_validator)
 
+    @classmethod
+    def discriminate(cls, resource: dict) -> "ResourceDefinition":
+        """Discriminate the resource definition based on its base type."""
+        from madsci.common.types.resource_types import RESOURCE_TYPE_MAP
+
+        if isinstance(resource, dict):
+            resource_type = resource.get("base_type")
+        else:
+            resource_type = resource.base_type
+        return RESOURCE_TYPE_MAP[resource_type]["definition"].model_validate(resource)
+
 
 class AssetResourceDefinition(ResourceDefinition, table=False):
     """Definition for an asset resource."""

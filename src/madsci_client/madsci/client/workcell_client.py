@@ -6,14 +6,16 @@ from pathlib import Path
 from typing import Any, Optional
 
 import requests
-from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.location_types import Location
+from madsci.common.types.workcell_types import WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
     WorkflowStatus,
 )
+from madsci.workcell_manager.workflow_utils import insert_parameter_values
 
 
 class WorkcellClient:
@@ -45,7 +47,7 @@ class WorkcellClient:
         response: Dict
            The JSON portion of the response from the server"""
 
-        url = f"{self.url}/workflows/{workflow_id}"
+        url = f"{self.url}/workflow/{workflow_id}"
         response = requests.get(url, timeout=10)
 
         if response.ok:
@@ -67,7 +69,7 @@ class WorkcellClient:
         WorkflowDefinition.model_validate(workflow)
         insert_parameter_values(workflow=workflow, parameters=parameters)
         files = self._extract_files_from_workflow(workflow)
-        url = self.url + "/workflows/start"
+        url = self.url + "/workflow"
         response = requests.post(
             url,
             data={
@@ -97,6 +99,8 @@ class WorkcellClient:
             raise_on_cancelled=raise_on_cancelled,
             raise_on_failed=raise_on_failed,
         )
+
+    start_workflow = submit_workflow
 
     def _extract_files_from_workflow(
         self, workflow: WorkflowDefinition
@@ -148,7 +152,7 @@ class WorkcellClient:
 
     def retry_workflow(self, workflow_id: str, index: int = -1) -> dict:
         """rerun an exisiting wf using the same wf id"""
-        url = f"{self.url}/workflows/retry"
+        url = f"{self.url}/workflow/{workflow_id}/retry"
         response = requests.post(
             url,
             params={
@@ -167,7 +171,7 @@ class WorkcellClient:
         raise_on_cancelled: bool = True,
     ) -> Workflow:
         """resubmit an existing workflows as a new workflow with a new id"""
-        url = f"{self.url}/workflows/resubmit/{workflow_id}"
+        url = f"{self.url}/workflow/{workflow_id}/resubmit"
         response = requests.get(url, timeout=10)
         new_wf = Workflow(**response.json())
         if blocking:
@@ -223,7 +227,7 @@ class WorkcellClient:
             )
         return wf
 
-    def get_all_nodes(self) -> dict:
+    def get_nodes(self) -> dict:
         """get all nodes in the workcell"""
         url = f"{self.url}/nodes"
         response = requests.get(url, timeout=10)
@@ -256,39 +260,92 @@ class WorkcellClient:
         )
         return response.json()
 
-    def get_all_workflows(self) -> dict:
+    def get_workflows(self) -> dict:
         """get all workflows from a workcell manager"""
         url = f"{self.url}/workflows"
         response = requests.get(url, timeout=100)
         return response.json()
 
+    def get_workflow_queue(self) -> dict:
+        """get the workflow queue from the workcell"""
+        url = f"{self.url}/workflows/queue"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return [Workflow.model_validate(wf) for wf in response.json()]
+
     def get_workcell_state(self) -> dict:
         """Get the full state of the workcell"""
         url = f"{self.url}/state"
         response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return WorkcellState.model_validate(response.json())
+
+    def pause_workflow(self, workflow_id: str) -> dict:
+        """pause a workflow"""
+        url = f"{self.url}/workflow/{workflow_id}/pause"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return Workflow.model_validate(response.json())
+
+    def resume_workflow(self, workflow_id: str) -> dict:
+        """resume a workflow"""
+        url = f"{self.url}/workflow/{workflow_id}/resume"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return Workflow.model_validate(response.json())
+
+    def cancel_workflow(self, workflow_id: str) -> dict:
+        """cancel a workflow"""
+        url = f"{self.url}/workflow/{workflow_id}/cancel"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return Workflow.model_validate(response.json())
+
+    def get_locations(self) -> list[Location]:
+        """get all locations in the workcell"""
+        url = f"{self.url}/locations"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return [Location.model_validate(loc) for loc in response.json()]
+
+    def get_location(self, location_id: str) -> Location:
+        """get a single location from a workcell"""
+        url = f"{self.url}/location/{location_id}"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    def add_location(self, location: Location) -> Location:
+        """add a location to a workcell"""
+        url = f"{self.url}/location"
+        response = requests.post(
+            url,
+            json={
+                "location": location.model_dump(mode="json"),
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    def attach_resource_to_location(
+        self, location_id: str, resource_id: str
+    ) -> Location:
+        """Attach a resource container to a location"""
+        url = f"{self.url}/location/{location_id}/attach_resource"
+        response = requests.post(
+            url,
+            params={
+                "resource_id": resource_id,
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    def delete_location(self, location_id: str) -> dict:
+        """delete a location from a workcell"""
+        url = f"{self.url}/location/{location_id}"
+        response = requests.delete(url, timeout=10)
+        response.raise_for_status()
         return response.json()
-
-
-def insert_parameter_values(
-    workflow: WorkflowDefinition, parameters: dict[str, Any]
-) -> Workflow:
-    """Replace the parameter strings in the workflow with the provided values"""
-    for param in workflow.parameters:
-        if param.name not in parameters:
-            if param.default:
-                parameters[param.name] = param.default
-            else:
-                raise ValueError(
-                    "Workflow parameter: "
-                    + param.name
-                    + " not provided, and no default value is defined."
-                )
-    steps = []
-    for step in workflow.steps:
-        for key, val in iter(step):
-            if type(val) is str:
-                setattr(step, key, value_substitution(val, parameters))
-
-        step.args = walk_and_replace(step.args, parameters)
-        steps.append(step)
-    workflow.steps = steps

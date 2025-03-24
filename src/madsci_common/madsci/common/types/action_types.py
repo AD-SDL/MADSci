@@ -382,7 +382,7 @@ class ActionArgumentDefinition(BaseModel):
         title="Argument Description",
         description="A description of the argument.",
     )
-    type: str = Field(
+    argument_type: str = Field(
         title="Argument Type", description="Any type information about the argument"
     )
     required: bool = Field(
