@@ -134,7 +134,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Get all workflows."""
         return state_handler.get_workflows()
 
-    @app.get("/workflow/queue")
+    @app.get("/workflows/queue")
     def get_workflow_queue() -> list[Workflow]:
         """Get all queued workflows."""
         return state_handler.get_workflow_queue()
