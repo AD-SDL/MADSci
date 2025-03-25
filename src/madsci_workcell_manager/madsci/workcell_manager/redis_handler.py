@@ -268,13 +268,10 @@ class WorkcellRedisHandler:
         """
         Sets the workflow queue based on the current state of the workflows
         """
-        workflow_queue = [
-            wf_id
-            for wf_id in self._workflows
-            if not self.get_workflow(wf_id).status.is_active
-        ]
         self._workflow_queue.clear()
-        self._workflow_queue.extend(workflow_queue)
+        for wf in self.get_workflows().values():
+            if wf.status.is_active:
+                self._workflow_queue.append(wf.workflow_id)
         self.mark_state_changed()
 
     def set_workflow(self, wf: Workflow, mark_state_changed: bool = True) -> None:

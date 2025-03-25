@@ -11,10 +11,12 @@ from typing import Optional
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
+from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
+from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
     Workflow,
@@ -41,24 +43,26 @@ class Engine:
     ) -> None:
         """Initialize the scheduler."""
         self.state_handler = state_handler
-        workcell_definition = state_handler.get_workcell_definition()
-        self.logger = EventClient(workcell_definition.config.event_client_config)
-        self.logger.source.workcell_id = workcell_definition.workcell_id
+        self.workcell_definition = state_handler.get_workcell_definition()
+        self.logger = EventClient(self.workcell_definition.config.event_client_config)
+        self.logger.source.workcell_id = self.workcell_definition.workcell_id
         cancel_active_workflows(state_handler)
-        scheduler_module = importlib.import_module(workcell_definition.config.scheduler)
-        self.scheduler = scheduler_module.Scheduler(
-            workcell_definition, self.state_handler
+        scheduler_module = importlib.import_module(
+            self.workcell_definition.config.scheduler
         )
-        self.data_client = DataClient(workcell_definition.config.data_server_url)
+        self.scheduler = scheduler_module.Scheduler(
+            self.workcell_definition, self.state_handler
+        )
+        self.data_client = DataClient(self.workcell_definition.config.data_server_url)
         self.resource_client = ResourceClient(
-            workcell_definition.config.resource_server_url
+            self.workcell_definition.config.resource_server_url
         )
         self.logger.log_debug(self.data_client.url)
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state(
                 self.resource_client,
             )
-        time.sleep(workcell_definition.config.cold_start_delay)
+        time.sleep(self.workcell_definition.config.cold_start_delay)
         self.logger.log_info("Engine initialized, waiting for workflows...")
 
     @threaded_daemon
@@ -85,20 +89,15 @@ class Engine:
                     > self.workcell_definition.config.scheduler_update_interval
                 ):
                     with self.state_handler.wc_state_lock():
-                        workflows = self.state_handler.get_workflows()
-                        filtered_workflows = [
-                            wf
-                            for wf in workflows.values()
-                            if wf.status
-                            in {WorkflowStatus.QUEUED, WorkflowStatus.IN_PROGRESS}
-                        ]
+                        self.state_handler.update_workflow_queue()
+                        workflows = self.state_handler.get_workflow_queue()
                         workflow_metadata_map = self.scheduler.run_iteration(
-                            workflows=filtered_workflows
+                            workflows=workflows
                         )
-                        for workflow_id, workflow in workflows.items():
-                            if workflow_id in workflow_metadata_map:
+                        for workflow in workflows:
+                            if workflow.workflow_id in workflow_metadata_map:
                                 workflow.scheduler_metadata = workflow_metadata_map[
-                                    workflow_id
+                                    workflow.workflow_id
                                 ]
                                 self.state_handler.set_workflow(
                                     workflow, mark_state_changed=False
@@ -106,42 +105,55 @@ class Engine:
                     if self.state_handler.get_workcell_status().ok:
                         self.run_next_step()
                         scheduler_tick = time.time()
-            except Exception:
+            except Exception as e:
                 traceback.print_exc()
                 self.logger.log_error(
                     f"Error in engine loop, waiting {self.workcell_definition.config.node_update_interval} seconds before trying again."
                 )
+                with self.state_handler.wc_state_lock():
+                    workcell_status = self.state_handler.get_workcell_status()
+                    workcell_status.errored = True
+                    workcell_status.errors.append(Error.from_exception(e))
+                    self.state_handler.set_workcell_status(workcell_status)
                 time.sleep(self.workcell_definition.config.node_update_interval)
 
-    def run_next_step(self, await_step_completion: bool = False) -> None:
-        """Runs the next step in the workflow with the highest priority"""
+    def run_next_step(self, await_step_completion: bool = False) -> Optional[Workflow]:
+        """Runs the next step in the workflow with the highest priority. Returns information about the workflow it ran, if any."""
         next_wf = None
         with self.state_handler.wc_state_lock():
-            workflows = self.state_handler.get_workflows()
+            workflows = self.state_handler.get_workflow_queue()
             ready_workflows = filter(
-                lambda wf: wf.scheduler_metadata.ready_to_run, workflows.values()
+                lambda wf: wf.scheduler_metadata.ready_to_run, workflows
             )
             sorted_ready_workflows = sorted(
                 ready_workflows,
                 key=lambda wf: wf.scheduler_metadata.priority,
                 reverse=True,
             )
-            if len(sorted_ready_workflows) > 0:
+            while len(sorted_ready_workflows) > 0:
+                next_wf = sorted_ready_workflows[0]
+                if next_wf.step_index >= len(next_wf.steps):
+                    self.logger.log_warning(
+                        f"Workflow {next_wf.workflow_id} has no more steps, marking as completed"
+                    )
+                    next_wf.status = WorkflowStatus.COMPLETED
+                    self.state_handler.set_workflow(next_wf)
+                    sorted_ready_workflows.pop(0)
+                    next_wf = None
+                    continue
                 next_wf = sorted_ready_workflows[0]
                 next_wf.status = WorkflowStatus.RUNNING
                 if next_wf.step_index == 0:
                     next_wf.start_time = datetime.now()
                 self.state_handler.set_workflow(next_wf)
-        if (
-            next_wf
-            and len(next_wf.steps) > 0
-            and next_wf.step_index < len(next_wf.steps)
-        ):
+                break
+            else:
+                self.logger.log_info("No workflows ready to run")
+        if next_wf:
             thread = self.run_step(next_wf.workflow_id)
             if await_step_completion:
                 thread.join()
-        else:
-            self.logger.log_info("No workflows ready to run")
+        return next_wf
 
     @threaded_daemon
     def run_step(self, workflow_id: str) -> None:
@@ -182,57 +194,73 @@ class Engine:
 
             # * Periodically query the action status until complete, updating the workflow as needed
             # * If the node or client supports get_action_result, query the action result
-            interval = 0.25
-            retry_count = 0
-            while not response.status.is_terminal:
-                if node.info.capabilities.get_action_result is False or (
-                    node.info.capabilities.get_action_result is None
-                    and client.supported_capabilities.get_action_result is False
-                ):
-                    self.logger.log_warning(
-                        f"While running Step {step.step_id} of workflow {workflow_id}, send_action returned a non-terminal response {response}. However, node {step.node} does not support querying an action result."
-                    )
-                    break
-                try:
-                    time.sleep(interval)  # * Exponential backoff with cap
-                    interval = interval * 1.5 if interval < 10 else 10
-                    response = client.get_action_result(action_id)
-                    self.handle_response(wf, step, response)
-                    if (
-                        response.status.is_terminal
-                        or response.status == ActionStatus.UNKNOWN
-                    ):
-                        # * If the action is terminal or unknown, break out of the loop
-                        # * If the action is unknown, that means the node does not have a record of the action
-                        break
-                except Exception as e:
-                    self.logger.log_error(
-                        f"Querying action {action_id} for step {step.step_id} resulted in exception: {e!s}"
-                    )
-                    if response is None:
-                        response = request.unknown(errors=[Error.from_exception(e)])
-                    else:
-                        response.errors.append(Error.from_exception(e))
-                    self.handle_response(wf, step, response)
-                    if (
-                        retry_count
-                        >= self.workcell_definition.config.get_action_result_retries
-                    ):
-                        self.logger.log_error(
-                            f"Exceeded maximum number of retries for querying action {action_id} for step {step.step_id}"
-                        )
-                        break
-                    retry_count += 1
+            self.monitor_action_progress(
+                wf, step, node, client, response, request, action_id
+            )
 
             # * Finalize the step
             self.finalize_step(workflow_id, step)
             self.logger.log_info(
                 f"Completed step {step.step_id} in workflow {workflow_id}"
             )
-        except Exception as e:
+            self.logger.log_debug(self.state_handler.get_workflow(workflow_id))
+        except Exception:
             self.logger.log_error(
-                f"Running step in workflow {workflow_id} triggered unhandled exception: {e!s}"
+                f"Running step in workflow {workflow_id} triggered unhandled exception: {traceback.format_exc()}"
             )
+
+    def monitor_action_progress(
+        self,
+        wf: Workflow,
+        step: Step,
+        node: Node,
+        client: AbstractNodeClient,
+        response: ActionResult,
+        request: ActionRequest,
+        action_id: str,
+    ) -> None:
+        """Monitor the progress of the action, querying the action result until it is terminal"""
+        interval = 0.25
+        retry_count = 0
+        while not response.status.is_terminal:
+            if node.info.capabilities.get_action_result is False or (
+                node.info.capabilities.get_action_result is None
+                and client.supported_capabilities.get_action_result is False
+            ):
+                self.logger.log_warning(
+                    f"While running Step {step.step_id} of workflow {wf.workflow_id}, send_action returned a non-terminal response {response}. However, node {step.node} does not support querying an action result."
+                )
+                break
+            try:
+                time.sleep(interval)  # * Exponential backoff with cap
+                interval = interval * 1.5 if interval < 10 else 10
+                response = client.get_action_result(action_id)
+                self.handle_response(wf, step, response)
+                if (
+                    response.status.is_terminal
+                    or response.status == ActionStatus.UNKNOWN
+                ):
+                    # * If the action is terminal or unknown, break out of the loop
+                    # * If the action is unknown, that means the node does not have a record of the action
+                    break
+            except Exception as e:
+                self.logger.log_error(
+                    f"Querying action {action_id} for step {step.step_id} resulted in exception: {e!s}"
+                )
+                if response is None:
+                    response = request.unknown(errors=[Error.from_exception(e)])
+                else:
+                    response.errors.append(Error.from_exception(e))
+                self.handle_response(wf, step, response)
+                if (
+                    retry_count
+                    >= self.workcell_definition.config.get_action_result_retries
+                ):
+                    self.logger.log_error(
+                        f"Exceeded maximum number of retries for querying action {action_id} for step {step.step_id}"
+                    )
+                    break
+                retry_count += 1
 
     def finalize_step(self, workflow_id: str, step: Step) -> None:
         """Finalize the step, updating the workflow based on the results (setting status, updating index, etc.)"""
@@ -242,19 +270,23 @@ class Engine:
             wf.steps[wf.step_index] = step
             if step.status == ActionStatus.SUCCEEDED:
                 new_index = wf.step_index + 1
-                if new_index == len(wf.steps):
+                if new_index >= len(wf.steps):
                     wf.status = WorkflowStatus.COMPLETED
                     wf.end_time = datetime.now()
                 else:
                     wf.step_index = new_index
                     if wf.status == WorkflowStatus.RUNNING:
                         wf.status = WorkflowStatus.IN_PROGRESS
-            if step.status == ActionStatus.FAILED:
+            elif step.status == ActionStatus.FAILED:
                 wf.status = WorkflowStatus.FAILED
                 wf.end_time = datetime.now()
-            if step.status == ActionStatus.CANCELLED:
+            elif step.status == ActionStatus.CANCELLED:
                 wf.status = WorkflowStatus.CANCELLED
                 wf.end_time = datetime.now()
+            else:
+                self.logger.log_error(
+                    f"Step {step.step_id} in workflow {workflow_id} ended with unexpected status {step.status}"
+                )
             self.state_handler.set_workflow(wf)
 
     def update_step(self, wf: Workflow, step: Step) -> None:
@@ -266,15 +298,14 @@ class Engine:
         return wf
 
     def handle_response(
-        self, wf: Workflow, step: Step, response: Optional[ActionResult]
+        self, wf: Workflow, step: Step, response: ActionResult
     ) -> Optional[ActionResult]:
         """Handle the response from the node"""
-        if response is not None:
-            response = self.handle_data_and_files(step, wf, response)
-            step.status = response.status
-            step.result = response
-            step.history.append(response)
-            wf = self.update_step(wf, step)
+        response = self.handle_data_and_files(step, wf, response)
+        step.status = response.status
+        step.result = response
+        step.history.append(response)
+        wf = self.update_step(wf, step)
         return response
 
     def handle_data_and_files(
