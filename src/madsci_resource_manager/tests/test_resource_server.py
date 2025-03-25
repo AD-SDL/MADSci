@@ -184,11 +184,16 @@ def test_query_resource(test_client: TestClient) -> None:
     """Test querying for a resource"""
     # First add a resource
     resource1 = Resource(resource_name="Test Resource")
+    resource2 = Resource(resource_name="Test Resource 2")
     response = test_client.post("/resource/add", json=resource1.model_dump(mode="json"))
+    response.raise_for_status()
+    response = test_client.post("/resource/add", json=resource2.model_dump(mode="json"))
     response.raise_for_status()
 
     # Query for the resource by name
-    query = ResourceGetQuery(resource_name="Test Resource").model_dump(mode="json")
+    query = ResourceGetQuery(
+        resource_name="Test Resource", multiple=False, unique=True
+    ).model_dump(mode="json")
     response = test_client.post("/resource/query", json=query)
     response.raise_for_status()
 
@@ -196,6 +201,17 @@ def test_query_resource(test_client: TestClient) -> None:
     queried_resource = Resource.model_validate(response.json())
     assert queried_resource.resource_id == resource1.resource_id
     assert queried_resource.resource_name == resource1.resource_name
+
+    # Query for multiple resources
+    query = ResourceGetQuery().model_dump(mode="json")
+    response = test_client.post("/resource/query", json=query)
+    response.raise_for_status()
+
+    # Verify the queried resources match
+    queried_resources = response.json()
+    assert len(queried_resources) == 2
+    assert queried_resources[0]["resource_id"] == resource1.resource_id
+    assert queried_resources[1]["resource_id"] == resource2.resource_id
 
 
 def test_query_nonexistent_resource(test_client: TestClient) -> None:
