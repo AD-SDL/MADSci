@@ -1,7 +1,9 @@
 """REST-based Node Module helper classes."""
 
 import json
+import os
 import shutil
+import signal
 import tempfile
 import time
 from contextlib import asynccontextmanager
@@ -9,6 +11,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from fastapi.applications import FastAPI
+from fastapi.background import BackgroundTasks
 from fastapi.datastructures import UploadFile
 from fastapi.routing import APIRouter
 from madsci.client.node.rest_node_client import RestNodeClient
@@ -28,7 +31,6 @@ from madsci.common.types.node_types import (
     NodeStatus,
     RestNodeConfig,
 )
-from madsci.common.utils import threaded_task
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
@@ -41,10 +43,6 @@ class RestNode(AbstractNode):
 
     rest_api = None
     """The REST API server for the node."""
-    restart_flag = False
-    """Whether the node should restart the REST server."""
-    exit_flag = False
-    """Whether the node should exit."""
     supported_capabilities: NodeClientCapabilities = (
         RestNodeClient.supported_capabilities
     )
@@ -79,10 +77,6 @@ class RestNode(AbstractNode):
             self.rest_api = FastAPI(lifespan=self._lifespan)
             self._configure_routes()
             uvicorn.run(self.rest_api, host=host, port=port)
-            if self.restart_flag:
-                self.start_node(testing=testing)
-            if self.exit_flag:
-                return
         else:
             self.logger.log_debug("Running node in test mode")
             self.rest_api = FastAPI(lifespan=self._lifespan)
@@ -179,7 +173,6 @@ class RestNode(AbstractNode):
     def reset(self) -> AdminCommandResponse:
         """Restart the node."""
         try:
-            self.restart_flag = True  # * Restart the REST server
             self.shutdown_handler()
             self._startup()
         except Exception as exception:
@@ -193,23 +186,17 @@ class RestNode(AbstractNode):
             errors=[],
         )
 
-    def shutdown(self) -> AdminCommandResponse:
+    def shutdown(self, background_tasks: BackgroundTasks) -> AdminCommandResponse:
         """Shutdown the node."""
         try:
-            self.restart_flag = False
 
-            @threaded_task
             def shutdown_server() -> None:
                 """Shutdown the REST server."""
-                time.sleep(2)
-                if (
-                    hasattr(self, "rest_server_process")
-                    and self.rest_server_process is not None
-                ):
-                    self.rest_server_process.terminate()
-                self.exit_flag = True
+                time.sleep(1)
+                pid = os.getpid()
+                os.kill(pid, signal.SIGTERM)
 
-            shutdown_server()
+            background_tasks.add_task(shutdown_server)
         except Exception as exception:
             return AdminCommandResponse(
                 success=False,

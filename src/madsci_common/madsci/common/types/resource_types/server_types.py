@@ -37,7 +37,7 @@ class ResourceGetQuery(ResourceRequestBase):
     """The base type of the resource"""
     unique: Optional[bool] = False
     """Whether to require a unique resource or not."""
-    multiple: Optional[bool] = False
+    multiple: Optional[bool] = True
     """Whether to return multiple resources or just the first."""
 
 

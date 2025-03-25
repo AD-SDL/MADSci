@@ -116,7 +116,9 @@ def create_resource_server(  # noqa: C901, PLR0915
             raise
 
     @app.post("/resource/query")
-    async def query_resource(query: ResourceGetQuery = Body(...)) -> ResourceDataModels:  # noqa: B008
+    async def query_resource(
+        query: ResourceGetQuery = Body(...),  # noqa: B008
+    ) -> Union[ResourceDataModels, list[ResourceDataModels]]:
         """
         Retrieve a resource from the database based on the specified parameters.
         """
