@@ -59,12 +59,12 @@ export default {
 }
 
 .wf_status_running,
-.node_status_busy {
+.node_status_running {
   background-color: blue;
 }
 
 .wf_status_failed,
-.node_status_error {
+.node_status_errored {
   background-color: red;
 }
 
@@ -74,7 +74,7 @@ export default {
 }
 
 .wf_status_new,
-.node_status_init {
+.node_status_initializing {
   background-color: aquamarine;
   color: black;
 }

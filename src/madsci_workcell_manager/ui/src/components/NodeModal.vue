@@ -70,8 +70,13 @@
                       <td>{{ item.required }}</td>
                       <td>{{ item.default }}</td>
                       <td>{{ item.description }}</td>
-                      <td v-if="item.type == 'Location'"><v-select @update:menu="set_text(action)" v-model="item.value"
-                          :items="Object.keys(wc_state.locations)"></v-select></td>
+                      <td v-if="item.type == 'NodeLocation'">
+                        <v-text-field v-model=item.value list="locations" id="locations_id" name="locations_name" />
+                        <datalist id="locations">
+                        <option v-for="option in locations.map(function(location: any){return location.location_name;})" :value="option">{{option}}</option>
+                        </datalist>
+                        </td>
+
                       <td v-else><v-text-field @update:focused="set_text(action)" height="20px" v-model="item.value"
                           dense>
                         </v-text-field></td>
@@ -150,7 +155,7 @@ import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 import LockUnlockButton from './AdminButtons/LockUnlockButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
-const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state'])
+const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
 const arg_headers = [
   { title: 'Name', key: 'name' },
   { title: 'Type', key: 'type' },

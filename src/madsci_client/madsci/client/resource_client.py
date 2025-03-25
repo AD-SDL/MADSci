@@ -25,21 +25,41 @@ class ResourceClient:
     def __init__(self, url: str) -> None:
         """Initial params"""
         self.url = url
-        if self.url.endswith("/"):
-            self.url = {self.url[:-1]}
+        if str(self.url).endswith("/"):
+            self.url = str(self.url)[:-1]
 
-    def add_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
+    def add_resource(self, resource: Resource) -> Resource:
         """
         Add a resource to the server.
 
         Args:
-            resource (ResourceDataModels): The resource to add.
+            resource (Resource): The resource to add.
 
         Returns:
             Resource: The added resource as returned by the server.
         """
         response = requests.post(
             f"{self.url}/resource/add",
+            json=resource.model_dump(mode="json"),
+            timeout=10,
+        )
+        response.raise_for_status()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
+
+    def add_or_update_resource(self, resource: Resource) -> Resource:
+        """
+        Add a resource to the server.
+
+        Args:
+            resource (Resource): The resource to add.
+
+        Returns:
+            Resource: The added resource as returned by the server.
+        """
+        response = requests.post(
+            f"{self.url}/resource/add_or_update",
             json=resource.model_dump(mode="json"),
             timeout=10,
         )

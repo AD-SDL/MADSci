@@ -32,9 +32,9 @@ class Location(BaseModel):
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
         default={},
     )
-    resource_id: Optional[str] = Field(
-        title="Resource ID",
-        description="The resource ID linked to the location, typically a container.",
+    resource: Optional[Any] = Field(
+        title="Resource",
+        description="The Resource associated with the location",
         default=None,
     )
     reservation: Optional["LocationReservation"] = Field(

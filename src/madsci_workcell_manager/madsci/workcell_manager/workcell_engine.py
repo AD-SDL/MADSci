@@ -11,6 +11,7 @@ from typing import Optional
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import default_logger
 from madsci.client.node.abstract_node_client import AbstractNodeClient
+from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionRequest, ActionResult
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.location_types import LocationArgument
@@ -49,8 +50,16 @@ class Engine:
         scheduler_module = importlib.import_module(self.definition.config.scheduler)
         self.scheduler = scheduler_module.Scheduler(self.definition, self.state_handler)
         self.data_client = DataClient(self.definition.config.data_server_url)
+        self.resource_client = ResourceClient(
+            self.definition.config.resource_server_url
+        )
+        default_logger.log_info(self.data_client.url)
         with state_handler.wc_state_lock():
-            initialize_workcell(state_handler)
+            initialize_workcell(
+                state_handler,
+                self.resource_client,
+                workcell=workcell_manager_definition,
+            )
         time.sleep(workcell_manager_definition.config.cold_start_delay)
         default_logger.log_info("Engine initialized, waiting for workflows...")
         # TODO send event
@@ -169,9 +178,10 @@ class Engine:
         finally:
             default_logger.log_info("querying result")
             response = self.query_action_result(node, client, request, response)
-        default_logger.log_info("done querying result")
+        default_logger.log_info(f"done querying result: {response}")
         if response is None:
             response = request.failed()
+            default_logger.log_info("querying result failed")
         response = self.handle_data_and_files(step, wf, response)
         default_logger.log_info("handled data and files")
         with self.state_handler.wc_state_lock():
@@ -207,13 +217,13 @@ class Engine:
                     label = data_key
                 datapoint = ValueDataPoint(
                     label=label,
-                    step_id=step.id,
+                    step_id=step.step_id,
                     workflow_id=wf.workflow_id,
-                    experiment_id=wf.experiment_id,
+                    experiment_id=wf.ownership_info.experiment_id,
                     value=response.data[data_key],
                 )
                 self.data_client.submit_datapoint(datapoint)
-                labeled_data[label] = datapoint.id
+                labeled_data[label] = datapoint.datapoint_id
         if response.files:
             for file_key in response.files:
                 if step.data_labels is not None and file_key in step.data_labels:
@@ -221,13 +231,16 @@ class Engine:
                 else:
                     label = file_key
                 datapoint = FileDataPoint(
-                    step_id=step.id,
+                    step_id=step.step_id,
                     workflow_id=wf.workflow_id,
-                    experiment_id=wf.experiment_id,
+                    experiment_id=wf.ownership_info.experiment_id,
                     label=label,
                     path=str(response.files[file_key]),
                 )
-                self.data_client.submit_datapoint(datapoint, datapoint.path)
-                labeled_data[label] = datapoint.id
+                default_logger.log_info("presub")
+                self.data_client.submit_datapoint(datapoint)
+                default_logger.log_info("postsub")
+
+                labeled_data[label] = datapoint.datapoint_id
         response.data = labeled_data
         return response

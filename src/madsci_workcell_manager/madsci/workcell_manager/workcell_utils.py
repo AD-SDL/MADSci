@@ -5,8 +5,11 @@ import warnings
 from typing import Optional
 
 import requests
+import yaml
 from madsci.client.node import NODE_CLIENT_MAP, AbstractNodeClient
+from madsci.client.resource_client import ResourceClient
 from madsci.common.types.node_types import Node, NodeDefinition
+from madsci.common.types.resource_types import Resource
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellLink
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 from pydantic import AnyUrl
@@ -26,7 +29,9 @@ def resolve_workcell_link(workcell_link: WorkcellLink) -> WorkcellDefinition:
 
 
 def initialize_workcell(
-    state_manager: WorkcellRedisHandler, workcell: Optional[WorkcellDefinition] = None
+    state_manager: WorkcellRedisHandler,
+    resource_client: ResourceClient,
+    workcell: Optional[WorkcellDefinition] = None,
 ) -> None:
     """
     Initializes the state of the workcell from the workcell definition.
@@ -35,7 +40,8 @@ def initialize_workcell(
     if not workcell:
         workcell = state_manager.get_workcell()
     initialize_workcell_nodes(workcell, state_manager)
-    initialize_workcell_resources(workcell)
+    initialize_workcell_resources(workcell, resource_client)
+    state_manager.set_workcell(workcell)
 
 
 def initialize_workcell_nodes(
@@ -50,8 +56,22 @@ def initialize_workcell_nodes(
         state_manager.set_node(key, node)
 
 
-def initialize_workcell_resources(workcell: WorkcellDefinition) -> None:
+def initialize_workcell_resources(
+    workcell: WorkcellDefinition, resource_client: ResourceClient
+) -> None:
     """create the resources for a given workcell definition"""
+    for location in workcell.locations:
+        if location.resource is not None:
+            resource = Resource.discriminate(location.resource)
+            resource = resource_client.add_resource(resource)
+            location.resource = resource
+            with workcell._definition_path.open() as f:
+                wc_yaml = yaml.safe_load(f)
+            for dict_location in wc_yaml["locations"]:
+                if dict_location["location_name"] == location.location_name:
+                    dict_location["resource"]["resource_id"] = resource.resource_id
+            with workcell._definition_path.open(mode="w") as f:
+                yaml.dump(wc_yaml, f, default_flow_style=False)
 
 
 def find_node_client(url: str) -> AbstractNodeClient:
