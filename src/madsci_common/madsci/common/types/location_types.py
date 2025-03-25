@@ -95,3 +95,7 @@ class LocationArgument(BaseModel):
     """Details about the Location relevant to this node"""
     resource_id: Optional[str] = None
     """The ID of the corresponding resource, if any"""
+    location_name: Optional[str] = None
+    """the name of the given location"""
+    reservation: Optional["LocationReservation"] = None
+    """whether existing location is reserved"""

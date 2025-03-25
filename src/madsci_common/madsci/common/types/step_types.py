@@ -6,7 +6,7 @@ from typing import Any, Optional, Union
 from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 from madsci.common.types.condition_types import Conditions
-from madsci.common.types.location_types import Location
+from madsci.common.types.location_types import LocationArgument
 from sqlmodel.main import Field
 
 
@@ -37,7 +37,7 @@ class StepDefinition(BaseModel):
         description="Files to be used in the step. Key is the name of the file argument, value is the path to the file.",
         default_factory=dict,
     )
-    locations: dict[str, Union[str, Location]] = Field(
+    locations: dict[str, Union[str, LocationArgument]] = Field(
         title="Step Location Arguments",
         description="Locations to be used in the step. Key is the name of the argument, value is the name of the location, or a Location object.",
         default_factory=dict,

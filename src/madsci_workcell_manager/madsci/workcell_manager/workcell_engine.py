@@ -16,7 +16,6 @@ from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
-from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
@@ -103,6 +102,11 @@ class Engine:
                                 self.state_handler.set_workflow(
                                     workflow, mark_state_changed=False
                                 )
+                            else:
+                                workflow.scheduler_metadata.ready_to_run = False
+                                self.state_handler.set_workflow(
+                                    workflow, mark_state_changed=False
+                                )
                     if self.state_handler.get_workcell_status().ok:
                         self.run_next_step()
                         scheduler_tick = time.time()
@@ -173,15 +177,9 @@ class Engine:
 
             # * Send the action request
             response = None
-            location_args = {}
-            for key, location in step.locations.items():
-                location_payload = location.lookup
-                location_args[key] = LocationArgument(
-                    location=location_payload, resource_id=location.resource_id
-                )
 
             # Merge with step.args
-            args = {**step.args, **location_args}
+            args = {**step.args, **step.locations}
             request = ActionRequest(
                 action_name=step.action,
                 args=args,

@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import ClassVar, Optional
 
-from madsci.common.types.base_types import BaseModel, ModelLink, PathLike, new_ulid_str
+from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
 from madsci.common.validators import (
     ulid_validator,
 )
@@ -12,6 +12,22 @@ from pydantic import ConfigDict
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
+
+
+class LabUrls(BaseModel):
+    """urls for the lab manager"""
+
+    workcell_manager: Optional[AnyUrl] = Field(
+        title="Workcell Manager URL",
+        description="The Workcell Manager Url",
+        default=None,
+    )
+
+    resource_manager: Optional[AnyUrl] = Field(
+        title="Resource Manager URL",
+        description="The Resource Manager URL for this lab.",
+        default=None,
+    )
 
 
 class LabDefinition(BaseModel):
@@ -43,8 +59,13 @@ class LabDefinition(BaseModel):
         title="Commands",
         description="Commands for operating the lab.",
     )
-    managers: dict[str, ModelLink["ManagerDefinition"]] = Field(
-        default_factory=dict,
+    static_files_path: str = Field(
+        default=None,
+        title="Static Files Path",
+        description="Path to the static files for the lab manager",
+    )
+    managers: "LabUrls" = Field(
+        default_factory=LabUrls,
         title="Manager Model Links",
         description="Links to definitions for Managers used by the lab.",
     )

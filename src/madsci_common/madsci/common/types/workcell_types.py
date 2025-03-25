@@ -15,6 +15,7 @@ from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.node_types import Node, NodeDefinition
+from madsci.common.types.workflow_types import Workflow
 from madsci.common.validators import ulid_validator
 from pydantic import computed_field
 from pydantic.functional_validators import field_validator
@@ -171,7 +172,7 @@ class WorkcellState(BaseModel):
         title="Workcell Status",
         description="The status of the workcell.",
     )
-    workflow_queue: list[str] = Field(
+    workflow_queue: list[Workflow] = Field(
         default_factory=list,
         title="Workflow Queue",
         description="The queue of workflows in non-terminal states.",
