@@ -7,8 +7,8 @@ from typing import Any, Literal, Optional, Union
 from madsci.common.types.base_types import BaseModel, Error, PathLike, new_ulid_str
 from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.utils import localnow
+from pydantic import Field
 from pydantic.functional_validators import field_validator, model_validator
-from sqlmodel.main import Field
 
 
 class ActionStatus(str, Enum):
@@ -298,19 +298,26 @@ class ActionDefinition(BaseModel):
         description="A description of the action.",
     )
     args: Union[
-        dict[str, "ActionArgumentDefinition"],
-        list["ActionArgumentDefinition"],
+        dict[str, "ArgumentDefinition"],
+        list["ArgumentDefinition"],
     ] = Field(
         title="Action Arguments",
         description="The arguments of the action.",
         default_factory=dict,
     )
-    files: Union[dict[str, "ActionFileDefinition"], list["ActionFileDefinition"]] = (
-        Field(
-            title="Action File Arguments",
-            description="The file arguments of the action.",
-            default_factory=dict,
-        )
+    locations: Union[
+        dict[str, "LocationArgumentDefinition"], list["LocationArgumentDefinition"]
+    ] = Field(
+        title="Action Location Arguments",
+        description="The location arguments of the action.",
+        default_factory=dict,
+    )
+    files: Union[
+        dict[str, "FileArgumentDefinition"], list["FileArgumentDefinition"]
+    ] = Field(
+        title="Action File Arguments",
+        description="The file arguments of the action.",
+        default_factory=dict,
     )
     results: Union[
         dict[str, "ActionResultDefinition"],
@@ -347,6 +354,14 @@ class ActionDefinition(BaseModel):
             return {file.name: file for file in v}
         return v
 
+    @field_validator("locations", mode="after")
+    @classmethod
+    def ensure_locations_are_dict(cls, v: Any) -> Any:
+        """Ensure that the locations are a dictionary"""
+        if isinstance(v, list):
+            return {location.name: location for location in v}
+        return v
+
     @field_validator("results", mode="after")
     @classmethod
     def ensure_results_are_dict(cls, v: Any) -> Any:
@@ -368,10 +383,14 @@ class ActionDefinition(BaseModel):
             if file.name in names:
                 raise ValueError(f"File name '{file.name}' is not unique")
             names.add(file.name)
+        for location in v.locations.values():
+            if location.name in names:
+                raise ValueError(f"Location name '{location.name}' is not unique")
+            names.add(location.name)
         return v
 
 
-class ActionArgumentDefinition(BaseModel):
+class ArgumentDefinition(BaseModel):
     """Defines an argument for a node action"""
 
     name: str = Field(
@@ -396,20 +415,23 @@ class ActionArgumentDefinition(BaseModel):
     )
 
 
-class ActionFileDefinition(BaseModel):
+class LocationArgumentDefinition(ArgumentDefinition):
+    """Location Argument Definition for use in NodeInfo"""
+
+    argument_type: Literal["location"] = Field(
+        title="Location Argument Type",
+        description="The type of the location argument.",
+        default="location",
+    )
+
+
+class FileArgumentDefinition(ArgumentDefinition):
     """Defines a file for a node action"""
 
-    name: str = Field(
-        title="File Name",
-        description="The name of the file.",
-    )
-    required: bool = Field(
-        title="File Required",
-        description="Whether the file is required.",
-    )
-    description: str = Field(
-        title="File Description",
-        description="A description of the file.",
+    argument_type: Literal["file"] = Field(
+        title="File Argument Type",
+        description="The type of the file argument.",
+        default="file",
     )
 
 

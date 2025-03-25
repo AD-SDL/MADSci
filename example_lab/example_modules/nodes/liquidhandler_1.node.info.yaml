@@ -18,31 +18,18 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
-  - unlock
+  - shutdown
   - reset
-  - pause
-  - cancel
+  - unlock
+  - resume
   - safety_stop
   - lock
-  - resume
-  - shutdown
+  - cancel
+  - pause
 commands: {}
 is_template: false
 config_defaults: {}
-actions:
-  run_command:
-    name: run_command
-    description: Run a command on the liquid handler.
-    args:
-      command:
-        name: command
-        description: ''
-        type: str
-        required: true
-        default: null
-    files: {}
-    results: {}
-    blocking: false
+actions: {}
 config:
   status_update_interval: null
   state_update_interval: null
@@ -50,7 +37,6 @@ config:
   host: 127.0.0.1
   port: 8000
   protocol: http
-  device_number: 0
 config_schema:
   $defs:
     EventClientConfig:
@@ -76,10 +62,7 @@ config_schema:
           title: Event Client Log Level
           type: integer
         source:
-          anyOf:
-          - $ref: '#/$defs/OwnershipInfo'
-          - type: 'null'
-          default: null
+          $ref: '#/$defs/OwnershipInfo'
           description: Information about the source of the event client.
           title: Source
         log_dir:
@@ -147,10 +130,24 @@ config_schema:
           default: null
           description: The ID of the lab that owns the object.
           title: Lab ID
+        step_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: The ID of the step that owns the object.
+          title: Step ID
+        workflow_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: The ID of the workflow that owns the object.
+          title: Workflow ID
       title: OwnershipInfo
       type: object
   additionalProperties: true
-  description: Configuration for the liquid handler node module.
+  description: Default Configuration for a MADSci Node that communicates over REST.
   properties:
     status_update_interval:
       anyOf:
@@ -188,9 +185,5 @@ config_schema:
       description: The protocol of the REST API, either 'http' or 'https'.
       title: Protocol
       type: string
-    device_number:
-      default: 0
-      title: Device Number
-      type: integer
-  title: LiquidHandlerConfig
+  title: RestNodeConfig
   type: object

@@ -25,17 +25,21 @@ from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
 from madsci.common.types.action_types import (
-    ActionArgumentDefinition,
     ActionDefinition,
-    ActionFileDefinition,
     ActionRequest,
     ActionResult,
     ActionStatus,
+    ArgumentDefinition,
+    FileArgumentDefinition,
+    LocationArgumentDefinition,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.event_types import Event, EventClientConfig, EventType
+from madsci.common.types.location_types import (
+    LocationArgument,
+)
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -462,71 +466,95 @@ class AbstractNode:
                     and parameter_name not in [file.name for file in action_def.files]
                     and parameter_name != "action"
                 ):
-                    type_hint = parameter_type
-                    description = ""
-                    annotated_as_file = False
-                    annotated_as_arg = False
-                    # * If the type hint is Optional, extract the inner type
-                    if is_optional(type_hint):
-                        type_hint = get_args(type_hint)[0]
-                    # * If the type hint is an Annotated type, extract the type and description
-                    # * Description here means the first string metadata in the Annotated type
-                    if get_origin(type_hint) == Annotated:
-                        description = next(
-                            (
-                                metadata
-                                for metadata in type_hint.__metadata__
-                                if isinstance(metadata, str)
-                            ),
-                            "",
-                        )
-                        annotated_as_file = any(
-                            isinstance(metadata, ActionFileDefinition)
-                            for metadata in type_hint.__metadata__
-                        )
-                        annotated_as_arg = not any(
-                            isinstance(metadata, ActionArgumentDefinition)
-                            for metadata in type_hint.__metadata__
-                        )
-                        if annotated_as_file and annotated_as_arg:
-                            raise ValueError(
-                                f"Parameter '{parameter_name}' is annotated as both a file and an argument. This is not allowed.",
-                            )
-                        type_hint = get_args(type_hint)[0]
-                    # * Another Optional check after Annotated type extraction
-                    if is_optional(type_hint):
-                        type_hint = get_args(type_hint)[0]
-                    # * If the type hint is a file type, add it to the files list
-                    if annotated_as_file or (
-                        getattr(type_hint, "__name__", None)
-                        in ["Path", "PurePath", "PosixPath", "WindowsPath"]
-                        and not annotated_as_arg
-                    ):
-                        # * Add a file parameter to the action
-                        action_def.files[parameter_name] = ActionFileDefinition(
-                            name=parameter_name,
-                            required=True,
-                            description=description,
-                        )
-                    # * Otherwise, add it to the args list
-                    else:
-                        parameter_info = signature.parameters[parameter_name]
-                        # * Add an arg to the action
-                        default = (
-                            None
-                            if parameter_info.default == inspect.Parameter.empty
-                            else parameter_info.default
-                        )
-                        is_required = parameter_info.default == inspect.Parameter.empty
-
-                        action_def.args[parameter_name] = ActionArgumentDefinition(
-                            name=parameter_name,
-                            argument_type=pretty_type_repr(type_hint),
-                            default=default,
-                            required=is_required,
-                            description=description,
-                        )
+                    self._parse_action_arg(
+                        action_def, signature, parameter_name, parameter_type
+                    )
         self.node_info.actions[action_name] = action_def
+
+    def _parse_action_arg(
+        self,
+        action_def: ActionDefinition,
+        signature: inspect.Signature,
+        parameter_name: str,
+        parameter_type: Any,
+    ) -> None:
+        """Parses a function argument of an action handler into a MADSci ArgumentDefinition"""
+        type_hint = parameter_type
+        description = ""
+        annotated_as_file = False
+        annotated_as_arg = False
+        annotated_as_location = False
+        # * If the type hint is Optional, extract the inner type
+        if is_optional(type_hint):
+            type_hint = get_args(type_hint)[0]
+            # * If the type hint is an Annotated type, extract the type and description
+            # * Description here means the first string metadata in the Annotated type
+        if get_origin(type_hint) == Annotated:
+            description = next(
+                (
+                    metadata
+                    for metadata in type_hint.__metadata__
+                    if isinstance(metadata, str)
+                ),
+                "",
+            )
+            annotated_as_file = any(
+                isinstance(metadata, FileArgumentDefinition)
+                for metadata in type_hint.__metadata__
+            )
+            annotated_as_location = any(
+                isinstance(metadata, LocationArgumentDefinition)
+                for metadata in type_hint.__metadata__
+            )
+            annotated_as_arg = any(
+                isinstance(metadata, ArgumentDefinition)
+                for metadata in type_hint.__metadata__
+            )
+            if sum([annotated_as_file, annotated_as_arg, annotated_as_location]) > 1:
+                raise ValueError(
+                    f"Parameter '{parameter_name}' is annotated as multiple types of argument. This is not allowed.",
+                )
+            type_hint = get_args(type_hint)[0]
+            # * Another Optional check after Annotated type extraction
+        if is_optional(type_hint):
+            type_hint = get_args(type_hint)[0]
+            # * If the type hint is a file type, add it to the files list
+        if annotated_as_file or (
+            getattr(type_hint, "__name__", None)
+            in ["Path", "PurePath", "PosixPath", "WindowsPath"]
+            and not annotated_as_arg
+        ):
+            # * Add a file parameter to the action
+            action_def.files[parameter_name] = FileArgumentDefinition(
+                name=parameter_name,
+                required=True,
+                description=description,
+            )
+        # * Otherwise, add it to the args list
+        else:
+            parameter_info = signature.parameters[parameter_name]
+            # * Add an arg to the action
+            default = (
+                None
+                if parameter_info.default == inspect.Parameter.empty
+                else parameter_info.default
+            )
+            is_required = parameter_info.default == inspect.Parameter.empty
+
+            if annotated_as_location or type_hint is LocationArgument:
+                action_def.locations[parameter_name] = LocationArgumentDefinition(
+                    name=parameter_name,
+                    required=is_required,
+                    description=description,
+                )
+            else:
+                action_def.args[parameter_name] = ArgumentDefinition(
+                    name=parameter_name,
+                    argument_type=pretty_type_repr(type_hint),
+                    default=default,
+                    required=is_required,
+                    description=description,
+                )
 
     def _parse_action_args(
         self,
@@ -568,6 +596,40 @@ class AbstractNode:
                     arg_dict[file] = action_request.files[file]
                 else:
                     default_logger.log_warning(f"Ignoring unexpected file {file}")
+
+        # Validate any arguments that expect a LocationArgument
+
+        return self._validate_location_arguments(action_callable, arg_dict)
+
+    def _validate_location_arguments(
+        self,
+        action_callable: Callable,
+        arg_dict: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Validate and convert any arguments expected as LocationArgument.
+
+        If the action function declares a parameter with type LocationArgument and the
+        corresponding value in arg_dict is a dictionary (e.g., from a deserialized JSON payload),
+        this function uses Pydantic's model_validate to reconstruct a valid LocationArgument instance.
+
+        Raises:
+            ValueError: If the input dictionary fails LocationArgument validation.
+
+        Returns:
+            dict[str, Any]: The updated argument dictionary with validated LocationArgument objects.
+        """
+        type_hints = get_type_hints(action_callable)
+        for name, expected_type in type_hints.items():
+            if expected_type is LocationArgument and isinstance(
+                arg_dict.get(name), dict
+            ):
+                try:
+                    arg_dict[name] = LocationArgument.model_validate(arg_dict[name])
+                except ValidationError as e:
+                    raise ValueError(
+                        f"Invalid LocationArgument for parameter '{name}': {e}"
+                    ) from e
         return arg_dict
 
     @threaded_daemon

@@ -86,3 +86,12 @@ class LocationReservation(BaseModel):
             and self.start <= datetime.now()
             and self.end >= datetime.now()
         )
+
+
+class LocationArgument(BaseModel):
+    """Location Argument to be used by MADSCI nodes."""
+
+    location: Any
+    """Details about the Location relevant to this node"""
+    resource_id: Optional[str] = None
+    """The ID of the corresponding resource, if any"""
