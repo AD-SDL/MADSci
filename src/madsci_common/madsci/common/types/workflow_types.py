@@ -107,7 +107,7 @@ class Workflow(WorkflowDefinition):
     """ID of the workflow run"""
     steps: list[Step] = Field(default_factory=list)
     """Processed Steps of the flow"""
-    parameter_values: dict[str, Any] = Field(default_factory={})
+    parameter_values: dict[str, Any] = Field(default_factory=dict)
     """parameter values used in this workflow"""
     ownership_info: OwnershipInfo = Field(default_factory=OwnershipInfo)
     """ID of the experiment this workflow is a part of"""

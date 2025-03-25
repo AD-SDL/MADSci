@@ -2,17 +2,12 @@
 
 import concurrent
 import warnings
-from typing import Optional
 
 import requests
-import yaml
 from madsci.client.node import NODE_CLIENT_MAP, AbstractNodeClient
-from madsci.client.resource_client import ResourceClient
-from madsci.common.types.node_types import Node, NodeDefinition
-from madsci.common.types.resource_types import Resource
+from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellLink
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
-from pydantic import AnyUrl
 
 
 def resolve_workcell_link(workcell_link: WorkcellLink) -> WorkcellDefinition:
@@ -28,54 +23,8 @@ def resolve_workcell_link(workcell_link: WorkcellLink) -> WorkcellDefinition:
     return workcell_link.expanduser()
 
 
-def initialize_workcell(
-    state_manager: WorkcellRedisHandler,
-    resource_client: ResourceClient,
-    workcell: Optional[WorkcellDefinition] = None,
-) -> None:
-    """
-    Initializes the state of the workcell from the workcell definition.
-    """
-
-    if not workcell:
-        workcell = state_manager.get_workcell()
-    initialize_workcell_nodes(workcell, state_manager)
-    initialize_workcell_resources(workcell, resource_client)
-    state_manager.set_workcell(workcell)
-
-
-def initialize_workcell_nodes(
-    workcell: WorkcellDefinition, state_manager: WorkcellRedisHandler
-) -> None:
-    """create the nodes for the given workcell"""
-    for key, value in workcell.nodes.items():
-        if type(value) is NodeDefinition:
-            node = Node(node_url=value.node_url)
-        elif type(value) is AnyUrl or type(value) is str:
-            node = Node(node_url=AnyUrl(value))
-        state_manager.set_node(key, node)
-
-
-def initialize_workcell_resources(
-    workcell: WorkcellDefinition, resource_client: ResourceClient
-) -> None:
-    """create the resources for a given workcell definition"""
-    for location in workcell.locations:
-        if location.resource is not None:
-            resource = Resource.discriminate(location.resource)
-            resource = resource_client.add_resource(resource)
-            location.resource = resource
-            with workcell._definition_path.open() as f:
-                wc_yaml = yaml.safe_load(f)
-            for dict_location in wc_yaml["locations"]:
-                if dict_location["location_name"] == location.location_name:
-                    dict_location["resource"]["resource_id"] = resource.resource_id
-            with workcell._definition_path.open(mode="w") as f:
-                yaml.dump(wc_yaml, f, default_flow_style=False)
-
-
 def find_node_client(url: str) -> AbstractNodeClient:
-    """finds the right client for the node url provided"""
+    """Finds the appropriate node client based on a given node url"""
     for client in NODE_CLIENT_MAP.values():
         if client.validate_url(url):
             return client(url)
@@ -89,7 +38,7 @@ def update_active_nodes(state_manager: WorkcellRedisHandler) -> None:
     """Update all active nodes in the workcell."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         node_futures = []
-        for node_name, node in state_manager.get_all_nodes().items():
+        for node_name, node in state_manager.get_nodes().items():
             node_future = executor.submit(update_node, node_name, node, state_manager)
             node_futures.append(node_future)
 

@@ -171,6 +171,11 @@ def test_run_action(test_client: TestClient) -> None:
         )
         assert response.status_code == 200
         assert (
+            ActionResult.model_validate(response.json()).status == ActionStatus.RUNNING
+        )
+        response = client.get(f"/action/{response.json()['action_id']}")
+        assert response.status_code == 200
+        assert (
             ActionResult.model_validate(response.json()).status
             == ActionStatus.SUCCEEDED
         )
@@ -192,6 +197,11 @@ def test_run_action_fail(test_client: TestClient) -> None:
             "/action",
             params={"action_name": "test_fail", "args": json.dumps({"test_param": 1})},
         )
+        assert ActionResult.model_validate(response.json()).status in [
+            ActionStatus.FAILED,
+            ActionStatus.RUNNING,
+        ]
+        response = client.get(f"/action/{response.json()['action_id']}")
         assert response.status_code == 200
         action_result = ActionResult.model_validate(response.json())
         assert action_result.status == ActionStatus.FAILED
@@ -317,14 +327,13 @@ def test_get_action_result(test_client: TestClient) -> None:
         )
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
-        assert result.status == ActionStatus.SUCCEEDED
+        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
 
         response = client.get(f"/action/{result.action_id}")
         assert response.status_code == 200
         fetched_result = ActionResult.model_validate(response.json())
-        assert fetched_result.status == result.status
+        assert fetched_result.status == ActionStatus.SUCCEEDED
         assert fetched_result.action_id == result.action_id
-        assert fetched_result.history_created_at == result.history_created_at
 
         response = client.get("/action/not_a_valid_id")
         assert response.status_code == 200
@@ -350,7 +359,13 @@ def test_get_action_history(test_client: TestClient) -> None:
         )
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
-        assert result.status == ActionStatus.SUCCEEDED
+        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
+        response = client.get(f"/action/{response.json()['action_id']}")
+        assert response.status_code == 200
+        assert ActionResult.model_validate(response.json()).status in [
+            ActionStatus.RUNNING,
+            ActionStatus.SUCCEEDED,
+        ]
 
         response = client.post(
             "/action",
@@ -361,7 +376,7 @@ def test_get_action_history(test_client: TestClient) -> None:
         )
         assert response.status_code == 200
         result2 = ActionResult.model_validate(response.json())
-        assert result2.status == ActionStatus.SUCCEEDED
+        assert result2.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
 
         response = client.get("/action")
         assert response.status_code == 200
@@ -417,7 +432,7 @@ def test_get_log(test_client: TestClient) -> None:
         )
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
-        assert result.status == ActionStatus.SUCCEEDED
+        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
 
         response = client.get("/log")
         assert response.status_code == 200
@@ -439,7 +454,7 @@ def test_optional_param_action_with_optional_param(test_client: TestClient) -> N
         )
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
-        assert result.status == ActionStatus.SUCCEEDED
+        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
 
 
 def test_optional_param_action_without_optional_param(test_client: TestClient) -> None:
@@ -455,4 +470,4 @@ def test_optional_param_action_without_optional_param(test_client: TestClient) -
         )
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
-        assert result.status == ActionStatus.SUCCEEDED
+        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]

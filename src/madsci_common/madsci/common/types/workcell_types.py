@@ -1,10 +1,11 @@
 """Types for MADSci Workcell configuration."""
 
 from pathlib import Path
-from typing import Annotated, ClassVar, Literal, Optional, Union
+from typing import Annotated, Any, ClassVar, Literal, Optional, Union
 
 from madsci.common.types.base_types import (
     BaseModel,
+    Error,
     LoadConfig,
     ModelLink,
     PathLike,
@@ -12,8 +13,8 @@ from madsci.common.types.base_types import (
 )
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerType
-from madsci.common.types.location_types import Location
-from madsci.common.types.node_types import NodeDefinition
+from madsci.common.types.location_types import Location, LocationDefinition
+from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.validators import ulid_validator
 from pydantic import computed_field
 from pydantic.functional_validators import field_validator
@@ -70,7 +71,7 @@ class WorkcellDefinition(BaseModel, extra="allow"):
         title="Workcell Node URLs",
         description="The URL, path, or definition for each node in the workcell.",
     )
-    locations: list[Location] = Field(
+    locations: list[LocationDefinition] = Field(
         default_factory=list,
         title="Workcell Locations",
         description="The Locations used in the workcell.",
@@ -92,6 +93,102 @@ class WorkcellLink(ModelLink[WorkcellDefinition]):
         title="Workcell Definition",
         description="The actual definition of the workcell.",
         default=None,
+    )
+
+
+class WorkcellStatus(BaseModel):
+    """Represents the status of a MADSci workcell."""
+
+    paused: bool = Field(
+        default=False,
+        title="Workcell Paused",
+        description="Whether the workcell is paused.",
+    )
+    errored: bool = Field(
+        default=False,
+        title="Workcell Errored",
+        description="Whether the workcell is in an error state.",
+    )
+    errors: list[Error] = Field(
+        default_factory=list,
+        title="Workcell Errors",
+        description="A list of errors the workcell has encountered.",
+    )
+    initializing: bool = Field(
+        default=False,
+        title="Workcell Initializing",
+        description="Whether the workcell is initializing.",
+    )
+    shutdown: bool = Field(
+        default=False,
+        title="Workcell Shutdown",
+        description="Whether the workcell is shutting down.",
+    )
+    locked: bool = Field(
+        default=False,
+        title="Workcell Locked",
+        description="Whether the workcell is locked.",
+    )
+
+    @computed_field
+    @property
+    def ok(self) -> bool:
+        """Whether the workcell is in a good state."""
+        return not any(
+            [
+                self.paused,
+                self.errored,
+                self.initializing,
+                self.shutdown,
+                self.locked,
+            ]
+        )
+
+    @field_validator("errors", mode="before")
+    @classmethod
+    def ensure_list_of_errors(cls, v: Any) -> Any:
+        """Ensure that errors is a list of MADSci Errors"""
+        if isinstance(v, str):
+            return [Error(message=v)]
+        if isinstance(v, Error):
+            return [v]
+        if isinstance(v, Exception):
+            return [Error.from_exception(v)]
+        if isinstance(v, list):
+            for i, item in enumerate(v):
+                if isinstance(item, str):
+                    v[i] = Error(message=item)
+                elif isinstance(item, Exception):
+                    v[i] = Error.from_exception(item)
+        return v
+
+
+class WorkcellState(BaseModel):
+    """Represents the live state of a MADSci workcell."""
+
+    status: WorkcellStatus = Field(
+        default_factory=WorkcellStatus,
+        title="Workcell Status",
+        description="The status of the workcell.",
+    )
+    workflow_queue: list[str] = Field(
+        default_factory=list,
+        title="Workflow Queue",
+        description="The queue of workflows in non-terminal states.",
+    )
+    workcell_definition: WorkcellDefinition = Field(
+        title="Workcell Definition",
+        description="The definition of the workcell.",
+    )
+    nodes: dict[str, Node] = Field(
+        default_factory=dict,
+        title="Workcell Nodes",
+        description="The nodes in the workcell.",
+    )
+    locations: dict[str, Location] = Field(
+        default_factory=dict,
+        title="Workcell Locations",
+        description="The locations in the workcell.",
     )
 
 
@@ -143,11 +240,6 @@ class WorkcellConfig(BaseModel):
         title="Node Update Interval",
         description="The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval",
     )
-    heartbeat_interval: float = Field(
-        default=2.0,
-        title="Heartbeat Interval",
-        description="The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval",
-    )
     auto_start: bool = Field(
         default=True,
         title="Auto Start",
@@ -182,4 +274,9 @@ class WorkcellConfig(BaseModel):
         default=None,
         title="Static Files Path",
         description="Path to the static dashboard files",
+    )
+    get_action_result_retries: int = Field(
+        default=3,
+        title="Get Action Result Retries",
+        description="Number of times to retry getting an action result",
     )

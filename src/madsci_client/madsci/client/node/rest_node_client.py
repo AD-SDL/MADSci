@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, ClassVar, Optional
 from zipfile import ZipFile
@@ -54,7 +55,12 @@ class RestNodeClient(AbstractNodeClient):
         super().__init__(url)
         self.logger = EventClient(config=event_client_config)
 
-    def send_action(self, action_request: ActionRequest) -> ActionResult:
+    def send_action(
+        self,
+        action_request: ActionRequest,
+        await_result: bool = True,
+        timeout: Optional[float] = None,
+    ) -> ActionResult:
         """Perform an action on the node."""
         files = []
         try:
@@ -81,14 +87,17 @@ class RestNodeClient(AbstractNodeClient):
             # * Ensure files are closed
             for file in files:
                 file[1][1].close()
-        if not rest_response.ok:
-            self.logger.log_error(f"{rest_response.status_code}: {rest_response.text}")
+        try:
             rest_response.raise_for_status()
+        except requests.HTTPError as e:
+            self.logger.log_error(f"{rest_response.status_code}: {rest_response.text}")
+            raise e
         if "x-madsci-status" in rest_response.headers:
             response = process_file_response(rest_response)
-
         else:
             response = ActionResult.model_validate(rest_response.json())
+        if await_result and not response.status.is_terminal:
+            response = self.await_action_result(response.action_id, timeout=timeout)
         return response
 
     def get_action_history(
@@ -107,33 +116,47 @@ class RestNodeClient(AbstractNodeClient):
             f"{self.url}/action/{action_id}",
             timeout=10,
         )
-        if not rest_response.ok:
-            rest_response.raise_for_status()
+        rest_response.raise_for_status()
         if "x-madsci-status" in rest_response.headers:
             response = process_file_response(rest_response)
         else:
             response = ActionResult.model_validate(rest_response.json())
         return response
 
+    def await_action_result(
+        self, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """Wait for an action to complete and return the result. Optionally, specify a timeout in seconds."""
+        start_time = time.time()
+        interval = 0.25
+        while True:
+            if timeout is not None and time.time() - start_time > timeout:
+                raise TimeoutError("Timed out waiting for action to complete.")
+            response = self.get_action_result(action_id)
+            if not response.status.is_terminal:
+                time.sleep(interval)
+                interval = (
+                    interval * 1.5 if interval < 10 else 10
+                )  # * Capped Exponential backoff
+                continue
+            return response
+
     def get_status(self) -> NodeStatus:
         """Get the status of the node."""
         response = requests.get(f"{self.url}/status", timeout=10)
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         return NodeStatus.model_validate(response.json())
 
     def get_state(self) -> dict[str, Any]:
         """Get the state of the node."""
         response = requests.get(f"{self.url}/state", timeout=10)
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         return response.json()
 
     def get_info(self) -> NodeInfo:
         """Get information about the node."""
         response = requests.get(f"{self.url}/info", timeout=10)
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         return NodeInfo.model_validate(response.json())
 
     def set_config(self, new_config: dict[str, Any]) -> NodeSetConfigResponse:
@@ -143,15 +166,13 @@ class RestNodeClient(AbstractNodeClient):
             json=new_config,
             timeout=60,
         )
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         return NodeSetConfigResponse.model_validate(response.json())
 
     def send_admin_command(self, admin_command: AdminCommands) -> bool:
         """Perform an administrative command on the node."""
         response = requests.post(f"{self.url}/admin/{admin_command}", timeout=10)
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         return AdminCommandResponse.model_validate(response.json())
 
     def get_resources(self) -> dict[str, ResourceDefinition]:
@@ -164,8 +185,7 @@ class RestNodeClient(AbstractNodeClient):
     def get_log(self) -> dict[str, Event]:
         """Get the log from the node"""
         response = requests.get(f"{self.url}/log", timeout=10)
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         return response.json()
 
 

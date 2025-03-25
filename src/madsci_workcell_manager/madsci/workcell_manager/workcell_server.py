@@ -9,11 +9,14 @@ from typing import Annotated, Any, Optional, Union
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from madsci.client.event_client import EventClient
+from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import new_ulid_str
+from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
@@ -41,10 +44,18 @@ def create_workcell_server(  # noqa: C901, PLR0915
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
         """Start the REST server and initialize the state handler and engine"""
-        state_handler.set_workcell(workcell)
         if start_engine:
-            engine = Engine(workcell, state_handler)
-            engine.start_engine_thread()
+            engine = Engine(state_handler)
+            engine.spin()
+        else:
+            with state_handler.wc_state_lock():
+                state_handler.initialize_workcell_state(
+                    resource_client=ResourceClient(
+                        url=workcell.config.resource_server_url
+                    )
+                    if workcell.config.resource_server_url is not None
+                    else None,
+                )
         yield
 
     app = FastAPI(lifespan=lifespan)
@@ -53,19 +64,19 @@ def create_workcell_server(  # noqa: C901, PLR0915
     @app.get("/workcell")
     def get_workcell() -> WorkcellDefinition:
         """Get the currently running workcell."""
-        return state_handler.get_workcell()
+        return state_handler.get_workcell_definition()
 
     @app.get("/state")
-    def get_state() -> dict:
+    def get_state() -> WorkcellState:
         """Get the current state of the workcell."""
-        return state_handler.get_state()
+        return state_handler.get_workcell_state()
 
     @app.get("/nodes")
     def get_nodes() -> dict[str, Node]:
         """Get info on the nodes in the workcell."""
-        return state_handler.get_all_nodes()
+        return state_handler.get_nodes()
 
-    @app.get("/nodes/{node_name}")
+    @app.get("/node/{node_name}")
     def get_node(node_name: str) -> Union[Node, str]:
         """Get information about about a specific node."""
         try:
@@ -74,7 +85,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             return "Node not found!"
         return node
 
-    @app.post("/nodes/add_node")
+    @app.post("/node")
     def add_node(
         node_name: str,
         node_url: str,
@@ -82,7 +93,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         permanent: bool = False,
     ) -> Union[Node, str]:
         """Add a node to the workcell's node list"""
-        if node_name in state_handler.get_all_nodes():
+        if node_name in state_handler.get_nodes():
             return "Node name exists, node names must be unique!"
         node = Node(node_url=node_url)
         state_handler.set_node(node_name, node)
@@ -99,7 +110,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
     def send_admin_command(command: str) -> list:
         """Send an admin command to all capable nodes."""
         responses = []
-        for node in state_handler.get_all_nodes().values():
+        for node in state_handler.get_nodes().values():
             if command in node.info.capabilities.admin_commands:
                 client = find_node_client(node.node_url)
                 response = client.send_admin_command(command)
@@ -118,16 +129,21 @@ def create_workcell_server(  # noqa: C901, PLR0915
         return responses
 
     @app.get("/workflows")
-    def get_all_workflows() -> dict[str, Workflow]:
-        """get all workflows."""
-        return state_handler.get_all_workflows()
+    def get_workflows() -> dict[str, Workflow]:
+        """Get all workflows."""
+        return state_handler.get_workflows()
 
-    @app.get("/workflows/{workflow_id}")
+    @app.get("/workflows/queue")
+    def get_workflow_queue() -> list[Workflow]:
+        """Get all queued workflows."""
+        return state_handler.get_workflow_queue()
+
+    @app.get("/workflow/{workflow_id}")
     def get_workflow(workflow_id: str) -> Workflow:
         """Get info on a specific workflow."""
         return state_handler.get_workflow(workflow_id)
 
-    @app.post("/workflows/pause/{workflow_id}")
+    @app.post("/workflow/{workflow_id}/pause")
     def pause_workflow(workflow_id: str) -> Workflow:
         """Pause a specific workflow."""
         with state_handler.wc_state_lock():
@@ -141,7 +157,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
         return state_handler.get_workflow(workflow_id)
 
-    @app.post("/workflows/resume/{workflow_id}")
+    @app.post("/workflow/{workflow_id}/resume")
     def resume_workflow(workflow_id: str) -> Workflow:
         """Resume a paused workflow."""
         with state_handler.wc_state_lock():
@@ -154,7 +170,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.set_workflow(wf)
         return state_handler.get_workflow(workflow_id)
 
-    @app.post("/workflows/cancel/{workflow_id}")
+    @app.post("/workflow/{workflow_id}/cancel")
     def cancel_workflow(workflow_id: str) -> Workflow:
         """Cancel a specific workflow."""
         with state_handler.wc_state_lock():
@@ -166,7 +182,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             state_handler.set_workflow(wf)
         return state_handler.get_workflow(workflow_id)
 
-    @app.post("/workflows/resubmit/{workflow_id}")
+    @app.post("/workflow/{workflow_id}/resubmit")
     def resubmit_workflow(workflow_id: str) -> Workflow:
         """resubmit a previous workflow as a new workflow."""
         with state_handler.wc_state_lock():
@@ -189,7 +205,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             state_handler.set_workflow(wf)
         return state_handler.get_workflow(wf.workflow_id)
 
-    @app.post("/workflows/retry/{workflow_id}")
+    @app.post("/workflow/{workflow_id}/retry")
     def retry_workflow(workflow_id: str, index: int = -1) -> Workflow:
         """Retry an existing workflow from a specific step."""
         with state_handler.wc_state_lock():
@@ -205,7 +221,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.set_workflow(wf)
         return state_handler.get_workflow(workflow_id)
 
-    @app.post("/workflows/start")
+    @app.post("/workflow")
     async def start_workflow(
         workflow: Annotated[str, Form()],
         ownership_info: Annotated[Optional[str], Form()] = None,
@@ -240,10 +256,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
             traceback.print_exc()
             raise HTTPException(status_code=422, detail=str(e)) from e
 
-        if ownership_info is None:
-            ownership_info = OwnershipInfo()
-        else:
-            ownership_info = OwnershipInfo.model_validate_json(ownership_info)
+        ownership_info = (
+            OwnershipInfo.model_validate_json(ownership_info)
+            if ownership_info
+            else OwnershipInfo()
+        )
 
         if parameters is None:
             parameters = {}
@@ -256,7 +273,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     status_code=400,
                     detail="Parameters must be a dictionary with string keys",
                 )
-        workcell = state_handler.get_workcell()
+        workcell = state_handler.get_workcell_definition()
         wf = create_workflow(
             workflow_def=wf_def,
             workcell=workcell,
@@ -275,10 +292,54 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.set_workflow(wf)
         return wf
 
+    @app.get("/locations")
+    def get_locations() -> dict[str, Location]:
+        """Get the locations of the workcell."""
+        return state_handler.get_locations()
+
+    @app.post("/location")
+    def add_location(
+        location: Location,
+    ) -> Location:
+        """Add a location to the workcell's location list"""
+        with state_handler.wc_state_lock():
+            state_handler.set_location(location)
+        return state_handler.get_location(location.location_id)
+
+    @app.get("/location/{location_id}")
+    def get_location(location_id: str) -> Location:
+        """Get information about about a specific location."""
+        return state_handler.get_location(location_id)
+
+    @app.delete("/location/{location_id}")
+    def delete_location(location_id: str) -> dict:
+        """Delete a location from the workcell's location list"""
+        with state_handler.wc_state_lock():
+            state_handler.delete_location(location_id)
+        return {"status": "deleted"}
+
+    @app.post("/location/{location_id}/attach_resource")
+    def add_resource_to_location(
+        location_id: str,
+        resource_id: str,
+    ) -> Location:
+        """Attach a resource container to a location."""
+        with state_handler.wc_state_lock():
+            location = state_handler.get_location(location_id)
+            location.resource_id = resource_id
+            state_handler.set_location(location)
+        return state_handler.get_location(location_id)
+
     if workcell.config.static_files_path is not None:
-        app.mount(
-            "/", StaticFiles(directory=workcell.config.static_files_path, html=True)
-        )
+        try:
+            app.mount(
+                "/", StaticFiles(directory=workcell.config.static_files_path, html=True)
+            )
+        except Exception:
+            EventClient(workcell.config.event_client_config).log_error(
+                f"Error mounting static files: {workcell.config.static_files_path}"
+            )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

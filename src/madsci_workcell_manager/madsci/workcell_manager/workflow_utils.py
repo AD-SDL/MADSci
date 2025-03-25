@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 from fastapi import UploadFile
 from madsci.client.event_client import default_logger
+from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
@@ -33,8 +34,7 @@ def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> Non
 
 def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool, str]:
     """Check if a step is valid based on the node's info"""
-    result = (False, "Unknown validation error")
-    if step.node in state_handler.get_all_nodes():
+    if step.node in state_handler.get_nodes():
         node = state_handler.get_node(step.node)
         info = node.info
         if info is None:
@@ -125,7 +125,7 @@ def create_workflow(
     steps = []
     for step in workflow_def.steps:
         working_step = deepcopy(step)
-        nodes = state_handler.get_all_nodes()
+        nodes = state_handler.get_nodes()
         replace_locations(workcell, working_step, nodes)
         valid, validation_string = validate_step(
             working_step, state_handler=state_handler
@@ -168,7 +168,7 @@ def replace_locations(
     for argument, value in step.args.items():
         try:
             if (
-                nodes[step.node].info.actions[step.action].args[argument].type
+                nodes[step.node].info.actions[step.action].args[argument].argument_type
                 == "NodeLocation"
             ):
                 target_loc = next(
@@ -250,10 +250,35 @@ def cancel_workflow(wf: Workflow, state_handler: WorkcellRedisHandler) -> None:
 
 def cancel_active_workflows(state_handler: WorkcellRedisHandler) -> None:
     """Cancels all currently running workflow runs"""
-    for wf in state_handler.get_all_workflows().values():
+    for wf in state_handler.get_workflows().values():
         if wf.status in [
             WorkflowStatus.RUNNING,
             WorkflowStatus.QUEUED,
             WorkflowStatus.IN_PROGRESS,
         ]:
             cancel_workflow(wf, state_handler=state_handler)
+
+
+def insert_parameter_values(
+    workflow: WorkflowDefinition, parameters: dict[str, Any]
+) -> Workflow:
+    """Replace the parameter strings in the workflow with the provided values"""
+    for param in workflow.parameters:
+        if param.name not in parameters:
+            if param.default:
+                parameters[param.name] = param.default
+            else:
+                raise ValueError(
+                    "Workflow parameter: "
+                    + param.name
+                    + " not provided, and no default value is defined."
+                )
+    steps = []
+    for step in workflow.steps:
+        for key, val in iter(step):
+            if type(val) is str:
+                setattr(step, key, value_substitution(val, parameters))
+
+        step.args = walk_and_replace(step.args, parameters)
+        steps.append(step)
+    workflow.steps = steps

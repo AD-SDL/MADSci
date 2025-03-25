@@ -57,7 +57,7 @@ def test_add_node(test_client: TestClient) -> None:
         node_name = "test_node"
         node_url = "http://localhost:8000"
         response = client.post(
-            "/nodes/add_node",
+            "/node",
             params={
                 "node_name": node_name,
                 "node_url": node_url,
@@ -69,6 +69,17 @@ def test_add_node(test_client: TestClient) -> None:
         node = Node.model_validate(response.json())
         assert node.node_url == AnyUrl(node_url)
 
+        response = client.get("/node/test_node")
+        assert response.status_code == 200
+        node = Node.model_validate(response.json())
+        assert node.node_url == AnyUrl(node_url)
+
+        response = client.get("/nodes")
+        assert response.status_code == 200
+        assert isinstance(response.json(), dict)
+        assert len(response.json()) == 1
+        assert node_name in response.json()
+
 
 def test_send_admin_command(test_client: TestClient) -> None:
     """Test sending an admin command to all nodes."""
@@ -78,7 +89,7 @@ def test_send_admin_command(test_client: TestClient) -> None:
         assert isinstance(response.json(), list)
 
 
-def test_get_all_workflows(test_client: TestClient) -> None:
+def test_get_workflows(test_client: TestClient) -> None:
     """Test the /workflows endpoint."""
     with test_client as client:
         response = client.get("/workflows")
@@ -86,18 +97,26 @@ def test_get_all_workflows(test_client: TestClient) -> None:
         assert isinstance(response.json(), dict)
 
 
+def test_get_workflow_queue(test_client: TestClient) -> None:
+    """Test the /workflow_queue endpoint."""
+    with test_client as client:
+        response = client.get("/workflows/queue")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+
 def test_start_workflow(test_client: TestClient) -> None:
     """Test starting a new workflow."""
     with test_client as client:
         workflow_def = WorkflowDefinition(name="Test Workflow")
         response = client.post(
-            "/workflows/start",
+            "/workflow",
             data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
         )
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         assert workflow.name == workflow_def.name
-        response = client.get(f"/workflows/{workflow.workflow_id}")
+        response = client.get(f"/workflow/{workflow.workflow_id}")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         assert workflow.name == workflow_def.name
@@ -108,15 +127,15 @@ def test_pause_and_resume_workflow(test_client: TestClient) -> None:
     with test_client as client:
         workflow_def = WorkflowDefinition(name="Test Workflow")
         response = client.post(
-            "/workflows/start",
+            "/workflow",
             data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
         )
         workflow = Workflow.model_validate(response.json())
-        response = client.post(f"/workflows/pause/{workflow.workflow_id}")
+        response = client.post(f"/workflow/{workflow.workflow_id}/pause")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         assert workflow.paused is True
-        response = test_client.post(f"/workflows/resume/{workflow.workflow_id}")
+        response = test_client.post(f"/workflow/{workflow.workflow_id}/resume")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         assert workflow.paused is False
@@ -127,15 +146,15 @@ def test_cancel_workflow(test_client: TestClient) -> None:
     with test_client as client:
         workflow_def = WorkflowDefinition(name="Test Workflow")
         response = client.post(
-            "/workflows/start",
+            "/workflow",
             data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
         )
         workflow = Workflow.model_validate(response.json())
-        response = test_client.post(f"/workflows/cancel/{workflow.workflow_id}")
+        response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         assert workflow.status == "cancelled"
-        response = test_client.post(f"/workflows/resubmit/{workflow.workflow_id}")
+        response = test_client.post(f"/workflow/{workflow.workflow_id}/resubmit")
         assert response.status_code == 200
         new_workflow = Workflow.model_validate(response.json())
         assert workflow.workflow_id != new_workflow.workflow_id
@@ -146,16 +165,16 @@ def test_retry_workflow(test_client: TestClient) -> None:
     with test_client as client:
         workflow_def = WorkflowDefinition(name="Test Workflow")
         response = client.post(
-            "/workflows/start",
+            "/workflow",
             data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
         )
         workflow = Workflow.model_validate(response.json())
-        response = test_client.post(f"/workflows/cancel/{workflow.workflow_id}")
+        response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         assert workflow.status == "cancelled"
         response = test_client.post(
-            f"/workflows/retry/{workflow.workflow_id}", params={"index": 0}
+            f"/workflow/{workflow.workflow_id}/retry", params={"index": 0}
         )
         assert response.status_code == 200
         new_workflow = Workflow.model_validate(response.json())

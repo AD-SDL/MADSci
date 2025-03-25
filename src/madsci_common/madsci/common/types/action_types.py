@@ -23,6 +23,16 @@ class ActionStatus(str, Enum):
     PAUSED = "paused"
     UNKNOWN = "unknown"
 
+    @property
+    def is_terminal(self) -> bool:
+        """Check if the status is terminal"""
+        return self in [
+            ActionStatus.SUCCEEDED,
+            ActionStatus.FAILED,
+            ActionStatus.CANCELLED,
+            ActionStatus.NOT_READY,
+        ]
+
 
 class ActionRequest(BaseModel):
     """Request to perform an action on a node"""
@@ -321,6 +331,11 @@ class ActionDefinition(BaseModel):
         title="Blocking",
         description="Whether the action is blocking.",
         default=False,
+    )
+    asynchronous: bool = Field(
+        title="Asynchronous",
+        description="Whether the action is asynchronous, and will return a 'running' status immediately rather than waiting for the action to complete before returning. This should be used for long-running actions (e.g. actions that take more than a few seconds to complete).",
+        default=True,
     )
 
     @field_validator("args", mode="after")
