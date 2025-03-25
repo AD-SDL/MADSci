@@ -16,6 +16,7 @@ from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
+from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
@@ -172,9 +173,18 @@ class Engine:
 
             # * Send the action request
             response = None
+            location_args = {}
+            for key, location in step.locations.items():
+                location_payload = location.lookup
+                location_args[key] = LocationArgument(
+                    location=location_payload, resource_id=location.resource_id
+                )
+
+            # Merge with step.args
+            args = {**step.args, **location_args}
             request = ActionRequest(
                 action_name=step.action,
-                args={**step.args, **step.locations},
+                args=args,
                 files=step.files,
             )
             action_id = request.action_id
