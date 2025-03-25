@@ -75,28 +75,6 @@ class LocationReservation(BaseModel):
         )
 
 
-class LocationArgumentDefinition(BaseModel):
-    """Location Argument Definition for use in NodeInfo"""
-
-    name: str = Field(
-        title="Location Argument Name",
-        description="The name of the location argument.",
-    )
-    description: str = Field(
-        title="Location Argument Description",
-        description="A description of the location argument.",
-    )
-    required: bool = Field(
-        title="Location Argument Required",
-        description="Whether the location argument is required.",
-    )
-    default: Optional[Any] = Field(
-        title="Location Argument Default",
-        description="The default value of the location argument.",
-        default=None,
-    )
-
-
 class LocationArgument(BaseModel):
     """Location Argument to be used by MADSCI nodes."""
 
