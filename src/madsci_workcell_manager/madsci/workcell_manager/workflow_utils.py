@@ -33,15 +33,16 @@ def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> Non
 
 def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool, str]:
     """Check if a step is valid based on the node's info"""
+    result = (False, "Unknown validation error")
     if step.node in state_handler.get_all_nodes():
         node = state_handler.get_node(step.node)
         info = node.info
         if info is None:
-            return (
+            result = (
                 True,
                 f"Node {step.node} didn't return proper about information, skipping validation",
             )
-        if step.action in info.actions:
+        elif step.action in info.actions:
             action = info.actions[step.action]
             for action_arg in action.args.values():
                 if action_arg.name not in step.args and action_arg.required:
@@ -50,22 +51,33 @@ def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool
                         f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing arg '{action_arg.name}'",
                     )
                 # TODO: Action arg type validation goes here
+            for action_location in action.locations:
+                if (
+                    action_location.name not in step.locations
+                    and action_location.required
+                ):
+                    return (
+                        False,
+                        f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing location '{action_location.name}'",
+                    )
             for action_file in action.files:
                 if action_file.name not in step.files and action_file.required:
                     return (
                         False,
                         f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing file '{action_file.name}'",
                     )
-            return True, f"Step '{step.name}': Validated successfully"
-
-        return (
+            result = (True, f"Step '{step.name}': Validated successfully")
+        else:
+            result = (
+                False,
+                f"Step '{step.name}': Node {step.node} has no action '{step.action}'",
+            )
+    else:
+        result = (
             False,
-            f"Step '{step.name}': Node {step.node} has no action '{step.action}'",
+            f"Step '{step.name}': Node {step.node} is not defined in workcell",
         )
-    return (
-        False,
-        f"Step '{step.name}': Node {step.node} is not defined in workcell",
-    )
+    return result
 
 
 def create_workflow(
