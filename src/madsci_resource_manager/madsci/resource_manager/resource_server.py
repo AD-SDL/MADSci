@@ -5,6 +5,7 @@ from typing import Optional, Union
 
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from madsci.common.types.resource_types import (
     ContainerDataModels,
@@ -441,6 +442,13 @@ def create_resource_server(  # noqa: C901, PLR0915
             logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     return app
 
 

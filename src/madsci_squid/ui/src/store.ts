@@ -18,6 +18,7 @@ const experiment_keys = ref()
 const resources_url = ref()
 const urls = ref()
 const experiment_objects: any = ref([])
+const resources = ref()
 main_url.value = "http://".concat(window.location.host)
 class ExperimentInfo {
     experiment_id?: string;
@@ -40,16 +41,21 @@ watchEffect(async () => {
     workflows_url.value = urls.value.workcell_manager.concat("workflows")
     events_url.value = main_url.value.concat("/events/all")
 
+    updateResources()
     setInterval(updateWorkcellState, 1000)
     setInterval(updateWorkflows, 1000)
-    // setInterval(updateExperiments, 10000)
+    setInterval(updateResources, 5000)
     // setInterval(updateCampaigns, 10000);
     // setInterval(updateEvents, 10000);
 
-    async function updateExperiments() {
-        experiments.value = await ((await fetch(experiments_url.value)).json());
-        experiment_objects.value = Object.values(experiments.value);
-
+    async function updateResources() {
+        resources.value = await ((await fetch(urls.value.resource_manager.concat('resource/query'), {
+            method: "POST",
+            body: JSON.stringify({"multiple": true}),
+            headers: {
+                'Content-Type': 'application/json'
+            }
+          })).json());
     }
 
     async function updateCampaigns() {
@@ -92,4 +98,4 @@ function get_status(value: any) {
     }
 }
 
-export { campaigns, campaigns_url, events, experiment_keys, experiment_objects, experiments, experiments_url, get_status, main_url, state_url, workcell_info, workcell_info_url, workcell_state, workflows, urls };
+export { campaigns, campaigns_url, events, experiment_keys, experiment_objects, experiments, experiments_url, get_status, main_url, state_url, workcell_info, workcell_info_url, workcell_state, workflows, urls, resources };

@@ -124,7 +124,7 @@ def create_workflow(
     for step in workflow_def.steps:
         working_step = deepcopy(step)
         nodes = state_handler.get_nodes()
-        replace_locations(workcell, working_step, nodes)
+        replace_locations(workcell, working_step)
         valid, validation_string = validate_step(
             working_step, state_handler=state_handler
         )

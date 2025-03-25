@@ -6,6 +6,9 @@
     <v-tab :value="2">
       Workflows
     </v-tab>
+    <v-tab :value="3">
+      Resources
+    </v-tab>
 
   </v-tabs>
   <v-window v-model="tab">
@@ -26,6 +29,18 @@
         </v-card>
       </v-container>
     </v-window-item>
+    <v-window-item :key="3" :value="3">
+      <v-container class="pa-1 ma-1 justify-center" fluid>
+      <v-card>
+        <v-card-title class="text-center">
+          <h2>Resources</h2>
+        </v-card-title>
+        <v-card-text>
+          <ResourceTable />
+          </v-card-text>
+        </v-card>
+      </v-container>
+    </v-window-item>
   </v-window>
 </template>
 
@@ -35,6 +50,7 @@ import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
 import WorkcellPanel from './WorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
+import ResourceTable from './ResourceTable.vue';
 
 const tab = ref(1)
 </script>
