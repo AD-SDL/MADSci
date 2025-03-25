@@ -37,6 +37,7 @@ class LocationDefinition(BaseModel):
         title="Resource",
         description="Definition of the Resource to be associated with this location (if any) on location initialization.",
         default=None,
+        discriminator="base_type",
     )
     resource_id: Optional[str] = Field(
         title="Resource ID",

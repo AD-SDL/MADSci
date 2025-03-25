@@ -12,7 +12,7 @@ from madsci.common.types.resource_types.custom_types import (
 from madsci.common.utils import new_name_str
 from madsci.common.validators import ulid_validator
 from pydantic.functional_validators import field_validator, model_validator
-from pydantic.types import Tag
+from pydantic.types import Discriminator, Tag
 from sqlmodel import Field
 
 
@@ -300,16 +300,24 @@ class PoolResourceDefinition(ContainerResourceDefinition):
     )
 
 
-ResourceDefinitions = Union[
-    Annotated[ResourceDefinition, Tag("resource")],
-    Annotated[AssetResourceDefinition, Tag("asset")],
-    Annotated[ContainerResourceDefinition, Tag("container")],
-    Annotated[CollectionResourceDefinition, Tag("collection")],
-    Annotated[GridResourceDefinition, Tag("grid")],
-    Annotated[VoxelGridResourceDefinition, Tag("voxel_grid")],
-    Annotated[StackResourceDefinition, Tag("stack")],
-    Annotated[QueueResourceDefinition, Tag("queue")],
-    Annotated[PoolResourceDefinition, Tag("pool")],
+ResourceDefinitions = Annotated[
+    Union[
+        Annotated[ResourceDefinition, Tag("resource")],
+        Annotated[AssetResourceDefinition, Tag("asset")],
+        Annotated[ContainerResourceDefinition, Tag("container")],
+        Annotated[CollectionResourceDefinition, Tag("collection")],
+        Annotated[RowResourceDefinition, Tag("row")],
+        Annotated[GridResourceDefinition, Tag("grid")],
+        Annotated[VoxelGridResourceDefinition, Tag("voxel_grid")],
+        Annotated[StackResourceDefinition, Tag("stack")],
+        Annotated[QueueResourceDefinition, Tag("queue")],
+        Annotated[PoolResourceDefinition, Tag("pool")],
+        Annotated[SlotResourceDefinition, Tag("slot")],
+        Annotated[ConsumableResourceDefinition, Tag("consumable")],
+        Annotated[DiscreteConsumableResourceDefinition, Tag("discrete_consumable")],
+        Annotated[ContinuousConsumableResourceDefinition, Tag("continuous_consumable")],
+    ],
+    Discriminator("base_type"),
 ]
 
 

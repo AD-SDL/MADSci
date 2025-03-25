@@ -233,14 +233,13 @@ class BaseModel(SQLModel, use_enum_values=True):
             override_defaults: A dictionary mapping field names to default values, to override the model's own defaults.
         """
         parser = argparse.ArgumentParser()
+        combined_defaults = {}
         if model_instance is not None:
-            # * Use existing model instance fields as defaults, if provided
-            override_defaults.update(
-                model_instance.model_dump(
-                    mode="json", exclude_unset=True, exclude_defaults=True
-                )
+            combined_defaults = model_instance.model_dump(
+                mode="json", exclude_unset=True
             )
-        field_hierarchy = cls._parser_from_fields(parser, override_defaults)
+        combined_defaults.update(override_defaults)
+        field_hierarchy = cls._parser_from_fields(parser, combined_defaults)
         args, _ = parser.parse_known_args()
         return cls._from_cli_args(args, field_hierarchy)
 
@@ -250,13 +249,13 @@ class BaseModel(SQLModel, use_enum_values=True):
         field: Any,
         field_name: str,
         parser: argparse.ArgumentParser,
-        override_defaults: dict[str, Any] = {},
+        defaults: dict[str, Any] = {},
     ) -> None:
         """adds arguments to parser"""
         default = None
         required = False
-        if field_name in override_defaults:
-            default = override_defaults[field_name]
+        if field_name in defaults:
+            default = defaults[field_name]
         elif field.default_factory:
             default = field.default_factory()
         elif field.default != PydanticUndefined:
