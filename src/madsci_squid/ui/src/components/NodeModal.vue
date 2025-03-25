@@ -58,8 +58,8 @@
               <v-expansion-panel-text>
                 <h5>Description</h5>
                 <p class="py-1 my-1">{{ action.description }}</p>
-                <h5>Arguments</h5>
-                <v-data-table :headers="arg_headers" :items="Object.keys(action.args).map(function(key){
+                <h5 v-if="Object.keys(action.args).length > 0">Arguments</h5>
+                <v-data-table v-if="Object.keys(action.args).length > 0" :headers="arg_headers" :items="Object.keys(action.args).map(function(key){
     return action.args[key];})" hover items-per-page="-1"
                   no-data-text="No Arguments" density="compact">
                   <!-- eslint-disable vue/no-parsing-error-->
@@ -70,22 +70,16 @@
                       <td>{{ item.required }}</td>
                       <td>{{ item.default }}</td>
                       <td>{{ item.description }}</td>
-                      <td v-if="item.type == 'NodeLocation'">
-                        <v-text-field v-model=item.value list="locations" id="locations_id" name="locations_name" />
-                        <datalist id="locations">
-                        <option v-for="option in locations.map(function(location: any){return location.location_name;})" :value="option">{{option}}</option>
-                        </datalist>
-                        </td>
-
-                      <td v-else><v-text-field @update:focused="set_text(action)" height="20px" v-model="item.value"
+                      <td><v-text-field @update:focused="set_text(action)" height="20px" v-model="item.value"
                           dense>
                         </v-text-field></td>
                     </tr>
                   </template>
                   <template #bottom></template>
                 </v-data-table>
-                <h5 v-if="action.files.length > 0">Files</h5>
-                <v-data-table v-if="action.files.length > 0" :headers="file_headers" :items="action.files" hover
+                <h5 v-if="Object.keys(action.files).length > 0">Files</h5>
+                <v-data-table v-if="Object.keys(action.files).length > 0" :headers="file_headers" :items="Object.keys(action.files).map(function(key){
+    return action.files[key];})" hover
                   items-per-page="-1" no-data-text="No Files" density="compact">
                   <template v-slot:item="{ item }: { item: any }">
                     <tr>
@@ -93,6 +87,24 @@
                       <td>{{ item.required }}</td>
                       <td>{{ item.description }}</td>
                       <td><v-file-input v-model="item.value" label="File input"></v-file-input></td>
+                    </tr>
+                  </template>
+                </v-data-table>
+                <h5 v-if="Object.keys(action.locations).length > 0">Locations</h5>
+                <v-data-table v-if="Object.keys(action.locations).length > 0" :headers="locations_headers" :items="Object.keys(action.locations).map(function(key){
+    return action.locations[key];})" hover
+                  items-per-page="-1" no-data-text="No Locations" density="compact">
+                  <template v-slot:item="{ item }: { item: any }">
+                    <tr>
+                      <td>{{ item.name }}</td>
+                      <td>{{ item.required }}</td>
+                      <td>{{ item.description }}</td>
+                      <td>
+                        <v-text-field v-model=item.value list="locations" id="locations_id" name="locations_name" />
+                        <datalist id="locations">
+                        <option v-for="option in locations.map(function(location: any){return location.location_name;})" :value="option">{{option}}</option>
+                        </datalist>
+                        </td>
                     </tr>
                   </template>
                 </v-data-table>
@@ -120,7 +132,7 @@
                 </div>
               </v-expansion-panel-text>
             </v-expansion-panel>
-          </v-expansion-panels>
+          </v-expansion-panels>Files
           <v-container fluid>
             <v-row dense wrap justify-content="space-evenly">
               <v-col cols="12" md="6" lg="4" xl="3">
@@ -133,6 +145,7 @@
               </v-col>
               <v-col cols="12" md="6" lg="4" xl="3">
                 <h3>Resources</h3>
+                <p> {{ yaml.dump(json_text.value) }} </p>
                   <p>Coming Soon</p>
               </v-col>
             </v-row>
@@ -151,10 +164,13 @@
 import { ref } from 'vue';
 import { get_status } from '../store';
 import { urls } from "@/store";
+declare function require(name: string): any;
+import * as yaml from 'js-yaml';
 import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 import LockUnlockButton from './AdminButtons/LockUnlockButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
+import { json } from 'stream/consumers';
 const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
 const arg_headers = [
   { title: 'Name', key: 'name' },
@@ -171,6 +187,12 @@ const file_headers = [
   { title: 'Description', key: 'description' },
 ]
 
+const locations_headers = [
+  { title: 'Name', key: 'name' },
+  { title: 'Required', key: 'required' },
+  { title: 'Description', key: 'description' },
+]
+
 const result_headers = [
   { title: 'Default Label', key: 'name' },
   { title: 'Type', key: 'type' },
@@ -182,10 +204,7 @@ const json_text = ref()
 function set_text(action: any) {
   var input_args = Object.keys(action.args).map(function(key){
     return action.args[key];});
-  text.value = "- name : ".concat(action.name).concat("\n\t").concat(
-    "node : ").concat(props.modal_title).concat("\n\t").concat(
-      "action : ").concat(action.name).concat("\n\t").concat(
-        "args : \n\t\t").concat(cleanArgs(input_args)).concat("checks : null \n\tcomment: a comment! \n\t")
+
   var args: { [k: string]: any } = {};
 
   input_args.forEach(function (arg: any) {
@@ -202,14 +221,37 @@ function set_text(action: any) {
     }
   }
   )
+  var locations: { [k: string]: any } = {};
+  var input_locations = Object.keys(action.locations).map(function(key){
+    return action.locations[key];});
+  input_locations.forEach(function (location: any) {
+
+    if (location.value === undefined) {
+      locations[location.name] = location.default
+    }
+    else {
+      try {
+        locations[location.name] = JSON.parse(location.value)
+      } catch (e) {
+        locations[location.name] = location.value
+      }
+    }
+
+  })
+
   json_text.value = {
     "name": action.name,
     "node": props.modal_title,
     "action": action.name,
     "args": args,
+    "locations": locations,
     "checks": null,
     "comment": "Test"
   }
+  text.value = "- name : ".concat(action.name).concat("\n\t").concat(
+    "node : ").concat(props.modal_title).concat("\n\t").concat(
+      "action : ").concat(action.name).concat("\n\t").concat(
+        "args : \n\t\t").concat(cleanArgs(input_args)).concat("locations : \n\t\t").concat(cleanArgs(input_locations)).concat("checks : null \n\tcomment: a comment! \n\t")
 }
 async function send_wf(action: any) {
   var wf: any = {}
@@ -239,6 +281,24 @@ async function send_wf(action: any) {
     }
 
   })
+
+  var locations: { [k: string]: any } = {};
+  var input_locations = Object.keys(action.locations).map(function(key){
+    return action.locations[key];});
+  input_locations.forEach(function (location: any) {
+
+    if (location.value === undefined) {
+      locations[location.name] = location.default
+    }
+    else {
+      try {
+        locations[location.name] = JSON.parse(location.value)
+      } catch (e) {
+        locations[location.name] = location.value
+      }
+    }
+
+  })
   var files: { [k: string]: any } = {};
   var input_files = Object.keys(action.files).map(function(key){
     return action.files[key];});
@@ -256,6 +316,7 @@ async function send_wf(action: any) {
     "node": props.modal_title,
     "action": action.name,
     "args": args,
+    "locations": locations,
     "checks": null,
     "comment": "Test",
     "files": files

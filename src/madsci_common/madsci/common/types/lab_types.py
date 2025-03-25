@@ -14,6 +14,22 @@ from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
 
 
+class LabUrls(BaseModel):
+    """urls for the lab manager"""
+
+    workcell_manager: Optional[AnyUrl] = Field(
+        title="Workcell Manager URL",
+        description="The Workcell Manager Url",
+        default=None,
+    )
+
+    resource_manager: Optional[AnyUrl] = Field(
+        title="Resource Manager URL",
+        description="The Resource Manager URL for this lab.",
+        default=None,
+    )
+
+
 class LabDefinition(BaseModel):
     """Definition for a MADSci Lab."""
 
@@ -48,8 +64,8 @@ class LabDefinition(BaseModel):
         title="Static Files Path",
         description="Path to the static files for the lab manager",
     )
-    managers: dict[str, AnyUrl] = Field(
-        default_factory=dict,
+    managers: "LabUrls" = Field(
+        default_factory=LabUrls,
         title="Manager Model Links",
         description="Links to definitions for Managers used by the lab.",
     )

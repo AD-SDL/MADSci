@@ -1,6 +1,5 @@
 """Utility function for the workcell manager."""
 
-import copy
 import shutil
 from copy import deepcopy
 from datetime import datetime
@@ -11,8 +10,7 @@ from fastapi import UploadFile
 from madsci.client.event_client import default_logger
 from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.location_types import Location
-from madsci.common.types.node_types import Node
+from madsci.common.types.location_types import Location, LocationArgument
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -51,7 +49,7 @@ def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool
                         f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing arg '{action_arg.name}'",
                     )
                 # TODO: Action arg type validation goes here
-            for action_location in action.locations:
+            for action_location in action.locations.values():
                 if (
                     action_location.name not in step.locations
                     and action_location.required
@@ -60,7 +58,7 @@ def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool
                         False,
                         f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing location '{action_location.name}'",
                     )
-            for action_file in action.files:
+            for action_file in action.files.values():
                 if action_file.name not in step.files and action_file.required:
                     return (
                         False,
@@ -140,9 +138,7 @@ def create_workflow(
     return wf
 
 
-def replace_locations(
-    workcell: WorkcellDefinition, step: Step, nodes: dict[str, Node]
-) -> None:
+def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
     """Replaces the location names with the location objects"""
     for location_arg, location_name_or_object in step.locations.items():
         if isinstance(location_name_or_object, Location):
@@ -158,33 +154,16 @@ def replace_locations(
                 ),
                 None,
             )
-            node_location = copy.deepcopy(target_loc.lookup[step.node])
-            node_location["resource_id"] = target_loc.resource_id
+            node_location = LocationArgument(
+                location=target_loc.lookup[step.node],
+                resource_id=target_loc.resource_id,
+                location_name=target_loc.location_name,
+            )
             step.locations[location_arg] = node_location
         else:
             raise ValueError(
                 f"Location {location_name_or_object} not in Workcell {workcell.name}"
             )
-    for argument, value in step.args.items():
-        try:
-            if (
-                nodes[step.node].info.actions[step.action].args[argument].argument_type
-                == "NodeLocation"
-            ):
-                target_loc = next(
-                    (
-                        location
-                        for location in workcell.locations
-                        if location.location_name == value
-                    ),
-                    None,
-                )
-                node_location = copy.deepcopy(target_loc.lookup[step.node])
-                node_location["resource_id"] = target_loc.resource_id
-                step.args[argument] = node_location
-
-        except Exception:
-            step.args[argument] = step.args[argument]
 
 
 def save_workflow_files(

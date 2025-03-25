@@ -4,8 +4,9 @@ from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from madsci.common.types.lab_types import LabDefinition
+from madsci.common.types.lab_types import LabDefinition, LabUrls
 
 
 def create_lab_server(
@@ -24,12 +25,19 @@ def create_lab_server(
 
     # * Logger
     @app.get("/urls")
-    async def urls() -> dict:
+    async def urls() -> LabUrls:
         """Get the definition for the Experiment Manager."""
         return lab_manager_definition.managers
 
     app.mount(
         "/", StaticFiles(directory=lab_manager_definition.static_files_path, html=True)
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     return app

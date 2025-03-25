@@ -15,6 +15,7 @@ const workcell_info = ref()
 const campaigns = ref()
 const campaigns_url = ref()
 const experiment_keys = ref()
+const resources_url = ref()
 const urls = ref()
 const experiment_objects: any = ref([])
 main_url.value = "http://".concat(window.location.host)
@@ -32,7 +33,7 @@ async function get_events(experiment_id: string) {
 watchEffect(async () => {
     urls.value = await ((await fetch(main_url.value.concat("/urls"))).json())
     state_url.value = urls.value.workcell_manager.concat("state")
-
+    resources_url.value = urls.value.resource_manager
     experiments_url.value = main_url.value.concat("/experiments/all")
     campaigns_url.value = main_url.value.concat("/campaigns/all")
     workcell_info_url.value = urls.value.workcell_manager.concat("workcell")
