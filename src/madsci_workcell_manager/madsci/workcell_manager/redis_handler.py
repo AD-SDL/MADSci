@@ -43,6 +43,7 @@ class WorkcellRedisHandler:
         self._redis_port = workcell_definition.config.redis_port
         self._redis_password = workcell_definition.config.redis_password
         self._redis_connection = redis_connection
+        self.shutdown = False
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
 
