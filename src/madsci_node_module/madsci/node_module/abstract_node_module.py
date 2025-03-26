@@ -78,9 +78,9 @@ class AbstractNode:
     """The handlers for the actions that the node supports."""
     action_history: ClassVar[dict[str, list[ActionResult]]] = {}
     """The history of the actions that the node has performed."""
-    status_update_interval: ClassVar[float] = 5.0
+    status_update_interval: ClassVar[float] = 2.0
     """The interval at which the status handler is called. Overridable by config."""
-    state_update_interval: ClassVar[float] = 5.0
+    state_update_interval: ClassVar[float] = 2.0
     """The interval at which the state handler is called. Overridable by config."""
     node_info_path: ClassVar[Optional[Path]] = None
     """The path to the node info file. If unset, defaults to '<node_definition_path>.info.yaml'"""
