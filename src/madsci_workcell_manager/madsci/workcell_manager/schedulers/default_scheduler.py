@@ -75,6 +75,8 @@ class Scheduler(AbstractScheduler):
     def location_checks(self, step: Step, metadata: SchedulerMetadata) -> None:
         """Check if the location(s) for the step are ready"""
         for location in step.locations.values():
+            if location is None:
+                continue
             if location.resource_id is not None and self.resource_client is not None:
                 self.resource_client.get_resource(location.resource_id)
                 # TODO: what do we do with the location_resource?

@@ -123,7 +123,6 @@ def create_workflow(
     steps = []
     for step in workflow_def.steps:
         working_step = deepcopy(step)
-        nodes = state_handler.get_nodes()
         replace_locations(workcell, working_step)
         valid, validation_string = validate_step(
             working_step, state_handler=state_handler
@@ -141,7 +140,9 @@ def create_workflow(
 def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
     """Replaces the location names with the location objects"""
     for location_arg, location_name_or_object in step.locations.items():
-        if isinstance(location_name_or_object, Location):
+        if location_name_or_object is None:
+            step.locations[location_arg] = None
+        elif isinstance(location_name_or_object, Location):
             step.locations[location_arg] = location_name_or_object.lookup[step.node]
         elif location_name_or_object in [
             location.location_name for location in workcell.locations
