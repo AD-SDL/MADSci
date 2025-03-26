@@ -3,6 +3,8 @@
 from typing import Optional, Union
 
 import requests
+from madsci.client.resource_client import ResourceClient
+from madsci.client.workcell_client import WorkcellClient
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.experiment_types import (
     Experiment,
@@ -26,6 +28,12 @@ class ExperimentClient:
         """Create a new Experiment Client."""
         self.url = AnyUrl(url)
         self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
+        try:
+            server_def = requests.get(str(self.url) + "definition", timeout=10).json()
+            self.workcell_client = WorkcellClient(server_def["workcell_manager_url"])
+            self.resource_client = ResourceClient(server_def["resource_manager_url"])
+        except Exception as e:
+            raise e
 
     def get_experiment(self, experiment_id: Union[str, ULID]) -> dict:
         """Get an experiment by ID."""
