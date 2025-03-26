@@ -16,10 +16,8 @@ from madsci.common.types.workflow_types import (
     WorkflowDefinition,
     WorkflowStatus,
 )
+from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.utils import PathLike
-from madsci.workcell_manager.workflow_utils import insert_parameter_values
-
-
 class WorkcellClient:
     """A client for interacting with the Workcell Manager to perform various actions."""
 
@@ -44,6 +42,10 @@ class WorkcellClient:
         self.url = workcell_manager_url
         self.working_directory = Path(working_directory).expanduser()
         self.ownership_info = ownership_info
+        if self.ownership_info is None:
+            self.ownership_info = OwnershipInfo()
+        if str(self.url).endswith("/"):
+            self.url = str(self.url)[:-1]
 
     def query_workflow(self, workflow_id: str) -> Optional[Workflow]:
         """
@@ -110,7 +112,7 @@ class WorkcellClient:
             url,
             data={
                 "workflow": workflow.model_dump_json(),
-                "parameters": json.dumps(parameters),
+                "parameters": json.dumps(parameters) if parameters else None,
                 "validate_only": validate_only,
                 "ownership_info": self.ownership_info.model_dump_json()
                 if self.ownership_info
@@ -128,6 +130,8 @@ class WorkcellClient:
             },
             timeout=10,
         )
+        if not response.ok:
+            response.raise_for_status()
         if not blocking:
             return Workflow(**response.json())
         return self.await_workflow(
@@ -627,3 +631,28 @@ class WorkcellClient:
         url = f"{self.url}/location/{location_id}"
         response = requests.delete(url, timeout=10)
         response.raise_for_status()
+ 
+def insert_parameter_values(
+workflow: WorkflowDefinition, parameters: dict[str, Any]
+) -> Workflow:
+    """Replace the parameter strings in the workflow with the provided values"""
+    for param in workflow.parameters:
+        if param.name not in parameters:
+            if param.default:
+                parameters[param.name] = param.default
+            else:
+                raise ValueError(
+                    "Workflow parameter: "
+                    + param.name
+                    + " not provided, and no default value is defined."
+                )
+    steps = []
+    for step in workflow.steps:
+        for key, val in iter(step):
+            if type(val) is str:
+                setattr(step, key, value_substitution(val, parameters))
+
+        step.args = walk_and_replace(step.args, parameters)
+        steps.append(step)
+    workflow.steps = steps
+

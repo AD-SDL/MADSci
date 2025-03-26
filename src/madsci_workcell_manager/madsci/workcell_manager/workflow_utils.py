@@ -237,27 +237,3 @@ def cancel_active_workflows(state_handler: WorkcellRedisHandler) -> None:
         ]:
             cancel_workflow(wf, state_handler=state_handler)
 
-
-def insert_parameter_values(
-    workflow: WorkflowDefinition, parameters: dict[str, Any]
-) -> Workflow:
-    """Replace the parameter strings in the workflow with the provided values"""
-    for param in workflow.parameters:
-        if param.name not in parameters:
-            if param.default:
-                parameters[param.name] = param.default
-            else:
-                raise ValueError(
-                    "Workflow parameter: "
-                    + param.name
-                    + " not provided, and no default value is defined."
-                )
-    steps = []
-    for step in workflow.steps:
-        for key, val in iter(step):
-            if type(val) is str:
-                setattr(step, key, value_substitution(val, parameters))
-
-        step.args = walk_and_replace(step.args, parameters)
-        steps.append(step)
-    workflow.steps = steps
