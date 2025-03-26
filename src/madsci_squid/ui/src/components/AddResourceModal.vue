@@ -5,10 +5,9 @@
         <h2 class="title">Add Resource:</h2>
       </v-card-title>
       <v-card-text>
-        <label :for="base_type"> base_type</label>
-        <v-text-field class="pt-5 mr-2 w-25" :id="base_type" height="20px"  v-model="base_type"
-            dense>
-        </v-text-field>
+        <label for="base_type"> base_type</label>
+
+        <v-select id="base_type" class="w-25" v-model="base_type" :options="base_types"/>
   <div v-for="(field, index) in formFields" :key="index">
 
     <label :for="field.label">{{ field.label }}</label>
@@ -47,11 +46,30 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { urls } from "@/store";
+import vSelect from 'vue-select'
+import 'vue-select/dist/vue-select.css';
 const flowdef = ref(false)
 const new_name = ref()
 const base_type = ref()
 const formFields =  ref([
 { label: 'resource_name', value: '', placeholder: 'Enter value' },
+])
+const base_types = ref([
+  "resource",
+  "asset",
+   "consumable",
+    "discrete_consumable",
+     "continuous_consumable",
+      "container",
+      "collection",
+         "row",
+         "grid",
+        "voxel_grid",
+         "stack",
+         "queue",
+         "pool",
+         "slot",
+
 ])
 
 function addField() {
