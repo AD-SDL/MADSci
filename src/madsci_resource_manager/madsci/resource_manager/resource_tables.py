@@ -105,6 +105,13 @@ class ResourceTableBase(Resource):
         sa_type=Enum(ResourceTypeEnum),
         default=ResourceTypeEnum.resource,
     )
+
+    owner: dict[str, str] = Field(
+        title="Owner",
+        description="The ownership info for the resource",
+        sa_type=JSON,
+        default_factory=dict,
+    )
     key: Optional[str] = Field(
         title="Resource Key",
         description="The key to identify the child resource's location in the parent container.",
@@ -183,7 +190,7 @@ class ResourceTableBase(Resource):
     @classmethod
     def from_data_model(cls, resource: ResourceDataModels) -> Self:
         """Create a new Resource Table entry from a resource data model."""
-        return cls.model_validate(resource)
+        return cls.model_validate(resource.model_dump(mode="json"))
 
 
 class ResourceTable(ResourceTableBase, table=True):

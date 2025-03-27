@@ -3,6 +3,7 @@
 import datetime
 from typing import Optional
 
+import requests
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from madsci.client.event_client import EventClient, EventType
@@ -36,6 +37,20 @@ def create_experiment_server(  # noqa: C901, PLR0915
     # * Logger
     logger = EventClient(experiment_manager_definition.event_client_config)
     logger.log_info(experiment_manager_definition)
+
+    if experiment_manager_definition.lab_manager_url is not None:
+        try:
+            urls = requests.get(
+                experiment_manager_definition.lab_manager_url + "/urls", timeout=10
+            ).json()
+            experiment_manager_definition.workcell_manager_url = urls[
+                "workcell_manager"
+            ]
+            experiment_manager_definition.resource_manager_url = urls[
+                "resource_manager"
+            ]
+        except Exception as e:
+            logger.log_error(e)
 
     # * DB Config
     if db_connection is None:

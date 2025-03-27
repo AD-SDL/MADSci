@@ -32,12 +32,12 @@ class StepDefinition(BaseModel):
         description="Arguments for the step action.",
         default_factory=dict,
     )
-    files: dict[str, PathLike] = Field(
+    files: dict[str, Optional[PathLike]] = Field(
         title="Step File Arguments",
         description="Files to be used in the step. Key is the name of the file argument, value is the path to the file.",
         default_factory=dict,
     )
-    locations: dict[str, Union[str, LocationArgument]] = Field(
+    locations: dict[str, Optional[Union[str, LocationArgument]]] = Field(
         title="Step Location Arguments",
         description="Locations to be used in the step. Key is the name of the argument, value is the name of the location, or a Location object.",
         default_factory=dict,

@@ -7,6 +7,7 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    AddResourceModal: typeof import('./src/components/AddResourceModal.vue')['default']
     CancelButton: typeof import('./src/components/AdminButtons/CancelButton.vue')['default']
     Dashboard: typeof import('./src/components/Dashboard.vue')['default']
     Event: typeof import('./src/components/Event.vue')['default']
@@ -17,6 +18,8 @@ declare module 'vue' {
     NodesPanel: typeof import('./src/components/NodesPanel.vue')['default']
     PauseResumeButton: typeof import('./src/components/AdminButtons/PauseResumeButton.vue')['default']
     ResetButton: typeof import('./src/components/AdminButtons/ResetButton.vue')['default']
+    ResourceModal: typeof import('./src/components/ResourceModal.vue')['default']
+    ResourceTable: typeof import('./src/components/ResourceTable.vue')['default']
     SafetyStopButton: typeof import('./src/components/AdminButtons/SafetyStopButton.vue')['default']
     ShutdownButton: typeof import('./src/components/AdminButtons/ShutdownButton.vue')['default']
     WorkcellPanel: typeof import('./src/components/WorkcellPanel.vue')['default']
