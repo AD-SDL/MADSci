@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional, Union
 
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
     Collection,
     ConsumableTypeEnum,
@@ -235,9 +236,9 @@ class ResourceInterface:
         resource_id: Optional[str] = None,
         resource_name: Optional[str] = None,
         parent_id: Optional[str] = None,
-        owner_name: Optional[str] = None,
+        owner: Optional[OwnershipInfo] = None,
         resource_type: Optional[str] = None,
-        resource_base_type: Optional[ResourceTypeEnum] = None,
+        base_type: Optional[ResourceTypeEnum] = None,
         unique: bool = False,
         multiple: bool = False,
     ) -> Optional[Union[list[ResourceDataModels], ResourceDataModels]]:
@@ -266,19 +267,23 @@ class ResourceInterface:
                 if parent_id
                 else statement
             )
-            statement = (
-                statement.where(ResourceTable.owner == owner_name)
-                if owner_name
-                else statement
-            )
+            if owner is not None:
+                owner = OwnershipInfo.model_validate(owner)
+                for key, value in owner.model_dump(exclude_none=True).items():
+                    if key == "auth_id":
+                        continue
+
+                    statement = statement.filter(
+                        ResourceTable.owner[key].as_string() == value
+                    )
             statement = (
                 statement.where(ResourceTable.resource_type == resource_type)
                 if resource_type
                 else statement
             )
             statement = (
-                statement.where(ResourceTable.base_type == resource_base_type)
-                if resource_base_type
+                statement.where(ResourceTable.base_type == base_type)
+                if base_type
                 else statement
             )
 

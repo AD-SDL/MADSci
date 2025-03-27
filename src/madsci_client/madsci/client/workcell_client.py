@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
+from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.location_types import Location
@@ -16,8 +17,9 @@ from madsci.common.types.workflow_types import (
     WorkflowDefinition,
     WorkflowStatus,
 )
-from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.utils import PathLike
+
+
 class WorkcellClient:
     """A client for interacting with the Workcell Manager to perform various actions."""
 
@@ -631,9 +633,10 @@ class WorkcellClient:
         url = f"{self.url}/location/{location_id}"
         response = requests.delete(url, timeout=10)
         response.raise_for_status()
- 
+
+
 def insert_parameter_values(
-workflow: WorkflowDefinition, parameters: dict[str, Any]
+    workflow: WorkflowDefinition, parameters: dict[str, Any]
 ) -> Workflow:
     """Replace the parameter strings in the workflow with the provided values"""
     for param in workflow.parameters:
@@ -655,4 +658,3 @@ workflow: WorkflowDefinition, parameters: dict[str, Any]
         step.args = walk_and_replace(step.args, parameters)
         steps.append(step)
     workflow.steps = steps
-

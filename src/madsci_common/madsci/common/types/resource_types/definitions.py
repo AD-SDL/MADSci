@@ -2,7 +2,8 @@
 
 from typing import Annotated, Literal, Optional, Union
 
-from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import BaseModel
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.types.resource_types.custom_types import (
@@ -10,9 +11,9 @@ from madsci.common.types.resource_types.custom_types import (
     ResourceTypeEnum,
 )
 from madsci.common.utils import new_name_str
-from madsci.common.validators import ulid_validator
 from pydantic.functional_validators import field_validator, model_validator
 from pydantic.types import Discriminator, Tag
+from sqlalchemy.dialects.postgresql import JSON
 from sqlmodel import Field
 
 
@@ -49,12 +50,6 @@ class ResourceManagerDefinition(ManagerDefinition):
 class ResourceDefinition(BaseModel, table=False):
     """Definition for a MADSci Resource."""
 
-    resource_id: str = Field(
-        title="Resource ID",
-        description="The ID of the resource.",
-        default_factory=new_ulid_str,
-        primary_key=True,
-    )
     resource_name: str = Field(
         title="Resource Name",
         description="The name of the resource.",
@@ -76,7 +71,12 @@ class ResourceDefinition(BaseModel, table=False):
         title="Resource Description",
         description="A description of the resource.",
     )
-    is_ulid = field_validator("resource_id")(ulid_validator)
+    owner: OwnershipInfo = Field(
+        default_factory=OwnershipInfo,
+        title="Ownership Info",
+        description="The owner of this resource",
+        sa_type=JSON,
+    )
 
     @classmethod
     def discriminate(cls, resource: dict) -> "ResourceDefinition":

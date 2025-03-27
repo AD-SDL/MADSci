@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Optional, Union
 
 import requests
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -44,6 +45,47 @@ class ResourceClient:
             timeout=10,
         )
         response.raise_for_status()
+        resource = Resource.discriminate(response.json())
+        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        return resource
+
+    def query_or_add_resource(
+        self,
+        resource_id: Optional[str] = None,
+        resource_name: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        base_type: Optional[str] = None,
+        owner: Optional[OwnershipInfo] = None,
+        multiple: bool = False,
+        unique: bool = False,
+    ) -> Resource:
+        """
+        Add a resource to the server.
+
+        Args:
+            resource (Resource): The resource to add.
+
+        Returns:
+            Resource: The added resource as returned by the server.
+        """
+        payload = ResourceGetQuery(
+            resource_id=resource_id,
+            resource_name=resource_name,
+            parent_id=parent_id,
+            resource_type=resource_type,
+            base_type=base_type,
+            owner=owner,
+            unique=unique,
+            multiple=multiple,
+        ).model_dump(mode="json")
+        response = requests.post(
+            f"{self.url}/resource/query_or_add",
+            json=payload,
+            timeout=10,
+        )
+        response.raise_for_status()
+
         resource = Resource.discriminate(response.json())
         resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         return resource

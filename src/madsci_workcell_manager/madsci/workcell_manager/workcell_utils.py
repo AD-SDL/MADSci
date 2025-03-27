@@ -5,7 +5,7 @@ import warnings
 
 import requests
 from madsci.client.node import NODE_CLIENT_MAP, AbstractNodeClient
-from madsci.common.types.node_types import Node
+from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellLink
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 
@@ -66,3 +66,8 @@ def update_node(
             category=UserWarning,
             stacklevel=1,
         )
+        new_status = NodeStatus()
+        new_status.errored = True
+        node.status = new_status
+        with state_manager.wc_state_lock():
+            state_manager.set_node(node_name, node)

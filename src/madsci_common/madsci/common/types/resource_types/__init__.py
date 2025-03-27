@@ -3,6 +3,7 @@
 import string
 from typing import Annotated, Literal, Optional, Union
 
+from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.resource_types.custom_types import (
     AssetTypeEnum,
     ConsumableTypeEnum,
@@ -25,12 +26,14 @@ from madsci.common.types.resource_types.definitions import (
     StackResourceDefinition,
     VoxelGridResourceDefinition,
 )
+from madsci.common.validators import ulid_validator
 from pydantic import (
     AfterValidator,
     AnyUrl,
     computed_field,
     model_validator,
 )
+from pydantic.functional_validators import field_validator
 from pydantic.types import Discriminator, Tag, datetime
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql.sqltypes import String
@@ -44,6 +47,14 @@ PositiveNumber = Annotated[Union[float, int], Field(ge=0)]
 class Resource(ResourceDefinition, extra="allow", table=False):
     """Base class for all MADSci Resources. Used to track any resource that isn't well-modeled by a more specific type."""
 
+    resource_id: str = Field(
+        title="Resource ID",
+        description="The ID of the resource.",
+        nullable=False,
+        default_factory=new_ulid_str,
+        primary_key=True,
+        sa_type=String,
+    )
     resource_url: Optional[AnyUrl] = Field(
         title="Resource URL",
         description="The URL of the resource.",
@@ -68,12 +79,6 @@ class Resource(ResourceDefinition, extra="allow", table=False):
         title="Key",
         description="The key of the resource in the parent container, if any.",
     )
-    owner: Optional[str] = Field(
-        title="Resource owner",
-        description="The owner of the resource.",
-        nullable=True,
-        default=None,
-    )
     attributes: dict = Field(
         default_factory=dict,
         sa_type=JSON,
@@ -96,6 +101,7 @@ class Resource(ResourceDefinition, extra="allow", table=False):
         nullable=False,
         default=False,
     )
+    is_ulid = field_validator("resource_id")(ulid_validator)
 
     @classmethod
     def discriminate(cls, resource: dict) -> "Resource":

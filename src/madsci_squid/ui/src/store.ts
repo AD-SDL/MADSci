@@ -1,4 +1,5 @@
 
+import { Console } from 'console';
 import { ref, watchEffect } from 'vue';
 
 const main_url = ref()
@@ -79,8 +80,8 @@ watchEffect(async () => {
 })
 
 function get_status(value: any) {
-    if(value["error"] && value["error"] != false)  {
-        return "error"
+    if(value["errored"] && value["errored"] != false)  {
+        return "errored"
     }
     if(value["cancelled"] && value["cancelled"] != false)  {
         return "cancelled"

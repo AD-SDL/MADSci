@@ -8,7 +8,6 @@ from typing import Any, Optional
 
 from fastapi import UploadFile
 from madsci.client.event_client import default_logger
-from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.location_types import Location, LocationArgument
 from madsci.common.types.step_types import Step
@@ -237,4 +236,3 @@ def cancel_active_workflows(state_handler: WorkcellRedisHandler) -> None:
             WorkflowStatus.IN_PROGRESS,
         ]:
             cancel_workflow(wf, state_handler=state_handler)
-

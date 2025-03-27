@@ -85,11 +85,10 @@ class WorkcellRedisHandler:
                 and resource_client is not None
                 and location_definition.resource_id is None
             ):
-                print(location_definition.resource_definition)
                 resource = Resource.discriminate(
                     location_definition.resource_definition
                 )
-                print(resource)
+
                 resource = resource_client.add_resource(resource)
                 location_definition.resource_id = resource.resource_id
             try:
