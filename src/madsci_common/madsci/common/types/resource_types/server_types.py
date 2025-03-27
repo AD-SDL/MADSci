@@ -37,7 +37,7 @@ class ResourceGetQuery(ResourceRequestBase):
     base_type: Optional[str] = None
     """The base type of the resource"""
     owner: Optional[OwnershipInfo] = None
-    """The base type of the resource"""
+    """The owner(s) of the resource"""
     unique: Optional[bool] = False
     """Whether to require a unique resource or not."""
     multiple: Optional[bool] = True

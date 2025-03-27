@@ -132,8 +132,7 @@ class WorkcellClient:
             },
             timeout=10,
         )
-        if not response.ok:
-            response.raise_for_status()
+        response.raise_for_status()
         if not blocking:
             return Workflow(**response.json())
         return self.await_workflow(
