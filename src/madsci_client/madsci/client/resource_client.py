@@ -53,12 +53,14 @@ class ResourceClient:
         self,
         resource_id: Optional[str] = None,
         resource_name: Optional[str] = None,
+        resource_description: Optional[str] = None,
         parent_id: Optional[str] = None,
         resource_type: Optional[str] = None,
         base_type: Optional[str] = None,
         owner: Optional[OwnershipInfo] = None,
         multiple: bool = False,
         unique: bool = False,
+        **kwargs: Any,  # noqa F821: consume extra kwargs to easily support model dumps
     ) -> Resource:
         """
         Add a resource to the server.
@@ -72,6 +74,7 @@ class ResourceClient:
         payload = ResourceGetQuery(
             resource_id=resource_id,
             resource_name=resource_name,
+            resource_description=resource_description,
             parent_id=parent_id,
             resource_type=resource_type,
             base_type=base_type,
@@ -158,7 +161,7 @@ class ResourceClient:
         resource_name: Optional[str] = None,
         parent_id: Optional[str] = None,
         resource_type: Optional[str] = None,
-        resource_base_type: Optional[str] = None,
+        base_type: Optional[str] = None,
         unique: Optional[bool] = False,
         multiple: Optional[bool] = False,
     ) -> Union[ResourceDataModels, list[ResourceDataModels]]:
@@ -170,7 +173,7 @@ class ResourceClient:
             resource_name (str): The name of the resource to retrieve.
             parent_id (str): The ID of the parent resource.
             resource_type (str): The custom type of the resource.
-            resource_base_type (str): The base type of the resource.
+            base_type (str): The base type of the resource.
             unique (bool): Whether to require a unique resource or not.
             multiple (bool): Whether to return multiple resources or just the first.
 
@@ -182,7 +185,7 @@ class ResourceClient:
             resource_name=resource_name,
             parent_id=parent_id,
             resource_type=resource_type,
-            resource_base_type=resource_base_type,
+            base_type=base_type,
             unique=unique,
             multiple=multiple,
         ).model_dump(mode="json")

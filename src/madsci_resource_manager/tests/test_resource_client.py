@@ -6,7 +6,9 @@ from unittest.mock import patch
 
 import pytest
 from madsci.client.resource_client import ResourceClient
-from madsci.common.types.resource_types import Consumable
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import new_ulid_str
+from madsci.common.types.resource_types import Consumable, ResourceDefinition
 from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
 from madsci.resource_manager.resource_interface import (
     Container,
@@ -278,3 +280,30 @@ def test_fill_resource(client: ResourceClient) -> None:
     client.add_resource(resource)
     filled_resource = client.fill(resource)
     assert filled_resource.quantity == filled_resource.capacity
+
+
+def test_query_or_add_resource(client: ResourceClient) -> None:
+    """Test querying or adding a resource using ResourceClient"""
+    resource = ResourceDefinition(
+        resource_name="Query or Add Test Resource",
+        owner=OwnershipInfo(node_id=new_ulid_str()),
+    )
+    queried_or_added_resource = client.query_or_add_resource(
+        **resource.model_dump(mode="json")
+    )
+    assert queried_or_added_resource.resource_name == "Query or Add Test Resource"
+
+    second_queried_or_added_resource = client.query_or_add_resource(
+        **resource.model_dump(mode="json")
+    )
+    assert (
+        second_queried_or_added_resource.resource_name == "Query or Add Test Resource"
+    )
+    assert (
+        second_queried_or_added_resource.resource_id
+        == queried_or_added_resource.resource_id
+    )
+    assert (
+        second_queried_or_added_resource.owner.node_id
+        == queried_or_added_resource.owner.node_id
+    )

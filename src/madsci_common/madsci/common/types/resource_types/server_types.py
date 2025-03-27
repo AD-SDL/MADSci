@@ -30,6 +30,8 @@ class ResourceGetQuery(ResourceRequestBase):
     """The ID of the resource"""
     resource_name: Optional[str] = None
     """The name of the resource."""
+    resource_description: Optional[str] = None
+    """The description of the resource."""
     parent_id: Optional[str] = None
     """The ID of the parent resource"""
     resource_type: Optional[str] = None
