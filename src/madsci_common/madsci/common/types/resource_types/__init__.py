@@ -3,7 +3,7 @@
 import string
 from typing import Annotated, Literal, Optional, Union
 
-from madsci.common.types.base_types import new_ulid_str
+from madsci.common.types.base_types import PositiveInt, PositiveNumber, new_ulid_str
 from madsci.common.types.resource_types.custom_types import (
     AssetTypeEnum,
     ConsumableTypeEnum,
@@ -39,9 +39,6 @@ from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql.sqltypes import String
 from sqlmodel import Field
 from typing_extensions import Self  # type: ignore
-
-PositiveInt = Annotated[int, Field(ge=0)]
-PositiveNumber = Annotated[Union[float, int], Field(ge=0)]
 
 
 class Resource(ResourceDefinition, extra="allow", table=False):

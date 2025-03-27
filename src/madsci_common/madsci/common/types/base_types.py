@@ -6,14 +6,13 @@ import argparse
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
+from typing import Annotated, Any, ClassVar, Generic, Optional, TypeVar, Union
 
 import yaml
 from pydantic import AnyUrl, model_validator
 from pydantic.config import ConfigDict
 from pydantic.fields import PrivateAttr, PydanticUndefined
-from sqlmodel import SQLModel
-from sqlmodel.main import Field
+from sqlmodel import Field, SQLModel
 from ulid import ULID
 
 _T = TypeVar("_T")
@@ -386,3 +385,7 @@ class Error(BaseModel):
     def from_exception(cls, exception: Exception) -> "Error":
         """Create an error from an exception."""
         return cls(message=str(exception), error_type=type(exception).__name__)
+
+
+PositiveInt = Annotated[int, Field(ge=0)]
+PositiveNumber = Annotated[Union[float, int], Field(ge=0)]

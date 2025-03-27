@@ -40,16 +40,21 @@ class NodeConfig(BaseModel):
     status_update_interval: Optional[float] = Field(
         title="Status Update Interval",
         description="The interval in seconds at which the node should update its status.",
-        default=None,
+        default=2.0,
     )
     state_update_interval: Optional[float] = Field(
         title="State Update Interval",
         description="The interval in seconds at which the node should update its state.",
-        default=None,
+        default=2.0,
     )
     event_client_config: Optional[EventClientConfig] = Field(
         title="Event Client Configuration",
         description="The configuration for a MADSci event client.",
+        default=None,
+    )
+    resource_server_url: Optional[AnyUrl] = Field(
+        title="Resource Client URL",
+        description="The URL of the resource server for this node to use.",
         default=None,
     )
 

@@ -3,7 +3,11 @@
 from typing import Annotated, Literal, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel
+from madsci.common.types.base_types import (
+    BaseModel,
+    PositiveInt,
+    PositiveNumber,
+)
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.types.resource_types.custom_types import (
@@ -108,6 +112,21 @@ class ConsumableResourceDefinition(ResourceDefinition):
         title="Resource Base Type",
         description="The base type of the consumable.",
     )
+    unit: Optional[str] = Field(
+        default=None,
+        title="Resource Unit",
+        description="The unit used to measure the quantity of the consumable.",
+    )
+    quantity: Optional[PositiveNumber] = Field(
+        default=None,
+        title="Default Resource Quantity",
+        description="The initial quantity of the consumable.",
+    )
+    capacity: Optional[PositiveNumber] = Field(
+        default=None,
+        title="Resource Capacity",
+        description="The initial capacity of the consumable.",
+    )
 
 
 class DiscreteConsumableResourceDefinition(ConsumableResourceDefinition):
@@ -117,6 +136,16 @@ class DiscreteConsumableResourceDefinition(ConsumableResourceDefinition):
         default=ResourceTypeEnum.discrete_consumable,
         title="Resource Base Type",
         description="The base type of the consumable.",
+    )
+    quantity: Optional[PositiveInt] = Field(
+        default=None,
+        title="Default Resource Quantity",
+        description="The initial quantity of the consumable.",
+    )
+    capacity: Optional[PositiveInt] = Field(
+        default=None,
+        title="Resource Capacity",
+        description="The initial capacity of the consumable.",
     )
 
 
