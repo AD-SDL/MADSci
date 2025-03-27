@@ -13,6 +13,7 @@
     "roboto-fontface": "*",
     "vue": "^3.3.0",
     "vue-json-pretty": "^2.4.0",
+    "vue-select": "^4.0.0-beta.6",
     "vuetify": "^3.6.0"
   },
   "devDependencies": {
@@ -20,6 +21,7 @@
     "@rushstack/eslint-patch": "^1.10.3",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.0",
+    "@types/vue-select": "^3.16.8",
     "@typescript-eslint/eslint-plugin": "^7.15.0",
     "@typescript-eslint/parser": "^7.15.0",
     "@vitejs/plugin-vue": "^4.5.0",

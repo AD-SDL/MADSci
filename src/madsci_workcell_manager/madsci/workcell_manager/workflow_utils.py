@@ -8,7 +8,6 @@ from typing import Any, Optional
 
 from fastapi import UploadFile
 from madsci.client.event_client import default_logger
-from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.location_types import Location, LocationArgument
 from madsci.common.types.step_types import Step
@@ -123,8 +122,7 @@ def create_workflow(
     steps = []
     for step in workflow_def.steps:
         working_step = deepcopy(step)
-        nodes = state_handler.get_nodes()
-        replace_locations(workcell, working_step, nodes)
+        replace_locations(workcell, working_step)
         valid, validation_string = validate_step(
             working_step, state_handler=state_handler
         )
@@ -141,7 +139,9 @@ def create_workflow(
 def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
     """Replaces the location names with the location objects"""
     for location_arg, location_name_or_object in step.locations.items():
-        if isinstance(location_name_or_object, Location):
+        if location_name_or_object is None:
+            step.locations[location_arg] = None
+        elif isinstance(location_name_or_object, Location):
             step.locations[location_arg] = location_name_or_object.lookup[step.node]
         elif location_name_or_object in [
             location.location_name for location in workcell.locations
@@ -236,28 +236,3 @@ def cancel_active_workflows(state_handler: WorkcellRedisHandler) -> None:
             WorkflowStatus.IN_PROGRESS,
         ]:
             cancel_workflow(wf, state_handler=state_handler)
-
-
-def insert_parameter_values(
-    workflow: WorkflowDefinition, parameters: dict[str, Any]
-) -> Workflow:
-    """Replace the parameter strings in the workflow with the provided values"""
-    for param in workflow.parameters:
-        if param.name not in parameters:
-            if param.default:
-                parameters[param.name] = param.default
-            else:
-                raise ValueError(
-                    "Workflow parameter: "
-                    + param.name
-                    + " not provided, and no default value is defined."
-                )
-    steps = []
-    for step in workflow.steps:
-        for key, val in iter(step):
-            if type(val) is str:
-                setattr(step, key, value_substitution(val, parameters))
-
-        step.args = walk_and_replace(step.args, parameters)
-        steps.append(step)
-    workflow.steps = steps

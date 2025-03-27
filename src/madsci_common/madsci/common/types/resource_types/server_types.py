@@ -2,6 +2,7 @@
 
 from typing import Optional, Union
 
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel
 from madsci.common.types.resource_types import (
     GridIndex,
@@ -29,12 +30,16 @@ class ResourceGetQuery(ResourceRequestBase):
     """The ID of the resource"""
     resource_name: Optional[str] = None
     """The name of the resource."""
+    resource_description: Optional[str] = None
+    """The description of the resource."""
     parent_id: Optional[str] = None
     """The ID of the parent resource"""
     resource_type: Optional[str] = None
     """The custom type of the resource."""
-    resource_base_type: Optional[str] = None
+    base_type: Optional[str] = None
     """The base type of the resource"""
+    owner: Optional[OwnershipInfo] = None
+    """The owner(s) of the resource"""
     unique: Optional[bool] = False
     """Whether to require a unique resource or not."""
     multiple: Optional[bool] = True

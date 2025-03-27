@@ -40,6 +40,19 @@ class ExperimentManagerDefinition(ManagerDefinition):
         description="The URL of the database for the experiment manager.",
         default="mongodb://localhost:27017",
     )
+    lab_manager_url: Optional[str] = Field(
+        title="Lab Manager URL", description="URL for the lab manager", default=None
+    )
+    workcell_manager_url: Optional[str] = Field(
+        title="Workcell Manager URL",
+        description="URL for the workcell manager",
+        default=None,
+    )
+    resource_manager_url: Optional[str] = Field(
+        title="Resource Manager URL",
+        description="URL for the resource manager",
+        default=None,
+    )
     event_client_config: Optional[EventClientConfig] = Field(
         title="Event Client Configuration",
         description="The configuration for a MADSci event client.",

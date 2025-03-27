@@ -88,6 +88,7 @@ class WorkcellRedisHandler:
                 resource = Resource.discriminate(
                     location_definition.resource_definition
                 )
+
                 resource = resource_client.add_resource(resource)
                 location_definition.resource_id = resource.resource_id
             try:

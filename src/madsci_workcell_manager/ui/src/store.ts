@@ -15,6 +15,7 @@ const campaigns = ref()
 const campaigns_url = ref()
 const experiment_keys = ref()
 const experiment_objects: any = ref([])
+const resources = ref()
 main_url.value = "http://".concat(window.location.host)
 class ExperimentInfo {
     experiment_id?: string;

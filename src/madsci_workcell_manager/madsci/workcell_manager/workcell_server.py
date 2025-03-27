@@ -262,7 +262,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             else OwnershipInfo()
         )
 
-        if parameters is None:
+        if parameters is None or parameters == "":
             parameters = {}
         else:
             parameters = json.loads(parameters)

@@ -2,7 +2,7 @@
     <WorkflowModal :modal_title="modal_title" :modal_text="modal_text" v-model="modal" />
     <!-- eslint-disable vue/no-parsing-error-->
     <v-data-table :headers="arg_headers" hover
-      :items="Object.values(workcell_state.workflows).filter((key: any) => (workflows).includes(key.workflow_id))"
+      :items="workcell_state.workflow_queue"
       no-data-text="No Workflows" density="compact" :sort-by="sortBy" :hide-default-footer="workflows.length <= 10">
       <template v-slot:item="{ item }: { item: any }">
         <tr @click="set_modal(workcell_state.workflows[item.workflow_id].name, workcell_state.workflows[item.workflow_id])">
@@ -27,10 +27,11 @@ import { VDataTable } from 'vuetify/components';
 const modal = ref(false)
 const modal_text = ref()
 const modal_title = ref()
-const sortBy: VDataTable['sortBy'] = [{ key: 'start_time', order: 'desc' }];
+const sortBy: VDataTable['sortBy'] = [{ key: 'submitted_time', order: 'desc' }];
 const arg_headers = [
   { title: 'Name', key: 'name' },
   { title: 'Status', key: 'status' },
+  { title: 'Submitted', key: 'submitted_time' },
   { title: 'Start Time', key: 'start_time' },
   { title: 'Latest Step', key: 'latest_step' },
   { title: 'End Time', key: 'end_time' }
