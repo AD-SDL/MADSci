@@ -1,6 +1,7 @@
 """Types for Admin Commands."""
 
 from enum import Enum
+from typing import Any, Optional
 
 from madsci.common.types.base_types import BaseModel, Error
 from sqlmodel.main import Field
@@ -17,6 +18,7 @@ class AdminCommands(str, Enum):
     SHUTDOWN = "shutdown"
     LOCK = "lock"
     UNLOCK = "unlock"
+    GET_LOCATION = "get_location"
 
 
 class AdminCommandResponse(BaseModel):
@@ -31,4 +33,7 @@ class AdminCommandResponse(BaseModel):
         title="Admin Command Errors",
         description="A list of errors that occurred while executing the admin command.",
         default_factory=list,
+    )
+    data: Optional[dict[str, Any]] = Field(
+        title="Data", description="Any data returned by the admin action", default=None
     )

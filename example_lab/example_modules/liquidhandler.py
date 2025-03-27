@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionResult, ActionSucceeded
+from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -64,6 +65,10 @@ class LiquidHandlerNode(RestNode):
         """Run a command on the liquid handler."""
         self.liquid_handler.run_command(command)
         return ActionSucceeded()
+
+    def get_location() -> AdminCommandResponse:
+        """Get location for the liquid handler"""
+        return AdminCommandResponse(data={"location": [0, 0, 0, 0]})
 
 
 if __name__ == "__main__":
