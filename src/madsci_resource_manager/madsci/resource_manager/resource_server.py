@@ -42,6 +42,7 @@ def create_resource_server(  # noqa: C901, PLR0915
     app = FastAPI()
 
     @app.get("/info")
+    @app.get("/definition")
     def info() -> ResourceManagerDefinition:
         """Get information about the resource manager."""
         return resource_manager_definition
@@ -356,7 +357,8 @@ def create_resource_server(  # noqa: C901, PLR0915
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
             return resource_interface.set_quantity(
-                resource_id=resource_id, quantity=resource.quantity - abs(amount)
+                resource_id=resource_id,
+                quantity=max(resource.quantity - abs(amount), 0),
             )
         except Exception as e:
             logger.error(e)

@@ -134,6 +134,11 @@ class Consumable(Resource):
         description="The maximum capacity of the consumable.",
         default=None,
     )
+    unit: Optional[str] = Field(
+        default=None,
+        title="Resource Unit",
+        description="The unit used to measure the quantity of the consumable.",
+    )
 
     @model_validator(mode="after")
     def validate_consumable_quantity(self) -> Self:
@@ -650,6 +655,7 @@ class Pool(Container):
     capacity: Optional[float] = Field(
         title="Capacity",
         description="The capacity of the pool as a whole.",
+        default=None,
     )
 
     def get_child(self, key: str) -> Optional["ResourceDataModels"]:
