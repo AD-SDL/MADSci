@@ -463,7 +463,8 @@ class AbstractNode:
                     continue
                 if (
                     parameter_name not in action_def.args
-                    and parameter_name not in [file.name for file in action_def.files]
+                    and parameter_name
+                    not in [file.name for file in action_def.files.values()]
                     and parameter_name != "action"
                 ):
                     self._parse_action_arg(
