@@ -44,4 +44,5 @@ const set_modal = (title: string, value: Object) => {
   modal.value = true
 }
 
+
 </script>

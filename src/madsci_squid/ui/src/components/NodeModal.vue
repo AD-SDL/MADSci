@@ -145,7 +145,7 @@
               </v-col>
               <v-col cols="12" md="6" lg="4" xl="3">
                 <h3>Resources</h3>
-                <p> {{ yaml.dump(json_text.value) }} </p>
+                <p> {{ yaml.dump(json_text) }} </p>
                   <p>Coming Soon</p>
               </v-col>
             </v-row>

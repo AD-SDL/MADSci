@@ -32,14 +32,15 @@ class ResourceClient:
     ) -> None:
         """Initialize the resource client."""
         self.url = str(url)
-        if url is not None and str(self.url).endswith("/"):
+        if self.url is not None and str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
+        if self.url is not None:
             start_time = time.time()
             while time.time() - start_time < 20:
                 try:
-                    requests.get(self.url + "definition", timeout=10)
+                    requests.get(self.url + "/definition", timeout=10)
                     break
-                except requests.exceptions.ConnectionError:
+                except Exception:
                     time.sleep(1)
             else:
                 raise ConnectionError(

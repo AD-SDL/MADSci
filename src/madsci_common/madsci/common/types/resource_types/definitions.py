@@ -280,12 +280,19 @@ class SlotResourceDefinition(ContainerResourceDefinition):
         title="Resource Base Type",
         description="The base type of the slot.",
     )
+
     default_child_quantity: Optional[int] = Field(
         default=None,
         title="Default Child Quantity",
         description="The number of children to create by default. If None, use the type's default_child_quantity.",
         ge=0,
         le=1,
+    )
+    capacity: Literal[1] = Field(
+        title="Capacity",
+        description="The capacity of the slot.",
+        default=1,
+        const=1,
     )
 
 

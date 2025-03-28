@@ -12,6 +12,7 @@ declare module 'vue' {
     Dashboard: typeof import('./src/components/Dashboard.vue')['default']
     Event: typeof import('./src/components/Event.vue')['default']
     Experiments: typeof import('./src/components/Experiments.vue')['default']
+    LocationModal: typeof import('./src/components/LocationModal.vue')['default']
     LocationsPanel: typeof import('./src/components/LocationsPanel.vue')['default']
     LockUnlockButton: typeof import('./src/components/AdminButtons/LockUnlockButton.vue')['default']
     NodeModal: typeof import('./src/components/NodeModal.vue')['default']
