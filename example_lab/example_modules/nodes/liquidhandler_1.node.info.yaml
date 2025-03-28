@@ -77,10 +77,6 @@ config_schema:
     OwnershipInfo:
       description: Information about the ownership of a MADSci object.
       properties:
-        auth_id:
-          description: The ID of the auth that owns the object.
-          title: Auth ID
-          type: string
         user_id:
           anyOf:
           - type: string

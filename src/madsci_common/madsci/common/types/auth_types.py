@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.base_types import BaseModel
 from madsci.common.validators import ulid_validator
 from pydantic import SerializationInfo, SerializerFunctionWrapHandler, model_serializer
 from pydantic.functional_validators import field_validator
@@ -11,12 +11,6 @@ from sqlmodel.main import Field
 
 class OwnershipInfo(BaseModel):
     """Information about the ownership of a MADSci object."""
-
-    auth_id: str = Field(
-        title="Auth ID",
-        description="The ID of the auth that owns the object.",
-        default_factory=new_ulid_str,
-    )
 
     user_id: Optional[str] = Field(
         title="User ID",
@@ -87,7 +81,7 @@ class OwnershipInfo(BaseModel):
 
     def check(self, other: "OwnershipInfo") -> bool:
         """Check if this ownership is the same as another."""
-        for key in self.model_dump(exclude={"auth_id"}, exclude_none=True):
+        for key in self.model_dump(exclude_none=True):
             if getattr(self, key) != getattr(other, key):
                 return False
         return True

@@ -271,9 +271,6 @@ class ResourceInterface:
             if owner is not None:
                 owner = OwnershipInfo.model_validate(owner)
                 for key, value in owner.model_dump(exclude_none=True).items():
-                    if key == "auth_id":
-                        continue
-
                     statement = statement.filter(
                         ResourceTable.owner[key].as_string() == value
                     )

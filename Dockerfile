@@ -26,6 +26,8 @@ RUN mkdir -p /home/${CONTAINER_USER}/MADSci
 RUN pip install -U pdm
 # disable update check
 ENV PDM_CHECK_UPDATE=false
+# use uv
+# RUN pdm config use_uv true
 # copy files
 COPY pyproject.toml pdm.lock README.md /home/${CONTAINER_USER}/MADSci/
 COPY src/ /home/${CONTAINER_USER}/MADSci/src
