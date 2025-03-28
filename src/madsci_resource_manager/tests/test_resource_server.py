@@ -13,7 +13,10 @@ from madsci.common.types.resource_types import (
     Stack,
     VoxelGrid,
 )
-from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
+from madsci.common.types.resource_types.definitions import (
+    ResourceDefinition,
+    ResourceManagerDefinition,
+)
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_server import (
     ResourceGetQuery,
@@ -1057,29 +1060,20 @@ def test_fill_resource(test_client: TestClient) -> None:
     assert result.quantity == 10
 
 
-def test_query_or_add_resource(test_client: TestClient) -> None:
-    """Test querying for or creating a new/existing resource"""
+def test_init_resource(test_client: TestClient) -> None:
+    """Test initializing a new/existing resource"""
 
-    query = ResourceGetQuery(
-        resource_name="Test Resource",
-        base_type="resource",
-        owner=OwnershipInfo(node_id=new_ulid_str()),
-        multiple=False,
+    definition = ResourceDefinition(
+        resource_name="Test Resource", owner=OwnershipInfo(node_id=new_ulid_str())
     ).model_dump(mode="json")
-    queried_or_added_resource = Resource.model_validate(
-        test_client.post("/resource/query_or_add", json=query).json()
+    init_resource = Resource.model_validate(
+        test_client.post("/resource/init", json=definition).json()
     )
-    assert queried_or_added_resource.resource_name == "Test Resource"
+    assert init_resource.resource_name == "Test Resource"
 
-    second_queried_or_added_resource = Resource.model_validate(
-        test_client.post("/resource/query_or_add", json=query).json()
+    second_init_resource = Resource.model_validate(
+        test_client.post("/resource/init", json=definition).json()
     )
-    assert second_queried_or_added_resource.resource_name == "Test Resource"
-    assert (
-        second_queried_or_added_resource.resource_id
-        == queried_or_added_resource.resource_id
-    )
-    assert (
-        second_queried_or_added_resource.owner.node_id
-        == queried_or_added_resource.owner.node_id
-    )
+    assert second_init_resource.resource_name == "Test Resource"
+    assert second_init_resource.resource_id == init_resource.resource_id
+    assert second_init_resource.owner.node_id == init_resource.owner.node_id

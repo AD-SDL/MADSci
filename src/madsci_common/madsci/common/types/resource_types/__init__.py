@@ -133,6 +133,7 @@ class Consumable(Resource):
     quantity: PositiveNumber = Field(
         title="Quantity",
         description="The quantity of the consumable.",
+        default=0,
     )
     capacity: Optional[PositiveNumber] = Field(
         title="Capacity",
@@ -165,6 +166,7 @@ class DiscreteConsumable(Consumable):
     quantity: PositiveInt = Field(
         title="Quantity",
         description="The quantity of the discrete consumable.",
+        default=0,
     )
     capacity: Optional[PositiveInt] = Field(
         title="Capacity",
@@ -185,6 +187,7 @@ class ContinuousConsumable(Consumable):
     quantity: PositiveNumber = Field(
         title="Quantity",
         description="The quantity of the continuous consumable.",
+        default=0.0,
     )
     capacity: Optional[PositiveNumber] = Field(
         title="Capacity",

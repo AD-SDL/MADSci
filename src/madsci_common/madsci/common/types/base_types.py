@@ -89,7 +89,7 @@ class BaseModel(SQLModel, use_enum_values=True):
         Convert the model to a MongoDB-compatible dictionary.
         """
         json_data = self.model_dump(mode="json", by_alias=True)
-        for field in self.model_fields:
+        for field in self.__pydantic_fields__:
             if field in self._mongo_excluded_fields:
                 json_data.pop(field, None)
         return json_data
