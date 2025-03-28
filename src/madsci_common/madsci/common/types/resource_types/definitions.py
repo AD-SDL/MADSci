@@ -327,6 +327,16 @@ class PoolResourceDefinition(ContainerResourceDefinition):
         title="Resource Base Type",
         description="The base type of the pool.",
     )
+    capacity: Optional[PositiveNumber] = Field(
+        title="Capacity",
+        description="The default capacity of the pool as a whole.",
+        default=None,
+    )
+    unit: Optional[str] = Field(
+        default=None,
+        title="Resource Unit",
+        description="The unit used to measure the quantity of the pool.",
+    )
 
 
 ResourceDefinitions = Annotated[

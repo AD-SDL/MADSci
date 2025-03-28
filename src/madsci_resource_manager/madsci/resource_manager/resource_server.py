@@ -16,6 +16,7 @@ from madsci.common.types.resource_types import (
     Stack,
 )
 from madsci.common.types.resource_types.definitions import (
+    ResourceDefinitions,
     ResourceManagerDefinition,
 )
 from madsci.common.types.resource_types.server_types import (
@@ -46,9 +47,33 @@ def create_resource_server(  # noqa: C901, PLR0915
     app = FastAPI()
 
     @app.get("/info")
+    @app.get("/definition")
     def info() -> ResourceManagerDefinition:
         """Get information about the resource manager."""
         return resource_manager_definition
+
+    @app.post("/resource/init")
+    async def init_resource(
+        resource_definition: ResourceDefinitions = Body(...),  # noqa: B008
+    ) -> ResourceDataModels:
+        """
+        Initialize a resource in the database based on a definition. If a matching resource already exists, it will be returned.
+        """
+        try:
+            resource = resource_interface.get_resource(
+                **resource_definition.model_dump(exclude_none=True),
+                multiple=False,
+                unique=True,
+            )
+            if not resource:
+                resource = resource_interface.add_resource(
+                    Resource.discriminate(resource_definition)
+                )
+
+            return resource
+        except Exception as e:
+            logger.error(e)
+            raise e
 
     @app.post("/resource/add")
     async def add_resource(
@@ -132,30 +157,6 @@ def create_resource_server(  # noqa: C901, PLR0915
             )
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
-
-            return resource
-        except Exception as e:
-            logger.error(e)
-            raise e
-
-    @app.post("/resource/query_or_add")
-    async def query_or_add_resource(
-        query: ResourceGetQuery = Body(...),  # noqa: B008
-    ) -> Union[ResourceDataModels, list[ResourceDataModels]]:
-        """
-        Retrieve a resource from the database based on the specified parameters.
-        """
-        try:
-            resource = resource_interface.get_resource(
-                **query.model_dump(exclude_none=True)
-            )
-            if not resource:
-                resource = query.model_dump(exclude_none=True)
-                del resource["multiple"]
-                del resource["unique"]
-                resource = resource_interface.add_resource(
-                    Resource.discriminate(resource)
-                )
 
             return resource
         except Exception as e:
@@ -384,7 +385,8 @@ def create_resource_server(  # noqa: C901, PLR0915
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
             return resource_interface.set_quantity(
-                resource_id=resource_id, quantity=resource.quantity - abs(amount)
+                resource_id=resource_id,
+                quantity=max(resource.quantity - abs(amount), 0),
             )
         except Exception as e:
             logger.error(e)

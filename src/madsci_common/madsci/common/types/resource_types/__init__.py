@@ -133,11 +133,17 @@ class Consumable(Resource):
     quantity: PositiveNumber = Field(
         title="Quantity",
         description="The quantity of the consumable.",
+        default=0,
     )
     capacity: Optional[PositiveNumber] = Field(
         title="Capacity",
         description="The maximum capacity of the consumable.",
         default=None,
+    )
+    unit: Optional[str] = Field(
+        default=None,
+        title="Resource Unit",
+        description="The unit used to measure the quantity of the consumable.",
     )
 
     @model_validator(mode="after")
@@ -160,6 +166,7 @@ class DiscreteConsumable(Consumable):
     quantity: PositiveInt = Field(
         title="Quantity",
         description="The quantity of the discrete consumable.",
+        default=0,
     )
     capacity: Optional[PositiveInt] = Field(
         title="Capacity",
@@ -180,6 +187,7 @@ class ContinuousConsumable(Consumable):
     quantity: PositiveNumber = Field(
         title="Quantity",
         description="The quantity of the continuous consumable.",
+        default=0.0,
     )
     capacity: Optional[PositiveNumber] = Field(
         title="Capacity",
@@ -655,6 +663,7 @@ class Pool(Container):
     capacity: Optional[float] = Field(
         title="Capacity",
         description="The capacity of the pool as a whole.",
+        default=None,
     )
 
     def get_child(self, key: str) -> Optional["ResourceDataModels"]:
