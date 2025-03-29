@@ -45,7 +45,7 @@ watchEffect(async () => {
     updateResources()
     setInterval(updateWorkcellState, 1000)
     setInterval(updateWorkflows, 1000)
-    setInterval(updateResources, 5000)
+    setInterval(updateResources, 1000)
     // setInterval(updateCampaigns, 10000);
     // setInterval(updateEvents, 10000);
 

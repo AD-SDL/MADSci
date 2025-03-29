@@ -23,6 +23,8 @@ declare module 'vue' {
     ResourceTable: typeof import('./src/components/ResourceTable.vue')['default']
     SafetyStopButton: typeof import('./src/components/AdminButtons/SafetyStopButton.vue')['default']
     ShutdownButton: typeof import('./src/components/AdminButtons/ShutdownButton.vue')['default']
+    Slot: typeof import('./src/components/ResourceComponents/Slot.vue')['default']
+    Stack: typeof import('./src/components/ResourceComponents/Stack.vue')['default']
     WorkcellPanel: typeof import('./src/components/WorkcellPanel.vue')['default']
     Workflow: typeof import('./src/components/Workflow.vue')['default']
     WorkflowModal: typeof import('./src/components/WorkflowModal.vue')['default']
