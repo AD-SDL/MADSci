@@ -328,7 +328,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Add a lookup value to a locations lookup list"""
         with state_handler.wc_state_lock():
             location = state_handler.get_location(location_id)
-            location.lookup[node_name] = lookup_val
+            location.lookup[node_name] = lookup_val["lookup_val"]
             state_handler.set_location(location)
         return state_handler.get_location(location.location_id)
 

@@ -7,6 +7,7 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    AddLocationModal: typeof import('./src/components/AddLocationModal.vue')['default']
     AddResourceModal: typeof import('./src/components/AddResourceModal.vue')['default']
     CancelButton: typeof import('./src/components/AdminButtons/CancelButton.vue')['default']
     Dashboard: typeof import('./src/components/Dashboard.vue')['default']

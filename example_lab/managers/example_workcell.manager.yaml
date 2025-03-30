@@ -42,5 +42,5 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JQHBGJ0HD70J0NX2P1SN6TPG
+  resource_id: 01JQMFHEN8FTRSDGHT7VYF8CHC
 workcell_directory: /home/madsci/.madsci/workcells/Example Workcell

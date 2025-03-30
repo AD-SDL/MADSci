@@ -18,7 +18,6 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
-  - safety_stop
   - reset
   - get_location
   - pause
@@ -26,6 +25,7 @@ capabilities:
   - shutdown
   - resume
   - lock
+  - safety_stop
   - cancel
 commands: {}
 is_template: false

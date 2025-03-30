@@ -21,7 +21,7 @@
                           dense>
                           <template #append>
 
-                            <v-btn @click="get_location(node_to_add)">Get Current Location</v-btn>
+                            <v-btn @click="get_location(node_to_add)">Get Current Position</v-btn>
                             <v-btn @click="submit_location(node_to_add); add_lookup_toggle = !add_lookup_toggle">Submit</v-btn>
                           </template>
       </v-text-field>
