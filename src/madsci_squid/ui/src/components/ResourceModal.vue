@@ -13,7 +13,7 @@
           <Slot :resource="modal_text" />
         </div>
         <div v-else>
-        {{ modal_text }}
+          <Resource :resource="modal_text" />
       </div>
       </v-card-text>
       <v-card-actions>
@@ -28,6 +28,7 @@
 import { ref } from 'vue';
 import Stack from "./ResourceComponents/Stack.vue";
 import Slot from "./ResourceComponents/Slot.vue";
+import Resource from "./ResourceComponents/Resource.vue";
 const props = defineProps(['modal_title', 'modal_text'])
 const flowdef = ref(false)
 </script>

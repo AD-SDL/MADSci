@@ -10,6 +10,8 @@
               <p wrap class="text-caption">
                 {{ value.reservation }}
               </p>
+              <p v-if="get_resource(resources, value)"> Occupied</p>
+              <p v-else> Empty</p>
             </v-card-text>
           </v-col>
         </v-row>
@@ -26,10 +28,26 @@ const props = defineProps(['locations'])
 const modal_title = ref()
 const modal_text = ref()
 const modal = ref(false)
+import { resources, urls } from "@/store";
 
 const set_modal = (title: string, value: Object) => {
   modal_title.value = title
   modal_text.value = value
   modal.value = true
+}
+
+function get_resource (resources: any, location: any) {
+  if ("resource_id" in location && location.resource_id != null) {
+   var resource = resources.find((element: any) => element.resource_id == location["resource_id"])
+  } else {
+    return false
+  }
+  if ("quantity" in resource) {
+    if (resource.quantity > 0) {
+      return true
+    }
+    return false
+  }
+  return false
 }
 </script>

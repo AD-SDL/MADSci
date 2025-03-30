@@ -19,6 +19,7 @@ declare module 'vue' {
     NodesPanel: typeof import('./src/components/NodesPanel.vue')['default']
     PauseResumeButton: typeof import('./src/components/AdminButtons/PauseResumeButton.vue')['default']
     ResetButton: typeof import('./src/components/AdminButtons/ResetButton.vue')['default']
+    Resource: typeof import('./src/components/ResourceComponents/Resource.vue')['default']
     ResourceModal: typeof import('./src/components/ResourceModal.vue')['default']
     ResourceTable: typeof import('./src/components/ResourceTable.vue')['default']
     SafetyStopButton: typeof import('./src/components/AdminButtons/SafetyStopButton.vue')['default']

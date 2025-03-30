@@ -8,6 +8,7 @@ from typing import Annotated, Any, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.params import Body
 from fastapi.staticfiles import StaticFiles
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
@@ -317,6 +318,19 @@ def create_workcell_server(  # noqa: C901, PLR0915
         with state_handler.wc_state_lock():
             state_handler.delete_location(location_id)
         return {"status": "deleted"}
+
+    @app.post("/location/{location_id}/add_lookup/{node_name}")
+    def add_or_update_location_lookup(
+        location_id: str,
+        node_name: str,
+        lookup_val: Any = Body(...),  # noqa: B008
+    ) -> Location:
+        """Add a lookup value to a locations lookup list"""
+        with state_handler.wc_state_lock():
+            location = state_handler.get_location(location_id)
+            location.lookup[node_name] = lookup_val
+            state_handler.set_location(location)
+        return state_handler.get_location(location.location_id)
 
     @app.post("/location/{location_id}/attach_resource")
     def add_resource_to_location(

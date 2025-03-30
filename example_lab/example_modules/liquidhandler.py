@@ -66,9 +66,9 @@ class LiquidHandlerNode(RestNode):
         self.liquid_handler.run_command(command)
         return ActionSucceeded()
 
-    def get_location() -> AdminCommandResponse:
+    def get_location(self) -> AdminCommandResponse:
         """Get location for the liquid handler"""
-        return AdminCommandResponse(data={"location": [0, 0, 0, 0]})
+        return AdminCommandResponse(data=[0, 0, 0, 0])
 
 
 if __name__ == "__main__":
