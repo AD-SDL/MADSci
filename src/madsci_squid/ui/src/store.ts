@@ -92,8 +92,8 @@ function get_status(value: any) {
     if(value["paused"] && value["paused"] != false) {
         return "paused"
     }
-    if(value["busy"] && value["busy"]) {
-        return "busy"
+    if((value["busy"] && value["busy"]) || (value["running_actions"] && (value["running_actions"].length > 0))) {
+        return "running"
     } else {
         return "ready"
     }
