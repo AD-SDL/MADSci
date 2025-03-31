@@ -31,7 +31,7 @@ class ResourceClient:
         self, url: Optional[str] = None, event_client: Optional[EventClient] = None
     ) -> None:
         """Initialize the resource client."""
-        self.url = str(url)
+        self.url = str(url) if url is not None else None
         if self.url is not None and str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
         if self.url is not None:
@@ -44,11 +44,11 @@ class ResourceClient:
                     time.sleep(1)
             else:
                 raise ConnectionError(
-                    f"Could not connect to the resource manager at {url}."
+                    f"Could not connect to the resource manager at {self.url}."
                 )
         self.local_resources = {}
         self.logger = event_client if event_client is not None else EventClient()
-        if url is None:
+        if self.url is None:
             self.logger.log_warning(
                 "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION."
             )
