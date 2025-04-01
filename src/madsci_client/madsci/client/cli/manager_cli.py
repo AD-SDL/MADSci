@@ -71,8 +71,21 @@ def find_manager(name: Optional[str], path: Optional[str]) -> ManagerContext:
     # * Search for any manager file
     manager_files = search_for_file_pattern("*.manager.yaml")
     if manager_files:
-        manager_context.path = Path(manager_files[0])
-        manager_context.manager_def = ManagerDefinition.from_yaml(manager_files[0])
+        for manager_file in manager_files:
+            try:
+                if not name:
+                    manager_context.path = Path(manager_file)
+                    manager_context.manager_def = ManagerDefinition.from_yaml(manager_file)
+                    return manager_context
+                if name and name in manager_file:
+                    manager_context.path = Path(manager_file)
+                    manager_context.manager_def = ManagerDefinition.from_yaml(manager_file)
+                    return manager_context
+            except Exception:
+                console.print(
+                    f"Error loading manager definition from {manager_file}. Skipping.",
+                )
+                continue
 
     return manager_context
 

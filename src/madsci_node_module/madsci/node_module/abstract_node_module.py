@@ -217,6 +217,7 @@ class AbstractNode:
         except Exception as e:
             # * If there was an error in parsing the action arguments, log the error and return a failed action response
             # * but don't set the node to errored
+            self.node_status.running_actions.discard(action_request.action_id)
             self._exception_handler(e, set_node_errored=False)
             self._extend_action_history(
                 action_request.failed(errors=Error.from_exception(e))
@@ -231,6 +232,7 @@ class AbstractNode:
                         ),
                     )
                 )
+                self.node_status.running_actions.discard(action_request.action_id)
             else:
                 try:
                     # * Run the action in a separate thread
@@ -247,6 +249,7 @@ class AbstractNode:
                     self._extend_action_history(
                         action_request.failed(errors=Error.from_exception(e))
                     )
+                    self.node_status.running_actions.discard(action_request.action_id)
 
         return self.get_action_result(action_request.action_id)
 
@@ -680,7 +683,8 @@ class AbstractNode:
 
     def _exception_handler(self, e: Exception, set_node_errored: bool = True) -> None:
         """Handle an exception."""
-        self.node_status.errored = set_node_errored
+        if set_node_errored:
+            self.node_status.errored = True
         madsci_error = Error.from_exception(e)
         self.node_status.errors.append(madsci_error)
         self.logger.log_error(
@@ -725,20 +729,26 @@ class AbstractNode:
 
     def _update_node_info_and_definition(self) -> None:
         """Update the node info and definition files, if possible."""
-        if self.node_info_path:
-            self.node_info.to_yaml(self.node_info_path)
-        elif self.node_definition._definition_path:
-            self.node_info_path = Path(
-                self.node_definition._definition_path,
-            ).with_suffix(".info.yaml")
-            self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
+        try:
+            if self.node_info_path:
+                self.node_info.to_yaml(self.node_info_path)
+            elif self.node_definition._definition_path:
+                self.node_info_path = Path(
+                    self.node_definition._definition_path,
+                ).with_suffix(".info.yaml")
+                self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
+        except Exception as e:
+            self.logger.log_warning(
+                f"Failed to update node info file: {e}",
+            )
 
         if self.node_definition._definition_path:
-            self.node_definition.to_yaml(self.node_definition._definition_path)
-        else:
-            self.logger.log_warning(
-                "No definition path set for node, skipping node definition update"
-            )
+            try:
+                self.node_definition.to_yaml(self.node_definition._definition_path)
+            except Exception as e:
+                self.logger.log_warning(
+                    f"Failed to update node definition file: {e}",
+                )
 
     def _check_required_args(self, action_request: ActionRequest) -> None:
         """Check that all required arguments are present in the action request."""
@@ -773,9 +783,10 @@ class AbstractNode:
             # * Handle any exceptions that occurred during startup
             self._exception_handler(exception)
             self.node_status.errored = True
+        else:
+            self.logger.log_info(f"Startup complete for node {self.node_info.node_name}.")
         finally:
             # * Mark the node as no longer initializing
-            self.logger.log(f"Startup complete for node {self.node_info.node_name}.")
             self.node_status.initializing = False
 
     def _extend_action_history(self, action_result: ActionResult) -> None:
