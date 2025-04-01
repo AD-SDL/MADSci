@@ -19,6 +19,25 @@ services:
       - POSTGRES_DB=resources
     ports:
       - 5432:5432
+
+  #Managers
+
+  lab_manager:
+    container_name: lab_manager
+    image: madsci:latest
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    network_mode: host
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-./}:/home/madsci/example_lab
+      - ${LOCAL_WORKSPACE_FOLDER:-./}.madsci:/home/madsci/.madsci/
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/../src/madsci_squid/ui:/home/madsci/ui
+    command: python -m madsci.squid.lab_server --definition /home/madsci/example_lab/managers/example_lab_manager.manager.yaml
+    restart: on-failure
+    depends_on:
+      - redis
+      - event_manager
   event_manager:
     container_name: event_manager
     image: madsci:latest

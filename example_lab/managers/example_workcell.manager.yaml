@@ -1,32 +1,46 @@
+workcell_name: Example Workcell
+manager_type: workcell_manager
+workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
+description: null
 config:
+  host: 0.0.0.0
+  port: 8013
+  workcells_directory: /home/madsci/.madsci/workcells
+  redis_host: localhost
+  redis_port: 6379
+  redis_password: null
+  event_client_config: null
+  scheduler_update_interval: 2.0
+  node_update_interval: 1.0
   auto_start: true
   clear_workflows: false
   cold_start_delay: 0
-  data_server_url: http://localhost:8003
-  event_client_config: null
-  heartbeat_interval: 2.0
-  host: 0.0.0.0
-  node_update_interval: 1.0
-  port: 8013
-  redis_host: localhost
-  redis_password: null
-  redis_port: 6379
-  resource_server_url: http://localhost:8004
   scheduler: madsci.workcell_manager.schedulers.default_scheduler
-  scheduler_update_interval: 2.0
+  data_server_url: http://localhost:8003/
+  resource_server_url: http://localhost:8004/
   static_files_path: /home/madsci/ui/dist
-  workcells_directory: /home/madsci/.madsci/workcells
-description: null
-locations:
-- location_name: test1
-  lookup: {}
-  resource:
-    base_type: stack
-    capacity: 20
-    resource_id: 01JQ02ZRQG9DM1F6YGKMV0ABVQ
-manager_type: workcell_manager
+  get_action_result_retries: 3
 nodes:
   liquidhandler_1: http://localhost:8000
-workcell_directory: ~/.madsci/workcells/Example Workcell
-workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
-workcell_name: Example Workcell
+locations:
+- location_name: test1
+  location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
+  description: null
+  lookup:
+    liquidhandler_1:
+    - 1
+    - 2
+    - 3
+    - 4
+  resource_definition:
+    resource_name: slot_1
+    resource_type: ''
+    base_type: slot
+    resource_description: null
+    owner: {}
+    capacity: 1
+    default_children: null
+    default_child_template: null
+    default_child_quantity: null
+  resource_id: 01JQMFHEN8FTRSDGHT7VYF8CHC
+workcell_directory: /home/madsci/.madsci/workcells/Example Workcell

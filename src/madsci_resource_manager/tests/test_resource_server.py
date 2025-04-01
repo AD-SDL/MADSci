@@ -1,6 +1,8 @@
 """Automated pytest unit tests for the madsci resource manager's REST server."""
 
 import pytest
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.resource_types import (
     Consumable,
     Container,
@@ -11,7 +13,10 @@ from madsci.common.types.resource_types import (
     Stack,
     VoxelGrid,
 )
-from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
+from madsci.common.types.resource_types.definitions import (
+    ResourceDefinition,
+    ResourceManagerDefinition,
+)
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_server import (
     ResourceGetQuery,
@@ -1053,3 +1058,22 @@ def test_fill_resource(test_client: TestClient) -> None:
     # Verify the resource is filled to capacity
     result = Consumable.model_validate(response.json())
     assert result.quantity == 10
+
+
+def test_init_resource(test_client: TestClient) -> None:
+    """Test initializing a new/existing resource"""
+
+    definition = ResourceDefinition(
+        resource_name="Test Resource", owner=OwnershipInfo(node_id=new_ulid_str())
+    ).model_dump(mode="json")
+    init_resource = Resource.model_validate(
+        test_client.post("/resource/init", json=definition).json()
+    )
+    assert init_resource.resource_name == "Test Resource"
+
+    second_init_resource = Resource.model_validate(
+        test_client.post("/resource/init", json=definition).json()
+    )
+    assert second_init_resource.resource_name == "Test Resource"
+    assert second_init_resource.resource_id == init_resource.resource_id
+    assert second_init_resource.owner.node_id == init_resource.owner.node_id

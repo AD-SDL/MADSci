@@ -6,7 +6,9 @@ from unittest.mock import patch
 
 import pytest
 from madsci.client.resource_client import ResourceClient
-from madsci.common.types.resource_types import Consumable
+from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import new_ulid_str
+from madsci.common.types.resource_types import Consumable, ResourceDefinition
 from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
 from madsci.resource_manager.resource_interface import (
     Container,
@@ -278,3 +280,18 @@ def test_fill_resource(client: ResourceClient) -> None:
     client.add_resource(resource)
     filled_resource = client.fill(resource)
     assert filled_resource.quantity == filled_resource.capacity
+
+
+def test_init_resource(client: ResourceClient) -> None:
+    """Test querying or adding a resource using ResourceClient"""
+    definition = ResourceDefinition(
+        resource_name="Init Test Resource",
+        owner=OwnershipInfo(node_id=new_ulid_str()),
+    )
+    init_resource = client.init_resource(definition)
+    assert init_resource.resource_name == "Init Test Resource"
+
+    second_init_resource = client.init_resource(definition)
+    assert second_init_resource.resource_name == "Init Test Resource"
+    assert second_init_resource.resource_id == init_resource.resource_id
+    assert second_init_resource.owner.node_id == init_resource.owner.node_id

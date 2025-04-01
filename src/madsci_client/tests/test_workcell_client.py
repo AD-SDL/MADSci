@@ -121,7 +121,7 @@ def test_get_workcell_state(client: WorkcellClient) -> None:
 def test_pause_workflow(client: WorkcellClient) -> None:
     """Test pausing a workflow."""
     workflow = client.submit_workflow(
-        WorkflowDefinition(name="Test Workflow"), {}, blocking=False
+        WorkflowDefinition(name="Test Workflow"), None, blocking=False
     )
     paused_workflow = client.pause_workflow(workflow.workflow_id)
     assert paused_workflow.paused is True

@@ -290,7 +290,7 @@ def prompt_from_pydantic_model(model: BaseModel, prompt: str, **kwargs: Any) -> 
     # Print header for the prompts
     console.print(f"\n[bold]{prompt}[/]")
 
-    for field_name, field in model.model_fields.items():
+    for field_name, field in model.__pydantic_fields__.items():
         # Skip if value provided in kwargs
         if field_name in kwargs:
             result[field_name] = kwargs[field_name]

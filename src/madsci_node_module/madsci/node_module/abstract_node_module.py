@@ -463,7 +463,8 @@ class AbstractNode:
                     continue
                 if (
                     parameter_name not in action_def.args
-                    and parameter_name not in [file.name for file in action_def.files]
+                    and parameter_name
+                    not in [file.name for file in action_def.files.values()]
                     and parameter_name != "action"
                 ):
                     self._parse_action_arg(
@@ -704,7 +705,7 @@ class AbstractNode:
 
     def _populate_capabilities(self) -> None:
         """Populate the node capabilities based on the node definition and the supported capabilities of the class."""
-        for field in self.supported_capabilities.model_fields:
+        for field in self.supported_capabilities.__pydantic_fields__:
             if getattr(self.node_definition.capabilities, field) is None:
                 setattr(
                     self.node_definition.capabilities,

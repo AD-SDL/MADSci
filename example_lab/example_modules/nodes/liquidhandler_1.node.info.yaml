@@ -18,25 +18,43 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
-  - shutdown
   - reset
-  - unlock
-  - resume
-  - safety_stop
-  - lock
-  - cancel
+  - get_location
   - pause
+  - unlock
+  - shutdown
+  - resume
+  - lock
+  - safety_stop
+  - cancel
 commands: {}
 is_template: false
 config_defaults: {}
-actions: {}
+actions:
+  run_command:
+    name: run_command
+    description: Run a command on the liquid handler.
+    args:
+      command:
+        name: command
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
 config:
-  status_update_interval: null
-  state_update_interval: null
+  status_update_interval: 2.0
+  state_update_interval: 2.0
   event_client_config: null
+  resource_server_url: null
   host: 127.0.0.1
   port: 8000
   protocol: http
+  device_number: 0
 config_schema:
   $defs:
     EventClientConfig:
@@ -77,10 +95,6 @@ config_schema:
     OwnershipInfo:
       description: Information about the ownership of a MADSci object.
       properties:
-        auth_id:
-          description: The ID of the auth that owns the object.
-          title: Auth ID
-          type: string
         user_id:
           anyOf:
           - type: string
@@ -147,20 +161,20 @@ config_schema:
       title: OwnershipInfo
       type: object
   additionalProperties: true
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: Configuration for the liquid handler node module.
   properties:
     status_update_interval:
       anyOf:
       - type: number
       - type: 'null'
-      default: null
+      default: 2.0
       description: The interval in seconds at which the node should update its status.
       title: Status Update Interval
     state_update_interval:
       anyOf:
       - type: number
       - type: 'null'
-      default: null
+      default: 2.0
       description: The interval in seconds at which the node should update its state.
       title: State Update Interval
     event_client_config:
@@ -170,6 +184,15 @@ config_schema:
       default: null
       description: The configuration for a MADSci event client.
       title: Event Client Configuration
+    resource_server_url:
+      anyOf:
+      - format: uri
+        minLength: 1
+        type: string
+      - type: 'null'
+      default: null
+      description: The URL of the resource server for this node to use.
+      title: Resource Client URL
     host:
       default: 127.0.0.1
       description: The host of the REST API.
@@ -185,5 +208,9 @@ config_schema:
       description: The protocol of the REST API, either 'http' or 'https'.
       title: Protocol
       type: string
-  title: RestNodeConfig
+    device_number:
+      default: 0
+      title: Device Number
+      type: integer
+  title: LiquidHandlerConfig
   type: object

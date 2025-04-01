@@ -1,16 +1,18 @@
 """Fast API Client for Resources"""
 
+import time
 from datetime import datetime
 from typing import Any, Optional, Union
 
 import requests
-from madsci.common.types.auth_types import OwnershipInfo
+from madsci.client.event_client import EventClient
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
     Resource,
     ResourceDataModels,
 )
+from madsci.common.types.resource_types.definitions import ResourceDefinitions
 from madsci.common.types.resource_types.server_types import (
     PushResourceBody,
     RemoveChildBody,
@@ -21,13 +23,35 @@ from madsci.common.types.resource_types.server_types import (
 
 
 class ResourceClient:
-    """Fast API Client for Resources"""
+    """REST client for interacting with a MADSci Resource Manager."""
 
-    def __init__(self, url: str) -> None:
-        """Initial params"""
-        self.url = url
-        if str(self.url).endswith("/"):
+    local_resources: dict[str, ResourceDataModels]
+
+    def __init__(
+        self, url: Optional[str] = None, event_client: Optional[EventClient] = None
+    ) -> None:
+        """Initialize the resource client."""
+        self.url = str(url)
+        if self.url is not None and str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
+        if self.url is not None:
+            start_time = time.time()
+            while time.time() - start_time < 20:
+                try:
+                    requests.get(self.url + "/definition", timeout=10)
+                    break
+                except Exception:
+                    time.sleep(1)
+            else:
+                raise ConnectionError(
+                    f"Could not connect to the resource manager at {url}."
+                )
+        self.local_resources = {}
+        self.logger = event_client if event_client is not None else EventClient()
+        if url is None:
+            self.logger.log_warning(
+                "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION."
+            )
 
     def add_resource(self, resource: Resource) -> Resource:
         """
@@ -39,55 +63,47 @@ class ResourceClient:
         Returns:
             Resource: The added resource as returned by the server.
         """
-        response = requests.post(
-            f"{self.url}/resource/add",
-            json=resource.model_dump(mode="json"),
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            response = requests.post(
+                f"{self.url}/resource/add",
+                json=resource.model_dump(mode="json"),
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id] = resource
         return resource
 
-    def query_or_add_resource(
-        self,
-        resource_id: Optional[str] = None,
-        resource_name: Optional[str] = None,
-        parent_id: Optional[str] = None,
-        resource_type: Optional[str] = None,
-        base_type: Optional[str] = None,
-        owner: Optional[OwnershipInfo] = None,
-        multiple: bool = False,
-        unique: bool = False,
-    ) -> Resource:
+    def init_resource(
+        self, resource_definition: ResourceDefinitions
+    ) -> ResourceDataModels:
         """
-        Add a resource to the server.
+        Initializes a resource with the resource manager based on a definition, either creating a new resource if no matching one exists, or returning an existing match.
 
         Args:
-            resource (Resource): The resource to add.
+            resource (Resource): The resource to initialize.
 
         Returns:
-            Resource: The added resource as returned by the server.
+            ResourceDataModels: The initialized resource as returned by the server.
         """
-        payload = ResourceGetQuery(
-            resource_id=resource_id,
-            resource_name=resource_name,
-            parent_id=parent_id,
-            resource_type=resource_type,
-            base_type=base_type,
-            owner=owner,
-            unique=unique,
-            multiple=multiple,
-        ).model_dump(mode="json")
-        response = requests.post(
-            f"{self.url}/resource/query_or_add",
-            json=payload,
-            timeout=10,
-        )
-        response.raise_for_status()
+        if self.url:
+            response = requests.post(
+                f"{self.url}/resource/init",
+                json=resource_definition.model_dump(mode="json"),
+                timeout=10,
+            )
+            response.raise_for_status()
 
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.logger.log_warning(
+                "Local-only mode does not check to see if an existing resource match already exists."
+            )
+            resource = Resource.discriminate(resource_definition)
+            self.local_resources[resource.resource_id] = resource
         return resource
 
     def add_or_update_resource(self, resource: Resource) -> Resource:
@@ -100,14 +116,17 @@ class ResourceClient:
         Returns:
             Resource: The added resource as returned by the server.
         """
-        response = requests.post(
-            f"{self.url}/resource/add_or_update",
-            json=resource.model_dump(mode="json"),
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            response = requests.post(
+                f"{self.url}/resource/add_or_update",
+                json=resource.model_dump(mode="json"),
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id] = resource
         return resource
 
     def update_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
@@ -120,14 +139,17 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource as returned by the server.
         """
-        response = requests.post(
-            f"{self.url}/resource/update",
-            json=resource.model_dump(mode="json"),
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            response = requests.post(
+                f"{self.url}/resource/update",
+                json=resource.model_dump(mode="json"),
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id] = resource
         return resource
 
     def get_resource(
@@ -143,13 +165,19 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The retrieved resource.
         """
-        response = requests.get(
-            f"{self.url}/resource/{resource_id}",
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            response = requests.get(
+                f"{self.url}/resource/{resource_id}",
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.logger.log_warning(
+                "Local-only mode does not currently search through child resources to get children."
+            )
+            resource = self.local_resources.get(resource_id)
         return resource
 
     def query_resource(
@@ -158,7 +186,7 @@ class ResourceClient:
         resource_name: Optional[str] = None,
         parent_id: Optional[str] = None,
         resource_type: Optional[str] = None,
-        resource_base_type: Optional[str] = None,
+        base_type: Optional[str] = None,
         unique: Optional[bool] = False,
         multiple: Optional[bool] = False,
     ) -> Union[ResourceDataModels, list[ResourceDataModels]]:
@@ -170,42 +198,58 @@ class ResourceClient:
             resource_name (str): The name of the resource to retrieve.
             parent_id (str): The ID of the parent resource.
             resource_type (str): The custom type of the resource.
-            resource_base_type (str): The base type of the resource.
+            base_type (str): The base type of the resource.
             unique (bool): Whether to require a unique resource or not.
             multiple (bool): Whether to return multiple resources or just the first.
 
         Returns:
             Resource: The retrieved resource.
         """
-        payload = ResourceGetQuery(
-            resource_id=resource_id,
-            resource_name=resource_name,
-            parent_id=parent_id,
-            resource_type=resource_type,
-            resource_base_type=resource_base_type,
-            unique=unique,
-            multiple=multiple,
-        ).model_dump(mode="json")
-        response = requests.post(f"{self.url}/resource/query", json=payload, timeout=10)
-        response.raise_for_status()
-        response_json = response.json()
-        if isinstance(response_json, list):
-            resources = [Resource.discriminate(resource) for resource in response_json]
-            for resource in resources:
-                resource.resource_url = self.url
-            return resources
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            payload = ResourceGetQuery(
+                resource_id=resource_id,
+                resource_name=resource_name,
+                parent_id=parent_id,
+                resource_type=resource_type,
+                base_type=base_type,
+                unique=unique,
+                multiple=multiple,
+            ).model_dump(mode="json")
+            response = requests.post(
+                f"{self.url}/resource/query", json=payload, timeout=10
+            )
+            response.raise_for_status()
+            response_json = response.json()
+            if isinstance(response_json, list):
+                resources = [
+                    Resource.discriminate(resource) for resource in response_json
+                ]
+                for resource in resources:
+                    resource.resource_url = self.url
+                return resources
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.logger.log_error(
+                "Local-only mode does not currently support querying."
+            )
+            raise NotImplementedError(
+                "Local-only mode does not currently support querying."
+            )
         return resource
 
     def remove_resource(self, resource_id: str) -> dict[str, Any]:
         """
         Remove a resource by moving it to the history table with `removed=True`.
         """
-        response = requests.delete(f"{self.url}/resource/{resource_id}", timeout=10)
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            response = requests.delete(f"{self.url}/resource/{resource_id}", timeout=10)
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            resource = self.local_resources.pop(resource_id)
+            resource.removed = True
         return resource
 
     def query_history(
@@ -221,17 +265,27 @@ class ResourceClient:
         """
         Retrieve the history of a resource with flexible filters.
         """
-        query = ResourceHistoryGetQuery(
-            resource_id=resource_id,
-            version=version,
-            change_type=change_type,
-            removed=removed,
-            start_date=start_date,
-            end_date=end_date,
-            limit=limit,
-        ).model_dump(mode="json")
-        response = requests.post(f"{self.url}/history/query", json=query, timeout=10)
-        response.raise_for_status()
+        if self.url:
+            query = ResourceHistoryGetQuery(
+                resource_id=resource_id,
+                version=version,
+                change_type=change_type,
+                removed=removed,
+                start_date=start_date,
+                end_date=end_date,
+                limit=limit,
+            ).model_dump(mode="json")
+            response = requests.post(
+                f"{self.url}/history/query", json=query, timeout=10
+            )
+            response.raise_for_status()
+        else:
+            self.logger.log_error(
+                "Local-only mode does not currently support querying history."
+            )
+            raise NotImplementedError(
+                "Local-only mode does not currently support querying history."
+            )
 
         return response.json()
 
@@ -239,12 +293,20 @@ class ResourceClient:
         """
         Restore a deleted resource from the history table.
         """
-        response = requests.post(
-            f"{self.url}/history/{resource_id}/restore", timeout=10
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            response = requests.post(
+                f"{self.url}/history/{resource_id}/restore", timeout=10
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.logger.log_error(
+                "Local-only mode does not currently support restoring resources."
+            )
+            raise NotImplementedError(
+                "Local-only mode does not currently support restoring resources."
+            )
         return resource
 
     def push(
@@ -262,19 +324,23 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated parent resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        payload = PushResourceBody(
-            child=child if isinstance(child, Resource) else None,
-            child_id=child.resource_id if isinstance(child, Resource) else child,
-        ).model_dump(mode="json")
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/push", json=payload, timeout=10
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            payload = PushResourceBody(
+                child=child if isinstance(child, Resource) else None,
+                child_id=child.resource_id if isinstance(child, Resource) else child,
+            ).model_dump(mode="json")
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/push", json=payload, timeout=10
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            resource = resource.children.append(child)
+            self.local_resources[resource.resource_id] = resource
         return resource
 
     def pop(
@@ -290,16 +356,27 @@ class ResourceClient:
             tuple[ResourceDataModels, ResourceDataModels]: The popped asset and updated parent.
         """
 
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.post(f"{self.url}/resource/{resource_id}/pop", timeout=10)
-        response.raise_for_status()
-        result = response.json()
-        popped_asset = Resource.discriminate(result[0])
-        update_parent = Resource.discriminate(result[1])
-        popped_asset.resource_url = f"{self.url}/resource/{popped_asset.resource_id}"
-        update_parent.resource_url = f"{self.url}/resource/{update_parent.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/pop", timeout=10
+            )
+            response.raise_for_status()
+            result = response.json()
+            popped_asset = Resource.discriminate(result[0])
+            update_parent = Resource.discriminate(result[1])
+            popped_asset.resource_url = (
+                f"{self.url}/resource/{popped_asset.resource_id}"
+            )
+            update_parent.resource_url = (
+                f"{self.url}/resource/{update_parent.resource_id}"
+            )
+        else:
+            update_parent = resource
+            popped_asset = update_parent.children.pop(0)
+            self.local_resources[update_parent.resource_id] = update_parent
         return popped_asset, update_parent
 
     def set_child(
@@ -319,21 +396,25 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated parent container resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        payload = SetChildBody(
-            key=key,
-            child=child,
-        ).model_dump(mode="json")
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/child/set",
-            json=payload,
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            payload = SetChildBody(
+                key=key,
+                child=child,
+            ).model_dump(mode="json")
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/child/set",
+                json=payload,
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            resource = resource.children[key] = child
+            self.local_resources[resource.resource_id] = resource
         return resource
 
     def remove_child(
@@ -351,20 +432,24 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated parent container resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        payload = RemoveChildBody(
-            key=key,
-        ).model_dump(mode="json")
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/child/remove",
-            json=payload,
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            payload = RemoveChildBody(
+                key=key,
+            ).model_dump(mode="json")
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/child/remove",
+                json=payload,
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            resource = resource.children.pop(key)
+            self.local_resources[resource.resource_id] = resource
         return resource
 
     def set_quantity(
@@ -380,17 +465,20 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/quantity",
-            params={"quantity": quantity},
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/quantity",
+                params={"quantity": quantity},
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id].quantity = quantity
         return resource
 
     def change_quantity_by(
@@ -406,17 +494,21 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/quantity/change_by",
-            params={"amount": amount},
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/quantity/change_by",
+                params={"amount": amount},
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id].quantity += amount
+            resource = self.local_resources[resource.resource_id]
         return resource
 
     def increase_quantity(
@@ -432,17 +524,21 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/quantity/increase",
-            params={"amount": amount},
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/quantity/increase",
+                params={"amount": amount},
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id].quantity += abs(amount)
+            resource = self.local_resources[resource.resource_id]
         return resource
 
     def decrease_quantity(
@@ -458,17 +554,21 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/quantity/decrease",
-            params={"amount": amount},
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/quantity/decrease",
+                params={"amount": amount},
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id].quantity -= abs(amount)
+            resource = self.local_resources[resource.resource_id]
         return resource
 
     def set_capacity(
@@ -484,17 +584,21 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/capacity",
-            params={"capacity": capacity},
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/capacity",
+                params={"capacity": capacity},
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id].capacity = capacity
+            resource = self.local_resources[resource.resource_id]
         return resource
 
     def remove_capacity_limit(
@@ -509,15 +613,19 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.delete(
-            f"{self.url}/resource/{resource_id}/capacity", timeout=10
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.delete(
+                f"{self.url}/resource/{resource_id}/capacity", timeout=10
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            self.local_resources[resource.resource_id].capacity = None
+            resource = self.local_resources[resource.resource_id]
         return resource
 
     def empty(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
@@ -530,16 +638,24 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/empty",
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/empty",
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            resource = self.local_resources[resource.resource_id]
+            while resource.children:
+                resource.children.pop()
+            if resource.quantity:
+                resource.quantity = 0
+            self.local_resources[resource.resource_id] = resource
         return resource
 
     def fill(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
@@ -552,14 +668,19 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource.
         """
-        resource_id = (
-            resource.resource_id if isinstance(resource, Resource) else resource
-        )
-        response = requests.post(
-            f"{self.url}/resource/{resource_id}/fill",
-            timeout=10,
-        )
-        response.raise_for_status()
-        resource = Resource.discriminate(response.json())
-        resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        if self.url:
+            resource_id = (
+                resource.resource_id if isinstance(resource, Resource) else resource
+            )
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/fill",
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+        else:
+            resource = self.local_resources[resource.resource_id]
+            resource.quantity = resource.capacity
+            self.local_resources[resource.resource_id] = resource
         return resource

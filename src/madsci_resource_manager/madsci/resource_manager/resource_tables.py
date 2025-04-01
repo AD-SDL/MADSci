@@ -107,7 +107,10 @@ class ResourceTableBase(Resource):
     )
 
     owner: dict[str, str] = Field(
-        title="Owner", description="The ownership info for the resource", sa_type=JSON
+        title="Owner",
+        description="The ownership info for the resource",
+        sa_type=JSON,
+        default_factory=dict,
     )
     key: Optional[str] = Field(
         title="Resource Key",

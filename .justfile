@@ -5,6 +5,7 @@ default:
 # initialize the project
 init:
   @which pdm || echo "pdm not found, you'll need to install it: https://github.com/pdm-project/pdm"
+  @#pdm config use_uv true
   @pdm install -G:all
   @#test -e .env || cp .env.example .env
   @OSTYPE="" . .venv/bin/activate

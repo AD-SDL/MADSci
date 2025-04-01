@@ -66,7 +66,7 @@ def test_add_resource(interface: ResourceInterface) -> None:
         resource_name=resource1.resource_name,
         parent_id=resource1.parent_id,
         resource_type=resource1.resource_type,
-        resource_base_type=resource1.base_type,
+        base_type=resource1.base_type,
         unique=True,
     )
     assert resource3.resource_id == resource1.resource_id

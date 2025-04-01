@@ -2,7 +2,6 @@
 
 import json
 import os
-import shutil
 import signal
 import tempfile
 import time
@@ -100,12 +99,15 @@ class RestNode(AbstractNode):
                 raise ValueError("args must be a JSON object")
         else:
             args = {}
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with tempfile.TemporaryDirectory(delete=False) as temp_dir:
             # * Save the uploaded files to a temporary directory
             for i in range(len(files)):
                 file = files[i]
                 with (Path(temp_dir) / file.filename).open("wb") as f:
-                    shutil.copyfileobj(file.file, f)
+                    file.file.seek(0)
+                    content = file.file.read()
+                    f.write(content)
+
             response = super().run_action(
                 ActionRequest(
                     action_id=action_id if action_id else new_ulid_str(),

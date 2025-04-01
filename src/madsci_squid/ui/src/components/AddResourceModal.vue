@@ -52,7 +52,7 @@ const flowdef = ref(false)
 const new_name = ref()
 const base_type = ref()
 const formFields =  ref([
-{ label: 'resource_name', value: '', placeholder: 'Enter value' },
+{ label: 'resource_name', value: null, placeholder: 'Enter value' },
 ])
 const base_types = ref([
   "resource",
@@ -73,7 +73,7 @@ const base_types = ref([
 ])
 
 function addField() {
-      formFields.value.push({ label: new_name.value, value: '', placeholder: 'Enter value' });
+      formFields.value.push({ label: new_name.value, value: null, placeholder: 'Enter value' });
     }
 function removeField(index: any) {
       formFields.value.splice(index, 1);

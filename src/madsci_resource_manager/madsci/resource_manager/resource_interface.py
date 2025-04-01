@@ -7,7 +7,7 @@ import traceback
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
@@ -241,6 +241,7 @@ class ResourceInterface:
         base_type: Optional[ResourceTypeEnum] = None,
         unique: bool = False,
         multiple: bool = False,
+        **kwargs: Any,  #  noqa ARG002:Consumes any additional keyword arguments to make model dumps easier
     ) -> Optional[Union[list[ResourceDataModels], ResourceDataModels]]:
         """
         Get the resource(s) that match the specified properties (unless `unique` is specified,
@@ -270,9 +271,6 @@ class ResourceInterface:
             if owner is not None:
                 owner = OwnershipInfo.model_validate(owner)
                 for key, value in owner.model_dump(exclude_none=True).items():
-                    if key == "auth_id":
-                        continue
-
                     statement = statement.filter(
                         ResourceTable.owner[key].as_string() == value
                     )
