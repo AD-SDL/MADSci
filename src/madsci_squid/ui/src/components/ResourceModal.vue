@@ -15,6 +15,7 @@
         <div v-else>
           <Resource :resource="modal_text" />
       </div>
+      <v-btn @click="delete_resource(modal_text.resource_id); isActive.value=false">Delete</v-btn>
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
@@ -31,4 +32,12 @@ import Slot from "./ResourceComponents/Slot.vue";
 import Resource from "./ResourceComponents/Resource.vue";
 const props = defineProps(['modal_title', 'modal_text'])
 const flowdef = ref(false)
+import { urls } from "@/store";
+
+const delete_resource = (resource_id: string) => {
+  fetch(urls.value.resource_manager.concat('resource/').concat(resource_id), {
+    method: "DELETE",
+  });
+
+}
 </script>
