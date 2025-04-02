@@ -11,7 +11,7 @@
           <td>{{ item.base_type }}</td>
           <td>{{ item.created_at }}</td>
           <td>{{ item.resource_id }}</td>
-          <td v-if="item.children && item.children.length > 0"><v-btn
+          <td v-if="item.children && get_all(item.children).length > 0"><v-btn
         :icon="isExpanded(internalItem) ? 'mdi-chevron-up' : 'mdi-chevron-down'"
         variant="plain"
         @click.stop="toggleExpand(internalItem)"
@@ -20,7 +20,7 @@
       </template>
       <template v-slot:expanded-row="{ columns, item}: {columns: any, item: any}">
           <tr>
-            <td :colspan="columns.length"><ResourceTable :resources=item.children :parent_id=item.resource_id :hide_header="true" /></td>
+            <td :colspan="columns.length"><ResourceTable :resources=get_all(item.children) :parent_id=item.resource_id :hide_header="true" /></td>
           </tr>
         </template>
     </v-data-table>
@@ -30,8 +30,6 @@
 </template>
 
 <script setup lang="ts">
-import { urls } from "@/store";
-import VDrilldownTable from  '@wdns/vuetify-drilldown-table';
 import { ref } from 'vue';
 import { VDataTable } from 'vuetify/components';
 const props = defineProps(['resources', 'parent_id',  'hide_header'])
@@ -61,6 +59,12 @@ function prune_tree(input_resources: any): any[] {
 }
 
 
-
+function get_all(input_resources: any) {
+  if (Array.isArray(input_resources)) {
+    return input_resources
+  } else {
+    return Object.values(input_resources)
+  }
+}
 
 </script>
