@@ -6,6 +6,7 @@ from typing import Any, ClassVar, Literal, Optional, Union
 from bson.objectid import ObjectId
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, datetime, new_ulid_str
+from madsci.common.types.condition_types import Conditions
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from pydantic import Field, field_validator
@@ -37,7 +38,7 @@ class ExperimentManagerDefinition(ManagerDefinition):
     )
     db_url: str = Field(
         title="Database URL",
-        description="The URL of the database for the experiment manager.",
+        description="The URL of the database for the experidict[str, Any]ment manager.",
         default="mongodb://localhost:27017",
     )
     lab_manager_url: Optional[str] = Field(
@@ -72,11 +73,11 @@ class ExperimentDesign(BaseModel):
         description="A description of the experiment.",
         default=None,
     )
-    starting_layout: Optional[dict[str, Any]] = Field(
-        title="Starting Layout",
+    resource_conditions: Optional[list[Conditions]] = Field(
+        title="Resource Conditions",
         description="The starting layout of resources required for the experiment.",
         default=None,
-    )  # TODO: What does this look like?
+    ) 
     ownership_info: OwnershipInfo = Field(
         title="Ownership Info",
         description="Information about the users, campaigns, etc. that this design is owned by.",

@@ -1,17 +1,23 @@
 """Provides an ExperimentApplication class that manages the execution of an experiment."""
 
+from pathlib import Path
 import time
 from contextlib import contextmanager
-from typing import Optional
+from typing import Optional, Union
 
+from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
+from madsci.client.resource_client import ResourceClient
+from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
+from madsci.common.types.condition_types import Condition
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
     ExperimentStatus,
 )
+from madsci.common.types.resource_types import Resource
 from madsci.common.utils import threaded_daemon
 from pydantic import AnyUrl
 
@@ -35,21 +41,31 @@ class ExperimentApplication:
     def __init__(
         self,
         url: Optional[AnyUrl] = None,
-        experiment_design: Optional[ExperimentDesign] = None,
+        experiment_design: Optional[Union[str, Path,  ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
         self.url = AnyUrl(url) if url else self.url
-        self.experiment_design = (
-            experiment_design if experiment_design else self.experiment_design
-        )
+        if experiment_design:
+            self.experiment_design = experiment_design
+        if isinstance(self.experiment_design, str) or isinstance(self.experiment_design, Path):
+            self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
+        else:
+            self.experiment_design = experiment_design
+        
         self.experiment = experiment if experiment else self.experiment
 
         self.experiment_client = ExperimentClient(url=self.url)
-        if self.experiment_client.workcell_client:
-            self.workcell_client = self.experiment_client.workcell_client
+        
+        self.workcell_client = WorkcellClient(self.experiment_client.workcell_client_url)
+        self.resource_client = ResourceClient(self.experiment_client.resource_client_url)
+        self.data_client = DataClient(self.experiment_client.data_client_url)
         if self.experiment_design and self.experiment_design.event_client_config:
             self.logger = EventClient(config=self.experiment_design.event_client_config)
+    
+
+   
+    
 
     @classmethod
     def start_new(
@@ -75,6 +91,8 @@ class ExperimentApplication:
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
     ) -> None:
         """Sends the ExperimentDesign to the server to register a new experimental run."""
+        for condition in self.experiment_design.resource_conditions:
+            print(self.evaluate_condition(condition))
         self.experiment = self.experiment_client.start_experiment(
             experiment_design=self.experiment_design,
             run_name=run_name,
@@ -176,6 +194,102 @@ class ExperimentApplication:
         if exception:
             self.logger.log_error(exception.message)
             raise exception
+    def get_resource_from_condition(self, condition):
+        resource = None
+        if condition.resource_id:
+            resource = self.resource_client.get_resource(condition.resource_id)
+        elif condition.resource_name:
+            resource = self.resource_client.query_resource(resource_name=condition.resource_name, multiple=False)
+        if resource is None:
+            raise(Exception("Invalid Identifier for Resource"))
+        return resource
+                
+    def check_resource_field(self, resource: Resource, condition: Condition) -> bool:
+        """check if a resource meets a condition"""
+        if condition.operator == "is_greater_than":
+            return getattr(resource, condition.field) > condition.target_value
+        elif condition.operator == "is_less_than":
+            return getattr(resource, condition.field) < condition.target_value
+        elif condition.operator == "is_equal_to":
+            return getattr(resource, condition.field) == condition.target_value
+        if condition.operator == "is_greater_than_or_equal_to":
+            return getattr(resource, condition.field) >= condition.target_value
+        elif condition.operator == "is_less_than_or_equal_to":
+            return getattr(resource, condition.field) < condition.target_value
+
+    
+    def evaluate_condition(self, condition: Condition):
+        """evaluate a condition"""
+        match condition.condition_type:
+            case "resource_present":
+                location = None
+                if condition.location_name:
+                    location = [location for location in self.workcell_client.get_locations() if location.location_name == condition.location_name][0]
+                elif condition.location_id: 
+                    location = self.workcell_client.get_location(condition.location_id)
+                if location is None:
+                    raise(Exception("Invalid Identifier for Location"))
+                else:
+                    resource = self.resource_client.get_resource(location.resource_id)
+                    if isinstance(resource.children, list):
+                        if isinstance(condition.key, int):
+                            if len(resource.children) > condition.key:
+                                if condition.resource_type:
+                                    if resource.children[condition.key].resource_type == condition.resource_type:
+                                        return True
+                                    else:
+                                        return False
+                                else:
+                                    return True
+                            else:
+                                return False
+                        else: 
+                            raise(Exception("Key has wrong type for resource"))    
+                    elif str(condition.key) in resource.children:
+                        if condition.resource_type:
+                            if resource.children[str(condition.key)].resource_type == condition.resource_type:
+                                        return True
+                            else:
+                                        return False
+                        else:
+                            return True
+                    else:
+                        return False
+                        
+            case "no_resource_present":
+                location = None
+                if condition.location_id: 
+                    location = self.workcell_client.get_location(condition.location_id)
+                elif condition.location_name:
+                    location = [location for location in self.workcell_client.get_locations() if location.location_name == condition.location_name][0] 
+                if location is None:
+                    raise(Exception("Invalid Identifier for Location"))
+                else:
+                    resource = self.resource_client.get_resource(location.resource_id)
+                    if isinstance(resource.children, list):
+                        if isinstance(condition.key, int):
+                            if len(resource.children) > condition.key:
+                                return False
+                            else:
+                                return True
+                        else: 
+                            raise(Exception("Key has wrong type for resource"))
+                    elif str(condition.key) in resource.children:
+                        return False   
+                    else:
+                        return True
+            
+            case "resource_field_check":
+                resource = self.get_resource_from_condition(condition)
+                return self.check_resource_field(resource, condition)
+                
+                
+
+            case "resource_child_field_check":
+                resource = self.get_resource_from_condition(condition)
+                resource_child = resource.children[condition.key]
+                return self.check_resource_field(resource_child, condition)
+    
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@
 
 from typing import Optional, Union
 
+from madsci.client.data_client import DataClient
+from madsci.common.types.condition_types import Condition
 import requests
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
@@ -30,8 +32,9 @@ class ExperimentClient:
         self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
         try:
             server_def = requests.get(str(self.url) + "definition", timeout=10).json()
-            self.workcell_client = WorkcellClient(server_def["workcell_manager_url"])
-            self.resource_client = ResourceClient(server_def["resource_manager_url"])
+            self.workcell_client_url = server_def["workcell_manager_url"]
+            self.resource_client_url = server_def["resource_manager_url"]
+            self.data_client_url = server_def["data_manager_url"]
         except Exception as e:
             raise e
 
