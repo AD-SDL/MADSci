@@ -20,14 +20,14 @@
         <div v-if="!(value.result == '') && !(value.result == null)"><b>Status</b>: {{
           value.result.status }} <br>
           <div v-if="!(value.result.data == null)"> <b>Data:</b><br>
-            <v-data-table :headers="data_headers" :items="Object.values(test[value.id])">
+            <v-data-table :headers="data_headers" :items="Object.values(test[value.step_id])">
               <template v-slot:item="{ item }: { item: any }">
                 <tr>
                   <td>{{ item.label }}</td>
-                  <td>{{ item.type }}</td>
-                  <td v-if="item.type == 'local_file'"><v-btn @click="trydownload(item.id, item.label)">Download</v-btn>
+                  <td>{{ item.data_type }}</td>
+                  <td v-if="item.data_type == 'file'"><v-btn @click="trydownload(item.datapoint_id, item.label)">Download</v-btn>
                   </td>
-                  <td v-if="item.type == 'data_value'">
+                  <td v-if="item.data_type == 'data_value'">
                     <VueJsonPretty :data="item.value" />
                   </td>
 
@@ -49,6 +49,7 @@ import { ref } from 'vue';
 import VueJsonPretty from 'vue-json-pretty';
 import { VDataTable } from 'vuetify/components';
 const props = defineProps(['steps', 'wf'])
+import {urls} from "@/store"
 
 const test = ref()
 test.value = {}
@@ -60,13 +61,12 @@ const data_headers = [
 
 ]
 props.steps.forEach((step: any) => {
-  test.value[step.id] = {}; if (step.result && step.result.data) {
+  console.log(step); test.value[step.step_id] = {}; if (step.result && step.result.data) {
     Object.keys(step.result.data).forEach(async (key: string) => {
 
-      let val = await ((await fetch("http://".concat(window.location.host).concat("/data/").concat(step.result.data[key]).concat("/info"))).json())
-      console.log(val)
-      test.value[step.id][val.id] = val
-
+      let val = await ((await fetch(urls.value.data_manager.concat("datapoint/").concat(step.result.data[key]))).json())
+      test.value[step.step_id][val.datapoint_id] = val;
+      console.log(test.value)
     })
 
   }
@@ -83,7 +83,7 @@ const forceFileDownload = (val: any, title: any) => {
 }
 
 async function trydownload(id: string, label: string) {
-  let val = await (await fetch("http://".concat(window.location.host).concat('/data/').concat(id))).blob()
+  let val = await (await fetch(urls.value.data_manager.concat('datapoint/').concat(id).concat('/value'))).blob()
   forceFileDownload(val, label)
 
 

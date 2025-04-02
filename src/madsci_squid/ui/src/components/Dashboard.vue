@@ -1,4 +1,6 @@
 <template>
+  <AddResourceModal v-model="add_modal" />
+
   <v-tabs v-model="tab" align-tabs="center" color="deep-purple-accent-4">
     <v-tab :value="1">
       Workcells
@@ -36,7 +38,8 @@
           <h2>Resources</h2>
         </v-card-title>
         <v-card-text>
-          <ResourceTable />
+          <ResourceTable :resources=resources :hide_header="false"/>
+          <v-btn @click="active_add()">Add Resource</v-btn>
           </v-card-text>
         </v-card>
       </v-container>
@@ -48,14 +51,21 @@
 import { ref } from 'vue';
 import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
+import { resources } from "@/store";
 import WorkcellPanel from './WorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
 import ResourceTable from './ResourceTable.vue';
+import AddResourceModal from './AddResourceModal.vue';
 
+const add_modal = ref(false)
 const tab = ref(1)
+function active_add() {
+  add_modal.value=true
+}
 </script>
 
 <script lang="ts">
+
 export default {
   data: () => ({ drawer: false }),
 }

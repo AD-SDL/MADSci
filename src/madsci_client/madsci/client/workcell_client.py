@@ -9,6 +9,7 @@ import requests
 from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellState
@@ -163,7 +164,7 @@ class WorkcellClient:
         for step in workflow.steps:
             if step.files:
                 for file, path in step.files.items():
-                    unique_filename = f"{step.step_id}_{file}"
+                    unique_filename = f"{new_ulid_str()}_{file}"
                     files[unique_filename] = path
                     if not Path(files[unique_filename]).is_absolute():
                         files[unique_filename] = (

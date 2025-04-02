@@ -49,6 +49,7 @@ def create_experiment_server(  # noqa: C901, PLR0915
             experiment_manager_definition.resource_manager_url = urls[
                 "resource_manager"
             ]
+            experiment_manager_definition.data_manager_url = urls["data_manager"]
         except Exception as e:
             logger.log_error(e)
 

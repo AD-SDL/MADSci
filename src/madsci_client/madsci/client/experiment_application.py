@@ -46,6 +46,8 @@ class ExperimentApplication:
         self.experiment = experiment if experiment else self.experiment
 
         self.experiment_client = ExperimentClient(url=self.url)
+        if self.experiment_client.workcell_client:
+            self.workcell_client = self.experiment_client.workcell_client
         if self.experiment_design and self.experiment_design.event_client_config:
             self.logger = EventClient(config=self.experiment_design.event_client_config)
 

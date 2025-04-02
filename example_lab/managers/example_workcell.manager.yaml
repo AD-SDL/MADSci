@@ -26,7 +26,21 @@ locations:
 - location_name: test1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: null
-  lookup: {}
-  resource_definition: null
-  resource_id: null
+  lookup:
+    liquidhandler_1:
+    - 1
+    - 2
+    - 3
+    - 4
+  resource_definition:
+    resource_name: slot_1
+    resource_type: ''
+    base_type: slot
+    resource_description: null
+    owner: {}
+    capacity: 1
+    default_children: null
+    default_child_template: null
+    default_child_quantity: null
+  resource_id: 01JQMFHEN8FTRSDGHT7VYF8CHC
 workcell_directory: /home/madsci/.madsci/workcells/Example Workcell

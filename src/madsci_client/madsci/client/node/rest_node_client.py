@@ -68,10 +68,8 @@ class RestNodeClient(AbstractNodeClient):
                 ("files", (file, Path(path).expanduser().open("rb")))
                 for file, path in action_request.files.items()
             ]
-            self.logger.log_debug(files)
 
             serialized_args = action_request.model_dump(mode="json")["args"]
-            self.logger.log_debug(serialized_args)
 
             rest_response = requests.post(
                 f"{self.url}/action",

@@ -1,31 +1,39 @@
 <template>
     <ResourceModal :modal_title="modal_title" :modal_text="modal_text" v-model="modal" />
-    <AddResourceModal :modal_title="modal_title" :modal_text="modal_text" v-model="add_modal" />
     <!-- eslint-disable vue/no-parsing-error-->
     <v-data-table :headers="arg_headers" hover
-      :items="resources"
-      no-data-text="No Resources" density="compact" :sort-by="sortBy" :hide-default-footer="resources.length <= 10">
-      <template v-slot:item="{ item }: { item: any }">
+      :items="prune_tree(resources)"
+      item-value="resource_id"
+      no-data-text="No Resources" density="compact" :sort-by="sortBy" :hide-default-footer="resources.length <= 10"  :hide-default-header="hide_header" show-expand>
+      <template v-slot:item="{ item, internalItem, isExpanded, toggleExpand}: { item: any, internalItem: any, isExpanded: any, toggleExpand: any}">
         <tr @click="set_modal(item.resource_name, item)">
           <td>{{ item.resource_name }}</td>
           <td>{{ item.base_type }}</td>
           <td>{{ item.created_at }}</td>
           <td>{{ item.resource_id }}</td>
-          <td><v-btn @click.stop=delete_resource(item.resource_id)>Delete</v-btn></td>
+          <td v-if="item.children && get_all(item.children).length > 0"><v-btn
+        :icon="isExpanded(internalItem) ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+        variant="plain"
+        @click.stop="toggleExpand(internalItem)"
+      /></td>
         </tr>
       </template>
+      <template v-slot:expanded-row="{ columns, item}: {columns: any, item: any}">
+          <tr>
+            <td :colspan="columns.length"><ResourceTable :resources=get_all(item.children) :parent_id=item.resource_id :hide_header="true" /></td>
+          </tr>
+        </template>
     </v-data-table>
-    <v-btn @click="active_add()">Add Resource</v-btn>
+
+
+
 </template>
 
 <script setup lang="ts">
-import { resources, urls } from "@/store";
 import { ref } from 'vue';
 import { VDataTable } from 'vuetify/components';
-import AddResourceModal from "./AddResourceModal.vue";
-
+const props = defineProps(['resources', 'parent_id',  'hide_header'])
 const modal = ref(false)
-const add_modal = ref(false)
 const modal_text = ref()
 const modal_title = ref()
 const sortBy: VDataTable['sortBy'] = [{ key: 'created_at', order: 'desc' }];
@@ -41,15 +49,22 @@ const set_modal = (title: string, value: Object) => {
   modal.value = true
 }
 
-const active_add = () => {
-  add_modal.value = true
-}
+function prune_tree(input_resources: any): any[] {
+  var return_resources: any = []
+  input_resources.forEach((element: any) => { if((element.parent_id == null) || element.parent_id == props.parent_id) { return_resources.push(element)}
 
-
-const delete_resource = (resource_id: string) => {
-  fetch(urls.value.resource_manager.concat('resource/').concat(resource_id), {
-    method: "DELETE",
   });
+  return return_resources
 
 }
+
+
+function get_all(input_resources: any) {
+  if (Array.isArray(input_resources)) {
+    return input_resources
+  } else {
+    return Object.values(input_resources)
+  }
+}
+
 </script>

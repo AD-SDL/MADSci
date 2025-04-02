@@ -219,7 +219,7 @@ def create_resource_server(  # noqa: C901, PLR0915
         Push a resource onto a stack or queue.
 
         Args:
-            resource_id (str): The ID of the stack or queue to push the resource onto.
+            resource_id (str): The ID of the stNetworkErrorack or queue to push the resource onto.
             body (PushResourceBody): The resource to push onto the stack or queue, or the ID of an existing resource.
 
         Returns:

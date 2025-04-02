@@ -170,9 +170,11 @@ def test_run_action(test_client: TestClient) -> None:
             },
         )
         assert response.status_code == 200
-        assert (
-            ActionResult.model_validate(response.json()).status == ActionStatus.RUNNING
-        )
+        assert ActionResult.model_validate(response.json()).status in [
+            ActionStatus.RUNNING,
+            ActionStatus.SUCCEEDED,
+        ]
+        time.sleep(0.1)
         response = client.get(f"/action/{response.json()['action_id']}")
         assert response.status_code == 200
         assert (
@@ -201,6 +203,7 @@ def test_run_action_fail(test_client: TestClient) -> None:
             ActionStatus.FAILED,
             ActionStatus.RUNNING,
         ]
+        time.sleep(0.1)
         response = client.get(f"/action/{response.json()['action_id']}")
         assert response.status_code == 200
         action_result = ActionResult.model_validate(response.json())

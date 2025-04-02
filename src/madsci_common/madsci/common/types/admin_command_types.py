@@ -34,6 +34,6 @@ class AdminCommandResponse(BaseModel):
         description="A list of errors that occurred while executing the admin command.",
         default_factory=list,
     )
-    data: Optional[dict[str, Any]] = Field(
+    data: Optional[Any] = Field(
         title="Data", description="Any data returned by the admin action", default=None
     )

@@ -2,7 +2,6 @@
 
 import json
 import os
-import shutil
 import signal
 import tempfile
 import time
@@ -100,29 +99,33 @@ class RestNode(AbstractNode):
                 raise ValueError("args must be a JSON object")
         else:
             args = {}
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # * Save the uploaded files to a temporary directory
-            for i in range(len(files)):
+        local_files = {}
+        # * Save the uploaded files to a temporary directory
+        for i in range(len(files)):
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                 file = files[i]
-                with (Path(temp_dir) / file.filename).open("wb") as f:
-                    shutil.copyfileobj(file.file, f)
-            response = super().run_action(
-                ActionRequest(
-                    action_id=action_id if action_id else new_ulid_str(),
-                    action_name=action_name,
-                    args=args,
-                    files={
-                        file.filename: Path(temp_dir) / file.filename for file in files
-                    },
-                ),
+                file.file.seek(0)
+                content = file.file.read()
+                temp_file.write(content)
+                local_files[file.filename] = temp_file.name
+
+        response = super().run_action(
+            ActionRequest(
+                action_id=action_id if action_id else new_ulid_str(),
+                action_name=action_name,
+                args=args,
+                files={
+                    file.filename: Path(local_files[file.filename]) for file in files
+                },
+            ),
+        )
+        # * Return a file response if there are files to be returned
+        if response.files:
+            return ActionResultWithFiles.from_action_response(
+                action_response=response,
             )
-            # * Return a file response if there are files to be returned
-            if response.files:
-                return ActionResultWithFiles.from_action_response(
-                    action_response=response,
-                )
-            # * Otherwise, return a normal action response
-            return ActionResult.model_validate(response)
+        # * Otherwise, return a normal action response
+        return ActionResult.model_validate(response)
 
     def get_action_result(
         self,

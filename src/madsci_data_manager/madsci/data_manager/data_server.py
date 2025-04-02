@@ -7,6 +7,7 @@ from typing import Annotated, Any, Optional
 
 import uvicorn
 from fastapi import FastAPI, Form, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
 from madsci.common.types.datapoint_types import DataManagerDefinition, DataPoint
@@ -92,6 +93,14 @@ def create_data_server(  # noqa: C901
             datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     return app
 

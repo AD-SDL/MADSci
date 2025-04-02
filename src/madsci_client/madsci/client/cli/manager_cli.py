@@ -1,5 +1,6 @@
 """Command Line Interface for managing MADSci Squid managers."""
 
+import contextlib
 from pathlib import Path
 from typing import Optional
 
@@ -47,32 +48,21 @@ def find_manager(name: Optional[str], path: Optional[str]) -> ManagerContext:
     """Find a manager by name or path."""
     manager_context = ManagerContext()
 
+    with contextlib.suppress(Exception):
+        manager_context.lab_def = LabDefinition.load_model(
+            set_fields_from_cli=False, path_from_cli_arg=False
+        )
+
     if path:
         manager_context.path = Path(path)
-        if manager_context.path.exists():
+        with contextlib.suppress(Exception):
             manager_context.manager_def = ManagerDefinition.from_yaml(path)
-            return manager_context
 
-    if name:
-        lab_files = search_for_file_pattern("*.lab.yaml")
-        for lab_file in lab_files:
-            lab_def = LabDefinition.from_yaml(lab_file)
-            for manager_name, manager in lab_def.managers.items():
-                if manager_name == name:
-                    manager_context.path = Path(lab_file)
-                    manager_context.lab_def = lab_def
-                    manager_context.manager_def = (
-                        manager
-                        if isinstance(manager, ManagerDefinition)
-                        else ManagerDefinition.from_yaml(manager)
-                    )
-                    return manager_context
-
-    # * Search for any manager file
-    manager_files = search_for_file_pattern("*.manager.yaml")
-    if manager_files:
-        manager_context.path = Path(manager_files[0])
-        manager_context.manager_def = ManagerDefinition.from_yaml(manager_files[0])
+    if name and not manager_context.manager_def:
+        managers = ManagerDefinition.load_all_models()
+        for manager in managers.values():
+            if manager.name == name:
+                manager_context.manager_def = manager
 
     return manager_context
 

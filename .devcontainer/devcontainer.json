@@ -64,6 +64,9 @@
 		"ghcr.io/va-h/devcontainers-features/uv:1": {
 			"version": "latest",
 			"shellautocompletion": true
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"version": "3.11"
 		}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
