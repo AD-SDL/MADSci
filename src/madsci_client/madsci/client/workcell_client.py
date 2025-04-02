@@ -18,6 +18,7 @@ from madsci.common.types.workflow_types import (
     WorkflowStatus,
 )
 from madsci.common.utils import PathLike
+from madsci.common.types.base_types import new_ulid_str
 
 
 class WorkcellClient:
@@ -163,7 +164,7 @@ class WorkcellClient:
         for step in workflow.steps:
             if step.files:
                 for file, path in step.files.items():
-                    unique_filename = f"{step.step_id}_{file}"
+                    unique_filename = f"{new_ulid_str()}_{file}"
                     files[unique_filename] = path
                     if not Path(files[unique_filename]).is_absolute():
                         files[unique_filename] = (
