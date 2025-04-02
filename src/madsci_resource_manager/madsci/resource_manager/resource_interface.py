@@ -580,10 +580,12 @@ class ResourceInterface:
             container_row = session.exec(
                 select(ResourceTable).filter_by(resource_id=container_id)
             ).one()
-            if container_row.base_type not in ContainerTypeEnum:
+            try:
+                ContainerTypeEnum(container_row.base_type)
+            except ValueError as e:
                 raise ValueError(
                     f"Resource '{container_row.resource_name}' with type {container_row.base_type} is not a container."
-                )
+                ) from e
             if container_row.base_type in [
                 ContainerTypeEnum.stack,
                 ContainerTypeEnum.queue,
@@ -632,10 +634,12 @@ class ResourceInterface:
             container_row = session.exec(
                 select(ResourceTable).filter_by(resource_id=container_id)
             ).one()
-            if container_row.base_type not in ContainerTypeEnum:
+            try:
+                ContainerTypeEnum(container_row.base_type)
+            except ValueError as e:
                 raise ValueError(
                     f"Resource '{container_row.resource_name}' with type {container_row.base_type} is not a container."
-                )
+                ) from e
             if container_row.base_type in [
                 ContainerTypeEnum.stack,
                 ContainerTypeEnum.queue,
