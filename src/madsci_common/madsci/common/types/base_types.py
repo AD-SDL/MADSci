@@ -145,7 +145,24 @@ class BaseModel(SQLModel, use_enum_values=True):
         return model_instance
 
     @classmethod
-    def search_for_definition_file(cls, require_unique: bool = False) -> _T:
+    def load_all_models(
+        cls: type[_T],
+    ) -> list[_T]:
+        """
+        Load all models of this type from definition files.
+        """
+
+        model_instances = []
+
+        # * Load definition from filesystem search, looking for files matching the model's definition file pattern(s)
+        model_instances.extend(cls.search_for_definition_file())
+
+        return model_instances
+
+    @classmethod
+    def search_for_definition_file(
+        cls, require_unique: bool = False, return_all: bool = False
+    ) -> Union[list[_T], _T]:
         """
         Searches for a definition file for this model on the filesystem.
         Matching files are determined by the class variable _definition_file_patterns.
@@ -177,6 +194,8 @@ class BaseModel(SQLModel, use_enum_values=True):
                 raise FileNotFoundError(
                     f"No valid definition files found for {cls.__name__}"
                 )
+            if return_all:
+                return validated_definitions
             model_instance = validated_definitions[0]
         except Exception as e:
             default_logger.log_error(

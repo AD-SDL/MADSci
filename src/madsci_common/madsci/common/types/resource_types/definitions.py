@@ -117,8 +117,8 @@ class ConsumableResourceDefinition(ResourceDefinition):
         title="Resource Unit",
         description="The unit used to measure the quantity of the consumable.",
     )
-    quantity: Optional[PositiveNumber] = Field(
-        default=None,
+    quantity: PositiveNumber = Field(
+        default=0.0,
         title="Default Resource Quantity",
         description="The initial quantity of the consumable.",
     )
@@ -137,8 +137,8 @@ class DiscreteConsumableResourceDefinition(ConsumableResourceDefinition):
         title="Resource Base Type",
         description="The base type of the consumable.",
     )
-    quantity: Optional[PositiveInt] = Field(
-        default=None,
+    quantity: PositiveInt = Field(
+        default=0,
         title="Default Resource Quantity",
         description="The initial quantity of the consumable.",
     )

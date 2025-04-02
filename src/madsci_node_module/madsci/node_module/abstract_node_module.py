@@ -784,7 +784,9 @@ class AbstractNode:
             self._exception_handler(exception)
             self.node_status.errored = True
         else:
-            self.logger.log_info(f"Startup complete for node {self.node_info.node_name}.")
+            self.logger.log_info(
+                f"Startup complete for node {self.node_info.node_name}."
+            )
         finally:
             # * Mark the node as no longer initializing
             self.node_status.initializing = False
