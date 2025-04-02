@@ -201,6 +201,7 @@ def test_run_action_fail(test_client: TestClient) -> None:
             ActionStatus.FAILED,
             ActionStatus.RUNNING,
         ]
+        time.sleep(0.1)
         response = client.get(f"/action/{response.json()['action_id']}")
         assert response.status_code == 200
         action_result = ActionResult.model_validate(response.json())
