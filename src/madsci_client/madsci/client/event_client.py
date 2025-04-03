@@ -157,17 +157,25 @@ class EventClient:
         """Log an event at the info level."""
         self.log(event, logging.INFO)
 
+    info = log_info
+
     def log_warning(self, event: Union[Event, str]) -> None:
         """Log an event at the warning level."""
         self.log(event, logging.WARNING)
+
+    warning = log_warning
 
     def log_error(self, event: Union[Event, str]) -> None:
         """Log an event at the error level."""
         self.log(event, logging.ERROR)
 
+    error = log_error
+
     def log_critical(self, event: Union[Event, str]) -> None:
         """Log an event at the critical level."""
         self.log(event, logging.CRITICAL)
+
+    critical = log_critical
 
     @threaded_task
     def _send_event_to_event_server(self, event: Event) -> None:

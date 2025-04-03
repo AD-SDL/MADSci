@@ -7,7 +7,7 @@ from madsci.common.types.condition_types import (
     ResourceFieldCheckCondition,
     ResourceInLocationCondition,
 )
-from madsci.common.types.resource_types import Container, Resource
+from madsci.common.types.resource_types import ContainerTypeEnum, Resource
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import SchedulerMetadata
 from madsci.workcell_manager.schedulers.scheduler import AbstractScheduler
@@ -70,7 +70,9 @@ def evaluate_resource_in_location_condition(
         metadata.reasons.append("Resource client is not available.")
     else:
         container = scheduler.resource_client.get_resource(location.resource_id)
-        if not isinstance(container, Container):
+        try:
+            ContainerTypeEnum(container.base_type)
+        except ValueError:
             metadata.ready_to_run = False
             metadata.reasons.append(
                 f"Resource {container.resource_id} is not a container."
@@ -118,7 +120,9 @@ def evaluate_no_resource_in_location_condition(
         metadata.reasons.append("Resource client is not available.")
     else:
         container = scheduler.resource_client.get_resource(location.resource_id)
-        if not isinstance(container, Container):
+        try:
+            ContainerTypeEnum(container.base_type)
+        except ValueError:
             metadata.ready_to_run = False
             metadata.reasons.append(
                 f"Resource {container.resource_id} is not a container."
