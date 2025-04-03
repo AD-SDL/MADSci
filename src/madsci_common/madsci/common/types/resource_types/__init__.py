@@ -1,7 +1,8 @@
 """Types related to MADSci Resources."""
 
+import re
 import string
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import PositiveInt, PositiveNumber, new_ulid_str
 from madsci.common.types.resource_types.custom_types import (
@@ -289,9 +290,13 @@ GridIndex2D = tuple[GridIndex, GridIndex]
 GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 
-def numericize_index(key: Union[str, GridIndex]) -> GridIndex:
+def numericize_index(
+    key: Union[str, GridIndex], is_one_indexed: bool = False
+) -> GridIndex:
     """Convert a key to a numeric value."""
     if isinstance(key, int) or str(key).isdigit():
+        if is_one_indexed:
+            return int(key) - 1
         return int(key)
     return string.ascii_lowercase.index(key.lower())
 
@@ -316,6 +321,12 @@ class Row(Container):
         ge=0,
     )
 
+    is_one_indexed: bool = Field(
+        title="One Indexed",
+        description="Whether the numeric index of the object start at 0 or 1",
+        default=True,
+    )
+
     @computed_field
     def quantity(self) -> int:
         """Calculate the quantity of assets in the container."""
@@ -323,7 +334,15 @@ class Row(Container):
 
     def get_child(self, key: GridIndex) -> Optional["ResourceDataModels"]:
         """Get a child from the Row."""
-        return self.children.get(numericize_index(key), None)
+        return self.children.get(numericize_index(key, self.is_one_indexed), None)
+
+    def __getitem__(self, key: str) -> Resource:
+        """retrieve a child using an alphanumeric key"""
+        return self.get_child(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """set an item using an alphanumeric key"""
+        self.children[numericize_index(key, self.is_one_indexed)] = value
 
     @staticmethod
     def flatten_key(key: GridIndex) -> str:
@@ -377,6 +396,24 @@ class Grid(Row):
         if row is None:
             return None
         return row.get(numericize_index(key[1]), None)
+
+    def __getitem__(self, key: str) -> Resource:
+        """get an item using alphanumeric keys"""
+        match = re.search(r"(\d)", key)
+        if match:
+            index = match.start()
+            new_key = (key[:index], key[index:])
+        return self.get_child(new_key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """set an item using alphanumeric keys"""
+        match = re.search(r"(\d)", key)
+        if match:
+            index = match.start()
+            new_key = (key[:index], key[index:])
+        self.children[numericize_index(new_key[0], self.is_one_indexed)][
+            numericize_index(new_key[1], self.is_one_indexed)
+        ] = value
 
     @staticmethod
     def flatten_key(key: GridIndex2D) -> str:
