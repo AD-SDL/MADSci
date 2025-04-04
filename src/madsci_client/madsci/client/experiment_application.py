@@ -51,8 +51,6 @@ class ExperimentApplication:
             self.experiment_design = experiment_design
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
-        else:
-            self.experiment_design = experiment_design
 
         self.experiment = experiment if experiment else self.experiment
 

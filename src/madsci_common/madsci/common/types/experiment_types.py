@@ -1,7 +1,7 @@
 """Types for interacting with MADSci experiments and the Experiment Manager."""
 
 from enum import Enum
-from typing import Any, ClassVar, Literal, Optional, Union
+from typing import ClassVar, Literal, Optional, Union
 
 from bson.objectid import ObjectId
 from madsci.common.types.auth_types import OwnershipInfo
@@ -54,6 +54,11 @@ class ExperimentManagerDefinition(ManagerDefinition):
         description="URL for the resource manager",
         default=None,
     )
+    data_manager_url: Optional[str] = Field(
+        title="Data Manager URL",
+        description="URL for the data manager",
+        default=None,
+    )
     event_client_config: Optional[EventClientConfig] = Field(
         title="Event Client Configuration",
         description="The configuration for a MADSci event client.",
@@ -73,11 +78,11 @@ class ExperimentDesign(BaseModel):
         description="A description of the experiment.",
         default=None,
     )
-    resource_conditions: Optional[list[Conditions]] = Field(
+    resource_conditions: list[Conditions] = Field(
         title="Resource Conditions",
         description="The starting layout of resources required for the experiment.",
-        default=None,
-    ) 
+        default_factory=list,
+    )
     ownership_info: OwnershipInfo = Field(
         title="Ownership Info",
         description="Information about the users, campaigns, etc. that this design is owned by.",

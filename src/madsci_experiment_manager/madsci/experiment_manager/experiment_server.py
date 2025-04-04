@@ -6,6 +6,7 @@ from typing import Optional
 import requests
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient, EventType
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
@@ -204,6 +205,14 @@ def create_experiment_server(  # noqa: C901, PLR0915
             )
         )
         return experiment
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     return app
 
