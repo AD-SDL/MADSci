@@ -786,7 +786,10 @@ class AbstractNode:
             self.node_status.errored = True
         else:
             self.logger.log_info(
-                f"Startup complete for node {self.node_info.node_name}."
+                Event(
+                    event_type=EventType.NODE_START,
+                    event_data=self.node_definition.model_dump(mode="json"),
+                )
             )
         finally:
             # * Mark the node as no longer initializing

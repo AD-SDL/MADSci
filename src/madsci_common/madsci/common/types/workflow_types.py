@@ -1,42 +1,90 @@
 """Types for MADSci Worfklow running."""
 
 from datetime import datetime, timedelta
-from enum import Enum
 from typing import Any, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, new_ulid_str
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.validators import ulid_validator
-from pydantic import Field, field_validator
+from pydantic import Field, computed_field, field_validator
 
 
-class WorkflowStatus(str, Enum):
-    """Status for a workflow run"""
+class WorkflowStatus(BaseModel):
+    """Representation of the status of a Workflow"""
 
-    QUEUED = "queued"
-    """Workflow run is queued, hasn't started yet"""
-    RUNNING = "running"
-    """Workflow is currently running a step"""
-    IN_PROGRESS = "in_progress"
-    """Workflow has started, but is not actively running a step"""
-    COMPLETED = "completed"
-    """Workflow has completed"""
-    FAILED = "failed"
-    """Workflow has failed"""
-    UNKNOWN = "unknown"
-    """Workflow status is unknown"""
-    CANCELLED = "cancelled"
-    """Workflow has been cancelled"""
+    current_step_index: int = 0
+    """Index of the current step"""
+    paused: bool = False
+    """Whether or not the workflow is paused"""
+    completed: bool = False
+    """Whether or not the workflow has completed successfully"""
+    failed: bool = False
+    """Whether or not the workflow has failed"""
+    cancelled: bool = False
+    """Whether or not the workflow has been cancelled"""
+    running: bool = False
+    """Whether or not the workflow is currently running"""
+    has_started: bool = False
+    """Whether or not at least one step of the workflow has been run"""
 
+    def reset(self, step_index: int = 0) -> None:
+        """Reset the workflow status"""
+        self.current_step_index = step_index
+        self.paused = False
+        self.completed = False
+        self.failed = False
+        self.cancelled = False
+        self.running = False
+        self.has_started = False
+
+    @computed_field
     @property
-    def is_active(self) -> bool:
-        """Whether or not the workflow run is active"""
-        return self in [
-            WorkflowStatus.QUEUED,
-            WorkflowStatus.RUNNING,
-            WorkflowStatus.IN_PROGRESS,
-        ]
+    def queued(self) -> bool:
+        """Whether or not the workflow is queued"""
+        return self.active and not self.running
+
+    @computed_field
+    @property
+    def active(self) -> bool:
+        """Whether or not the workflow is actively being scheduled"""
+        return not (self.terminal or self.paused)
+
+    @computed_field
+    @property
+    def terminal(self) -> bool:
+        """Whether or not the workflow is in a terminal state"""
+        return self.completed or self.failed or self.cancelled
+
+    @computed_field
+    @property
+    def started(self) -> bool:
+        """Whether or not the workflow has started"""
+        return self.current_step_index > 0
+
+    @computed_field
+    @property
+    def ok(self) -> bool:
+        """Whether or not the workflow is ok (i.e. not failed or cancelled)"""
+        return not (self.failed or self.cancelled)
+
+    @computed_field
+    @property
+    def description(self) -> str:  # noqa: PLR0911
+        """Description of the workflow's status"""
+        if self.completed:
+            return "Completed Successfully"
+        if self.failed:
+            return "Failed on step {self.current_step_index}"
+        if self.cancelled:
+            return "Cancelled on step {self.current_step_index}"
+        if self.paused:
+            return "Paused on step {self.current_step_index}"
+        if self.running:
+            return "Running step {self.current_step_index}"
+        if self.active:
+            return "Queued on step {self.current_step_index}"
+        return "Unknown"
 
 
 class WorkflowParameter(BaseModel):
@@ -111,7 +159,7 @@ class Workflow(WorkflowDefinition):
     """parameter values used in this workflow"""
     ownership_info: OwnershipInfo = Field(default_factory=OwnershipInfo)
     """ID of the experiment this workflow is a part of"""
-    status: WorkflowStatus = Field(default=WorkflowStatus.QUEUED)
+    status: WorkflowStatus = Field(default_factory=WorkflowStatus)
     """current status of the workflow"""
     step_index: int = 0
     """Index of the current step"""
@@ -125,8 +173,6 @@ class Workflow(WorkflowDefinition):
     """Time the workflow finished running"""
     duration: Optional[timedelta] = None
     """Duration of the workflow's run"""
-    paused: Optional[bool] = False
-    """whether or not the workflow is paused"""
     step_definitions: list[StepDefinition] = Field(default_factory=list)
     """The original step definitions for the workflow"""
 
