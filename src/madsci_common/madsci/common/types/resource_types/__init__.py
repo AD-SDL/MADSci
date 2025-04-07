@@ -17,6 +17,7 @@ from madsci.common.types.resource_types.definitions import (
     ConsumableResourceDefinition,
     ContainerResourceDefinition,
     ContinuousConsumableResourceDefinition,
+    CustomResourceAttributeDefinition,  # noqa: F401
     DiscreteConsumableResourceDefinition,
     GridIndex,
     GridIndex2D,
