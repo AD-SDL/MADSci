@@ -113,7 +113,6 @@ export default {
 
 .wf_status_queued,
 .wf_status_paused,
-.wf_status_in_progress,
 .node_status_paused {
   background-color: gold;
   color: black;
@@ -121,7 +120,6 @@ export default {
 
 .wf_status_in_progress {
   background-color: darkblue;
-  color: black;
 }
 
 .node_status_locked {

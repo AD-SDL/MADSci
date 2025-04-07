@@ -7,15 +7,15 @@
       <v-data-table :headers="arg_headers" :items="experiments" item-value="_id" :sort-by="sortBy"
         density="compact">
         <template v-slot:item="{ item, internalItem, isExpanded, toggleExpand}: { item: any, internalItem: any, isExpanded: any, toggleExpand: any}">
-        <tr @click="openExperimentDetails(item)">
-          <td>{{ item.experiment_name }}</td>
-          <td>{{ item._id }}</td>
-          <td :class="'status_button wf_status_' + item.status">{{ item.status }}</td>
-          <td>{{ item.started_at }}</td>
+        <tr >
+          <td @click="openExperimentDetails(item)">{{ item.experiment_design.experiment_name }}</td>
+          <td @click="openExperimentDetails(item)">{{ item._id }}</td>
+          <td @click="openExperimentDetails(item)" :class="'status_button wf_status_' + item.status">{{ item.status }}</td>
+          <td @click="openExperimentDetails(item)" >{{ item.started_at }}</td>
           <td><v-btn
         :icon="isExpanded(internalItem) ? 'mdi-chevron-up' : 'mdi-chevron-down'"
         variant="plain"
-        @click.stop="toggleExpand(internalItem)"
+        @click="toggleExpand(internalItem)"
       /></td>
         </tr>
       </template>
@@ -91,7 +91,10 @@ const openExperimentDetails = (item: any) => {
 
 
 function filter_workflows(workflows: any, experiment_id: any)  {
-  return Object.values(workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
+  var workflow_list = Object.values(workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
+  var dict: any = {}
+  workflow_list.forEach((workflow: any) => dict[workflow.workflow_id] = workflow)
+  return dict
 }
 </script>
 
