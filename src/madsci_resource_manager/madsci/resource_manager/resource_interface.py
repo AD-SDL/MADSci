@@ -812,12 +812,15 @@ class ResourceInterface:
         if custom_definition.fill:
             keys = resource.get_all_keys()
             for key in keys:
-                resource.set_child(
-                    key,
-                    Resource.discriminate(
-                        custom_definition.default_child_template.model_dump(mode="json")
-                    ),
+                child_resource = Resource.discriminate(
+                    custom_definition.default_child_template.model_dump(mode="json")
                 )
+                if custom_definition.default_child_template.resource_name_prefix:
+                    child_resource.resource_name = (
+                        custom_definition.default_child_template.resource_name_prefix
+                        + str(key)
+                    )
+                resource.set_child(key, child_resource)
         if custom_definition.default_children:
             for key in custom_definition.default_children:
                 resource.set_child(

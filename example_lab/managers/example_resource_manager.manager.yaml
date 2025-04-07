@@ -13,6 +13,7 @@ custom_types:
     row_dimension: 12
     column_dimension: 8
     default_child_template:
+      resource_name_prefix: "well "
       base_type: discrete_consumable
       capacity: 1
       quantity: 1

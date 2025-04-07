@@ -412,7 +412,7 @@ class Grid(Row):
         row = self.children.get(index, None)
         if row is None:
             self.children[index] = Row(
-                resource_name=f"{self.resource_name}_row_{index}",
+                resource_name=f"{self.resource_name}_row_{int(index) + self.is_one_indexed!s}",
                 row_dimension=self.row_dimension,
             )
             row = self.children[index]

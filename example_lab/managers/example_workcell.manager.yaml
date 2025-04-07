@@ -36,6 +36,7 @@ locations:
     - 4
   resource_definition:
     resource_name: slot_1
+    resource_name_prefix: null
     resource_type: ''
     base_type: slot
     resource_description: null
@@ -45,7 +46,7 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JQMFHEN8FTRSDGHT7VYF8CHC
+  resource_id: 01JR8DPPSHVNRFDZZDGRAXZ1MQ
 - location_name: test2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
@@ -57,6 +58,7 @@ locations:
     - 4
   resource_definition:
     resource_name: slot_2
+    resource_name_prefix: null
     resource_type: ''
     base_type: slot
     resource_description: null
@@ -66,5 +68,5 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JR1574FNYZMTMW5ZFH2YZN56
+  resource_id: 01JR8DPPVJKRPQ2CSF9RHVYRTS
 workcell_directory: /home/madsci/.madsci/workcells/Example Workcell

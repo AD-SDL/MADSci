@@ -107,6 +107,12 @@ class ResourceDefinition(BaseModel, table=False, extra="allow"):
         description="The name of the resource.",
         default_factory=new_name_str,
     )
+
+    resource_name_prefix: Optional[str] = Field(
+        title="Resource Name Prefix",
+        description="A prefix to append the key of the object to for machine instanciated resources",
+        default=None,
+    )
     resource_type: str = Field(
         title="Resource Type",
         description="The type of the resource. Either a custom type name or a resource base type.",
