@@ -1,11 +1,5 @@
 # Modular Autonomous Discovery for Science (MADSci)
 
-## Notes on Stability
-
-MADSci is currently in beta. Most of the core functionality is working and tested, but there may be bugs or stability issues (if you run into any, please [open an issue](https://github.com/AD-SDL/MADSci/issues) so we can get it fixed). New releases will likely include breaking changes, so we recommend pinning the version in your dependencies and upgrading only after reviewing the release notes.
-
-Note that MADSci is the successor to [the Workflow Execution Interface](https://github.com/AD-SDL/wei).
-
 ## Overview
 
 MADSci is a modular, autonomous, and scalable framework for scientific discovery and experimentation. It aims to provide:
@@ -16,6 +10,10 @@ MADSci is a modular, autonomous, and scalable framework for scientific discovery
 - Resource Management, allowing robust tracking of all the labware, consumables, equipment, samples, and assets used in an autonomous laboratory.
 - Event Management, enabling distributed logging and event handling across every part of the autonomous lab.
 - Data Management, collecting and storing data created by instruments or analysis as part of an experiment.
+
+## Notes on Stability
+
+MADSci is currently in beta. Most of the core functionality is working and tested, but there may be bugs or stability issues (if you run into any, please [open an issue](https://github.com/AD-SDL/MADSci/issues) so we can get it fixed). New releases will likely include breaking changes, so we recommend pinning the version in your dependencies and upgrading only after reviewing the release notes.
 
 ## Documentation
 
