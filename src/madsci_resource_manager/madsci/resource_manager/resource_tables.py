@@ -181,7 +181,8 @@ class ResourceTableBase(Resource):
             for key, child in self.children.items():
                 flat_children[key] = child.to_data_model()
             if flat_children and hasattr(resource, "children"):
-                resource.children = flat_children
+                resource.populate_children(flat_children)
+
         return resource
 
     @classmethod

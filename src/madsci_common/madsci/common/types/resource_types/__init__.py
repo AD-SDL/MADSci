@@ -362,6 +362,10 @@ class Row(Container):
             GridIndex(i + self.is_one_indexed) for i in list(range(self.row_dimension))
         ]
 
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
+        """Populate the children of the grid."""
+        self.children = children
+
 
 class Grid(Row):
     """Data Model for a Grid. A grid is a container that can hold other resources in two dimensions and supports random access. For example, a 96-well microplate. Grids are indexed by integers or letters."""
@@ -469,9 +473,9 @@ class Grid(Row):
         """Extract the children from the grid as a flat dictionary."""
         return self.children
 
-    def populate_children(self) -> None:
+    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
         """Populate the children of the grid."""
-        return self.children
+        self.children = children
 
 
 class VoxelGrid(Grid):

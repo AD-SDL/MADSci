@@ -7,8 +7,8 @@
       <template v-slot:item="{ item }: { item: any }">
         <tr @click="set_modal(workflows[item.workflow_id].name, workflows[item.workflow_id])">
           <td>{{ item.name }}</td>
-          <td><v-sheet class="pa-2 rounded-lg text-md-center text-white" :class="'wf_status_' + item.status"> {{
-      item.status }}
+          <td><v-sheet class="pa-2 rounded-lg text-md-center text-white" :class="'wf_status_' + process_status(item.status)"> {{
+      process_status(item.status) }}
             </v-sheet>
           </td>
           <td>{{ item.start_time }}</td>
@@ -40,6 +40,22 @@ const set_modal = (title: string, value: Object) => {
   modal_title.value = title
   modal_text.value = value
   modal.value = true
+}
+
+function process_status(status: any) {
+  if (status.completed) {
+    return "completed"
+  }
+  else if (status.paused) {
+    return "paused"
+  }
+  else if(status.running) {
+    return "running"
+  }
+  else if(status.queued) {
+    return "queued"
+  }
+
 }
 </script>
 
