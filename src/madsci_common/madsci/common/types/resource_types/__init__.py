@@ -214,7 +214,7 @@ class Container(Asset):
         description="The capacity of the container.",
         default=None,
     )
-    children: Optional[dict[str, "ResourceDataModels"]] = Field(
+    children: dict[str, "ResourceDataModels"] = Field(
         title="Children",
         description="The children of the container.",
         default_factory=dict,
@@ -254,7 +254,7 @@ class Collection(Container):
         default=ContainerTypeEnum.collection,
         const=True,
     )
-    children: Optional[dict[str, "ResourceDataModels"]] = Field(
+    children: dict[str, "ResourceDataModels"] = Field(
         title="Children",
         description="The children of the collection.",
         default_factory=dict,
@@ -292,7 +292,7 @@ def numericize_index(
 class Row(Container):
     """Data Model for a Row. A row is a container that can hold other resources in a single dimension and supports random access. For example, a row of tubes in a rack or a single-row microplate. Rows are indexed by integers or letters."""
 
-    children: Optional[dict[GridIndex, "ResourceDataModels"]] = Field(
+    children: dict[GridIndex, "ResourceDataModels"] = Field(
         title="Children",
         description="The children of the row container.",
         default_factory=dict,
@@ -320,7 +320,8 @@ class Row(Container):
         """Calculate the quantity of assets in the container."""
         quantity = 0
         for child in self.children.values():
-            quantity += child.quantity
+            if getattr(child, "quantity", None) is not None:
+                quantity += child.quantity
         return quantity
 
     def extract_children(self) -> dict[str, "ResourceDataModels"]:
@@ -354,7 +355,7 @@ class Row(Container):
     def check_key_bounds(self, key: Union[str, GridIndex]) -> bool:
         """Check if the key is within the bounds of the grid."""
         key = numericize_index(key)
-        return not (key < 0 or key >= self.row_dimension)
+        return not (int(key) < 0 or int(key) >= self.row_dimension)
 
     def get_all_keys(self) -> list:
         """get all keys of this object"""
@@ -370,7 +371,7 @@ class Row(Container):
 class Grid(Row):
     """Data Model for a Grid. A grid is a container that can hold other resources in two dimensions and supports random access. For example, a 96-well microplate. Grids are indexed by integers or letters."""
 
-    children: Optional[dict[GridIndex, Row]] = Field(
+    children: dict[GridIndex, Row] = Field(
         title="Children",
         description="The children of the grid container.",
         default_factory=dict,
@@ -400,7 +401,8 @@ class Grid(Row):
         """Calculate the quantity of assets in the container."""
         quantity = 0
         for _, row_value in self.children.items():
-            quantity += row_value.quantity
+            if getattr(row_value, "quantity", None) is not None:
+                quantity += row_value.quantity
         return quantity
 
     def get_child(self, key: GridIndex2D) -> Optional["ResourceDataModels"]:
@@ -463,7 +465,7 @@ class Grid(Row):
             raise ValueError("Key must be a string or a 2-tuple.")
         numeric_key = []
         for index in key:
-            numeric_key.append(numericize_index(index))
+            numeric_key.append(int(numericize_index(index)))
         key = numeric_key
         return not (key[0] < 0 or key[0] >= self.row_dimension) and not (
             key[1] < 0 or key[1] >= self.column_dimension
@@ -492,8 +494,8 @@ class VoxelGrid(Grid):
         description="The number of layers in the grid.",
         ge=0,
     )
-    children: Optional[
-        dict[GridIndex, dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]]
+    children: dict[
+        GridIndex, dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]
     ] = Field(
         title="Children",
         description="The children of the voxel grid container.",
@@ -506,7 +508,8 @@ class VoxelGrid(Grid):
         quantity = 0
         for _, row_value in self.children.items():
             for _, col_value in row_value.items():
-                quantity += len(col_value)
+                if getattr(col_value, "quantity", None) is not None:
+                    quantity += col_value.quantity
         return quantity
 
     def get_child(self, key: GridIndex3D) -> Optional["ResourceDataModels"]:
@@ -564,7 +567,7 @@ class VoxelGrid(Grid):
             raise ValueError("Key must be a string or a 3-tuple.")
         numeric_key = []
         for index in key:
-            numeric_key.append(numericize_index(index))
+            numeric_key.append(int(numericize_index(index)))
         key = numeric_key
         return (
             not (key[0] < 0 or key[0] >= self.row_dimension)
@@ -582,7 +585,7 @@ class Slot(Container):
         default=ContainerTypeEnum.slot,
         const=True,
     )
-    children: Optional[list["ResourceDataModels"]] = Field(
+    children: list["ResourceDataModels"] = Field(
         title="Children",
         description="The children of the slot.",
         default_factory=list,
@@ -628,7 +631,7 @@ class Stack(Container):
         default=ContainerTypeEnum.stack,
         const=True,
     )
-    children: Optional[list["ResourceDataModels"]] = Field(
+    children: list["ResourceDataModels"] = Field(
         title="Children",
         description="The children of the stack.",
         default_factory=list,
@@ -668,7 +671,7 @@ class Queue(Container):
         default=ContainerTypeEnum.queue,
         const=True,
     )
-    children: Optional[list["ResourceDataModels"]] = Field(
+    children: list["ResourceDataModels"] = Field(
         title="Children",
         description="The children of the queue.",
         default_factory=list,
@@ -708,7 +711,7 @@ class Pool(Container):
         default=ContainerTypeEnum.pool,
         const=True,
     )
-    children: Optional[dict[str, "ConsumableDataModels"]] = Field(
+    children: dict[str, "ConsumableDataModels"] = Field(
         title="Children",
         description="The children of the pool.",
         default_factory=dict,

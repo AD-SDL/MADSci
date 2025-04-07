@@ -16,9 +16,9 @@ from madsci.common.types.resource_types import Slot
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
-    ComplexWorkflowStatus,
     SchedulerMetadata,
     Workflow,
+    WorkflowStatus,
 )
 from madsci.workcell_manager.schedulers.default_scheduler import Scheduler
 
@@ -111,8 +111,8 @@ def test_condition_checking_no_resource_info_for_location(
                     action="test_action",
                     node="test_node",
                     conditions=[
-                        ResourceInLocationCondition(location="loc1"),
-                        NoResourceInLocationCondition(location="loc2"),
+                        ResourceInLocationCondition(location_name="loc1"),
+                        NoResourceInLocationCondition(location_name="loc2"),
                     ],
                 )
             ],
@@ -141,8 +141,8 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
                     action="test_action",
                     node="test_node",
                     conditions=[
-                        ResourceInLocationCondition(location="loc1"),
-                        NoResourceInLocationCondition(location="loc2"),
+                        ResourceInLocationCondition(location_name="loc1"),
+                        NoResourceInLocationCondition(location_name="loc2"),
                     ],
                 )
             ],
@@ -162,7 +162,7 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
     metadata = result[workflows[0].workflow_id]
     assert not metadata.ready_to_run
     assert len(metadata.reasons) > 0
-    assert "is empty" in metadata.reasons[0]
+    assert "does not contain" in metadata.reasons[0]
 
     mock_scheduler.resource_client.get_resource.return_value = Resource()
 
@@ -180,7 +180,7 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
     metadata = result[workflows[0].workflow_id]
     assert not metadata.ready_to_run
     assert len(metadata.reasons) > 0
-    assert "is not empty." in metadata.reasons[0]
+    assert "contains" in metadata.reasons[0]
 
 
 def test_workflow_paused(mock_scheduler: Scheduler, workflows: list[Workflow]) -> None:
@@ -233,7 +233,7 @@ def test_workflow_status_queued(
     mock_scheduler: Scheduler, workflows: list[Workflow]
 ) -> None:
     """Test that queued workflows are ready to run"""
-    workflows[0].status = ComplexWorkflowStatus()
+    workflows[0].status = WorkflowStatus()
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     assert result[workflows[0].workflow_id].ready_to_run
 

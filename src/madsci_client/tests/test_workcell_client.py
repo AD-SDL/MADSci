@@ -120,7 +120,7 @@ def test_get_workcell_state(client: WorkcellClient) -> None:
 def test_pause_workflow(client: WorkcellClient) -> None:
     """Test pausing a workflow."""
     workflow = client.submit_workflow(
-        WorkflowDefinition(name="Test Workflow"), None, blocking=False
+        WorkflowDefinition(name="Test Workflow"), None, await_completion=False
     )
     paused_workflow = client.pause_workflow(workflow.workflow_id)
     assert paused_workflow.status.paused is True
@@ -129,7 +129,7 @@ def test_pause_workflow(client: WorkcellClient) -> None:
 def test_resume_workflow(client: WorkcellClient) -> None:
     """Test resuming a workflow."""
     workflow = client.submit_workflow(
-        WorkflowDefinition(name="Test Workflow"), {}, blocking=False
+        WorkflowDefinition(name="Test Workflow"), {}, await_completion=False
     )
     client.pause_workflow(workflow.workflow_id)
     resumed_workflow = client.resume_workflow(workflow.workflow_id)
@@ -139,7 +139,7 @@ def test_resume_workflow(client: WorkcellClient) -> None:
 def test_cancel_workflow(client: WorkcellClient) -> None:
     """Test canceling a workflow."""
     workflow = client.submit_workflow(
-        WorkflowDefinition(name="Test Workflow"), {}, blocking=False
+        WorkflowDefinition(name="Test Workflow"), {}, await_completion=False
     )
     canceled_workflow = client.cancel_workflow(workflow.workflow_id)
     assert canceled_workflow.status.cancelled is True

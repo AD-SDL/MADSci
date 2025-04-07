@@ -16,9 +16,9 @@ from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellConfig, WorkcellDefinition
 from madsci.common.types.workflow_types import (
-    ComplexWorkflowStatus,
     SchedulerMetadata,
     Workflow,
+    WorkflowStatus,
 )
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 from madsci.workcell_manager.workcell_engine import Engine
@@ -92,7 +92,7 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellRedisHandler) ->
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        status=ComplexWorkflowStatus(running=True),
+        status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
     state_handler.set_workflow(workflow)
@@ -133,7 +133,7 @@ def test_run_single_step_of_workflow_with_multiple_steps(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step1, step2],
-        status=ComplexWorkflowStatus(running=True),
+        status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
     state_handler.set_workflow(workflow)
@@ -173,7 +173,7 @@ def test_finalize_step_success(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        status=ComplexWorkflowStatus(running=True),
+        status=WorkflowStatus(running=True),
     )
     state_handler.set_workflow(workflow)
     updated_step = copy.deepcopy(step)
@@ -196,7 +196,7 @@ def test_finalize_step_failure(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        status=ComplexWorkflowStatus(running=True),
+        status=WorkflowStatus(running=True),
     )
     state_handler.set_workflow(workflow)
     updated_step = copy.deepcopy(step)
@@ -225,7 +225,7 @@ def test_handle_data_and_files_with_data(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        status=ComplexWorkflowStatus(running=True),
+        status=WorkflowStatus(running=True),
     )
     state_handler.set_node(
         node_name="node1",
@@ -264,7 +264,7 @@ def test_handle_data_and_files_with_files(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        status=ComplexWorkflowStatus(running=True),
+        status=WorkflowStatus(running=True),
     )
     state_handler.set_node(
         node_name="node1",
@@ -300,7 +300,7 @@ def test_run_step_send_action_exception_then_get_action_result_success(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        status=ComplexWorkflowStatus(running=True),
+        status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
     state_handler.set_workflow(workflow)
@@ -346,7 +346,7 @@ def test_run_step_send_action_and_get_action_result_fail(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        status=ComplexWorkflowStatus(running=True),
+        status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
     state_handler.set_workflow(workflow)

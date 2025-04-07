@@ -2,7 +2,7 @@
 
 import json
 import time
-from pathlib import Path
+from pathlib import Path, PosixPath, PurePath, WindowsPath
 from typing import Any, Optional, Union
 
 import requests
@@ -264,7 +264,7 @@ class WorkcellClient:
     def resubmit_workflow(
         self,
         workflow_id: str,
-        blocking: bool = True,
+        await_completion: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
     ) -> Workflow:
@@ -275,7 +275,7 @@ class WorkcellClient:
         ----------
         workflow_id : str
             The ID of the workflow to resubmit.
-        blocking : bool, optional
+        await_completion : bool, optional
             If True, wait for the workflow to complete, by default True.
         raise_on_failed : bool, optional
             If True, raise an exception if the workflow fails, by default True.
@@ -290,7 +290,7 @@ class WorkcellClient:
         url = f"{self.url}/workflow/{workflow_id}/resubmit"
         response = requests.get(url, timeout=10)
         new_wf = Workflow(**response.json())
-        if blocking:
+        if await_completion:
             return self.await_workflow(
                 new_wf.workflow_id,
                 raise_on_failed=raise_on_failed,
@@ -650,6 +650,9 @@ def insert_parameter_values(
                     + param.name
                     + " not provided, and no default value is defined."
                 )
+    for key, value in parameters.items():
+        if isinstance(value, (Path, PurePath, WindowsPath, PosixPath)):
+            parameters[key] = str(value)
     steps = []
     for step in workflow.steps:
         for key, val in iter(step):

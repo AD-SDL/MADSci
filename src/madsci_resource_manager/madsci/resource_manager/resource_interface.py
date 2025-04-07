@@ -604,12 +604,14 @@ class ResourceInterface:
                 ContainerTypeEnum.grid,
                 ContainerTypeEnum.voxel_grid,
             ]:
-                if isinstance(key, str):
-                    key = container.expand_key(key)
-                if not container.check_key_bounds(key):
-                    raise KeyError(key)
-                key = container.flatten_key(key)
-            elif (
+                container[key] = child
+                self.update_resource(
+                    container, update_descendants=True, parent_session=session
+                )
+                session.commit()
+                session.refresh(container_row)
+                return container_row.to_data_model()
+            if (
                 container.capacity
                 and container.quantity >= container.capacity
                 and key not in container.children
@@ -679,7 +681,10 @@ class ResourceInterface:
                 select(ResourceTable).filter_by(resource_id=resource_id)
             ).one()
             resource = resource_row.to_data_model()
-            if not hasattr(resource, "capacity"):
+            if resource.base_type in [
+                ResourceTypeEnum.resource,
+                ResourceTypeEnum.asset,
+            ]:
                 raise ValueError(
                     f"Resource '{resource.resource_name}' with type {resource.base_type} has no capacity attribute."
                 )
@@ -704,7 +709,10 @@ class ResourceInterface:
                 select(ResourceTable).filter_by(resource_id=resource_id)
             ).one()
             resource = resource_row.to_data_model()
-            if not hasattr(resource, "capacity"):
+            if resource.base_type in [
+                ResourceTypeEnum.resource,
+                ResourceTypeEnum.asset,
+            ]:
                 raise ValueError(
                     f"Resource '{resource.resource_name}' with type {resource.base_type} has no capacity attribute."
                 )
@@ -727,7 +735,10 @@ class ResourceInterface:
                 select(ResourceTable).filter_by(resource_id=resource_id)
             ).one()
             resource = resource_row.to_data_model()
-            if not hasattr(resource, "quantity"):
+            if resource.base_type in [
+                ResourceTypeEnum.resource,
+                ResourceTypeEnum.asset,
+            ]:
                 raise ValueError(
                     f"Resource '{resource.resource_name}' with type {resource.base_type} has no quantity attribute."
                 )
