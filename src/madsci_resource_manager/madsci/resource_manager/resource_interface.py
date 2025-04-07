@@ -17,10 +17,14 @@ from madsci.common.types.resource_types import (
     ContainerDataModels,
     ContainerTypeEnum,
     Queue,
+    Resource,
     ResourceDataModels,
     ResourceTypeEnum,
     Slot,
     Stack,
+)
+from madsci.common.types.resource_types.definitions import (
+    ResourceDefinitions,
 )
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
@@ -777,3 +781,50 @@ class ResourceInterface:
             session.merge(resource_row)
             session.commit()
             return resource_row.to_data_model()
+
+    def init_custom_resource(
+        self,
+        input_definition: ResourceDefinitions,
+        custom_definition: ResourceDefinitions,
+    ) -> ResourceDataModels:
+        """initialize a customr resource"""
+        input_dict = input_definition.model_dump(mode="json", exclude_unset=True)
+        custom_dict = custom_definition.model_dump(mode="json")
+        custom_dict.update(**input_dict)
+        custom_dict["base_type"] = custom_definition.base_type
+        resource = Resource.discriminate(custom_dict)
+        for attribute in custom_definition.custom_attributes:
+            if attribute.default_value:
+                resource.attributes[attribute.attribute_name] = attribute.default_value
+            if (
+                input_definition.model_extra
+                and attribute.attribute_name in input_definition.model_extra
+            ):
+                resource.attributes[attribute.attribute_name] = getattr(
+                    input_definition, attribute.attribute_name
+                )
+            elif not attribute.optional:
+                raise (
+                    ValueError(
+                        f"Missing necessary custom attribute: {attribute.attribute_name}"
+                    )
+                )
+        if custom_definition.fill:
+            keys = resource.get_all_keys()
+            for key in keys:
+                resource.set_child(
+                    key,
+                    Resource.discriminate(
+                        custom_definition.default_child_template.model_dump(mode="json")
+                    ),
+                )
+        if custom_definition.default_children:
+            for key in custom_definition.default_children:
+                resource.set_child(
+                    key,
+                    Resource.discriminate(
+                        custom_definition.default_children[key].model_dump(mode="json")
+                    ),
+                )
+        resource = self.add_resource(resource)
+        return self.get_resource(resource.resource_id)

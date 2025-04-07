@@ -70,22 +70,6 @@ services:
     network_mode: host
     depends_on:
       - mongodb
-  liquidhandler:
-    container_name: liquidhandler
-    image: madsci:latest
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    environment:
-      - USER_ID=1000
-      - GROUP_ID=1000
-    volumes:
-      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
-      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
-    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/liquidhandler_1.node.yaml
-    network_mode: host
-    depends_on:
-      - event_manager
   resource_manager:
     container_name: resource_manager
     image: madsci:latest
@@ -102,6 +86,22 @@ services:
     network_mode: host
     depends_on:
       - postgres
+  data_manager:
+    container_name: data_manager
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python -m madsci.data_manager.data_server
+    network_mode: host
+    depends_on:
+      - mongodb
   workcell_manager:
     container_name: workcell_manager
     image: madsci:latest
@@ -122,3 +122,53 @@ services:
       - redis
       - resource_manager
       - postgres
+   #Nodes
+  liquidhandler:
+    container_name: liquidhandler
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/liquidhandler_1.node.yaml
+    network_mode: host
+    depends_on:
+      - event_manager
+  robotarm:
+    container_name: robotarm
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python example_lab/example_modules/robotarm.py --definition example_lab/example_modules/nodes/robotarm_1.node.yaml
+    network_mode: host
+    depends_on:
+      - event_manager
+
+  platereader:
+    container_name: platereader
+    image: madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python example_lab/example_modules/platereader.py --definition example_lab/example_modules/nodes/platereader_1.node.yaml
+    network_mode: host
+    depends_on:
+      - event_manager

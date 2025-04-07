@@ -1,10 +1,11 @@
 """Pydantic Models for Resource Definitions, used to define default resources for a node or workcell."""
 
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     BaseModel,
+    ConfigDict,
     PositiveInt,
     PositiveNumber,
 )
@@ -15,10 +16,26 @@ from madsci.common.types.resource_types.custom_types import (
     ResourceTypeEnum,
 )
 from madsci.common.utils import new_name_str
+from pydantic import AfterValidator
 from pydantic.functional_validators import field_validator, model_validator
 from pydantic.types import Discriminator, Tag
 from sqlalchemy.dialects.postgresql import JSON
 from sqlmodel import Field
+
+
+def single_letter_or_digit_validator(value: str) -> str:
+    """Validate that the value is a single letter or digit."""
+    if not (value.isalpha() and len(value) == 1) or value.isdigit():
+        raise ValueError("Value must be a single letter or digit.")
+    return value
+
+
+GridIndex = Union[
+    int,
+    Annotated[str, AfterValidator(single_letter_or_digit_validator)],
+]
+GridIndex2D = tuple[GridIndex, GridIndex]
+GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 
 class ResourceManagerDefinition(ManagerDefinition):
@@ -49,11 +66,42 @@ class ResourceManagerDefinition(ManagerDefinition):
         title="Event Client Configuration",
         description="Configuration for the event client.",
     )
+    custom_types: dict[str, "ResourceDefinitions"] = Field(
+        default_factory=dict,
+        title="Custom Types",
+        description="Custom Types for this resource manager",
+    )
 
 
-class ResourceDefinition(BaseModel, table=False):
+class CustomResourceAttributeDefinition(BaseModel, extra="allow"):
+    """Definition for a MADSci Custom Resource Attribute."""
+
+    attribute_name: str = Field(
+        title="Attribute Name",
+        description="The name of the attribute.",
+    )
+    attribute_description: Optional[str] = Field(
+        default=None,
+        title="Attribute Description",
+        description="A description of the attribute.",
+    )
+    optional: bool = Field(
+        default=False,
+        title="Optional",
+        description="Whether the attribute is optional.",
+    )
+    default_value: Any = Field(
+        default=None,
+        title="Default Value",
+        description="The default value of the attribute.",
+        sa_type=JSON,
+    )
+
+
+class ResourceDefinition(BaseModel, table=False, extra="allow"):
     """Definition for a MADSci Resource."""
 
+    model_config = ConfigDict(extra="allow")
     resource_name: str = Field(
         title="Resource Name",
         description="The name of the resource.",
@@ -79,6 +127,12 @@ class ResourceDefinition(BaseModel, table=False):
         default_factory=OwnershipInfo,
         title="Ownership Info",
         description="The owner of this resource",
+        sa_type=JSON,
+    )
+    custom_attributes: Optional[list["CustomResourceAttributeDefinition"]] = Field(
+        default=None,
+        title="Custom Attributes",
+        description="Custom attributes used by resources of this type.",
         sa_type=JSON,
     )
 
@@ -179,7 +233,7 @@ class ContainerResourceDefinition(ResourceDefinition):
         title="Default Children",
         description="The default children to create when initializing the container. If None, use the type's default_children.",
     )
-    default_child_template: Optional[ResourceDefinition] = Field(
+    default_child_template: Optional["ResourceDefinitions"] = Field(
         default=None,
         title="Default Child Template",
         description="Template for creating child resources, supporting variable substitution. If None, use the type's default_child_template.",
@@ -229,6 +283,21 @@ class RowResourceDefinition(ContainerResourceDefinition):
         title="Default Children",
         description="The default children to create when initializing the collection. If None, use the type's default_children.",
     )
+    fill: bool = Field(
+        default=False,
+        title="Fill",
+        description="Whether to populate every empty key with a default child",
+    )
+    row_dimension: int = Field(
+        title="Row Dimension",
+        description="The number of rows in the row.",
+        ge=0,
+    )
+    is_one_indexed: bool = Field(
+        title="One Indexed",
+        description="Whether the numeric index of the object start at 0 or 1",
+        default=True,
+    )
 
 
 class GridResourceDefinition(RowResourceDefinition):
@@ -270,6 +339,15 @@ class VoxelGridResourceDefinition(GridResourceDefinition):
         title="Layer Dimension",
         description="The number of layers in the voxel grid. If None, use the type's layer_dimension.",
     )
+
+    def get_all_keys(self) -> list:
+        """get all keys of this object"""
+        return [
+            GridIndex3D((i, j, k))
+            for i in range(self.row_dimension)
+            for j in range(self.column_dimension)
+            for k in range(self.layer_dimension)
+        ]
 
 
 class SlotResourceDefinition(ContainerResourceDefinition):

@@ -1,9 +1,9 @@
-node_name: liquidhandler_1
-node_id: 01JNH61ZEA13F3286JPMH3QM1M
+node_name: robotarm_1
+node_id: 01JR10Q74MYD2MC3CD5S0V8XN5
 node_url: null
-node_description: Test liquidhandler
+node_description: An example robot arm
 node_type: device
-module_name: liquidhandler
+module_name: robotarm
 module_version: 0.0.1
 capabilities:
   get_info: true
@@ -18,46 +18,36 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
-  - resume
   - get_location
-  - shutdown
-  - lock
   - unlock
-  - cancel
-  - pause
-  - safety_stop
+  - lock
   - reset
+  - shutdown
 commands: {}
 is_template: false
-config_defaults: {}
+config_defaults:
+  host: 0.0.0.0
+  port: 2001
+  resource_server_url: http://localhost:8004
 actions:
-  run_command:
-    name: run_command
-    description: Run a command on the liquid handler.
-    args:
-      command:
-        name: command
-        description: ''
-        argument_type: str
-        required: true
-        default: null
-    locations: {}
-    files: {}
-    results: {}
-    blocking: false
-    asynchronous: true
-  run_protocol:
-    name: run_protocol
-    description: Run a protocol on the liquid handler
+  transfer:
+    name: transfer
+    description: Run a command on the robot arm.
     args: {}
-    locations: {}
-    files:
-      protocol:
-        name: protocol
-        description: ''
-        argument_type: file
+    locations:
+      source:
+        name: source
+        description: The source location
+        argument_type: location
         required: true
         default: null
+      target:
+        name: target
+        description: the target location
+        argument_type: location
+        required: true
+        default: null
+    files: {}
     results: {}
     blocking: false
     asynchronous: true
@@ -65,9 +55,9 @@ config:
   status_update_interval: 2.0
   state_update_interval: 2.0
   event_client_config: null
-  resource_server_url: null
-  host: 127.0.0.1
-  port: 8000
+  resource_server_url: http://localhost:8004/
+  host: 0.0.0.0
+  port: 2001
   protocol: http
   device_number: 0
 config_schema:
@@ -176,7 +166,7 @@ config_schema:
       title: OwnershipInfo
       type: object
   additionalProperties: true
-  description: Configuration for the liquid handler node module.
+  description: Configuration for the robot arm node module.
   properties:
     status_update_interval:
       anyOf:
@@ -227,5 +217,5 @@ config_schema:
       default: 0
       title: Device Number
       type: integer
-  title: LiquidHandlerConfig
+  title: RobotArmConfig
   type: object

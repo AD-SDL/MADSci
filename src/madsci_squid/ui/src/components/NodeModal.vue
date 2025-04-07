@@ -66,7 +66,7 @@
                   <template v-slot:item="{ item }: { item: any }">
                     <tr>
                       <td>{{ item.name }}</td>
-                      <td>{{ item.type }}</td>
+                      <td>{{ item.argument_type }}</td>
                       <td>{{ item.required }}</td>
                       <td>{{ item.default }}</td>
                       <td>{{ item.description }}</td>
@@ -174,7 +174,7 @@ import { json } from 'stream/consumers';
 const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
 const arg_headers = [
   { title: 'Name', key: 'name' },
-  { title: 'Type', key: 'type' },
+  { title: 'Type', key: 'argument_type' },
   { title: 'Required', key: 'required' },
   { title: 'Default', key: 'default' },
   { title: 'Description', key: 'description' },
