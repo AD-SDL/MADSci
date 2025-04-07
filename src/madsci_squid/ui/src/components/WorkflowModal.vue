@@ -26,6 +26,12 @@ function process_status(status: any) {
   if (status.completed) {
     return "completed"
   }
+  else if (status.cancelled) {
+    return "cancelled"
+  }
+  else if (status.failed) {
+    return "failed"
+  }
   else if (status.paused) {
     return "paused"
   }
