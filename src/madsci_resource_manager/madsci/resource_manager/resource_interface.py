@@ -17,10 +17,14 @@ from madsci.common.types.resource_types import (
     ContainerDataModels,
     ContainerTypeEnum,
     Queue,
+    Resource,
     ResourceDataModels,
     ResourceTypeEnum,
     Slot,
     Stack,
+)
+from madsci.common.types.resource_types.definitions import (
+    ResourceDefinitions,
 )
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
@@ -580,10 +584,12 @@ class ResourceInterface:
             container_row = session.exec(
                 select(ResourceTable).filter_by(resource_id=container_id)
             ).one()
-            if container_row.base_type not in ContainerTypeEnum:
+            try:
+                ContainerTypeEnum(container_row.base_type)
+            except ValueError as e:
                 raise ValueError(
                     f"Resource '{container_row.resource_name}' with type {container_row.base_type} is not a container."
-                )
+                ) from e
             if container_row.base_type in [
                 ContainerTypeEnum.stack,
                 ContainerTypeEnum.queue,
@@ -632,10 +638,12 @@ class ResourceInterface:
             container_row = session.exec(
                 select(ResourceTable).filter_by(resource_id=container_id)
             ).one()
-            if container_row.base_type in ContainerTypeEnum:
+            try:
+                ContainerTypeEnum(container_row.base_type)
+            except ValueError as e:
                 raise ValueError(
                     f"Resource '{container_row.resource_name}' with type {container_row.base_type} is not a container."
-                )
+                ) from e
             if container_row.base_type in [
                 ContainerTypeEnum.stack,
                 ContainerTypeEnum.queue,
@@ -773,3 +781,53 @@ class ResourceInterface:
             session.merge(resource_row)
             session.commit()
             return resource_row.to_data_model()
+
+    def init_custom_resource(
+        self,
+        input_definition: ResourceDefinitions,
+        custom_definition: ResourceDefinitions,
+    ) -> ResourceDataModels:
+        """initialize a customr resource"""
+        input_dict = input_definition.model_dump(mode="json", exclude_unset=True)
+        custom_dict = custom_definition.model_dump(mode="json")
+        custom_dict.update(**input_dict)
+        custom_dict["base_type"] = custom_definition.base_type
+        resource = Resource.discriminate(custom_dict)
+        for attribute in custom_definition.custom_attributes:
+            if attribute.default_value:
+                resource.attributes[attribute.attribute_name] = attribute.default_value
+            if (
+                input_definition.model_extra
+                and attribute.attribute_name in input_definition.model_extra
+            ):
+                resource.attributes[attribute.attribute_name] = getattr(
+                    input_definition, attribute.attribute_name
+                )
+            elif not attribute.optional:
+                raise (
+                    ValueError(
+                        f"Missing necessary custom attribute: {attribute.attribute_name}"
+                    )
+                )
+        if custom_definition.fill:
+            keys = resource.get_all_keys()
+            for key in keys:
+                child_resource = Resource.discriminate(
+                    custom_definition.default_child_template.model_dump(mode="json")
+                )
+                if custom_definition.default_child_template.resource_name_prefix:
+                    child_resource.resource_name = (
+                        custom_definition.default_child_template.resource_name_prefix
+                        + str(key)
+                    )
+                resource.set_child(key, child_resource)
+        if custom_definition.default_children:
+            for key in custom_definition.default_children:
+                resource.set_child(
+                    key,
+                    Resource.discriminate(
+                        custom_definition.default_children[key].model_dump(mode="json")
+                    ),
+                )
+        resource = self.add_resource(resource)
+        return self.get_resource(resource.resource_id)

@@ -66,9 +66,21 @@ def create_resource_server(  # noqa: C901, PLR0915
                 unique=True,
             )
             if not resource:
-                resource = resource_interface.add_resource(
-                    Resource.discriminate(resource_definition)
-                )
+                if (
+                    resource_definition.resource_type
+                    and resource_definition.resource_type
+                    in resource_manager_definition.custom_types
+                ):
+                    custom_definition = resource_manager_definition.custom_types[
+                        resource_definition.resource_type
+                    ]
+                    resource = resource_interface.init_custom_resource(
+                        resource_definition, custom_definition
+                    )
+                else:
+                    resource = resource_interface.add_resource(
+                        Resource.discriminate(resource_definition)
+                    )
 
             return resource
         except Exception as e:

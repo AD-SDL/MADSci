@@ -3,7 +3,7 @@
 from typing import Any, Optional
 
 from madsci.common.types.base_types import BaseModel
-from madsci.common.validators import ulid_validator
+from madsci.common.validators import optional_ulid_validator, ulid_validator
 from pydantic import SerializationInfo, SerializerFunctionWrapHandler, model_serializer
 from pydantic.functional_validators import field_validator
 from sqlmodel.main import Field
@@ -69,7 +69,7 @@ class OwnershipInfo(BaseModel):
         "lab_id",
         "workflow_id",
         mode="after",
-    )(ulid_validator)
+    )(optional_ulid_validator)
 
     @model_serializer(mode="wrap")
     def exclude_unset_by_default(

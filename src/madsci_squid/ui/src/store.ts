@@ -36,7 +36,7 @@ watchEffect(async () => {
     urls.value = await ((await fetch(main_url.value.concat("/urls"))).json())
     state_url.value = urls.value.workcell_manager.concat("state")
     resources_url.value = urls.value.resource_manager
-    experiments_url.value = main_url.value.concat("/experiments/all")
+    experiments_url.value = urls.value.experiment_manager.concat("experiments")
     campaigns_url.value = main_url.value.concat("/campaigns/all")
     workcell_info_url.value = urls.value.workcell_manager.concat("workcell")
     workflows_url.value = urls.value.workcell_manager.concat("workflows")
@@ -46,7 +46,7 @@ watchEffect(async () => {
     setInterval(updateWorkcellState, 1000)
     setInterval(updateWorkflows, 1000)
     setInterval(updateResources, 1000)
-    // setInterval(updateCampaigns, 10000);
+    setInterval(updateExperiments, 1000);
     // setInterval(updateEvents, 10000);
 
     async function updateResources() {
@@ -59,8 +59,8 @@ watchEffect(async () => {
           })).json());
     }
 
-    async function updateCampaigns() {
-        campaigns.value = await ((await fetch(campaigns_url.value)).json());
+    async function updateExperiments() {
+        experiments.value = await ((await fetch(experiments_url.value)).json());
     }
 
     async function updateEvents() {

@@ -24,8 +24,9 @@
   </template>
 
 <script lang="ts" setup>
-import { main_url, workcell_state } from "@/store";
+import { urls, workcell_state } from "@/store";
 import { ref, watchEffect } from 'vue';
+import { useRtl } from "vuetify/lib/framework.mjs";
 
 const props = defineProps<{
     module?: string;
@@ -41,13 +42,13 @@ const hoverText = ref('')
 // Format pause and resume urls
 watchEffect(() => {
     if (props.module) {
-        pause_url.value = main_url.value.concat('/admin/pause/'.concat(props.module))
-        resume_url.value = main_url.value.concat('/admin/resume/'.concat(props.module))
+        pause_url.value = urls.value.workcell_manager.concat('admin/pause/'.concat(props.module))
+        resume_url.value = urls.value.workcell_manager.value.concat('admin/resume/'.concat(props.module))
         hoverText.value = "Module"
     }
     else {
-        pause_url.value = main_url.value.concat('/admin/pause')
-        resume_url.value = main_url.value.concat('/admin/resume')
+        pause_url.value = urls.value.workcell_manager.value.concat('admin/pause')
+        resume_url.value = urls.value.workcell_manager.value.concat('admin/resume')
         hoverText.value = "Workcell"
     }
 })
@@ -90,6 +91,7 @@ const togglePauseResume = async () => {
 
 // Function to send pause command
 const sendPauseCommand = async () => {
+    console.log(urls.value)
     try {
         const response = await fetch(pause_url.value, {
             method: 'POST',

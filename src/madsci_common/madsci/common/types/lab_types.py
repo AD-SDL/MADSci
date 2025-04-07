@@ -35,6 +35,12 @@ class LabUrls(BaseModel):
         default=None,
     )
 
+    experiment_manager: Optional[AnyUrl] = Field(
+        title="Data Manager URL",
+        description="The Data Manager URL for this lab.",
+        default=None,
+    )
+
 
 class LabDefinition(BaseModel):
     """Definition for a MADSci Lab."""

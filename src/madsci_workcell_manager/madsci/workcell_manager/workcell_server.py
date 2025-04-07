@@ -21,7 +21,6 @@ from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
-    WorkflowStatus,
 )
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 from madsci.workcell_manager.workcell_engine import Engine
@@ -149,11 +148,12 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Pause a specific workflow."""
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
-            if wf.status in ["running", "in_progress", "queued"]:
-                if wf.status == "running":
-                    send_admin_command_to_node("pause", wf.steps[wf.step_index].node)
-                    wf.steps[wf.step_index] = ActionStatus.PAUSED
-                wf.paused = True
+            if wf.status.active:
+                if wf.status.running:
+                    send_admin_command_to_node(
+                        "pause", wf.steps[wf.status.current_step_index].node
+                    )
+                wf.status.paused = True
                 state_handler.set_workflow(wf)
 
         return state_handler.get_workflow(workflow_id)
@@ -163,11 +163,12 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Resume a paused workflow."""
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
-            if wf.paused:
-                if wf.status == "running":
-                    send_admin_command_to_node("resume", wf.steps[wf.step_index].node)
-                    wf.steps[wf.step_index] = ActionStatus.RUNNING
-                wf.paused = False
+            if wf.status.paused:
+                if wf.status.running:
+                    send_admin_command_to_node(
+                        "resume", wf.steps[wf.status.current_step_index].node
+                    )
+                wf.status.paused = False
                 state_handler.set_workflow(wf)
         return state_handler.get_workflow(workflow_id)
 
@@ -176,10 +177,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Cancel a specific workflow."""
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
-            if wf.status == "running":
-                send_admin_command_to_node("stop", wf.steps[wf.step_index].node)
-                wf.steps[wf.step_index] = ActionStatus.CANCELLED
-            wf.status = WorkflowStatus.CANCELLED
+            if wf.status.running:
+                send_admin_command_to_node(
+                    "cancel", wf.steps[wf.status.current_step_index].node
+                )
+            wf.status.cancelled = True
             state_handler.set_workflow(wf)
         return state_handler.get_workflow(workflow_id)
 
@@ -189,7 +191,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
             wf.workflow_id = new_ulid_str()
-            wf.step_index = 0
+            wf.status.reset()
             wf.start_time = None
             wf.end_time = None
             wf.submitted_time = datetime.now()
@@ -211,15 +213,15 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Retry an existing workflow from a specific step."""
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
-            if wf.status in [
-                WorkflowStatus.COMPLETED,
-                WorkflowStatus.FAILED,
-                WorkflowStatus.CANCELLED,
-            ]:
-                if index >= 0:
-                    wf.step_index = index
-                wf.status = WorkflowStatus.QUEUED
+            if wf.status.terminal:
+                index = max(index, 0)
+                wf.status.reset(index)
                 state_handler.set_workflow(wf)
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Workflow is not in a terminal state, cannot retry",
+                )
         return state_handler.get_workflow(workflow_id)
 
     @app.post("/workflow")

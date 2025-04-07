@@ -272,7 +272,7 @@ class WorkcellRedisHandler:
         """
         self._workflow_queue.clear()
         for wf in self.get_workflows().values():
-            if wf.status.is_active:
+            if wf.status.active:
                 self._workflow_queue.append(wf.workflow_id)
         self.mark_state_changed()
 

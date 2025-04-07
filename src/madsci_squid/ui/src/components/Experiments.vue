@@ -4,11 +4,10 @@
       <h2>Experiments</h2>
     </v-card-title>
     <v-card-text>
-      <v-data-table :headers="arg_headers" :items="experiment_objects" item-value="experiment_id" :sort-by="sortBy"
+      <v-data-table :headers="arg_headers" :items="experiments" item-value="_id" :sort-by="sortBy"
         @click:row="openExperimentDetails" density="compact">
-        <template v-slot:item.campaign_id="{ value }">
-          <td>{{ (value != null && campaigns !== undefined && value in campaigns) ? campaigns[value].campaign_name : "-"
-            }}</td>
+        <template v-slot:item.status="{ value }">
+          <td :class="'status_button wf_status_' + value">{{ value }}</td>
         </template>
       </v-data-table>
       <v-dialog v-model="dialogVisible">
@@ -17,32 +16,27 @@
             <span class="text-h5">Experiment Details</span>
           </v-card-title>
           <v-card-text>
+            <p  :class="'status_button wf_status_' + selectedExperiment.status">{{ selectedExperiment.status }}</p>
             <v-list>
               <v-list-item>
                 <v-list-item-title>Name:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.experiment_name }}</v-list-item-subtitle>
+                <v-list-item-subtitle>{{ selectedExperiment.experiment_design.experiment_name }}</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
                 <v-list-item-title>ID:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.experiment_id }}</v-list-item-subtitle>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Campaign:</v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ selectedExperiment.campaign_id ? campaigns[selectedExperiment.campaign_id]?.campaign_name : '-' }}
-                </v-list-item-subtitle>
+                <v-list-item-subtitle>{{ selectedExperiment._id }}</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
                 <v-list-item-title>Description:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.experiment_description || '-' }}</v-list-item-subtitle>
+                <v-list-item-subtitle>{{ selectedExperiment.experiment_design.experiment_description || '-' }}</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
-                <v-list-item-title>Last Check-in:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.check_in_timestamp || '-' }}</v-list-item-subtitle>
+                <v-list-item-title>Start Time:</v-list-item-title>
+                <v-list-item-subtitle>{{ selectedExperiment.started_at || '-' }}</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
-                <v-list-item-title>Email Addresses:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.email_addresses.join(', ') || '-' }}</v-list-item-subtitle>
+                <v-list-item-title>End Time:</v-list-item-title>
+                <v-list-item-subtitle>{{ selectedExperiment.ended_at || '-' }}</v-list-item-subtitle>
               </v-list-item>
             </v-list>
           </v-card-text>
@@ -60,15 +54,15 @@
 import { ref } from 'vue';
 import { VDataTable } from 'vuetify/lib/components/index.mjs';
 /// <reference path="../store.d.ts" />
-import { campaigns, experiment_objects } from "@/store";
+import { campaigns, experiments } from "@/store";
 
-const sortBy: VDataTable['sortBy'] = [{ key: 'experiment_id', order: 'desc' }];
+const sortBy: VDataTable['sortBy'] = [{ key: 'started_at', order: 'desc' }];
 
 const arg_headers = [
-  { title: 'Name', key: 'experiment_name' },
-  { title: 'ID', key: 'experiment_id' },
-  { title: 'Campaign', key: 'campaign_id' },
-  { title: 'Last Check-in', key: 'check_in_timestamp' }
+  { title: 'Name', key: 'experiment_design.experiment_name' },
+  { title: 'ID', key: '_id' },
+  { title: 'Status', key: 'status' },
+  { title: 'Started_at', key: 'started_at' }
 ];
 
 const dialogVisible = ref(false);
@@ -79,3 +73,12 @@ const openExperimentDetails = (event: Event, { item }: { item: any }) => {
   dialogVisible.value = true;
 };
 </script>
+
+<style>
+.status_button {
+  border-radius: 5px;
+  text-align: center;
+  color: white;
+    padding: 2px;
+  }
+</style>

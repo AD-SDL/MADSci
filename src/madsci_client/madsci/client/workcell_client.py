@@ -9,16 +9,15 @@ import requests
 from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
-    WorkflowStatus,
 )
 from madsci.common.utils import PathLike
-from madsci.common.types.base_types import new_ulid_str
 
 
 class WorkcellClient:
@@ -225,7 +224,7 @@ class WorkcellClient:
             wfs = []
             for id in id_list:
                 wf = self.query_workflow(id)
-                flag = flag and (wf.status in ["completed", "failed"])
+                flag = flag and (wf.status.terminal)
                 wfs.append(wf)
             finished = flag
         return wfs
@@ -322,7 +321,7 @@ class WorkcellClient:
         while True:
             wf = self.query_workflow(workflow_id)
             status = wf.status
-            step_index = wf.step_index
+            step_index = wf.status.current_step_index
             if prior_status != status or prior_index != step_index:
                 if step_index < len(wf.steps):
                     step_name = wf.steps[step_index].name
@@ -330,28 +329,24 @@ class WorkcellClient:
                     step_name = "Workflow End"
                 # TODO: Improve progress reporting
                 print(  # noqa: T201
-                    f"\n{wf.name} [{step_index}]: {step_name} ({wf.status})",
+                    f"\n{wf.name}['{step_name}']: {wf.status.description}",
                     end="",
                     flush=True,
                 )
             else:
                 print(".", end="", flush=True)  # noqa: T201
             time.sleep(1)
-            if wf.status in [
-                WorkflowStatus.COMPLETED,
-                WorkflowStatus.FAILED,
-                WorkflowStatus.CANCELLED,
-            ]:
+            if wf.status.terminal:
                 break
             prior_status = status
             prior_index = step_index
-        if wf.status == WorkflowStatus.FAILED and raise_on_failed:
+        if wf.status.failed and raise_on_failed:
             raise WorkflowFailedError(
-                f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.step_index}: '{wf.steps[wf.step_index].name}'."
+                f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
             )
-        if wf.status == WorkflowStatus.CANCELLED and raise_on_cancelled:
+        if wf.status.cancelled and raise_on_cancelled:
             raise WorkflowFailedError(
-                f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.step_index}: '{wf.steps[wf.step_index].name}'."
+                f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
             )
         return wf
 
