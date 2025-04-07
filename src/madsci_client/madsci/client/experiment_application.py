@@ -236,11 +236,9 @@ class ExperimentApplication:
         location = None
         if condition.location_name:
             location = next(
-                [
-                    location
-                    for location in self.workcell_client.get_locations()
-                    if location.location_name == condition.location_name
-                ]
+                location
+                for location in self.workcell_client.get_locations()
+                if location.location_name == condition.location_name
             )
         elif condition.location_id:
             location = self.workcell_client.get_location(condition.location_id)
@@ -285,7 +283,15 @@ class ExperimentApplication:
 
         if condition.condition_type == "resource_child_field_check":
             resource = self.get_resource_from_condition(condition)
-            resource_child = resource.children[condition.key]
+            if isinstance(resource.children, list):
+                if len(resource.children) > int(condition.key):
+                    resource_child = resource.children[int(condition.key)]
+                else:
+                    raise (Exception("Invalid Key for Resource Child"))
+            elif condition.key not in resource.children:
+                raise (Exception("Invalid Key for Resource Child"))
+            else:
+                resource_child = resource.children[condition.key]
             return self.check_resource_field(resource_child, condition)
         return False
 

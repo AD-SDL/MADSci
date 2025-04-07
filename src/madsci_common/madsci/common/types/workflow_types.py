@@ -75,15 +75,15 @@ class WorkflowStatus(BaseModel):
         if self.completed:
             return "Completed Successfully"
         if self.failed:
-            return "Failed on step {self.current_step_index}"
+            return f"Failed on step {self.current_step_index}"
         if self.cancelled:
-            return "Cancelled on step {self.current_step_index}"
+            return f"Cancelled on step {self.current_step_index}"
         if self.paused:
-            return "Paused on step {self.current_step_index}"
+            return f"Paused on step {self.current_step_index}"
         if self.running:
-            return "Running step {self.current_step_index}"
+            return f"Running step {self.current_step_index}"
         if self.active:
-            return "Queued on step {self.current_step_index}"
+            return f"Queued on step {self.current_step_index}"
         return "Unknown"
 
 
