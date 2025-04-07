@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { workcell_state, workflows } from "@/store";
+const props = defineProps(['workflows'])
 import { ref } from 'vue';
 import { VDataTable } from 'vuetify/components';
 

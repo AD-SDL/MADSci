@@ -5,9 +5,24 @@
     </v-card-title>
     <v-card-text>
       <v-data-table :headers="arg_headers" :items="experiments" item-value="_id" :sort-by="sortBy"
-        @click:row="openExperimentDetails" density="compact">
-        <template v-slot:item.status="{ value }">
-          <td :class="'status_button wf_status_' + value">{{ value }}</td>
+        density="compact">
+        <template v-slot:item="{ item, internalItem, isExpanded, toggleExpand}: { item: any, internalItem: any, isExpanded: any, toggleExpand: any}">
+        <tr >
+          <td @click="openExperimentDetails(item)">{{ item.experiment_design.experiment_name }}</td>
+          <td @click="openExperimentDetails(item)">{{ item._id }}</td>
+          <td @click="openExperimentDetails(item)" :class="'status_button wf_status_' + item.status">{{ item.status }}</td>
+          <td @click="openExperimentDetails(item)" >{{ item.started_at }}</td>
+          <td><v-btn
+        :icon="isExpanded(internalItem) ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+        variant="plain"
+        @click="toggleExpand(internalItem)"
+      /></td>
+        </tr>
+      </template>
+      <template v-slot:expanded-row="{ columns, item}: {columns: any, item: any}">
+          <tr>
+            <td :colspan="columns.length"><WorkflowTable :workflows="filter_workflows(workflows, item._id)" /></td>
+          </tr>
         </template>
       </v-data-table>
       <v-dialog v-model="dialogVisible">
@@ -53,8 +68,9 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { VDataTable } from 'vuetify/lib/components/index.mjs';
+
 /// <reference path="../store.d.ts" />
-import { campaigns, experiments } from "@/store";
+import { workflows, experiments } from "@/store";
 
 const sortBy: VDataTable['sortBy'] = [{ key: 'started_at', order: 'desc' }];
 
@@ -68,10 +84,18 @@ const arg_headers = [
 const dialogVisible = ref(false);
 const selectedExperiment = ref();
 
-const openExperimentDetails = (event: Event, { item }: { item: any }) => {
+const openExperimentDetails = (item: any) => {
   selectedExperiment.value = item;
   dialogVisible.value = true;
 };
+
+
+function filter_workflows(workflows: any, experiment_id: any)  {
+  var workflow_list = Object.values(workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
+  var dict: any = {}
+  workflow_list.forEach((workflow: any) => dict[workflow.workflow_id] = workflow)
+  return dict
+}
 </script>
 
 <style>
