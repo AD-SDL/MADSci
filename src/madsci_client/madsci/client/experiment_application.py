@@ -11,7 +11,6 @@ from madsci.client.experiment_client import ExperimentClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.condition_types import Condition
 from madsci.common.types.experiment_types import (
     Experiment,
@@ -98,14 +97,12 @@ class ExperimentApplication:
             run_name=run_name,
             run_description=run_description,
         )
-        self.workcell_client.ownership_info = OwnershipInfo(
-            experiment_id=self.experiment.experiment_id
+        self.workcell_client.ownership_info.experiment_id = (
+            self.experiment.experiment_id
         )
-        self.data_client.ownership_info = OwnershipInfo(
-            experiment_id=self.experiment.experiment_id
-        )
-        self.resource_client.ownership_info = OwnershipInfo(
-            experiment_id=self.experiment.experiment_id
+        self.data_client.ownership_info.experiment_id = self.experiment.experiment_id
+        self.resource_client.ownership_info.experiment_id = (
+            self.experiment.experiment_id
         )
         self.logger.log_info(
             f"Started run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
