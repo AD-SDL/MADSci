@@ -25,16 +25,21 @@ class ConditionTypeEnum(str, Enum):
             if member.lower() == value:
                 return member
         raise ValueError(f"Invalid ConditionType: {value}")
+
+
 class OperatorTypeEnum(str, Enum):
-    IS_GREATER_THAN = "is_greater_than",
-    IS_LESS_THAN = "is_less_than",
-    IS_EQUAL_TO = "is_equal_to",
+    """Comparison operators for value checks"""
+
+    IS_GREATER_THAN = ("is_greater_than",)
+    IS_LESS_THAN = ("is_less_than",)
+    IS_EQUAL_TO = ("is_equal_to",)
     IS_GREQUAL_TO = "is_greater_than_or_equal_to"
     IS_LEQUAL_TO = "is_less_than_or_equal_to"
 
 
 class Condition(BaseModel, extra="allow"):
     """A model for the conditions a step needs to be run"""
+
     condition_type: Optional[ConditionTypeEnum] = Field(
         title="Condition Type",
         description="The type of condition to check",
@@ -53,13 +58,13 @@ class ResourceInLocationCondition(Condition):
     location_id: Optional[str] = Field(
         title="Location",
         description="The ID of the location to check for a resource in",
-        default = None
+        default=None,
     )
 
     location_name: Optional[str] = Field(
         title="Location",
         description="The name of the location to check for a resource in",
-        default = None
+        default=None,
     )
     key: Union[str, int, GridIndex, GridIndex2D, GridIndex3D] = Field(
         title="Key",
@@ -85,7 +90,7 @@ class NoResourceInLocationCondition(Condition):
     location_id: Optional[str] = Field(
         title="Location",
         description="The ID of the location to check for a resource in",
-        default = None
+        default=None,
     )
 
     location_name: str = Field(
@@ -98,6 +103,7 @@ class NoResourceInLocationCondition(Condition):
         default=0,
     )
 
+
 class ResourceFieldCheckCondition(Condition):
     """A condition that checks if a resource is present"""
 
@@ -109,27 +115,26 @@ class ResourceFieldCheckCondition(Condition):
     resource_id: Optional[str] = Field(
         title="Resource ID",
         description="The id of the resource to check a quality of",
-        default=None
+        default=None,
     )
-    
+
     resource_name: Optional[str] = Field(
         title="Resource Name",
         description="The name of the resource to check a quality of",
-        default=None
+        default=None,
     )
     field: str = Field(
-        title="Field",
-        description="The field to evaluate against the operator"
+        title="Field", description="The field to evaluate against the operator"
     )
     operator: OperatorTypeEnum = Field(
         title="Operator",
-        description="The check (is_greater_than, is_less_than or is_equal_to etc.) to evaluate the field by"
+        description="The check (is_greater_than, is_less_than or is_equal_to etc.) to evaluate the field by",
     )
     target_value: Any = Field(
-        title="Target Value",
-        description="the target value for the field"
+        title="Target Value", description="the target value for the field"
     )
-    
+
+
 class ResourceChildFieldCheckCondition(Condition):
     """A condition that checks if a resource is present"""
 
@@ -141,21 +146,20 @@ class ResourceChildFieldCheckCondition(Condition):
     resource_id: Optional[str] = Field(
         title="Resource ID",
         description="The id of the resource to check a quality of",
-        default=None
+        default=None,
     )
-    
+
     resource_name: Optional[str] = Field(
         title="Resource Name",
         description="The name of the resource to check a quality of",
-        default=None
+        default=None,
     )
     field: str = Field(
-        title="Field",
-        description="The field to evaluate against the operator"
+        title="Field", description="The field to evaluate against the operator"
     )
     operator: OperatorTypeEnum = Field(
         title="Operator",
-        description="The check (is_greater_than, is_less_than or is_equal_to etc.) to evaluate the field by"
+        description="The check (is_greater_than, is_less_than or is_equal_to etc.) to evaluate the field by",
     )
     key: Union[str, int, GridIndex, GridIndex2D, GridIndex3D] = Field(
         title="Key",
@@ -163,12 +167,17 @@ class ResourceChildFieldCheckCondition(Condition):
         default=0,
     )
     target_value: Any = Field(
-        title="Target Value",
-        description="the target value for the field"
+        title="Target Value", description="the target value for the field"
     )
 
+
 Conditions = Annotated[
-    Union[ResourceInLocationCondition, NoResourceInLocationCondition, ResourceFieldCheckCondition, ResourceChildFieldCheckCondition],
+    Union[
+        ResourceInLocationCondition,
+        NoResourceInLocationCondition,
+        ResourceFieldCheckCondition,
+        ResourceChildFieldCheckCondition,
+    ],
     Discriminator(
         discriminator="condition_type",
     ),

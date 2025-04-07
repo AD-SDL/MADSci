@@ -242,7 +242,7 @@ class Engine:
                 break
             try:
                 time.sleep(interval)  # * Exponential backoff with cap
-                interval = interval * 1.5 if interval < 10 else 10
+                interval = interval * 1.5 if interval < 5 else 5
                 response = client.get_action_result(action_id)
                 self.handle_response(wf, step, response)
                 if (
