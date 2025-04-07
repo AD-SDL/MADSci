@@ -58,12 +58,6 @@ class WorkflowStatus(BaseModel):
 
     @computed_field
     @property
-    def started(self) -> bool:
-        """Whether or not the workflow has started"""
-        return self.current_step_index > 0
-
-    @computed_field
-    @property
     def ok(self) -> bool:
         """Whether or not the workflow is ok (i.e. not failed or cancelled)"""
         return not (self.failed or self.cancelled)
