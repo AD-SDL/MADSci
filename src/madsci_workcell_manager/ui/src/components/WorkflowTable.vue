@@ -12,7 +12,7 @@
             </v-sheet>
           </td>
           <td>{{ item.start_time }}</td>
-          <td>Step {{ item.step_index }}: {{ item.steps[item.step_index].name }}</td>
+          <td>Step {{ item.status.current_step_index }}: {{ item.steps[item.status.current_step_index].name }}</td>
           <td>{{ item.end_time }}</td>
         </tr>
       </template>

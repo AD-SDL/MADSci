@@ -15,7 +15,6 @@ from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
-    WorkflowStatus,
 )
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
 
@@ -221,7 +220,7 @@ def get_workflow_inputs_directory(
 
 def cancel_workflow(wf: Workflow, state_handler: WorkcellRedisHandler) -> None:
     """Cancels the workflow run"""
-    wf.status = WorkflowStatus.CANCELLED
+    wf.status.cancelled = True
     with state_handler.wc_state_lock():
         state_handler.set_workflow(wf)
     return wf
@@ -230,9 +229,5 @@ def cancel_workflow(wf: Workflow, state_handler: WorkcellRedisHandler) -> None:
 def cancel_active_workflows(state_handler: WorkcellRedisHandler) -> None:
     """Cancels all currently running workflow runs"""
     for wf in state_handler.get_workflows().values():
-        if wf.status in [
-            WorkflowStatus.RUNNING,
-            WorkflowStatus.QUEUED,
-            WorkflowStatus.IN_PROGRESS,
-        ]:
+        if wf.status.active:
             cancel_workflow(wf, state_handler=state_handler)
