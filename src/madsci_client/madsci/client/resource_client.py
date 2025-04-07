@@ -6,6 +6,7 @@ from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -28,10 +29,14 @@ class ResourceClient:
     local_resources: dict[str, ResourceDataModels]
 
     def __init__(
-        self, url: Optional[str] = None, event_client: Optional[EventClient] = None
+        self,
+        url: Optional[str] = None,
+        event_client: Optional[EventClient] = None,
+        ownership_info: Optional[OwnershipInfo] = None,
     ) -> None:
         """Initialize the resource client."""
         self.url = str(url) if url is not None else None
+        self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
         if self.url is not None and str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
         if self.url is not None:
