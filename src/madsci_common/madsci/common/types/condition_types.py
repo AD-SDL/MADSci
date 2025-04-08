@@ -45,6 +45,11 @@ class Condition(BaseModel, extra="allow"):
         description="The type of condition to check",
         default=None,
     )
+    condition_name: str = Field(
+        title="Condition Name",
+        description="Name of the Condition",
+        default="A Condition"
+    )
 
 
 class ResourceInLocationCondition(Condition):

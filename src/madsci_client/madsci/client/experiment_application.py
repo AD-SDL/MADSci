@@ -21,6 +21,7 @@ from madsci.common.types.location_types import Location
 from madsci.common.types.resource_types import Resource
 from madsci.common.utils import threaded_daemon
 from pydantic import AnyUrl
+from rich import print
 
 
 class ExperimentApplication:
@@ -90,13 +91,27 @@ class ExperimentApplication:
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
     ) -> None:
         """Sends the ExperimentDesign to the server to register a new experimental run."""
-        for condition in self.experiment_design.resource_conditions:
-            self.evaluate_condition(condition)
+        
         self.experiment = self.experiment_client.start_experiment(
             experiment_design=self.experiment_design,
             run_name=run_name,
             run_description=run_description,
         )
+        self.logger.log_info(
+            f"Started run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+        )
+        passed_checks = False
+        while not passed_checks:
+            passed_checks = True
+            for condition in self.experiment_design.resource_conditions:
+                passed = self.evaluate_condition(condition)
+                passed_checks = passed_checks and passed
+                print(f"Check {condition.condition_name}: {passed}")
+            if not passed_checks:
+                val =  input("Check failed, retry?")
+                if val == "n":
+                    break
+        
         self.workcell_client.ownership_info.experiment_id = (
             self.experiment.experiment_id
         )
@@ -104,9 +119,7 @@ class ExperimentApplication:
         self.resource_client.ownership_info.experiment_id = (
             self.experiment.experiment_id
         )
-        self.logger.log_info(
-            f"Started run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
-        )
+        
 
     def end_experiment(self, status: Optional[ExperimentStatus] = None) -> None:
         """End the experiment."""
