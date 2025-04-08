@@ -29,7 +29,7 @@
           <h2>Workflows</h2>
         </v-card-title>
         <v-card-text>
-          <WorkflowTable/>
+          <WorkflowTable :workflows="workflows"/>
           </v-card-text>
         </v-card>
       </v-container>
@@ -62,7 +62,7 @@
 import { ref } from 'vue';
 import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
-import { resources } from "@/store";
+import { resources, workflows } from "@/store";
 import WorkcellPanel from './WorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
 import ResourcesPanel from './ResourcesPanel.vue';

@@ -25,7 +25,7 @@ nodes:
   platereader_1: http://localhost:2002
   robotarm_1: http://localhost:2001
 locations:
-- location_name: test1
+- location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: null
   lookup:
@@ -47,7 +47,7 @@ locations:
     default_child_template: null
     default_child_quantity: null
   resource_id: 01JR8F3KF3BPZG1BEDK9DKXNWH
-- location_name: test2
+- location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
   lookup:

@@ -291,6 +291,8 @@ class Engine:
             elif step.status == ActionStatus.CANCELLED:
                 wf.status.cancelled = True
                 wf.end_time = datetime.now()
+            elif step.status == ActionStatus.NOT_READY:
+                pass
             else:
                 self.logger.log_error(
                     f"Step {step.step_id} in workflow {workflow_id} ended with unexpected status {step.status}"

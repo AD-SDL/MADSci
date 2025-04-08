@@ -19,10 +19,10 @@ capabilities:
   get_log: true
   admin_commands:
   - get_location
-  - unlock
-  - shutdown
-  - reset
   - lock
+  - shutdown
+  - unlock
+  - reset
 commands: {}
 is_template: false
 config_defaults:
