@@ -1,8 +1,8 @@
 # Modular Autonomous Discovery for Science (MADSci)
 
-## Overview
+<img src="./assets/drawio/madsci_control_flow.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
-<img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
+## Overview
 
 MADSci is a modular, autonomous, and scalable framework for scientific discovery and experimentation. It aims to provide:
 
@@ -12,6 +12,8 @@ MADSci is a modular, autonomous, and scalable framework for scientific discovery
 - Resource Management, allowing robust tracking of all the labware, consumables, equipment, samples, and assets used in an autonomous laboratory.
 - Event Management, enabling distributed logging and event handling across every part of the autonomous lab.
 - Data Management, collecting and storing data created by instruments or analysis as part of an experiment.
+
+<img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
 ## Notes on Stability
 
