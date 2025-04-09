@@ -2,7 +2,7 @@
 
 ## Overview
 
-<img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000 style="background-color: white"/>
+<img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
 MADSci is a modular, autonomous, and scalable framework for scientific discovery and experimentation. It aims to provide:
 
