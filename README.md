@@ -2,7 +2,7 @@
 
 ## Overview
 
-TODO: Diagram
+<img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000 style="background-color: white"/>
 
 MADSci is a modular, autonomous, and scalable framework for scientific discovery and experimentation. It aims to provide:
 
@@ -28,6 +28,7 @@ MADSci is made up of a number of different modular components, each of which can
 - [Experiment Manager](./src/madsci_experiment_manager/README.md): manages experimental runs and campaigns across a MADSci-powered lab.
 - [Resource Manager](./src/madsci_resource_manager/README.md): For tracking labware, assets, samples, and consumables in an automated or autonomous lab.
 - [Data Manager](./src/madsci_data_manager/README.md): handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis)
+- [Squid Lab Manager](./src/madsci_squid/README.md): a central lab configuration manager and dashboard provider for MADSci-powered labs.
 
 ## Roadmap
 
@@ -36,8 +37,6 @@ We're working on bringing the following additional components to MADSci:
 - **Notification Manager**: For handling notifications related to an automated or autonomous lab.
 - **Auth Manager**: For handling authentication and user and group management for an autonomous lab.
 - **Transfer Manager**: For coordinating resource movement in a lab.
-- **Squid Lab Manager**: the central lab coordinator and dashboard for MADSci-powered labs.
-
 
 ## Getting Started with MADSci
 

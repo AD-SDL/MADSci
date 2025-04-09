@@ -54,7 +54,7 @@ services:
       - 5432:5432
   resource_manager:
     container_name: resource_manager
-    image: madsci:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     build:
       context: ..
       dockerfile: Dockerfile

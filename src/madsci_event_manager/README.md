@@ -30,7 +30,7 @@ services:
       - 27017:27017
   event_manager:
     container_name: event_manager
-    image: madsci:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     build:
       context: ..
       dockerfile: Dockerfile
