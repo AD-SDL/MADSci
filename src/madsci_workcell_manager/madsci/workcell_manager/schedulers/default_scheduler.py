@@ -1,7 +1,9 @@
 """Default MADSci Workcell scheduler"""
 
 import traceback
+from datetime import datetime, timedelta
 
+from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
@@ -40,6 +42,7 @@ class Scheduler(AbstractScheduler):
                     self.location_checks(step, metadata)
                     self.resource_checks(step, metadata)
                     self.node_checks(step, wf, metadata)
+                    self.step_checks(step, metadata)
                     metadata = evaluate_condition_checks(step, self, metadata)
                     metadata.priority = priority
                     priority -= 1
@@ -87,6 +90,16 @@ class Scheduler(AbstractScheduler):
 
     def resource_checks(self, step: Step, metadata: SchedulerMetadata) -> None:
         """Check if the resources for the step are ready TODO: actually check"""
+
+    def step_checks(self, step: Step, metadata: SchedulerMetadata) -> None:
+        """Check if the step was not ready recently mark the workflow as not active"""
+        if (
+            step.result is not None
+            and step.result.status == ActionStatus.NOT_READY
+            and datetime.now().astimezone() - step.result.history_created_at
+            < timedelta(seconds=30)
+        ):
+            metadata.ready_to_run = False
 
     def node_checks(
         self, step: Step, wf: Workflow, metadata: SchedulerMetadata
