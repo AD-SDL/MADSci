@@ -1,19 +1,23 @@
-# Modular Autonomous Discovery for Science (MADSci)
+# The Modular Autonomous Discovery for Science (MADSci) Framework
 
 <img src="./assets/drawio/madsci_control_flow.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
+
+_Experiment Control Flow Using MADSci_
 
 ## Overview
 
 MADSci is a modular, autonomous, and scalable framework for scientific discovery and experimentation. It aims to provide:
 
-- Laboratory Instrument Automation and Integration via the MADSci Node standard. Developers can implement Node modules in any language that can then be integrated into a MADSci system using a common interface standard (currently supports REST-based communication)
-- Workflow Management, allowing users to define and run flexible scientific workflows that can leverage one or more Nodes to complete complex tasks.
-- Experiment Management, conducting flexible closed loop autonomous experiments by combining multiple workflow runs, as well as any compute, decision making, data collection, and analysis as needed.
-- Resource Management, allowing robust tracking of all the labware, consumables, equipment, samples, and assets used in an autonomous laboratory.
-- Event Management, enabling distributed logging and event handling across every part of the autonomous lab.
-- Data Management, collecting and storing data created by instruments or analysis as part of an experiment.
+- **Laboratory Instrument Automation and Integration** via the MADSci Node standard. Developers can implement device-specific Node modules in any language that can then be integrated into a MADSci system using a common interface standard (currently supports REST-based HTTP communication)
+- **Workflow Management**, allowing users to define and run flexible scientific workflows that can leverage one or more Nodes to complete complex tasks.
+- **Experiment Management**, conducting flexible closed loop autonomous experiments by combining multiple workflow runs, as well as any compute, decision making, data collection, and analysis as needed.
+- **Resource Management**, allowing robust tracking of all the labware, consumables, equipment, samples, and assets used in an autonomous laboratory.
+- **Event Management**, enabling distributed logging and event handling across every part of the autonomous lab.
+- **Data Management**, collecting and storing data created by instruments or analysis as part of an experiment.
 
 <img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
+
+_Diagram of a MADSci Laboratory's Infrastructure_
 
 ## Notes on Stability
 
