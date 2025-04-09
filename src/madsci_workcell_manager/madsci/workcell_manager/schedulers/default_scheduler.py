@@ -100,6 +100,7 @@ class Scheduler(AbstractScheduler):
             < timedelta(seconds=30)
         ):
             metadata.ready_to_run = False
+            metadata.reasons.append(f"Waiting for Node {step.node} to be ready")
 
     def node_checks(
         self, step: Step, wf: Workflow, metadata: SchedulerMetadata
