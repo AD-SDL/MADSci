@@ -29,7 +29,7 @@ services:
       - 27017:27017
   data_manager:
     container_name: data_manager
-    image: madsci:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     build:
       context: ..
       dockerfile: Dockerfile

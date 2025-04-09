@@ -48,7 +48,7 @@ class Condition(BaseModel, extra="allow"):
     condition_name: str = Field(
         title="Condition Name",
         description="Name of the Condition",
-        default="A Condition"
+        default="A Condition",
     )
 
 
