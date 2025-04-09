@@ -29,6 +29,8 @@ MADSci Resource Manager supports various resource types, including:
 - **Queue**: Single-dimensional containers supporting FIFO access.
 - **Pool**: Containers for holding consumables that are mixed or collocated.
 
+You can define a resource using the ResourceDefinition types included in `madsci.common.types.resource_types.definitions`. These resource definitions can be used to query, create new, or attach to existing Resources.
+
 ## Usage
 
 ### Manager
@@ -94,6 +96,8 @@ client = ResourceClient(url=url)
 
 #### Adding a Resource
 
+This saves a new resource to the resource database.
+
 ```python
 from madsci.common.types.resource_types import Resource
 
@@ -105,7 +109,24 @@ added_resource = client.add_resource(resource)
 print(added_resource)
 ```
 
+#### Initializing a Resource
+
+This saves a new resource to the resource database, if a matching resource doesn't exist already, or attaches to the existing resource if it does.
+
+```python
+from madsci.common.types.resource_types.definitions import ResourceDefinition
+
+resource = ResourceDefinition(
+  resource_name="Sample Resource",
+  resource_type="sample",
+)
+initialized_resource = client.init_resource(resource)
+print(intialized_resource)
+```
+
 #### Updating a Resource
+
+Updates an existing resource.
 
 ```python
 resource.resource_name = "Updated Sample Resource"
@@ -115,12 +136,16 @@ print(updated_resource)
 
 #### Getting a Resource
 
+Get the current state of a given resource.
+
 ```python
 fetched_resource = client.get_resource(resource_id=added_resource.resource_id)
 print(fetched_resource)
 ```
 
 #### Querying Resources
+
+Query for a resource(s) that matches the provided parameters. Can specify whether to return multiple or require that there is a unique matching result.
 
 ```python
 resources = client.query_resource(resource_type="sample", multiple=True)
@@ -130,12 +155,16 @@ for resource in resources:
 
 #### Removing a Resource
 
+Delete a resource (the resource is preserved in the History table)
+
 ```python
 removed_resource = client.remove_resource(resource_id=added_resource.resource_id)
 print(removed_resource)
 ```
 
 #### Querying Resource History
+
+Get the entire history of a resource, from creation to deletion and every change in between.
 
 ```python
 history = client.query_history(resource_id=added_resource.resource_id)
@@ -149,12 +178,16 @@ print(history)
 
 #### Restoring a Deleted Resource
 
+Restore the latest version of a deleted resource.
+
 ```python
 restored_resource = client.restore_deleted_resource(resource_id=added_resource.resource_id)
 print(restored_resource)
 ```
 
-#### Pushing a Resource to a Stack or Queue
+#### Pushing a Resource to a Stack, Queue, or Slot
+
+Push a child resource onto a container, for containers that don't support random access.
 
 ```python
 from madsci.common.types.resource_types import Stack
@@ -165,7 +198,9 @@ pushed_resource = client.push(resource=added_stack, child=added_resource)
 print(pushed_resource)
 ```
 
-#### Popping a Resource from a Stack or Queue
+#### Popping a Resource from a Stack, Queue, or Slot
+
+Pop a child resource from a non-random access container.
 
 ```python
 popped_resource, updated_stack = client.pop(resource=added_stack)
@@ -173,6 +208,8 @@ print(popped_resource, updated_stack)
 ```
 
 #### Setting a Child Resource in a Container
+
+Set a child at a specific key of a random access container.
 
 ```python
 from madsci.common.types.resource_types import Grid
@@ -185,12 +222,16 @@ print(set_child_resource)
 
 #### Removing a Child Resource from a Container
 
+Remove a child from a specific key of a random access container.
+
 ```python
 removed_child_resource = client.remove_child(resource=added_grid, key=(0, 0))
 print(removed_child_resource)
 ```
 
 #### Setting the Quantity of a Consumable
+
+Set the quantity of a consumable resource.
 
 ```python
 from madsci.common.types.resource_types import Consumable
@@ -203,12 +244,16 @@ print(updated_consumable)
 
 #### Changing the Quantity of a Consumable
 
+Increase or decrease the quantity of a consumable by an amount.
+
 ```python
 changed_consumable = client.change_quantity_by(resource=added_consumable, amount=5)
 print(changed_consumable)
 ```
 
 #### Increasing the Quantity of a Consumable
+
+Strictly increase the quantity of a consumable by an amount.
 
 ```python
 increased_consumable = client.increase_quantity(resource=added_consumable, amount=5)
@@ -217,12 +262,16 @@ print(increased_consumable)
 
 #### Decreasing the Quantity of a Consumable
 
+Strictly decrease the quantity of a consumable by an amount.
+
 ```python
 decreased_consumable = client.decrease_quantity(resource=added_consumable, amount=5)
 print(decreased_consumable)
 ```
 
 #### Setting the Capacity of a Resource
+
+Set the capacity (i.e., maximum quantity) of a resource.
 
 ```python
 updated_capacity_resource = client.set_capacity(resource=added_consumable, capacity=50)
@@ -231,12 +280,16 @@ print(updated_capacity_resource)
 
 #### Removing the Capacity Limit of a Resource
 
+Remove the capacity (i.e., maximum quantity) of a resource.
+
 ```python
 removed_capacity_resource = client.remove_capacity_limit(resource=added_consumable)
 print(removed_capacity_resource)
 ```
 
 #### Emptying a Resource
+
+Empty a consumable or container resource.
 
 ```python
 emptied_resource = client.empty(resource=added_consumable)
@@ -245,35 +298,8 @@ print(emptied_resource)
 
 #### Filling a Resource
 
+Fill a consumable resource.
+
 ```python
 filled_resource = client.fill(resource=added_consumable)
 print(filled_resource)
-```
-
-### Slot
-
-A `Slot` is a container that can hold exactly one resource. It is useful for scenarios where a single resource needs to be tracked in a specific location, such as a plate nest.
-
-#### Adding a Slot
-
-```python
-from madsci.common.types.resource_types import Slot
-
-slot = Slot(resource_name="Sample Slot")
-added_slot = client.add_resource(slot)
-print(added_slot)
-```
-
-#### Pushing a Resource to a Slot
-
-```python
-pushed_resource = client.push(resource=added_slot, child=added_resource)
-print(pushed_resource)
-```
-
-#### Popping a Resource from a Slot
-
-```python
-popped_resource, updated_slot = client.pop(resource=added_slot)
-print(popped_resource, updated_slot)
-```

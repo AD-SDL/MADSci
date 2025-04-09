@@ -2,9 +2,7 @@
 
 Provides a collection of clients for interacting with the different components of a MADSci interface.
 
-## Clients
-
-### CLI
+## CLI
 
 **Note: the MADSci CLI is not currently stable, and commands/options/arguments may have breaking changes from update to update**
 
@@ -31,7 +29,7 @@ Commands:
   workcell  Manage workcells
 ```
 
-### Node Clients
+## Node Clients
 
 Node clients allow you to interface with MADSci Nodes to:
 
@@ -42,12 +40,32 @@ Node clients allow you to interface with MADSci Nodes to:
 
 As MADSci is designed to support multiple communications protocols, we provide a client for each. In addition, an `AbstractNodeClient` base class is provided, which can be inherited from to implement your own node clients for different interfaces.
 
-#### REST Client
+### REST Client
 
-The Rest Client
+TODO
 
-### Event Client
+## Event Client
 
 Allows a user or system to interface with a MADSci EventManager, or log events locally if one isn't available/configured. Can be used to both log new events and query logged events.
 
 For detailed documentation on usage, see the [EventManager Documentation](../madsci_event_manager/README.md).
+
+## Experiment Application
+
+TODO
+
+## Experiment Client
+
+TODO
+
+## Data Client
+
+TODO
+
+## Resource Client
+
+TODO
+
+## Workcell Client
+
+TODO

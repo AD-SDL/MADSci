@@ -2,6 +2,8 @@
 
 ## Overview
 
+TODO: Diagram
+
 MADSci is a modular, autonomous, and scalable framework for scientific discovery and experimentation. It aims to provide:
 
 - Laboratory Instrument Automation and Integration via the MADSci Node standard. Developers can implement Node modules in any language that can then be integrated into a MADSci system using a common interface standard (currently supports REST-based communication)
@@ -19,6 +21,7 @@ MADSci is currently in beta. Most of the core functionality is working and teste
 
 MADSci is made up of a number of different modular components, each of which can be used independently to fulfill specific needs, or composed to build more complex and capable systems. Below we link to specific documentation for each system component.
 
+- [Common](./src/madsci_common/README.md): the common types and utilities used across the MADSci toolkit
 - [Clients](./src/madsci_client/README.md): A collection of clients for interacting with different components of MADSci
 - [Event Manager](./src/madsci_event_manager/README.md): handles distributed event logging and querying across a distributed lab.
 - [Workcell Manager](./src/madsci_workcell_manager/README.md): handles coordinating and scheduling a collection of interoperating instruments, robots, and resources using Workflows.
