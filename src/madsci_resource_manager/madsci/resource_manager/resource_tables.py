@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
+    CustomResourceAttributeDefinition,  # noqa: F401
     Resource,
     ResourceDataModels,
     ResourceTypeEnum,
