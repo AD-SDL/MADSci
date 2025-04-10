@@ -619,12 +619,12 @@ def test_set_child_row(interface: ResourceInterface) -> None:
 
     resource = Resource()
     row_result = interface.set_child(
-        container_id=row.resource_id, key="0", child=resource
+        container_id=row.resource_id, key=0, child=resource
     )
 
-    assert row_result["0"].resource_id == resource.resource_id
+    assert row_result[0].resource_id == resource.resource_id
 
-    with pytest.raises(KeyError):
+    with pytest.raises(IndexError):
         interface.set_child(container_id=row.resource_id, key="B", child=resource)
 
 
@@ -644,11 +644,10 @@ def test_set_child_grid(interface: ResourceInterface) -> None:
     # Verify child was set
     assert grid["A1"].resource_id == resource.resource_id
 
-    with pytest.raises(KeyError):
+    with pytest.raises(IndexError):
         interface.set_child(container_id=grid.resource_id, key="B2", child=resource)
 
 
-@pytest.mark.skip(reason="VoxelGrid not updated yet")
 def test_set_child_voxel_grid(interface: ResourceInterface) -> None:
     """Test setting a child in a voxel grid container"""
     # Create voxel grid container
@@ -667,7 +666,7 @@ def test_set_child_voxel_grid(interface: ResourceInterface) -> None:
     # Verify child was set
     assert voxel_grid.children[0][0][0].resource_id == resource.resource_id
 
-    with pytest.raises(KeyError):
+    with pytest.raises(IndexError):
         interface.set_child(
             container_id=voxel_grid.resource_id, key=(0, 0, 1), child=resource
         )

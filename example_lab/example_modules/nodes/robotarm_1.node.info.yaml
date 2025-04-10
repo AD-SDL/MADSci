@@ -21,8 +21,8 @@ capabilities:
   - get_location
   - lock
   - shutdown
-  - unlock
   - reset
+  - unlock
 commands: {}
 is_template: false
 config_defaults:

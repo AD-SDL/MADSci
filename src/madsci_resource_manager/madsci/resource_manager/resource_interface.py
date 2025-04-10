@@ -150,13 +150,14 @@ class ResourceInterface:
                 if add_descendants and getattr(resource, "children", None):
                     children = resource.extract_children()
                     for key, child in children.items():
-                        child.parent_id = resource_row.resource_id
-                        child.key = key
-                        self.add_or_update_resource(
-                            resource=child,
-                            include_descendants=add_descendants,
-                            parent_session=session,
-                        )
+                        if child is not None:
+                            child.parent_id = resource_row.resource_id
+                            child.key = key
+                            self.add_or_update_resource(
+                                resource=child,
+                                include_descendants=add_descendants,
+                                parent_session=session,
+                            )
                 session.commit()
                 session.refresh(resource_row)
                 return resource_row.to_data_model()
@@ -626,7 +627,7 @@ class ResourceInterface:
             session.refresh(container_row)
             return container_row.to_data_model()
 
-    def remove_child(self, container_id: str, key: str) -> Union[Collection, Container]:
+    def remove_child(self, container_id: str, key: Any) -> Union[Collection, Container]:
         """Remove the child of a container at a particular key/location.
 
         Args:
@@ -655,15 +656,13 @@ class ResourceInterface:
                     f"Resource '{container_row.resource_name}' with type {container_row.base_type} does not support random access, use `.pop` instead."
                 )
             container = container_row.to_data_model()
-            if container.base_type in [
-                ContainerTypeEnum.row,
-                ContainerTypeEnum.grid,
-                ContainerTypeEnum.voxel_grid,
-            ]:
-                key = container.flatten_key(key)
-            child = container.children[key]
+            child = container.get_child(key)
+            if child is None:
+                raise (KeyError("Key not found in children"))
             child_row = session.exec(
-                select(ResourceTable).filter_by(resource_id=child.resource_id)
+                select(ResourceTable).filter_by(
+                    resource_id=getattr(child, "resource_id", None)
+                )
             ).one()
             child_row.parent_id = None
             child_row.key = None
