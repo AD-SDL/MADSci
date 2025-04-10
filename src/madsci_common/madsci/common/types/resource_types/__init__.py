@@ -287,9 +287,9 @@ class Row(Container):
         default=ContainerTypeEnum.row,
         const=True,
     )
-    row_dimension: int = Field(
-        title="Row Dimension",
-        description="The number of rows in the row.",
+    columns: int = Field(
+        title="Number of Columns",
+        description="The number of columns in the row.",
         ge=0,
     )
 
@@ -307,7 +307,7 @@ class Row(Container):
     def set_list(self) -> "Row":
         """populates the children list with none values"""
         if self.children == []:
-            self.children = [None] * self.row_dimension
+            self.children = [None] * self.columns
         return self
 
     @computed_field
@@ -357,11 +357,11 @@ class Row(Container):
 
     def check_key_bounds(self, key: Union[str, GridIndex]) -> bool:
         """Check if the key is within the bounds of the grid."""
-        return not (int(key) < 0 or int(key) >= self.row_dimension)
+        return not (int(key) < 0 or int(key) >= self.columns)
 
     def get_all_keys(self) -> list:
         """get all keys of this object"""
-        return list(range(self.row_dimension))
+        return list(range(self.columns))
 
     def populate_children(
         self, children: dict[GridIndex, "ResourceDataModels"]
@@ -380,9 +380,9 @@ class Grid(Row):
         default=ContainerTypeEnum.grid,
         const=True,
     )
-    column_dimension: int = Field(
-        title="Column Dimension",
-        description="The number of columns in the grid.",
+    rows: int = Field(
+        title="Number of Rows",
+        description="The number of rows in the grid.",
         ge=0,
     )
 
@@ -391,16 +391,21 @@ class Grid(Row):
     )
 
     @model_validator(mode="after")
-    def set_list_2(self) -> None:
-        """fills out empty children"""
-        if self.children[0] is None:
-            self.children = [
-                Row(
-                    row_dimension=self.row_dimension,
+    def initialize_grid(self) -> None:
+        """Creates a grid of the correct dimensions"""
+        for i in range(self.rows):
+            if i >= len(self.children):
+                self.children.append(
+                    Row(
+                        columns=self.columns,
+                        resource_name=self.resource_name + "_row_" + str(i),
+                    )
+                )
+            if self.children[i] is None:
+                self.children[i] = Row(
+                    columns=self.columns,
                     resource_name=self.resource_name + "_row_" + str(i),
                 )
-                for i in range(self.column_dimension)
-            ]
         return self
 
     def split_index(self, key: str) -> GridIndex2D:
@@ -417,9 +422,7 @@ class Grid(Row):
     def get_all_keys(self) -> list:
         """get all keys of this object"""
         return [
-            GridIndex2D(i, j)
-            for i in range(self.row_dimension)
-            for j in range(self.column_dimension)
+            GridIndex2D(i, j) for i in range(self.columns) for j in range(self.rows)
         ]
 
     @computed_field
@@ -468,8 +471,8 @@ class Grid(Row):
             key = self.split_index(key)
         elif not isinstance(key, tuple) or len(key) != 2:
             raise ValueError("Key must be a string or a 2-tuple.")
-        return not (key[0] < 0 or key[0] >= self.column_dimension) and not (
-            key[1] < 0 or key[1] >= self.row_dimension
+        return not (key[0] < 0 or key[0] >= self.rows) and not (
+            key[1] < 0 or key[1] >= self.columns
         )
 
 
@@ -482,27 +485,58 @@ class VoxelGrid(Grid):
         default=ContainerTypeEnum.voxel_grid,
         const=True,
     )
-    layer_dimension: int = Field(
-        title="Layer Dimension",
-        description="The number of layers in the grid.",
+    layers: int = Field(
+        title="Number of Layers",
+        description="The number of layers in the voxel grid.",
         ge=0,
     )
-    children: list[Optional[Row]] = Field(
+    children: list[Optional[Grid]] = Field(
         title="Children",
         description="The children of the voxel grid container.",
         default=[],
     )
 
     @model_validator(mode="after")
-    def set_list_3(self) -> None:
-        """fills out empty children"""
-        if isinstance(self.children[0], Row) and not isinstance(self.children[0], Grid):
-            self.children = [
-                Grid(
-                    column_dimension=self.column_dimension,
-                    row_dimension=self.row_dimension,
+    def initialize_grid(self) -> None:
+        """Creates a voxel grid of the correct dimension"""
+        for i in range(self.layers):
+            if i >= len(self.children):
+                self.children.append(
+                    Grid(
+                        resource_name=self.resource_name + "_layer_" + str(i),
+                        rows=self.rows,
+                        columns=self.columns,
+                        children=[
+                            Row(
+                                columns=self.columns,
+                                resource_name=self.resource_name
+                                + "_layer_"
+                                + str(i)
+                                + "_row_"
+                                + str(j),
+                            )
+                            for j in range(self.rows)
+                        ],
+                    )
                 )
-            ] * self.layer_dimension
+            if self.children[i] is None:
+                self.children[i] = Grid(
+                    resource_name=self.resource_name + "_layer_" + str(i),
+                    rows=self.rows,
+                    columns=self.columns,
+                    children=[
+                        Row(
+                            columns=self.columns,
+                            resource_name=self.resource_name
+                            + "_layer_"
+                            + str(i)
+                            + "_row_"
+                            + str(j),
+                        )
+                        for j in range(self.rows)
+                    ],
+                )
+        return self
 
     @computed_field
     def quantity(self) -> int:
@@ -524,7 +558,37 @@ class VoxelGrid(Grid):
             self.children[key] = child
         else:
             grid = self.children[key[2]]
-            grid[key[0]][key[1]] = child
+            if not isinstance(grid, Grid):
+                grid = Grid(
+                    resource_name=self.resource_name + "_layer_" + str(key[2]),
+                    rows=self.rows,
+                    columns=self.columns,
+                    children=[
+                        Row(
+                            columns=self.columns,
+                            resource_name=self.resource_name
+                            + "_layer_"
+                            + str(key[2])
+                            + "_row_"
+                            + str(j),
+                        )
+                        for j in range(self.rows)
+                    ],
+                )
+                self.children[key[2]] = grid
+            row = grid[key[0]]
+            if not isinstance(row, Row):
+                row = Row(
+                    resource_name=self.resource_name
+                    + "_layer_"
+                    + str(key[2])
+                    + "_row_"
+                    + str(key[0]),
+                    columns=self.columns,
+                    children=list([None] * self.columns),
+                )
+                grid.children[key[0]] = row
+            row[key[1]] = child
             child.key = str(key[2])
 
     def check_key_bounds(self, key: GridIndex3D) -> bool:
@@ -533,9 +597,9 @@ class VoxelGrid(Grid):
         if not isinstance(key, tuple) or len(key) != 3:
             raise ValueError("Key must be a 3-tuple.")
         return (
-            not (key[2] < 0 or key[2] >= self.layer_dimension)
-            and not (key[1] < 0 or key[1] >= self.column_dimension)
-            and not (key[0] < 0 or key[0] >= self.row_dimension)
+            not (key[2] < 0 or key[2] >= self.layers)
+            and not (key[1] < 0 or key[1] >= self.rows)
+            and not (key[0] < 0 or key[0] >= self.columns)
         )
 
 

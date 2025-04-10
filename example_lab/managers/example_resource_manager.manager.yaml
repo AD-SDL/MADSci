@@ -10,8 +10,8 @@ custom_types:
   tip_box:
     base_type: grid
     fill: True
-    row_dimension: 12
-    column_dimension: 8
+    columns: 12
+    rows: 8
     default_child_template:
       resource_name_prefix: "well "
       base_type: discrete_consumable

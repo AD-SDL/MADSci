@@ -580,7 +580,7 @@ def test_set_child_invalid_body(test_client: TestClient) -> None:
 def test_set_child_row(test_client: TestClient) -> None:
     """Test setting a child resource of a grid"""
 
-    row = Row(row_dimension=2)
+    row = Row(columns=2)
     response = test_client.post("/resource/add", json=row.model_dump(mode="json"))
     response.raise_for_status()
 
@@ -596,7 +596,7 @@ def test_set_child_row(test_client: TestClient) -> None:
 def test_set_child_grid(test_client: TestClient) -> None:
     """Test setting a child resource in a grid"""
     # Create a grid
-    grid = Grid(row_dimension=2, column_dimension=2)
+    grid = Grid(columns=2, rows=2)
     response = test_client.post("/resource/add", json=grid.model_dump(mode="json"))
     response.raise_for_status()
 
@@ -616,7 +616,7 @@ def test_set_child_grid(test_client: TestClient) -> None:
 def test_set_child_voxel_grid(test_client: TestClient) -> None:
     """Test setting a child resource in a voxel grid"""
     # Create a voxel grid
-    voxel_grid = VoxelGrid(row_dimension=2, column_dimension=2, layer_dimension=2)
+    voxel_grid = VoxelGrid(columns=2, rows=2, layers=2)
     response = test_client.post(
         "/resource/add", json=voxel_grid.model_dump(mode="json")
     )

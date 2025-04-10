@@ -294,9 +294,9 @@ class RowResourceDefinition(ContainerResourceDefinition):
         title="Fill",
         description="Whether to populate every empty key with a default child",
     )
-    row_dimension: int = Field(
-        title="Row Dimension",
-        description="The number of rows in the row.",
+    columns: int = Field(
+        title="Number of Columns",
+        description="The number of columns in the row.",
         ge=0,
     )
     is_one_indexed: bool = Field(
@@ -319,10 +319,10 @@ class GridResourceDefinition(RowResourceDefinition):
         title="Default Children",
         description="The default children to create when initializing the collection. If None, use the type's default_children.",
     )
-    column_dimension: int = Field(
+    rows: int = Field(
         default=None,
-        title="Column Dimension",
-        description="The number of columns in the grid. If None, use the type's column_dimension.",
+        title="Number of Rows",
+        description="The number of rows in the grid. If None, use the type's rows.",
     )
 
 
@@ -341,18 +341,18 @@ class VoxelGridResourceDefinition(GridResourceDefinition):
             description="The default children to create when initializing the collection. If None, use the type's default_children.",
         )
     )
-    layer_dimension: int = Field(
-        title="Layer Dimension",
-        description="The number of layers in the voxel grid. If None, use the type's layer_dimension.",
+    layers: int = Field(
+        title="Number of Layers",
+        description="The number of layers in the voxel grid. If None, use the type's layers.",
     )
 
     def get_all_keys(self) -> list:
         """get all keys of this object"""
         return [
             GridIndex3D((i, j, k))
-            for i in range(self.row_dimension)
-            for j in range(self.column_dimension)
-            for k in range(self.layer_dimension)
+            for i in range(self.columns)
+            for j in range(self.rows)
+            for k in range(self.layers)
         ]
 
 

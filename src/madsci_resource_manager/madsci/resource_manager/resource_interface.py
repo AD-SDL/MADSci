@@ -199,6 +199,8 @@ class ResourceInterface:
                     resource_row.children_list = []
                     children = resource.extract_children()
                     for key, child in children.items():
+                        if child is None:
+                            continue
                         child.parent_id = resource_row.resource_id
                         child.key = key
                         self.add_or_update_resource(

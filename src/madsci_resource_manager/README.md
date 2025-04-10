@@ -214,7 +214,7 @@ Set a child at a specific key of a random access container.
 ```python
 from madsci.common.types.resource_types import Grid
 
-grid = Grid(resource_name="Sample Grid", row_dimension=8, column_dimension=12)
+grid = Grid(resource_name="Sample Grid", columns=8, rows=12)
 added_grid = client.add_resource(grid)
 set_child_resource = client.set_child(resource=added_grid, key=(0, 0), child=added_resource)
 print(set_child_resource)

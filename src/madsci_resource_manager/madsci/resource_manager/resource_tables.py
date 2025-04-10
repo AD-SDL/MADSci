@@ -132,20 +132,20 @@ class ResourceTableBase(Resource):
         default=None,
         sa_type=Numeric,
     )
-    row_dimension: Optional[int] = Field(
-        title="Row Dimension",
+    columns: Optional[int] = Field(
+        title="Number of Columns",
         description="The size of a row (used by Grids and Voxel Grids).",
         nullable=True,
         default=None,
     )
-    column_dimension: Optional[int] = Field(
-        title="Column Dimension",
+    rows: Optional[int] = Field(
+        title="Number of Rows",
         description="The size of a column (used by Grids and Voxel Grids).",
         nullable=True,
         default=None,
     )
-    layer_dimension: Optional[int] = Field(
-        title="Layer Dimension",
+    layers: Optional[int] = Field(
+        title="Number of Layers",
         description="The size of a layer (used by Voxel Grids).",
         nullable=True,
         default=None,
