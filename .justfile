@@ -16,6 +16,8 @@ checks:
   @pre-commit run --all-files || { echo "Checking fixes\n" ; pre-commit run --all-files; }
 check: checks
 
+build: dcb
+  # Build the project
 
 # Python tasks
 
@@ -46,5 +48,5 @@ tests: test
 pytest: test
 
 # Build docker image
-docker-build:
-  @docker build -t ghcr.io/ad-sdl/madsci:dev .
+dcb:
+  @docker compose build
