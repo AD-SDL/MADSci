@@ -434,7 +434,9 @@ class Grid(Row):
                 quantity += row.quantity
         return quantity
 
-    def get_child(self, key: str | GridIndex2D | int) -> Optional["ResourceDataModels"]:
+    def get_child(
+        self, key: Union[str, GridIndex2D, int]
+    ) -> Optional["ResourceDataModels"]:
         """Get a child from the Grid."""
         if isinstance(key, str):
             key = self.split_index(key)
@@ -444,7 +446,7 @@ class Grid(Row):
         return row[key[1]]
 
     def set_child(
-        self, key: str | GridIndex2D | int, child: "ResourceDataModels"
+        self, key: Union[str, GridIndex2D, int], child: "ResourceDataModels"
     ) -> None:
         """Get a child from the Grid."""
         if isinstance(key, int):
@@ -456,7 +458,7 @@ class Grid(Row):
             row[key[1]] = child
             child.key = str(key[1])
 
-    def __getitem__(self, key: str | GridIndex2D | int) -> Resource:
+    def __getitem__(self, key: Union[str, GridIndex2D, int]) -> Resource:
         """get an item using alphanumeric keys"""
 
         return self.get_child(key)
@@ -552,7 +554,9 @@ class VoxelGrid(Grid):
         grid = self.children[key[2]]
         return grid[(key[0], key[1])]
 
-    def set_child(self, key: GridIndex3D | int, child: "ResourceDataModels") -> None:
+    def set_child(
+        self, key: Union[GridIndex3D, int], child: "ResourceDataModels"
+    ) -> None:
         """Get a child from the Grid."""
         if isinstance(key, int):
             self.children[key] = child
