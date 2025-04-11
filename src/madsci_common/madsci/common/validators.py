@@ -15,6 +15,17 @@ def ulid_validator(id: str, info: ValidationInfo) -> str:
         raise ValueError(f"Invalid ULID {id} for field {info.field_name}") from e
 
 
+def optional_ulid_validator(id: Union[str, None], info: ValidationInfo) -> str:
+    """Validates that a string field is a valid ULID."""
+    if id is None:
+        return id
+    try:
+        ULID.from_str(id)
+        return id
+    except ValueError as e:
+        raise ValueError(f"Invalid ULID {id} for field {info.field_name}") from e
+
+
 def alphanumeric_with_underscores_validator(v: str, info: ValidationInfo) -> str:
     """Validates that a string field is alphanumeric with underscores."""
     if not str(v).replace("_", "").isalnum():

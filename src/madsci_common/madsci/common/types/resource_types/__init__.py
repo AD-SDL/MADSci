@@ -1,7 +1,8 @@
 """Types related to MADSci Resources."""
 
+import re
 import string
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import PositiveInt, PositiveNumber, new_ulid_str
 from madsci.common.types.resource_types.custom_types import (
@@ -16,7 +17,11 @@ from madsci.common.types.resource_types.definitions import (
     ConsumableResourceDefinition,
     ContainerResourceDefinition,
     ContinuousConsumableResourceDefinition,
+    CustomResourceAttributeDefinition,  # noqa: F401
     DiscreteConsumableResourceDefinition,
+    GridIndex,
+    GridIndex2D,
+    GridIndex3D,
     GridResourceDefinition,
     PoolResourceDefinition,
     QueueResourceDefinition,
@@ -28,7 +33,6 @@ from madsci.common.types.resource_types.definitions import (
 )
 from madsci.common.validators import ulid_validator
 from pydantic import (
-    AfterValidator,
     AnyUrl,
     computed_field,
     model_validator,
@@ -210,7 +214,7 @@ class Container(Asset):
         description="The capacity of the container.",
         default=None,
     )
-    children: Optional[dict[str, "ResourceDataModels"]] = Field(
+    children: dict[str, "ResourceDataModels"] = Field(
         title="Children",
         description="The children of the container.",
         default_factory=dict,
@@ -250,7 +254,7 @@ class Collection(Container):
         default=ContainerTypeEnum.collection,
         const=True,
     )
-    children: Optional[dict[str, "ResourceDataModels"]] = Field(
+    children: dict[str, "ResourceDataModels"] = Field(
         title="Children",
         description="The children of the collection.",
         default_factory=dict,
@@ -274,155 +278,204 @@ class Collection(Container):
         self.children = children
 
 
-def single_letter_or_digit_validator(value: str) -> str:
-    """Validate that the value is a single letter or digit."""
-    if not (value.isalpha() and len(value) == 1) or value.isdigit():
-        raise ValueError("Value must be a single letter or digit.")
-    return value
-
-
-GridIndex = Union[
-    int,
-    Annotated[str, AfterValidator(single_letter_or_digit_validator)],
-]
-GridIndex2D = tuple[GridIndex, GridIndex]
-GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
-
-
-def numericize_index(key: Union[str, GridIndex]) -> GridIndex:
-    """Convert a key to a numeric value."""
-    if isinstance(key, int) or str(key).isdigit():
-        return int(key)
-    return string.ascii_lowercase.index(key.lower())
-
-
 class Row(Container):
     """Data Model for a Row. A row is a container that can hold other resources in a single dimension and supports random access. For example, a row of tubes in a rack or a single-row microplate. Rows are indexed by integers or letters."""
 
-    children: Optional[dict[GridIndex, "ResourceDataModels"]] = Field(
-        title="Children",
-        description="The children of the row container.",
-        default_factory=dict,
-    )
     base_type: Literal[ContainerTypeEnum.row] = Field(
         title="Container Base Type",
         description="The base type of the row.",
         default=ContainerTypeEnum.row,
         const=True,
     )
-    row_dimension: int = Field(
-        title="Row Dimension",
-        description="The number of rows in the row.",
+    columns: int = Field(
+        title="Number of Columns",
+        description="The number of columns in the row.",
         ge=0,
     )
+
+    children: list[Union["ResourceDataModels", None]] = Field(
+        title="Children", description="The children of the row container.", default=[]
+    )
+
+    is_one_indexed: bool = Field(
+        title="One Indexed",
+        description="Whether the numeric index of the object start at 0 or 1, only used with string keys",
+        default=True,
+    )
+
+    @model_validator(mode="after")
+    def set_list(self) -> "Row":
+        """populates the children list with none values"""
+        if self.children == []:
+            self.children = [None] * self.columns
+        return self
 
     @computed_field
     def quantity(self) -> int:
         """Calculate the quantity of assets in the container."""
-        return len(self.children)
+        quantity = 0
+        for child in self.children:
+            if getattr(child, "quantity", None) is not None:
+                quantity += child.quantity
+        return quantity
+
+    def extract_children(self) -> list["ResourceDataModels"]:
+        """return all children"""
+        return_dict = {}
+        for index, item in enumerate(self.children):
+            return_dict[str(index)] = item
+        return return_dict
 
     def get_child(self, key: GridIndex) -> Optional["ResourceDataModels"]:
         """Get a child from the Row."""
-        return self.children.get(numericize_index(key), None)
+        if isinstance(key, str):
+            return self.children[int(key) - self.is_one_indexed]
+        return self.children[key]
 
-    @staticmethod
-    def flatten_key(key: GridIndex) -> str:
-        """Flatten the key to a string."""
-        return str(key)
-
-    @staticmethod
-    def expand_key(key: str) -> GridIndex:
-        """Expand the key to a 2-tuple."""
-        if key.isdigit():
+    def numericize_index(self, key: Union[str, GridIndex]) -> GridIndex:
+        """Convert a key to a numeric value."""
+        if isinstance(key, int):
             return int(key)
-        return key
+        if key.isdigit():
+            return int(key) - self.is_one_indexed
+        return string.ascii_lowercase.index(key.lower())
+
+    def set_child(self, key: GridIndex, value: "ResourceDataModels") -> None:
+        """set a child using a string or int"""
+        if isinstance(key, str):
+            key = self.numericize_index(key)
+        self.children[key] = value
+        value.key = str(key)
+
+    def __getitem__(self, index: GridIndex) -> Resource:
+        """retrieve a child using an alphanumeric key, if index is a string, uses self.is_one_indexed, otherwise uses normal array rules"""
+        return self.get_child(index)
+
+    def __setitem__(self, key: GridIndex, value: Any) -> None:
+        """set an item using an alphanumeric key"""
+        self.set_child(key, value)
 
     def check_key_bounds(self, key: Union[str, GridIndex]) -> bool:
         """Check if the key is within the bounds of the grid."""
-        key = numericize_index(key)
-        return not (key < 0 or key >= self.row_dimension)
+        return not (int(key) < 0 or int(key) >= self.columns)
+
+    def get_all_keys(self) -> list:
+        """get all keys of this object"""
+        return list(range(self.columns))
+
+    def populate_children(
+        self, children: dict[GridIndex, "ResourceDataModels"]
+    ) -> None:
+        """Populate the children of the grid."""
+        for key, value in children.items():
+            self[int(key)] = value
 
 
 class Grid(Row):
     """Data Model for a Grid. A grid is a container that can hold other resources in two dimensions and supports random access. For example, a 96-well microplate. Grids are indexed by integers or letters."""
 
-    children: Optional[dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]] = Field(
-        title="Children",
-        description="The children of the grid container.",
-        default_factory=dict,
-    )
     base_type: Literal[ContainerTypeEnum.grid] = Field(
         title="Container Base Type",
         description="The base type of the grid.",
         default=ContainerTypeEnum.grid,
         const=True,
     )
-    column_dimension: int = Field(
-        title="Column Dimension",
-        description="The number of columns in the grid.",
+    rows: int = Field(
+        title="Number of Rows",
+        description="The number of rows in the grid.",
         ge=0,
     )
+
+    children: list[Optional[Row]] = Field(
+        title="Children", description="The children of the grid container.", default=[]
+    )
+
+    @model_validator(mode="after")
+    def initialize_grid(self) -> None:
+        """Creates a grid of the correct dimensions"""
+        for i in range(self.rows):
+            if i >= len(self.children):
+                self.children.append(
+                    Row(
+                        columns=self.columns,
+                        resource_name=self.resource_name + "_row_" + str(i),
+                    )
+                )
+            if self.children[i] is None:
+                self.children[i] = Row(
+                    columns=self.columns,
+                    resource_name=self.resource_name + "_row_" + str(i),
+                )
+        return self
+
+    def split_index(self, key: str) -> GridIndex2D:
+        """split an alphanumeric index string into a grid index tuple, uses is_one_indexed for the numerical index"""
+        match = re.search(r"(\d)", key)
+        if match:
+            index = match.start()
+            return (
+                self.numericize_index(key[:index]),
+                self.numericize_index(key[index:]),
+            )
+        raise (ValueError("Key is in the wrong format!"))
+
+    def get_all_keys(self) -> list:
+        """get all keys of this object"""
+        return [
+            GridIndex2D(i, j) for i in range(self.columns) for j in range(self.rows)
+        ]
 
     @computed_field
     def quantity(self) -> int:
         """Calculate the quantity of assets in the container."""
         quantity = 0
-        for _, row_value in self.children.items():
-            quantity += len(row_value)
+        for row in self.children:
+            if getattr(row, "quantity", None) is not None:
+                quantity += row.quantity
         return quantity
 
-    def get_child(self, key: GridIndex2D) -> Optional["ResourceDataModels"]:
+    def get_child(
+        self, key: Union[str, GridIndex2D, int]
+    ) -> Optional["ResourceDataModels"]:
         """Get a child from the Grid."""
-        row = self.children.get(numericize_index(key[0]), None)
-        if row is None:
-            return None
-        return row.get(numericize_index(key[1]), None)
+        if isinstance(key, str):
+            key = self.split_index(key)
+        if isinstance(key, int):
+            return self.children[key]
+        row = self.children[key[0]]
+        return row[key[1]]
 
-    @staticmethod
-    def flatten_key(key: GridIndex2D) -> str:
-        """Flatten the key to a string."""
-        return "_".join([str(index) for index in key])
+    def set_child(
+        self, key: Union[str, GridIndex2D, int], child: "ResourceDataModels"
+    ) -> None:
+        """Get a child from the Grid."""
+        if isinstance(key, int):
+            self.children[key] = child
+        else:
+            if isinstance(key, str):
+                key = self.split_index(key)
+            row = self.children[key[0]]
+            row[key[1]] = child
+            child.key = str(key[1])
 
-    @staticmethod
-    def expand_key(key: str) -> GridIndex2D:
-        """Expand the key to a 2-tuple."""
-        expanded_key = key.split("_")
-        final_keys = []
-        for index in expanded_key:
-            if index.isdigit():
-                final_keys.append(int(index))
-            else:
-                final_keys.append(index)
-        return tuple(final_keys)
+    def __getitem__(self, key: Union[str, GridIndex2D, int]) -> Resource:
+        """get an item using alphanumeric keys"""
+
+        return self.get_child(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """set an item using alphanumeric keys"""
+        self.set_child(key, value)
 
     def check_key_bounds(self, key: Union[str, GridIndex2D]) -> bool:
         """Check if the key is within the bounds of the grid."""
         if isinstance(key, str):
-            key = self.expand_key(key)
+            key = self.split_index(key)
         elif not isinstance(key, tuple) or len(key) != 2:
             raise ValueError("Key must be a string or a 2-tuple.")
-        numeric_key = []
-        for index in key:
-            numeric_key.append(numericize_index(index))
-        key = numeric_key
-        return not (key[0] < 0 or key[0] >= self.row_dimension) and not (
-            key[1] < 0 or key[1] >= self.column_dimension
+        return not (key[0] < 0 or key[0] >= self.rows) and not (
+            key[1] < 0 or key[1] >= self.columns
         )
-
-    def extract_children(self) -> dict[str, "ResourceDataModels"]:
-        """Extract the children from the grid as a flat dictionary."""
-        children_dict = {}
-        for row_key, row_value in self.children.items():
-            for col_key, col_value in row_value.items():
-                children_dict[self.flatten_key((row_key, col_key))] = col_value
-
-    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
-        """Populate the children of the grid."""
-        for key, value in children.items():
-            row_key, col_key = self.expand_key(key)
-            if row_key not in self.children:
-                self.children[row_key] = {}
-            self.children[row_key][col_key] = value
 
 
 class VoxelGrid(Grid):
@@ -434,89 +487,123 @@ class VoxelGrid(Grid):
         default=ContainerTypeEnum.voxel_grid,
         const=True,
     )
-    layer_dimension: int = Field(
-        title="Layer Dimension",
-        description="The number of layers in the grid.",
+    layers: int = Field(
+        title="Number of Layers",
+        description="The number of layers in the voxel grid.",
         ge=0,
     )
-    children: Optional[
-        dict[GridIndex, dict[GridIndex, dict[GridIndex, "ResourceDataModels"]]]
-    ] = Field(
+    children: list[Optional[Grid]] = Field(
         title="Children",
         description="The children of the voxel grid container.",
-        default_factory=dict,
+        default=[],
     )
+
+    @model_validator(mode="after")
+    def initialize_grid(self) -> None:
+        """Creates a voxel grid of the correct dimension"""
+        for i in range(self.layers):
+            if i >= len(self.children):
+                self.children.append(
+                    Grid(
+                        resource_name=self.resource_name + "_layer_" + str(i),
+                        rows=self.rows,
+                        columns=self.columns,
+                        children=[
+                            Row(
+                                columns=self.columns,
+                                resource_name=self.resource_name
+                                + "_layer_"
+                                + str(i)
+                                + "_row_"
+                                + str(j),
+                            )
+                            for j in range(self.rows)
+                        ],
+                    )
+                )
+            if self.children[i] is None:
+                self.children[i] = Grid(
+                    resource_name=self.resource_name + "_layer_" + str(i),
+                    rows=self.rows,
+                    columns=self.columns,
+                    children=[
+                        Row(
+                            columns=self.columns,
+                            resource_name=self.resource_name
+                            + "_layer_"
+                            + str(i)
+                            + "_row_"
+                            + str(j),
+                        )
+                        for j in range(self.rows)
+                    ],
+                )
+        return self
 
     @computed_field
     def quantity(self) -> int:
         """Calculate the quantity of assets in the container."""
         quantity = 0
-        for _, row_value in self.children.items():
-            for _, col_value in row_value.items():
-                quantity += len(col_value)
+        for grid_value in self:
+            if getattr(grid_value, "quantity", None) is not None:
+                quantity += grid_value.quantity
         return quantity
 
     def get_child(self, key: GridIndex3D) -> Optional["ResourceDataModels"]:
         """Get a child from the Voxel Grid."""
-        row = self.children.get(numericize_index(key[0]), None)
-        if row is None:
-            return None
-        col = row.get(numericize_index(key[1]), None)
-        if col is None:
-            return None
-        return col.get(numericize_index(key[2]), None)
+        grid = self.children[key[2]]
+        return grid[(key[0], key[1])]
 
-    @staticmethod
-    def flatten_key(key: GridIndex3D) -> str:
-        """Flatten the key to a string."""
-        return "_".join([str(index) for index in key])
+    def set_child(
+        self, key: Union[GridIndex3D, int], child: "ResourceDataModels"
+    ) -> None:
+        """Get a child from the Grid."""
+        if isinstance(key, int):
+            self.children[key] = child
+        else:
+            grid = self.children[key[2]]
+            if not isinstance(grid, Grid):
+                grid = Grid(
+                    resource_name=self.resource_name + "_layer_" + str(key[2]),
+                    rows=self.rows,
+                    columns=self.columns,
+                    children=[
+                        Row(
+                            columns=self.columns,
+                            resource_name=self.resource_name
+                            + "_layer_"
+                            + str(key[2])
+                            + "_row_"
+                            + str(j),
+                        )
+                        for j in range(self.rows)
+                    ],
+                )
+                self.children[key[2]] = grid
+            row = grid[key[0]]
+            if not isinstance(row, Row):
+                row = Row(
+                    resource_name=self.resource_name
+                    + "_layer_"
+                    + str(key[2])
+                    + "_row_"
+                    + str(key[0]),
+                    columns=self.columns,
+                    children=list([None] * self.columns),
+                )
+                grid.children[key[0]] = row
+            row[key[1]] = child
+            child.key = str(key[2])
 
-    @staticmethod
-    def expand_key(key: str) -> GridIndex3D:
-        """Expand the key to a tuple."""
-        expanded_key = key.split("_")
-        final_keys = []
-        for index in expanded_key:
-            if index.isdigit():
-                final_keys.append(int(index))
-            else:
-                final_keys.append(index)
-        return final_keys
-
-    def extract_children(self) -> dict[str, "ResourceDataModels"]:
-        """Extract the children from the grid as a flat dictionary."""
-        children_dict = {}
-        for row_key, row_value in self.children.items():
-            for col_key, col_value in row_value.items():
-                for depth_key, depth_value in col_value.items():
-                    children_dict[self.flatten_key((row_key, col_key, depth_key))] = (
-                        depth_value
-                    )
-
-    def populate_children(self, children: dict[str, "ResourceDataModels"]) -> None:
-        """Populate the children of the grid."""
-        for key, value in children.items():
-            row_key, col_key, depth_key = self.expand_key(key)
-            if row_key not in self.children:
-                self.children[row_key] = {}
-            if col_key not in self.children[row_key]:
-                self.children[row_key][col_key] = {}
-            self.children[row_key][col_key][depth_key] = value
-
-    def check_key_bounds(self, key: Union[str, GridIndex3D]) -> bool:
+    def check_key_bounds(self, key: GridIndex3D) -> bool:
         """Check if the key is within the bounds of the grid."""
-        if isinstance(key, str):
-            key = self.expand_key(key)
-        elif not isinstance(key, tuple) or len(key) != 3:
-            raise ValueError("Key must be a string or a 3-tuple.")
-        numeric_key = []
-        for index in key:
-            numeric_key.append(numericize_index(index))
-        key = numeric_key
+
+        if not isinstance(key, tuple) or len(key) != 3:
+            raise ValueError("Key must be a 3-tuple.")
         return (
-            not (key[0] < 0 or key[0] >= self.row_dimension)
-            and not (key[1] < 0 or key[1] >= self.column_dimension)
-            and not (key[2] < 0 or key[2] >= self.layer_dimension)
+            not (key[2] < 0 or key[2] >= self.layers)
+            and not (key[1] < 0 or key[1] >= self.rows)
+            and not (key[0] < 0 or key[0] >= self.columns)
         )
 
 
@@ -529,7 +616,7 @@ class Slot(Container):
         default=ContainerTypeEnum.slot,
         const=True,
     )
-    children: Optional[list["ResourceDataModels"]] = Field(
+    children: list["ResourceDataModels"] = Field(
         title="Children",
         description="The children of the slot.",
         default_factory=list,
@@ -575,7 +662,7 @@ class Stack(Container):
         default=ContainerTypeEnum.stack,
         const=True,
     )
-    children: Optional[list["ResourceDataModels"]] = Field(
+    children: list["ResourceDataModels"] = Field(
         title="Children",
         description="The children of the stack.",
         default_factory=list,
@@ -615,7 +702,7 @@ class Queue(Container):
         default=ContainerTypeEnum.queue,
         const=True,
     )
-    children: Optional[list["ResourceDataModels"]] = Field(
+    children: list["ResourceDataModels"] = Field(
         title="Children",
         description="The children of the queue.",
         default_factory=list,
@@ -655,7 +742,7 @@ class Pool(Container):
         default=ContainerTypeEnum.pool,
         const=True,
     )
-    children: Optional[dict[str, "ConsumableDataModels"]] = Field(
+    children: dict[str, "ConsumableDataModels"] = Field(
         title="Children",
         description="The children of the pool.",
         default_factory=dict,

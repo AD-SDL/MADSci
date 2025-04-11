@@ -4,7 +4,7 @@
       <v-card-title>
         <h2 class="title">Workflow: {{ modal_title }}</h2>
         {{modal_text.run_id}}
-        <v-sheet class="pa-2 rounded-lg text-md-center text-white" :class="'wf_status_' + modal_text.status">{{ modal_text.status }}</v-sheet>
+        <v-sheet class="pa-2 rounded-lg text-md-center text-white" :class="'wf_status_' + process_status(modal_text.status)">{{ process_status(modal_text.status) }}</v-sheet>
       </v-card-title>
       <v-card-text>
         <Workflow :steps="modal_text.steps" :wf="modal_text" />
@@ -21,4 +21,26 @@
 import { ref } from 'vue';
 const props = defineProps(['modal_title', 'modal_text'])
 const flowdef = ref(false)
+
+function process_status(status: any) {
+  if (status.completed) {
+    return "completed"
+  }
+  else if (status.cancelled) {
+    return "cancelled"
+  }
+  else if (status.failed) {
+    return "failed"
+  }
+  else if (status.paused) {
+    return "paused"
+  }
+  else if(status.running) {
+    return "running"
+  }
+  else if(status.queued) {
+    return "queued"
+  }
+
+}
 </script>

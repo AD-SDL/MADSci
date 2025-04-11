@@ -24,7 +24,7 @@ services:
 
   lab_manager:
     container_name: lab_manager
-    image: madsci:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     environment:
       - USER_ID=1000
       - GROUP_ID=1000
@@ -40,7 +40,7 @@ services:
       - event_manager
   event_manager:
     container_name: event_manager
-    image: madsci:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     build:
       context: ..
       dockerfile: Dockerfile
@@ -56,7 +56,7 @@ services:
       - mongodb
   experiment_manager:
     container_name: experiment_manager
-    image: madsci:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     build:
       context: ..
       dockerfile: Dockerfile
@@ -70,25 +70,9 @@ services:
     network_mode: host
     depends_on:
       - mongodb
-  liquidhandler:
-    container_name: liquidhandler
-    image: madsci:latest
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    environment:
-      - USER_ID=1000
-      - GROUP_ID=1000
-    volumes:
-      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
-      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
-    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/liquidhandler_1.node.yaml
-    network_mode: host
-    depends_on:
-      - event_manager
   resource_manager:
     container_name: resource_manager
-    image: madsci:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     build:
       context: ..
       dockerfile: Dockerfile
@@ -102,9 +86,25 @@ services:
     network_mode: host
     depends_on:
       - postgres
+  data_manager:
+    container_name: data_manager
+    image: ghcr.io/ad-sdl/madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python -m madsci.data_manager.data_server
+    network_mode: host
+    depends_on:
+      - mongodb
   workcell_manager:
     container_name: workcell_manager
-    image: madsci:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     build:
       context: ..
       dockerfile: Dockerfile
@@ -122,3 +122,53 @@ services:
       - redis
       - resource_manager
       - postgres
+   #Nodes
+  liquidhandler:
+    container_name: liquidhandler
+    image: ghcr.io/ad-sdl/madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/liquidhandler_1.node.yaml
+    network_mode: host
+    depends_on:
+      - event_manager
+  robotarm:
+    container_name: robotarm
+    image: ghcr.io/ad-sdl/madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python example_lab/example_modules/robotarm.py --definition example_lab/example_modules/nodes/robotarm_1.node.yaml
+    network_mode: host
+    depends_on:
+      - event_manager
+
+  platereader:
+    container_name: platereader
+    image: ghcr.io/ad-sdl/madsci:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    volumes:
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/example_lab:/home/madsci/example_lab/
+      - ${LOCAL_WORKSPACE_FOLDER:-../}/.madsci:/home/madsci/.madsci/
+    command: python example_lab/example_modules/platereader.py --definition example_lab/example_modules/nodes/platereader_1.node.yaml
+    network_mode: host
+    depends_on:
+      - event_manager

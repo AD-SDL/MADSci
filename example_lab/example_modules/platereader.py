@@ -1,6 +1,5 @@
-"""A fake liquid handler module for testing."""
+"""A fake plate reader module for testing."""
 
-from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
@@ -11,74 +10,69 @@ from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
 
-class LiquidHandlerConfig(RestNodeConfig):
-    """Configuration for the liquid handler node module."""
+class PlateReaderConfig(RestNodeConfig):
+    """Configuration for the plate reader node module."""
 
     device_number: int = 0
-    """The device number of the liquid handler."""
+    """The device number of the plate reader."""
 
 
-class LiquidHandlerInterface:
-    """A fake liquid handler interface for testing."""
+class PlateReaderInterface:
+    """A fake plate reader interface for testing."""
 
     status_code: int = 0
     device_number: int = 0
 
     def __init__(
         self, device_number: int = 0, logger: Optional[EventClient] = None
-    ) -> "LiquidHandlerInterface":
-        """Initialize the liquid handler."""
+    ) -> "PlateReaderInterface":
+        """Initialize the plate reader."""
         self.logger = logger if logger else EventClient()
         self.device_number = device_number
 
     def run_command(self, command: str) -> None:
-        """Run a command on the liquid handler."""
+        """Run a command on the plate reader."""
         self.logger.log(
             f"Running command {command} on device number {self.device_number}."
         )
 
 
-class LiquidHandlerNode(RestNode):
-    """A fake liquid handler node module for testing."""
+class PlateReaderNode(RestNode):
+    """A fake plate reader node module for testing."""
 
-    liquid_handler: LiquidHandlerInterface = None
-    config_model = LiquidHandlerConfig
+    plate_reader: PlateReaderInterface = None
+    config_model = PlateReaderConfig
 
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
-        self.liquid_handler = LiquidHandlerInterface(logger=self.logger)
-        self.logger.log("Liquid handler initialized!")
+        self.plate_reader = PlateReaderInterface(logger=self.logger)
+        self.logger.log("Plate reader initialized!")
 
     def shutdown_handler(self) -> None:
         """Called to shutdown the node. Should be used to close connections to devices or release any other resources."""
         self.logger.log("Shutting down")
-        del self.liquid_handler
+        del self.plate_reader
 
     def state_handler(self) -> dict[str, Any]:
         """Periodically called to get the current state of the node."""
-        if self.liquid_handler is not None:
+        if self.plate_reader is not None:
             self.node_state = {
-                "liquid_handler_status_code": self.liquid_handler.status_code,
+                "plate_reader_status_code": self.plate_reader.status_code,
             }
 
     @action
-    def run_command(self, command: str) -> ActionResult:
-        """Run a command on the liquid handler."""
-        self.liquid_handler.run_command(command)
-        return ActionSucceeded()
+    def read_plate(
+        self,
+    ) -> ActionResult:
+        """Run a command on the plate reader."""
 
-    @action
-    def run_protocol(self, protocol: Path) -> ActionResult:
-        """Run a protocol on the liquid handler"""
-        self.logger.log(protocol)
-        self.liquid_handler.run_command("run_protocol")
-        return ActionSucceeded()
+        return ActionSucceeded(data={"example_data": {"example": "data"}})
 
     def get_location(self) -> AdminCommandResponse:
-        """Get location for the liquid handler"""
+        """Get location for the plate reader"""
         return AdminCommandResponse(data=[0, 0, 0, 0])
 
 
 if __name__ == "__main__":
-    liquid_handler_node = LiquidHandlerNode()
-    liquid_handler_node.start_node()
+    plate_reader_node = PlateReaderNode()
+    plate_reader_node.start_node()

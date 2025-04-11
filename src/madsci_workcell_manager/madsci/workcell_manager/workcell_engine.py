@@ -20,7 +20,6 @@ from madsci.common.types.node_types import Node
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
     Workflow,
-    WorkflowStatus,
 )
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
@@ -137,18 +136,20 @@ class Engine:
             )
             while len(sorted_ready_workflows) > 0:
                 next_wf = sorted_ready_workflows[0]
-                if next_wf.step_index >= len(next_wf.steps):
+                # * Check if the workflow is already complete
+                if next_wf.status.current_step_index >= len(next_wf.steps):
                     self.logger.log_warning(
                         f"Workflow {next_wf.workflow_id} has no more steps, marking as completed"
                     )
-                    next_wf.status = WorkflowStatus.COMPLETED
+                    next_wf.status.completed = True
                     self.state_handler.set_workflow(next_wf)
                     sorted_ready_workflows.pop(0)
                     next_wf = None
                     continue
                 next_wf = sorted_ready_workflows[0]
-                next_wf.status = WorkflowStatus.RUNNING
-                if next_wf.step_index == 0:
+                next_wf.status.running = True
+                next_wf.status.has_started = True
+                if next_wf.status.current_step_index == 0:
                     next_wf.start_time = datetime.now()
                 self.state_handler.set_workflow(next_wf)
                 break
@@ -166,7 +167,7 @@ class Engine:
         try:
             # * Prepare the step
             wf = self.state_handler.get_workflow(workflow_id)
-            step = wf.steps[wf.step_index]
+            step = wf.steps[wf.status.current_step_index]
             step.start_time = datetime.now()
             self.logger.log_info(
                 f"Running step {step.step_id} in workflow {workflow_id}"
@@ -241,7 +242,7 @@ class Engine:
                 break
             try:
                 time.sleep(interval)  # * Exponential backoff with cap
-                interval = interval * 1.5 if interval < 10 else 10
+                interval = interval * 1.5 if interval < 5 else 5
                 response = client.get_action_result(action_id)
                 self.handle_response(wf, step, response)
                 if (
@@ -275,22 +276,23 @@ class Engine:
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             step.end_time = datetime.now()
-            wf.steps[wf.step_index] = step
+            wf.steps[wf.status.current_step_index] = step
+            wf.status.running = False
             if step.status == ActionStatus.SUCCEEDED:
-                new_index = wf.step_index + 1
+                new_index = wf.status.current_step_index + 1
                 if new_index >= len(wf.steps):
-                    wf.status = WorkflowStatus.COMPLETED
+                    wf.status.completed = True
                     wf.end_time = datetime.now()
                 else:
-                    wf.step_index = new_index
-                    if wf.status == WorkflowStatus.RUNNING:
-                        wf.status = WorkflowStatus.IN_PROGRESS
+                    wf.status.current_step_index = new_index
             elif step.status == ActionStatus.FAILED:
-                wf.status = WorkflowStatus.FAILED
+                wf.status.failed = True
                 wf.end_time = datetime.now()
             elif step.status == ActionStatus.CANCELLED:
-                wf.status = WorkflowStatus.CANCELLED
+                wf.status.cancelled = True
                 wf.end_time = datetime.now()
+            elif step.status == ActionStatus.NOT_READY:
+                pass
             else:
                 self.logger.log_error(
                     f"Step {step.step_id} in workflow {workflow_id} ended with unexpected status {step.status}"
@@ -301,7 +303,7 @@ class Engine:
         """Update the step in the workflow"""
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(wf.workflow_id)
-            wf.steps[wf.step_index] = step
+            wf.steps[wf.status.current_step_index] = step
             self.state_handler.set_workflow(wf)
         return wf
 

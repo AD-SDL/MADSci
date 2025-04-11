@@ -1,12 +1,13 @@
 """Default MADSci Workcell scheduler"""
 
 import traceback
+from datetime import datetime, timedelta
 
+from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
-    WorkflowStatus,
 )
 from madsci.workcell_manager.condition_checks import evaluate_condition_checks
 from madsci.workcell_manager.schedulers.scheduler import AbstractScheduler
@@ -35,12 +36,13 @@ class Scheduler(AbstractScheduler):
                 metadata.ready_to_run = True
                 metadata.reasons = []
 
-                if wf.step_index < len(wf.steps):
-                    step = wf.steps[wf.step_index]
+                if wf.status.current_step_index < len(wf.steps):
+                    step = wf.steps[wf.status.current_step_index]
                     self.check_workflow_status(wf, metadata)
                     self.location_checks(step, metadata)
                     self.resource_checks(step, metadata)
                     self.node_checks(step, wf, metadata)
+                    self.step_checks(step, metadata)
                     metadata = evaluate_condition_checks(step, self, metadata)
                     metadata.priority = priority
                     priority -= 1
@@ -58,18 +60,18 @@ class Scheduler(AbstractScheduler):
 
     def check_workflow_status(self, wf: Workflow, metadata: SchedulerMetadata) -> None:
         """Check if the workflow is ready to run (i.e. not paused, not completed, etc.)"""
-        if wf.paused:
+        if wf.status.paused:
             metadata.ready_to_run = False
             metadata.reasons.append("Workflow is paused")
             return
-        if wf.status == WorkflowStatus.RUNNING:
+        if wf.status.running:
             metadata.ready_to_run = False
             metadata.reasons.append("Workflow is already running")
             return
-        if wf.status not in [WorkflowStatus.QUEUED, WorkflowStatus.IN_PROGRESS]:
+        if not wf.status.active:
             metadata.ready_to_run = False
             metadata.reasons.append(
-                f"Workflow status must be '{WorkflowStatus.QUEUED}' or '{WorkflowStatus.IN_PROGRESS}' to run, not {wf.status}"
+                f"Workflow must be active (i.e., not completed, failed, cancelled, or paused), not {wf.status.description}"
             )
 
     def location_checks(self, step: Step, metadata: SchedulerMetadata) -> None:
@@ -88,6 +90,17 @@ class Scheduler(AbstractScheduler):
 
     def resource_checks(self, step: Step, metadata: SchedulerMetadata) -> None:
         """Check if the resources for the step are ready TODO: actually check"""
+
+    def step_checks(self, step: Step, metadata: SchedulerMetadata) -> None:
+        """Check if the step was not ready recently mark the workflow as not active"""
+        if (
+            step.result is not None
+            and step.result.status == ActionStatus.NOT_READY
+            and datetime.now().astimezone() - step.result.history_created_at
+            < timedelta(seconds=30)
+        ):
+            metadata.ready_to_run = False
+            metadata.reasons.append(f"Waiting for Node {step.node} to be ready")
 
     def node_checks(
         self, step: Step, wf: Workflow, metadata: SchedulerMetadata

@@ -2,7 +2,7 @@
 
 import json
 import time
-from pathlib import Path
+from pathlib import Path, PosixPath, PurePath, WindowsPath
 from typing import Any, Optional, Union
 
 import requests
@@ -16,9 +16,9 @@ from madsci.common.types.workcell_types import WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
-    WorkflowStatus,
 )
 from madsci.common.utils import PathLike
+from rich import print
 
 
 class WorkcellClient:
@@ -75,7 +75,7 @@ class WorkcellClient:
         workflow: Union[PathLike, WorkflowDefinition],
         parameters: Optional[dict[str, Any]] = None,
         validate_only: bool = False,
-        blocking: bool = True,
+        await_completion: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
     ) -> Workflow:
@@ -90,7 +90,7 @@ class WorkcellClient:
             Parameters to be inserted into the workflow.
         validate_only : bool, optional
             If True, only validate the workflow without submitting, by default False.
-        blocking : bool, optional
+        await_completion : bool, optional
             If True, wait for the workflow to complete, by default True.
         raise_on_failed : bool, optional
             If True, raise an exception if the workflow fails, by default True.
@@ -134,7 +134,7 @@ class WorkcellClient:
             timeout=10,
         )
         response.raise_for_status()
-        if not blocking:
+        if not await_completion:
             return Workflow(**response.json())
         return self.await_workflow(
             response.json()["workflow_id"],
@@ -193,7 +193,9 @@ class WorkcellClient:
         """
         wfs = []
         for i in range(len(workflows)):
-            wf = self.submit_workflow(workflows[i], parameters[i], blocking=True)
+            wf = self.submit_workflow(
+                workflows[i], parameters[i], await_completion=True
+            )
             wfs.append(wf)
         return wfs
 
@@ -217,7 +219,9 @@ class WorkcellClient:
         """
         id_list = []
         for i in range(len(workflows)):
-            response = self.submit_workflow(workflows[i], parameters[i], blocking=False)
+            response = self.submit_workflow(
+                workflows[i], parameters[i], await_completion=False
+            )
             id_list.append(response.json()["workflow_id"])
         finished = False
         while not finished:
@@ -225,7 +229,7 @@ class WorkcellClient:
             wfs = []
             for id in id_list:
                 wf = self.query_workflow(id)
-                flag = flag and (wf.status in ["completed", "failed"])
+                flag = flag and (wf.status.terminal)
                 wfs.append(wf)
             finished = flag
         return wfs
@@ -260,7 +264,7 @@ class WorkcellClient:
     def resubmit_workflow(
         self,
         workflow_id: str,
-        blocking: bool = True,
+        await_completion: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
     ) -> Workflow:
@@ -271,7 +275,7 @@ class WorkcellClient:
         ----------
         workflow_id : str
             The ID of the workflow to resubmit.
-        blocking : bool, optional
+        await_completion : bool, optional
             If True, wait for the workflow to complete, by default True.
         raise_on_failed : bool, optional
             If True, raise an exception if the workflow fails, by default True.
@@ -286,7 +290,7 @@ class WorkcellClient:
         url = f"{self.url}/workflow/{workflow_id}/resubmit"
         response = requests.get(url, timeout=10)
         new_wf = Workflow(**response.json())
-        if blocking:
+        if await_completion:
             return self.await_workflow(
                 new_wf.workflow_id,
                 raise_on_failed=raise_on_failed,
@@ -322,36 +326,33 @@ class WorkcellClient:
         while True:
             wf = self.query_workflow(workflow_id)
             status = wf.status
-            step_index = wf.step_index
+            step_index = wf.status.current_step_index
             if prior_status != status or prior_index != step_index:
                 if step_index < len(wf.steps):
                     step_name = wf.steps[step_index].name
                 else:
                     step_name = "Workflow End"
                 # TODO: Improve progress reporting
-                print(  # noqa: T201
-                    f"\n{wf.name} [{step_index}]: {step_name} ({wf.status})",
+                print(
+                    f"\n{wf.name}['{step_name}']: {wf.status.description}",
                     end="",
                     flush=True,
                 )
             else:
-                print(".", end="", flush=True)  # noqa: T201
+                print(".", end="", flush=True)
             time.sleep(1)
-            if wf.status in [
-                WorkflowStatus.COMPLETED,
-                WorkflowStatus.FAILED,
-                WorkflowStatus.CANCELLED,
-            ]:
+            if wf.status.terminal:
+                print()
                 break
             prior_status = status
             prior_index = step_index
-        if wf.status == WorkflowStatus.FAILED and raise_on_failed:
+        if wf.status.failed and raise_on_failed:
             raise WorkflowFailedError(
-                f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.step_index}: '{wf.steps[wf.step_index].name}'."
+                f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
             )
-        if wf.status == WorkflowStatus.CANCELLED and raise_on_cancelled:
+        if wf.status.cancelled and raise_on_cancelled:
             raise WorkflowFailedError(
-                f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.step_index}: '{wf.steps[wf.step_index].name}'."
+                f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
             )
         return wf
 
@@ -649,6 +650,9 @@ def insert_parameter_values(
                     + param.name
                     + " not provided, and no default value is defined."
                 )
+    for key, value in parameters.items():
+        if isinstance(value, (Path, PurePath, WindowsPath, PosixPath)):
+            parameters[key] = str(value)
     steps = []
     for step in workflow.steps:
         for key, val in iter(step):
@@ -656,5 +660,7 @@ def insert_parameter_values(
                 setattr(step, key, value_substitution(val, parameters))
 
         step.args = walk_and_replace(step.args, parameters)
+        step.files = walk_and_replace(step.files, parameters)
+        step.locations = walk_and_replace(step.locations, parameters)
         steps.append(step)
     workflow.steps = steps

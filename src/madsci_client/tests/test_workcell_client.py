@@ -10,7 +10,6 @@ from madsci.client.workcell_client import WorkcellClient
 from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
-from madsci.common.types.workflow_types import WorkflowStatus
 from madsci.workcell_manager.workcell_server import (
     WorkflowDefinition,
     create_workcell_server,
@@ -121,29 +120,29 @@ def test_get_workcell_state(client: WorkcellClient) -> None:
 def test_pause_workflow(client: WorkcellClient) -> None:
     """Test pausing a workflow."""
     workflow = client.submit_workflow(
-        WorkflowDefinition(name="Test Workflow"), None, blocking=False
+        WorkflowDefinition(name="Test Workflow"), None, await_completion=False
     )
     paused_workflow = client.pause_workflow(workflow.workflow_id)
-    assert paused_workflow.paused is True
+    assert paused_workflow.status.paused is True
 
 
 def test_resume_workflow(client: WorkcellClient) -> None:
     """Test resuming a workflow."""
     workflow = client.submit_workflow(
-        WorkflowDefinition(name="Test Workflow"), {}, blocking=False
+        WorkflowDefinition(name="Test Workflow"), {}, await_completion=False
     )
     client.pause_workflow(workflow.workflow_id)
     resumed_workflow = client.resume_workflow(workflow.workflow_id)
-    assert resumed_workflow.paused is False
+    assert resumed_workflow.status.paused is False
 
 
 def test_cancel_workflow(client: WorkcellClient) -> None:
     """Test canceling a workflow."""
     workflow = client.submit_workflow(
-        WorkflowDefinition(name="Test Workflow"), {}, blocking=False
+        WorkflowDefinition(name="Test Workflow"), {}, await_completion=False
     )
     canceled_workflow = client.cancel_workflow(workflow.workflow_id)
-    assert canceled_workflow.status == WorkflowStatus.CANCELLED
+    assert canceled_workflow.status.cancelled is True
 
 
 def test_get_locations(client: WorkcellClient) -> None:

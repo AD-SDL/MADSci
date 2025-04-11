@@ -15,6 +15,7 @@
         </tr>
       </template>
     </v-data-table>
+    <v-btn @click="active_add()">Add Location</v-btn>
 
 
     </v-card-text>
@@ -91,5 +92,8 @@ function location_items(locations: any, resources: any) {
   })
   return new_locations
 
+}
+function active_add() {
+  add_modal.value=true
 }
 </script>

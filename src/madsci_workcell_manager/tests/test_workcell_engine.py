@@ -74,8 +74,6 @@ def test_run_next_step_with_ready_workflow(
         name="Test Workflow",
         steps=[Step(name="Test Step", action="test_action", node="test_node", args={})],
         scheduler_metadata=SchedulerMetadata(ready_to_run=True, priority=1),
-        step_index=0,
-        status=WorkflowStatus.QUEUED,
     )
     state_handler.set_workflow(workflow)
     state_handler.update_workflow_queue()
@@ -85,7 +83,7 @@ def test_run_next_step_with_ready_workflow(
         assert engine.run_next_step() is not None
         mock_run_step.assert_called_once()
     updated_workflow = state_handler.get_workflow(workflow.workflow_id)
-    assert updated_workflow.status == WorkflowStatus.RUNNING
+    assert updated_workflow.status.running is True
 
 
 def test_run_single_step(engine: Engine, state_handler: WorkcellRedisHandler) -> None:
@@ -94,8 +92,7 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellRedisHandler) ->
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        step_index=0,
-        status=WorkflowStatus.RUNNING,
+        status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
     state_handler.set_workflow(workflow)
@@ -121,9 +118,10 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellRedisHandler) ->
         updated_workflow = state_handler.get_workflow(workflow.workflow_id)
         assert updated_workflow.steps[0].status == ActionStatus.SUCCEEDED
         assert updated_workflow.steps[0].result.status == ActionStatus.SUCCEEDED
-        assert updated_workflow.step_index == 0
-        assert updated_workflow.status == WorkflowStatus.COMPLETED
+        assert updated_workflow.status.current_step_index == 0
+        assert updated_workflow.status.completed is True
         assert updated_workflow.end_time is not None
+        assert updated_workflow.status.active is False
 
 
 def test_run_single_step_of_workflow_with_multiple_steps(
@@ -135,8 +133,7 @@ def test_run_single_step_of_workflow_with_multiple_steps(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step1, step2],
-        step_index=0,
-        status=WorkflowStatus.RUNNING,
+        status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
     state_handler.set_workflow(workflow)
@@ -164,8 +161,8 @@ def test_run_single_step_of_workflow_with_multiple_steps(
         assert updated_workflow.steps[0].result.status == ActionStatus.SUCCEEDED
         assert updated_workflow.steps[1].status == ActionStatus.NOT_STARTED
         assert updated_workflow.steps[1].result is None
-        assert updated_workflow.step_index == 1
-        assert updated_workflow.status == WorkflowStatus.IN_PROGRESS
+        assert updated_workflow.status.current_step_index == 1
+        assert updated_workflow.status.active is True
 
 
 def test_finalize_step_success(
@@ -176,8 +173,7 @@ def test_finalize_step_success(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        step_index=0,
-        status=WorkflowStatus.RUNNING,
+        status=WorkflowStatus(running=True),
     )
     state_handler.set_workflow(workflow)
     updated_step = copy.deepcopy(step)
@@ -187,7 +183,7 @@ def test_finalize_step_success(
     engine.finalize_step(workflow.workflow_id, updated_step)
 
     finalized_workflow = state_handler.get_workflow(workflow.workflow_id)
-    assert finalized_workflow.status == WorkflowStatus.COMPLETED
+    assert finalized_workflow.status.completed is True
     assert finalized_workflow.end_time is not None
     assert finalized_workflow.steps[0].status == ActionStatus.SUCCEEDED
 
@@ -200,8 +196,7 @@ def test_finalize_step_failure(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        step_index=0,
-        status=WorkflowStatus.RUNNING,
+        status=WorkflowStatus(running=True),
     )
     state_handler.set_workflow(workflow)
     updated_step = copy.deepcopy(step)
@@ -211,7 +206,7 @@ def test_finalize_step_failure(
     engine.finalize_step(workflow.workflow_id, updated_step)
 
     finalized_workflow = state_handler.get_workflow(workflow.workflow_id)
-    assert finalized_workflow.status == WorkflowStatus.FAILED
+    assert finalized_workflow.status.failed is True
     assert finalized_workflow.end_time is not None
     assert finalized_workflow.steps[0].status == ActionStatus.FAILED
 
@@ -230,8 +225,7 @@ def test_handle_data_and_files_with_data(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        step_index=0,
-        status=WorkflowStatus.RUNNING,
+        status=WorkflowStatus(running=True),
     )
     state_handler.set_node(
         node_name="node1",
@@ -270,8 +264,7 @@ def test_handle_data_and_files_with_files(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        step_index=0,
-        status=WorkflowStatus.RUNNING,
+        status=WorkflowStatus(running=True),
     )
     state_handler.set_node(
         node_name="node1",
@@ -307,8 +300,7 @@ def test_run_step_send_action_exception_then_get_action_result_success(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        step_index=0,
-        status=WorkflowStatus.RUNNING,
+        status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
     state_handler.set_workflow(workflow)
@@ -354,8 +346,7 @@ def test_run_step_send_action_and_get_action_result_fail(
     workflow = Workflow(
         name="Test Workflow",
         steps=[step],
-        step_index=0,
-        status=WorkflowStatus.RUNNING,
+        status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
     state_handler.set_workflow(workflow)

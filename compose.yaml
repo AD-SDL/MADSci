@@ -2,7 +2,7 @@ name: madsci
 services:
   madsci:
     container_name: madsci
-    image: madsci
+    image: ghcr.io/ad-sdl/madsci
     build:
       context: .
       dockerfile: Dockerfile

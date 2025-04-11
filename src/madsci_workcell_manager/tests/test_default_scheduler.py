@@ -71,13 +71,11 @@ def workflows() -> list[Workflow]:
             name="wf1",
             submitted_time=now - timedelta(minutes=10),
             steps=[Step(name="step1", action="test_action", node="test_node")],
-            status=WorkflowStatus.QUEUED,
         ),
         Workflow(
             name="wf2",
             submitted_time=now - timedelta(minutes=5),
             steps=[Step(name="step2", action="test_action", node="test_node")],
-            status=WorkflowStatus.QUEUED,
         ),
     ]
 
@@ -113,12 +111,11 @@ def test_condition_checking_no_resource_info_for_location(
                     action="test_action",
                     node="test_node",
                     conditions=[
-                        ResourceInLocationCondition(location="loc1"),
-                        NoResourceInLocationCondition(location="loc2"),
+                        ResourceInLocationCondition(location_name="loc1"),
+                        NoResourceInLocationCondition(location_name="loc2"),
                     ],
                 )
             ],
-            status=WorkflowStatus.QUEUED,
         )
     ]
     mock_scheduler.resource_client = MagicMock()
@@ -144,12 +141,11 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
                     action="test_action",
                     node="test_node",
                     conditions=[
-                        ResourceInLocationCondition(location="loc1"),
-                        NoResourceInLocationCondition(location="loc2"),
+                        ResourceInLocationCondition(location_name="loc1"),
+                        NoResourceInLocationCondition(location_name="loc2"),
                     ],
                 )
             ],
-            status=WorkflowStatus.QUEUED,
         )
     ]
     mock_scheduler.resource_client = MagicMock()
@@ -166,7 +162,7 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
     metadata = result[workflows[0].workflow_id]
     assert not metadata.ready_to_run
     assert len(metadata.reasons) > 0
-    assert "is empty" in metadata.reasons[0]
+    assert "does not contain" in metadata.reasons[0]
 
     mock_scheduler.resource_client.get_resource.return_value = Resource()
 
@@ -184,12 +180,12 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
     metadata = result[workflows[0].workflow_id]
     assert not metadata.ready_to_run
     assert len(metadata.reasons) > 0
-    assert "is not empty." in metadata.reasons[0]
+    assert "contains" in metadata.reasons[0]
 
 
 def test_workflow_paused(mock_scheduler: Scheduler, workflows: list[Workflow]) -> None:
     """Test that paused workflows are marked as not ready to run"""
-    workflows[0].paused = True
+    workflows[0].status.paused = True
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     assert not result[workflows[0].workflow_id].ready_to_run
     assert "Workflow is paused" in result[workflows[0].workflow_id].reasons
@@ -197,7 +193,7 @@ def test_workflow_paused(mock_scheduler: Scheduler, workflows: list[Workflow]) -
 
 def test_workflow_running(mock_scheduler: Scheduler, workflows: list[Workflow]) -> None:
     """Test that running workflows are marked as not ready to run"""
-    workflows[0].status = WorkflowStatus.RUNNING
+    workflows[0].status.running = True
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     assert not result[workflows[0].workflow_id].ready_to_run
     assert "Workflow is already running" in result[workflows[0].workflow_id].reasons
@@ -207,55 +203,37 @@ def test_workflow_status_failed(
     mock_scheduler: Scheduler, workflows: list[Workflow]
 ) -> None:
     """Test that workflows with an error status are not ready to run"""
-    workflows[0].status = WorkflowStatus.FAILED
+    workflows[0].status.failed = True
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     assert not result[workflows[0].workflow_id].ready_to_run
-    assert (
-        f"Workflow status must be '{WorkflowStatus.QUEUED}' or '{WorkflowStatus.IN_PROGRESS}' to run, not {WorkflowStatus.FAILED}"
-        in result[workflows[0].workflow_id].reasons[0]
-    )
+    assert "Workflow must be active" in result[workflows[0].workflow_id].reasons[0]
 
 
 def test_workflow_status_completed(
     mock_scheduler: Scheduler, workflows: list[Workflow]
 ) -> None:
     """Test that completed workflows are not ready to run"""
-    workflows[0].status = WorkflowStatus.COMPLETED
+    workflows[0].status.completed = True
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     assert not result[workflows[0].workflow_id].ready_to_run
-    assert (
-        f"Workflow status must be '{WorkflowStatus.QUEUED}' or '{WorkflowStatus.IN_PROGRESS}' to run, not {WorkflowStatus.COMPLETED}"
-        in result[workflows[0].workflow_id].reasons[0]
-    )
+    assert "Workflow must be active" in result[workflows[0].workflow_id].reasons[0]
 
 
 def test_workflow_status_cancelled(
     mock_scheduler: Scheduler, workflows: list[Workflow]
 ) -> None:
     """Test that cancelled workflows are not ready to run"""
-    workflows[0].status = WorkflowStatus.CANCELLED
+    workflows[0].status.cancelled = True
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     assert not result[workflows[0].workflow_id].ready_to_run
-    assert (
-        f"Workflow status must be '{WorkflowStatus.QUEUED}' or '{WorkflowStatus.IN_PROGRESS}' to run, not {WorkflowStatus.CANCELLED}"
-        in result[workflows[0].workflow_id].reasons[0]
-    )
-
-
-def test_workflow_status_in_progress(
-    mock_scheduler: Scheduler, workflows: list[Workflow]
-) -> None:
-    """Test that in progress workflows are ready to run"""
-    workflows[0].status = WorkflowStatus.IN_PROGRESS
-    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
-    assert result[workflows[0].workflow_id].ready_to_run
+    assert "Workflow must be active" in result[workflows[0].workflow_id].reasons[0]
 
 
 def test_workflow_status_queued(
     mock_scheduler: Scheduler, workflows: list[Workflow]
 ) -> None:
     """Test that queued workflows are ready to run"""
-    workflows[0].status = WorkflowStatus.QUEUED
+    workflows[0].status = WorkflowStatus()
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
     assert result[workflows[0].workflow_id].ready_to_run
 

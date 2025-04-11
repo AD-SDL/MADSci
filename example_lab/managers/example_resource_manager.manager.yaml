@@ -6,3 +6,18 @@ url: null
 host: 0.0.0.0
 port: 8004
 db_url: postgresql://rpl:rpl@localhost:5432/resources
+custom_types:
+  tip_box:
+    base_type: grid
+    fill: True
+    columns: 12
+    rows: 8
+    default_child_template:
+      resource_name_prefix: "well "
+      base_type: discrete_consumable
+      capacity: 1
+      quantity: 1
+    custom_attributes:
+    - attribute_name: test_attribute
+      attribute_description: a test attribute_description
+      default_value: teststst

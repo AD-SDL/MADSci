@@ -1,7 +1,7 @@
 <template>
     <v-card class="pa-1 ma-1" title="Recent Workflows">
         <v-card-text v-if="wfs">
-            <WorkflowTable />
+            <WorkflowTable :workflows="workflows"/>
         </v-card-text>
         <v-card-text v-else>
             <p>No Workflows Yet</p>
@@ -16,5 +16,6 @@
 
 <script setup lang="ts">
 const props = defineProps(['wc_state', 'wfs'])
+import { workflows } from "@/store";
 const emits = defineEmits(['viewWorkflows'])
 </script>

@@ -8,3 +8,5 @@ static_files_path: /home/madsci/ui/dist
 managers:
   workcell_manager: http://localhost:8013
   resource_manager: http://localhost:8004
+  data_manager: http://localhost:8003
+  experiment_manager: http://localhost:8002

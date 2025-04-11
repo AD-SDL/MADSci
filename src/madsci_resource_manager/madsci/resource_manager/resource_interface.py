@@ -17,10 +17,14 @@ from madsci.common.types.resource_types import (
     ContainerDataModels,
     ContainerTypeEnum,
     Queue,
+    Resource,
     ResourceDataModels,
     ResourceTypeEnum,
     Slot,
     Stack,
+)
+from madsci.common.types.resource_types.definitions import (
+    ResourceDefinitions,
 )
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
@@ -146,13 +150,14 @@ class ResourceInterface:
                 if add_descendants and getattr(resource, "children", None):
                     children = resource.extract_children()
                     for key, child in children.items():
-                        child.parent_id = resource_row.resource_id
-                        child.key = key
-                        self.add_or_update_resource(
-                            resource=child,
-                            include_descendants=add_descendants,
-                            parent_session=session,
-                        )
+                        if child is not None:
+                            child.parent_id = resource_row.resource_id
+                            child.key = key
+                            self.add_or_update_resource(
+                                resource=child,
+                                include_descendants=add_descendants,
+                                parent_session=session,
+                            )
                 session.commit()
                 session.refresh(resource_row)
                 return resource_row.to_data_model()
@@ -194,6 +199,8 @@ class ResourceInterface:
                     resource_row.children_list = []
                     children = resource.extract_children()
                     for key, child in children.items():
+                        if child is None:
+                            continue
                         child.parent_id = resource_row.resource_id
                         child.key = key
                         self.add_or_update_resource(
@@ -600,12 +607,14 @@ class ResourceInterface:
                 ContainerTypeEnum.grid,
                 ContainerTypeEnum.voxel_grid,
             ]:
-                if isinstance(key, str):
-                    key = container.expand_key(key)
-                if not container.check_key_bounds(key):
-                    raise KeyError(key)
-                key = container.flatten_key(key)
-            elif (
+                container[key] = child
+                self.update_resource(
+                    container, update_descendants=True, parent_session=session
+                )
+                session.commit()
+                session.refresh(container_row)
+                return container_row.to_data_model()
+            if (
                 container.capacity
                 and container.quantity >= container.capacity
                 and key not in container.children
@@ -620,7 +629,7 @@ class ResourceInterface:
             session.refresh(container_row)
             return container_row.to_data_model()
 
-    def remove_child(self, container_id: str, key: str) -> Union[Collection, Container]:
+    def remove_child(self, container_id: str, key: Any) -> Union[Collection, Container]:
         """Remove the child of a container at a particular key/location.
 
         Args:
@@ -649,15 +658,13 @@ class ResourceInterface:
                     f"Resource '{container_row.resource_name}' with type {container_row.base_type} does not support random access, use `.pop` instead."
                 )
             container = container_row.to_data_model()
-            if container.base_type in [
-                ContainerTypeEnum.row,
-                ContainerTypeEnum.grid,
-                ContainerTypeEnum.voxel_grid,
-            ]:
-                key = container.flatten_key(key)
-            child = container.children[key]
+            child = container.get_child(key)
+            if child is None:
+                raise (KeyError("Key not found in children"))
             child_row = session.exec(
-                select(ResourceTable).filter_by(resource_id=child.resource_id)
+                select(ResourceTable).filter_by(
+                    resource_id=getattr(child, "resource_id", None)
+                )
             ).one()
             child_row.parent_id = None
             child_row.key = None
@@ -675,7 +682,10 @@ class ResourceInterface:
                 select(ResourceTable).filter_by(resource_id=resource_id)
             ).one()
             resource = resource_row.to_data_model()
-            if not hasattr(resource, "capacity"):
+            if resource.base_type in [
+                ResourceTypeEnum.resource,
+                ResourceTypeEnum.asset,
+            ]:
                 raise ValueError(
                     f"Resource '{resource.resource_name}' with type {resource.base_type} has no capacity attribute."
                 )
@@ -700,7 +710,10 @@ class ResourceInterface:
                 select(ResourceTable).filter_by(resource_id=resource_id)
             ).one()
             resource = resource_row.to_data_model()
-            if not hasattr(resource, "capacity"):
+            if resource.base_type in [
+                ResourceTypeEnum.resource,
+                ResourceTypeEnum.asset,
+            ]:
                 raise ValueError(
                     f"Resource '{resource.resource_name}' with type {resource.base_type} has no capacity attribute."
                 )
@@ -723,7 +736,10 @@ class ResourceInterface:
                 select(ResourceTable).filter_by(resource_id=resource_id)
             ).one()
             resource = resource_row.to_data_model()
-            if not hasattr(resource, "quantity"):
+            if resource.base_type in [
+                ResourceTypeEnum.resource,
+                ResourceTypeEnum.asset,
+            ]:
                 raise ValueError(
                     f"Resource '{resource.resource_name}' with type {resource.base_type} has no quantity attribute."
                 )
@@ -777,3 +793,53 @@ class ResourceInterface:
             session.merge(resource_row)
             session.commit()
             return resource_row.to_data_model()
+
+    def init_custom_resource(
+        self,
+        input_definition: ResourceDefinitions,
+        custom_definition: ResourceDefinitions,
+    ) -> ResourceDataModels:
+        """initialize a customr resource"""
+        input_dict = input_definition.model_dump(mode="json", exclude_unset=True)
+        custom_dict = custom_definition.model_dump(mode="json")
+        custom_dict.update(**input_dict)
+        custom_dict["base_type"] = custom_definition.base_type
+        resource = Resource.discriminate(custom_dict)
+        for attribute in custom_definition.custom_attributes:
+            if attribute.default_value:
+                resource.attributes[attribute.attribute_name] = attribute.default_value
+            if (
+                input_definition.model_extra
+                and attribute.attribute_name in input_definition.model_extra
+            ):
+                resource.attributes[attribute.attribute_name] = getattr(
+                    input_definition, attribute.attribute_name
+                )
+            elif not attribute.optional:
+                raise (
+                    ValueError(
+                        f"Missing necessary custom attribute: {attribute.attribute_name}"
+                    )
+                )
+        if custom_definition.fill:
+            keys = resource.get_all_keys()
+            for key in keys:
+                child_resource = Resource.discriminate(
+                    custom_definition.default_child_template.model_dump(mode="json")
+                )
+                if custom_definition.default_child_template.resource_name_prefix:
+                    child_resource.resource_name = (
+                        custom_definition.default_child_template.resource_name_prefix
+                        + str(key)
+                    )
+                resource.set_child(key, child_resource)
+        if custom_definition.default_children:
+            for key in custom_definition.default_children:
+                resource.set_child(
+                    key,
+                    Resource.discriminate(
+                        custom_definition.default_children[key].model_dump(mode="json")
+                    ),
+                )
+        resource = self.add_resource(resource)
+        return self.get_resource(resource.resource_id)

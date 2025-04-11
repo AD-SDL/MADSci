@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
+    CustomResourceAttributeDefinition,  # noqa: F401
     Resource,
     ResourceDataModels,
     ResourceTypeEnum,
@@ -132,20 +133,20 @@ class ResourceTableBase(Resource):
         default=None,
         sa_type=Numeric,
     )
-    row_dimension: Optional[int] = Field(
-        title="Row Dimension",
+    columns: Optional[int] = Field(
+        title="Number of Columns",
         description="The size of a row (used by Grids and Voxel Grids).",
         nullable=True,
         default=None,
     )
-    column_dimension: Optional[int] = Field(
-        title="Column Dimension",
+    rows: Optional[int] = Field(
+        title="Number of Rows",
         description="The size of a column (used by Grids and Voxel Grids).",
         nullable=True,
         default=None,
     )
-    layer_dimension: Optional[int] = Field(
-        title="Layer Dimension",
+    layers: Optional[int] = Field(
+        title="Number of Layers",
         description="The size of a layer (used by Voxel Grids).",
         nullable=True,
         default=None,
@@ -181,10 +182,8 @@ class ResourceTableBase(Resource):
             for key, child in self.children.items():
                 flat_children[key] = child.to_data_model()
             if flat_children and hasattr(resource, "children"):
-                if hasattr(resource, "populate_children"):
-                    resource.populate_children(flat_children)
-                else:
-                    resource.children = flat_children
+                resource.populate_children(flat_children)
+
         return resource
 
     @classmethod

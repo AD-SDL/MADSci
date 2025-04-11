@@ -22,25 +22,51 @@ config:
   get_action_result_retries: 3
 nodes:
   liquidhandler_1: http://localhost:8000
+  platereader_1: http://localhost:2002
+  robotarm_1: http://localhost:2001
 locations:
-- location_name: test1
+- location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: null
   lookup:
-    liquidhandler_1:
+    robotarm_1:
     - 1
     - 2
     - 3
     - 4
   resource_definition:
     resource_name: slot_1
+    resource_name_prefix: null
     resource_type: ''
     base_type: slot
     resource_description: null
     owner: {}
+    custom_attributes: null
     capacity: 1
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JQMFHEN8FTRSDGHT7VYF8CHC
+  resource_id: 01JR8F3KF3BPZG1BEDK9DKXNWH
+- location_name: location_2
+  location_id: 01JR157336G2GXT79RQWZ1PE9F
+  description: null
+  lookup:
+    robotarm_1:
+    - 1
+    - 2
+    - 3
+    - 4
+  resource_definition:
+    resource_name: slot_2
+    resource_name_prefix: null
+    resource_type: ''
+    base_type: slot
+    resource_description: null
+    owner: {}
+    custom_attributes: null
+    capacity: 1
+    default_children: null
+    default_child_template: null
+    default_child_quantity: null
+  resource_id: 01JR8F3KN3MA49C0HW0H727STM
 workcell_directory: /home/madsci/.madsci/workcells/Example Workcell

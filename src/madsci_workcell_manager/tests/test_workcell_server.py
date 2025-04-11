@@ -134,11 +134,11 @@ def test_pause_and_resume_workflow(test_client: TestClient) -> None:
         response = client.post(f"/workflow/{workflow.workflow_id}/pause")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
-        assert workflow.paused is True
+        assert workflow.status.paused is True
         response = test_client.post(f"/workflow/{workflow.workflow_id}/resume")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
-        assert workflow.paused is False
+        assert workflow.status.paused is False
 
 
 def test_cancel_workflow(test_client: TestClient) -> None:
@@ -153,7 +153,7 @@ def test_cancel_workflow(test_client: TestClient) -> None:
         response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
-        assert workflow.status == "cancelled"
+        assert workflow.status.cancelled is True
         response = test_client.post(f"/workflow/{workflow.workflow_id}/resubmit")
         assert response.status_code == 200
         new_workflow = Workflow.model_validate(response.json())
@@ -172,11 +172,33 @@ def test_retry_workflow(test_client: TestClient) -> None:
         response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
-        assert workflow.status == "cancelled"
+        assert workflow.status.cancelled is True
         response = test_client.post(
             f"/workflow/{workflow.workflow_id}/retry", params={"index": 0}
         )
         assert response.status_code == 200
         new_workflow = Workflow.model_validate(response.json())
         assert workflow.workflow_id == new_workflow.workflow_id
-        assert new_workflow.status == "queued"
+        assert new_workflow.status.ok is True
+
+
+def test_resubmit_workflow(test_client: TestClient) -> None:
+    """Test resubmitting a workflow."""
+    with test_client as client:
+        workflow_def = WorkflowDefinition(name="Test Workflow")
+        response = client.post(
+            "/workflow",
+            data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
+        )
+        workflow = Workflow.model_validate(response.json())
+        response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
+        assert response.status_code == 200
+        workflow = Workflow.model_validate(response.json())
+        assert workflow.status.cancelled is True
+        response = test_client.post(
+            f"/workflow/{workflow.workflow_id}/resubmit", params={"index": 0}
+        )
+        assert response.status_code == 200
+        new_workflow = Workflow.model_validate(response.json())
+        assert workflow.workflow_id != new_workflow.workflow_id
+        assert new_workflow.status.ok is True

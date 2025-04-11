@@ -1,5 +1,5 @@
 <template>
-  <AddResourceModal v-model="add_modal" />
+
 
   <v-tabs v-model="tab" align-tabs="center" color="deep-purple-accent-4">
     <v-tab :value="1">
@@ -10,6 +10,9 @@
     </v-tab>
     <v-tab :value="3">
       Resources
+    </v-tab>
+    <v-tab :value="4">
+      Experiments
     </v-tab>
 
   </v-tabs>
@@ -26,7 +29,7 @@
           <h2>Workflows</h2>
         </v-card-title>
         <v-card-text>
-          <WorkflowTable/>
+          <WorkflowTable :workflows="workflows"/>
           </v-card-text>
         </v-card>
       </v-container>
@@ -38,8 +41,16 @@
           <h2>Resources</h2>
         </v-card-title>
         <v-card-text>
-          <ResourceTable :resources=resources :hide_header="false"/>
-          <v-btn @click="active_add()">Add Resource</v-btn>
+          <ResourcesPanel />
+          </v-card-text>
+        </v-card>
+      </v-container>
+    </v-window-item>
+    <v-window-item :key="4" :value="4">
+      <v-container class="pa-1 ma-1 justify-center" fluid>
+      <v-card>
+        <v-card-text>
+          <Experiments />
           </v-card-text>
         </v-card>
       </v-container>
@@ -51,17 +62,12 @@
 import { ref } from 'vue';
 import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
-import { resources } from "@/store";
+import { resources, workflows } from "@/store";
 import WorkcellPanel from './WorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
-import ResourceTable from './ResourceTable.vue';
-import AddResourceModal from './AddResourceModal.vue';
-
-const add_modal = ref(false)
+import ResourcesPanel from './ResourcesPanel.vue';
 const tab = ref(1)
-function active_add() {
-  add_modal.value=true
-}
+
 </script>
 
 <script lang="ts">
@@ -107,7 +113,6 @@ export default {
 
 .wf_status_queued,
 .wf_status_paused,
-.wf_status_in_progress,
 .node_status_paused {
   background-color: gold;
   color: black;
@@ -115,7 +120,6 @@ export default {
 
 .wf_status_in_progress {
   background-color: darkblue;
-  color: black;
 }
 
 .node_status_locked {

@@ -134,7 +134,7 @@ class RestNodeClient(AbstractNodeClient):
             if not response.status.is_terminal:
                 time.sleep(interval)
                 interval = (
-                    interval * 1.5 if interval < 10 else 10
+                    interval * 1.5 if interval < 5 else 5
                 )  # * Capped Exponential backoff
                 continue
             return response

@@ -4,11 +4,25 @@
       <h2>Experiments</h2>
     </v-card-title>
     <v-card-text>
-      <v-data-table :headers="arg_headers" :items="experiment_objects" item-value="experiment_id" :sort-by="sortBy"
-        @click:row="openExperimentDetails" density="compact">
-        <template v-slot:item.campaign_id="{ value }">
-          <td>{{ (value != null && campaigns !== undefined && value in campaigns) ? campaigns[value].campaign_name : "-"
-            }}</td>
+      <v-data-table :headers="arg_headers" :items="experiments" item-value="_id" :sort-by="sortBy"
+        density="compact">
+        <template v-slot:item="{ item, internalItem, isExpanded, toggleExpand}: { item: any, internalItem: any, isExpanded: any, toggleExpand: any}">
+        <tr >
+          <td @click="openExperimentDetails(item)">{{ item.experiment_design.experiment_name }}</td>
+          <td @click="openExperimentDetails(item)">{{ item._id }}</td>
+          <td @click="openExperimentDetails(item)" :class="'status_button wf_status_' + item.status">{{ item.status }}</td>
+          <td @click="openExperimentDetails(item)" >{{ item.started_at }}</td>
+          <td><v-btn
+        :icon="isExpanded(internalItem) ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+        variant="plain"
+        @click="toggleExpand(internalItem)"
+      /></td>
+        </tr>
+      </template>
+      <template v-slot:expanded-row="{ columns, item}: {columns: any, item: any}">
+          <tr>
+            <td :colspan="columns.length"><WorkflowTable :workflows="filter_workflows(workflows, item._id)" /></td>
+          </tr>
         </template>
       </v-data-table>
       <v-dialog v-model="dialogVisible">
@@ -17,32 +31,27 @@
             <span class="text-h5">Experiment Details</span>
           </v-card-title>
           <v-card-text>
+            <p  :class="'status_button wf_status_' + selectedExperiment.status">{{ selectedExperiment.status }}</p>
             <v-list>
               <v-list-item>
                 <v-list-item-title>Name:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.experiment_name }}</v-list-item-subtitle>
+                <v-list-item-subtitle>{{ selectedExperiment.experiment_design.experiment_name }}</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
                 <v-list-item-title>ID:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.experiment_id }}</v-list-item-subtitle>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Campaign:</v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ selectedExperiment.campaign_id ? campaigns[selectedExperiment.campaign_id]?.campaign_name : '-' }}
-                </v-list-item-subtitle>
+                <v-list-item-subtitle>{{ selectedExperiment._id }}</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
                 <v-list-item-title>Description:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.experiment_description || '-' }}</v-list-item-subtitle>
+                <v-list-item-subtitle>{{ selectedExperiment.experiment_design.experiment_description || '-' }}</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
-                <v-list-item-title>Last Check-in:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.check_in_timestamp || '-' }}</v-list-item-subtitle>
+                <v-list-item-title>Start Time:</v-list-item-title>
+                <v-list-item-subtitle>{{ selectedExperiment.started_at || '-' }}</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
-                <v-list-item-title>Email Addresses:</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedExperiment.email_addresses.join(', ') || '-' }}</v-list-item-subtitle>
+                <v-list-item-title>End Time:</v-list-item-title>
+                <v-list-item-subtitle>{{ selectedExperiment.ended_at || '-' }}</v-list-item-subtitle>
               </v-list-item>
             </v-list>
           </v-card-text>
@@ -59,23 +68,41 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { VDataTable } from 'vuetify/lib/components/index.mjs';
-/// <reference path="../store.d.ts" />
-import { campaigns, experiment_objects } from "@/store";
 
-const sortBy: VDataTable['sortBy'] = [{ key: 'experiment_id', order: 'desc' }];
+/// <reference path="../store.d.ts" />
+import { workflows, experiments } from "@/store";
+
+const sortBy: VDataTable['sortBy'] = [{ key: 'started_at', order: 'desc' }];
 
 const arg_headers = [
-  { title: 'Name', key: 'experiment_name' },
-  { title: 'ID', key: 'experiment_id' },
-  { title: 'Campaign', key: 'campaign_id' },
-  { title: 'Last Check-in', key: 'check_in_timestamp' }
+  { title: 'Name', key: 'experiment_design.experiment_name' },
+  { title: 'ID', key: '_id' },
+  { title: 'Status', key: 'status' },
+  { title: 'Started_at', key: 'started_at' }
 ];
 
 const dialogVisible = ref(false);
 const selectedExperiment = ref();
 
-const openExperimentDetails = (event: Event, { item }: { item: any }) => {
+const openExperimentDetails = (item: any) => {
   selectedExperiment.value = item;
   dialogVisible.value = true;
 };
+
+
+function filter_workflows(workflows: any, experiment_id: any)  {
+  var workflow_list = Object.values(workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
+  var dict: any = {}
+  workflow_list.forEach((workflow: any) => dict[workflow.workflow_id] = workflow)
+  return dict
+}
 </script>
+
+<style>
+.status_button {
+  border-radius: 5px;
+  text-align: center;
+  color: white;
+    padding: 2px;
+  }
+</style>

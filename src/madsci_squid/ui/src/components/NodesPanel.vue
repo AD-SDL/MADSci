@@ -15,11 +15,6 @@
                   <p wrap class="text-caption">
                     status: {{ Object.entries(value.status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }}
                   </p>
-                  <div v-for="(value2, key2) in value.state" :key="key2">
-                    <p wrap v-if="(key2.toString() != 'status') && (value2 != null)" class="text-caption">
-                      {{ key2 }} : {{ value2 }}
-                    </p>
-                  </div>
                 </v-card-text>
               </v-card>
             </v-col>
