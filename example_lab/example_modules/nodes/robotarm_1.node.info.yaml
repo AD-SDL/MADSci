@@ -18,11 +18,11 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
-  - get_location
-  - lock
   - shutdown
-  - reset
   - unlock
+  - get_location
+  - reset
+  - lock
 commands: {}
 is_template: false
 config_defaults:
