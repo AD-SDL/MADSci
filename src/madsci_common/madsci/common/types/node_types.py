@@ -10,7 +10,12 @@ from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.validators import ulid_validator
-from pydantic import SerializationInfo, SerializerFunctionWrapHandler, model_serializer
+from pydantic import (
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    field_serializer,
+    model_serializer,
+)
 from pydantic.config import ConfigDict
 from pydantic.fields import computed_field
 from pydantic.functional_validators import field_validator
@@ -165,6 +170,13 @@ class NodeCapabilities(NodeClientCapabilities):
         title="Node Admin Commands",
         description="Which admin commands the node supports, if any.",
     )
+
+    @field_serializer("admin_commands")
+    def order_admin_commands(
+        self, admin_commands: set[AdminCommands]
+    ) -> list[AdminCommands]:
+        """Ensure sorted admin commands."""
+        return sorted(admin_commands)
 
 
 class NodeDefinition(BaseModel):
