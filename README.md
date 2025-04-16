@@ -36,6 +36,13 @@ MADSci is made up of a number of different modular components, each of which can
 - [Data Manager](./src/madsci_data_manager/README.md): handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis)
 - [Squid Lab Manager](./src/madsci_squid/README.md): a central lab configuration manager and dashboard provider for MADSci-powered labs.
 
+## Docker
+
+We provide docker images to make containerizing and orchestrating your labs as easy as robust as possible. Currently, we provide:
+
+- [ghcr.io/ad-sdl/madsci](https://github.com/orgs/AD-SDL/packages/container/package/madsci): base docker image with the full set of MADSci python packages installed and available. You can use this image as a base for your own Manager, Experiment Application, or Node docker containers.
+- [ghcr.io/ad-sdl/madsci_dashboard](https://github.com/orgs/AD-SDL/packages/container/package/madsci_dashboard): extends the base image to add the web-based dashboard's prebuilt static files. Should be used for running your Squid Lab Manager if you want to host the MADSci Dashboard.
+
 ## Roadmap
 
 We're working on bringing the following additional components to MADSci:
