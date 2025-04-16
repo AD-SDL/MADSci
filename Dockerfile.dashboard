@@ -1,0 +1,21 @@
+FROM ghcr.io/ad-sdl/madsci:latest
+LABEL org.opencontainers.image.source=https://github.com/AD-SDL/MADSci/
+LABEL org.opencontainers.image.description="The Modular Autonomous Discovery for Science (MADSci) toolkit's docker image which includes a compiled version of the Dashboard."
+LABEL org.opencontainers.image.licenses=MIT
+
+RUN set -eux; \
+	apt update; \
+	apt install -y npm; \
+	rm -rf /var/lib/apt/lists/*
+
+# User configuration
+ARG USER_ID=9999
+ARG GROUP_ID=9999
+ARG CONTAINER_USER=madsci
+
+WORKDIR /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
+RUN npm install
+RUN npm run build
+RUN rm -rf node_modules
+
+WORKDIR /home/${CONTAINER_USER}
