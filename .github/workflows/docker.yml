@@ -73,7 +73,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   build_and_publish_madsci_dashboard:
-
+    needs: build_and_publish_madsci
     runs-on: ubuntu-latest
     permissions:
       contents: read
