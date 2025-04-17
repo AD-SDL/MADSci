@@ -7,7 +7,16 @@ services:
       context: .
       dockerfile: Dockerfile
       tags:
-        - madsci:latest
-        - madsci:dev
+        - ghcr.io/ad-sdl/madsci:latest
+        - ghcr.io/ad-sdl/madsci:dev
     privileged: true
     env_file: .env
+  madsci_with_dashboard:
+    container_name: madsci_with_dashboard
+    image: ghcr.io/ad-sdl/madsci_dashboard
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+      tags:
+        - ghcr.io/ad-sdl/madsci_dashboard:latest
+        - ghcr.io/ad-sdl/madsci_dashboard:dev
