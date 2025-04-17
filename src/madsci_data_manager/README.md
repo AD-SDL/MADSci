@@ -13,6 +13,18 @@ Handles capturing, storing, and querying data, in either JSON value or file form
 - Datapoints include metadata such as ownership info and date-timestamps
 - Datapoints are queryable and searchable based on both value and metadata
 
+## Installation
+
+The MADSci Data Manager is available via [the Python Package Index](https://pypi.org/project/madsci.data_manager/), and can be installed via:
+
+```bash
+pip install madsci.data_manager
+```
+
+This python package is also included as part of the [madsci Docker image](https://github.com/orgs/AD-SDL/packages/container/package/madsci). You can see an example docker image in [this example compose file](./data_manager.compose.yaml).
+
+Note that you will also need a MongoDB database (included in the example compose file)
+
 ## Usage
 
 ### Manager
@@ -20,34 +32,7 @@ Handles capturing, storing, and querying data, in either JSON value or file form
 To create and run a new MADSci Data Manager, do the following in your MADSci lab directory:
 
 - If you're not using docker compose, provision and configure a MongoDB instance.
-- If you're using docker compose, create or add the following to your Lab's `compose.yaml`, defining your docker compose services for the DataManager and a MongoDB database to store datapoints.
-
-
-```yaml
-name: madsci_example_lab
-services:
-  mongodb:
-    container_name: mongodb
-    image: mongodb/mongodb-community-server:latest
-    ports:
-      - 27017:27017
-  data_manager:
-    container_name: data_manager
-    image: ghcr.io/ad-sdl/madsci:latest
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    environment:
-      - USER_ID=1000
-      - GROUP_ID=1000
-    network_mode: host
-    volumes:
-      - /path/to/your/lab/direcotry:/home/madsci/lab/
-      - .madsci:/home/madsci/.madsci/
-    command: python -m madsci.data_manager.data_server
-    depends_on:
-      - mongodb
-```
+- If you're using docker compose, define your data manager and mongodb services based on the [example compose file](./data_manager.compose.yaml).
 
 ```bash
 # Create a Data Manager Definition
