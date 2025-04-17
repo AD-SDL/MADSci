@@ -2,11 +2,15 @@
 
 Handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis).
 
+![MADSci Data Manager Diagram](./assets/data_manager.drawio.svg)
+
 ## Notable Features
 
 - Collects and stores data generated in the course of an experiment as "datapoints"
-- Current datapoint types supported: Values (as JSON-serializable data) and Files (stored as-is)
-- Datapoints include metadata such as ownership info and datetimestamps
+- Current datapoint types supported:
+  - Values, as JSON-serializable data
+  - Files, stored as-is
+- Datapoints include metadata such as ownership info and date-timestamps
 - Datapoints are queryable and searchable based on both value and metadata
 
 ## Usage
