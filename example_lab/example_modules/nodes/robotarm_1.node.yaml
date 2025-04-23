@@ -20,8 +20,8 @@ capabilities:
   admin_commands:
   - get_location
   - lock
-  - shutdown
   - reset
+  - shutdown
   - unlock
 commands: {}
 is_template: false

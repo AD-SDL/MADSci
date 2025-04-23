@@ -128,10 +128,15 @@ def create_workcell_server(  # noqa: C901, PLR0915
             responses.append(response)
         return responses
 
-    @app.get("/workflows")
-    def get_workflows() -> dict[str, Workflow]:
+    @app.get("/workflows/active")
+    def get_active_workflows() -> dict[str, Workflow]:
         """Get all workflows."""
-        return state_handler.get_workflows()
+        return state_handler.get_active_workflows()
+
+    @app.get("/workflows/archived")
+    def get_archived_workflows() -> dict[str, Workflow]:
+        """Get all workflows."""
+        return state_handler.get_archived_workflows()
 
     @app.get("/workflows/queue")
     def get_workflow_queue() -> list[Workflow]:
@@ -147,30 +152,31 @@ def create_workcell_server(  # noqa: C901, PLR0915
     def pause_workflow(workflow_id: str) -> Workflow:
         """Pause a specific workflow."""
         with state_handler.wc_state_lock():
-            wf = state_handler.get_workflow(workflow_id)
+            wf = state_handler.get_active_workflow(workflow_id)
             if wf.status.active:
                 if wf.status.running:
                     send_admin_command_to_node(
                         "pause", wf.steps[wf.status.current_step_index].node
                     )
                 wf.status.paused = True
-                state_handler.set_workflow(wf)
+                state_handler.set_active_workflow(wf)
 
-        return state_handler.get_workflow(workflow_id)
+        return state_handler.get_active_workflow(workflow_id)
 
     @app.post("/workflow/{workflow_id}/resume")
     def resume_workflow(workflow_id: str) -> Workflow:
         """Resume a paused workflow."""
         with state_handler.wc_state_lock():
-            wf = state_handler.get_workflow(workflow_id)
+            wf = state_handler.get_active_workflow(workflow_id)
             if wf.status.paused:
                 if wf.status.running:
                     send_admin_command_to_node(
                         "resume", wf.steps[wf.status.current_step_index].node
                     )
                 wf.status.paused = False
-                state_handler.set_workflow(wf)
-        return state_handler.get_workflow(workflow_id)
+                state_handler.set_active_workflow(wf)
+                state_handler.enqueue_workflow(wf.workflow_id)
+        return state_handler.get_active_workflow(workflow_id)
 
     @app.post("/workflow/{workflow_id}/cancel")
     def cancel_workflow(workflow_id: str) -> Workflow:
@@ -182,8 +188,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     "cancel", wf.steps[wf.status.current_step_index].node
                 )
             wf.status.cancelled = True
-            state_handler.set_workflow(wf)
-        return state_handler.get_workflow(workflow_id)
+            state_handler.set_active_workflow(wf)
+        return state_handler.get_active_workflow(workflow_id)
 
     @app.post("/workflow/{workflow_id}/resubmit")
     def resubmit_workflow(workflow_id: str) -> Workflow:
@@ -205,8 +211,9 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 workflow=wf,
                 working_directory=workcell.workcell_directory,
             )
-            state_handler.set_workflow(wf)
-        return state_handler.get_workflow(wf.workflow_id)
+            state_handler.set_active_workflow(wf)
+            state_handler.enqueue_workflow(wf.workflow_id)
+        return state_handler.get_active_workflow(wf.workflow_id)
 
     @app.post("/workflow/{workflow_id}/retry")
     def retry_workflow(workflow_id: str, index: int = -1) -> Workflow:
@@ -217,12 +224,13 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 index = max(index, 0)
                 wf.status.reset(index)
                 state_handler.set_workflow(wf)
+                state_handler.enqueue_workflow(wf.workflow_id)
             else:
                 raise HTTPException(
                     status_code=400,
                     detail="Workflow is not in a terminal state, cannot retry",
                 )
-        return state_handler.get_workflow(workflow_id)
+        return state_handler.get_active_workflow(workflow_id)
 
     @app.post("/workflow")
     async def start_workflow(
@@ -292,7 +300,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 files=files,
             )
             with state_handler.wc_state_lock():
-                state_handler.set_workflow(wf)
+                state_handler.set_active_workflow(wf)
+                state_handler.enqueue_workflow(wf.workflow_id)
         return wf
 
     @app.get("/locations")

@@ -19,7 +19,7 @@
             <LocationsPanel :locations="workcell_info.locations" />
           </v-col>
           <v-col cols="12" md="6" lg="6" xl="6">
-            <WorkflowsPanel :wc_state="workcell_state" :wfs="workflows" @view-workflows="$emit('view-workflows')" />
+            <WorkflowsPanel :wc_state="workcell_state" :wfs="active_workflows" @view-workflows="$emit('view-workflows')" />
           </v-col>
         </v-row>
       </v-container>
@@ -59,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { main_url, workcell_info, workcell_state, workflows } from "@/store";
+import { main_url, workcell_info, workcell_state, active_workflows } from "@/store";
 import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 import CancelButton from './AdminButtons/CancelButton.vue';

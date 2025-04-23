@@ -89,6 +89,7 @@ class Engine:
                 ):
                     with self.state_handler.wc_state_lock():
                         self.state_handler.update_workflow_queue()
+                        self.state_handler.archive_terminal_workflows()
                         workflows = self.state_handler.get_workflow_queue()
                         workflow_metadata_map = self.scheduler.run_iteration(
                             workflows=workflows
@@ -98,12 +99,12 @@ class Engine:
                                 workflow.scheduler_metadata = workflow_metadata_map[
                                     workflow.workflow_id
                                 ]
-                                self.state_handler.set_workflow(
+                                self.state_handler.set_active_workflow(
                                     workflow, mark_state_changed=False
                                 )
                             else:
                                 workflow.scheduler_metadata.ready_to_run = False
-                                self.state_handler.set_workflow(
+                                self.state_handler.set_active_workflow(
                                     workflow, mark_state_changed=False
                                 )
                     if self.state_handler.get_workcell_status().ok:
@@ -142,7 +143,7 @@ class Engine:
                         f"Workflow {next_wf.workflow_id} has no more steps, marking as completed"
                     )
                     next_wf.status.completed = True
-                    self.state_handler.set_workflow(next_wf)
+                    self.state_handler.set_active_workflow(next_wf)
                     sorted_ready_workflows.pop(0)
                     next_wf = None
                     continue
@@ -151,7 +152,7 @@ class Engine:
                 next_wf.status.has_started = True
                 if next_wf.status.current_step_index == 0:
                     next_wf.start_time = datetime.now()
-                self.state_handler.set_workflow(next_wf)
+                self.state_handler.set_active_workflow(next_wf)
                 break
             else:
                 self.logger.log_info("No workflows ready to run")
@@ -166,7 +167,7 @@ class Engine:
         """Run a step in a standalone thread, updating the workflow as needed"""
         try:
             # * Prepare the step
-            wf = self.state_handler.get_workflow(workflow_id)
+            wf = self.state_handler.get_active_workflow(workflow_id)
             step = wf.steps[wf.status.current_step_index]
             step.start_time = datetime.now()
             self.logger.log_info(
@@ -274,7 +275,7 @@ class Engine:
     def finalize_step(self, workflow_id: str, step: Step) -> None:
         """Finalize the step, updating the workflow based on the results (setting status, updating index, etc.)"""
         with self.state_handler.wc_state_lock():
-            wf = self.state_handler.get_workflow(workflow_id)
+            wf = self.state_handler.get_active_workflow(workflow_id)
             step.end_time = datetime.now()
             wf.steps[wf.status.current_step_index] = step
             wf.status.running = False
@@ -297,14 +298,14 @@ class Engine:
                 self.logger.log_error(
                     f"Step {step.step_id} in workflow {workflow_id} ended with unexpected status {step.status}"
                 )
-            self.state_handler.set_workflow(wf)
+            self.state_handler.set_active_workflow(wf)
 
     def update_step(self, wf: Workflow, step: Step) -> None:
         """Update the step in the workflow"""
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(wf.workflow_id)
             wf.steps[wf.status.current_step_index] = step
-            self.state_handler.set_workflow(wf)
+            self.state_handler.set_active_workflow(wf)
         return wf
 
     def handle_response(

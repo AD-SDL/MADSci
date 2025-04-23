@@ -21,7 +21,7 @@
       </template>
       <template v-slot:expanded-row="{ columns, item}: {columns: any, item: any}">
           <tr>
-            <td :colspan="columns.length"><WorkflowTable :workflows="filter_workflows(workflows, item._id)" /></td>
+            <td :colspan="columns.length"><WorkflowTable :workflows="filter_workflows(active_workflows, archived_workflows, item._id)" /></td>
           </tr>
         </template>
       </v-data-table>
@@ -70,7 +70,7 @@ import { ref } from 'vue';
 import { VDataTable } from 'vuetify/lib/components/index.mjs';
 
 /// <reference path="../store.d.ts" />
-import { workflows, experiments } from "@/store";
+import { active_workflows, archived_workflows,  experiments } from "@/store";
 
 const sortBy: VDataTable['sortBy'] = [{ key: 'started_at', order: 'desc' }];
 
@@ -90,10 +90,13 @@ const openExperimentDetails = (item: any) => {
 };
 
 
-function filter_workflows(workflows: any, experiment_id: any)  {
-  var workflow_list = Object.values(workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
+function filter_workflows(active_workflows: any, archived_workflows: any, experiment_id: any)  {
+  var active_workflow_list = Object.values(active_workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
+  var archived_workflow_list = Object.values(archived_workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
+
   var dict: any = {}
-  workflow_list.forEach((workflow: any) => dict[workflow.workflow_id] = workflow)
+  active_workflow_list.forEach((workflow: any) => dict[workflow.workflow_id] = workflow)
+  archived_workflow_list.forEach((workflow: any) => dict[workflow.workflow_id] = workflow)
   return dict
 }
 </script>
