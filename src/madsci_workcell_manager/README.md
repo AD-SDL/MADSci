@@ -43,8 +43,15 @@ You can see up-to-date documentation on the endpoints provided by your workcell 
 
 You can use MADSci's `WorkcellClient` in your python code to submit workflows, query their status and progress, get information about and update the workcell state, and more.
 
-TODO
+```python
+from madsci.client.workcell_client import WorkcellClient
+from madsci.common.types.workflow_types import WorkflowDefinition
 
+workcell_client = WorkcellClient(
+  workcell_manager_url="http://localhost:8005"
+)
+
+```
 
 ## Defining a Workcell
 
