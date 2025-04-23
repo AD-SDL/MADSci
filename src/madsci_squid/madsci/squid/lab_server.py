@@ -1,5 +1,6 @@
 """REST API and Server for the lab Manager."""
 
+from pathlib import Path
 from typing import Optional
 
 import uvicorn
@@ -32,7 +33,10 @@ def create_lab_server(
     if lab_manager_definition.static_files_path:
         app.mount(
             "/",
-            StaticFiles(directory=lab_manager_definition.static_files_path, html=True),
+            StaticFiles(
+                directory=Path(lab_manager_definition.static_files_path).expanduser(),
+                html=True,
+            ),
         )
     app.add_middleware(
         CORSMiddleware,

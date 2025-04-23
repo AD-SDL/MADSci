@@ -27,7 +27,7 @@ class WorkcellClient:
     def __init__(
         self,
         workcell_manager_url: str,
-        working_directory: str = "~/.MADsci/temp",
+        working_directory: str = "./",
         ownership_info: Optional[OwnershipInfo] = None,
     ) -> None:
         """
@@ -38,7 +38,7 @@ class WorkcellClient:
         workcell_manager_url : str
             The base URL of the Workcell Manager.
         working_directory : str, optional
-            The directory for temporary workflow files, by default "~/.MADsci/temp".
+            The directory to look for relative paths. Defaults to "./".
         ownership_info : Optional[OwnershipInfo], optional
             Ownership information for workflows, by default None.
         """

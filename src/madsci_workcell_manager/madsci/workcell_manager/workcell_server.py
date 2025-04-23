@@ -9,8 +9,6 @@ from typing import Annotated, Any, Optional, Union
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
-from fastapi.staticfiles import StaticFiles
-from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
@@ -359,16 +357,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
             location.resource_id = resource_id
             state_handler.set_location(location)
         return state_handler.get_location(location_id)
-
-    if workcell.config.static_files_path is not None:
-        try:
-            app.mount(
-                "/", StaticFiles(directory=workcell.config.static_files_path, html=True)
-            )
-        except Exception:
-            EventClient(workcell.config.event_client_config).log_error(
-                f"Error mounting static files: {workcell.config.static_files_path}"
-            )
 
     app.add_middleware(
         CORSMiddleware,

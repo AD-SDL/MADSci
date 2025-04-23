@@ -2,6 +2,88 @@
 
 The MADSci Workcell Manager handles the operation of a **Workcell**, a collection of **Nodes**, **Locations**, and **Resources** that are scheduled together to perform **Workflows**. A lab may consist of multiple Workcells, with each Workcell able to execute workflows independently.
 
+![MADSci Event Manager Architecture Diagram](./assets/workcell_manager.drawio.svg)
+
+## Installation
+
+The MADSci workcell manager is available via [the Python Package Index](https://pypi.org/project/madsci.workcell_manager/), and can be installed via:
+
+```bash
+pip install madsci.workcell_manager
+```
+
+This python package is also included as part of the [madsci Docker image](https://github.com/orgs/AD-SDL/packages/container/package/madsci). You can see an example docker setup in [this example compose file](./workcell_manager.compose.yaml).
+
+Note that you will also need a MongoDB database and a Redis database (both included in the example compose file)
+
+## Usage
+
+### Workcell Manager
+
+To create and run a new MADSci Workcell Manager, do the following in your MADSci lab directory:
+
+- If you're not using docker compose, provision and configure a MongoDB instance.
+- If you're using docker compose, define your workcell manager, redis, and mongodb services based on the [example compose file](./workcell_manager.compose.yaml).
+
+
+```bash
+# Create a Workcell Definition
+madsci workcell create
+# Start the databases and Workcell Server
+docker compose up
+# OR
+python -m madsci.workcell_manager.workcell_server
+```
+
+You should see a REST server started on the configured host and port. Navigate in your browser to the URL you configured (default: `http://localhost:8005/`) to see if it's working.
+
+You can see up-to-date documentation on the endpoints provided by your workcell manager, and try them out, via the OpenAPI docs served by your manager at the server's `/docs` page.
+
+### Workcell Client
+
+You can use MADSci's `WorkcellClient` in your python code to submit workflows, query their status and progress, manage a workflow's lifecycle, get information about and update the workcell state, and more.
+
+```python
+from madsci.client.workcell_client import WorkcellClient
+from madsci.common.types.workflow_types import WorkflowDefinition
+from madsci.common.types.step_types import StepDefinition
+
+workcell_client = WorkcellClient(
+  workcell_manager_url="http://localhost:8005"
+)
+wf_def = WorkflowDefinition(
+  name="Test Workflow",
+  parameters=[
+    {"name": "test_param", "default": 0}
+  ],
+  steps=[
+    StepDefinition(
+      name="Test Step 0",
+      node="liquidhandler_1", # Must exist in workcell nodes
+      action="test_action",
+      args={
+        "test_arg": "${test_param}" # This parameter will be substituted at submission time
+      },
+      files={
+        "test_file_arg": "path/to/file/argument"
+      },
+      locations={
+        "test_location": "liquidhandler_deck_1" # Must exist in workcell locations
+      }
+    )
+  ]
+)
+
+result = workcell_client.submit_workflow(workflow=wf_def, parameters={"test_param": 10})
+# Alternatively, specify the workflow as a path
+result = workcell_client.submit_workflow(workflow="path/to/test.workflow.yaml")
+
+# You can also not await the workflow results, and query later
+result = workcell_client.submit_workflow(workflow=wf_def, await_completion=False)
+time.sleep(10)
+result = workcell_client.query_workflow(result.workflow_id)
+```
+
 ## Defining a Workcell
 
 You can create a new `WorkcellDefinition` file (typically a `.workcell.yaml`) using the command `madsci workcell create`
@@ -85,15 +167,3 @@ stateDiagram
   Completed:completed
   Paused:paused
 ```
-
-## Usage
-
-TODO
-
-### Workcell Manager
-
-TODO
-
-### Workcell Client
-
-TODO
