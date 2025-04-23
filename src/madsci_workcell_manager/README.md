@@ -41,16 +41,47 @@ You can see up-to-date documentation on the endpoints provided by your workcell 
 
 ### Workcell Client
 
-You can use MADSci's `WorkcellClient` in your python code to submit workflows, query their status and progress, get information about and update the workcell state, and more.
+You can use MADSci's `WorkcellClient` in your python code to submit workflows, query their status and progress, manage a workflow's lifecycle, get information about and update the workcell state, and more.
 
 ```python
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.types.workflow_types import WorkflowDefinition
+from madsci.common.types.step_types import StepDefinition
 
 workcell_client = WorkcellClient(
   workcell_manager_url="http://localhost:8005"
 )
+wf_def = WorkflowDefinition(
+  name="Test Workflow",
+  parameters=[
+    {"name": "test_param", "default": 0}
+  ],
+  steps=[
+    StepDefinition(
+      name="Test Step 0",
+      node="liquidhandler_1", # Must exist in workcell nodes
+      action="test_action",
+      args={
+        "test_arg": "${test_param}" # This parameter will be substituted at submission time
+      },
+      files={
+        "test_file_arg": "path/to/file/argument"
+      },
+      locations={
+        "test_location": "liquidhandler_deck_1" # Must exist in workcell locations
+      }
+    )
+  ]
+)
 
+result = workcell_client.submit_workflow(workflow=wf_def, parameters={"test_param": 10})
+# Alternatively, specify the workflow as a path
+result = workcell_client.submit_workflow(workflow="path/to/test.workflow.yaml")
+
+# You can also not await the workflow results, and query later
+result = workcell_client.submit_workflow(workflow=wf_def, await_completion=False)
+time.sleep(10)
+result = workcell_client.query_workflow(result.workflow_id)
 ```
 
 ## Defining a Workcell
