@@ -19,14 +19,14 @@ capabilities:
   get_log: true
   admin_commands:
   - cancel
-  - lock
-  - unlock
-  - resume
   - get_location
+  - lock
   - pause
-  - safety_stop
   - reset
+  - resume
+  - safety_stop
   - shutdown
+  - unlock
 commands: {}
 is_template: false
 config_defaults: {}

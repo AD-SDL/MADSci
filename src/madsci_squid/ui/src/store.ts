@@ -5,8 +5,10 @@ import { ref, watchEffect } from 'vue';
 const main_url = ref()
 const state_url = ref()
 const workcell_info_url = ref()
-const workflows_url = ref()
-const workflows = ref()
+const active_workflows_url = ref()
+const archived_workflows_url = ref()
+const active_workflows = ref()
+const archived_workflows = ref()
 const experiments = ref()
 const experiments_url = ref()
 const events_url = ref()
@@ -39,7 +41,8 @@ watchEffect(async () => {
     experiments_url.value = urls.value.experiment_manager.concat("experiments")
     campaigns_url.value = main_url.value.concat("/campaigns/all")
     workcell_info_url.value = urls.value.workcell_manager.concat("workcell")
-    workflows_url.value = urls.value.workcell_manager.concat("workflows")
+    active_workflows_url.value = urls.value.workcell_manager.concat("workflows/active")
+    archived_workflows_url.value = urls.value.workcell_manager.concat("workflows/archived")
     events_url.value = main_url.value.concat("/events/all")
 
     updateResources()
@@ -73,7 +76,8 @@ watchEffect(async () => {
     }
 
     async function updateWorkflows() {
-        workflows.value = await (await fetch(workflows_url.value)).json();
+        active_workflows.value = await (await fetch(active_workflows_url.value)).json();
+        archived_workflows.value = await (await fetch(archived_workflows_url.value)).json();
     }
 
 
@@ -99,4 +103,4 @@ function get_status(value: any) {
     }
 }
 
-export { campaigns, campaigns_url, events, experiment_keys, experiment_objects, experiments, experiments_url, get_status, main_url, state_url, workcell_info, workcell_info_url, workcell_state, workflows, urls, resources };
+export { campaigns, campaigns_url, events, experiment_keys, experiment_objects, experiments, experiments_url, get_status, main_url, state_url, workcell_info, workcell_info_url, workcell_state, active_workflows, archived_workflows, urls, resources };

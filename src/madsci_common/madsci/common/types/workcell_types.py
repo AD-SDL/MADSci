@@ -271,6 +271,11 @@ class WorkcellConfig(BaseModel):
         title="Resource Server URL",
         description="The URL for the resource server.",
     )
+    mongo_url: Optional[str] = Field(
+        default=None,
+        title="MongoDB URL",
+        description="The URL for the mongo database.",
+    )
     static_files_path: Optional[str] = Field(
         default=None,
         title="Static Files Path",

@@ -29,7 +29,10 @@
           <h2>Workflows</h2>
         </v-card-title>
         <v-card-text>
-          <WorkflowTable :workflows="workflows"/>
+          <h3>Active</h3>
+          <WorkflowTable :workflows="active_workflows"/>
+          <h3>Archived: </h3>
+          <WorkflowTable :workflows="archived_workflows"/>
           </v-card-text>
         </v-card>
       </v-container>
@@ -62,7 +65,7 @@
 import { ref } from 'vue';
 import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
-import { resources, workflows } from "@/store";
+import { resources, active_workflows, archived_workflows } from "@/store";
 import WorkcellPanel from './WorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
 import ResourcesPanel from './ResourcesPanel.vue';

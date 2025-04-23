@@ -222,12 +222,12 @@ def cancel_workflow(wf: Workflow, state_handler: WorkcellRedisHandler) -> None:
     """Cancels the workflow run"""
     wf.status.cancelled = True
     with state_handler.wc_state_lock():
-        state_handler.set_workflow(wf)
+        state_handler.set_active_workflow(wf)
     return wf
 
 
 def cancel_active_workflows(state_handler: WorkcellRedisHandler) -> None:
     """Cancels all currently running workflow runs"""
-    for wf in state_handler.get_workflows().values():
+    for wf in state_handler.get_active_workflows().values():
         if wf.status.active:
             cancel_workflow(wf, state_handler=state_handler)
