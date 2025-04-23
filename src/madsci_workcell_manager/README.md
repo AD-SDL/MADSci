@@ -14,33 +14,50 @@ In the workcell definition files `nodes` section, you can specify each node avai
 
 ### Locations
 
-TODO
+You can define important locations in your workcell, optionally linking them to container resources, using the `locations` list. This top-level element of the `WorkcellDefinition` allows you to provide a list of `LocationDefinition` objects, which have the following important properties:
 
-### Resources
-
-TODO
+- A `location_name` and `location_id` to idenitfy the location
+- A `lookup` dictionary, which maps node names to representations of the location relevant to that node.
+- Optionally, a `resource_id` or `resource_definition` for the container resource that you want the location to be attached to.
 
 ## Defining Workflows
 
-TODO
+MADSci Workcell Managers accept `WorkflowDefinition`s, which define a sequence of steps to be run on a Workcell. Each step represents an Action to be taken by a Node.
+
+Workflows can either be directly created as python objects, or defined as YAML files (typically with the `.workflow.yaml` extension) which are then read, validated, and submitted by the workcell client.
 
 ### Steps
 
-TODO
+The `steps` list allows you to specify a sequence of `StepDefinition`s, which are evaluated by the Workcell Manager's Scheduler and executed when able.
 
-### Checks
+A step has the following important properties:
 
-TODO
+- `name`: the human-readable name of the step
+- `description`: optional, a longer/more-detailed description of the step
+- `node`: the name of the node used to perform this step. This must match the name of a node in the workcell definition (so if the node's name and the alias used by the workcell differ, use the workcell's version)
+- `action`: the name of the action to be performed (must match an action provided by the node)
+- `args`: a dictionary of argument names and values to pass to the node when executing the action
+- `files`: a dictionary of file argument names and paths to upload to the node when executing the action
+- `locations`: any locations to be passed to the node as arguments. Note that this will send _just the representation relevant to that node_, so the workcell's `LocationDefinition` must include a lookup value matching the node name.
+- `conditions`: a list of user-specified conditions that must be met before this step can be run.
+- `data_labels`: allows you to attach unique labels to datapoints returned as part of the action results.
+
+### Parameters
+
+You can, optionally, specify `WorkflowParameter`s in the `parameters` field of a workflow. These consist of a `name` and, optionally, a `default` value. When submitting a workflow, you can specify values for these parameters to be used in the workflow.
+
+You can use a workflow parameter's value in a workflow definition with the following syntax:
+
+- `${parameter_name}`
+- `$parameter_name`
+
+If a parameter has no default value and a value is not provided when the workflow is submitted, an exception is thrown.
 
 ## Workflow Lifecycle
 
 The below state diagrams illustrates the evolution of a Workflow's status over the course of it's life, from submission to reaching a terminal state.
 
 ```mermaid
----
-config:
-    layout: elk
----
 stateDiagram
   direction LR
   [*] --> Queued:Workflow Submitted
@@ -71,6 +88,12 @@ stateDiagram
 
 ## Usage
 
+TODO
+
 ### Workcell Manager
 
+TODO
+
 ### Workcell Client
+
+TODO
