@@ -30,16 +30,20 @@ from madsci.workcell_manager.workflow_utils import (
     create_workflow,
     save_workflow_files,
 )
+from pymongo.synchronous.database import Database
 
 
 def create_workcell_server(  # noqa: C901, PLR0915
     workcell: WorkcellDefinition,
     redis_connection: Optional[Any] = None,
+    mongo_connection: Optional[Database] = None,
     start_engine: bool = True,
 ) -> FastAPI:
     """Creates a Workcell Manager's REST server."""
 
-    state_handler = WorkcellRedisHandler(workcell, redis_connection=redis_connection)
+    state_handler = WorkcellRedisHandler(
+        workcell, redis_connection=redis_connection, mongo_connection=mongo_connection
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
@@ -130,13 +134,13 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
     @app.get("/workflows/active")
     def get_active_workflows() -> dict[str, Workflow]:
-        """Get all workflows."""
+        """Get active workflows."""
         return state_handler.get_active_workflows()
 
     @app.get("/workflows/archived")
-    def get_archived_workflows() -> dict[str, Workflow]:
-        """Get all workflows."""
-        return state_handler.get_archived_workflows()
+    def get_archived_workflows(number: int = 20) -> dict[str, Workflow]:
+        """Get archived workflows."""
+        return state_handler.get_archived_workflows(number)
 
     @app.get("/workflows/queue")
     def get_workflow_queue() -> list[Workflow]:
@@ -223,7 +227,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
             if wf.status.terminal:
                 index = max(index, 0)
                 wf.status.reset(index)
-                state_handler.set_workflow(wf)
+                state_handler.set_active_workflow(wf)
+                state_handler.delete_archived_workflow(wf.workflow_id)
                 state_handler.enqueue_workflow(wf.workflow_id)
             else:
                 raise HTTPException(

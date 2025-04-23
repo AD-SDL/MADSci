@@ -7,7 +7,13 @@ from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import Workflow, WorkflowDefinition
 from madsci.workcell_manager.workcell_server import create_workcell_server
 from pydantic import AnyUrl
-from pytest_mock_resources import RedisConfig, create_redis_fixture
+from pymongo.synchronous.database import Database
+from pytest_mock_resources import (
+    MongoConfig,
+    RedisConfig,
+    create_mongo_fixture,
+    create_redis_fixture,
+)
 from redis import Redis
 
 
@@ -18,7 +24,14 @@ def pmr_redis_config() -> RedisConfig:
     return RedisConfig(image="redis:7.4")
 
 
+@pytest.fixture(scope="session")
+def pmr_mongo_config() -> MongoConfig:
+    """Congifure the MongoDB fixture."""
+    return MongoConfig(image="mongo:8.0")
+
+
 redis_server = create_redis_fixture()
+mongo_server = create_mongo_fixture()
 
 
 @pytest.fixture
@@ -29,9 +42,13 @@ def workcell() -> WorkcellDefinition:
 
 
 @pytest.fixture
-def test_client(workcell: WorkcellDefinition, redis_server: Redis) -> TestClient:
+def test_client(
+    workcell: WorkcellDefinition, redis_server: Redis, mongo_server: Database
+) -> TestClient:
     """Workcell Server Test Client Fixture"""
-    app = create_workcell_server(workcell, redis_server, start_engine=False)
+    app = create_workcell_server(
+        workcell, redis_server, mongo_server, start_engine=False
+    )
     return TestClient(app)
 
 
@@ -89,10 +106,18 @@ def test_send_admin_command(test_client: TestClient) -> None:
         assert isinstance(response.json(), list)
 
 
-def test_get_workflows(test_client: TestClient) -> None:
+def test_get_active_workflows(test_client: TestClient) -> None:
     """Test the /workflows endpoint."""
     with test_client as client:
-        response = client.get("/workflows")
+        response = client.get("/workflows/active")
+        assert response.status_code == 200
+        assert isinstance(response.json(), dict)
+
+
+def test_get_archived_workflows(test_client: TestClient) -> None:
+    """Test the /workflows endpoint."""
+    with test_client as client:
+        response = client.get("/workflows/archived")
         assert response.status_code == 200
         assert isinstance(response.json(), dict)
 

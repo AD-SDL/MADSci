@@ -20,6 +20,7 @@ from madsci.common.types.workflow_types import Workflow
 from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
 from pydantic import AnyUrl, ValidationError
 from pymongo import MongoClient
+from pymongo.synchronous.database import Database
 
 
 class WorkcellRedisHandler:
@@ -35,6 +36,7 @@ class WorkcellRedisHandler:
         self,
         workcell_definition: WorkcellDefinition,
         redis_connection: Optional[Any] = None,
+        mongo_connection: Optional[Database] = None,
     ) -> None:
         """
         Initialize a StateManager for a given workcell.
@@ -45,8 +47,11 @@ class WorkcellRedisHandler:
         self._redis_port = workcell_definition.config.redis_port
         self._redis_password = workcell_definition.config.redis_password
         self._redis_connection = redis_connection
-        self.db_client = MongoClient(workcell_definition.config.mongo_url)
-        self.db_connection = self.db_client["workcell_manager"]
+        if mongo_connection is not None:
+            self.db_connection = mongo_connection
+        else:
+            self.db_client = MongoClient(workcell_definition.config.mongo_url)
+            self.db_connection = self.db_client["workcell_manager"]
         self.archived_workflows = self.db_connection["archived_workflows"]
         self.shutdown = False
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
@@ -338,12 +343,16 @@ class WorkcellRedisHandler:
             if Workflow.model_validate(workflow).status.terminal:
                 self.archive_workflow(workflow_id)
 
-    def delete_active_workflow(self, workflow_id: Union[str, str]) -> None:
+    def delete_active_workflow(self, workflow_id: str) -> None:
         """
-        Deletes a workflow by ID
+        Deletes an active workflow by ID
         """
         del self._active_workflows[str(workflow_id)]
         self.mark_state_changed()
+
+    def delete_archived_workflow(self, workflow_id: str) -> None:
+        """delete an archived workflow"""
+        self.archived_workflows.delete_one({"workflow_id": workflow_id})
 
     def update_active_workflow(
         self, workflow_id: str, func: Callable[..., Any], *args: Any, **kwargs: Any

@@ -14,7 +14,13 @@ from madsci.workcell_manager.workcell_server import (
     WorkflowDefinition,
     create_workcell_server,
 )
-from pytest_mock_resources import RedisConfig, create_redis_fixture
+from pymongo.synchronous.database import Database
+from pytest_mock_resources import (
+    MongoConfig,
+    RedisConfig,
+    create_mongo_fixture,
+    create_redis_fixture,
+)
 from redis import Redis
 from requests import Response
 
@@ -26,7 +32,14 @@ def pmr_redis_config() -> RedisConfig:
     return RedisConfig(image="redis:7.4")
 
 
+@pytest.fixture(scope="session")
+def pmr_mongo_config() -> MongoConfig:
+    """Congifure the MongoDB fixture."""
+    return MongoConfig(image="mongo:8.0")
+
+
 redis_server = create_redis_fixture()
+mongo_server = create_mongo_fixture()
 
 
 @pytest.fixture
@@ -42,10 +55,12 @@ def workcell() -> WorkcellDefinition:
 
 @pytest.fixture
 def test_client(
-    workcell: WorkcellDefinition, redis_server: Redis
+    workcell: WorkcellDefinition, redis_server: Redis, mongo_server: Database
 ) -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
-    app = create_workcell_server(workcell, redis_server, start_engine=False)
+    app = create_workcell_server(
+        workcell, redis_server, mongo_server, start_engine=False
+    )
     client = TestClient(app)
     with client:
         yield client
@@ -99,9 +114,15 @@ def test_add_node(client: WorkcellClient) -> None:
     assert node["node_url"] == "http://node1/"
 
 
-def test_get_workflows(client: WorkcellClient) -> None:
+def test_get_active_workflows(client: WorkcellClient) -> None:
     """Test retrieving workflows."""
-    workflows = client.get_workflows()
+    workflows = client.get_active_workflows()
+    assert isinstance(workflows, dict)
+
+
+def test_get_archived_workflows(client: WorkcellClient) -> None:
+    """Test retrieving workflows."""
+    workflows = client.get_archived_workflows(30)
     assert isinstance(workflows, dict)
 
 
