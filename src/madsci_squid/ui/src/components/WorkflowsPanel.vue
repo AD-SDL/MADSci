@@ -1,5 +1,5 @@
 <template>
-    <v-card class="pa-1 ma-1" title="Recent Workflows">
+    <v-card class="pa-1 ma-1" title="Active Workflows">
         <v-card-text v-if="active_workflows">
             <WorkflowTable :workflows="active_workflows"/>
         </v-card-text>
