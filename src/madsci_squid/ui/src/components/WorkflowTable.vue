@@ -49,6 +49,9 @@ function process_status(status: any) {
   else if (status.paused) {
     return "paused"
   }
+  else if (status.failed) {
+    return "failed"
+  }
   else if(status.running) {
     return "running"
   }
