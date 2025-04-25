@@ -18,6 +18,7 @@ config:
   scheduler: madsci.workcell_manager.schedulers.default_scheduler
   data_server_url: http://localhost:8003/
   resource_server_url: http://localhost:8004/
+  mongo_url: mongodb://localhost:27017
   static_files_path: /home/madsci/ui/dist
   get_action_result_retries: 3
 nodes:
@@ -46,7 +47,7 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JR8F3KF3BPZG1BEDK9DKXNWH
+  resource_id: 01JSFZ1HG1F76AMNT03EVJMSXY
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
@@ -68,5 +69,5 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JR8F3KN3MA49C0HW0H727STM
+  resource_id: 01JSFZ1HJ15NMFW94KJHD38PQ2
 workcell_directory: /home/madsci/.madsci/workcells/Example Workcell

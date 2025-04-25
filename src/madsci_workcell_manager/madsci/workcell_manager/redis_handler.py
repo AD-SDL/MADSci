@@ -6,6 +6,7 @@ import warnings
 from typing import Any, Callable, Optional, Union
 
 import redis
+from fastapi import HTTPException
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
@@ -18,11 +19,13 @@ from madsci.common.types.workcell_types import (
 from madsci.common.types.workflow_types import Workflow
 from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
 from pydantic import AnyUrl, ValidationError
+from pymongo import MongoClient
+from pymongo.synchronous.database import Database
 
 
 class WorkcellRedisHandler:
     """
-    Manages state for WEI, providing transactional access to reading and writing state with
+    Manages state for Madsci, providing transactional access to reading and writing state with
     optimistic check-and-set and locking.
     """
 
@@ -33,6 +36,7 @@ class WorkcellRedisHandler:
         self,
         workcell_definition: WorkcellDefinition,
         redis_connection: Optional[Any] = None,
+        mongo_connection: Optional[Database] = None,
     ) -> None:
         """
         Initialize a StateManager for a given workcell.
@@ -43,6 +47,12 @@ class WorkcellRedisHandler:
         self._redis_port = workcell_definition.config.redis_port
         self._redis_password = workcell_definition.config.redis_password
         self._redis_connection = redis_connection
+        if mongo_connection is not None:
+            self.db_connection = mongo_connection
+        else:
+            self.db_client = MongoClient(workcell_definition.config.mongo_url)
+            self.db_connection = self.db_client["workcell_manager"]
+        self.archived_workflows = self.db_connection["archived_workflows"]
         self.shutdown = False
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
@@ -147,9 +157,9 @@ class WorkcellRedisHandler:
         )
 
     @property
-    def _workflows(self) -> RedisDict:
+    def _active_workflows(self) -> RedisDict:
         return RedisDict(
-            key=f"{self._workcell_prefix}:workflows", redis=self._redis_client
+            key=f"{self._workcell_prefix}:active_workflows", redis=self._redis_client
         )
 
     @property
@@ -242,41 +252,71 @@ class WorkcellRedisHandler:
         )
 
     # *Workflow Methods
-    def get_workflow(self, workflow_id: Union[str, str]) -> Workflow:
+
+    def get_workflow(self, workflow_id: str) -> Workflow:
+        """Get an experiment by ID."""
+        if workflow_id in self._active_workflows:
+            return Workflow.model_validate(self._active_workflows[workflow_id])
+        workflow = self.archived_workflows.find_one({"workflow_id": workflow_id})
+        if not workflow:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        return Workflow.model_validate(workflow)
+
+    def get_active_workflow(self, workflow_id: Union[str, str]) -> Workflow:
         """
         Returns a workflow by ID
         """
-        return Workflow.model_validate(self._workflows[str(workflow_id)])
+        return Workflow.model_validate(self._active_workflows[str(workflow_id)])
 
-    def get_workflows(self) -> dict[str, Workflow]:
+    def get_active_workflows(self) -> dict[str, Workflow]:
         """
-        Returns all workflow runs
+        Returns all active workflowS
         """
         valid_workflows = {}
-        for workflow_id, workflow in self._workflows.to_dict().items():
+        for workflow_id, workflow in self._active_workflows.to_dict().items():
             try:
                 valid_workflows[str(workflow_id)] = Workflow.model_validate(workflow)
             except ValidationError:
                 continue
         return valid_workflows
 
+    def get_archived_workflows(self, number: int = 20) -> dict[str, Workflow]:
+        """Get the latest experiments."""
+        workflows_list = (
+            self.archived_workflows.find()
+            .sort("submitted_time", -1)
+            .limit(number)
+            .to_list()
+        )
+        workflows = {}
+        for workflow in workflows_list:
+            valid_workflow = Workflow.model_validate(workflow)
+            workflows[valid_workflow.workflow_id] = valid_workflow
+        return workflows
+
     def get_workflow_queue(self) -> list[Workflow]:
         """
         Returns the workflow queue
         """
-        return [self.get_workflow(wf_id) for wf_id in self._workflow_queue]
+        return [self.get_active_workflow(wf_id) for wf_id in self._workflow_queue]
 
     def update_workflow_queue(self) -> None:
         """
         Sets the workflow queue based on the current state of the workflows
         """
-        self._workflow_queue.clear()
-        for wf in self.get_workflows().values():
-            if wf.status.active:
-                self._workflow_queue.append(wf.workflow_id)
+        for id in self._workflow_queue:
+            wf = self.get_active_workflow(id)
+            if not wf.status.active:
+                self._workflow_queue.remove(wf.workflow_id)
         self.mark_state_changed()
 
-    def set_workflow(self, wf: Workflow, mark_state_changed: bool = True) -> None:
+    def enqueue_workflow(self, workflow_id: str) -> None:
+        """add a workflow to the workflow queue"""
+        self._workflow_queue.append(workflow_id)
+
+    def set_active_workflow(
+        self, wf: Workflow, mark_state_changed: bool = True
+    ) -> None:
         """
         Sets a workflow by ID
         """
@@ -284,24 +324,45 @@ class WorkcellRedisHandler:
             wf_dump = wf.model_dump(mode="json")
         else:
             wf_dump = Workflow.model_validate(wf).model_dump(mode="json")
-        self._workflows[str(wf_dump["workflow_id"])] = wf_dump
+        self._active_workflows[str(wf_dump["workflow_id"])] = wf_dump
         if mark_state_changed:
             self.mark_state_changed()
 
-    def delete_workflow(self, workflow_id: Union[str, str]) -> None:
+    def archive_workflow(self, workflow_id: str) -> None:
+        """move a workflow from redis to mongo"""
+        try:
+            workflow = self.get_active_workflow(workflow_id)
+        except Exception:
+            raise ValueError("Workflow is not active!") from None
+        self.archived_workflows.insert_one(workflow.to_mongo())
+        self.delete_active_workflow(workflow_id)
+
+    def archive_terminal_workflows(self) -> None:
+        """move all completed workflows from redis to mongo"""
+        for workflow_id, workflow in self._active_workflows.items():
+            if Workflow.model_validate(workflow).status.terminal:
+                self.archive_workflow(workflow_id)
+
+    def delete_active_workflow(self, workflow_id: str) -> None:
         """
-        Deletes a workflow by ID
+        Deletes an active workflow by ID
         """
-        del self._workflows[str(workflow_id)]
+        del self._active_workflows[str(workflow_id)]
         self.mark_state_changed()
 
-    def update_workflow(
+    def delete_archived_workflow(self, workflow_id: str) -> None:
+        """delete an archived workflow"""
+        self.archived_workflows.delete_one({"workflow_id": workflow_id})
+
+    def update_active_workflow(
         self, workflow_id: str, func: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> None:
         """
         Updates the state of a workflow.
         """
-        self.set_workflow(func(self.get_workflow(workflow_id), *args, **kwargs))
+        self.set_active_workflow(
+            func(self.get_active_workflow(workflow_id), *args, **kwargs)
+        )
 
     def get_node(self, node_name: str) -> Node:
         """

@@ -75,7 +75,8 @@ def test_run_next_step_with_ready_workflow(
         steps=[Step(name="Test Step", action="test_action", node="test_node", args={})],
         scheduler_metadata=SchedulerMetadata(ready_to_run=True, priority=1),
     )
-    state_handler.set_workflow(workflow)
+    state_handler.set_active_workflow(workflow)
+    state_handler.enqueue_workflow(workflow.workflow_id)
     state_handler.update_workflow_queue()
     with patch(
         "madsci.workcell_manager.workcell_engine.Engine.run_step"
@@ -95,7 +96,7 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellRedisHandler) ->
         status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
-    state_handler.set_workflow(workflow)
+    state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
         node=Node(
@@ -136,7 +137,7 @@ def test_run_single_step_of_workflow_with_multiple_steps(
         status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
-    state_handler.set_workflow(workflow)
+    state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
         node=Node(
@@ -175,7 +176,7 @@ def test_finalize_step_success(
         steps=[step],
         status=WorkflowStatus(running=True),
     )
-    state_handler.set_workflow(workflow)
+    state_handler.set_active_workflow(workflow)
     updated_step = copy.deepcopy(step)
     updated_step.status = ActionStatus.SUCCEEDED
     updated_step.result = ActionSucceeded()
@@ -198,7 +199,7 @@ def test_finalize_step_failure(
         steps=[step],
         status=WorkflowStatus(running=True),
     )
-    state_handler.set_workflow(workflow)
+    state_handler.set_active_workflow(workflow)
     updated_step = copy.deepcopy(step)
     updated_step.status = ActionStatus.FAILED
     updated_step.result = ActionFailed()
@@ -303,7 +304,7 @@ def test_run_step_send_action_exception_then_get_action_result_success(
         status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
-    state_handler.set_workflow(workflow)
+    state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
         node=Node(
@@ -349,7 +350,7 @@ def test_run_step_send_action_and_get_action_result_fail(
         status=WorkflowStatus(running=True),
         ownership_info=OwnershipInfo(),
     )
-    state_handler.set_workflow(workflow)
+    state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
         node=Node(

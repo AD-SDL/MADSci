@@ -71,15 +71,15 @@ class LabDefinition(BaseModel):
         title="Commands",
         description="Commands for operating the lab.",
     )
-    static_files_path: str = Field(
-        default=None,
+    static_files_path: Optional[PathLike] = Field(
+        default=Path("~") / "MADSci" / "src" / "madsci_squid" / "ui" / "dist",
         title="Static Files Path",
-        description="Path to the static files for the lab manager",
+        description="Path to the static files for the lab manager. Set to None to disable.",
     )
     managers: "LabUrls" = Field(
         default_factory=LabUrls,
-        title="Manager Model Links",
-        description="Links to definitions for Managers used by the lab.",
+        title="Manager URLs",
+        description="URLs for Managers used by the lab.",
     )
 
     @field_validator("commands")

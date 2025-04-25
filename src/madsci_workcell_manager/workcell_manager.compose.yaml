@@ -1,0 +1,30 @@
+name: madsci_example_workcell_manager
+services:
+  mongodb:
+    container_name: mongodb
+    image: mongo:8.0
+    ports:
+      - 27017:27017
+    volumes:
+      - ./.madsci/mongodb:/data/db
+  redis:
+    container_name: redis
+    image: redis:7.4
+    ports:
+      - 6379:6379
+    volumes:
+      - ./.madsci/redis:/data
+  workcell_manager:
+    container_name: workcell_manager
+    image: ghcr.io/ad-sdl/madsci:latest
+    environment:
+      - USER_ID=1000
+      - GROUP_ID=1000
+    network_mode: host
+    volumes:
+      - /path/to/your/managers/directory:/home/madsci/managers/
+      - .madsci:/home/madsci/.madsci/
+    command: python -m madsci.workcell_manager.workcell_server --definition /home/madsci/managers/example_wc.workcell.yaml
+    depends_on:
+      - mongodb
+      - redis

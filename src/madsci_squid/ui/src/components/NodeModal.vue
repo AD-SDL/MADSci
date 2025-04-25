@@ -132,7 +132,7 @@
                 </div>
               </v-expansion-panel-text>
             </v-expansion-panel>
-          </v-expansion-panels>Files
+          </v-expansion-panels>
           <v-container fluid>
             <v-row dense wrap justify-content="space-evenly">
               <v-col cols="12" md="6" lg="4" xl="3">
@@ -145,7 +145,6 @@
               </v-col>
               <v-col cols="12" md="6" lg="4" xl="3">
                 <h3>Resources</h3>
-                <p> {{ yaml.dump(json_text) }} </p>
                   <p>Coming Soon</p>
               </v-col>
             </v-row>

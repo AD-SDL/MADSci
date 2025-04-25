@@ -1,5 +1,6 @@
 """REST API and Server for the lab Manager."""
 
+from pathlib import Path
 from typing import Optional
 
 import uvicorn
@@ -29,9 +30,14 @@ def create_lab_server(
         """Get the definition for the Experiment Manager."""
         return lab_manager_definition.managers
 
-    app.mount(
-        "/", StaticFiles(directory=lab_manager_definition.static_files_path, html=True)
-    )
+    if lab_manager_definition.static_files_path:
+        app.mount(
+            "/",
+            StaticFiles(
+                directory=Path(lab_manager_definition.static_files_path).expanduser(),
+                html=True,
+            ),
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

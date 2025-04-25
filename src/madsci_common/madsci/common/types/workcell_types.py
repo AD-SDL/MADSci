@@ -202,7 +202,7 @@ class WorkcellConfig(BaseModel):
         description="The host to run the workcell manager on.",
     )
     port: int = Field(
-        default=8013,
+        default=8005,
         title="Port",
         description="The port to run the workcell manager on.",
     )
@@ -271,10 +271,10 @@ class WorkcellConfig(BaseModel):
         title="Resource Server URL",
         description="The URL for the resource server.",
     )
-    static_files_path: Optional[str] = Field(
+    mongo_url: Optional[str] = Field(
         default=None,
-        title="Static Files Path",
-        description="Path to the static dashboard files",
+        title="MongoDB URL",
+        description="The URL for the mongo database.",
     )
     get_action_result_retries: int = Field(
         default=3,

@@ -35,7 +35,7 @@
               </template>
             </v-data-table>
           </div>
-          <div v-if="!(value.result.error == null)"><b>Error:</b> {{ value.result.error }}</div>
+          <div v-if="!(value.result.errors == null)"><b>Errors:</b> {{ value.result.errors }}</div>
         </div>
       </v-expansion-panel-text>
     </v-expansion-panel>

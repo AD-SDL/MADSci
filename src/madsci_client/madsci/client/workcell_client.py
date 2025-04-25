@@ -27,7 +27,7 @@ class WorkcellClient:
     def __init__(
         self,
         workcell_manager_url: str,
-        working_directory: str = "~/.MADsci/temp",
+        working_directory: str = "./",
         ownership_info: Optional[OwnershipInfo] = None,
     ) -> None:
         """
@@ -38,7 +38,7 @@ class WorkcellClient:
         workcell_manager_url : str
             The base URL of the Workcell Manager.
         working_directory : str, optional
-            The directory for temporary workflow files, by default "~/.MADsci/temp".
+            The directory to look for relative paths. Defaults to "./".
         ownership_info : Optional[OwnershipInfo], optional
             Ownership information for workflows, by default None.
         """
@@ -426,7 +426,7 @@ class WorkcellClient:
         )
         return response.json()
 
-    def get_workflows(self) -> dict[str, Workflow]:
+    def get_active_workflows(self) -> dict[str, Workflow]:
         """
         Get all workflows from the Workcell Manager.
 
@@ -435,8 +435,29 @@ class WorkcellClient:
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
         """
-        url = f"{self.url}/workflows"
+        url = f"{self.url}/workflows/active"
         response = requests.get(url, timeout=100)
+        response.raise_for_status()
+        workflow_dict = response.json()
+        if not isinstance(workflow_dict, dict):
+            raise ValueError(
+                f"Expected a dictionary of workflows, but got {type(workflow_dict)}."
+            )
+        return {
+            key: Workflow.model_validate(value) for key, value in workflow_dict.items()
+        }
+
+    def get_archived_workflows(self, number: int = 20) -> dict[str, Workflow]:
+        """
+        Get all workflows from the Workcell Manager.
+
+        Returns
+        -------
+        dict[str, Workflow]
+            A dictionary of workflow IDs and their details.
+        """
+        url = f"{self.url}/workflows/archived"
+        response = requests.get(url, params={"number": number}, timeout=100)
         response.raise_for_status()
         workflow_dict = response.json()
         if not isinstance(workflow_dict, dict):
