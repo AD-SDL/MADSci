@@ -103,7 +103,7 @@ from madsci.common.types.resource_types import Resource
 
 resource = Resource(
     resource_name="Sample Resource",
-    resource_type="sample",
+    resource_class="sample",
 )
 added_resource = client.add_resource(resource)
 print(added_resource)
@@ -118,7 +118,7 @@ from madsci.common.types.resource_types.definitions import ResourceDefinition
 
 resource = ResourceDefinition(
   resource_name="Sample Resource",
-  resource_type="sample",
+  resource_class="sample",
 )
 initialized_resource = client.init_resource(resource)
 print(intialized_resource)
@@ -148,7 +148,7 @@ print(fetched_resource)
 Query for a resource(s) that matches the provided parameters. Can specify whether to return multiple or require that there is a unique matching result.
 
 ```python
-resources = client.query_resource(resource_type="sample", multiple=True)
+resources = client.query_resource(resource_class="sample", multiple=True)
 for resource in resources:
     print(resource)
 ```

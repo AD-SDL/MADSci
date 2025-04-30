@@ -244,7 +244,7 @@ class ResourceInterface:
         resource_name: Optional[str] = None,
         parent_id: Optional[str] = None,
         owner: Optional[OwnershipInfo] = None,
-        resource_type: Optional[str] = None,
+        resource_class: Optional[str] = None,
         base_type: Optional[ResourceTypeEnum] = None,
         unique: bool = False,
         multiple: bool = False,
@@ -282,8 +282,8 @@ class ResourceInterface:
                         ResourceTable.owner[key].as_string() == value
                     )
             statement = (
-                statement.where(ResourceTable.resource_type == resource_type)
-                if resource_type
+                statement.where(ResourceTable.resource_class == resource_class)
+                if resource_class
                 else statement
             )
             statement = (

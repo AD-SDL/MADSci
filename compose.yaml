@@ -20,3 +20,5 @@ services:
       tags:
         - ghcr.io/ad-sdl/madsci_dashboard:latest
         - ghcr.io/ad-sdl/madsci_dashboard:dev
+    depends_on:
+      - madsci

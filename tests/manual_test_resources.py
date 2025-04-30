@@ -13,11 +13,11 @@ from madsci.common.types.resource_types import (
 base_url = "http://localhost:8003"
 client = ResourceClient(url=base_url)
 
-stack = Stack(resource_name="stack", resource_type="stack", capacity=10, ownership=None)
+stack = Stack(resource_name="stack", resource_class="stack", capacity=10, ownership=None)
 stack = client.add_resource(stack)
 # # Add assets to the stack and push them
 for i in range(5):
-    asset = Asset(resource_name=f"Test plate {i}", resource_type="asset")
+    asset = Asset(resource_name=f"Test plate {i}", resource_class="asset")
     asset = client.add_resource(asset)
     stack = client.push(stack, asset)
 
@@ -28,12 +28,12 @@ for _ in range(2):
     print(popped_asset)
 
 # # Create and add a queue
-queue = Queue(resource_name="queue", resource_type="queue", capacity=10, ownership=None)
+queue = Queue(resource_name="queue", resource_class="queue", capacity=10, ownership=None)
 queue = client.add_resource(queue)
 
 # Add assets to the queue and push them
 for i in range(5):
-    asset = Asset(resource_name=f"Test plate {i}", resource_type="asset")
+    asset = Asset(resource_name=f"Test plate {i}", resource_class="asset")
     asset = client.add_resource(asset)
     queue = client.push(queue, asset)
 
@@ -46,7 +46,7 @@ queue = client.push(queue, popped_asset)
 # # # # Create and add a consumable resource
 consumable = Consumable(
     resource_name="Water",
-    resource_type="consumable",
+    resource_class="consumable",
     quantity=50.0,
     ownership=None,
     capacity=100,
@@ -56,7 +56,7 @@ consumable = client.add_resource(consumable)
 # # Create and add a pool resource with the consumable as a child
 pool = Pool(
     resource_name="Vial_1",
-    resource_type="pool",
+    resource_class="pool",
     capacity=500.0,
     children={"Water": consumable},
 )
@@ -77,13 +77,13 @@ pool = client.empty_pool(pool)
 print(f"After Empty: {pool.quantity}")
 
 # Add another pool resource
-pool1 = Pool(resource_name="Pool1", resource_type="pool", capacity=100, quantity=50)
+pool1 = Pool(resource_name="Pool1", resource_class="pool", capacity=100, quantity=50)
 pool1 = client.add_resource(pool1)
 
 # Create and add a plate resource with an initial child pool
 plate = Collection(
     resource_name="Microplate1",
-    resource_type="collection",
+    resource_class="collection",
     children={"A1": pool},
 )
 plate = client.add_resource(plate)
@@ -107,7 +107,7 @@ print(updated_resource.capacity)
 print("\n=== Testing get_history, remove_resource, and restore_deleted_resource ===")
 
 # Create a test asset to remove and then restore
-test_asset = Asset(resource_name="Test Asset for Removal", resource_type="asset")
+test_asset = Asset(resource_name="Test Asset for Removal", resource_class="asset")
 test_asset = client.add_resource(test_asset)
 print("Test asset added:", test_asset)
 

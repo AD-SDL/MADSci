@@ -13,8 +13,8 @@ from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.types.resource_types.custom_types import (
     CustomResourceTypes,
-    ResourceTypeEnum,
 )
+from madsci.common.types.resource_types.resource_enums import ResourceTypeEnum
 from madsci.common.utils import new_name_str
 from pydantic import AfterValidator
 from pydantic.functional_validators import field_validator, model_validator
@@ -113,9 +113,9 @@ class ResourceDefinition(BaseModel, table=False, extra="allow"):
         description="A prefix to append the key of the object to for machine instanciated resources",
         default=None,
     )
-    resource_type: str = Field(
-        title="Resource Type",
-        description="The type of the resource. Either a custom type name or a resource base type.",
+    resource_class: str = Field(
+        title="Resource Class",
+        description="The class of the resource. Must match a class defined in the resource manager.",
         default="",
         nullable=False,
     )
@@ -449,35 +449,3 @@ ResourceDefinitions = Annotated[
     ],
     Discriminator("base_type"),
 ]
-
-
-class ResourceFile(BaseModel):
-    """Definition for a MADSci Resource File."""
-
-    resource_types: list[
-        Annotated[CustomResourceTypes, Field(discriminator="base_type")]
-    ] = Field(
-        title="Resource Types",
-        description="The definitions of the resource types in the file.",
-        default=[],
-    )
-    default_resources: list[
-        Annotated[ResourceDefinitions, Field(discriminator="base_type")]
-    ] = Field(
-        title="Default Resources",
-        description="The definitions of the default resources in the file.",
-        default=[],
-    )
-
-    @model_validator(mode="after")
-    def validate_resource_types(self) -> "ResourceFile":
-        """Validate resource types."""
-        for resource_type in self.resource_types:
-            for parent_type in resource_type.parent_types:
-                if parent_type not in ResourceTypeEnum and parent_type not in [
-                    resource_type.type_name for resource_type in self.resource_types
-                ]:
-                    raise ValueError(
-                        f"Unknown resource parent type: {parent_type}, parent type must be one of {list(ResourceTypeEnum)} or a custom defined resource type.",
-                    )
-        return self

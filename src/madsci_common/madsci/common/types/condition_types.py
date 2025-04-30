@@ -76,9 +76,9 @@ class ResourceInLocationCondition(Condition):
         description="The key to check in the location's container resource",
         default=0,
     )
-    resource_type: Optional[str] = Field(
-        title="Resource Type",
-        description="The type of the resource to check is in the location's container resource",
+    resource_class: Optional[str] = Field(
+        title="Resource Class",
+        description="Check that the resource in this location is of a certain class",
         default=None,
     )
 
