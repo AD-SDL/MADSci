@@ -31,7 +31,7 @@
         <v-card-text>
           <h3>Active</h3>
           <WorkflowTable :workflows="active_workflows"/>
-          <h3>Archived: </h3>
+          <h3>Archived</h3>
           <WorkflowTable :workflows="archived_workflows"/>
           </v-card-text>
         </v-card>
