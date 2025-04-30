@@ -79,7 +79,6 @@ class Engine:
                 if (
                     time.time() - node_tick
                     > self.workcell_definition.config.node_update_interval
-                    or self.state_handler.has_state_changed()
                 ):
                     update_active_nodes(self.state_handler)
                     node_tick = time.time()

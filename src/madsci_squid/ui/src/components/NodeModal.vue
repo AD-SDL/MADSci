@@ -42,13 +42,29 @@
               class="ml-2"/>
           </template>
         </div>
-        <v-sheet class="pa-2 rounded-lg text-md-center text-white" :class="'node_status_' + get_status(wc_state.nodes[modal_title].status)">
+        <v-sheet class="pa-2 rounded-lg text-md-center" :class="'node_status_' + get_status(wc_state.nodes[modal_title].status)">
           {{ Object.entries(wc_state.nodes[modal_title].status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }}
         </v-sheet>
       </v-card-title>
 
       <v-card-text class="subheading grey--text">
         <div>
+          <v-container fluid>
+            <v-row dense wrap justify-content="space-evenly">
+              <v-col cols="12" md="6" lg="4" xl="3">
+                <h3>Status</h3>
+                <vue-json-pretty :data="wc_state.nodes[modal_title].status"></vue-json-pretty>
+              </v-col>
+              <v-col cols="12" md="6" lg="4" xl="3">
+                <h3>State</h3>
+                <vue-json-pretty :data="wc_state.nodes[modal_title].state"></vue-json-pretty>
+              </v-col>
+              <v-col cols="12" md="6" lg="4" xl="3">
+                <h3>Info</h3>
+                <vue-json-pretty :data="modal_text" :deep="1"></vue-json-pretty>
+              </v-col>
+            </v-row>
+          </v-container>
           <h3>Actions</h3>
           <v-expansion-panels>
             <v-expansion-panel v-for="action in modal_text.actions" :key="action.name">
@@ -133,22 +149,6 @@
               </v-expansion-panel-text>
             </v-expansion-panel>
           </v-expansion-panels>
-          <v-container fluid>
-            <v-row dense wrap justify-content="space-evenly">
-              <v-col cols="12" md="6" lg="4" xl="3">
-                <h3>State</h3>
-                <vue-json-pretty :data="wc_state.nodes[modal_title].state"></vue-json-pretty>
-              </v-col>
-              <v-col cols="12" md="6" lg="4" xl="3">
-                <h3>Info</h3>
-                <vue-json-pretty :data="modal_text" :deep="1"></vue-json-pretty>
-              </v-col>
-              <v-col cols="12" md="6" lg="4" xl="3">
-                <h3>Resources</h3>
-                  <p>Coming Soon</p>
-              </v-col>
-            </v-row>
-          </v-container>
         </div>
       </v-card-text>
       <v-card-actions>
