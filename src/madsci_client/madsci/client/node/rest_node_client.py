@@ -196,6 +196,7 @@ def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
         errors=json.loads(headers["x-madsci-errors"]),
         files=json.loads(headers["x-madsci-files"]),
         datapoints=json.loads(headers["x-madsci-datapoints"]),
+        data=json.loads(headers["x-madsci-data"]),
     )
 
 
