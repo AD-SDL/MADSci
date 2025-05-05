@@ -11,13 +11,10 @@ from madsci.common.types.base_types import (
 )
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
-from madsci.common.types.resource_types.custom_types import (
-    CustomResourceTypes,
-)
 from madsci.common.types.resource_types.resource_enums import ResourceTypeEnum
 from madsci.common.utils import new_name_str
 from pydantic import AfterValidator
-from pydantic.functional_validators import field_validator, model_validator
+from pydantic.functional_validators import field_validator
 from pydantic.types import Discriminator, Tag
 from sqlalchemy.dialects.postgresql import JSON
 from sqlmodel import Field

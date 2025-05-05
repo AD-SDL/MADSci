@@ -45,6 +45,9 @@ class LabUrls(BaseModel):
 class LabDefinition(BaseModel):
     """Definition for a MADSci Lab."""
 
+    model_config = ConfigDict(extra="allow")
+    _definition_file_patterns: ClassVar[list[str]] = ["*.lab.yaml"]
+
     name: str = Field(title="Name", description="The name of the lab.")
     lab_id: str = Field(
         title="Lab ID",

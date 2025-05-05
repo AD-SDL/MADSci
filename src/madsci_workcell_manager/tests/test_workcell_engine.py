@@ -20,7 +20,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowStatus,
 )
-from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from pytest_mock_resources import RedisConfig, create_redis_fixture
 from redis import Redis
@@ -37,19 +37,19 @@ redis_server = create_redis_fixture()
 
 
 @pytest.fixture
-def state_handler(redis_server: Redis) -> WorkcellRedisHandler:
+def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
     workcell_def = WorkcellDefinition(
         workcell_name="Test Workcell",
         config=WorkcellConfig(data_server_url="http://localhost:8000"),
     )
-    return WorkcellRedisHandler(
+    return WorkcellStateHandler(
         workcell_definition=workcell_def, redis_connection=redis_server
     )
 
 
 @pytest.fixture
-def engine(state_handler: WorkcellRedisHandler) -> Engine:
+def engine(state_handler: WorkcellStateHandler) -> Engine:
     """Fixture for creating an Engine instance."""
     return Engine(state_handler=state_handler)
 
@@ -67,7 +67,7 @@ def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
 
 
 def test_run_next_step_with_ready_workflow(
-    engine: Engine, state_handler: WorkcellRedisHandler
+    engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test run_next_step with a ready workflow."""
     workflow = Workflow(
@@ -87,7 +87,7 @@ def test_run_next_step_with_ready_workflow(
     assert updated_workflow.status.running is True
 
 
-def test_run_single_step(engine: Engine, state_handler: WorkcellRedisHandler) -> None:
+def test_run_single_step(engine: Engine, state_handler: WorkcellStateHandler) -> None:
     """Test running a step in a workflow."""
     step = Step(name="Test Step 1", action="test_action", node="node1", args={})
     workflow = Workflow(
@@ -126,7 +126,7 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellRedisHandler) ->
 
 
 def test_run_single_step_of_workflow_with_multiple_steps(
-    engine: Engine, state_handler: WorkcellRedisHandler
+    engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test running a step in a workflow with multiple steps."""
     step1 = Step(name="Test Step 1", action="test_action", node="node1", args={})
@@ -167,7 +167,7 @@ def test_run_single_step_of_workflow_with_multiple_steps(
 
 
 def test_finalize_step_success(
-    engine: Engine, state_handler: WorkcellRedisHandler
+    engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test finalizing a successful step."""
     step = Step(name="Test Step 1", action="test_action", node="node1", args={})
@@ -190,7 +190,7 @@ def test_finalize_step_success(
 
 
 def test_finalize_step_failure(
-    engine: Engine, state_handler: WorkcellRedisHandler
+    engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test finalizing a failed step."""
     step = Step(name="Test Step 1", action="test_action", node="node1", args={})
@@ -213,7 +213,7 @@ def test_finalize_step_failure(
 
 
 def test_handle_data_and_files_with_data(
-    engine: Engine, state_handler: WorkcellRedisHandler
+    engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test handle_data_and_files with data points."""
     step = Step(
@@ -252,7 +252,7 @@ def test_handle_data_and_files_with_data(
 
 
 def test_handle_data_and_files_with_files(
-    engine: Engine, state_handler: WorkcellRedisHandler
+    engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test handle_data_and_files with file points."""
     step = Step(
@@ -294,7 +294,7 @@ def test_handle_data_and_files_with_files(
 
 
 def test_run_step_send_action_exception_then_get_action_result_success(
-    engine: Engine, state_handler: WorkcellRedisHandler
+    engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test run_step where send_action raises an exception but get_action_result succeeds."""
     step = Step(name="Test Step 1", action="test_action", node="node1", args={})
@@ -340,7 +340,7 @@ def test_run_step_send_action_exception_then_get_action_result_success(
 
 
 def test_run_step_send_action_and_get_action_result_fail(
-    engine: Engine, state_handler: WorkcellRedisHandler
+    engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test run_step where both send_action and get_action_result fail."""
     step = Step(name="Test Step 1", action="test_action", node="node1", args={})

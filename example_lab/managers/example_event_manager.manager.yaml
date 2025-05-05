@@ -1,0 +1,23 @@
+name: Example Event Manager
+manager_id: 01JTGEXQ14WHQWDRDDJPKGH6FR
+description: null
+manager_type: event_manager
+url: null
+host: 127.0.0.1
+port: 8001
+db_url: mongodb://localhost:27017
+event_client_config:
+  name: null
+  event_server_url: null
+  log_level: 20
+  source:
+    manager_id: 01JTGEXQ14WHQWDRDDJPKGH6FR
+  log_dir: ~/.madsci/logs
+alert_level: 40
+# email_alerts:
+#   smtp_server: mailgateway.anl.gov
+#   smtp_port: 25
+#   use_tls: true
+#   sender: no-reply-madsci@anl.gov
+#   default_email_addresses:
+#     - test@example.com

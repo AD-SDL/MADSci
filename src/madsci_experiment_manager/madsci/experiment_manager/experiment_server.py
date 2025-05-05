@@ -62,6 +62,8 @@ def create_experiment_server(  # noqa: C901, PLR0915
 
     app = FastAPI()
 
+    @app.get("/")
+    @app.get("/info")
     @app.get("/definition")
     async def definition() -> Optional[ExperimentManagerDefinition]:
         """Get the definition for the Experiment Manager."""

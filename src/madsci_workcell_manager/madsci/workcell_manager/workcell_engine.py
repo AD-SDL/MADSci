@@ -22,7 +22,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
 )
 from madsci.common.utils import threaded_daemon
-from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_utils import (
     find_node_client,
     update_active_nodes,
@@ -38,7 +38,7 @@ class Engine:
 
     def __init__(
         self,
-        state_handler: WorkcellRedisHandler,
+        state_handler: WorkcellStateHandler,
     ) -> None:
         """Initialize the scheduler."""
         self.state_handler = state_handler

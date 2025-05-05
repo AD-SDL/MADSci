@@ -110,22 +110,19 @@ def create(
     yes: bool,
 ) -> None:
     """Create a new workcell."""
-    name = name if name else ctx.parent.params.get("name")
     name = (
         name
-        if name
-        else prompt_for_input("Workcell Name", required=True, quiet=ctx.obj.quiet)
+        or ctx.parent.params.get("name")
+        or prompt_for_input("Workcell Name", required=True, quiet=ctx.obj.quiet)
     )
-    description = (
-        description
-        if description
-        else prompt_for_input("Workcell Description", quiet=ctx.obj.quiet)
+    description = description or prompt_for_input(
+        "Workcell Description", quiet=ctx.obj.quiet
     )
 
     workcell = WorkcellDefinition(name=name, description=description)
     console.print(workcell)
 
-    path = path if path else ctx.parent.params.get("path")
+    path = path or ctx.parent.params.get("path")
     if not path:
         if ctx.obj.lab and ctx.obj.lab.path:
             # If we have a lab context, create in the lab directory

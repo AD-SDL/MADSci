@@ -1,7 +1,6 @@
 """Resources Interface"""
 
 # Suppress SAWarnings
-import logging
 import time
 import traceback
 from collections.abc import Generator
@@ -9,6 +8,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Optional, Union
 
+from madsci.client.event_client import EventClient
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
     Collection,
@@ -35,8 +35,6 @@ from sqlalchemy import true
 from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, func, select
 
-logger = logging.getLogger(__name__)
-
 
 class ResourceInterface:
     """
@@ -54,6 +52,7 @@ class ResourceInterface:
         sessionmaker: Optional[callable] = None,
         session: Optional[Session] = None,
         init_timeout: float = 10.0,
+        logger: Optional[EventClient] = None,
     ) -> None:
         """
         Initialize the ResourceInterface with a database URL.
@@ -68,6 +67,7 @@ class ResourceInterface:
                 self.engine = engine
                 self.sessionmaker = sessionmaker
                 self.session = session
+                self.logger = logger or EventClient()
 
                 if not (self.url or self.engine or self.sessionmaker or self.session):
                     raise ValueError(
@@ -80,16 +80,18 @@ class ResourceInterface:
                 self.sessionmaker = self.sessionmaker or create_session
                 if self.engine:
                     SQLModel.metadata.create_all(self.engine)
-                logger.info("Initialized Resource Interface.")
+                self.logger.info("Initialized Resource Interface.")
                 break
             except Exception:
-                logger.error(
+                self.logger.error(
                     f"Error while creating/connecting to database: \n{traceback.print_exc()}"
                 )
                 time.sleep(5)
                 continue
         else:
-            logger.error(f"Failed to connect to database after {init_timeout} seconds.")
+            self.logger.error(
+                f"Failed to connect to database after {init_timeout} seconds."
+            )
             raise ConnectionError(
                 f"Failed to connect to database after {init_timeout} seconds."
             )
@@ -105,7 +107,7 @@ class ResourceInterface:
             yield self.session
         else:
             session = self.sessionmaker()
-            logger.error(session)
+            self.logger.error(session)
             session.bind = self.engine
             try:
                 yield session
@@ -141,7 +143,7 @@ class ResourceInterface:
                     )
                 ).first()
                 if existing_resource:
-                    logger.info(
+                    self.logger.info(
                         f"Resource with ID '{resource_row.resource_id}' already exists in the database. No action taken."
                     )
                     return existing_resource.to_data_model()
@@ -162,7 +164,7 @@ class ResourceInterface:
                 session.refresh(resource_row)
                 return resource_row.to_data_model()
         except Exception as e:
-            logger.error(f"Error adding resource: \n{traceback.format_exc()}")
+            self.logger.error(f"Error adding resource: \n{traceback.format_exc()}")
             raise e
 
     def update_resource(
@@ -212,7 +214,7 @@ class ResourceInterface:
                 session.refresh(resource_row)
                 return resource_row.to_data_model()
         except Exception as e:
-            logger.error(f"Error updating resource: \n{traceback.format_exc()}")
+            self.logger.error(f"Error updating resource: \n{traceback.format_exc()}")
             raise e
 
     def add_or_update_resource(
@@ -296,7 +298,7 @@ class ResourceInterface:
                 try:
                     result = session.exec(statement).one_or_none()
                 except MultipleResultsFound as e:
-                    logger.error(
+                    self.logger.error(
                         f"Result is not unique, narrow down the search criteria: {e}"
                     )
                     raise e
@@ -397,7 +399,7 @@ class ResourceInterface:
                 .order_by(ResourceHistoryTable.version.desc())
             ).first()
             if resource_history is None:
-                logger.error(
+                self.logger.error(
                     f"No removed resource found for ID '{resource_id}' in the History table."
                 )
                 return None
@@ -694,7 +696,7 @@ class ResourceInterface:
                     f"Cannot set capacity of resource '{resource.resource_name}' to {capacity} because it currently contains {resource.quantity}."
                 )
             if resource.capacity == capacity:
-                logger.info(
+                self.logger.info(
                     f"Capacity of container '{resource.resource_name}' is already set to {capacity}. No action taken."
                 )
                 return resource_row.to_data_model()
@@ -718,7 +720,7 @@ class ResourceInterface:
                     f"Resource '{resource.resource_name}' with type {resource.base_type} has no capacity attribute."
                 )
             if resource.capacity is None:
-                logger.info(
+                self.logger.info(
                     f"Container '{resource.resource_name}' has no capacity limit set. No action taken."
                 )
                 return resource_row.to_data_model()

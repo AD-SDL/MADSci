@@ -5,24 +5,6 @@ node_description: The plate reader for the example lab
 node_type: device
 module_name: platereader
 module_version: 0.0.1
-capabilities:
-  get_info: true
-  get_state: true
-  get_status: true
-  send_action: true
-  get_action_result: true
-  get_action_history: true
-  action_files: true
-  send_admin_commands: true
-  set_config: true
-  get_resources: false
-  get_log: true
-  admin_commands:
-  - get_location
-  - lock
-  - reset
-  - shutdown
-  - unlock
 commands: {}
 is_template: false
 config_defaults:

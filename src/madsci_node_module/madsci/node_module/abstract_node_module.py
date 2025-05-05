@@ -42,6 +42,7 @@ from madsci.common.types.location_types import (
 )
 from madsci.common.types.node_types import (
     AdminCommands,
+    NodeCapabilities,
     NodeClientCapabilities,
     NodeConfig,
     NodeDefinition,
@@ -128,13 +129,13 @@ class AbstractNode:
                 "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
             )
 
-        # * Combine the node definition and classes's capabilities
-        self._populate_capabilities()
-
         # * Synthesize the node info
         self.node_info = NodeInfo.from_node_def_and_config(
             self.node_definition, self.config
         )
+
+        # * Combine the node definition and classes's capabilities
+        self._populate_capabilities()
 
         # * Add the action decorators to the node (and node info)
         for action_callable in self.__class__.__dict__.values():
@@ -462,7 +463,7 @@ class AbstractNode:
                     f"Adding parameter {parameter_name} of type {parameter_type} to action {action_name}",
                 )
                 if parameter_name == "return":
-                    # * Skip the return parameter
+                    # TODO: Extract the return type and add it to the action definition
                     continue
                 if (
                     parameter_name not in action_def.args
@@ -709,17 +710,19 @@ class AbstractNode:
 
     def _populate_capabilities(self) -> None:
         """Populate the node capabilities based on the node definition and the supported capabilities of the class."""
+        if self.node_info.capabilities is None:
+            self.node_info.capabilities = NodeCapabilities()
         for field in self.supported_capabilities.__pydantic_fields__:
-            if getattr(self.node_definition.capabilities, field) is None:
+            if getattr(self.node_info.capabilities, field) is None:
                 setattr(
-                    self.node_definition.capabilities,
+                    self.node_info.capabilities,
                     field,
                     getattr(self.supported_capabilities, field),
                 )
 
         # * Add the admin commands to the node info
-        self.node_definition.capabilities.admin_commands = set.union(
-            self.node_definition.capabilities.admin_commands,
+        self.node_info.capabilities.admin_commands = set.union(
+            self.node_info.capabilities.admin_commands,
             {
                 admin_command.value
                 for admin_command in AdminCommands

@@ -7,7 +7,7 @@ import requests
 from madsci.client.node import NODE_CLIENT_MAP, AbstractNodeClient
 from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellLink
-from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from madsci.workcell_manager.state_handler import WorkcellStateHandler
 
 
 def resolve_workcell_link(workcell_link: WorkcellLink) -> WorkcellDefinition:
@@ -34,7 +34,7 @@ def find_node_client(url: str) -> AbstractNodeClient:
     return None
 
 
-def update_active_nodes(state_manager: WorkcellRedisHandler) -> None:
+def update_active_nodes(state_manager: WorkcellStateHandler) -> None:
     """Update all active nodes in the workcell."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         node_futures = []
@@ -47,7 +47,7 @@ def update_active_nodes(state_manager: WorkcellRedisHandler) -> None:
 
 
 def update_node(
-    node_name: str, node: Node, state_manager: WorkcellRedisHandler
+    node_name: str, node: Node, state_manager: WorkcellStateHandler
 ) -> None:
     """Update a single node's state and about information."""
     try:

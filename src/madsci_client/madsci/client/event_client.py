@@ -2,6 +2,7 @@
 
 import contextlib
 import inspect
+import json
 import logging
 from collections import OrderedDict
 from pathlib import Path
@@ -14,7 +15,7 @@ from madsci.common.types.event_types import (
     EventType,
 )
 from madsci.common.utils import threaded_task
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from rich import print
 
 
@@ -32,28 +33,25 @@ class EventClient:
 
         Keyword Arguments are used to override the values of the passed in/default config.
         """
-        if kwargs:
-            if config:
-                [self.config.__setattr__(key, value) for key, value in kwargs.items()]
-            else:
-                self.config = EventClientConfig(**kwargs)
         if config is not None:
             self.config = config
+            if kwargs:
+                [self.config.__setattr__(key, value) for key, value in kwargs.items()]
         else:
-            self.config = EventClientConfig()
+            self.config = EventClientConfig(**kwargs)
         if self.config.name:
             self.name = self.config.name
         else:
-            # * See if there's a calling class we can name after
+            # * See if there's a calling module we can name after
             stack = inspect.stack()
             parent = stack[1][0]
-            if calling_self := parent.f_locals.get("self"):
-                self.name = calling_self.__class__.__name__
+            if calling_module := parent.f_globals.get("__name__"):
+                self.name = calling_module
             else:
                 # * No luck, name after EventClient
                 self.name = __name__
         self.name = str(self.name)
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger(self.name)
         self.log_dir = Path(self.config.log_dir).expanduser()
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.logfile = self.log_dir / f"{self.name}.log"
@@ -127,7 +125,12 @@ class EventClient:
             return dict(events)
         raise ValueError("No event server configured, cannot query events.")
 
-    def log(self, event: Union[Event, Any], level: Optional[int] = None) -> None:
+    def log(
+        self,
+        event: Union[Event, Any],
+        level: Optional[int] = None,
+        alert: Optional[bool] = None,
+    ) -> None:
         """Log an event."""
 
         # * If we've got a string or dict, check if it's a serialized event
@@ -137,10 +140,18 @@ class EventClient:
         if isinstance(event, dict):
             with contextlib.suppress(ValidationError):
                 event = Event.model_validate(event)
+        if isinstance(event, Exception):
+            import traceback
+
+            event = Event(
+                event_type=EventType.LOG_ERROR,
+                event_data=traceback.format_exc(),
+            )
         if not isinstance(event, Event):
             event = self._new_event_for_log(event, level)
         event.log_level = level if level else event.log_level
         event.source = event.source if event.source is not None else self.source
+        event.alert = alert if alert is not None else event.alert
         self.logger.log(event.log_level, event.model_dump_json())
         # * Log the event to the event server if configured
         # * Only log if the event is at the same level or higher than the logger
@@ -152,6 +163,8 @@ class EventClient:
     def log_debug(self, event: Union[Event, str]) -> None:
         """Log an event at the debug level."""
         self.log(event, logging.DEBUG)
+
+    debug = log_debug
 
     def log_info(self, event: Union[Event, str]) -> None:
         """Log an event at the info level."""
@@ -177,6 +190,12 @@ class EventClient:
 
     critical = log_critical
 
+    def log_alert(self, event: Union[Event, str]) -> None:
+        """Log an event at the alert level."""
+        self.log(event, alert=True)
+
+    alert = log_alert
+
     @threaded_task
     def _send_event_to_event_server(self, event: Event) -> None:
         """Send an event to the event manager."""
@@ -201,6 +220,18 @@ class EventClient:
             event_type = EventType.LOG_ERROR
         elif level == logging.CRITICAL:
             event_type = EventType.LOG_CRITICAL
+        if isinstance(event_data, BaseModel):
+            event_data = event_data.model_dump(mode="json")
+        else:
+            try:
+                event_data = json.dumps(event_data, default=str)
+            except Exception:
+                try:
+                    event_data = str(event_data)
+                except Exception:
+                    event_data = {
+                        "error": "Error during logging. Unable to serialize event data."
+                    }
         return Event(
             event_type=event_type,
             event_data=event_data,

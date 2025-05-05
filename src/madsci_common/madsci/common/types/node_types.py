@@ -212,10 +212,10 @@ class NodeDefinition(BaseModel):
         title="Module Version",
         description="The version of the node module.",
     )
-    capabilities: "NodeCapabilities" = Field(
-        default_factory=lambda: NodeCapabilities(),
+    capabilities: Optional["NodeCapabilities"] = Field(
+        default=None,
         title="Node Capabilities",
-        description="The capabilities of the node.",
+        description="Explicitly override the capabilities of the node.",
     )
     commands: dict[str, str] = Field(
         title="Node Commands",

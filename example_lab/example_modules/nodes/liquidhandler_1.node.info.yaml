@@ -18,13 +18,9 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
-  - cancel
   - get_location
   - lock
-  - pause
   - reset
-  - resume
-  - safety_stop
   - shutdown
   - unlock
 commands: {}
@@ -173,6 +169,13 @@ config_schema:
           default: null
           description: The ID of the workflow that owns the object.
           title: Workflow ID
+        manager_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: The ID of the manager that owns the object.
+          title: Manager ID
       title: OwnershipInfo
       type: object
   additionalProperties: true

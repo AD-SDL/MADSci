@@ -33,7 +33,7 @@ services:
       - ${LOCAL_WORKSPACE_FOLDER:-./}:/home/madsci/example_lab
       - ${LOCAL_WORKSPACE_FOLDER:-./}.madsci:/home/madsci/.madsci/
       - ${LOCAL_WORKSPACE_FOLDER:-./}/../src/madsci_squid/ui:/home/madsci/ui
-    command: python -m madsci.squid.lab_server --definition /home/madsci/example_lab/managers/example_lab_manager.manager.yaml
+    command: python -m madsci.squid.lab_server --definition /home/madsci/example_lab/example_lab.lab.yaml
     restart: on-failure
     depends_on:
       - redis

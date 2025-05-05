@@ -5,15 +5,23 @@ Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires
 a working docker installation.
 """
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from madsci.common.types.event_types import Event, EventManagerDefinition, EventType
+from madsci.common.types.event_types import (
+    EmailAlertsConfig,
+    Event,
+    EventManagerDefinition,
+    EventType,
+)
 from madsci.event_manager.event_server import create_event_server
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
 event_manager_def = EventManagerDefinition(
     name="test_event_manager",
+    email_alerts=EmailAlertsConfig(default_email_addresses=["test@example.com"]),
 )
 
 
@@ -99,3 +107,28 @@ def test_query_events(test_client: TestClient) -> None:
     for _, value in result.items():
         event = Event.model_validate(value)
         assert event.event_data["test"] >= test_val
+
+
+def test_event_alert(test_client: TestClient) -> None:
+    """
+    Test that an alert is triggered when an event meets the alert criteria.
+    """
+    # Create an event that should trigger an alert
+    alert_event = Event(
+        event_type=EventType.TEST,
+        log_level=event_manager_def.alert_level,
+        alert=True,
+        event_data={"alert": "This is a test alert"},
+    )
+
+    # Post the event to the server
+    with patch(
+        "madsci.event_manager.notifications.EmailAlerts.send_email"
+    ) as mock_send_email:
+        test_client.post("/event", json=alert_event.model_dump(mode="json"))
+
+        # Assert that the email alert was sent
+        mock_send_email.assert_called()
+        assert mock_send_email.call_count == len(
+            event_manager_def.email_alerts.default_email_addresses
+        )

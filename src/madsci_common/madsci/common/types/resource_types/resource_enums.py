@@ -1,3 +1,5 @@
+"""Enums for MADSci Resource Types."""
+
 from enum import Enum
 
 

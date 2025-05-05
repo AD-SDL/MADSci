@@ -20,7 +20,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
@@ -39,7 +39,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
 ) -> FastAPI:
     """Creates a Workcell Manager's REST server."""
 
-    state_handler = WorkcellRedisHandler(
+    state_handler = WorkcellStateHandler(
         workcell, redis_connection=redis_connection, mongo_connection=mongo_connection
     )
 
@@ -62,6 +62,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
     app = FastAPI(lifespan=lifespan)
 
+    @app.get("/")
+    @app.get("/info")
     @app.get("/definition")
     @app.get("/workcell")
     def get_workcell() -> WorkcellDefinition:

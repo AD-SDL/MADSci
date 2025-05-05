@@ -13,7 +13,9 @@ from madsci.common.types.resource_types import (
 base_url = "http://localhost:8003"
 client = ResourceClient(url=base_url)
 
-stack = Stack(resource_name="stack", resource_class="stack", capacity=10, ownership=None)
+stack = Stack(
+    resource_name="stack", resource_class="stack", capacity=10, ownership=None
+)
 stack = client.add_resource(stack)
 # # Add assets to the stack and push them
 for i in range(5):
@@ -28,7 +30,9 @@ for _ in range(2):
     print(popped_asset)
 
 # # Create and add a queue
-queue = Queue(resource_name="queue", resource_class="queue", capacity=10, ownership=None)
+queue = Queue(
+    resource_name="queue", resource_class="queue", capacity=10, ownership=None
+)
 queue = client.add_resource(queue)
 
 # Add assets to the queue and push them

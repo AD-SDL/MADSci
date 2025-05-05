@@ -14,14 +14,15 @@ from madsci.common.types.datapoint_types import DataManagerDefinition, DataPoint
 from pymongo import MongoClient
 
 
-def create_data_server(  # noqa: C901
+def create_data_server(
     data_manager_definition: Optional[DataManagerDefinition] = None,
     db_client: Optional[MongoClient] = None,
 ) -> FastAPI:
     """Creates a Data Manager's REST server."""
 
-    if not data_manager_definition:
-        data_manager_definition = DataManagerDefinition.load_model()
+    data_manager_definition = (
+        data_manager_definition or DataManagerDefinition.load_model()
+    )
     if db_client is None:
         db_client = MongoClient(data_manager_definition.db_url)
 
@@ -31,6 +32,8 @@ def create_data_server(  # noqa: C901
     datapoints.create_index("datapoint_id", unique=True, background=True)
 
     @app.get("/")
+    @app.get("/info")
+    @app.get("/definition")
     async def root() -> DataManagerDefinition:
         """Return the DataPoint Manager Definition"""
         return data_manager_definition

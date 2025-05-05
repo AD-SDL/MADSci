@@ -5,12 +5,14 @@ from typing import Any, Optional
 import uvicorn
 from fastapi import FastAPI
 from fastapi.params import Body
+from madsci.client.event_client import EventClient
 from madsci.common.types.event_types import Event, EventManagerDefinition
+from madsci.event_manager.notifications import EmailAlerts
 from pymongo import MongoClient
 from pymongo.synchronous.database import Database
 
 
-def create_event_server(
+def create_event_server(  # noqa: C901
     event_manager_definition: Optional[EventManagerDefinition] = None,
     db_connection: Optional[Database] = None,
 ) -> FastAPI:
@@ -20,6 +22,13 @@ def create_event_server(
         event_manager_definition = EventManagerDefinition.load_model(
             require_unique=True
         )
+    if event_manager_definition.event_client_config.name is None:
+        event_manager_definition.event_client_config.name = (
+            f"event_manager.{event_manager_definition.name}"
+        )
+    logger = EventClient(
+        config=event_manager_definition.event_client_config,
+    )
     if db_connection is None:
         db_client = MongoClient(event_manager_definition.db_url)
         db_connection = db_client["madsci_events"]
@@ -29,14 +38,32 @@ def create_event_server(
     events.create_index("event_id", unique=True, background=True)
 
     @app.get("/")
+    @app.get("/info")
+    @app.get("/definition")
     async def root() -> EventManagerDefinition:
         """Return the Event Manager Definition"""
         return event_manager_definition
 
     @app.post("/event")
-    async def create_event(event: Event) -> Event:
+    async def log_event(event: Event) -> Event:
         """Create a new event."""
         events.insert_one(event.model_dump(mode="json"))
+        if event.alert or event.log_level >= event_manager_definition.alert_level:  # noqa: SIM102
+            if event_manager_definition.email_alerts:
+                email_alerter = EmailAlerts(
+                    config=event_manager_definition.email_alerts,
+                    logger=logger,
+                )
+                for (
+                    email_address
+                ) in event_manager_definition.email_alerts.default_email_addresses:
+                    email_alerter.send_email(
+                        subject=f"ALERT ({event.log_level}): {event.event_type}",
+                        email_address=email_address,
+                        body=event.event_data,
+                        sender=event_manager_definition.email_alerts.sender,
+                        headers={"X-MADSci-Event-ID": event.event_id},
+                    )
         return event
 
     @app.get("/event/{event_id}")
