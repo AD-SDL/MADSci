@@ -65,6 +65,7 @@ def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
         "x-madsci-datapoints": json.dumps(action_response.datapoints),
         "x-madsci-errors": json.dumps(action_response.errors),
         "x-madsci-files": json.dumps(action_response.files),
+        "x-madsci-data": json.dumps(action_response.data),
     }
 
 
