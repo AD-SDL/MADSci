@@ -107,13 +107,15 @@ class ResourceInterface:
             yield self.session
         else:
             session = self.sessionmaker()
-            self.logger.error(session)
             session.bind = self.engine
             try:
                 yield session
                 session.commit()
             except Exception:
                 session.rollback()
+                self.logger.error(
+                    f"Error while committing session: \n{traceback.format_exc()}"
+                )
                 raise
             finally:
                 session.close()
