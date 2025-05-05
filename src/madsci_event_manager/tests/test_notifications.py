@@ -83,7 +83,7 @@ def test_send_email_failure(mock_smtp: MagicMock, email_alerts: EmailAlerts) -> 
         result: bool = email_alerts.send_email(
             subject="Test Subject",
             email_address="recipient@test.com",
-            body="<p>This is a test email</p>",
+            body="This is a test email",
         )
 
         assert result is False
@@ -111,10 +111,41 @@ def test_send_email_no_auth(
     result: bool = email_alerts.send_email(
         subject="Test Subject",
         email_address="recipient@test.com",
-        body="<p>This is a test email</p>",
+        body="This is a test email",
     )
 
     assert result is True
     mock_server.starttls.assert_called_once()
     mock_server.login.assert_not_called()
     mock_server.sendmail.assert_called_once()
+
+
+@patch("madsci.event_manager.notifications.ThreadPoolExecutor")
+def test_send_email_alerts(mock_executor: MagicMock, email_alerts: EmailAlerts) -> None:
+    """
+    Test that send_email_alerts sends emails to all configured addresses in parallel.
+
+    Args:
+        mock_executor (MagicMock): Mocked ThreadPoolExecutor class.
+        email_alerts (EmailAlerts): The EmailAlerts instance to test.
+    """
+    mock_executor_instance = MagicMock()
+    mock_executor.return_value.__enter__.return_value = mock_executor_instance
+
+    email_alerts.config.email_addresses = [
+        "recipient1@test.com",
+        "recipient2@test.com",
+        "recipient3@test.com",
+    ]
+
+    event = MagicMock()
+    event.log_level = "INFO"
+    event.event_type = "Test Event"
+    event.model_dump_json.return_value = '{"key": "value"}'
+    event.event_id = "12345"
+
+    email_alerts.send_email_alerts(event)
+
+    mock_executor_instance.map.assert_called_once()
+    args, _ = mock_executor_instance.map.call_args
+    assert len(args[1]) == 3  # Ensure all email addresses are passed

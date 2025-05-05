@@ -54,16 +54,7 @@ def create_event_server(  # noqa: C901
                     config=event_manager_definition.email_alerts,
                     logger=logger,
                 )
-                for (
-                    email_address
-                ) in event_manager_definition.email_alerts.default_email_addresses:
-                    email_alerter.send_email(
-                        subject=f"ALERT ({event.log_level}): {event.event_type}",
-                        email_address=email_address,
-                        body=event.event_data,
-                        sender=event_manager_definition.email_alerts.sender,
-                        headers={"X-MADSci-Event-ID": event.event_id},
-                    )
+                email_alerter.send_email_alerts(event)
         return event
 
     @app.get("/event/{event_id}")

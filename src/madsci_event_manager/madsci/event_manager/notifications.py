@@ -3,12 +3,13 @@ Code for sending notifications and alerts based on events
 """
 
 import smtplib
+from concurrent.futures import ThreadPoolExecutor
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.event_types import EmailAlertsConfig
+from madsci.common.types.event_types import EmailAlertsConfig, Event
 
 
 class EmailAlerts:
@@ -20,6 +21,29 @@ class EmailAlerts:
         """Create an instance of EmailAlerts with the provided configuration."""
         self.config = config
         self.logger = logger if logger else EventClient()
+
+    def send_email_alerts(
+        self,
+        event: Event,
+    ) -> None:
+        """Send email alerts to the configured email addresses."""
+        if not self.config.email_addresses:
+            self.logger.log_warning("No email addresses configured for alerts.")
+            return
+
+        def send_to_address(email_address: str) -> None:
+            if not self.send_email(
+                subject=f"ALERT ({event.log_level}): {event.event_type}",
+                email_address=email_address,
+                body=event.model_dump_json(indent=2),
+                sender=self.config.sender,
+                headers={"X-MADSci-Event-ID": event.event_id},
+                importance=self.config.default_importance,
+            ):
+                self.logger.log_error(f"Failed to send email to {email_address}")
+
+        with ThreadPoolExecutor() as executor:
+            executor.map(send_to_address, self.config.email_addresses)
 
     def send_email(
         self,
@@ -39,7 +63,7 @@ class EmailAlerts:
 
         try:
             # Create the MIMEText objects for the email content
-            msg = MIMEMultipart("alternative")
+            msg = MIMEMultipart()
             msg["Subject"] = subject
             msg["From"] = sender
             msg["To"] = email_address
@@ -60,15 +84,7 @@ class EmailAlerts:
                 for key, value in headers.items():
                     msg[key] = value
 
-            # Attach both plain text and HTML versions
-            import re
-
-            part1 = MIMEText(
-                re.sub("<[^<]+?>", "", body), "plain"
-            )  # * Strip HTML tags for plaintext
-            part2 = MIMEText(body, "html")
-            msg.attach(part1)
-            msg.attach(part2)
+            msg.attach(MIMEText(body, "plain"))
 
             # Send the email via the SMTP server
             server = smtplib.SMTP(smtp_server, smtp_port)

@@ -21,7 +21,7 @@ from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
 event_manager_def = EventManagerDefinition(
     name="test_event_manager",
-    email_alerts=EmailAlertsConfig(default_email_addresses=["test@example.com"]),
+    email_alerts=EmailAlertsConfig(email_addresses=["test@example.com"]),
 )
 
 
@@ -130,5 +130,5 @@ def test_event_alert(test_client: TestClient) -> None:
         # Assert that the email alert was sent
         mock_send_email.assert_called()
         assert mock_send_email.call_count == len(
-            event_manager_def.email_alerts.default_email_addresses
+            event_manager_def.email_alerts.email_addresses
         )

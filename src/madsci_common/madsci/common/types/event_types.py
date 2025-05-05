@@ -195,7 +195,7 @@ class EmailAlertsConfig(BaseModel):
         title="Default Importance",
         description="The default importance level of the email. Options are: High, Normal, Low.",
     )
-    default_email_addresses: list[str] = Field(
+    email_addresses: list[str] = Field(
         default_factory=list,
         title="Default Email Addresses",
         description="The default email addresses to send alerts to.",
