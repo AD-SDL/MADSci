@@ -2,6 +2,7 @@
 Engine Class and associated helpers and data
 """
 
+import concurrent
 import copy
 import importlib
 import time
@@ -9,7 +10,6 @@ import traceback
 from datetime import datetime
 from typing import Optional
 
-import concurrent
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
@@ -18,7 +18,7 @@ from madsci.common.types.action_types import ActionRequest, ActionResult, Action
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
-from madsci.common.types.event_types import Event, EventType
+from madsci.common.types.event_types import Event, EventClientConfig, EventType
 from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
@@ -45,11 +45,16 @@ class Engine:
         """Initialize the scheduler."""
         self.state_handler = state_handler
         self.workcell_definition = state_handler.get_workcell_definition()
-        self.workcell_definition.config.event_client_config.source.workcell_id = self.workcell_definition.workcell_id
-        self.workcell_definition.config.event_client_config.source.manager_id = self.workcell_definition.workcell_id
-        self.logger = EventClient(
-            self.workcell_definition.config.event_client_config
+        self.workcell_definition.config.event_client_config = (
+            self.workcell_definition.config.event_client_config or EventClientConfig()
         )
+        self.workcell_definition.config.event_client_config.source.workcell_id = (
+            self.workcell_definition.workcell_id
+        )
+        self.workcell_definition.config.event_client_config.source.manager_id = (
+            self.workcell_definition.workcell_id
+        )
+        self.logger = EventClient(self.workcell_definition.config.event_client_config)
         self.logger.source.workcell_id = self.workcell_definition.workcell_id
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(
@@ -374,12 +379,13 @@ class Engine:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             node_futures = []
             for node_name, node in state_manager.get_nodes().items():
-                node_future = executor.submit(self.update_node, node_name, node, state_manager)
+                node_future = executor.submit(
+                    self.update_node, node_name, node, state_manager
+                )
                 node_futures.append(node_future)
 
             # Wait for all node updates to complete
             concurrent.futures.wait(node_futures)
-
 
     def update_node(
         self, node_name: str, node: Node, state_manager: WorkcellStateHandler
@@ -394,13 +400,13 @@ class Engine:
                 state_manager.set_node(node_name, node)
         except Exception as e:
             error = Error.from_exception(e)
-            node.status = NodeStatus(
-                errored=True,
-                errors=[error]
-            )
+            node.status = NodeStatus(errored=True, errors=[error])
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
-            source = self.workcell_definition.config.event_client_config.source or OwnershipInfo()
+            source = (
+                self.workcell_definition.config.event_client_config.source
+                or OwnershipInfo()
+            )
             source.node_id = node.info.node_id if node.info else None
             self.logger.log_warning(
                 event=Event(
