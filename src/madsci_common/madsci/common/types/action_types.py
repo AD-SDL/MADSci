@@ -297,6 +297,11 @@ class ActionDefinition(BaseModel):
         title="Action Description",
         description="A description of the action.",
     )
+    @field_validator("description", mode="before")
+    def none_to_empty_str(v: Optional[str]):
+        if v is None:
+            return ""
+        return v
     args: Union[
         dict[str, "ArgumentDefinition"],
         list["ArgumentDefinition"],
