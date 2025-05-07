@@ -85,7 +85,7 @@ class ActionResultWithFiles(FileResponse):
             suffix=".zip",
             delete=False,
         ) as temp_zipfile_path:
-            temp_zip = ZipFile(temp_zipfile_path, "w")
+            temp_zip = ZipFile(temp_zipfile_path.name, "w")
             for file in action_response.files:
                 temp_zip.write(
                     action_response.files[file],
@@ -96,6 +96,6 @@ class ActionResultWithFiles(FileResponse):
                 )
 
             return ActionResultWithFiles(
-                path=temp_zipfile_path,
+                path=temp_zipfile_path.name,
                 headers=action_response_to_headers(action_response),
             )
