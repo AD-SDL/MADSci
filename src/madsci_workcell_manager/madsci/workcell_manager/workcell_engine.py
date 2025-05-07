@@ -304,10 +304,18 @@ class Engine:
                 wf.end_time = datetime.now()
             elif step.status == ActionStatus.NOT_READY:
                 pass
+            elif step.status == ActionStatus.UNKNOWN:
+                self.logger.log_error(
+                    f"Step {step.step_id} in workflow {workflow_id} ended with unknown status"
+                )
+                wf.status.failed = True
+                wf.end_time = datetime.now()
             else:
                 self.logger.log_error(
                     f"Step {step.step_id} in workflow {workflow_id} ended with unexpected status {step.status}"
                 )
+                wf.status.failed = True
+                wf.end_time = datetime.now()
             self.state_handler.set_active_workflow(wf)
 
     def update_step(self, wf: Workflow, step: Step) -> None:
