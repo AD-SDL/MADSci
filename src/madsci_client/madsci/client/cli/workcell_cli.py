@@ -122,7 +122,7 @@ def create(
         else prompt_for_input("Workcell Description", quiet=ctx.obj.quiet)
     )
 
-    workcell = WorkcellDefinition(name=name, description=description)
+    workcell = WorkcellDefinition(workcell_name=name, description=description)
     console.print(workcell)
 
     path = path if path else ctx.parent.params.get("path")
