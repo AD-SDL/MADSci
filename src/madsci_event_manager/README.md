@@ -72,4 +72,12 @@ event_client.log_warning(event) # Log the same event, but override the log level
 event_client.get_events(number=50)
 # Get all events from a specific node
 event_client.query_events({"source": {"node_id": "01JJ4S0WNGEF5FQAZG5KDGJRBV"}})
+
+event_client.alert(event) # Will force firing any configured alert notifiers on this event
 ```
+
+### Alerts
+
+The Event Manager provides some native alerting functionality. A default alert level can be set in the event manager definition's `alert_level`, which will determine the minimum log level at which to send an alert. Calls directly to the `EventClient.alert` method will send alerts regardless of the `alert_level`.
+
+You can configure Email Alerts by setting up an `EmailAlertConfig` (`madsci.common.types.event_types.EmailAlertConfig`) in the `email_alerts` field of your `EventManagerDefinition`.
