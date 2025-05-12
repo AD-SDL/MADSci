@@ -297,6 +297,15 @@ class ActionDefinition(BaseModel):
         title="Action Description",
         description="A description of the action.",
     )
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def none_to_empty_str(cls, v: Any) -> str:
+        """Convert None to empty string"""
+        if v is None:
+            return ""
+        return v
+
     args: Union[
         dict[str, "ArgumentDefinition"],
         list["ArgumentDefinition"],

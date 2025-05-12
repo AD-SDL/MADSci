@@ -3,10 +3,9 @@ LABEL org.opencontainers.image.source=https://github.com/AD-SDL/MADSci/
 LABEL org.opencontainers.image.description="The Modular Autonomous Discovery for Science (MADSci) toolkit's base docker image."
 LABEL org.opencontainers.image.licenses=MIT
 
-RUN set -eux; \
-	apt update; \
-	apt install -y gosu; \
-	rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+	apt-get install -y gosu && \
+	rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 # User configuration
 ARG USER_ID=9999

@@ -5,28 +5,8 @@ node_description: Test liquidhandler
 node_type: device
 module_name: liquidhandler
 module_version: 0.0.1
-capabilities:
-  get_info: true
-  get_state: true
-  get_status: true
-  send_action: true
-  get_action_result: true
-  get_action_history: true
-  action_files: true
-  send_admin_commands: true
-  set_config: true
-  get_resources: false
-  get_log: true
-  admin_commands:
-  - cancel
-  - get_location
-  - lock
-  - pause
-  - reset
-  - resume
-  - safety_stop
-  - shutdown
-  - unlock
+capabilities: null
 commands: {}
 is_template: false
-config_defaults: {}
+config_defaults:
+  port: 2000

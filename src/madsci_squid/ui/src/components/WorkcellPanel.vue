@@ -19,7 +19,7 @@
             <LocationsPanel :locations="workcell_info.locations" />
           </v-col>
           <v-col cols="12" md="6" lg="6" xl="6">
-            <WorkflowsPanel :wc_state="workcell_state" :wfs="active_workflows" @view-workflows="$emit('view-workflows')" />
+            <WorkflowsPanel @view-workflows="$emit('view-workflows')" />
           </v-col>
         </v-row>
       </v-container>
@@ -69,7 +69,6 @@ import ResetButton from './AdminButtons/ResetButton.vue';
 import SafetyStopButton from './AdminButtons/SafetyStopButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
 import LocationsPanel from './LocationsPanel.vue';
-import ModulesPanel from './ModulesPanel.vue';
 import WorkflowsPanel from './WorkflowsPanel.vue';
 
 defineEmits(['view-workflows']);

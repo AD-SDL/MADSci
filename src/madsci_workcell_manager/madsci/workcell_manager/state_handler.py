@@ -23,9 +23,9 @@ from pymongo import MongoClient
 from pymongo.synchronous.database import Database
 
 
-class WorkcellRedisHandler:
+class WorkcellStateHandler:
     """
-    Manages state for Madsci, providing transactional access to reading and writing state with
+    Manages state for a MADSci Workcell, providing transactional access to reading and writing state with
     optimistic check-and-set and locking.
     """
 

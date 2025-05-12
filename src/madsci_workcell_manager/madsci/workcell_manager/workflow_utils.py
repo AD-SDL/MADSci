@@ -16,7 +16,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from madsci.workcell_manager.state_handler import WorkcellStateHandler
 
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
@@ -28,7 +28,7 @@ def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> Non
             raise ValueError(f"Node {node_name} not in Workcell {workcell.name}")
 
 
-def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool, str]:
+def validate_step(step: Step, state_handler: WorkcellStateHandler) -> tuple[bool, str]:
     """Check if a step is valid based on the node's info"""
     if step.node in state_handler.get_nodes():
         node = state_handler.get_node(step.node)
@@ -79,7 +79,7 @@ def validate_step(step: Step, state_handler: WorkcellRedisHandler) -> tuple[bool
 def create_workflow(
     workflow_def: WorkflowDefinition,
     workcell: WorkcellDefinition,
-    state_handler: WorkcellRedisHandler,
+    state_handler: WorkcellStateHandler,
     ownership_info: Optional[OwnershipInfo] = None,
     parameters: Optional[dict[str, Any]] = None,
 ) -> Workflow:
@@ -218,7 +218,7 @@ def get_workflow_inputs_directory(
     return Path(working_directory).expanduser() / "Workflows" / workflow_id / "Inputs"
 
 
-def cancel_workflow(wf: Workflow, state_handler: WorkcellRedisHandler) -> None:
+def cancel_workflow(wf: Workflow, state_handler: WorkcellStateHandler) -> None:
     """Cancels the workflow run"""
     wf.status.cancelled = True
     with state_handler.wc_state_lock():
@@ -226,7 +226,7 @@ def cancel_workflow(wf: Workflow, state_handler: WorkcellRedisHandler) -> None:
     return wf
 
 
-def cancel_active_workflows(state_handler: WorkcellRedisHandler) -> None:
+def cancel_active_workflows(state_handler: WorkcellStateHandler) -> None:
     """Cancels all currently running workflow runs"""
     for wf in state_handler.get_active_workflows().values():
         if wf.status.active:

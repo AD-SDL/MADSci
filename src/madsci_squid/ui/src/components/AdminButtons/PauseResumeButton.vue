@@ -26,7 +26,6 @@
 <script lang="ts" setup>
 import { urls, workcell_state } from "@/store";
 import { ref, watchEffect } from 'vue';
-import { useRtl } from "vuetify/lib/framework.mjs";
 
 const props = defineProps<{
     module?: string;

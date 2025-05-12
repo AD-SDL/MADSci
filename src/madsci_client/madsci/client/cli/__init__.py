@@ -4,7 +4,6 @@ import click
 from madsci.client.cli.lab_cli import lab
 from madsci.client.cli.manager_cli import manager
 from madsci.client.cli.node_cli import node
-from madsci.client.cli.resources_cli import resource
 from madsci.client.cli.workcell_cli import workcell
 from rich.console import Console
 from trogon import tui
@@ -33,7 +32,6 @@ def version() -> None:
 root_cli.add_command(lab)
 root_cli.add_command(workcell)
 root_cli.add_command(node)
-root_cli.add_command(resource)
 root_cli.add_command(manager)
 
 if __name__ == "__main__":

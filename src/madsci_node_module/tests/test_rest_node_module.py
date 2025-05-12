@@ -332,6 +332,7 @@ def test_get_action_result(test_client: TestClient) -> None:
         result = ActionResult.model_validate(response.json())
         assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
 
+        time.sleep(0.1)
         response = client.get(f"/action/{result.action_id}")
         assert response.status_code == 200
         fetched_result = ActionResult.model_validate(response.json())

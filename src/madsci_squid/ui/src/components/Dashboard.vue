@@ -31,7 +31,7 @@
         <v-card-text>
           <h3>Active</h3>
           <WorkflowTable :workflows="active_workflows"/>
-          <h3>Archived: </h3>
+          <h3>Archived</h3>
           <WorkflowTable :workflows="archived_workflows"/>
           </v-card-text>
         </v-card>
@@ -91,21 +91,25 @@ export default {
 .node_status_idle,
 .node_status_ready {
   background-color: green;
+  color: white;
 }
 
 .wf_status_running,
 .node_status_running {
   background-color: blue;
+  color: white;
 }
 
 .wf_status_failed,
 .node_status_errored {
   background-color: red;
+  color: white;
 }
 
 .wf_status_unknown,
 .node_status_unknown {
   background-color: darkslategray;
+  color: white;
 }
 
 .wf_status_new,
@@ -123,6 +127,7 @@ export default {
 
 .wf_status_in_progress {
   background-color: darkblue;
+  color: white;
 }
 
 .node_status_locked {

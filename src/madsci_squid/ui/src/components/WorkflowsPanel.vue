@@ -1,10 +1,18 @@
 <template>
-    <v-card class="pa-1 ma-1" title="Active Workflows">
+    <v-card class="pa-1 ma-1" title="Workflows">
         <v-card-text v-if="active_workflows">
+            <h3>Active Workflows</h3>
             <WorkflowTable :workflows="active_workflows"/>
         </v-card-text>
         <v-card-text v-else>
-            <p>No Workflows Yet</p>
+            <p>No Active Workflows</p>
+        </v-card-text>
+        <v-card-text v-if="archived_workflows">
+            <h3>Archived Workflows</h3>
+            <WorkflowTable :workflows="archived_workflows"/>
+        </v-card-text>
+        <v-card-text v-else>
+            <p>No Archived Workflows</p>
         </v-card-text>
         <v-card-actions>
             <v-spacer></v-spacer>
@@ -15,7 +23,6 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps(['wc_state', 'wfs'])
-import { active_workflows } from "@/store";
+import { active_workflows, archived_workflows } from "@/store";
 const emits = defineEmits(['viewWorkflows'])
 </script>

@@ -2,6 +2,7 @@
 Engine Class and associated helpers and data
 """
 
+import concurrent
 import copy
 import importlib
 import time
@@ -14,18 +15,19 @@ from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
-from madsci.common.types.node_types import Node
+from madsci.common.types.event_types import Event, EventClientConfig, EventType
+from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
     Workflow,
 )
 from madsci.common.utils import threaded_daemon
-from madsci.workcell_manager.redis_handler import WorkcellRedisHandler
+from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_utils import (
     find_node_client,
-    update_active_nodes,
 )
 from madsci.workcell_manager.workflow_utils import cancel_active_workflows
 
@@ -38,11 +40,20 @@ class Engine:
 
     def __init__(
         self,
-        state_handler: WorkcellRedisHandler,
+        state_handler: WorkcellStateHandler,
     ) -> None:
         """Initialize the scheduler."""
         self.state_handler = state_handler
         self.workcell_definition = state_handler.get_workcell_definition()
+        self.workcell_definition.config.event_client_config = (
+            self.workcell_definition.config.event_client_config or EventClientConfig()
+        )
+        self.workcell_definition.config.event_client_config.source.workcell_id = (
+            self.workcell_definition.workcell_id
+        )
+        self.workcell_definition.config.event_client_config.source.manager_id = (
+            self.workcell_definition.workcell_id
+        )
         self.logger = EventClient(self.workcell_definition.config.event_client_config)
         self.logger.source.workcell_id = self.workcell_definition.workcell_id
         cancel_active_workflows(state_handler)
@@ -70,7 +81,7 @@ class Engine:
         Continuously loop, updating node states every Config.update_interval seconds.
         If the state of the workcell has changed, update the active modules and run the scheduler.
         """
-        update_active_nodes(self.state_handler)
+        self.update_active_nodes(self.state_handler)
         node_tick = time.time()
         scheduler_tick = time.time()
         while True and not self.state_handler.shutdown:
@@ -79,9 +90,8 @@ class Engine:
                 if (
                     time.time() - node_tick
                     > self.workcell_definition.config.node_update_interval
-                    or self.state_handler.has_state_changed()
                 ):
-                    update_active_nodes(self.state_handler)
+                    self.update_active_nodes(self.state_handler)
                     node_tick = time.time()
                 if (
                     time.time() - scheduler_tick
@@ -111,8 +121,8 @@ class Engine:
                         self.run_next_step()
                         scheduler_tick = time.time()
             except Exception as e:
-                traceback.print_exc()
-                self.logger.log_error(
+                self.logger.log_error(e)
+                self.logger.log_warning(
                     f"Error in engine loop, waiting {self.workcell_definition.config.node_update_interval} seconds before trying again."
                 )
                 with self.state_handler.wc_state_lock():
@@ -294,10 +304,18 @@ class Engine:
                 wf.end_time = datetime.now()
             elif step.status == ActionStatus.NOT_READY:
                 pass
+            elif step.status == ActionStatus.UNKNOWN:
+                self.logger.log_error(
+                    f"Step {step.step_id} in workflow {workflow_id} ended with unknown status"
+                )
+                wf.status.failed = True
+                wf.end_time = datetime.now()
             else:
                 self.logger.log_error(
                     f"Step {step.step_id} in workflow {workflow_id} ended with unexpected status {step.status}"
                 )
+                wf.status.failed = True
+                wf.end_time = datetime.now()
             self.state_handler.set_active_workflow(wf)
 
     def update_step(self, wf: Workflow, step: Step) -> None:
@@ -314,6 +332,13 @@ class Engine:
         """Handle the response from the node"""
         response = self.handle_data_and_files(step, wf, response)
         step.status = response.status
+        if response.status == ActionStatus.UNKNOWN:
+            response.errors.append(
+                Error(
+                    message="Node returned 'unknown' action status for running action.",
+                    error_type="NodeReturnedUnknown",
+                )
+            )
         step.result = response
         step.history.append(response)
         wf = self.update_step(wf, step)
@@ -363,3 +388,45 @@ class Engine:
                 labeled_data[label] = datapoint.datapoint_id
         response.data = labeled_data
         return response
+
+    def update_active_nodes(self, state_manager: WorkcellStateHandler) -> None:
+        """Update all active nodes in the workcell."""
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            node_futures = []
+            for node_name, node in state_manager.get_nodes().items():
+                node_future = executor.submit(
+                    self.update_node, node_name, node, state_manager
+                )
+                node_futures.append(node_future)
+
+            # Wait for all node updates to complete
+            concurrent.futures.wait(node_futures)
+
+    def update_node(
+        self, node_name: str, node: Node, state_manager: WorkcellStateHandler
+    ) -> None:
+        """Update a single node's state and about information."""
+        try:
+            client = find_node_client(node.node_url)
+            node.status = client.get_status()
+            node.info = client.get_info()
+            node.state = client.get_state()
+            with state_manager.wc_state_lock():
+                state_manager.set_node(node_name, node)
+        except Exception as e:
+            error = Error.from_exception(e)
+            node.status = NodeStatus(errored=True, errors=[error])
+            with state_manager.wc_state_lock():
+                state_manager.set_node(node_name, node)
+            source = (
+                self.workcell_definition.config.event_client_config.source
+                or OwnershipInfo()
+            )
+            source.node_id = node.info.node_id if node.info else None
+            self.logger.log_warning(
+                event=Event(
+                    event_type=EventType.NODE_STATUS_UPDATE,
+                    source=source,
+                    event_data=node.status,
+                )
+            )

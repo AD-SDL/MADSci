@@ -69,12 +69,12 @@ const set_modal = (title: string, value: Object) => {
 }
 
 function get_resource (resources: any, location: any) {
-  if ("resource_id" in location && location.resource_id != null) {
+  if (location && "resource_id" in location && location.resource_id != null) {
    var resource = resources.find((element: any) => element.resource_id == location["resource_id"])
   } else {
     return "None"
   }
-  if ("quantity" in resource) {
+  if (resource && "quantity" in resource) {
     if (resource.quantity > 0) {
       return "Occupied"
     }
@@ -86,9 +86,9 @@ function get_resource (resources: any, location: any) {
 
 function location_items(locations: any, resources: any) {
   var new_locations: any = []
-  Object.values(locations).forEach((item: any) => {
-    item["occupied"] = get_resource(resources, item);
-    new_locations.push(item);
+  Object.values(locations).forEach((location: any) => {
+    location["occupied"] = get_resource(resources, location);
+    new_locations.push(location);
   })
   return new_locations
 

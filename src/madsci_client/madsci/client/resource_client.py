@@ -190,7 +190,7 @@ class ResourceClient:
         resource_id: Optional[str] = None,
         resource_name: Optional[str] = None,
         parent_id: Optional[str] = None,
-        resource_type: Optional[str] = None,
+        resource_class: Optional[str] = None,
         base_type: Optional[str] = None,
         unique: Optional[bool] = False,
         multiple: Optional[bool] = False,
@@ -202,7 +202,7 @@ class ResourceClient:
             resource_id (str): The ID of the resource to retrieve.
             resource_name (str): The name of the resource to retrieve.
             parent_id (str): The ID of the parent resource.
-            resource_type (str): The custom type of the resource.
+            resource_class (str): The class of the resource.
             base_type (str): The base type of the resource.
             unique (bool): Whether to require a unique resource or not.
             multiple (bool): Whether to return multiple resources or just the first.
@@ -215,7 +215,7 @@ class ResourceClient:
                 resource_id=resource_id,
                 resource_name=resource_name,
                 parent_id=parent_id,
-                resource_type=resource_type,
+                resource_class=resource_class,
                 base_type=base_type,
                 unique=unique,
                 multiple=multiple,

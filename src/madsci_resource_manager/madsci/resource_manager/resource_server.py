@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
+from madsci.client.event_client import EventClient, EventClientConfig
 from madsci.common.types.resource_types import (
     ContainerDataModels,
     Queue,
@@ -40,12 +41,27 @@ def create_resource_server(  # noqa: C901, PLR0915
     """Creates a Resource Manager's REST server."""
     if not resource_manager_definition:
         resource_manager_definition = ResourceManagerDefinition.load_model()
+
+    # * Configure the event client
+    event_client_config = (
+        resource_manager_definition.event_client_config or EventClientConfig()
+    )
+    event_client_config.name = (
+        event_client_config.name
+        or f"resource_manager.{resource_manager_definition.name}"
+    )
+    event_client_config.source.manager_id = resource_manager_definition.manager_id
+    logger = EventClient(resource_manager_definition.event_client_config)
+
     if not resource_interface:
-        resource_interface = ResourceInterface(url=resource_manager_definition.db_url)
+        resource_interface = ResourceInterface(
+            url=resource_manager_definition.db_url, logger=logger
+        )
         logger.info(resource_interface)
         logger.info(resource_interface.session)
     app = FastAPI()
 
+    @app.get("/")
     @app.get("/info")
     @app.get("/definition")
     def info() -> ResourceManagerDefinition:
@@ -67,12 +83,12 @@ def create_resource_server(  # noqa: C901, PLR0915
             )
             if not resource:
                 if (
-                    resource_definition.resource_type
-                    and resource_definition.resource_type
+                    resource_definition.resource_class
+                    and resource_definition.resource_class
                     in resource_manager_definition.custom_types
                 ):
                     custom_definition = resource_manager_definition.custom_types[
-                        resource_definition.resource_type
+                        resource_definition.resource_class
                     ]
                     resource = resource_interface.init_custom_resource(
                         resource_definition, custom_definition
@@ -497,10 +513,8 @@ if __name__ == "__main__":
     import uvicorn
 
     resource_manager_definition = ResourceManagerDefinition.load_model()
-    resource_interface = ResourceInterface(url=resource_manager_definition.db_url)
     app = create_resource_server(
         resource_manager_definition=resource_manager_definition,
-        resource_interface=resource_interface,
     )
     uvicorn.run(
         app,

@@ -34,8 +34,8 @@ class ResourceGetQuery(ResourceRequestBase):
     """The description of the resource."""
     parent_id: Optional[str] = None
     """The ID of the parent resource"""
-    resource_type: Optional[str] = None
-    """The custom type of the resource."""
+    resource_class: Optional[str] = None
+    """The class of the resource."""
     base_type: Optional[str] = None
     """The base type of the resource"""
     owner: Optional[OwnershipInfo] = None

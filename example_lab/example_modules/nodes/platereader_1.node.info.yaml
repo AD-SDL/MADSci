@@ -67,10 +67,12 @@ config_schema:
           description: The URL of the event server.
           title: Event Server URL
         log_level:
+          anyOf:
+          - type: integer
+          - $ref: '#/$defs/EventLogLevel'
           default: 20
           description: The log level of the event client.
           title: Event Client Log Level
-          type: integer
         source:
           $ref: '#/$defs/OwnershipInfo'
           description: Information about the source of the event client.
@@ -84,6 +86,17 @@ config_schema:
           title: Log Directory
       title: EventClientConfig
       type: object
+    EventLogLevel:
+      description: The log level of an event.
+      enum:
+      - 0
+      - 10
+      - 20
+      - 30
+      - 40
+      - 50
+      title: EventLogLevel
+      type: integer
     OwnershipInfo:
       description: Information about the ownership of a MADSci object.
       properties:
@@ -150,6 +163,13 @@ config_schema:
           default: null
           description: The ID of the workflow that owns the object.
           title: Workflow ID
+        manager_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: The ID of the manager that owns the object.
+          title: Manager ID
       title: OwnershipInfo
       type: object
   additionalProperties: true
@@ -191,7 +211,7 @@ config_schema:
       title: Host
       type: string
     port:
-      default: 8000
+      default: 2000
       description: The port of the REST API.
       title: Port
       type: integer

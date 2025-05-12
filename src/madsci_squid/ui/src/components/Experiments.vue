@@ -67,10 +67,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { VDataTable } from 'vuetify/lib/components/index.mjs';
 
 /// <reference path="../store.d.ts" />
 import { active_workflows, archived_workflows,  experiments } from "@/store";
+import { VDataTable } from 'vuetify/components';
 
 const sortBy: VDataTable['sortBy'] = [{ key: 'started_at', order: 'desc' }];
 

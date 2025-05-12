@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
@@ -33,6 +33,11 @@ class Event(BaseModel):
         title="Event Log Level",
         description="The log level of the event. Defaults to NOTSET. See https://docs.python.org/3/library/logging.html#logging-levels",
         default_factory=lambda: EventLogLevel.INFO,
+    )
+    alert: bool = Field(
+        title="Alert",
+        description="Forces firing an alert about this event. Defaults to False.",
+        default=False,
     )
     event_timestamp: datetime = Field(
         title="Event Timestamp",
@@ -77,7 +82,7 @@ class EventClientConfig(BaseModel):
         description="The URL of the event server.",
         default=None,
     )
-    log_level: int = Field(
+    log_level: Union[int, EventLogLevel] = Field(
         title="Event Client Log Level",
         description="The log level of the event client.",
         default=EventLogLevel.INFO,
@@ -152,6 +157,51 @@ class EventType(str, Enum):
         raise ValueError(f"Invalid ManagerTypes: {value}")
 
 
+class EmailAlertsConfig(BaseModel):
+    """Configuration for sending emails."""
+
+    smtp_server: str = Field(
+        default="smtp.example.com",
+        title="SMTP Server",
+        description="The SMTP server address used for sending emails.",
+    )
+    smtp_port: int = Field(
+        default=587,
+        title="SMTP Port",
+        description="The port number used by the SMTP server.",
+    )
+    smtp_username: Optional[str] = Field(
+        default=None,
+        title="SMTP Username",
+        description="The username for authenticating with the SMTP server.",
+    )
+    smtp_password: Optional[str] = Field(
+        default=None,
+        title="SMTP Password",
+        description="The password for authenticating with the SMTP server.",
+    )
+    use_tls: bool = Field(
+        default=True,
+        title="Use TLS",
+        description="Whether to use TLS for the SMTP connection.",
+    )
+    sender: str = Field(
+        default="no-reply@example.com",
+        title="Sender Email",
+        description="The default sender email address.",
+    )
+    default_importance: str = Field(
+        default="Normal",
+        title="Default Importance",
+        description="The default importance level of the email. Options are: High, Normal, Low.",
+    )
+    email_addresses: list[str] = Field(
+        default_factory=list,
+        title="Default Email Addresses",
+        description="The default email addresses to send alerts to.",
+    )
+
+
 class EventManagerDefinition(ManagerDefinition):
     """Definition for a Squid Event Manager"""
 
@@ -179,4 +229,14 @@ class EventManagerDefinition(ManagerDefinition):
         default_factory=lambda: EventClientConfig(),
         title="Event Client Configuration",
         description="The configuration for a MADSci event client. This is used by the event manager to log it's own events/logs. Note that the event_server_url is ignored.",
+    )
+    alert_level: EventLogLevel = Field(
+        default=EventLogLevel.ERROR,
+        title="Alert Level",
+        description="The log level at which to send an alert.",
+    )
+    email_alerts: Optional["EmailAlertsConfig"] = Field(
+        default=None,
+        title="Email Alerts Configuration",
+        description="The configuration for sending email alerts.",
     )

@@ -75,7 +75,7 @@ class RestNodeConfig(NodeConfig):
     port: int = Field(
         title="Port",
         description="The port of the REST API.",
-        default=8000,
+        default=2000,
     )
     protocol: str = Field(
         title="Protocol",
@@ -212,10 +212,10 @@ class NodeDefinition(BaseModel):
         title="Module Version",
         description="The version of the node module.",
     )
-    capabilities: "NodeCapabilities" = Field(
-        default_factory=lambda: NodeCapabilities(),
+    capabilities: Optional["NodeCapabilities"] = Field(
+        default=None,
         title="Node Capabilities",
-        description="The capabilities of the node.",
+        description="Explicitly override the capabilities of the node.",
     )
     commands: dict[str, str] = Field(
         title="Node Commands",

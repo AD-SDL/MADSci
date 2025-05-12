@@ -96,26 +96,19 @@ def add(
     manager_type: str,
 ) -> None:
     """Add a new manager."""
-    name = name if name else ctx.parent.params.get("name")
     name = (
         name
-        if name
-        else prompt_for_input("Manager Name", required=True, quiet=ctx.obj.quiet)
+        or ctx.parent.params.get("name")
+        or prompt_for_input("Manager Name", required=True, quiet=ctx.obj.quiet)
     )
-    description = (
-        description
-        if description
-        else prompt_for_input("Manager Description", quiet=ctx.obj.quiet)
+    description = description or prompt_for_input(
+        "Manager Description", quiet=ctx.obj.quiet
     )
-    manager_type = (
-        manager_type
-        if manager_type
-        else prompt_from_list(
-            "Manager Type",
-            options=[e.value for e in ManagerType],
-            quiet=ctx.obj.quiet,
-            required=True,
-        )
+    manager_type = manager_type or prompt_from_list(
+        "Manager Type",
+        options=[e.value for e in ManagerType],
+        quiet=ctx.obj.quiet,
+        required=True,
     )
 
     manager_definition = ManagerDefinition(
@@ -123,32 +116,27 @@ def add(
     )
     console.print(manager_definition)
 
-    if ctx.obj.lab_def:
-        ctx.obj.lab_def.managers[name] = manager_definition
-        save_model(ctx.obj.path, ctx.obj.lab_def, overwrite_check=not ctx.obj.quiet)
-    else:
-        if not path:
-            path = ctx.parent.params.get("path")
-        if not path:
-            if ctx.obj.lab_def and ctx.obj.lab_def._definition_path:
-                working_path = Path(ctx.obj.lab_def._definition_path).parent
-            else:
-                working_path = Path.cwd()
-            if working_path.parts[-1] != "managers":
-                working_path = working_path / "managers"
-            default_path = working_path / f"{to_snake_case(name)}.manager.yaml"
-            new_path = prompt_for_input(
-                "Path to save Manager Definition file",
-                default=str(default_path),
-                quiet=ctx.obj.quiet,
-            )
-            if new_path:
-                path = Path(new_path)
-                path.expanduser().parent.mkdir(parents=True, exist_ok=True)
-        manager_definition = promote_manager_definition(manager_definition)
-        save_model(
-            path=path, model=manager_definition, overwrite_check=not ctx.obj.quiet
+    if not path:
+        path = ctx.parent.params.get("path")
+    if not path:
+        if ctx.obj.lab_def and ctx.obj.lab_def._definition_path:
+            working_path = Path(ctx.obj.lab_def._definition_path).parent
+        else:
+            working_path = Path.cwd()
+        working_path = working_path.resolve()
+        if working_path.parts[-1] != "managers":
+            working_path = working_path / "managers"
+        default_path = working_path / f"{to_snake_case(name)}.manager.yaml"
+        new_path = prompt_for_input(
+            "Path to save Manager Definition file",
+            default=str(default_path),
+            quiet=ctx.obj.quiet,
         )
+        if new_path:
+            path = Path(new_path)
+            path.expanduser().parent.mkdir(parents=True, exist_ok=True)
+    manager_definition = promote_manager_definition(manager_definition)
+    save_model(path=path, model=manager_definition, overwrite_check=not ctx.obj.quiet)
 
 
 def promote_manager_definition(
@@ -202,7 +190,7 @@ def info(ctx: ManagerContext) -> None:
         pprint(ctx.manager_def)
     else:
         console.print(
-            "No manager found. Specify manager by name or path. If you don't have a manager file, you can create one with 'madsci manager create'.",
+            "No manager found. Specify manager by name or path. If you don't have a manager file, you can create one with 'madsci manager add'.",
         )
 
 
@@ -224,7 +212,7 @@ def delete(ctx: ManagerContext, yes: bool) -> None:
             console.print(f"Deleted {ctx.path}")
     else:
         console.print(
-            "No manager found. Specify manager by name or path. If you don't have a manager file, you can create one with 'madsci manager create'.",
+            "No manager found. Specify manager by name or path. If you don't have a manager file, you can create one with 'madsci manager add'.",
         )
 
 
@@ -236,5 +224,5 @@ def validate(ctx: ManagerContext) -> None:
         console.print(ctx.manager_def)
     else:
         console.print(
-            "No manager found. Specify manager by name or path. If you don't have a manager definition file, you can create one with 'madsci manager create'.",
+            "No manager found. Specify manager by name or path. If you don't have a manager definition file, you can create one with 'madsci manager add'.",
         )

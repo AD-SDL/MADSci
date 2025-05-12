@@ -259,18 +259,18 @@ class ExperimentApplication:
         """return if a resource is in a location at condition.key"""
         if isinstance(resource.children, list):
             if len(resource.children) > int(condition.key):
-                if condition.resource_type:
+                if condition.resource_class:
                     return (
-                        resource.children[condition.key].resource_type
-                        == condition.resource_type
+                        resource.children[condition.key].resource_class
+                        == condition.resource_class
                     )
                 return True
             return False
         if str(condition.key) in resource.children:
-            if condition.resource_type:
+            if condition.resource_class:
                 return (
-                    resource.children[str(condition.key)].resource_type
-                    == condition.resource_type
+                    resource.children[str(condition.key)].resource_class
+                    == condition.resource_class
                 )
             return True
         return False

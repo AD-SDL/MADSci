@@ -111,7 +111,7 @@ class RestNode(AbstractNode):
 
         response = super().run_action(
             ActionRequest(
-                action_id=action_id if action_id else new_ulid_str(),
+                action_id=action_id or new_ulid_str(),
                 action_name=action_name,
                 args=args,
                 files={

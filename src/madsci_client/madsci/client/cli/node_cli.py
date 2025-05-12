@@ -175,16 +175,13 @@ def create(
     is_template: bool,
 ) -> None:
     """Create a new node."""
-    name = name if name else ctx.parent.params.get("name")
     name = (
         name
-        if name
-        else prompt_for_input("Node Name", required=True, quiet=ctx.obj.quiet)
+        or ctx.parent.params.get("name")
+        or prompt_for_input("Node Name", required=True, quiet=ctx.obj.quiet)
     )
-    description = (
-        description
-        if description
-        else prompt_for_input("Node Description", quiet=ctx.obj.quiet)
+    description = description or prompt_for_input(
+        "Node Description", quiet=ctx.obj.quiet
     )
     template_definition = get_template_definition(ctx, template_name, template_path)
     if not template_definition and (template_name or template_path):
@@ -219,7 +216,7 @@ def create(
         )
     console.print(node_definition)
 
-    path = path if path else ctx.parent.params.get("path")
+    path = path or ctx.parent.params.get("path")
     if not path:
         if Path.cwd().name == "nodes":
             default_path = Path.cwd() / f"{to_snake_case(name)}.node.yaml"

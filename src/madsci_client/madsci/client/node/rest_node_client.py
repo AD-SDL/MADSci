@@ -196,6 +196,7 @@ def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
         errors=json.loads(headers["x-madsci-errors"]),
         files=json.loads(headers["x-madsci-files"]),
         datapoints=json.loads(headers["x-madsci-datapoints"]),
+        data=json.loads(headers["x-madsci-data"]),
     )
 
 
@@ -205,7 +206,9 @@ def process_file_response(rest_response: requests.Response) -> ActionResult:
     if response.files and len(response.files) == 1:
         file_key = next(iter(response.files.keys()))
         filename = response.files[file_key]
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            suffix="".join(Path(filename).suffixes), delete=False
+        ) as temp_file:
             temp_file.write(rest_response.content)
             temp_path = Path(temp_file.name)
         response.files[file_key] = temp_path
@@ -216,7 +219,9 @@ def process_file_response(rest_response: requests.Response) -> ActionResult:
         with ZipFile(temp_zip_path) as zip_file:
             for file_key in list(response.files.keys()):
                 filename = response.files[file_key]
-                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                with tempfile.NamedTemporaryFile(
+                    suffix="".join(Path(filename).suffixes), delete=False
+                ) as temp_file:
                     temp_file.write(zip_file.read(filename))
                     temp_path = Path(temp_file.name)
                 response.files[file_key] = temp_path

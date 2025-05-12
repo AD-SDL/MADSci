@@ -3,7 +3,7 @@
     <v-card>
       <v-card-title>
         <h2 class="title">Resource: {{ modal_title }}</h2>
-        {{modal_text.resource_id}}
+        <small>{{modal_text.resource_id}}</small>
       </v-card-title>
       <v-card-text>
         <div v-if="modal_text.base_type=='stack'">

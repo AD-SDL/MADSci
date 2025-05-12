@@ -1,7 +1,11 @@
-name: Example Lab
-lab_id: 01JK6SRTKX81SD1G70X6WAJATP
-description: An example MADSci-powered autonomous laboratory
-host: 127.0.0.1
+name: RPL_SDL_Lab_Manager
+description: The primary lab manager for the RPL SDL
+manager_type: lab_manager
+url: http://localhost:8000
+host: 0.0.0.0
 port: 8000
-commands: {}
-managers: {}
+managers:
+  workcell_manager: http://localhost:8013
+  resource_manager: http://localhost:8004
+  data_manager: http://localhost:8003
+  experiment_manager: http://localhost:8002

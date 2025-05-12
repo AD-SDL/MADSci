@@ -1,6 +1,7 @@
 {
-  "name": "squid_frontend",
-  "version": "0.0.1",
+  "name": "squid_dashboard",
+  "version": "0.3.0",
+  "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_OPTIONS='--no-warnings' vite",
     "build": "vue-tsc --noEmit && vite build",
