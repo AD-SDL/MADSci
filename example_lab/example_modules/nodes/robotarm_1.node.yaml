@@ -5,6 +5,7 @@ node_description: An example robot arm
 node_type: device
 module_name: robotarm
 module_version: 0.0.1
+capabilities: null
 commands: {}
 is_template: false
 config_defaults:

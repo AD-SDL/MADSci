@@ -1,24 +1,130 @@
-name: madsci
+name: madsci_example_lab
+
+# * Usage Notes:
+# 1. Environment variables can be set in a `.env` file or directly in the shell.
+# 2. The `REPO_PATH` variable should point to the root of the repository.
+# 3. The `example_lab` directory should contain the lab definition and module files.
+# 4. The `madsci` image is built from the Dockerfile in the current directory.
+# 5. The `madsci_dashboard` image is built from the Dockerfile.dashboard in the current directory.
+# 6. Services are configured to use the host network mode to simplify port configuration. Production deployments may require a different network configuration.
+# 7. Services are configured to restart unless stopped manually.
+# 8. The container images are built with the latest tag and a dev tag for development purposes.
+
+
+# * Common configuration
+x-madsci-service: &madsci-service
+  image: ghcr.io/ad-sdl/madsci:latest
+  build:
+    context: .
+    dockerfile: Dockerfile
+    tags:
+      - ghcr.io/ad-sdl/madsci:latest
+      - ghcr.io/ad-sdl/madsci:dev
+  environment:
+    - USER_ID=${USER_ID:-1000}
+    - GROUP_ID=${GROUP_ID:-1000}
+  network_mode: host
+  env_file:
+    - .env
+  volumes:
+    - ${REPO_PATH:-.}/example_lab:/home/madsci/example_lab
+    - ${REPO_PATH:-.}/.madsci:/home/madsci/.madsci
+  restart: unless-stopped
+
 services:
-  madsci:
-    container_name: madsci
-    image: ghcr.io/ad-sdl/madsci
-    build:
-      context: .
-      dockerfile: Dockerfile
-      tags:
-        - ghcr.io/ad-sdl/madsci:latest
-        - ghcr.io/ad-sdl/madsci:dev
-    privileged: true
-    env_file: .env
-  madsci_with_dashboard:
-    container_name: madsci_with_dashboard
-    image: ghcr.io/ad-sdl/madsci_dashboard
+
+  # *Databases (note: these are non-persistent, add volumes for persistence)
+  mongodb:
+    container_name: mongodb
+    image: mongo:8.0
+    restart: unless-stopped
+    ports:
+      - 27017:27017
+  redis:
+    container_name: redis
+    image: redis:7.4
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+  postgres:
+    container_name: postgres
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=rpl
+      - POSTGRES_PASSWORD=rpl
+      - POSTGRES_DB=resources
+    ports:
+      - 5432:5432
+
+  # *Managers
+
+  lab_manager:
+    <<: *madsci-service
+    container_name: lab_manager
+    image: ghcr.io/ad-sdl/madsci_dashboard:latest
     build:
       context: .
       dockerfile: Dockerfile.dashboard
       tags:
         - ghcr.io/ad-sdl/madsci_dashboard:latest
         - ghcr.io/ad-sdl/madsci_dashboard:dev
+    command: python -m madsci.squid.lab_server --definition /home/madsci/example_lab/example_lab.lab.yaml
     depends_on:
-      - madsci
+      - event_manager
+  event_manager:
+    <<: *madsci-service
+    container_name: event_manager
+    command: python -m madsci.event_manager.event_server --definition /home/madsci/example_lab/managers/example_event_manager.manager.yaml
+    depends_on:
+      - mongodb
+
+  experiment_manager:
+    <<: *madsci-service
+    container_name: experiment_manager
+    command: python -m madsci.experiment_manager.experiment_server --definition /home/madsci/example_lab/managers/example_experiment_manager.manager.yaml
+    depends_on:
+      - mongodb
+      - lab_manager
+
+  resource_manager:
+    <<: *madsci-service
+    container_name: resource_manager
+    command: python -m madsci.resource_manager.resource_server --definition /home/madsci/example_lab/managers/example_resource_manager.manager.yaml
+    depends_on:
+      - postgres
+
+  data_manager:
+    <<: *madsci-service
+    container_name: data_manager
+    command: python -m madsci.data_manager.data_server --definition /home/madsci/example_lab/managers/example_data_manager.manager.yaml
+    depends_on:
+      - mongodb
+  workcell_manager:
+    <<: *madsci-service
+    container_name: workcell_manager
+    command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 0 --definition /home/madsci/example_lab/managers/example_workcell_manager.manager.yaml
+    depends_on:
+      - redis
+      - mongodb
+      - resource_manager
+      - event_manager
+      - postgres
+
+
+   # *Nodes
+  liquidhandler:
+    <<: *madsci-service
+    container_name: liquidhandler
+    command: python example_lab/example_modules/liquidhandler.py --definition example_lab/example_modules/nodes/liquidhandler_1.node.yaml
+
+  robotarm:
+    <<: *madsci-service
+    container_name: robotarm
+    command: python example_lab/example_modules/robotarm.py --definition example_lab/example_modules/nodes/robotarm_1.node.yaml
+
+
+  platereader:
+    <<: *madsci-service
+    container_name: platereader
+    command: python example_lab/example_modules/platereader.py --definition example_lab/example_modules/nodes/platereader_1.node.yaml

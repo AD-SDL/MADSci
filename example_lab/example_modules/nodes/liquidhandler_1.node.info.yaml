@@ -25,7 +25,8 @@ capabilities:
   - unlock
 commands: {}
 is_template: false
-config_defaults: {}
+config_defaults:
+  port: 2000
 actions:
   run_command:
     name: run_command
@@ -63,7 +64,7 @@ config:
   event_client_config: null
   resource_server_url: null
   host: 127.0.0.1
-  port: 8000
+  port: 2000
   protocol: http
   device_number: 0
 config_schema:
@@ -86,10 +87,12 @@ config_schema:
           description: The URL of the event server.
           title: Event Server URL
         log_level:
+          anyOf:
+          - type: integer
+          - $ref: '#/$defs/EventLogLevel'
           default: 20
           description: The log level of the event client.
           title: Event Client Log Level
-          type: integer
         source:
           $ref: '#/$defs/OwnershipInfo'
           description: Information about the source of the event client.
@@ -103,6 +106,17 @@ config_schema:
           title: Log Directory
       title: EventClientConfig
       type: object
+    EventLogLevel:
+      description: The log level of an event.
+      enum:
+      - 0
+      - 10
+      - 20
+      - 30
+      - 40
+      - 50
+      title: EventLogLevel
+      type: integer
     OwnershipInfo:
       description: Information about the ownership of a MADSci object.
       properties:
@@ -217,7 +231,7 @@ config_schema:
       title: Host
       type: string
     port:
-      default: 8000
+      default: 2000
       description: The port of the REST API.
       title: Port
       type: integer

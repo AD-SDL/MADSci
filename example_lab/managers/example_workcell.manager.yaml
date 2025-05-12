@@ -19,10 +19,9 @@ config:
   data_server_url: http://localhost:8003/
   resource_server_url: http://localhost:8004/
   mongo_url: mongodb://localhost:27017
-  static_files_path: /home/madsci/ui/dist
   get_action_result_retries: 3
 nodes:
-  liquidhandler_1: http://localhost:8000
+  liquidhandler_1: http://localhost:2000
   platereader_1: http://localhost:2002
   robotarm_1: http://localhost:2001
 locations:
@@ -38,6 +37,7 @@ locations:
   resource_definition:
     resource_name: slot_1
     resource_name_prefix: null
+    resource_class: ''
     base_type: slot
     resource_description: null
     owner: {}
@@ -46,7 +46,7 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JSFZ1HG1F76AMNT03EVJMSXY
+  resource_id: 01JTV7FD6HXW3XTFNYJ52GJKSR
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
@@ -59,6 +59,7 @@ locations:
   resource_definition:
     resource_name: slot_2
     resource_name_prefix: null
+    resource_class: ''
     base_type: slot
     resource_description: null
     owner: {}
@@ -67,5 +68,5 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JSFZ1HJ15NMFW94KJHD38PQ2
+  resource_id: 01JTV7FD8XKV1NY0FJ2BQF2THR
 workcell_directory: /home/madsci/.madsci/workcells/Example Workcell

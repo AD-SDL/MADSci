@@ -75,7 +75,7 @@ class RestNodeConfig(NodeConfig):
     port: int = Field(
         title="Port",
         description="The port of the REST API.",
-        default=8000,
+        default=2000,
     )
     protocol: str = Field(
         title="Protocol",

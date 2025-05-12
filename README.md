@@ -51,10 +51,40 @@ We provide docker images to make containerizing and orchestrating your labs as e
 
 We're working on bringing the following additional components to MADSci:
 
-- **Notification Manager**: For handling notifications related to an automated or autonomous lab.
 - **Auth Manager**: For handling authentication and user and group management for an autonomous lab.
 - **Transfer Manager**: For coordinating resource movement in a lab.
 
 ## Getting Started with MADSci
 
 To get started with MADSci, we recommend checking out our [MADSci Examples Repository](https://github.com/AD-SDL/MADSci_Examples). There you'll find Jupyter Notebooks walking through the core concepts and how to leverage MADSci to build your autonomous laboratory and experiments.
+
+## Developer Guide
+
+### Environment Setup
+
+Some notes for setting up a development environment for the MADSci core packages:
+
+1. [Clone the Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository)
+    1. If you want to contribute back, or have your own version of the code, consider [Forking the Repository](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) first
+1. [Install Python](https://www.python.org/downloads/)
+    1. We use [PDM](https://pdm-project.org/latest/) to make installing the `madsci` python packages and managing dependencies easier
+    1. Alternatively, we recommend using [Virtual Environments](https://realpython.com/python-virtual-environments-a-primer/)
+1. To build and/or use the MADSci docker containers, [https://docs.docker.com/engine/install/]
+    1. If your organization doesn't allow Docker Desktop, or if you simply prefer an open source alternative, we recommend [Rancher Desktop](https://rancherdesktop.io/) or [Podman](https://podman.io/)
+1. We use the [just](https://github.com/casey/just) command runner for developer commands
+    1. To see all available commands, run `just list` or look at the [justfile](./.justfile) (useful even if you don't use just)
+1. If you want to make changes to the Squid Dashboard, [install npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
+    1. Optionally, install [yarn](https://yarnpkg.com/getting-started/install) for faster package installation
+1. We use [pre-commit](https://pre-commit.com/) to run automated linting, formatting, and other tests for code quality and consistency
+
+If you use an IDE like Visual Studio Code and want a quick way to bootstrap your environment, consider taking advantage of the included [Dev Container](./.devcontainer).
+See [Visual Studio Code Dev Container Documentation](https://code.visualstudio.com/docs/devcontainers/create-dev-container) or the [Development Container Documentation](https://containers.dev/) for more information on how to get started with Dev Containers in your IDE of choice.
+
+
+### Running Automated Tests
+
+1. Install locally using PDM or pip (see above)
+1. Ensure you've activated any relevant virtual environments
+1. Run `pytest` in the root directory of the repository
+    1. To run only the tests for a specific component, such as the workcell manager, change directories into the relevant subdirectory in `src/`, or use `pytest -k EXPRESSION` to filter the tests by test name/parent class
+1. Note that many of the pytests depend on docker to start mock database containers

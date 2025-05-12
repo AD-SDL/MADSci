@@ -333,7 +333,12 @@ class Engine:
         response = self.handle_data_and_files(step, wf, response)
         step.status = response.status
         if response.status == ActionStatus.UNKNOWN:
-            response.errors.append(Error(message="Node returned 'unknown' action status for running action.", error_type="NodeReturnedUnknown"))
+            response.errors.append(
+                Error(
+                    message="Node returned 'unknown' action status for running action.",
+                    error_type="NodeReturnedUnknown",
+                )
+            )
         step.result = response
         step.history.append(response)
         wf = self.update_step(wf, step)
