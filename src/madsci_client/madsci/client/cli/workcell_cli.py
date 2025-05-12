@@ -119,7 +119,7 @@ def create(
         "Workcell Description", quiet=ctx.obj.quiet
     )
 
-    workcell = WorkcellDefinition(name=name, description=description)
+    workcell = WorkcellDefinition(workcell_name=name, description=description)
     console.print(workcell)
 
     path = path or ctx.parent.params.get("path")
