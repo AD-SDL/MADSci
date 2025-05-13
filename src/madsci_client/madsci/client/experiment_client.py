@@ -28,9 +28,9 @@ class ExperimentClient:
         self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
         try:
             server_def = requests.get(str(self.url) + "definition", timeout=10).json()
-            self.workcell_client_url = server_def["workcell_manager_url"]
-            self.resource_client_url = server_def["resource_manager_url"]
-            self.data_client_url = server_def["data_manager_url"]
+            self.workcell_client_url = server_def["workcell_server_url"]
+            self.resource_client_url = server_def["resource_server_url"]
+            self.data_client_url = server_def["data_server_url"]
         except Exception as e:
             raise e
 

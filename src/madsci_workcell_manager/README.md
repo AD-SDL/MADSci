@@ -49,7 +49,7 @@ from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.types.step_types import StepDefinition
 
 workcell_client = WorkcellClient(
-  workcell_manager_url="http://localhost:8005"
+  workcell_server_url="http://localhost:8005"
 )
 wf_def = WorkflowDefinition(
   name="Test Workflow",

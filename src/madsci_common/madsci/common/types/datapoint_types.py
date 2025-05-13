@@ -5,9 +5,10 @@ from enum import Enum
 from typing import Annotated, Any, Literal, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.base_types import MadsciBaseModel, PathLike
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.utils import new_ulid_str
 from pydantic import Field, Tag
 from pydantic.types import Discriminator
 
@@ -24,7 +25,7 @@ class DataPointTypeEnum(str, Enum):
     DATA_VALUE = "data_value"
 
 
-class DataPoint(BaseModel, extra="allow"):
+class DataPoint(MadsciBaseModel, extra="allow"):
     """An object to contain and locate data created during experiments.
 
     Attributes:

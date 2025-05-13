@@ -19,7 +19,7 @@ from madsci.common.types.action_types import (
     ActionResult,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.base_types import Error, new_ulid_str
+from madsci.common.types.base_types import Error
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
     AdminCommands,
@@ -30,6 +30,7 @@ from madsci.common.types.node_types import (
     NodeStatus,
     RestNodeConfig,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )

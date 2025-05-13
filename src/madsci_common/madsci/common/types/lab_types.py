@@ -2,115 +2,83 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Optional
 
-from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
-from madsci.common.validators import (
-    ulid_validator,
+import dotenv
+from madsci.common.types.base_types import (
+    DefinitionSettings,
+    MadsciBaseModel,
+    MadsciBaseSettings,
+    PathLike,
 )
+from madsci.common.utils import new_ulid_str
 from pydantic import ConfigDict
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
 
 
-class LabUrls(BaseModel):
-    """urls for the lab manager"""
+class LabSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "lab.env"),
+    toml_file="lab.toml",
+    yaml_file="lab.yaml",
+    json_file="lab.json",
+    env_prefix="LAB_",
+):
+    """Settings for the MADSci Lab."""
 
-    workcell_manager: Optional[AnyUrl] = Field(
-        title="Workcell Manager URL",
-        description="The Workcell Manager Url",
-        default=None,
-    )
-
-    resource_manager: Optional[AnyUrl] = Field(
-        title="Resource Manager URL",
-        description="The Resource Manager URL for this lab.",
-        default=None,
-    )
-
-    data_manager: Optional[AnyUrl] = Field(
-        title="Data Manager URL",
-        description="The Data Manager URL for this lab.",
-        default=None,
-    )
-
-    experiment_manager: Optional[AnyUrl] = Field(
-        title="Data Manager URL",
-        description="The Data Manager URL for this lab.",
-        default=None,
-    )
-
-
-class LabDefinition(BaseModel):
-    """Definition for a MADSci Lab."""
-
-    model_config = ConfigDict(extra="allow")
-    _definition_file_patterns: ClassVar[list[str]] = ["*.lab.yaml"]
-
-    name: str = Field(title="Name", description="The name of the lab.")
-    lab_id: str = Field(
-        title="Lab ID",
-        description="The ID of the lab.",
-        default_factory=new_ulid_str,
+    name: str = Field(
+        title="Lab Name",
+        description="The name of the lab.",
+        default="MADSci Lab",
     )
     description: Optional[str] = Field(
         default=None,
         title="Description",
         description="A description of the lab.",
     )
-    host: str = Field(
-        default="127.0.0.1",
-        title="Server Host",
-        description="The hostname or IP address of the Squid Lab Server.",
+    lab_id: str = Field(
+        title="Lab ID",
+        description="The ID of the lab.",
+        default_factory=new_ulid_str,
+        alias="lab_id",  # * Don't double prefix
     )
-    port: int = Field(
-        default=8000,
-        title="Server Port",
-        description="The port number of the Squid Lab Server.",
-    )
-    commands: dict[str, str] = Field(
-        default_factory=dict,
-        title="Commands",
-        description="Commands for operating the lab.",
+    lab_url: Optional[AnyUrl] = Field(
+        title="Lab URL",
+        description="The URL of the lab manager.",
+        default=AnyUrl("http://localhost:8000"),
+        alias="lab_url",  # * Don't double prefix
     )
     static_files_path: Optional[PathLike] = Field(
         default=Path("~") / "MADSci" / "src" / "madsci_squid" / "ui" / "dist",
         title="Static Files Path",
-        description="Path to the static files for the lab manager. Set to None to disable.",
-    )
-    managers: "LabUrls" = Field(
-        default_factory=LabUrls,
-        title="Manager URLs",
-        description="URLs for Managers used by the lab.",
+        description="Path to the static files for the dashboard. Set to None to disable the dashboard.",
     )
 
-    @field_validator("commands")
+    @field_validator("lab_id", mode="before")
     @classmethod
-    def validate_commands(cls, v: dict[str, str]) -> dict[str, str]:
-        """Validate the command names."""
-        if v:
-            for command in v:
-                if not str(command).replace("_", "").isalnum():
-                    raise ValueError(
-                        f"Command '{command}' must consist only of alphanumeric characters or underscores."
-                    )
+    def validate_lab_id(cls, v: Optional[str]) -> str:
+        """Validate the lab ID, creating and saving if new."""
+        if not v:
+            v = new_ulid_str()
+            env_file = dotenv.find_dotenv("lab.env") or dotenv.find_dotenv(".env")
+            if not env_file:
+                env_file = Path(".env")
+                env_file.touch()
+            dotenv.set_key(env_file, "LAB_ID", v)
         return v
 
-    is_ulid = field_validator("lab_id")(ulid_validator)
-
-    def resolve_managers(self, path_origin: Optional[PathLike] = None) -> None:
-        """Resolve the manager definition links."""
-        if path_origin is not None:
-            if self._definition_path:
-                path_origin = Path(self._definition_path)
-            else:
-                path_origin = Path("./")
-        for manager in self.managers.values():
-            manager.resolve(path_origin=path_origin)
+    @classmethod
+    def load_model(cls, *args: Any, **kwargs: Any) -> "LabSettings":
+        """Load the lab settings model."""
+        definition_settings = DefinitionSettings()
+        if definition_settings.lab_manager_definition:
+            kwargs["definition_files"] = definition_settings.lab_manager_definition
+        return super().load_model(*args, **kwargs)
 
 
-class ManagerDefinition(BaseModel):
+class ManagerDefinition(MadsciBaseModel):
     """Definition for a Squid Manager."""
 
     model_config = ConfigDict(extra="allow")
@@ -148,11 +116,10 @@ class ManagerType(str, Enum):
     RESOURCE_MANAGER = "resource_manager"
     EVENT_MANAGER = "event_manager"
     AUTH_MANAGER = "auth_manager"
-    NOTIFICATION_MANAGER = "notification_manager"
     DATA_MANAGER = "data_manager"
     TRANSFER_MANAGER = "transfer_manager"
-    DASHBOARD_MANAGER = "dashboard_manager"
     EXPERIMENT_MANAGER = "experiment_manager"
+    LAB_MANAGER = "lab_manager"
 
     @classmethod
     def _missing_(cls, value: str) -> "ManagerType":

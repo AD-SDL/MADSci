@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:04235a77c5cadcd78cdd6a00558e57f1d6563fb74b3640d4e3a51be9e0abe2ea"
+content_hash = "sha256:42758c3f94e31bb47cd4961b3fee81fdcdbd2a2a0fda40185372f45def87bff0"
 
 [[metadata.targets]]
 requires_python = ">=3.9.1"
@@ -1054,7 +1054,7 @@ files = [
 
 [[package]]
 name = "madsci-client"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_client"
@@ -1068,7 +1068,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_common"
@@ -1080,6 +1080,7 @@ dependencies = [
     "fastapi>=0.115.4",
     "multiprocess>=0.70.17",
     "pydantic-extra-types>=2.10.2",
+    "pydantic-settings>=2.9.1",
     "pydantic>=2.10",
     "pymongo>=4.10.1",
     "python-dotenv>=1.0.1",
@@ -1093,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-data-manager"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_data_manager"
@@ -1106,7 +1107,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-event-manager"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_event_manager"
@@ -1119,7 +1120,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-manager"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_experiment_manager"
@@ -1133,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-node-module"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_node_module"
@@ -1146,7 +1147,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_resource_manager"
@@ -1160,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_squid"
@@ -1173,7 +1174,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-workcell-manager"
-version = "0.2.1"
+version = "0.3.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_workcell_manager"
@@ -2192,6 +2193,39 @@ dependencies = [
 files = [
     {file = "pydantic_extra_types-2.10.4-py3-none-any.whl", hash = "sha256:ce064595af3cab05e39ae062752432dcd0362ff80f7e695b61a3493a4d842db7"},
     {file = "pydantic_extra_types-2.10.4.tar.gz", hash = "sha256:bf8236a63d061eb3ecb1b2afa78ba0f97e3f67aa11dbbff56ec90491e8772edc"},
+]
+
+[[package]]
+name = "pydantic-settings"
+version = "2.9.1"
+requires_python = ">=3.9"
+summary = "Settings management using Pydantic"
+groups = ["dev"]
+dependencies = [
+    "pydantic>=2.7.0",
+    "python-dotenv>=0.21.0",
+    "typing-inspection>=0.4.0",
+]
+files = [
+    {file = "pydantic_settings-2.9.1-py3-none-any.whl", hash = "sha256:59b4f431b1defb26fe620c71a7d3968a710d719f5f4cdbbdb7926edeb770f6ef"},
+    {file = "pydantic_settings-2.9.1.tar.gz", hash = "sha256:c509bf79d27563add44e8446233359004ed85066cd096d8b510f715e6ef5d268"},
+]
+
+[[package]]
+name = "pydantic-settings-export"
+version = "1.0.2"
+requires_python = ">=3.9"
+summary = "Export your Pydantic settings to documentation with ease!"
+groups = ["dev"]
+dependencies = [
+    "pydantic-settings>=2.3",
+    "pydantic>=2.7",
+    "tomli>=2.2.1; python_full_version < \"3.11\"",
+    "typing-extensions>=4.12.2; python_full_version < \"3.11\"",
+]
+files = [
+    {file = "pydantic_settings_export-1.0.2-py3-none-any.whl", hash = "sha256:12b809f4f1c2388470e720c522dcbfb808d11aa5fb7efc8f7aae6272fddb9bbe"},
+    {file = "pydantic_settings_export-1.0.2.tar.gz", hash = "sha256:1b26277823e25ba4444fcb1e4fa8b1abd81024ecd49d98a7abd9f9c3e8b60c69"},
 ]
 
 [[package]]

@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import BaseModel
+from madsci.common.types.base_types import MadsciBaseModel
 
 if TYPE_CHECKING:
     from madsci.common.types.resource_types.definitions import ResourceDefinition
@@ -68,7 +68,7 @@ class ResourceTypeEnum(str, Enum):
     pool = "pool"
 
 
-class CustomResourceAttributeDefinition(BaseModel, extra="allow"):
+class CustomResourceAttributeDefinition(MadsciBaseModel, extra="allow"):
     """Definition for a MADSci Custom Resource Attribute."""
 
     attribute_name: str = Field(
@@ -92,7 +92,7 @@ class CustomResourceAttributeDefinition(BaseModel, extra="allow"):
     )
 
 
-class ResourceTypeDefinition(BaseModel):
+class ResourceTypeDefinition(MadsciBaseModel):
     """Definition for a MADSci Resource Type."""
 
     model_config = ConfigDict(extra="allow")

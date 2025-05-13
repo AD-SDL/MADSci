@@ -4,13 +4,14 @@ from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.step_types import Step, StepDefinition
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field, field_validator
 
 
-class WorkflowStatus(BaseModel):
+class WorkflowStatus(MadsciBaseModel):
     """Representation of the status of a Workflow"""
 
     current_step_index: int = 0
@@ -87,7 +88,7 @@ class WorkflowStatus(BaseModel):
         return "Unknown"
 
 
-class WorkflowParameter(BaseModel):
+class WorkflowParameter(MadsciBaseModel):
     """container for a workflow parameter"""
 
     name: str
@@ -96,7 +97,7 @@ class WorkflowParameter(BaseModel):
     """ the default value of the parameter"""
 
 
-class WorkflowMetadata(BaseModel, extra="allow"):
+class WorkflowMetadata(MadsciBaseModel, extra="allow"):
     """Metadata container"""
 
     author: Optional[str] = None
@@ -107,7 +108,7 @@ class WorkflowMetadata(BaseModel, extra="allow"):
     """Version of the object"""
 
 
-class WorkflowDefinition(BaseModel):
+class WorkflowDefinition(MadsciBaseModel):
     """Grand container that pulls all info of a workflow together"""
 
     name: str
@@ -133,7 +134,7 @@ class WorkflowDefinition(BaseModel):
         return v
 
 
-class SchedulerMetadata(BaseModel):
+class SchedulerMetadata(MadsciBaseModel):
     """Scheduler information"""
 
     ready_to_run: bool = False

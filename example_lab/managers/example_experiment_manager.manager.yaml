@@ -7,4 +7,4 @@ host: 0.0.0.0
 port: 8002
 db_url: mongodb://localhost:27017
 event_client_config: null
-lab_manager_url: http://localhost:8005
+lab_server_url: http://localhost:8005

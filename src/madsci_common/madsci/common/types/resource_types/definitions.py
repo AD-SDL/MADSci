@@ -4,8 +4,8 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
-    BaseModel,
     ConfigDict,
+    MadsciBaseModel,
     PositiveInt,
     PositiveNumber,
 )
@@ -70,7 +70,7 @@ class ResourceManagerDefinition(ManagerDefinition):
     )
 
 
-class CustomResourceAttributeDefinition(BaseModel, extra="allow"):
+class CustomResourceAttributeDefinition(MadsciBaseModel, extra="allow"):
     """Definition for a MADSci Custom Resource Attribute."""
 
     attribute_name: str = Field(
@@ -95,7 +95,7 @@ class CustomResourceAttributeDefinition(BaseModel, extra="allow"):
     )
 
 
-class ResourceDefinition(BaseModel, table=False, extra="allow"):
+class ResourceDefinition(MadsciBaseModel, table=False, extra="allow"):
     """Definition for a MADSci Resource."""
 
     model_config = ConfigDict(extra="allow")

@@ -5,10 +5,11 @@ from typing import ClassVar, Literal, Optional, Union
 
 from bson.objectid import ObjectId
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, datetime, new_ulid_str
+from madsci.common.types.base_types import MadsciBaseModel, datetime
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.utils import new_ulid_str
 from pydantic import Field, field_validator
 
 
@@ -41,20 +42,20 @@ class ExperimentManagerDefinition(ManagerDefinition):
         description="The URL of the database for the experidict[str, Any]ment manager.",
         default="mongodb://localhost:27017",
     )
-    lab_manager_url: Optional[str] = Field(
+    lab_server_url: Optional[str] = Field(
         title="Lab Manager URL", description="URL for the lab manager", default=None
     )
-    workcell_manager_url: Optional[str] = Field(
+    workcell_server_url: Optional[str] = Field(
         title="Workcell Manager URL",
         description="URL for the workcell manager",
         default=None,
     )
-    resource_manager_url: Optional[str] = Field(
+    resource_server_url: Optional[str] = Field(
         title="Resource Manager URL",
         description="URL for the resource manager",
         default=None,
     )
-    data_manager_url: Optional[str] = Field(
+    data_server_url: Optional[str] = Field(
         title="Data Manager URL",
         description="URL for the data manager",
         default=None,
@@ -66,7 +67,7 @@ class ExperimentManagerDefinition(ManagerDefinition):
     )
 
 
-class ExperimentDesign(BaseModel):
+class ExperimentDesign(MadsciBaseModel):
     """A design for a MADSci experiment."""
 
     experiment_name: str = Field(
@@ -105,7 +106,7 @@ class ExperimentDesign(BaseModel):
         )
 
 
-class ExperimentRegistration(BaseModel):
+class ExperimentRegistration(MadsciBaseModel):
     """Experiment Run Registration request body"""
 
     experiment_design: ExperimentDesign
@@ -130,7 +131,7 @@ class ExperimentStatus(str, Enum):
     """Experiment status is unknown."""
 
 
-class Experiment(BaseModel):
+class Experiment(MadsciBaseModel):
     """A MADSci experiment."""
 
     experiment_id: str = Field(
@@ -200,7 +201,7 @@ class Experiment(BaseModel):
         )
 
 
-class ExperimentalCampaign(BaseModel):
+class ExperimentalCampaign(MadsciBaseModel):
     """A campaign consisting of one or more related experiments."""
 
     campaign_id: str = Field(

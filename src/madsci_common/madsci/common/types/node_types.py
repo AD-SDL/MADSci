@@ -7,8 +7,9 @@ from typing import Any, ClassVar, Optional
 from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
+from madsci.common.types.base_types import Error, MadsciBaseModel
 from madsci.common.types.event_types import EventClientConfig
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import (
     SerializationInfo,
@@ -37,7 +38,7 @@ class NodeType(str, Enum):
     TRANSFER_MANAGER = "transfer_manager"
 
 
-class NodeConfig(BaseModel):
+class NodeConfig(MadsciBaseModel):
     """Basic Configuration for a MADSci Node."""
 
     model_config = ConfigDict(extra="allow")
@@ -84,7 +85,7 @@ class RestNodeConfig(NodeConfig):
     )
 
 
-class NodeClientCapabilities(BaseModel):
+class NodeClientCapabilities(MadsciBaseModel):
     """Capabilities of a MADSci Node Client. Default values are None, meaning the capability is not explicitly set. If a capability is set to False, it is explicitly not supported."""
 
     get_info: Optional[bool] = Field(
@@ -179,7 +180,7 @@ class NodeCapabilities(NodeClientCapabilities):
         return sorted(admin_commands)
 
 
-class NodeDefinition(BaseModel):
+class NodeDefinition(MadsciBaseModel):
     """Definition of a MADSci Node, a unique instance of a MADSci Node Module."""
 
     _definition_file_patterns: ClassVar[list[str]] = ["*.node.yaml"]
@@ -246,7 +247,7 @@ class NodeDefinition(BaseModel):
         return serialized
 
 
-class Node(BaseModel, arbitrary_types_allowed=True):
+class Node(MadsciBaseModel, arbitrary_types_allowed=True):
     """A runtime representation of a MADSci Node used in a Workcell."""
 
     node_url: AnyUrl = Field(
@@ -308,7 +309,7 @@ class NodeInfo(NodeDefinition):
         )
 
 
-class NodeStatus(BaseModel):
+class NodeStatus(MadsciBaseModel):
     """Status of a MADSci Node."""
 
     busy: bool = Field(
@@ -407,7 +408,7 @@ class NodeStatus(BaseModel):
         return "Node is ready"
 
 
-class NodeReservation(BaseModel):
+class NodeReservation(MadsciBaseModel):
     """Reservation of a MADSci Node."""
 
     owned_by: OwnershipInfo = Field(
@@ -436,7 +437,7 @@ class NodeReservation(BaseModel):
         )
 
 
-class NodeSetConfigResponse(BaseModel):
+class NodeSetConfigResponse(MadsciBaseModel):
     """Response from a Node Set Config Request"""
 
     success: bool = Field(

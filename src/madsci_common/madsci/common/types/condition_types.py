@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import BaseModel
+from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.resource_types import GridIndex, GridIndex2D, GridIndex3D
 from pydantic import Discriminator
 from sqlmodel.main import Field
@@ -37,7 +37,7 @@ class OperatorTypeEnum(str, Enum):
     IS_LEQUAL_TO = "is_less_than_or_equal_to"
 
 
-class Condition(BaseModel, extra="allow"):
+class Condition(MadsciBaseModel, extra="allow"):
     """A model for the conditions a step needs to be run"""
 
     condition_type: Optional[ConditionTypeEnum] = Field(

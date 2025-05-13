@@ -2,11 +2,11 @@
 
 from typing import Any, Optional, Union
 
-from madsci.common.types.base_types import BaseModel
+from madsci.common.types.base_types import MadsciBaseModel
 from pydantic import Field
 
 
-class ConfigParameterDefinition(BaseModel, extra="allow"):
+class ConfigParameterDefinition(MadsciBaseModel, extra="allow"):
     """A configuration parameter definition for a MADSci system component."""
 
     name: str = Field(
@@ -40,7 +40,7 @@ class ConfigParameterWithValue(ConfigParameterDefinition):
     )
 
 
-class ConfigNamespaceDefinition(BaseModel, extra="allow"):
+class ConfigNamespaceDefinition(MadsciBaseModel, extra="allow"):
     """A namespace for configuration parameters."""
 
     namespace: str = Field(

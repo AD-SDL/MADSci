@@ -4,18 +4,18 @@ from pathlib import Path
 from typing import Annotated, Any, ClassVar, Literal, Optional, Union
 
 from madsci.common.types.base_types import (
-    BaseModel,
     Error,
     LoadConfig,
+    MadsciBaseModel,
     ModelLink,
     PathLike,
-    new_ulid_str,
 )
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workflow_types import Workflow
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import computed_field
 from pydantic.functional_validators import field_validator
@@ -23,7 +23,7 @@ from pydantic.networks import AnyUrl
 from sqlmodel.main import Field
 
 
-class WorkcellDefinition(BaseModel, extra="allow"):
+class WorkcellDefinition(MadsciBaseModel, extra="allow"):
     """Configuration for a MADSci Workcell."""
 
     _definition_file_patterns: ClassVar[list] = [
@@ -97,7 +97,7 @@ class WorkcellLink(ModelLink[WorkcellDefinition]):
     )
 
 
-class WorkcellStatus(BaseModel):
+class WorkcellStatus(MadsciBaseModel):
     """Represents the status of a MADSci workcell."""
 
     paused: bool = Field(
@@ -164,7 +164,7 @@ class WorkcellStatus(BaseModel):
         return v
 
 
-class WorkcellState(BaseModel):
+class WorkcellState(MadsciBaseModel):
     """Represents the live state of a MADSci workcell."""
 
     status: WorkcellStatus = Field(
@@ -193,7 +193,7 @@ class WorkcellState(BaseModel):
     )
 
 
-class WorkcellConfig(BaseModel):
+class WorkcellConfig(MadsciBaseModel):
     """Configuration for a MADSci Workcell."""
 
     host: str = Field(

@@ -12,7 +12,6 @@ from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
@@ -20,6 +19,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client

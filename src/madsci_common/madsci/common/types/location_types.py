@@ -4,14 +4,15 @@ from datetime import datetime
 from typing import Any, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.resource_types.definitions import ResourceDefinitions
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field
 from pydantic.functional_validators import field_validator
 
 
-class LocationDefinition(BaseModel):
+class LocationDefinition(MadsciBaseModel):
     """The Definition of a Workcell Location."""
 
     location_name: str = Field(
@@ -60,7 +61,7 @@ class Location(LocationDefinition):
     is_ulid = field_validator("location_id")(ulid_validator)
 
 
-class LocationReservation(BaseModel):
+class LocationReservation(MadsciBaseModel):
     """Reservation of a MADSci Location."""
 
     owned_by: OwnershipInfo = Field(
@@ -89,7 +90,7 @@ class LocationReservation(BaseModel):
         )
 
 
-class LocationArgument(BaseModel):
+class LocationArgument(MadsciBaseModel):
     """Location Argument to be used by MADSCI nodes."""
 
     location: Any

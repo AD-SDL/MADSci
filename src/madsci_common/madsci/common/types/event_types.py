@@ -9,14 +9,15 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.base_types import MadsciBaseModel, PathLike
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic.functional_validators import field_validator
 from sqlmodel import Field
 
 
-class Event(BaseModel):
+class Event(MadsciBaseModel):
     """An event in the MADSci system."""
 
     event_id: str = Field(
@@ -69,7 +70,7 @@ class EventLogLevel(int, Enum):
     CRITICAL = logging.CRITICAL
 
 
-class EventClientConfig(BaseModel):
+class EventClientConfig(MadsciBaseModel):
     """Configuration for an Event Client."""
 
     name: Optional[str] = Field(
@@ -157,7 +158,7 @@ class EventType(str, Enum):
         raise ValueError(f"Invalid ManagerTypes: {value}")
 
 
-class EmailAlertsConfig(BaseModel):
+class EmailAlertsConfig(MadsciBaseModel):
     """Configuration for sending emails."""
 
     smtp_server: str = Field(

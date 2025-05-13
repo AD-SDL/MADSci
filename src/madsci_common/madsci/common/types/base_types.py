@@ -12,19 +12,20 @@ import yaml
 from pydantic import AnyUrl, model_validator
 from pydantic.config import ConfigDict
 from pydantic.fields import PrivateAttr, PydanticUndefined
+from pydantic_settings import (
+    BaseSettings,
+    CliSettingsSource,
+    JsonConfigSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+    YamlConfigSettingsSource,
+)
 from sqlmodel import Field, SQLModel
-from ulid import ULID
 
 _T = TypeVar("_T")
 
 PathLike = Union[str, Path]
-
-
-def new_ulid_str() -> str:
-    """
-    Generate a new ULID string.
-    """
-    return str(ULID())
 
 
 @dataclass
@@ -39,7 +40,119 @@ class LoadConfig:
     """Whether to use this field's model's fields as environment variables."""
 
 
-class BaseModel(SQLModel, use_enum_values=True):
+class MadsciBaseSettings(BaseSettings):
+    """
+    Base class for all MADSci settings.
+    """
+
+    model_config: SettingsConfigDict = SettingsConfigDict(
+        env_file=None,
+        env_file_encoding="utf-8",
+        validate_assignment=True,
+        validate_default=True,
+        use_enum_values=True,
+        env_nested_delimiter="__",
+        case_sensitive=False,
+        extra="ignore",
+        cli_parse_args=True,
+    )
+    """Configuration for the settings model."""
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Sets the order of settings sources for the settings model."""
+        return (
+            CliSettingsSource(settings_cls, cli_parse_args=True),
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+            JsonConfigSettingsSource(settings_cls),
+            TomlConfigSettingsSource(settings_cls),
+            YamlConfigSettingsSource(settings_cls),
+        )
+
+    @classmethod
+    def load_model(
+        cls,
+        definition_files: Union[PathLike, list[PathLike], tuple[PathLike, ...]],
+        *args: Any,
+        **kwargs: Any,
+    ) -> "MadsciBaseSettings":
+        """
+        Load settings from a file or list of files.
+        """
+
+        def collect_files_by_suffix(paths: list[Path], suffix: str) -> list[Path]:
+            return [p for p in paths if p.suffix == suffix]
+
+        paths = [
+            Path(p)
+            for p in (
+                definition_files
+                if isinstance(definition_files, (list, tuple))
+                else [definition_files]
+            )
+        ]
+        kwargs.update(
+            {
+                "_yaml_file": collect_files_by_suffix(paths, ".yaml")
+                + collect_files_by_suffix(paths, ".yml"),
+                "_json_file": collect_files_by_suffix(paths, ".json"),
+                "_toml_file": collect_files_by_suffix(paths, ".toml"),
+                "_env_file": collect_files_by_suffix(paths, ".env"),
+            }
+        )
+        kwargs = {k: v for k, v in kwargs.items() if v}  # Remove empty entries
+        return cls(*args, **kwargs)
+
+
+class DefinitionSettings(MadsciBaseSettings, env_file=(".env", "definitions.env")):
+    """
+    Settings loader for MADSci.
+    """
+
+    # * Settings
+    lab_manager_definition: Union[Optional[PathLike], list[PathLike]] = Field(
+        title="Lab File",
+        description="Path to the lab definition file(s).",
+        default=None,
+    )
+    workcell_manager_definition: Union[Optional[PathLike], list[PathLike]] = Field(
+        title="Workcell File",
+        description="Path to the workcell definition file(s).",
+        default=None,
+    )
+    resource_manager_definition: Union[Optional[PathLike], list[PathLike]] = Field(
+        title="Resource Manager File",
+        description="Path to the resource manager definition file(s).",
+        default=None,
+    )
+    event_manager_definition: Union[Optional[PathLike], list[PathLike]] = Field(
+        title="Event Manager File",
+        description="Path to the event manager definition file(s).",
+        default=None,
+    )
+    experiment_manager_definition: Union[Optional[PathLike], list[PathLike]] = Field(
+        title="Experiment Manager File",
+        description="Path to the experiment manager definition file(s).",
+        default=None,
+    )
+    node_definition: Union[Optional[PathLike], list[PathLike]] = Field(
+        title="Node File",
+        description="Path to the node definition file(s).",
+        default=None,
+    )
+
+
+class MadsciBaseModel(SQLModel, use_enum_values=True):
     """
     Parent class for all MADSci data models.
     """
@@ -57,6 +170,8 @@ class BaseModel(SQLModel, use_enum_values=True):
 
     model_config = ConfigDict(
         validate_assignment=True,
+        validate_default=True,
+        use_enum_values=True,
     )
 
     def to_yaml(self, path: PathLike, by_alias: bool = True, **kwargs: Any) -> None:
@@ -332,7 +447,7 @@ class BaseModel(SQLModel, use_enum_values=True):
         return cls(**field_values)
 
 
-class ModelLink(BaseModel, Generic[_T]):
+class ModelLink(MadsciBaseModel, Generic[_T]):
     """
     Link to another MADSci object
     """
@@ -381,7 +496,7 @@ class ModelLink(BaseModel, Generic[_T]):
                 pass
 
 
-class Error(BaseModel):
+class Error(MadsciBaseModel):
     """A MADSci Error"""
 
     message: Optional[str] = Field(
