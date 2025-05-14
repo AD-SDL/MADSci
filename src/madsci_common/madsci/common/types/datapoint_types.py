@@ -150,6 +150,21 @@ DataPointTypeMap = {
 }
 
 
+class ObjectStorageDefinition(BaseModel):
+    """Configuration for S3-compatible object storage."""
+
+    endpoint: str
+    """Endpoint for S3-compatible storage (e.g., 'minio.example.com:9000')"""
+    access_key: str
+    """Access key for authentication"""
+    secret_key: str
+    """Secret key for authentication"""
+    secure: bool = True
+    """Whether to use HTTPS (True) or HTTP (False)"""
+    default_bucket: str = "madsci-data"
+    """Default bucket to use for storing data"""
+
+
 class DataManagerDefinition(ManagerDefinition):
     """Definition for a Squid Data Manager.
 

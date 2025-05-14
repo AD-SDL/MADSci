@@ -14,7 +14,8 @@ license = {text = "MIT"}
 dependencies = [
   "madsci.common",
   "click>=8.1.7",
-  "trogon>=0.6.0"
+  "trogon>=0.6.0",
+  "minio-py3",
 ]
 
 [project.urls]
