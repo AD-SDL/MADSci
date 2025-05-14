@@ -55,6 +55,7 @@ class MadsciBaseSettings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         cli_parse_args=True,
+        cli_ignore_unknown_args=True,
     )
     """Configuration for the settings model."""
 
@@ -81,11 +82,11 @@ class MadsciBaseSettings(BaseSettings):
 
     @classmethod
     def load_model(
-        cls,
+        cls: _T,
         definition_files: Union[PathLike, list[PathLike], tuple[PathLike, ...]],
         *args: Any,
         **kwargs: Any,
-    ) -> "MadsciBaseSettings":
+    ) -> _T:
         """
         Load settings from a file or list of files.
         """
@@ -119,7 +120,11 @@ class DefinitionSettings(MadsciBaseSettings, env_file=(".env", "definitions.env"
     Settings loader for MADSci.
     """
 
-    # * Settings
+    context_definition: Union[Optional[PathLike], list[PathLike]] = Field(
+        title="Context File",
+        description="Path to the context definition file(s).",
+        default=None,
+    )
     lab_manager_definition: Union[Optional[PathLike], list[PathLike]] = Field(
         title="Lab File",
         description="Path to the lab definition file(s).",

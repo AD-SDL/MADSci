@@ -2,11 +2,11 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar, Optional, Union
 
 import dotenv
 from madsci.common.types.base_types import (
-    DefinitionSettings,
+    _T,
     MadsciBaseModel,
     MadsciBaseSettings,
     PathLike,
@@ -41,7 +41,7 @@ class LabSettings(
     lab_id: str = Field(
         title="Lab ID",
         description="The ID of the lab.",
-        default_factory=new_ulid_str,
+        default=None,
         alias="lab_id",  # * Don't double prefix
     )
     lab_url: Optional[AnyUrl] = Field(
@@ -54,6 +54,11 @@ class LabSettings(
         default=Path("~") / "MADSci" / "src" / "madsci_squid" / "ui" / "dist",
         title="Static Files Path",
         description="Path to the static files for the dashboard. Set to None to disable the dashboard.",
+    )
+    lab_settings_files: Union[Optional[PathLike], list[PathLike]] = Field(
+        title="Lab File",
+        description="Path to the lab settings file(s) to use. Overrides the defaults.",
+        default=None,
     )
 
     @field_validator("lab_id", mode="before")
@@ -70,11 +75,11 @@ class LabSettings(
         return v
 
     @classmethod
-    def load_model(cls, *args: Any, **kwargs: Any) -> "LabSettings":
+    def load_model(cls: _T, *args: Any, **kwargs: Any) -> _T:
         """Load the lab settings model."""
-        definition_settings = DefinitionSettings()
-        if definition_settings.lab_manager_definition:
-            kwargs["definition_files"] = definition_settings.lab_manager_definition
+        instance = super().load_model(*args, **kwargs)
+        if instance.lab_settings_files:
+            kwargs["definition_files"] = instance.lab_settings_files
         return super().load_model(*args, **kwargs)
 
 

@@ -5,7 +5,7 @@ url: http://localhost:8000
 host: 0.0.0.0
 port: 8000
 managers:
-  workcell_manager: http://localhost:8013
+  workcell_manager: http://localhost:8005
   resource_manager: http://localhost:8004
   data_manager: http://localhost:8003
   experiment_manager: http://localhost:8002

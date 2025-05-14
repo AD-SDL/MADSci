@@ -1,14 +1,15 @@
 """Types for managing MADSci contexts and their configurations."""
 
-from typing import Optional
+from typing import Any, Optional
 
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
-from madsci.common.types.lab_types import ManagerType
-from madsci.common.types.node_types import NodeType
+from madsci.common.types.base_types import (
+    DefinitionSettings,
+    MadsciBaseSettings,
+)
 from pydantic import AnyUrl, Field
 
 
-class Context(
+class MadsciContext(
     MadsciBaseSettings,
     env_file=(".env", "context.env"),
     toml_file="context.toml",
@@ -22,73 +23,36 @@ class Context(
         description="The URL of the lab server.",
         default=AnyUrl("http://localhost:8000"),
     )
-    managers: list["ManagerContext"] = Field(
-        title="Managers",
-        description="List of available_managers.",
-        default_factory=list,
-    )
-    nodes: list["NodeContext"] = Field(
-        title="Nodes",
-        description="List of available nodes.",
-        default_factory=list,
-    )
-    experiment: Optional["ExperimentContext"] = Field(
-        title="Experiment",
-        description="The experiment context.",
+    event_server_url: Optional[AnyUrl] = Field(
+        title="Event Server URL",
+        description="The URL of the event server.",
         default=None,
     )
-    owner: Optional["OwnerContext"] = Field(
-        title="Owner",
-        description="The owner(s) in the current context.",
+    experiment_server_url: Optional[AnyUrl] = Field(
+        title="Experiment Server URL",
+        description="The URL of the experiment server.",
         default=None,
     )
-
-
-class ManagerContext(
-    MadsciBaseModel,
-):
-    """Base class for MADSci manager context settings."""
-
-    url: AnyUrl = Field(
-        title="Manager Server URL",
-        description="The URL of the manager.",
-    )
-    manager_type: ManagerType = Field(
-        title="Manager Type",
-        description="The type of the manager.",
-    )
-    manager_name: Optional[str] = Field(
-        title="Manager Name",
-        description="The name of the manager.",
+    data_server_url: Optional[AnyUrl] = Field(
+        title="Data Server URL",
+        description="The URL of the data server.",
         default=None,
     )
-    manager_id: Optional[str] = Field(
-        title="Manager ID",
-        description="The ID of the manager.",
+    resource_server_url: Optional[AnyUrl] = Field(
+        title="Resource Server URL",
+        description="The URL of the resource server.",
+        default=None,
+    )
+    workcell_server_url: Optional[AnyUrl] = Field(
+        title="Workcell Server URL",
+        description="The URL of the workcell server.",
         default=None,
     )
 
-
-class NodeContext(
-    MadsciBaseModel,
-):
-    """Base class for MADSci node context settings."""
-
-    url: AnyUrl = Field(
-        title="Node Server URL",
-        description="The URL of the node.",
-    )
-    node_type: NodeType = Field(
-        title="Node Type",
-        description="The type of the node.",
-    )
-    node_name: Optional[str] = Field(
-        title="Node Name",
-        description="The name of the node.",
-        default=None,
-    )
-    node_id: Optional[str] = Field(
-        title="Node ID",
-        description="The ID of the node.",
-        default=None,
-    )
+    @classmethod
+    def load_model(cls, *args: Any, **kwargs: Any) -> "MadsciContext":
+        """Load the lab settings model."""
+        definition_settings = DefinitionSettings()
+        if definition_settings.context_definition:
+            kwargs["definition_files"] = definition_settings.context_definition
+        return super().load_model(*args, **kwargs)

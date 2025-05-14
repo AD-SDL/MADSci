@@ -7,17 +7,31 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.lab_types import LabSettings
 
 
 def create_lab_server(
     lab_settings: Optional[LabSettings] = None,
+    context: Optional[MadsciContext] = None,
 ) -> FastAPI:
     """Creates an lab Manager's REST server."""
 
     lab_settings = lab_settings or LabSettings.load_model()
+    context = context or MadsciContext.load_model()
 
     app = FastAPI()
+
+    @app.get("/context")
+    async def get_context() -> MadsciContext:
+        """Get the context of the lab server."""
+        return context
+
+    @app.post("/context")
+    async def set_context(new_context: MadsciContext) -> None:
+        """Set the context of the lab server."""
+        nonlocal context
+        context = new_context
 
     if lab_settings.static_files_path:
         app.mount(
@@ -27,6 +41,7 @@ def create_lab_server(
                 html=True,
             ),
         )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -39,8 +54,9 @@ def create_lab_server(
 
 
 if __name__ == "__main__":
-    lab_settings = LabSettings.load_model()
-    app = create_lab_server()
+    lab_settings = LabSettings()
+    context = MadsciContext()
+    app = create_lab_server(lab_settings=lab_settings, context=context)
     uvicorn.run(
         app,
         host=lab_settings.lab_url.host,
