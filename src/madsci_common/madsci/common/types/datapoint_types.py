@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union, Dict
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
@@ -22,6 +22,8 @@ class DataPointTypeEnum(str, Enum):
 
     FILE = "file"
     DATA_VALUE = "data_value"
+    OBJECT_STORAGE = "object_storage"
+
 
 
 class DataPoint(BaseModel, extra="allow"):
@@ -93,11 +95,37 @@ class ValueDataPoint(DataPoint):
     value: Any
     """Value of the data point"""
 
+class ObjectStorageDataPoint(DataPoint):
+    """A data point that references an object in S3-compatible storage (MinIO/S3).
+
+    This data point stores essential information about an object in S3-compatible 
+    storage without storing access credentials.
+
+    Attributes:
+        url: The accessible URL for the object (can be used in frontend).
+        storage_endpoint: The endpoint of the storage service (e.g., 'minio.example.com:9000').
+        bucket_name: The name of the bucket containing the object.
+        object_name: The path/key of the object within the bucket.
+        content_type: The MIME type of the stored object.
+        size_bytes: The size of the object in bytes.
+        etag: The entity tag (typically MD5) of the object.
+        custom_metadata: Additional user-defined metadata for the object.
+    """
+    url: str = Field(..., description="Accessible URL for the object (for frontend use)")
+    storage_endpoint: str = Field(..., description="Endpoint of the storage service")
+    bucket_name: str = Field(..., description="Name of the bucket containing the object")
+    object_name: str = Field(..., description="Path/key of the object within the bucket")
+    content_type: Optional[str] = Field(None, description="MIME type of the stored object")
+    size_bytes: Optional[int] = Field(None, description="Size of the object in bytes")
+    etag: Optional[str] = Field(None, description="Entity tag (typically MD5) of the object")
+    custom_metadata: Dict[str, str] = Field(default_factory=dict, description="User-defined metadata for the object")
 
 DataPointDataModels = Annotated[
     Union[
         Annotated[FileDataPoint, Tag(DataPointTypeEnum.FILE)],
         Annotated[ValueDataPoint, Tag(DataPointTypeEnum.DATA_VALUE)],
+        Annotated[ObjectStorageDataPoint, Tag(DataPointTypeEnum.OBJECT_STORAGE)],
+
     ],
     Discriminator("data_type"),
 ]
@@ -105,8 +133,8 @@ DataPointDataModels = Annotated[
 DataPointTypeMap = {
     DataPointTypeEnum.FILE: FileDataPoint,
     DataPointTypeEnum.DATA_VALUE: ValueDataPoint,
+    DataPointTypeEnum.OBJECT_STORAGE: ObjectStorageDataPoint,
 }
-
 
 class DataManagerDefinition(ManagerDefinition):
     """Definition for a Squid Data Manager.
