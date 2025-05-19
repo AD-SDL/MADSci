@@ -115,6 +115,10 @@ class ObjectStorageDataPoint(DataPoint):
     url: str = Field(
         ..., description="Accessible URL for the object (for frontend use)"
     )
+    data_type: Literal[DataPointTypeEnum.OBJECT_STORAGE] = (
+        DataPointTypeEnum.OBJECT_STORAGE
+    )
+    """The type of the data point, in this case an object storage"""
     storage_endpoint: str = Field(..., description="Endpoint of the storage service")
     bucket_name: str = Field(
         ..., description="Name of the bucket containing the object"

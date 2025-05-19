@@ -69,29 +69,32 @@ class DataClient:
             )
             self._minio_client = None
 
-    def get_datapoint(self, datapoint_id: Union[str, ULID]) -> dict:
-        """Get an datapoint by ID."""
+    def _get_datapoint_metadata(self, datapoint_id: Union[str, ULID]) -> DataPoint:
+        """Internal method to get datapoint metadata, either from local storage or server."""
         if self.url is None:
-            return self._local_datapoints[datapoint_id]
+            if datapoint_id in self._local_datapoints:
+                return self._local_datapoints[datapoint_id]
+            raise ValueError(f"Datapoint {datapoint_id} not found in local storage")
+
         response = requests.get(f"{self.url}datapoint/{datapoint_id}", timeout=10)
         response.raise_for_status()
         return DataPoint.discriminate(response.json())
 
+    def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
+        """Get a datapoint by ID."""
+        return self._get_datapoint_metadata(datapoint_id)
+
     def get_datapoint_value(self, datapoint_id: Union[str, ULID]) -> Any:
-        """Get an datapoint value by ID. If the datapoint is JSON, returns the JSON data.
+        """Get a datapoint value by ID. If the datapoint is JSON, returns the JSON data.
         Otherwise, returns the raw data as bytes."""
-        if self.url is None:
-            datapoint = self._local_datapoints[datapoint_id]
-            if hasattr(datapoint, "value"):
-                return datapoint.value
-            if hasattr(datapoint, "path"):
-                with Path(datapoint.path).resolve().expanduser().open("rb") as f:
-                    return f.read()
-            # Handle ObjectStorageDataPoint locally if MinIO client is available
+        # First get the datapoint metadata
+        datapoint = self._get_datapoint_metadata(datapoint_id)
+        # Handle based on datapoint type (regardless of URL configuration)
+        if self._minio_client is not None:
+            # Use MinIO client if configured
             if (
                 hasattr(datapoint, "data_type")
-                and datapoint.data_type == "object_storage"
-                and self._minio_client is not None
+                and str(datapoint.data_type.value) == "object_storage"
             ):
                 try:
                     response = self._minio_client.get_object(
@@ -103,27 +106,75 @@ class DataClient:
                     return data
                 except Exception as e:
                     warnings.warn(
-                        f"Failed to get object from storage, falling back to URL: {e!s}",
+                        f"Failed to get object directly from storage: {e!s}",
                         UserWarning,
                         stacklevel=2,
                     )
-                    # Fall back to URL if direct access fails
-                    response = requests.get(datapoint.url, timeout=10)
-                    response.raise_for_status()
-                    return response.content
+            else:
+                warnings.warn(
+                    "Cannot access object_storage datapoint: MinIO client not configured",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
-        response = requests.get(f"{self.url}datapoint/{datapoint_id}/value", timeout=10)
-        response.raise_for_status()
-        try:
-            return response.json()
-        except JSONDecodeError:
-            return response.content
+        # Handle file datapoints
+        elif hasattr(datapoint, "data_type") and str(datapoint.data_type) == "file":
+            if hasattr(datapoint, "path"):
+                try:
+                    with Path(datapoint.path).resolve().expanduser().open("rb") as f:
+                        return f.read()
+                except Exception as e:
+                    warnings.warn(
+                        f"Failed to read file from path: {e!s}",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+
+        # Handle value datapoints
+        elif hasattr(datapoint, "value"):
+            return datapoint.value
+
+        # Fall back to server API if we have a URL
+        if self.url is not None:
+            response = requests.get(
+                f"{self.url}datapoint/{datapoint_id}/value", timeout=10
+            )
+            response.raise_for_status()
+            try:
+                return response.json()
+            except JSONDecodeError:
+                return response.content
+
+        raise ValueError(f"Could not get value for datapoint {datapoint_id}")
 
     def save_datapoint_value(
         self, datapoint_id: Union[str, ULID], output_filepath: str
     ) -> None:
         """Get an datapoint value by ID."""
         output_filepath = Path(output_filepath).expanduser()
+        output_filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        datapoint = self.get_datapoint(datapoint_id)
+        # Handle object storage datapoints specifically
+        if (
+            self._minio_client is not None
+            and str(datapoint.data_type.value) == "object_storage"
+        ):
+            # Use MinIO client if configured
+            try:
+                self._minio_client.fget_object(
+                    datapoint.bucket_name,
+                    datapoint.object_name,
+                    str(output_filepath),
+                )
+                return
+            except Exception as e:
+                warnings.warn(
+                    f"Failed to download from object storage: {e!s}",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
         if self.url is None:
             if self._local_datapoints[datapoint_id].data_type == "file":
                 import shutil
@@ -135,6 +186,7 @@ class DataClient:
                 with Path(output_filepath).open("w") as f:
                     f.write(str(self._local_datapoints[datapoint_id].value))
             return
+
         response = requests.get(f"{self.url}datapoint/{datapoint_id}/value", timeout=10)
         response.raise_for_status()
         try:
@@ -158,6 +210,23 @@ class DataClient:
         response.raise_for_status()
         return [DataPoint.discriminate(datapoint) for datapoint in response.json()]
 
+    def query_datapoints(self, selector: Any) -> dict[str, DataPoint]:
+        """Query datapoints based on a selector."""
+        if self.url is None:
+            return {
+                datapoint_id: datapoint
+                for datapoint_id, datapoint in self._local_datapoints.items()
+                if selector(datapoint)
+            }
+        response = requests.post(
+            f"{self.url}datapoints/query", json=selector, timeout=10
+        )
+        response.raise_for_status()
+        return {
+            datapoint_id: DataPoint.discriminate(datapoint)
+            for datapoint_id, datapoint in response.json().items()
+        }
+
     def submit_datapoint(self, datapoint: DataPoint) -> DataPoint:
         """Submit a Datapoint object.
 
@@ -171,15 +240,14 @@ class DataClient:
         Returns:
             The submitted datapoint with server-assigned IDs if applicable
         """
-
-        if self.url is None:
-            self._local_datapoints[datapoint.datapoint_id] = datapoint
-            return datapoint
-
-        # If this is a file datapoint and object storage is configured, use object storage
-        if datapoint.data_type == "file" and self._minio_client is not None:
+        # First check if this is a file datapoint and object storage is configured
+        if (
+            hasattr(datapoint, "data_type")
+            and datapoint.data_type.value == "file"  # Convert to string for comparison
+            and self._minio_client is not None
+        ):
             try:
-                # Use the internal _upload_to_object_storage method with the file path
+                # Use the internal _upload_to_object_storage method
                 object_datapoint = self._upload_to_object_storage(
                     file_path=datapoint.path,
                     label=datapoint.label,
@@ -188,17 +256,22 @@ class DataClient:
                     else None,
                 )
 
-                # If successful, return the object storage datapoint
+                # If object storage upload was successful, return the result
                 if object_datapoint is not None:
                     return object_datapoint
-
             except Exception as e:
                 warnings.warn(
-                    f"Failed to upload to object storage, falling back to regular file upload: {e!s}",
+                    f"Failed to upload to object storage, falling back: {e!s}",
                     UserWarning,
                     stacklevel=2,
                 )
-                # Fall back to regular file upload if object storage fails
+                # Fall back to regular submission if object storage fails
+
+        # Handle regular submission (non-object storage or fallback)
+        if self.url is None:
+            # Store locally if no server URL is provided
+            self._local_datapoints[datapoint.datapoint_id] = datapoint
+            return datapoint
 
         if datapoint.data_type == "file":
             files = {
@@ -220,23 +293,6 @@ class DataClient:
         )
         response.raise_for_status()
         return DataPoint.discriminate(response.json())
-
-    def query_datapoints(self, selector: Any) -> dict[str, DataPoint]:
-        """Query datapoints based on a selector."""
-        if self.url is None:
-            return {
-                datapoint_id: datapoint
-                for datapoint_id, datapoint in self._local_datapoints.items()
-                if selector(datapoint)
-            }
-        response = requests.post(
-            f"{self.url}datapoints/query", json=selector, timeout=10
-        )
-        response.raise_for_status()
-        return {
-            datapoint_id: DataPoint.discriminate(datapoint)
-            for datapoint_id, datapoint in response.json().items()
-        }
 
     def _upload_to_object_storage(
         self,
