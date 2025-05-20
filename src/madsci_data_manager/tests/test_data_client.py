@@ -148,7 +148,7 @@ def test_local_only_dataclient(tmp_path: str) -> None:
     assert fetched_file_path.read_text() == "test_value"
 
 
-@pytest.mark.minio  # Custom marker to indicate this test requires MinIO
+# @pytest.mark.minio  # Custom marker to indicate this test requires MinIO
 def test_object_storage_integration(tmp_path: str):  # noqa
     """
     Test uploading and downloading a file using MinIO.
@@ -172,7 +172,7 @@ def test_object_storage_integration(tmp_path: str):  # noqa
 
     # Initialize DataClient
     client = DataClient(
-        url="http://127.0.0.1:8003",  # Local mode
+        url="http://localhost:8003",  # Local mode
         object_storage_config=minio_config,
     )
 

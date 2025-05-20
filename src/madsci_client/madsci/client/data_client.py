@@ -399,13 +399,12 @@ class DataClient:
         # Submit the datapoint to the Data Manager (metadata only)
         if self.url is not None:
             # Use a direct POST instead of recursively calling submit_datapoint
-
             response = requests.post(
                 f"{self.url}datapoint",
-                json={"datapoint": datapoint.model_dump_json()},
+                data={"datapoint": datapoint.model_dump_json()},
+                files={},
                 timeout=10,
             )
-
             response.raise_for_status()
             return DataPoint.discriminate(response.json())
         self._local_datapoints[datapoint.datapoint_id] = datapoint
