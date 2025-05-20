@@ -88,7 +88,7 @@ class DataClient:
         """Get a datapoint value by ID. If the datapoint is JSON, returns the JSON data.
         Otherwise, returns the raw data as bytes."""
         # First get the datapoint metadata
-        datapoint = self._get_datapoint_metadata(datapoint_id)
+        datapoint = self.get_datapoint(datapoint_id)
         # Handle based on datapoint type (regardless of URL configuration)
         if self._minio_client is not None:
             # Use MinIO client if configured
@@ -118,7 +118,9 @@ class DataClient:
                 )
 
         # Handle file datapoints
-        elif hasattr(datapoint, "data_type") and str(datapoint.data_type) == "file":
+        elif (
+            hasattr(datapoint, "data_type") and str(datapoint.data_type.value) == "file"
+        ):
             if hasattr(datapoint, "path"):
                 try:
                     with Path(datapoint.path).resolve().expanduser().open("rb") as f:
@@ -394,15 +396,16 @@ class DataClient:
 
         # Use discriminate to get the proper datapoint type
         datapoint = DataPoint.discriminate(datapoint_dict)
-
         # Submit the datapoint to the Data Manager (metadata only)
         if self.url is not None:
             # Use a direct POST instead of recursively calling submit_datapoint
+
             response = requests.post(
                 f"{self.url}datapoint",
                 json={"datapoint": datapoint.model_dump_json()},
                 timeout=10,
             )
+
             response.raise_for_status()
             return DataPoint.discriminate(response.json())
         self._local_datapoints[datapoint.datapoint_id] = datapoint
