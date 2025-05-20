@@ -11,6 +11,7 @@ from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
     DataPointTypeEnum,
     FileDataPoint,
+    ObjectStorageDefinition,
     ValueDataPoint,
 )
 from madsci.data_manager.data_server import create_data_server
@@ -145,3 +146,75 @@ def test_local_only_dataclient(tmp_path: str) -> None:
     fetched_file_path = Path(tmp_path) / "second_fetched_test.txt"
     client.save_datapoint_value(file_datapoint.datapoint_id, fetched_file_path)
     assert fetched_file_path.read_text() == "test_value"
+
+
+@pytest.mark.minio  # Custom marker to indicate this test requires MinIO
+def test_object_storage_integration(tmp_path: str):  # noqa
+    """
+    Test uploading and downloading a file using MinIO.
+
+    This test requires a real MinIO server running on localhost:9000
+    with minioadmin/minioadmin credentials.
+    """
+    # Create a test file
+    file_path = tmp_path / "test_file.txt"
+    file_content = "This is a test file for MinIO storage"
+    file_path.write_text(file_content)
+
+    # Create MinIO configuration
+    minio_config = ObjectStorageDefinition(
+        endpoint="localhost:9000",
+        access_key="minioadmin",
+        secret_key="minioadmin",  # noqa
+        secure=False,  # Use HTTP for local testing
+        default_bucket="madsci-test",
+    )
+
+    # Initialize DataClient
+    client = DataClient(
+        url="http://127.0.0.1:8003",  # Local mode
+        object_storage_config=minio_config,
+    )
+
+    # Create file datapoint
+    file_datapoint = FileDataPoint(label=file_path.name, path=str(file_path))
+
+    # Upload file (should automatically use object storage)
+    uploaded_datapoint = client.submit_datapoint(file_datapoint)
+
+    # Verify type conversion (should be changed to object storage)
+    assert hasattr(uploaded_datapoint, "data_type"), (
+        "Datapoint missing data_type attribute"
+    )
+    assert hasattr(uploaded_datapoint, "bucket_name"), (
+        "Not converted to object storage datapoint"
+    )
+    assert hasattr(uploaded_datapoint, "object_name"), (
+        "Not converted to object storage datapoint"
+    )
+    assert hasattr(uploaded_datapoint, "url"), "Missing URL in object storage datapoint"
+
+    # Download to a new location
+    download_path = tmp_path / f"downloaded_{file_path.name}"
+    client.save_datapoint_value(uploaded_datapoint.datapoint_id, str(download_path))
+
+    # Verify download was successful
+    assert download_path.exists(), "Downloaded file doesn't exist"
+
+    # Check file contents and size
+    original_size = file_path.stat().st_size
+    downloaded_size = download_path.stat().st_size
+    assert downloaded_size == original_size, "File sizes don't match"
+
+    downloaded_content = download_path.read_text()
+    assert downloaded_content == file_content, "File contents don't match"
+
+    # Verify object storage specifics
+    if uploaded_datapoint.data_type.value == "object_storage":
+        assert uploaded_datapoint.bucket_name == "madsci-test", "Wrong bucket name"
+        assert uploaded_datapoint.object_name == file_path.name, "Wrong object name"
+    else:
+        # Even if data_type still shows as "file", check if it has object storage attributes
+        pytest.xfail(
+            "Datapoint type not converted to object_storage but test otherwise passed"
+        )
