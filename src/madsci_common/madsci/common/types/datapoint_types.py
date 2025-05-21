@@ -112,14 +112,20 @@ class ObjectStorageDataPoint(DataPoint):
         custom_metadata: Additional user-defined metadata for the object.
     """
 
-    url: str = Field(
-        ..., description="Accessible URL for the object (for frontend use)"
+    url: Optional[str] = Field(
+        default=None, description="Accessible URL for the object (for frontend use)"
     )
     data_type: Literal[DataPointTypeEnum.OBJECT_STORAGE] = (
         DataPointTypeEnum.OBJECT_STORAGE
     )
     """The type of the data point, in this case an object storage"""
-    storage_endpoint: str = Field(..., description="Endpoint of the storage service")
+    storage_endpoint: str = Field(
+        ..., description="S3 API endpoint (e.g., 'localhost:9000')"
+    )
+    public_endpoint: Optional[str] = Field(
+        default=None,
+        description="Public endpoint for accessing objects (e.g., 'localhost:9001')",
+    )
     path: PathLike
     """Path to the file"""
     bucket_name: str = Field(
@@ -165,7 +171,7 @@ class ObjectStorageDefinition(BaseModel):
     """Access key for authentication"""
     secret_key: str
     """Secret key for authentication"""
-    secure: bool = True
+    secure: bool = False
     """Whether to use HTTPS (True) or HTTP (False)"""
     default_bucket: str = "madsci-data"
     """Default bucket to use for storing data"""
