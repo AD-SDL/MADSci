@@ -11,6 +11,7 @@ from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
     DataPointTypeEnum,
     FileDataPoint,
+    ObjectStorageDataPoint,
     ObjectStorageDefinition,
     ValueDataPoint,
 )
@@ -149,7 +150,7 @@ def test_local_only_dataclient(tmp_path: str) -> None:
 
 
 # @pytest.mark.minio  # Custom marker to indicate this test requires MinIO
-def test_object_storage_integration(tmp_path: str):  # noqa
+def test_object_storage_from_file_datapoint(tmp_path: str):  # noqa
     """
     Test uploading and downloading a file using MinIO.
 
@@ -181,7 +182,6 @@ def test_object_storage_integration(tmp_path: str):  # noqa
 
     # Upload file (should automatically use object storage)
     uploaded_datapoint = client.submit_datapoint(file_datapoint)
-
     # Verify type conversion (should be changed to object storage)
     assert hasattr(uploaded_datapoint, "data_type"), (
         "Datapoint missing data_type attribute"
@@ -218,3 +218,101 @@ def test_object_storage_integration(tmp_path: str):  # noqa
         pytest.xfail(
             "Datapoint type not converted to object_storage but test otherwise passed"
         )
+
+
+def test_direct_object_storage_datapoint_submission(tmp_path: str):  # noqa
+    """
+    Test creating and submitting an ObjectStorageDataPoint directly.
+    This test creates an ObjectStorageDataPoint with a path attribute
+    and verifies that the client properly uploads it to MinIO.
+
+    This test requires a real MinIO server running on localhost:9000
+    with minioadmin/minioadmin credentials.
+    """
+    # Create a test file
+    file_path = tmp_path / "direct_test_file.txt"
+    file_content = "This is a direct ObjectStorageDataPoint test file"
+    file_path.write_text(file_content)
+
+    # Create MinIO configuration
+    minio_config = ObjectStorageDefinition(
+        endpoint="localhost:9000",
+        access_key="minioadmin",
+        secret_key="minioadmin",  # noqa
+        secure=False,  # Use HTTP for local testing
+        default_bucket="madsci-test",
+    )
+
+    # Initialize DataClient
+    client = DataClient(
+        url="http://localhost:8003",  # Local mode
+        object_storage_config=minio_config,
+    )
+
+    # Custom metadata for the object
+    metadata = {
+        "test_type": "direct_submission",
+        "content_description": "Text file for testing direct ObjectStorageDataPoint submission",
+    }
+
+    # Create the ObjectStorageDataPoint directly
+    # The path attribute will be used to upload but won't be stored in the datapoint
+    object_name = f"direct_{file_path.name}"
+    bucket_name = "madsci-test"
+    url = f"http://localhost:9000/{bucket_name}/{object_name}"  # noqa
+
+    # Create the ObjectStorageDataPoint directly with explicit URL
+
+    direct_datapoint = ObjectStorageDataPoint(
+        label="Direct ObjectStorage Test",
+        path=str(file_path),
+        bucket_name=bucket_name,
+        object_name=object_name,
+        storage_endpoint="localhost:9000",
+        public_endpoint="localhost:9001",  # OPTIONAL: Public endpoint for accessing objects
+        content_type="text/plain",
+        custom_metadata=metadata,
+        # url=url,  # noqa OPTIONAL: URL for the object
+        size_bytes=file_path.stat().st_size,
+        etag="temporary-etag",
+    )
+
+    # Submit the datapoint directly
+    uploaded_datapoint = client.submit_datapoint(direct_datapoint)
+    # Verify datapoint attributes
+    assert uploaded_datapoint.data_type.value == "object_storage", (
+        "Datapoint type should be object_storage"
+    )
+    assert uploaded_datapoint.bucket_name == "madsci-test", "Wrong bucket name"
+    assert uploaded_datapoint.object_name == f"direct_{file_path.name}", (
+        "Wrong object name"
+    )
+    assert uploaded_datapoint.custom_metadata.get("test_type") == "direct_submission", (
+        "Metadata not preserved"
+    )
+
+    # Download to a new location
+    download_path = tmp_path / f"downloaded_direct_{file_path.name}"
+    client.save_datapoint_value(uploaded_datapoint.datapoint_id, str(download_path))
+
+    # Verify download was successful
+    assert download_path.exists(), "Downloaded file doesn't exist"
+
+    # Check file contents and size
+    original_size = file_path.stat().st_size
+    downloaded_size = download_path.stat().st_size
+    assert downloaded_size == original_size, "File sizes don't match"
+
+    downloaded_content = download_path.read_text()
+    assert downloaded_content == file_content, "File contents don't match"
+
+    # Verify the URL format is correct
+    expected_url_prefix = f"http://localhost:9001/madsci-test/direct_{file_path.name}"
+    assert uploaded_datapoint.url.startswith(expected_url_prefix), (
+        "URL format incorrect"
+    )
+
+    # Verify etag exists
+    assert hasattr(uploaded_datapoint, "etag") and uploaded_datapoint.etag, (
+        "Missing etag"
+    )

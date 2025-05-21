@@ -73,6 +73,8 @@ def test_object_storage(file_path: str) -> None:
             logger.info(f"  - Bucket: {uploaded_datapoint.bucket_name}")
             logger.info(f"  - Object name: {uploaded_datapoint.object_name}")
             logger.info(f"  - URL: {uploaded_datapoint.url}")
+            logger.info(f"  - Storage endpoint: {uploaded_datapoint.storage_endpoint}")
+            logger.info(f"  - Public endpoint: {uploaded_datapoint.public_endpoint}")
 
         # Download to a new location
         download_path = Path(f"/Users/dozgulbas/Desktop/downloaded_{file_path.name}")
