@@ -253,6 +253,7 @@ class DataClient:
                 # Use parameters from the datapoint itself
                 return self._upload_to_object_storage(
                     file_path=datapoint.path,
+                    public_endpoint=datapoint.public_endpoint,
                     object_name=datapoint.object_name
                     if hasattr(datapoint, "object_name")
                     else None,
@@ -332,6 +333,7 @@ class DataClient:
         content_type: Optional[str] = None,
         metadata: Optional[dict[str, str]] = None,
         label: Optional[str] = None,
+        public_endpoint: Optional[str] = None,
     ) -> DataPoint:
         """Internal method to upload a file to object storage and create a datapoint.
 
@@ -342,6 +344,7 @@ class DataClient:
             content_type: MIME type of the file (auto-detected if not provided)
             metadata: Additional metadata to attach to the object
             label: Label for the datapoint (defaults to file basename)
+            public_endpoint: Optional public endpoint for the object storage
 
         Returns:
             A DataPoint referencing the uploaded file
@@ -401,18 +404,31 @@ class DataClient:
         # Get file size
         size_bytes = file_path.stat().st_size
 
+        # Determine the appropriate endpoint for the URL
+        if public_endpoint:
+            endpoint_for_url = public_endpoint
+        else:
+            # If no public endpoint provided, use storage endpoint with port adjustment for MinIO
+            endpoint_for_url = self.object_storage_config.endpoint
+            # If this is a MinIO deployment, use port 9001 for web access instead of 9000
+            if ":9000" in endpoint_for_url:
+                endpoint_for_url = endpoint_for_url.replace(":9000", ":9001")
+
         # Construct the object URL
         protocol = "https" if self.object_storage_config.secure else "http"
-        url = f"{protocol}://{self.object_storage_config.endpoint}/{bucket_name}/{object_name}"
+        url = f"{protocol}://{endpoint_for_url}/{bucket_name}/{object_name}"
 
         # Create the datapoint dictionary
         datapoint_dict = {
             "data_type": "object_storage",
             "label": label,
+            "path": str(file_path),
             "url": url,
             "bucket_name": bucket_name,
             "object_name": object_name,
             "storage_endpoint": self.object_storage_config.endpoint,
+            "public_endpoint": public_endpoint
+            or endpoint_for_url,  # Store the public endpoint
             "content_type": content_type,
             "size_bytes": size_bytes,
             "etag": result.etag,
@@ -421,7 +437,6 @@ class DataClient:
             if self.ownership_info
             else {},
         }
-
         # Use discriminate to get the proper datapoint type
         datapoint = DataPoint.discriminate(datapoint_dict)
         # Submit the datapoint to the Data Manager (metadata only)
