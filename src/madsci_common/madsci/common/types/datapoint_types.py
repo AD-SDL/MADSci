@@ -120,11 +120,13 @@ class ObjectStorageDataPoint(DataPoint):
     )
     """The type of the data point, in this case an object storage"""
     storage_endpoint: str = Field(..., description="Endpoint of the storage service")
+    path: PathLike
+    """Path to the file"""
     bucket_name: str = Field(
-        ..., description="Name of the bucket containing the object"
+        default=None, description="Name of the bucket containing the object"
     )
     object_name: str = Field(
-        ..., description="Path/key of the object within the bucket"
+        default=None, description="Path/key of the object within the bucket"
     )
     content_type: Optional[str] = Field(
         None, description="MIME type of the stored object"
@@ -208,5 +210,10 @@ class DataManagerDefinition(ManagerDefinition):
     event_client_config: Optional[EventClientConfig] = Field(
         title="Event Client Configuration",
         description="The configuration for a MADSci event client.",
+        default=None,
+    )
+    object_storage_config: Optional[ObjectStorageDefinition] = Field(
+        title="Object Storage Configuration",
+        description="Configuration for S3-compatible object storage.",
         default=None,
     )
