@@ -242,7 +242,35 @@ class DataClient:
         Returns:
             The submitted datapoint with server-assigned IDs if applicable
         """
-        # First check if this is a file datapoint and object storage is configured
+        # Case 1: Handle ObjectStorageDataPoint with path directly
+        if (
+            hasattr(datapoint, "data_type")
+            and datapoint.data_type.value == "object_storage"
+            and hasattr(datapoint, "path")
+            and self._minio_client is not None
+        ):
+            try:
+                # Use parameters from the datapoint itself
+                return self._upload_to_object_storage(
+                    file_path=datapoint.path,
+                    object_name=datapoint.object_name
+                    if hasattr(datapoint, "object_name")
+                    else None,
+                    bucket_name=datapoint.bucket_name
+                    if hasattr(datapoint, "bucket_name")
+                    else None,
+                    label=datapoint.label,
+                    metadata=datapoint.custom_metadata
+                    if hasattr(datapoint, "custom_metadata")
+                    else None,
+                )
+            except Exception as e:
+                warnings.warn(
+                    f"Failed to upload ObjectStorageDataPoint: {e!s}",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        # Case2: check if this is a file datapoint and object storage is configured
         if (
             hasattr(datapoint, "data_type")
             and datapoint.data_type.value == "file"  # Convert to string for comparison
