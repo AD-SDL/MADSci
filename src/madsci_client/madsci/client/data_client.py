@@ -254,16 +254,10 @@ class DataClient:
                 return self._upload_to_object_storage(
                     file_path=datapoint.path,
                     public_endpoint=datapoint.public_endpoint,
-                    object_name=datapoint.object_name
-                    if hasattr(datapoint, "object_name")
-                    else None,
-                    bucket_name=datapoint.bucket_name
-                    if hasattr(datapoint, "bucket_name")
-                    else None,
                     label=datapoint.label,
-                    metadata=datapoint.custom_metadata
-                    if hasattr(datapoint, "custom_metadata")
-                    else None,
+                    object_name=getattr(datapoint, "object_name", None),
+                    bucket_name=getattr(datapoint, "bucket_name", None),
+                    metadata=getattr(datapoint, "custom_metadata", None),
                 )
             except Exception as e:
                 warnings.warn(
