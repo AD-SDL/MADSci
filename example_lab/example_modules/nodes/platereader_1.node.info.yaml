@@ -43,6 +43,7 @@ config:
   state_update_interval: 2.0
   event_client_config: null
   resource_server_url: null
+  minio_client_config: null
   host: 0.0.0.0
   port: 2002
   protocol: http
@@ -97,6 +98,32 @@ config_schema:
       - 50
       title: EventLogLevel
       type: integer
+    ObjectStorageDefinition:
+      description: Configuration for S3-compatible object storage.
+      properties:
+        endpoint:
+          title: Endpoint
+          type: string
+        access_key:
+          title: Access Key
+          type: string
+        secret_key:
+          title: Secret Key
+          type: string
+        secure:
+          default: false
+          title: Secure
+          type: boolean
+        default_bucket:
+          default: madsci-data
+          title: Default Bucket
+          type: string
+      required:
+      - endpoint
+      - access_key
+      - secret_key
+      title: ObjectStorageDefinition
+      type: object
     OwnershipInfo:
       description: Information about the ownership of a MADSci object.
       properties:
@@ -205,6 +232,13 @@ config_schema:
       default: null
       description: The URL of the resource server for this node to use.
       title: Resource Client URL
+    minio_client_config:
+      anyOf:
+      - $ref: '#/$defs/ObjectStorageDefinition'
+      - type: 'null'
+      default: null
+      description: Configuration for S3-compatible object storage using MinIO.
+      title: Object Storage Configuration
     host:
       default: 127.0.0.1
       description: The host of the REST API.
