@@ -173,7 +173,7 @@ def test_object_storage_from_file_datapoint(tmp_path: str):  # noqa
 
     # Initialize DataClient
     client = DataClient(
-        url="http://localhost:8003",  # Local mode
+        # url="http://localhost:8003",  # noqa
         object_storage_config=minio_config,
     )
 
@@ -245,7 +245,7 @@ def test_direct_object_storage_datapoint_submission(tmp_path: str):  # noqa
 
     # Initialize DataClient
     client = DataClient(
-        url="http://localhost:8003",  # Local mode
+        # url="http://localhost:8003",  # noqa
         object_storage_config=minio_config,
     )
 
