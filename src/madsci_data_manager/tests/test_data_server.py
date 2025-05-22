@@ -5,6 +5,7 @@ Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires
 a working docker installation.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -240,6 +241,10 @@ def test_file_datapoint_with_minio(db_connection: Database, tmp_path: Path) -> N
         assert retrieved_result["object_name"] == result["object_name"]
 
 
+@pytest.mark.skipif(
+    not os.getenv("RUN_INTEGRATION_TESTS"),
+    reason="Set RUN_INTEGRATION_TESTS=1 to run integration tests",
+)
 def test_real_minio_upload(db_connection: Database, tmp_path: Path) -> None:
     """Test actual MinIO upload - requires running MinIO instance"""
     # No mocks - use real MinIO
