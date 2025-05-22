@@ -174,7 +174,7 @@ def test_file_datapoint_with_minio(db_connection: Database, tmp_path: Path) -> N
     mock_minio_module.Minio.return_value = mock_minio_client
 
     # Mock the Minio class to return our mock client
-    with patch("minio.Minio", return_value=mock_minio_client):
+    with patch.dict("sys.modules", {"minio": mock_minio_module}):
         # Create the test client with MinIO configuration
         app = create_data_server(
             data_manager_definition=data_manager_def_with_minio, db_client=db_connection
