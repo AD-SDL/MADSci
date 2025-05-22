@@ -218,8 +218,8 @@ class DataManagerDefinition(ManagerDefinition):
         description="The configuration for a MADSci event client.",
         default=None,
     )
-    object_storage_config: Optional[ObjectStorageDefinition] = Field(
-        title="Object Storage Configuration",
-        description="Configuration for S3-compatible object storage.",
+    minio_client_config: Optional[ObjectStorageDefinition] = Field(
+        title="MinIO Client Configuration",
+        description="Configuration for MinIO client for object storage.",
         default=None,
     )
