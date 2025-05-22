@@ -166,10 +166,12 @@ def test_file_datapoint_with_minio(db_connection: Database, tmp_path: Path) -> N
         ),
     )
 
-    # Mock the MinIO client and its methods
+    # Mock the entire minio module
+    mock_minio_module = MagicMock()
     mock_minio_client = MagicMock()
     mock_minio_client.bucket_exists.return_value = True
     mock_minio_client.fput_object.return_value = MagicMock(etag="test-etag-123")
+    mock_minio_module.Minio.return_value = mock_minio_client
 
     # Mock the Minio class to return our mock client
     with patch("minio.Minio", return_value=mock_minio_client):
