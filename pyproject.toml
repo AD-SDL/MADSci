@@ -18,6 +18,7 @@ dev = [
     "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
     "pytest>=8.3.4",
     "pytest-mock-resources[docker,mongo]>=2.12.2",
+    "minio",
     "ipykernel>=6.29.5",
     "pre-commit>=4",
 ]
