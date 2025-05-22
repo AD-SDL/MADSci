@@ -8,6 +8,7 @@ from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
+from madsci.common.types.datapoint_types import ObjectStorageDefinition
 from madsci.common.types.event_types import EventClientConfig
 from madsci.common.validators import ulid_validator
 from pydantic import (
@@ -60,6 +61,11 @@ class NodeConfig(BaseModel):
     resource_server_url: Optional[AnyUrl] = Field(
         title="Resource Client URL",
         description="The URL of the resource server for this node to use.",
+        default=None,
+    )
+    minio_client_config: Optional[ObjectStorageDefinition] = Field(
+        title="Object Storage Configuration",
+        description="Configuration for S3-compatible object storage using MinIO.",
         default=None,
     )
 
