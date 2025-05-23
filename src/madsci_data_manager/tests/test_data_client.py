@@ -1,11 +1,14 @@
 """Automated pytest unit tests for the madsci data client."""
+# flake8: noqa
 
+import time
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
 import pytest
+import requests
 from madsci.client.data_client import DataClient
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
@@ -149,31 +152,232 @@ def test_local_only_dataclient(tmp_path: str) -> None:
     assert fetched_file_path.read_text() == "test_value"
 
 
-# @pytest.mark.minio  # Custom marker to indicate this test requires MinIO
-def test_object_storage_from_file_datapoint(tmp_path: str):  # noqa
+import shutil
+import socket
+import subprocess
+import tempfile
+
+import pytest
+
+# Your existing imports
+# from your_module import ObjectStorageDefinition, DataClient, FileDataPoint, ObjectStorageDataPoint
+
+
+def find_free_port():
+    """Find a free port to use for MinIO."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+    return port
+
+
+def is_docker_available():
+    """Check if Docker is available and running."""
+    try:
+        result = subprocess.run(
+            ["docker", "version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+@pytest.fixture(scope="session")
+def minio_server():
+    """
+    Fixture that starts a temporary MinIO server using Docker CLI directly.
+    This is more reliable than testcontainers for some environments.
+    """
+    if not is_docker_available():
+        pytest.skip("Docker not available")
+
+    # Find free ports
+    minio_port = find_free_port()
+    console_port = find_free_port()
+
+    # Create temporary directory for MinIO data
+    temp_dir = tempfile.mkdtemp(prefix="minio_test_")
+
+    # Container name with timestamp to avoid conflicts
+    import time
+
+    timestamp = int(time.time())
+    container_name = f"minio_test_{timestamp}_{minio_port}"
+
+    # Start MinIO container using docker CLI
+    docker_cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "-p",
+        f"{minio_port}:9000",
+        "-p",
+        f"{console_port}:9001",
+        "-e",
+        "MINIO_ROOT_USER=minioadmin",
+        "-e",
+        "MINIO_ROOT_PASSWORD=minioadmin",
+        "-v",
+        f"{temp_dir}:/data",
+        "minio/minio:latest",
+        "server",
+        "/data",
+        "--console-address",
+        ":9001",
+    ]
+
+    container_id = None
+    try:
+        # Start the container
+        print(f"Starting MinIO container on port {minio_port}...")
+        result = subprocess.run(docker_cmd, capture_output=True, text=True, check=True)
+        container_id = result.stdout.strip()
+        print(f"MinIO container started: {container_id[:12]}")
+
+        # Wait for MinIO to be ready
+        minio_url = f"http://localhost:{minio_port}"
+        _wait_for_minio(minio_url)
+        print(f"MinIO is ready at {minio_url}")
+
+        # Create test bucket
+        _create_test_bucket("localhost", minio_port)
+
+        yield {
+            "host": "localhost",
+            "port": minio_port,
+            "console_port": console_port,
+            "endpoint": f"localhost:{minio_port}",
+            "url": minio_url,
+            "access_key": "minioadmin",
+            "secret_key": "minioadmin",
+            "container_id": container_id,
+            "container_name": container_name,
+        }
+
+    except subprocess.CalledProcessError as e:
+        pytest.skip(f"Failed to start MinIO container: {e.stderr}")
+
+    finally:
+        # Cleanup
+        if container_id:
+            print(f"Cleaning up MinIO container {container_name}...")
+            try:
+                # Stop container
+                subprocess.run(
+                    ["docker", "stop", container_name],
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                )
+                # Remove container
+                subprocess.run(
+                    ["docker", "rm", container_name],
+                    capture_output=True,
+                    timeout=30,
+                    check=False,
+                )
+                print(f"Container {container_name} cleaned up")
+            except Exception as e:
+                print(f"Warning: Could not clean up container {container_name}: {e}")
+
+        # Remove temp directory
+        try:
+            shutil.rmtree(temp_dir)
+        except Exception as e:
+            print(f"Warning: Could not remove temp directory {temp_dir}: {e}")
+
+
+def _wait_for_minio(minio_url, timeout=60):
+    """Wait for MinIO server to be ready."""
+    print(f"Waiting for MinIO at {minio_url} to be ready...")
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        try:
+            # Try the health endpoint
+            response = requests.get(f"{minio_url}/minio/health/live", timeout=5)
+            if response.status_code == 200:
+                return
+        except requests.exceptions.RequestException:
+            pass
+
+        # Also try a basic GET to see if the server responds
+        try:
+            response = requests.get(minio_url, timeout=5)
+            if response.status_code in [
+                200,
+                403,
+                404,
+            ]:  # Any response means server is up
+                return
+        except requests.exceptions.RequestException:
+            pass
+
+        print(".", end="", flush=True)
+        time.sleep(2)
+
+    raise TimeoutError(
+        f"MinIO server at {minio_url} did not become ready within {timeout} seconds"
+    )
+
+
+def _create_test_bucket(host, port):  # noqa
+    """Create the test bucket using MinIO client."""
+    try:
+        from minio import Minio
+
+        client = Minio(
+            f"{host}:{port}",
+            access_key="minioadmin",
+            secret_key="minioadmin",  # noqa
+            secure=False,
+        )
+
+        bucket_name = "madsci-test"
+        if not client.bucket_exists(bucket_name):
+            client.make_bucket(bucket_name)
+            print(f"Created test bucket: {bucket_name}")  # noqa
+        else:
+            print(f"Test bucket {bucket_name} already exists")  # noqa
+
+    except Exception as e:
+        print(f"Warning: Could not create test bucket: {e}")  # noqa
+        # Continue anyway, the application might create it
+
+
+@pytest.fixture(scope="function")
+def minio_config(minio_server):  # noqa
+    """
+    Fixture that provides MinIO configuration for individual tests.
+    """
+    return ObjectStorageDefinition(
+        endpoint=minio_server["endpoint"],
+        access_key=minio_server["access_key"],
+        secret_key=minio_server["secret_key"],
+        secure=False,  # Use HTTP for testing
+        default_bucket="madsci-test",
+    )
+
+
+def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # noqa
     """
     Test uploading and downloading a file using MinIO.
-
-    This test requires a real MinIO server running on localhost:9000
-    with minioadmin/minioadmin credentials.
+    Uses the subprocess Docker CLI approach.
     """
     # Create a test file
     file_path = tmp_path / "test_file.txt"
     file_content = "This is a test file for MinIO storage"
     file_path.write_text(file_content)
 
-    # Create MinIO configuration
-    minio_config = ObjectStorageDefinition(
-        endpoint="localhost:9000",
-        access_key="minioadmin",
-        secret_key="minioadmin",  # noqa
-        secure=False,  # Use HTTP for local testing
-        default_bucket="madsci-test",
-    )
-
-    # Initialize DataClient
+    # Initialize DataClient with the test MinIO configuration
     client = DataClient(
-        # url="http://localhost:8003",  # noqa
         object_storage_config=minio_config,
     )
 
@@ -182,6 +386,7 @@ def test_object_storage_from_file_datapoint(tmp_path: str):  # noqa
 
     # Upload file (should automatically use object storage)
     uploaded_datapoint = client.submit_datapoint(file_datapoint)
+
     # Verify type conversion (should be changed to object storage)
     assert hasattr(uploaded_datapoint, "data_type"), (
         "Datapoint missing data_type attribute"
@@ -220,32 +425,22 @@ def test_object_storage_from_file_datapoint(tmp_path: str):  # noqa
         )
 
 
-def test_direct_object_storage_datapoint_submission(tmp_path: str):  # noqa
+def test_direct_object_storage_datapoint_submission(  # noqa
+    tmp_path: Path,
+    minio_config,
+    minio_server,  # noqa
+):
     """
     Test creating and submitting an ObjectStorageDataPoint directly.
-    This test creates an ObjectStorageDataPoint with a path attribute
-    and verifies that the client properly uploads it to MinIO.
-
-    This test requires a real MinIO server running on localhost:9000
-    with minioadmin/minioadmin credentials.
+    Uses the subprocess Docker CLI approach.
     """
     # Create a test file
     file_path = tmp_path / "direct_test_file.txt"
     file_content = "This is a direct ObjectStorageDataPoint test file"
     file_path.write_text(file_content)
 
-    # Create MinIO configuration
-    minio_config = ObjectStorageDefinition(
-        endpoint="localhost:9000",
-        access_key="minioadmin",
-        secret_key="minioadmin",  # noqa
-        secure=False,  # Use HTTP for local testing
-        default_bucket="madsci-test",
-    )
-
-    # Initialize DataClient
+    # Initialize DataClient with the test MinIO configuration
     client = DataClient(
-        # url="http://localhost:8003",  # noqa
         object_storage_config=minio_config,
     )
 
@@ -256,29 +451,25 @@ def test_direct_object_storage_datapoint_submission(tmp_path: str):  # noqa
     }
 
     # Create the ObjectStorageDataPoint directly
-    # The path attribute will be used to upload but won't be stored in the datapoint
     object_name = f"direct_{file_path.name}"
     bucket_name = "madsci-test"
-    url = f"http://localhost:9000/{bucket_name}/{object_name}"  # noqa
-
-    # Create the ObjectStorageDataPoint directly with explicit URL
 
     direct_datapoint = ObjectStorageDataPoint(
         label="Direct ObjectStorage Test",
         path=str(file_path),
         bucket_name=bucket_name,
         object_name=object_name,
-        storage_endpoint="localhost:9000",
-        public_endpoint="localhost:9001",  # OPTIONAL: Public endpoint for accessing objects
+        storage_endpoint=minio_server["endpoint"],
+        public_endpoint=minio_server["endpoint"],  # Use same endpoint for testing
         content_type="text/plain",
         custom_metadata=metadata,
-        # url=url,  # noqa OPTIONAL: URL for the object
         size_bytes=file_path.stat().st_size,
         etag="temporary-etag",
     )
 
     # Submit the datapoint directly
     uploaded_datapoint = client.submit_datapoint(direct_datapoint)
+
     # Verify datapoint attributes
     assert uploaded_datapoint.data_type.value == "object_storage", (
         "Datapoint type should be object_storage"
@@ -307,12 +498,61 @@ def test_direct_object_storage_datapoint_submission(tmp_path: str):  # noqa
     assert downloaded_content == file_content, "File contents don't match"
 
     # Verify the URL format is correct
-    expected_url_prefix = f"http://localhost:9001/madsci-test/direct_{file_path.name}"
+    expected_url_prefix = f"http://{minio_server['host']}:{minio_server['port']}/madsci-test/direct_{file_path.name}"
     assert uploaded_datapoint.url.startswith(expected_url_prefix), (
-        "URL format incorrect"
+        f"URL format incorrect. Expected to start with {expected_url_prefix}, got {uploaded_datapoint.url}"
     )
 
     # Verify etag exists
     assert hasattr(uploaded_datapoint, "etag") and uploaded_datapoint.etag, (
         "Missing etag"
     )
+
+
+# Helper to clean up any leftover test containers
+def cleanup_test_containers():  # noqa
+    """Clean up any leftover MinIO test containers."""
+    try:
+        # List containers with our test prefix
+        result = subprocess.run(  # noqa
+            [  # noqa
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                "name=minio_test_",
+                "--format",
+                "{{.Names}}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            container_names = result.stdout.strip().split("\n")
+            for name in container_names:
+                if name.startswith("minio_test_"):
+                    print(f"Cleaning up leftover container: {name}")  # noqa
+                    subprocess.run(  # noqa
+                        ["docker", "stop", name],  # noqa
+                        capture_output=True,
+                        check=False,
+                    )  # noqa
+                    subprocess.run(  # noqa
+                        ["docker", "rm", name],  # noqa
+                        capture_output=True,
+                        check=False,
+                    )
+
+    except Exception as e:
+        print(f"Could not clean up test containers: {e}")  # noqa
+
+
+# Run cleanup before tests if needed
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_before_tests():  # noqa
+    """Automatically clean up any leftover containers before running tests."""
+    cleanup_test_containers()
+    yield

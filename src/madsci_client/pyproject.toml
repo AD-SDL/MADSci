@@ -15,7 +15,8 @@ dependencies = [
   "madsci.common",
   "click>=8.1.7",
   "trogon>=0.6.0",
-  "minio-py3",
+  "minio>=7.1.0",
+
 ]
 
 [project.urls]
