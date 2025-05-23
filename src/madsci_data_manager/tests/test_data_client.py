@@ -155,6 +155,7 @@ def test_local_only_dataclient(tmp_path: str) -> None:
     client.save_datapoint_value(file_datapoint.datapoint_id, fetched_file_path)
     assert fetched_file_path.read_text() == "test_value"
 
+
 def find_free_port():
     """Find a free port to use for MinIO."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
