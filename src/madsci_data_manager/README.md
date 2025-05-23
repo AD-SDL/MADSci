@@ -95,3 +95,57 @@ print(f"Retrieved FileDataPoint: {retrieved_file_datapoint}")
 client.save_datapoint_value(submitted_file_datapoint.datapoint_id, "/local/path/to/save/experiment_log.txt")
 print("File saved successfully.")
 ```
+## Object Storage Integration
+
+The MADSci Data Manager supports optional **MinIO object storage** for efficient handling of large files. When configured, file datapoints are automatically stored in object storage instead of local filesystem storage.
+
+### How It Works
+
+**With Object Storage Configured:**
+- **File datapoints** are uploaded to MinIO object storage during submission
+- **Object storage metadata** (bucket name, object name, public URL, etc.) is stored in the database
+- **Datapoint type** automatically changes from `file` to `object_storage`
+- **Automatic fallback** to local storage if object storage upload fails
+
+**Without Object Storage (Default Behavior):**
+- **File datapoints** are stored locally on the filesystem
+- **File paths** are stored in the database
+- **Existing behavior** is preserved with no changes required
+
+### Configuration
+
+Enable object storage by adding MinIO configuration to your Data Manager definition:
+
+```yaml
+# example_data_manager.manager.yaml
+name: example_data_manager
+db_url: mongodb://localhost:27017
+host: localhost
+port: 8004
+file_storage_path: ./data
+
+# Add MinIO object storage configuration
+minio_client_config:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  secure: false
+  default_bucket: "madsci-data"
+```
+
+### Docker Compose Setup
+
+The `/MADSci/compose.yaml` includes a pre-configured MinIO service:
+
+```bash
+# Start all services including MinIO
+docker compose up
+
+# Access MinIO Console
+open http://localhost:9001
+# Login: minioadmin / minioadmin
+```
+
+MinIO will be available at:
+- **API Endpoint**: `http://localhost:9000`
+- **Web Console**: `http://localhost:9001`
