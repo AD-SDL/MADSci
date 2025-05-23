@@ -6,6 +6,10 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+import shutil
+import socket
+import subprocess
+import tempfile
 
 import pytest
 import requests
@@ -150,18 +154,6 @@ def test_local_only_dataclient(tmp_path: str) -> None:
     fetched_file_path = Path(tmp_path) / "second_fetched_test.txt"
     client.save_datapoint_value(file_datapoint.datapoint_id, fetched_file_path)
     assert fetched_file_path.read_text() == "test_value"
-
-
-import shutil
-import socket
-import subprocess
-import tempfile
-
-import pytest
-
-# Your existing imports
-# from your_module import ObjectStorageDefinition, DataClient, FileDataPoint, ObjectStorageDataPoint
-
 
 def find_free_port():
     """Find a free port to use for MinIO."""
