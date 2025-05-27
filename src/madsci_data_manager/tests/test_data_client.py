@@ -197,8 +197,6 @@ def minio_server():
     temp_dir = tempfile.mkdtemp(prefix="minio_test_")
 
     # Container name with timestamp to avoid conflicts
-    import time
-
     timestamp = int(time.time())
     container_name = f"minio_test_{timestamp}_{minio_port}"
 
@@ -258,33 +256,41 @@ def minio_server():
         pytest.skip(f"Failed to start MinIO container: {e.stderr}")
 
     finally:
-        # Cleanup
+        # Individual container cleanup
         if container_id:
             print(f"Cleaning up MinIO container {container_name}...")
             try:
                 # Stop container
-                subprocess.run(
+                stop_result = subprocess.run(
                     ["docker", "stop", container_name],
                     capture_output=True,
                     timeout=30,
                     check=False,
                 )
                 # Remove container
-                subprocess.run(
+                rm_result = subprocess.run(
                     ["docker", "rm", container_name],
                     capture_output=True,
                     timeout=30,
                     check=False,
                 )
-                print(f"Container {container_name} cleaned up")
+
+                if stop_result.returncode == 0 and rm_result.returncode == 0:
+                    print(f"Container {container_name} cleaned up")
+                else:
+                    print(
+                        f" Warning: Could not fully clean up container {container_name}"
+                    )
+
             except Exception as e:
                 print(f"Warning: Could not clean up container {container_name}: {e}")
 
         # Remove temp directory
         try:
             shutil.rmtree(temp_dir)
+            print(f"Temporary directory {temp_dir} cleaned up")
         except Exception as e:
-            print(f"Warning: Could not remove temp directory {temp_dir}: {e}")
+            print(f" Warning: Could not remove temp directory {temp_dir}: {e}")
 
 
 def _wait_for_minio(minio_url, timeout=60):
@@ -502,13 +508,43 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     )
 
 
-# Helper to clean up any leftover test containers
-def cleanup_test_containers():  # noqa
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_before_tests():  # noqa
+    """Automatically clean up any leftover containers before running tests."""
+    cleanup_test_containers()
+    yield
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_after_tests():
+    """Automatically clean up any leftover containers after running tests."""
+    yield  # This runs before cleanup (i.e., after all tests complete)
+    print("\nCleaning up test containers after all tests...")
+    cleanup_test_containers()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_on_interrupt():
+    """Clean up containers even if tests are interrupted."""
+    try:
+        yield
+    except KeyboardInterrupt:
+        print("\nTests interrupted, cleaning up containers...")
+        cleanup_test_containers()
+        raise
+    except Exception:
+        # Don't interfere with other exceptions, but still try to clean up
+        cleanup_test_containers()
+        raise
+
+
+# Enhanced cleanup function with better logging
+def cleanup_test_containers():
     """Clean up any leftover MinIO test containers."""
     try:
-        # List containers with our test prefix
-        result = subprocess.run(  # noqa
-            [  # noqa
+        # List all containers with our test prefix
+        result = subprocess.run(
+            [
                 "docker",
                 "ps",
                 "-a",
@@ -525,27 +561,82 @@ def cleanup_test_containers():  # noqa
 
         if result.returncode == 0 and result.stdout.strip():
             container_names = result.stdout.strip().split("\n")
+            containers_cleaned = 0
+
             for name in container_names:
                 if name.startswith("minio_test_"):
-                    print(f"Cleaning up leftover container: {name}")  # noqa
-                    subprocess.run(  # noqa
-                        ["docker", "stop", name],  # noqa
+                    print(f"  Stopping container: {name}")
+                    stop_result = subprocess.run(
+                        ["docker", "stop", name],
                         capture_output=True,
-                        check=False,
-                    )  # noqa
-                    subprocess.run(  # noqa
-                        ["docker", "rm", name],  # noqa
-                        capture_output=True,
+                        timeout=30,
                         check=False,
                     )
 
+                    print(f"  Removing container: {name}")
+                    rm_result = subprocess.run(
+                        ["docker", "rm", name],
+                        capture_output=True,
+                        timeout=30,
+                        check=False,
+                    )
+
+                    if stop_result.returncode == 0 and rm_result.returncode == 0:
+                        containers_cleaned += 1
+                    else:
+                        print(f"   Warning: Could not fully clean up {name}")
+
+            if containers_cleaned > 0:
+                print(f"Cleaned up {containers_cleaned} test container(s)")
+            else:
+                print("No containers needed cleanup")
+        else:
+            print("No MinIO test containers found")
+
     except Exception as e:
-        print(f"Could not clean up test containers: {e}")  # noqa
+        print(f"Could not clean up test containers: {e}")
 
 
-# Run cleanup before tests if needed
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_before_tests():  # noqa
-    """Automatically clean up any leftover containers before running tests."""
-    cleanup_test_containers()
-    yield
+# Mock test for configuration validation
+def test_s3_provider_configurations():
+    """Test that different S3 provider configurations are valid."""
+
+    # AWS S3 config
+    aws_config = ObjectStorageDefinition(
+        endpoint="s3.amazonaws.com",
+        access_key="AKIAIOSFODNN7EXAMPLE",  # Example key format
+        secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        secure=True,
+        default_bucket="my-aws-bucket",
+        region="us-west-2",
+    )
+
+    # GCS config
+    gcs_config = ObjectStorageDefinition(
+        endpoint="storage.googleapis.com",
+        access_key="GOOGTS7C7FIS2E4U4RBGEXAMPLE",  # Example HMAC key format
+        secret_key="bGoa+V7g/yqDXvKRqq+JTFn4uQZbPiQJo8rkEXAMPLE",
+        secure=True,
+        default_bucket="my-gcs-bucket",
+    )
+
+    # DigitalOcean Spaces config
+    do_config = ObjectStorageDefinition(
+        endpoint="nyc3.digitaloceanspaces.com",
+        access_key="DO00EXAMPLE12345678",
+        secret_key="doe_secret_key_example_123456789abcdef",
+        secure=True,
+        default_bucket="my-do-space",
+        region="nyc3",
+    )
+
+    # Validate all configs have required fields
+    for config in [aws_config, gcs_config, do_config]:
+        assert config.endpoint
+        assert config.access_key
+        assert config.secret_key
+        assert config.default_bucket
+        assert config.secure is True  # Should be True for production services
+
+    # AWS should have region
+    assert aws_config.region == "us-west-2"

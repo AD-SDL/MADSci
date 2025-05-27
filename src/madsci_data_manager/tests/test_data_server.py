@@ -179,9 +179,100 @@ def is_docker_available():  # noqa
         return False
 
 
+def cleanup_test_containers():
+    """Clean up any leftover MinIO test containers."""
+    try:
+        # List all containers with our test prefix
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                "name=minio_test_",
+                "--format",
+                "{{.Names}}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            container_names = result.stdout.strip().split("\n")
+            containers_cleaned = 0
+
+            for name in container_names:
+                if name.startswith("minio_test_"):
+                    print(f"  Stopping container: {name}")
+                    stop_result = subprocess.run(
+                        ["docker", "stop", name],
+                        capture_output=True,
+                        timeout=30,
+                        check=False,
+                    )
+
+                    print(f"  Removing container: {name}")
+                    rm_result = subprocess.run(
+                        ["docker", "rm", name],
+                        capture_output=True,
+                        timeout=30,
+                        check=False,
+                    )
+
+                    if stop_result.returncode == 0 and rm_result.returncode == 0:
+                        containers_cleaned += 1
+                    else:
+                        print(f"  Warning: Could not fully clean up {name}")
+
+            if containers_cleaned > 0:
+                print(f"Cleaned up {containers_cleaned} test container(s)")
+            else:
+                print("No containers needed cleanup")
+        else:
+            print("No MinIO test containers found")
+
+    except Exception as e:
+        print(f"Could not clean up test containers: {e}")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_before_tests():
+    """Automatically clean up any leftover containers before running tests."""
+    cleanup_test_containers()
+    yield
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_after_tests():
+    """Automatically clean up any leftover containers after running tests."""
+    yield  # This runs before cleanup (i.e., after all tests complete)
+    print("\nCleaning up test containers after all tests...")
+    cleanup_test_containers()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_on_interrupt():
+    """Clean up containers even if tests are interrupted."""
+    try:
+        yield
+    except KeyboardInterrupt:
+        print("\nTests interrupted, cleaning up containers...")
+        cleanup_test_containers()
+        raise
+    except Exception:
+        # Don't interfere with other exceptions, but still try to clean up
+        cleanup_test_containers()
+        raise
+
+
 @pytest.fixture(scope="session")
-def minio_server():  # noqa
-    """Fixture that starts a temporary MinIO server using Docker CLI."""
+def minio_server():
+    """
+    Fixture that starts a temporary MinIO server using Docker CLI directly.
+    This is more reliable than testcontainers for some environments.
+    """
     if not is_docker_available():
         pytest.skip("Docker not available")
 
@@ -196,6 +287,7 @@ def minio_server():  # noqa
     timestamp = int(time.time())
     container_name = f"minio_test_{timestamp}_{minio_port}"
 
+    # Start MinIO container using docker CLI
     docker_cmd = [
         "docker",
         "run",
@@ -222,15 +314,18 @@ def minio_server():  # noqa
     container_id = None
     try:
         # Start the container
-        result = subprocess.run(docker_cmd, capture_output=True, text=True, check=True)  # noqa
+        print(f"Starting MinIO container on port {minio_port}...")
+        result = subprocess.run(docker_cmd, capture_output=True, text=True, check=True)
         container_id = result.stdout.strip()
+        print(f"MinIO container started: {container_id[:12]}")
 
         # Wait for MinIO to be ready
         minio_url = f"http://localhost:{minio_port}"
         _wait_for_minio(minio_url)
+        print(f"MinIO is ready at {minio_url}")
 
-        # Create test buckets
-        _create_test_buckets("localhost", minio_port)
+        # Create test bucket
+        _create_test_bucket("localhost", minio_port)
 
         yield {
             "host": "localhost",
@@ -248,27 +343,41 @@ def minio_server():  # noqa
         pytest.skip(f"Failed to start MinIO container: {e.stderr}")
 
     finally:
+        # Individual container cleanup
         if container_id:
+            print(f"Cleaning up MinIO container {container_name}...")
             try:
-                subprocess.run(  # noqa
-                    ["docker", "stop", container_name],  # noqa
+                # Stop container
+                stop_result = subprocess.run(
+                    ["docker", "stop", container_name],
                     capture_output=True,
                     timeout=30,
                     check=False,
                 )
-                subprocess.run(  # noqa
-                    ["docker", "rm", container_name],  # noqa
+                # Remove container
+                rm_result = subprocess.run(
+                    ["docker", "rm", container_name],
                     capture_output=True,
                     timeout=30,
                     check=False,
                 )
-            except Exception as e:
-                print(f"Warning: Could not clean up container {container_name}: {e}")  # noqa
 
+                if stop_result.returncode == 0 and rm_result.returncode == 0:
+                    print(f"Container {container_name} cleaned up")
+                else:
+                    print(
+                        f"Warning: Could not fully clean up container {container_name}"
+                    )
+
+            except Exception as e:
+                print(f"Warning: Could not clean up container {container_name}: {e}")
+
+        # Remove temp directory
         try:
             shutil.rmtree(temp_dir)
+            print(f"Temporary directory {temp_dir} cleaned up")
         except Exception as e:
-            print(f"Warning: Could not remove temp directory {temp_dir}: {e}")  # noqa
+            print(f"Warning: Could not remove temp directory {temp_dir}: {e}")
 
 
 def _wait_for_minio(minio_url, timeout=60):  # noqa
@@ -297,24 +406,27 @@ def _wait_for_minio(minio_url, timeout=60):  # noqa
     )
 
 
-def _create_test_buckets(host, port):  # noqa
-    """Create the test buckets using MinIO client."""
+def _create_test_bucket(host, port):
+    """Create the test bucket using MinIO client."""
     try:
         from minio import Minio
 
         client = Minio(
             f"{host}:{port}",
             access_key="minioadmin",
-            secret_key="minioadmin",  # noqa
+            secret_key="minioadmin",
             secure=False,
         )
 
-        for bucket_name in ["madsci-test", "test-bucket"]:
-            if not client.bucket_exists(bucket_name):
-                client.make_bucket(bucket_name)
+        bucket_name = "madsci-test"
+        if not client.bucket_exists(bucket_name):
+            client.make_bucket(bucket_name)
+            print(f"Created test bucket: {bucket_name}")
+        else:
+            print(f"Test bucket {bucket_name} already exists")
 
     except Exception as e:
-        print(f"Warning: Could not create test buckets: {e}")  # noqa
+        print(f"Warning: Could not create test bucket: {e}")
 
 
 def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # noqa
