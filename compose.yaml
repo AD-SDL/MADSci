@@ -67,7 +67,7 @@ services:
       - 9000:9000
       - 9001:9001
     volumes:
-      - ~/minio/data:/data
+      - .madsci/minio:/home/madsci/.madsci/minio
     command: server /data --console-address ":9001"
 
   # *Managers
