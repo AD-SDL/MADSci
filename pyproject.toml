@@ -20,5 +20,4 @@ dev = [
     "pytest-mock-resources[docker,mongo]>=2.12.2",
     "ipykernel>=6.29.5",
     "pre-commit>=4",
-    "testcontainers>=4.0.0,<5.0.0",
 ]
