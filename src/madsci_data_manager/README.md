@@ -97,7 +97,7 @@ print("File saved successfully.")
 ```
 ## Object Storage Integration
 
-The MADSci Data Manager supports optional **MinIO object storage** for efficient handling of large files. When configured, file datapoints are automatically stored in object storage instead of local filesystem storage.
+The MADSci Data Manager supports optional **MinIO object storage** for efficient handling of large files. When configured, file datapoints are automatically stored in object storage instead of local filesystem storage. [MinIO Documentation](https://min.io/docs/minio/container/index.html)
 
 ### How It Works
 
