@@ -175,6 +175,8 @@ class ObjectStorageDefinition(BaseModel):
     """Whether to use HTTPS (True) or HTTP (False)"""
     default_bucket: str = "madsci-data"
     """Default bucket to use for storing data"""
+    region: str | None = None
+    """Optional for AWS S3/other providers"""
 
 
 class DataManagerDefinition(ManagerDefinition):
