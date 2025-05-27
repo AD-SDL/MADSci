@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
+from madsci.common.object_storage_helpers import create_minio_client
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.datapoint_types import DataPoint, ObjectStorageDefinition
 from pydantic import AnyUrl
@@ -38,54 +39,10 @@ class DataClient:
         self._minio_client = None
 
         if object_storage_config:
-            self._init_object_storage()
+            self._minio_client = create_minio_client(object_storage_config)
 
-    def _init_object_storage(self) -> None:
-        """Initialize the object storage client using the provided configuration."""
-        try:
-            # Defer importing minio until needed
-            from minio import Minio
-
-            self._minio_client = Minio(
-                endpoint=self.object_storage_config.endpoint,
-                access_key=self.object_storage_config.access_key,
-                secret_key=self.object_storage_config.secret_key,
-                secure=self.object_storage_config.secure,
-                region=self.object_storage_config.region
-                if self.object_storage_config.region
-                else None,
-            )
-            try:
-                # Ensure the default bucket exists
-                if not self._minio_client.bucket_exists(
-                    self.object_storage_config.default_bucket
-                ):
-                    self._minio_client.make_bucket(
-                        self.object_storage_config.default_bucket
-                    )
-            except Exception as bucket_error:
-                # Bucket creation failed - this is OK for many scenarios:
-                # - AWS S3: User might not have CreateBucket permissions (bucket created via console)
-                # - GCS: Bucket created via GCP console
-                # - Bucket already exists but bucket_exists() failed due to permissions
-                warnings.warn(
-                    f"Could not create bucket '{self.object_storage_config.default_bucket}': {bucket_error!s}. "
-                    f"Assuming bucket exists and continuing. If uploads fail, please ensure "
-                    f"the bucket exists and you have appropriate permissions.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-
-        except Exception as e:
-            warnings.warn(
-                f"Failed to initialize object storage client: {e!s}",
-                UserWarning,
-                stacklevel=2,
-            )
-            self._minio_client = None
-
-    def _get_datapoint_metadata(self, datapoint_id: Union[str, ULID]) -> DataPoint:
-        """Internal method to get datapoint metadata, either from local storage or server."""
+    def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
+        """Get a datapoint metadata by ID, either from local storage or server."""
         if self.url is None:
             if datapoint_id in self._local_datapoints:
                 return self._local_datapoints[datapoint_id]
@@ -94,10 +51,6 @@ class DataClient:
         response = requests.get(f"{self.url}datapoint/{datapoint_id}", timeout=10)
         response.raise_for_status()
         return DataPoint.discriminate(response.json())
-
-    def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
-        """Get a datapoint by ID."""
-        return self._get_datapoint_metadata(datapoint_id)
 
     def get_datapoint_value(self, datapoint_id: Union[str, ULID]) -> Any:
         """Get a datapoint value by ID. If the datapoint is JSON, returns the JSON data.

@@ -12,6 +12,7 @@ from fastapi import FastAPI, Form, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
+from madsci.common.object_storage_helpers import create_minio_client
 from madsci.common.types.datapoint_types import DataManagerDefinition, DataPoint
 from pymongo import MongoClient
 
@@ -31,32 +32,7 @@ def create_data_server(  # noqa: C901, PLR0915
     # Initialize MinIO client if configuration is provided
     minio_client = None
     if data_manager_definition.minio_client_config:
-        try:
-            from minio import Minio
-
-            minio_client = Minio(
-                endpoint=data_manager_definition.minio_client_config.endpoint,
-                access_key=data_manager_definition.minio_client_config.access_key,
-                secret_key=data_manager_definition.minio_client_config.secret_key,
-                secure=data_manager_definition.minio_client_config.secure,
-                region=data_manager_definition.minio_client_config.region
-                if data_manager_definition.minio_client_config.region
-                else None,
-            )
-
-        except ImportError:
-            warnings.warn(
-                "MinIO configuration provided but minio package not installed. "
-                "Install with: pip install minio",
-                UserWarning,
-                stacklevel=2,
-            )
-        except Exception as e:
-            warnings.warn(
-                f"Failed to initialize MinIO client: {e!s}",
-                UserWarning,
-                stacklevel=2,
-            )
+        minio_client = create_minio_client(data_manager_definition.minio_client_config)
 
     app = FastAPI()
     datapoints_db = db_client["madsci_data"]
