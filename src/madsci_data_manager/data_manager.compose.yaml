@@ -30,4 +30,4 @@ services:
       - 9001:9001
     volumes:
       - .madsci/minio:/home/madsci/.madsci/minio
-    command: server /data --console-address ":9001"
+    command: server /home/madsci/.madsci/minio --console-address ":9001"
