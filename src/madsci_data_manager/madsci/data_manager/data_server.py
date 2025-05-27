@@ -39,6 +39,9 @@ def create_data_server(  # noqa: C901, PLR0915
                 access_key=data_manager_definition.minio_client_config.access_key,
                 secret_key=data_manager_definition.minio_client_config.secret_key,
                 secure=data_manager_definition.minio_client_config.secure,
+                region=data_manager_definition.minio_client_config.region
+                if data_manager_definition.minio_client_config.region
+                else None,
             )
 
         except ImportError:
