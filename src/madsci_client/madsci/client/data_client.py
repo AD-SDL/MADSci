@@ -51,14 +51,29 @@ class DataClient:
                 access_key=self.object_storage_config.access_key,
                 secret_key=self.object_storage_config.secret_key,
                 secure=self.object_storage_config.secure,
+                region=self.object_storage_config.region
+                if self.object_storage_config.region
+                else None,
             )
-
-            # Ensure the default bucket exists
-            if not self._minio_client.bucket_exists(
-                self.object_storage_config.default_bucket
-            ):
-                self._minio_client.make_bucket(
+            try:
+                # Ensure the default bucket exists
+                if not self._minio_client.bucket_exists(
                     self.object_storage_config.default_bucket
+                ):
+                    self._minio_client.make_bucket(
+                        self.object_storage_config.default_bucket
+                    )
+            except Exception as bucket_error:
+                # Bucket creation failed - this is OK for many scenarios:
+                # - AWS S3: User might not have CreateBucket permissions (bucket created via console)
+                # - GCS: Bucket created via GCP console
+                # - Bucket already exists but bucket_exists() failed due to permissions
+                warnings.warn(
+                    f"Could not create bucket '{self.object_storage_config.default_bucket}': {bucket_error!s}. "
+                    f"Assuming bucket exists and continuing. If uploads fail, please ensure "
+                    f"the bucket exists and you have appropriate permissions.",
+                    UserWarning,
+                    stacklevel=2,
                 )
 
         except Exception as e:
