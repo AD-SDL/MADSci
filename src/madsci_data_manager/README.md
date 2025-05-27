@@ -149,3 +149,127 @@ open http://localhost:9001
 MinIO will be available at:
 - **API Endpoint**: `http://localhost:9000`
 - **Web Console**: `http://localhost:9001`
+
+
+# Cloud Storage Integration
+
+The MadSci Data Client supports multiple cloud storage providers through S3-compatible APIs. This allows you to store large files efficiently across different cloud platforms.
+
+## Supported Providers
+
+- **Amazon Web Services (AWS) S3**
+- **Google Cloud Storage (GCS)** - using S3-compatible HMAC authentication
+- **MinIO** (self-hosted or cloud)
+- **Any S3-compatible storage service**
+
+## Configuration
+
+### AWS S3
+
+```python
+from madsci.common.types.datapoint_types import ObjectStorageDefinition
+from madsci.client.data_client import DataClient
+
+aws_config = ObjectStorageDefinition(
+    endpoint="s3.amazonaws.com",
+    access_key="AKIAIOSFODNN7EXAMPLE",  # Your AWS Access Key ID
+    secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # Your AWS Secret Access Key
+    secure=True,
+    default_bucket="my-madsci-bucket",
+    region="us-east-1"  # Specify your AWS region
+)
+
+client = DataClient(object_storage_config=aws_config)
+```
+
+### Google Cloud Storage (GCS)
+
+GCS requires HMAC keys for S3-compatible access:
+
+```python
+gcs_config = ObjectStorageDefinition(
+    endpoint="storage.googleapis.com",
+    access_key="GOOGTS7C7FIS2E4U4RBGEXAMPLE",  # Your GCS HMAC Access Key
+    secret_key="bGoa+V7g/yqDXvKRqq+JTFn4uQZbPiQJo8rkEXAMPLE",  # Your GCS HMAC Secret
+    secure=True,
+    default_bucket="my-gcs-bucket"
+)
+
+client = DataClient(object_storage_config=gcs_config)
+```
+
+## Authentication Setup
+
+### AWS S3 Authentication
+
+1. **IAM User Method** (Recommended):
+   ```bash
+   # Create IAM user with S3 permissions
+   # Get Access Key ID and Secret Access Key from AWS Console
+   ```
+
+2. **Environment Variables**:
+   ```bash
+   export AWS_ACCESS_KEY_ID="your-access-key"
+   export AWS_SECRET_ACCESS_KEY="your-secret-key"
+   ```
+
+3. **AWS CLI Profile**:
+   ```bash
+   aws configure --profile madsci
+   # Then reference the profile in your application
+   ```
+
+### Google Cloud Storage Authentication
+
+1. **Generate HMAC Keys**:
+   ```bash
+   # In Google Cloud Console:
+   # Storage > Settings > Interoperability > Create Key
+   ```
+
+2. **Service Account Method**:
+   ```bash
+   # Create service account with Storage Admin role
+   # Generate HMAC key for the service account
+   ```
+
+## Usage Examples
+
+```python
+from madsci.common.types.datapoint_types import ObjectStorageDataPoint
+
+# Create object storage datapoint directly
+storage_datapoint = ObjectStorageDataPoint(
+    label="Preprocessed Data",
+    path="/path/to/local-file.parquet",
+    bucket_name="my-bucket",
+    object_name="datasets/processed_data.parquet",
+    storage_endpoint="s3.amazonaws.com",
+    public_endpoint="s3.amazonaws.com",
+    content_type="application/octet-stream",
+    custom_metadata={
+        "dataset_version": "v2.1",
+        "processing_date": "2024-01-15"
+    }
+)
+
+uploaded = client.submit_datapoint(storage_datapoint)
+```
+
+## Regional Endpoints
+
+### AWS S3 Regional Endpoints
+```python
+# US East (N. Virginia) - Default
+endpoint="s3.amazonaws.com"
+
+# US West (Oregon)
+endpoint="s3.us-west-2.amazonaws.com"
+
+# Europe (Ireland)
+endpoint="s3.eu-west-1.amazonaws.com"
+
+# Asia Pacific (Tokyo)
+endpoint="s3.ap-northeast-1.amazonaws.com"
+```
