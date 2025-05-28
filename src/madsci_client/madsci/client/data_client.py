@@ -1,15 +1,24 @@
 """Client for the MADSci Experiment Manager."""
 
-import mimetypes
 import warnings
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
-from madsci.common.object_storage_helpers import create_minio_client
+from madsci.common.object_storage_helpers import (
+    ObjectNamingStrategy,
+    create_minio_client,
+    download_file_from_object_storage,
+    get_object_data_from_storage,
+    upload_file_to_object_storage,
+)
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.datapoint_types import DataPoint, ObjectStorageDefinition
+from madsci.common.types.datapoint_types import (
+    DataPoint,
+    DataPointTypeEnum,
+    ObjectStorageDefinition,
+)
 from pydantic import AnyUrl
 from ulid import ULID
 
@@ -60,24 +69,13 @@ class DataClient:
         # Handle based on datapoint type (regardless of URL configuration)
         if self._minio_client is not None:
             # Use MinIO client if configured
-            if (
-                hasattr(datapoint, "data_type")
-                and str(datapoint.data_type.value) == "object_storage"
-            ):
-                try:
-                    response = self._minio_client.get_object(
-                        datapoint.bucket_name, datapoint.object_name
-                    )
-                    data = response.read()
-                    response.close()
-                    response.release_conn()
+            if datapoint.data_type == DataPointTypeEnum.OBJECT_STORAGE:
+                data = get_object_data_from_storage(
+                    self._minio_client, datapoint.bucket_name, datapoint.object_name
+                )
+                if data is not None:
                     return data
-                except Exception as e:
-                    warnings.warn(
-                        f"Failed to get object directly from storage: {e!s}",
-                        UserWarning,
-                        stacklevel=2,
-                    )
+                # Fall back to server API if object storage fails
             else:
                 warnings.warn(
                     "Cannot access object_storage datapoint: MinIO client not configured",
@@ -86,9 +84,7 @@ class DataClient:
                 )
 
         # Handle file datapoints
-        elif (
-            hasattr(datapoint, "data_type") and str(datapoint.data_type.value) == "file"
-        ):
+        elif datapoint.data_type == DataPointTypeEnum.FILE:
             if hasattr(datapoint, "path"):
                 try:
                     with Path(datapoint.path).resolve().expanduser().open("rb") as f:
@@ -128,22 +124,16 @@ class DataClient:
         # Handle object storage datapoints specifically
         if (
             self._minio_client is not None
-            and str(datapoint.data_type.value) == "object_storage"
+            and datapoint.data_type == DataPointTypeEnum.OBJECT_STORAGE
+            and download_file_from_object_storage(
+                self._minio_client,
+                datapoint.bucket_name,
+                datapoint.object_name,
+                output_filepath,
+            )
         ):
-            # Use MinIO client if configured
-            try:
-                self._minio_client.fget_object(
-                    datapoint.bucket_name,
-                    datapoint.object_name,
-                    str(output_filepath),
-                )
-                return
-            except Exception as e:
-                warnings.warn(
-                    f"Failed to download from object storage: {e!s}",
-                    UserWarning,
-                    stacklevel=2,
-                )
+            return
+            # If download failed, fall back to server API
 
         if self.url is None:
             if self._local_datapoints[datapoint_id].data_type == "file":
@@ -212,8 +202,7 @@ class DataClient:
         """
         # Case 1: Handle ObjectStorageDataPoint with path directly
         if (
-            hasattr(datapoint, "data_type")
-            and datapoint.data_type.value == "object_storage"
+            datapoint.data_type.value == "object_storage"
             and hasattr(datapoint, "path")
             and self._minio_client is not None
         ):
@@ -235,8 +224,7 @@ class DataClient:
                 )
         # Case2: check if this is a file datapoint and object storage is configured
         if (
-            hasattr(datapoint, "data_type")
-            and datapoint.data_type.value == "file"  # Convert to string for comparison
+            datapoint.data_type.value == "file"  # Convert to string for comparison
             and self._minio_client is not None
         ):
             try:
@@ -244,9 +232,7 @@ class DataClient:
                 object_datapoint = self._upload_to_object_storage(
                     file_path=datapoint.path,
                     label=datapoint.label,
-                    metadata={"original_datapoint_id": datapoint.datapoint_id}
-                    if hasattr(datapoint, "datapoint_id")
-                    else None,
+                    metadata={"original_datapoint_id": datapoint.datapoint_id},
                 )
 
                 # If object storage upload was successful, return the result
@@ -319,88 +305,36 @@ class DataClient:
                 "Object storage is not configured. Initialize DataClient with object_storage_config."
             )
 
-        # Import minio modules only when needed
-        from minio.error import S3Error
+        # Use the helper function to upload the file
+        object_storage_info = upload_file_to_object_storage(
+            minio_client=self._minio_client,
+            object_storage_config=self.object_storage_config,
+            file_path=file_path,
+            bucket_name=bucket_name,
+            object_name=object_name,
+            content_type=content_type,
+            metadata=metadata,
+            naming_strategy=ObjectNamingStrategy.FILENAME_ONLY,  # Client uses simple naming
+            public_endpoint=public_endpoint,
+            label=label,
+        )
 
-        # Convert to Path object and resolve
-        file_path = Path(file_path).expanduser().resolve()
-
-        # Use defaults if not specified
-        object_name = object_name or file_path.name
-        bucket_name = bucket_name or self.object_storage_config.default_bucket
-        label = label or file_path.name
-
-        # Auto-detect content type if not provided
-        if content_type is None:
-            content_type, _ = mimetypes.guess_type(str(file_path))
-            content_type = content_type or "application/octet-stream"
-
-        # Ensure the bucket exists
-        try:
-            if not self._minio_client.bucket_exists(bucket_name):
-                self._minio_client.make_bucket(bucket_name)
-        except S3Error as e:
-            warnings.warn(
-                f"Failed to check/create bucket: {e!s}",
-                UserWarning,
-                stacklevel=2,
-            )
-            return None
-        # Upload the file
-        try:
-            result = self._minio_client.fput_object(
-                bucket_name=bucket_name,
-                object_name=object_name,
-                file_path=str(file_path),
-                content_type=content_type,
-                metadata=metadata,
-            )
-        except S3Error as e:
-            warnings.warn(
-                f"Failed to upload file to object storage: {e!s}",
-                UserWarning,
-                stacklevel=2,
-            )
-            return None
-
-        # Get file size
-        size_bytes = file_path.stat().st_size
-
-        # Determine the appropriate endpoint for the URL
-        if public_endpoint:
-            endpoint_for_url = public_endpoint
-        else:
-            # If no public endpoint provided, use storage endpoint with port adjustment for MinIO
-            endpoint_for_url = self.object_storage_config.endpoint
-            # If this is a MinIO deployment, use port 9001 for web access instead of 9000
-            if ":9000" in endpoint_for_url:
-                endpoint_for_url = endpoint_for_url.replace(":9000", ":9001")
-
-        # Construct the object URL
-        protocol = "https" if self.object_storage_config.secure else "http"
-        url = f"{protocol}://{endpoint_for_url}/{bucket_name}/{object_name}"
+        if object_storage_info is None:
+            raise ValueError("Failed to upload file to object storage")
 
         # Create the datapoint dictionary
         datapoint_dict = {
             "data_type": "object_storage",
-            "label": label,
-            "path": str(file_path),
-            "url": url,
-            "bucket_name": bucket_name,
-            "object_name": object_name,
-            "storage_endpoint": self.object_storage_config.endpoint,
-            "public_endpoint": public_endpoint
-            or endpoint_for_url,  # Store the public endpoint
-            "content_type": content_type,
-            "size_bytes": size_bytes,
-            "etag": result.etag,
-            "custom_metadata": metadata or {},
+            "path": str(Path(file_path).expanduser().resolve()),
             "ownership_info": self.ownership_info.model_dump()
             if self.ownership_info
             else {},
+            **object_storage_info,  # Unpack all the storage info
         }
+
         # Use discriminate to get the proper datapoint type
         datapoint = DataPoint.discriminate(datapoint_dict)
+
         # Submit the datapoint to the Data Manager (metadata only)
         if self.url is not None:
             # Use a direct POST instead of recursively calling submit_datapoint
@@ -412,5 +346,6 @@ class DataClient:
             )
             response.raise_for_status()
             return DataPoint.discriminate(response.json())
+
         self._local_datapoints[datapoint.datapoint_id] = datapoint
         return datapoint

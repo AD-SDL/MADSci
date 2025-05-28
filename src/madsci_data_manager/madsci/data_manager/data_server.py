@@ -1,7 +1,6 @@
 """REST Server for the MADSci Data Manager"""
 
 import json
-import mimetypes
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -12,8 +11,17 @@ from fastapi import FastAPI, Form, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
-from madsci.common.object_storage_helpers import create_minio_client
-from madsci.common.types.datapoint_types import DataManagerDefinition, DataPoint
+from madsci.common.object_storage_helpers import (
+    ObjectNamingStrategy,
+    create_minio_client,
+    upload_file_to_object_storage,
+)
+from madsci.common.types.datapoint_types import (
+    DataManagerDefinition,
+    DataPoint,
+    ObjectStorageDefinition,
+)
+from minio import Minio
 from pymongo import MongoClient
 
 
@@ -47,6 +55,8 @@ def create_data_server(  # noqa: C901, PLR0915
         return data_manager_definition
 
     def _upload_file_to_minio(
+        minio_client: Minio,
+        object_storage_config: ObjectStorageDefinition,
         file_path: Path,
         filename: str,
         label: Optional[str] = None,
@@ -56,80 +66,19 @@ def create_data_server(  # noqa: C901, PLR0915
         if minio_client is None:
             return None
 
-        try:
-            from minio.error import S3Error
-        except ImportError:
-            return None
-
-        # Use default bucket from config
-        bucket_name = data_manager_definition.minio_client_config.default_bucket
-
-        # Create object name with timestamp and filename
-        time = datetime.now()
-        object_name = f"{time.year}/{time.month}/{time.day}/{filename}"
-
-        # Auto-detect content type (file datapoints don't have content_type)
-        content_type, _ = mimetypes.guess_type(str(file_path))
-        content_type = content_type or "application/octet-stream"
-
-        # Ensure the bucket exists
-        try:
-            if not minio_client.bucket_exists(bucket_name):
-                minio_client.make_bucket(bucket_name)
-        except S3Error as e:
-            warnings.warn(
-                f"Failed to check/create bucket: {e!s}",
-                UserWarning,
-                stacklevel=2,
-            )
-            return None
-
-        # Upload the file
-        try:
-            result = minio_client.fput_object(
-                bucket_name=bucket_name,
-                object_name=object_name,
-                file_path=str(file_path),
-                content_type=content_type,
-                metadata=metadata,
-            )
-        except S3Error as e:
-            warnings.warn(
-                f"Failed to upload file to object storage: {e!s}",
-                UserWarning,
-                stacklevel=2,
-            )
-            return None
-
-        # Get file size
-        size_bytes = file_path.stat().st_size
-
-        # Determine the appropriate endpoint for the URL
-        endpoint_for_url = data_manager_definition.minio_client_config.endpoint
-        # If this is a MinIO deployment, use port 9001 for web access instead of 9000
-        if ":9000" in endpoint_for_url and (
-            "localhost" in endpoint_for_url or "127.0.0.1" in endpoint_for_url
-        ):
-            endpoint_for_url = endpoint_for_url.replace(":9000", ":9001")
-
-        # Construct the object URL
-        protocol = (
-            "https" if data_manager_definition.minio_client_config.secure else "http"
+        # Use the helper function with server's timestamped naming strategy
+        return upload_file_to_object_storage(
+            minio_client=minio_client,
+            object_storage_config=object_storage_config,
+            file_path=file_path,
+            bucket_name=object_storage_config.default_bucket,
+            object_name=None,  # Let the helper generate the name
+            content_type=None,  # Let the helper detect it
+            metadata=metadata,
+            naming_strategy=ObjectNamingStrategy.TIMESTAMPED_PATH,  # Server uses timestamped paths
+            public_endpoint=None,  # Use default endpoint logic
+            label=label or filename,
         )
-        url = f"{protocol}://{endpoint_for_url}/{bucket_name}/{object_name}"
-
-        return {
-            "bucket_name": bucket_name,
-            "object_name": object_name,
-            "storage_endpoint": data_manager_definition.minio_client_config.endpoint,
-            "public_endpoint": endpoint_for_url,
-            "url": url,
-            "label": label or filename,
-            "content_type": content_type,
-            "size_bytes": size_bytes,
-            "etag": result.etag,
-            "custom_metadata": metadata or {},
-        }
 
     @app.post("/datapoint")
     async def create_datapoint(
@@ -162,12 +111,12 @@ def create_data_server(  # noqa: C901, PLR0915
 
                     # Upload to MinIO object storage
                     object_storage_info = _upload_file_to_minio(
+                        minio_client=minio_client,
+                        object_storage_config=data_manager_definition.minio_client_config,
                         file_path=temp_path,
                         filename=file.filename,
                         label=datapoint_obj.label,
-                        metadata={"original_datapoint_id": datapoint_obj.datapoint_id}
-                        if hasattr(datapoint_obj, "datapoint_id")
-                        else None,
+                        metadata={"original_datapoint_id": datapoint_obj.datapoint_id},
                     )
 
                     # Clean up temporary file
@@ -189,29 +138,7 @@ def create_data_server(  # noqa: C901, PLR0915
                         UserWarning,
                         stacklevel=2,
                     )
-                    # Use local storage fallback
-                    time = datetime.now()
-                    path = (
-                        Path(data_manager_definition.file_storage_path).expanduser()
-                        / str(time.year)
-                        / str(time.month)
-                        / str(time.day)
-                    )
-                    path.mkdir(parents=True, exist_ok=True)
-                    final_path = path / (
-                        datapoint_obj.datapoint_id + "_" + file.filename
-                    )
-
-                    # Reset file position and save locally
-                    file.file.seek(0)
-                    with Path.open(final_path, "wb") as f:
-                        contents = file.file.read()
-                        f.write(contents)
-                    datapoint_obj.path = str(final_path)
-                    datapoints.insert_one(datapoint_obj.model_dump(mode="json"))
-                    return datapoint_obj
-
-                # No MinIO config or not a file datapoint - use existing local storage logic
+                # Fallback to local storage
                 time = datetime.now()
                 path = (
                     Path(data_manager_definition.file_storage_path).expanduser()
@@ -222,7 +149,8 @@ def create_data_server(  # noqa: C901, PLR0915
                 path.mkdir(parents=True, exist_ok=True)
                 final_path = path / (datapoint_obj.datapoint_id + "_" + file.filename)
 
-                # Save file locally (existing functionality)
+                # Reset file position and save locally
+                file.file.seek(0)
                 with Path.open(final_path, "wb") as f:
                     contents = file.file.read()
                     f.write(contents)
@@ -233,6 +161,7 @@ def create_data_server(  # noqa: C901, PLR0915
             # No files - just insert the datapoint (for ValueDataPoint, etc.)
             datapoints.insert_one(datapoint_obj.model_dump(mode="json"))
             return datapoint_obj
+
         return None
 
     @app.get("/datapoint/{datapoint_id}")
