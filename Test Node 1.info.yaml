@@ -1,0 +1,169 @@
+node_name: Test Node 1
+node_id: 01JVT1B31NRHTZ6MB83NS030DF
+node_url: null
+node_description: null
+node_type: null
+module_name: test_node
+module_version: 0.0.1
+capabilities:
+  get_info: true
+  get_state: true
+  get_status: true
+  send_action: true
+  get_action_result: true
+  get_action_history: true
+  action_files: true
+  send_admin_commands: true
+  set_config: true
+  get_resources: false
+  get_log: true
+  admin_commands:
+  - cancel
+  - lock
+  - pause
+  - reset
+  - resume
+  - safety_stop
+  - shutdown
+  - unlock
+commands: {}
+is_template: false
+config_defaults: {}
+actions:
+  test_action:
+    name: test_action
+    description: A test action.
+    args:
+      test_param:
+        name: test_param
+        description: ''
+        argument_type: int
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+  test_fail:
+    name: test_fail
+    description: A test action that fails.
+    args:
+      test_param:
+        name: test_param
+        description: ''
+        argument_type: int
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+  test_optional_param_action:
+    name: test_optional_param_action
+    description: A test action with an optional parameter.
+    args:
+      test_param:
+        name: test_param
+        description: ''
+        argument_type: int
+        required: true
+        default: null
+      optional_param:
+        name: optional_param
+        description: ''
+        argument_type: str
+        required: false
+        default: ''
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+  test_annotation_action:
+    name: test_annotation_action
+    description: A no-op action to test argument parsing
+    args:
+      test_param:
+        name: test_param
+        description: Description
+        argument_type: int
+        required: false
+        default: 1
+      test_param_2:
+        name: test_param_2
+        description: Description 2
+        argument_type: int
+        required: false
+        default: 2
+      test_param_3:
+        name: test_param_3
+        description: Description 3
+        argument_type: int
+        required: false
+        default: 3
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+config:
+  status_update_interval: 2.0
+  state_update_interval: 2.0
+  host: 127.0.0.1
+  port: 2000
+  protocol: http
+  test_required_param: 1
+  test_optional_param: null
+  test_default_param: 42
+config_schema:
+  additionalProperties: true
+  description: Configuration for the test node module.
+  properties:
+    status_update_interval:
+      anyOf:
+      - type: number
+      - type: 'null'
+      default: 2.0
+      description: The interval in seconds at which the node should update its status.
+      title: Status Update Interval
+    state_update_interval:
+      anyOf:
+      - type: number
+      - type: 'null'
+      default: 2.0
+      description: The interval in seconds at which the node should update its state.
+      title: State Update Interval
+    host:
+      default: 127.0.0.1
+      description: The host of the REST API.
+      title: Host
+      type: string
+    port:
+      default: 2000
+      description: The port of the REST API.
+      title: Port
+      type: integer
+    protocol:
+      default: http
+      description: The protocol of the REST API, either 'http' or 'https'.
+      title: Protocol
+      type: string
+    test_required_param:
+      title: Test Required Param
+      type: integer
+    test_optional_param:
+      anyOf:
+      - type: integer
+      - type: 'null'
+      default: null
+      title: Test Optional Param
+    test_default_param:
+      default: 42
+      title: Test Default Param
+      type: integer
+  required:
+  - test_required_param
+  title: TestNodeConfig
+  type: object

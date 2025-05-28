@@ -33,10 +33,9 @@ class EventClient:
 
         Keyword Arguments are used to override the values of the passed in/default config.
         """
-        if config is not None:
+        if config:
             self.config = config
-            if kwargs:
-                [self.config.__setattr__(key, value) for key, value in kwargs.items()]
+            self.config.__init__(**kwargs)
         else:
             self.config = EventClientConfig(**kwargs)
         if self.config.name:
@@ -66,11 +65,10 @@ class EventClient:
         self.event_server = self.config.event_server_url
         self.source = self.config.source
         self.log_debug(
-            Event(
-                event_type=EventType.LOG_INFO,
-                event_data=f"Event logger {self.name} initialized.",
-            )
+            "Event logger {self.name} initialized.",
         )
+        self.log_debug(self.config)
+        print(self.config.log_level)
 
     def get_log(self) -> dict[str, Event]:
         """Read the log"""

@@ -2,115 +2,44 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Optional, Union
+from typing import Literal, Optional
 
-import dotenv
 from madsci.common.types.base_types import (
-    _T,
     MadsciBaseModel,
     MadsciBaseSettings,
     PathLike,
 )
 from madsci.common.utils import new_ulid_str
-from pydantic import ConfigDict
-from pydantic.functional_validators import field_validator
+from pydantic import ConfigDict, Field
 from pydantic.networks import AnyUrl
-from sqlmodel.main import Field
 
 
 class LabSettings(
     MadsciBaseSettings,
     env_file=(".env", "lab.env"),
-    toml_file="lab.toml",
-    yaml_file="lab.yaml",
-    json_file="lab.json",
+    toml_file=("settings.toml", "lab.settings.toml"),
+    yaml_file=("settings.yaml", "lab.settings.yaml"),
+    json_file=("settings.json", "lab.settings.json"),
     env_prefix="LAB_",
 ):
     """Settings for the MADSci Lab."""
 
-    name: str = Field(
-        title="Lab Name",
-        description="The name of the lab.",
-        default="MADSci Lab",
-    )
-    description: Optional[str] = Field(
-        default=None,
-        title="Description",
-        description="A description of the lab.",
-    )
-    lab_id: str = Field(
-        title="Lab ID",
-        description="The ID of the lab.",
-        default=None,
-        alias="lab_id",  # * Don't double prefix
-    )
-    lab_url: Optional[AnyUrl] = Field(
+    lab_server_url: AnyUrl = Field(
         title="Lab URL",
         description="The URL of the lab manager.",
         default=AnyUrl("http://localhost:8000"),
-        alias="lab_url",  # * Don't double prefix
+        alias="lab_server_url",  # * Don't double prefix
     )
-    static_files_path: Optional[PathLike] = Field(
+    dashboard_files_path: Optional[PathLike] = Field(
         default=Path("~") / "MADSci" / "src" / "madsci_squid" / "ui" / "dist",
-        title="Static Files Path",
+        title="Dashboard Static Files Path",
         description="Path to the static files for the dashboard. Set to None to disable the dashboard.",
     )
-    lab_settings_files: Union[Optional[PathLike], list[PathLike]] = Field(
-        title="Lab File",
-        description="Path to the lab settings file(s) to use. Overrides the defaults.",
-        default=None,
-    )
-
-    @field_validator("lab_id", mode="before")
-    @classmethod
-    def validate_lab_id(cls, v: Optional[str]) -> str:
-        """Validate the lab ID, creating and saving if new."""
-        if not v:
-            v = new_ulid_str()
-            env_file = dotenv.find_dotenv("lab.env") or dotenv.find_dotenv(".env")
-            if not env_file:
-                env_file = Path(".env")
-                env_file.touch()
-            dotenv.set_key(env_file, "LAB_ID", v)
-        return v
-
-    @classmethod
-    def load_model(cls: _T, *args: Any, **kwargs: Any) -> _T:
-        """Load the lab settings model."""
-        instance = super().load_model(*args, **kwargs)
-        if instance.lab_settings_files:
-            kwargs["definition_files"] = instance.lab_settings_files
-        return super().load_model(*args, **kwargs)
-
-
-class ManagerDefinition(MadsciBaseModel):
-    """Definition for a Squid Manager."""
-
-    model_config = ConfigDict(extra="allow")
-    _definition_file_patterns: ClassVar[list[str]] = ["*.manager.yaml"]
-
-    name: str = Field(
-        title="Manager Name",
-        description="The name of this manager instance.",
-    )
-    manager_id: Optional[str] = Field(
-        title="Manager ID",
-        description="The ID of the manager.",
-        default_factory=new_ulid_str,
-    )
-    description: Optional[str] = Field(
-        default=None,
-        title="Description",
-        description="A description of the manager.",
-    )
-    manager_type: "ManagerType" = Field(
-        title="Manager Type",
-        description="The type of the manager, used by other components or managers to find matching managers.",
-    )
-    url: Optional[AnyUrl] = Field(
-        default=None,
-        title="Manager URL",
-        description="The URL of the manager's API.",
+    lab_definition: PathLike = Field(
+        title="Lab Definition File",
+        description="Path to the lab definition file to use.",
+        default=Path("lab.manager.yaml"),
+        alias="lab_definition",  # * Don't double prefix
     )
 
 
@@ -133,3 +62,48 @@ class ManagerType(str, Enum):
             if member.lower() == value:
                 return member
         raise ValueError(f"Invalid ManagerTypes: {value}")
+
+
+class ManagerDefinition(MadsciBaseModel):
+    """Definition for a MADSci Manager."""
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str = Field(
+        title="Manager Name",
+        description="The name of this manager instance.",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        title="Description",
+        description="A description of the manager.",
+    )
+    manager_type: "ManagerType" = Field(
+        title="Manager Type",
+        description="The type of the manager, used by other components or managers to find matching managers.",
+    )
+
+
+class LabDefinition(ManagerDefinition):
+    """Definition for a MADSci Lab."""
+
+    name: str = Field(
+        title="Lab Name",
+        description="The name of the lab.",
+        default="MADSci Lab",
+    )
+    lab_id: str = Field(
+        title="Lab ID",
+        description="The ID of the lab.",
+        default_factory=new_ulid_str,
+    )
+    manager_type: Literal[ManagerType.LAB_MANAGER] = Field(
+        title="Manager Type",
+        description="The type of the manager, used by other components or managers to find matching managers.",
+        default=ManagerType.LAB_MANAGER,
+    )
+    description: Optional[str] = Field(
+        default=None,
+        title="Description",
+        description="A description of the lab.",
+    )

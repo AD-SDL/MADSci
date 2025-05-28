@@ -3,7 +3,6 @@
 import datetime
 from typing import Optional
 
-import requests
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,19 +35,8 @@ def create_experiment_server(  # noqa: C901, PLR0915
         )
 
     # * Logger
-    logger = EventClient(experiment_manager_definition.event_client_config)
+    logger = EventClient()
     logger.log_info(experiment_manager_definition)
-
-    if experiment_manager_definition.lab_server_url is not None:
-        try:
-            urls = requests.get(
-                experiment_manager_definition.lab_server_url + "/urls", timeout=10
-            ).json()
-            experiment_manager_definition.workcell_server_url = urls["workcell_manager"]
-            experiment_manager_definition.resource_server_url = urls["resource_manager"]
-            experiment_manager_definition.data_server_url = urls["data_manager"]
-        except Exception as e:
-            logger.log_error(e)
 
     # * DB Config
     if db_connection is None:

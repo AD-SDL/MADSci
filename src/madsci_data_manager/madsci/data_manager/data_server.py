@@ -29,7 +29,6 @@ def create_data_server(
     app = FastAPI()
     datapoints_db = db_client["madsci_data"]
     datapoints = datapoints_db["datapoints"]
-    datapoints.create_index("datapoint_id", unique=True, background=True)
 
     @app.get("/")
     @app.get("/info")
@@ -59,19 +58,19 @@ def create_data_server(
                 contents = file.file.read()
                 f.write(contents)
             datapoint.path = str(final_path)
-        datapoints.insert_one(datapoint.model_dump(mode="json"))
+        datapoints.insert_one(datapoint.to_mongo())
         return datapoint
 
     @app.get("/datapoint/{datapoint_id}")
     async def get_datapoint(datapoint_id: str) -> Any:
         """Look up a datapoint by datapoint_id"""
-        datapoint = datapoints.find_one({"datapoint_id": datapoint_id})
+        datapoint = datapoints.find_one({"_id": datapoint_id})
         return DataPoint.discriminate(datapoint)
 
     @app.get("/datapoint/{datapoint_id}/value")
     async def get_datapoint_value(datapoint_id: str) -> Response:
         """Returns a specific data point's value. If this is a file, it will return the file."""
-        datapoint = datapoints.find_one({"datapoint_id": datapoint_id})
+        datapoint = datapoints.find_one({"_id": datapoint_id})
         datapoint = DataPoint.discriminate(datapoint)
         if datapoint.data_type == "file":
             return FileResponse(datapoint.path)
@@ -84,7 +83,7 @@ def create_data_server(
             datapoints.find({}).sort("data_timestamp", -1).limit(number).to_list()
         )
         return {
-            datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
+            datapoint["_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 
@@ -93,7 +92,7 @@ def create_data_server(
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
         datapoint_list = datapoints.find(selector).to_list()
         return {
-            datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
+            datapoint["_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 

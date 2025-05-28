@@ -7,6 +7,7 @@ from typing import Any, Optional, Union
 
 import requests
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataPoint,
 )
@@ -18,6 +19,7 @@ class DataClient:
     """Client for the MADSci Experiment Manager."""
 
     url: AnyUrl
+    context: MadsciContext
 
     def __init__(
         self,
@@ -25,7 +27,9 @@ class DataClient:
         ownership_info: Optional[OwnershipInfo] = None,
     ) -> "DataClient":
         """Create a new Datapoint Client."""
-        self.url = AnyUrl(url) if url is not None else None
+        self.context = MadsciContext()
+        self.url = AnyUrl(url) if url else None
+        self.url = self.url or self.context.data_server_url
         if self.url is None:
             warnings.warn(
                 "No URL provided for the data client. Cannot persist datapoints.",
@@ -35,7 +39,7 @@ class DataClient:
         self._local_datapoints = {}
         self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
 
-    def get_datapoint(self, datapoint_id: Union[str, ULID]) -> dict:
+    def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
         """Get an datapoint by ID."""
         if self.url is None:
             return self._local_datapoints[datapoint_id]

@@ -133,9 +133,7 @@ def test_local_only_dataclient(tmp_path: str) -> None:
     fetched_file_path = Path(tmp_path) / "fetched_test.txt"
     client.save_datapoint_value(datapoint.datapoint_id, fetched_file_path)
     assert fetched_file_path.read_text() == "test_value"
-    file_datapoint = FileDataPoint(
-        label="Test", value="test_value", path=fetched_file_path
-    )
+    file_datapoint = FileDataPoint(label="Test", path=fetched_file_path)
     created_datapoint = client.submit_datapoint(file_datapoint)
     assert created_datapoint.datapoint_id == file_datapoint.datapoint_id
     fetched_datapoint = client.get_datapoint(file_datapoint.datapoint_id)

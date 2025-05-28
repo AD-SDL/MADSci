@@ -1,6 +1,7 @@
 """Automated unit tests for the Workcell Engine, using pytest."""
 
 import copy
+import warnings
 from unittest.mock import patch
 
 import pytest
@@ -41,7 +42,7 @@ def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
     workcell_def = WorkcellDefinition(
         workcell_name="Test Workcell",
-        config=WorkcellConfig(data_server_url="http://localhost:8000"),
+        config=WorkcellConfig(),
     )
     return WorkcellStateHandler(
         workcell_definition=workcell_def, redis_connection=redis_server
@@ -51,7 +52,9 @@ def state_handler(redis_server: Redis) -> WorkcellStateHandler:
 @pytest.fixture
 def engine(state_handler: WorkcellStateHandler) -> Engine:
     """Fixture for creating an Engine instance."""
-    return Engine(state_handler=state_handler)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        return Engine(state_handler=state_handler)
 
 
 def test_engine_initialization(engine: Engine) -> None:

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
-from madsci.client.event_client import EventClient, EventClientConfig
+from madsci.client.event_client import EventClient
 from madsci.common.types.resource_types import (
     ContainerDataModels,
     Queue,
@@ -43,15 +43,9 @@ def create_resource_server(  # noqa: C901, PLR0915
         resource_manager_definition = ResourceManagerDefinition.load_model()
 
     # * Configure the event client
-    event_client_config = (
-        resource_manager_definition.event_client_config or EventClientConfig()
-    )
-    event_client_config.name = (
-        event_client_config.name
-        or f"resource_manager.{resource_manager_definition.name}"
-    )
-    event_client_config.source.manager_id = resource_manager_definition.manager_id
-    logger = EventClient(resource_manager_definition.event_client_config)
+    logger = EventClient(
+        name=f"resource_manager.{resource_manager_definition.name}"
+    ).logger
 
     if not resource_interface:
         resource_interface = ResourceInterface(

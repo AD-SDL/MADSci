@@ -5,8 +5,7 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.resource_types import GridIndex, GridIndex2D, GridIndex3D
-from pydantic import Discriminator
-from sqlmodel.main import Field
+from pydantic import Discriminator, Field
 
 
 class ConditionTypeEnum(str, Enum):

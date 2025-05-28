@@ -7,10 +7,9 @@ from madsci.common.types.base_types import MadsciBaseModel
 
 if TYPE_CHECKING:
     from madsci.common.types.resource_types.definitions import ResourceDefinition
-from pydantic import Json, Tag
+from pydantic import Field, Json, Tag
 from pydantic.config import ConfigDict
 from pydantic.functional_validators import field_validator
-from sqlmodel import Field
 
 
 class AssetTypeEnum(str, Enum):

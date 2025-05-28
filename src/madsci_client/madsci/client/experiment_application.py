@@ -12,6 +12,7 @@ from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.condition_types import Condition
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -35,19 +36,28 @@ class ExperimentApplication:
     """The current experiment being run."""
     experiment_design: Optional[ExperimentDesign] = None
     """The design of the experiment."""
-    url: AnyUrl = AnyUrl("http://localhost:8002")
+    experiment_server_url: AnyUrl = AnyUrl("http://localhost:8002")
     """The URL of the experiment manager server."""
     logger = EventClient()
     """The event logger for the experiment."""
+    context: MadsciContext = MadsciContext()
+    """The context for the experiment application."""
 
     def __init__(
         self,
-        url: Optional[AnyUrl] = None,
+        experiment_server_url: Optional[AnyUrl] = None,
         experiment_design: Optional[Union[str, Path, ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
-        self.url = AnyUrl(url) if url else self.url
+        self.experiment_server_url = (
+            AnyUrl(experiment_server_url)
+            if experiment_server_url
+            else self.experiment_server_url
+        )
+        self.experiment_server_url = (
+            self.experiment_server_url or self.context.experiment_server_url
+        )
         if experiment_design:
             self.experiment_design = experiment_design
         if isinstance(self.experiment_design, (str, Path)):
@@ -55,17 +65,13 @@ class ExperimentApplication:
 
         self.experiment = experiment if experiment else self.experiment
 
-        self.experiment_client = ExperimentClient(url=self.url)
+        self.experiment_client = ExperimentClient(
+            experiment_server_url=self.experiment_server_url
+        )
 
-        self.workcell_client = WorkcellClient(
-            self.experiment_client.workcell_client_url
-        )
-        self.resource_client = ResourceClient(
-            self.experiment_client.resource_client_url
-        )
-        self.data_client = DataClient(self.experiment_client.data_client_url)
-        if self.experiment_design and self.experiment_design.event_client_config:
-            self.logger = EventClient(config=self.experiment_design.event_client_config)
+        self.workcell_client = WorkcellClient()
+        self.resource_client = ResourceClient()
+        self.data_client = DataClient()
 
     @classmethod
     def start_new(

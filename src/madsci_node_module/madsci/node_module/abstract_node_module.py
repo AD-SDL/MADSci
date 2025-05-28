@@ -21,6 +21,7 @@ from madsci.client.event_client import (
     default_logger,
 )
 from madsci.client.node.abstract_node_client import AbstractNodeClient
+from madsci.client.resource_client import ResourceClient
 from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
@@ -36,7 +37,8 @@ from madsci.common.types.action_types import (
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
-from madsci.common.types.event_types import Event, EventClientConfig, EventType
+from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import (
     LocationArgument,
 )
@@ -84,7 +86,7 @@ class AbstractNode:
     state_update_interval: ClassVar[float] = 2.0
     """The interval at which the state handler is called. Overridable by config."""
     node_info_path: ClassVar[Optional[Path]] = None
-    """The path to the node info file. If unset, defaults to '<node_definition_path>.info.yaml'"""
+    """The path to the node info file. If unset, uses the node name as the file name."""
     logger: ClassVar[EventClient] = EventClient()
     """The event logger for this node"""
     module_version: ClassVar[str] = "0.0.1"
@@ -93,6 +95,10 @@ class AbstractNode:
         AbstractNodeClient.supported_capabilities
     )
     """The default supported capabilities of this node module class."""
+    config: ClassVar[NodeConfig]
+    """The node config model. This is the model that will be used to validate the node configuration."""
+    context: ClassVar[Optional[MadsciContext]] = None
+    """The context for the node. This allows the node to access the MADSci context, including the event client and resource client."""
 
     def __init__(
         self,
@@ -116,7 +122,7 @@ class AbstractNode:
         # * Load the node config
         self._initialize_node_config(node_config)
 
-        self._configure_events()
+        self._configure_clients()
 
         # * Check Node Version
         if (
@@ -161,7 +167,7 @@ class AbstractNode:
         """Called once to start the node."""
 
         # * Update EventClient with logging parameters
-        self._configure_events()
+        self._configure_clients()
 
         # * Log startup info
         self.logger.log_debug(f"{self.node_definition=}")
@@ -395,37 +401,13 @@ class AbstractNode:
             else self.status_update_interval
         )
 
-    def _configure_events(self) -> None:
-        """Configure the event logger."""
-        event_client_config = EventClientConfig(
+    def _configure_clients(self) -> None:
+        """Configure the event and resource clients."""
+        self.logger = self.event_client = EventClient(
             name=f"node.{self.node_definition.node_name}",
             source=OwnershipInfo(node_id=self.node_definition.node_id),
         )
-        self.logger = EventClient(
-            config=event_client_config,
-        )
-        if (
-            new_event_client_config := getattr(self.config, "event_client_config", None)
-        ) is not None:
-            try:
-                event_client_config = EventClientConfig.model_validate(
-                    new_event_client_config
-                )
-                if not event_client_config.name:
-                    event_client_config.name = f"node.{self.node_definition.node_name}"
-                if not event_client_config.source:
-                    event_client_config.source = OwnershipInfo(
-                        node_id=self.node_definition.node_id
-                    )
-                else:
-                    event_client_config.source.node_id = self.node_definition.node_id
-                self.logger = EventClient(
-                    config=event_client_config,
-                )
-            except ValidationError:
-                self.logger.log_warning(
-                    "Invalid event client config, using default values",
-                )
+        self.resource_client = ResourceClient(event_client=self.event_client)
 
     def _add_action(
         self,
@@ -734,25 +716,17 @@ class AbstractNode:
     def _update_node_info_and_definition(self) -> None:
         """Update the node info and definition files, if possible."""
         try:
-            if self.node_info_path:
-                self.node_info.to_yaml(self.node_info_path)
-            elif self.node_definition._definition_path:
+            if not self.node_info_path:
                 self.node_info_path = Path(
-                    self.node_definition._definition_path,
-                ).with_suffix(".info.yaml")
-                self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
+                    f"{self.node_definition.node_name}.info.yaml"
+                )
+            self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
         except Exception as e:
             self.logger.log_warning(
                 f"Failed to update node info file: {e}",
             )
 
-        if self.node_definition._definition_path:
-            try:
-                self.node_definition.to_yaml(self.node_definition._definition_path)
-            except Exception as e:
-                self.logger.log_warning(
-                    f"Failed to update node definition file: {e}",
-                )
+        # TODO: Update the node definition file if it exists
 
     def _check_required_args(self, action_request: ActionRequest) -> None:
         """Check that all required arguments are present in the action request."""

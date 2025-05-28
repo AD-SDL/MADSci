@@ -2,7 +2,6 @@
 
 import json
 import time
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,14 +10,14 @@ from madsci.common.types.action_types import (
     ActionStatus,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.event_types import Event, EventClientConfig, EventLogLevel
+from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import NodeDefinition, NodeInfo, NodeStatus
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
 
 
 @pytest.fixture
-def test_node(tmpdir: Path) -> TestNode:
+def test_node() -> TestNode:
     """Return a RestNode instance for testing."""
     node_definition = NodeDefinition(
         node_name="Test Node 1",
@@ -30,10 +29,6 @@ def test_node(tmpdir: Path) -> TestNode:
         node_definition=node_definition,
         node_config=TestNodeConfig(
             test_required_param=1,
-            event_client_config=EventClientConfig(
-                log_dir=Path(tmpdir),
-                log_level=EventLogLevel.DEBUG,
-            ),
         ),
     )
 

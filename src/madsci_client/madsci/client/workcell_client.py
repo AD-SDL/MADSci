@@ -9,6 +9,8 @@ import requests
 from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.base_types import PathLike
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellState
@@ -16,16 +18,18 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.utils import PathLike, new_ulid_str
+from madsci.common.utils import new_ulid_str
 from rich import print
 
 
 class WorkcellClient:
     """A client for interacting with the Workcell Manager to perform various actions."""
 
+    context: MadsciContext = MadsciContext()
+
     def __init__(
         self,
-        workcell_server_url: str,
+        workcell_server_url: Optional[str] = None,
         working_directory: str = "./",
         ownership_info: Optional[OwnershipInfo] = None,
     ) -> None:
@@ -34,14 +38,18 @@ class WorkcellClient:
 
         Parameters
         ----------
-        workcell_server_url : str
+        workcell_server_url : Optional[str]
             The base URL of the Workcell Manager.
         working_directory : str, optional
             The directory to look for relative paths. Defaults to "./".
         ownership_info : Optional[OwnershipInfo], optional
             Ownership information for workflows, by default None.
         """
-        self.url = workcell_server_url
+        self.url = workcell_server_url or self.context.workcell_server_url
+        if not self.url:
+            raise ValueError(
+                "Workcell server URL is not provided and cannot be found in the context."
+            )
         self.working_directory = Path(working_directory).expanduser()
         self.ownership_info = ownership_info
         if self.ownership_info is None:

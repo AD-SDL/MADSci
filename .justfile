@@ -16,6 +16,9 @@ env:
   @sed -i "s|^REPO_PATH=.*|REPO_PATH=$(dirname {{justfile()}})|" .env
   @mkdir -p $(dirname {{justfile()}})/.madsci
 
+# Source the venv
+venv:
+  @$(pdm venv activate)
 
 
 # Run the pre-commit checks

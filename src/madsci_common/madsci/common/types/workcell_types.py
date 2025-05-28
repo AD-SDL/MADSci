@@ -5,22 +5,18 @@ from typing import Annotated, Any, ClassVar, Literal, Optional, Union
 
 from madsci.common.types.base_types import (
     Error,
-    LoadConfig,
     MadsciBaseModel,
-    ModelLink,
     PathLike,
 )
-from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workflow_types import Workflow
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
-from pydantic import computed_field
+from pydantic import Field, computed_field
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
-from sqlmodel.main import Field
 
 
 class WorkcellDefinition(MadsciBaseModel, extra="allow"):
@@ -65,7 +61,6 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
             description="The configuration for the workcell.",
             default_factory=lambda: WorkcellConfig(),
         ),
-        LoadConfig(use_fields_as_cli_args=True),
     ]
     nodes: dict[str, Union["NodeDefinition", AnyUrl, PathLike]] = Field(
         default_factory=dict,
@@ -85,16 +80,6 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
         return Path(self.config.workcells_directory) / self.workcell_name
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
-
-
-class WorkcellLink(ModelLink[WorkcellDefinition]):
-    """Link to a MADSci Workcell Definition."""
-
-    definition: Optional[WorkcellDefinition] = Field(
-        title="Workcell Definition",
-        description="The actual definition of the workcell.",
-        default=None,
-    )
 
 
 class WorkcellStatus(MadsciBaseModel):
@@ -226,11 +211,6 @@ class WorkcellConfig(MadsciBaseModel):
         title="Redis Password",
         description="The password for the redis server.",
     )
-    event_client_config: Optional[EventClientConfig] = Field(
-        default=None,
-        title="Event Client Configuration",
-        description="The configuration for a MADSci event client.",
-    )
     scheduler_update_interval: float = Field(
         default=2.0,
         title="Scheduler Update Interval",
@@ -260,16 +240,6 @@ class WorkcellConfig(MadsciBaseModel):
         default="madsci.workcell_manager.schedulers.default_scheduler",
         title="scheduler",
         description="Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use",
-    )
-    data_server_url: Optional[AnyUrl] = Field(
-        default=None,
-        title="Data Client URL",
-        description="The URL for the data client.",
-    )
-    resource_server_url: Optional[AnyUrl] = Field(
-        default=None,
-        title="Resource Server URL",
-        description="The URL for the resource server.",
     )
     mongo_url: Optional[str] = Field(
         default=None,

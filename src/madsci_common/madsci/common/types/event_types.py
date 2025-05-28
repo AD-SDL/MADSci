@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
+from pydantic import Field
 from pydantic.functional_validators import field_validator
-from sqlmodel import Field
 
 
 class Event(MadsciBaseModel):
@@ -70,7 +70,14 @@ class EventLogLevel(int, Enum):
     CRITICAL = logging.CRITICAL
 
 
-class EventClientConfig(MadsciBaseModel):
+class EventClientConfig(
+    MadsciBaseSettings,
+    env_file=(".env", "event_client.env"),
+    toml_file="event_client.toml",
+    yaml_file="event_client.yaml",
+    json_file="event_client.json",
+    env_prefix="EVENT_CLIENT_",
+):
     """Configuration for an Event Client."""
 
     name: Optional[str] = Field(
@@ -82,11 +89,12 @@ class EventClientConfig(MadsciBaseModel):
         title="Event Server URL",
         description="The URL of the event server.",
         default=None,
+        alias="event_server_url",  # * Don't prefix
     )
     log_level: Union[int, EventLogLevel] = Field(
         title="Event Client Log Level",
         description="The log level of the event client.",
-        default=EventLogLevel.INFO,
+        default=EventLogLevel.INFO,  # * Don't prefix
     )
     source: OwnershipInfo = Field(
         title="Source",
@@ -203,6 +211,10 @@ class EmailAlertsConfig(MadsciBaseModel):
     )
 
 
+class EventManagerSettings(MadsciBaseSettings):
+    """Handles settings and configuration for the Event Manager."""
+
+
 class EventManagerDefinition(ManagerDefinition):
     """Definition for a Squid Event Manager"""
 
@@ -225,11 +237,6 @@ class EventManagerDefinition(ManagerDefinition):
         default="mongodb://localhost:27017",
         title="Database URL",
         description="The URL of the database used by the Event Manager.",
-    )
-    event_client_config: "EventClientConfig" = Field(
-        default_factory=lambda: EventClientConfig(),
-        title="Event Client Configuration",
-        description="The configuration for a MADSci event client. This is used by the event manager to log it's own events/logs. Note that the event_server_url is ignored.",
     )
     alert_level: EventLogLevel = Field(
         default=EventLogLevel.ERROR,

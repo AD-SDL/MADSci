@@ -1,9 +1,8 @@
 """Types for managing MADSci contexts and their configurations."""
 
-from typing import Any, Optional
+from typing import Optional
 
 from madsci.common.types.base_types import (
-    DefinitionSettings,
     MadsciBaseSettings,
 )
 from pydantic import AnyUrl, Field
@@ -21,7 +20,7 @@ class MadsciContext(
     lab_server_url: Optional[AnyUrl] = Field(
         title="Lab Server URL",
         description="The URL of the lab server.",
-        default=AnyUrl("http://localhost:8000"),
+        default=None,
     )
     event_server_url: Optional[AnyUrl] = Field(
         title="Event Server URL",
@@ -48,11 +47,3 @@ class MadsciContext(
         description="The URL of the workcell server.",
         default=None,
     )
-
-    @classmethod
-    def load_model(cls, *args: Any, **kwargs: Any) -> "MadsciContext":
-        """Load the lab settings model."""
-        definition_settings = DefinitionSettings()
-        if definition_settings.context_definition:
-            kwargs["definition_files"] = definition_settings.context_definition
-        return super().load_model(*args, **kwargs)

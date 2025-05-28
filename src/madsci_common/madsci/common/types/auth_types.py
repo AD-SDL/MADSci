@@ -4,9 +4,13 @@ from typing import Any, Optional
 
 from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.validators import optional_ulid_validator, ulid_validator
-from pydantic import SerializationInfo, SerializerFunctionWrapHandler, model_serializer
+from pydantic import (
+    Field,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 from pydantic.functional_validators import field_validator
-from sqlmodel.main import Field
 
 
 class OwnershipInfo(MadsciBaseModel):

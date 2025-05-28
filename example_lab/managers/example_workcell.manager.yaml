@@ -9,15 +9,12 @@ config:
   redis_host: localhost
   redis_port: 6379
   redis_password: null
-  event_client_config: null
   scheduler_update_interval: 2.0
   node_update_interval: 1.0
   auto_start: true
   clear_workflows: false
   cold_start_delay: 0
   scheduler: madsci.workcell_manager.schedulers.default_scheduler
-  data_server_url: http://localhost:8003/
-  resource_server_url: http://localhost:8004/
   mongo_url: mongodb://localhost:27017
   get_action_result_retries: 3
 nodes:

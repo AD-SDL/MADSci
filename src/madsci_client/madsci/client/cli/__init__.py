@@ -1,10 +1,6 @@
 """Command Line Interface for the MADSci client."""
 
 import click
-from madsci.client.cli.lab_cli import lab
-from madsci.client.cli.manager_cli import manager
-from madsci.client.cli.node_cli import node
-from madsci.client.cli.workcell_cli import workcell
 from rich.console import Console
 from trogon import tui
 
@@ -28,11 +24,6 @@ def version() -> None:
     """Display the MADSci client version."""
     console.print("MADSci Client v0.1.0")
 
-
-root_cli.add_command(lab)
-root_cli.add_command(workcell)
-root_cli.add_command(node)
-root_cli.add_command(manager)
 
 if __name__ == "__main__":
     tui(root_cli, auto_envvar_prefix="MADSCI_CLI_")

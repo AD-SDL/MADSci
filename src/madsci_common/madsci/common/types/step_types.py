@@ -8,7 +8,7 @@ from madsci.common.types.base_types import MadsciBaseModel, PathLike
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.utils import new_ulid_str
-from sqlmodel.main import Field
+from pydantic import Field
 
 
 class StepDefinition(MadsciBaseModel):

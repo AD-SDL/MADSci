@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Any, Optional
 
 from madsci.common.types.base_types import Error, MadsciBaseModel
-from sqlmodel.main import Field
+from pydantic import Field
 
 
 class AdminCommands(str, Enum):

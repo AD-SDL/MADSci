@@ -8,10 +8,10 @@ from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error, MadsciBaseModel
-from madsci.common.types.event_types import EventClientConfig
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import (
+    Field,
     SerializationInfo,
     SerializerFunctionWrapHandler,
     field_serializer,
@@ -23,7 +23,6 @@ from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from pydantic_extra_types.semantic_version import SemanticVersion
 from semver import Version
-from sqlmodel.main import Field
 
 
 class NodeType(str, Enum):
@@ -52,16 +51,6 @@ class NodeConfig(MadsciBaseModel):
         title="State Update Interval",
         description="The interval in seconds at which the node should update its state.",
         default=2.0,
-    )
-    event_client_config: Optional[EventClientConfig] = Field(
-        title="Event Client Configuration",
-        description="The configuration for a MADSci event client.",
-        default=None,
-    )
-    resource_server_url: Optional[AnyUrl] = Field(
-        title="Resource Client URL",
-        description="The URL of the resource server for this node to use.",
-        default=None,
     )
 
 

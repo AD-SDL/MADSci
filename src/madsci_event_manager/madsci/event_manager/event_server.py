@@ -12,7 +12,7 @@ from pymongo import MongoClient
 from pymongo.synchronous.database import Database
 
 
-def create_event_server(  # noqa: C901
+def create_event_server(
     event_manager_definition: Optional[EventManagerDefinition] = None,
     db_connection: Optional[Database] = None,
 ) -> FastAPI:
@@ -22,13 +22,7 @@ def create_event_server(  # noqa: C901
         event_manager_definition = EventManagerDefinition.load_model(
             require_unique=True
         )
-    if event_manager_definition.event_client_config.name is None:
-        event_manager_definition.event_client_config.name = (
-            f"event_manager.{event_manager_definition.name}"
-        )
-    logger = EventClient(
-        config=event_manager_definition.event_client_config,
-    )
+    logger = EventClient(name=f"event_manager.{event_manager_definition.name}")
     if db_connection is None:
         db_client = MongoClient(event_manager_definition.db_url)
         db_connection = db_client["madsci_events"]
