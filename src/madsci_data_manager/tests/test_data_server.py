@@ -440,7 +440,9 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
     mock_minio_client.fput_object.return_value = MagicMock(etag="test-etag-123")
 
     # Mock the Minio class where it's imported in your server code
-    with patch("minio.Minio", return_value=mock_minio_client):
+    with patch(
+        "madsci.common.object_storage_helpers.Minio", return_value=mock_minio_client
+    ):
         # Create DataManager with MinIO config
         data_manager_def_with_minio = DataManagerDefinition(
             name="test_data_manager_with_minio",
