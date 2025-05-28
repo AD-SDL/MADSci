@@ -22,6 +22,7 @@ class DataPointTypeEnum(str, Enum):
 
     FILE = "file"
     DATA_VALUE = "data_value"
+    OBJECT_STORAGE = "object_storage"
 
 
 class DataPoint(BaseModel, extra="allow"):
@@ -94,10 +95,62 @@ class ValueDataPoint(DataPoint):
     """Value of the data point"""
 
 
+class ObjectStorageDataPoint(DataPoint):
+    """A data point that references an object in S3-compatible storage (MinIO/S3).
+
+    This data point stores essential information about an object in S3-compatible
+    storage without storing access credentials.
+
+    Attributes:
+        url: The accessible URL for the object (can be used in frontend).
+        storage_endpoint: The endpoint of the storage service (e.g., 'minio.example.com:9000').
+        bucket_name: The name of the bucket containing the object.
+        object_name: The path/key of the object within the bucket.
+        content_type: The MIME type of the stored object.
+        size_bytes: The size of the object in bytes.
+        etag: The entity tag (typically MD5) of the object.
+        custom_metadata: Additional user-defined metadata for the object.
+    """
+
+    url: Optional[str] = Field(
+        default=None, description="Accessible URL for the object (for frontend use)"
+    )
+    data_type: Literal[DataPointTypeEnum.OBJECT_STORAGE] = (
+        DataPointTypeEnum.OBJECT_STORAGE
+    )
+    """The type of the data point, in this case an object storage"""
+    storage_endpoint: str = Field(
+        ..., description="S3 API endpoint (e.g., 'localhost:9000')"
+    )
+    public_endpoint: Optional[str] = Field(
+        default=None,
+        description="Public endpoint for accessing objects (e.g., 'localhost:9001')",
+    )
+    path: PathLike
+    """Path to the file"""
+    bucket_name: str = Field(
+        default=None, description="Name of the bucket containing the object"
+    )
+    object_name: str = Field(
+        default=None, description="Path/key of the object within the bucket"
+    )
+    content_type: Optional[str] = Field(
+        None, description="MIME type of the stored object"
+    )
+    size_bytes: Optional[int] = Field(None, description="Size of the object in bytes")
+    etag: Optional[str] = Field(
+        None, description="Entity tag (typically MD5) of the object"
+    )
+    custom_metadata: dict[str, str] = Field(
+        default_factory=dict, description="User-defined metadata for the object"
+    )
+
+
 DataPointDataModels = Annotated[
     Union[
         Annotated[FileDataPoint, Tag(DataPointTypeEnum.FILE)],
         Annotated[ValueDataPoint, Tag(DataPointTypeEnum.DATA_VALUE)],
+        Annotated[ObjectStorageDataPoint, Tag(DataPointTypeEnum.OBJECT_STORAGE)],
     ],
     Discriminator("data_type"),
 ]
@@ -105,7 +158,25 @@ DataPointDataModels = Annotated[
 DataPointTypeMap = {
     DataPointTypeEnum.FILE: FileDataPoint,
     DataPointTypeEnum.DATA_VALUE: ValueDataPoint,
+    DataPointTypeEnum.OBJECT_STORAGE: ObjectStorageDataPoint,
 }
+
+
+class ObjectStorageDefinition(BaseModel):
+    """Configuration for S3-compatible object storage."""
+
+    endpoint: str
+    """Endpoint for S3-compatible storage (e.g., 'minio.example.com:9000')"""
+    access_key: str
+    """Access key for authentication"""
+    secret_key: str
+    """Secret key for authentication"""
+    secure: bool = False
+    """Whether to use HTTPS (True) or HTTP (False)"""
+    default_bucket: str = "madsci-data"
+    """Default bucket to use for storing data"""
+    region: Optional[str] = None
+    """Optional for AWS S3/other providers"""
 
 
 class DataManagerDefinition(ManagerDefinition):
@@ -147,5 +218,10 @@ class DataManagerDefinition(ManagerDefinition):
     event_client_config: Optional[EventClientConfig] = Field(
         title="Event Client Configuration",
         description="The configuration for a MADSci event client.",
+        default=None,
+    )
+    minio_client_config: Optional[ObjectStorageDefinition] = Field(
+        title="MinIO Client Configuration",
+        description="Configuration for MinIO client for object storage.",
         default=None,
     )

@@ -95,3 +95,181 @@ print(f"Retrieved FileDataPoint: {retrieved_file_datapoint}")
 client.save_datapoint_value(submitted_file_datapoint.datapoint_id, "/local/path/to/save/experiment_log.txt")
 print("File saved successfully.")
 ```
+## Object Storage Integration
+
+The MADSci Data Manager supports optional **MinIO object storage** for efficient handling of large files. When configured, file datapoints are automatically stored in object storage instead of local filesystem storage. [MinIO Documentation](https://min.io/docs/minio/container/index.html)
+
+### How It Works
+
+**With Object Storage Configured:**
+- **File datapoints** are uploaded to MinIO object storage during submission
+- **Object storage metadata** (bucket name, object name, public URL, etc.) is stored in the database
+- **Datapoint type** automatically changes from `file` to `object_storage`
+- **Automatic fallback** to local storage if object storage upload fails
+
+**Without Object Storage (Default Behavior):**
+- **File datapoints** are stored locally on the filesystem
+- **File paths** are stored in the database
+- **Existing behavior** is preserved with no changes required
+
+### Configuration
+
+Enable object storage by adding MinIO configuration to your Data Manager definition:
+
+```yaml
+# example_data_manager.manager.yaml
+name: example_data_manager
+db_url: mongodb://localhost:27017
+host: localhost
+port: 8004
+file_storage_path: ./data
+
+# Add MinIO object storage configuration
+minio_client_config:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  secure: false
+  default_bucket: "madsci-data"
+```
+
+### Docker Compose Setup
+
+The `/MADSci/compose.yaml` includes a pre-configured MinIO service:
+
+```bash
+# Start all services including MinIO
+docker compose up
+
+# Access MinIO Console
+open http://localhost:9001
+# Login: minioadmin / minioadmin
+```
+
+MinIO will be available at:
+- **API Endpoint**: `http://localhost:9000`
+- **Web Console**: `http://localhost:9001`
+
+
+# Cloud Storage Integration
+
+The MadSci Data Client supports multiple cloud storage providers through S3-compatible APIs. This allows you to store large files efficiently across different cloud platforms.
+
+## Supported Providers
+
+- **Amazon Web Services (AWS) S3**
+- **Google Cloud Storage (GCS)** - using S3-compatible HMAC authentication
+- **MinIO** (self-hosted or cloud)
+- **Any S3-compatible storage service**
+
+## Configuration
+
+### AWS S3
+
+```python
+from madsci.common.types.datapoint_types import ObjectStorageDefinition
+from madsci.client.data_client import DataClient
+
+aws_config = ObjectStorageDefinition(
+    endpoint="s3.amazonaws.com",
+    access_key="AKIAIOSFODNN7EXAMPLE",  # Your AWS Access Key ID
+    secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # Your AWS Secret Access Key
+    secure=True,
+    default_bucket="my-madsci-bucket",
+    region="us-east-1"  # Specify your AWS region
+)
+
+client = DataClient(object_storage_config=aws_config)
+```
+
+### Google Cloud Storage (GCS)
+
+GCS requires HMAC keys for S3-compatible access:
+
+```python
+gcs_config = ObjectStorageDefinition(
+    endpoint="storage.googleapis.com",
+    access_key="GOOGTS7C7FIS2E4U4RBGEXAMPLE",  # Your GCS HMAC Access Key
+    secret_key="bGoa+V7g/yqDXvKRqq+JTFn4uQZbPiQJo8rkEXAMPLE",  # Your GCS HMAC Secret
+    secure=True,
+    default_bucket="my-gcs-bucket"
+)
+
+client = DataClient(object_storage_config=gcs_config)
+```
+
+## Authentication Setup
+
+### AWS S3 Authentication
+
+1. **IAM User Method** (Recommended):
+   ```bash
+   # Create IAM user with S3 permissions
+   # Get Access Key ID and Secret Access Key from AWS Console
+   ```
+
+2. **Environment Variables**:
+   ```bash
+   export AWS_ACCESS_KEY_ID="your-access-key"
+   export AWS_SECRET_ACCESS_KEY="your-secret-key"
+   ```
+
+3. **AWS CLI Profile**:
+   ```bash
+   aws configure --profile madsci
+   # Then reference the profile in your application
+   ```
+
+### Google Cloud Storage Authentication
+
+1. **Generate HMAC Keys**:
+   ```bash
+   # In Google Cloud Console:
+   # Storage > Settings > Interoperability > Create Key
+   ```
+
+2. **Service Account Method**:
+   ```bash
+   # Create service account with Storage Admin role
+   # Generate HMAC key for the service account
+   ```
+
+## Usage Examples
+
+```python
+from madsci.common.types.datapoint_types import ObjectStorageDataPoint
+
+# Create object storage datapoint directly
+storage_datapoint = ObjectStorageDataPoint(
+    label="Preprocessed Data",
+    path="/path/to/local-file.parquet",
+    bucket_name="my-bucket",
+    object_name="datasets/processed_data.parquet",
+    storage_endpoint="s3.amazonaws.com",
+    public_endpoint="s3.amazonaws.com",
+    content_type="application/octet-stream",
+    custom_metadata={
+        "dataset_version": "v2.1",
+        "processing_date": "2024-01-15"
+    }
+)
+
+uploaded = client.submit_datapoint(storage_datapoint)
+```
+
+## Regional Endpoints
+
+### AWS S3 Regional Endpoints
+```python
+# US East (N. Virginia) - Default
+endpoint="s3.amazonaws.com"
+
+# US West (Oregon)
+endpoint="s3.us-west-2.amazonaws.com"
+
+# Europe (Ireland)
+endpoint="s3.eu-west-1.amazonaws.com"
+
+# Asia Pacific (Tokyo)
+endpoint="s3.ap-northeast-1.amazonaws.com"
+```

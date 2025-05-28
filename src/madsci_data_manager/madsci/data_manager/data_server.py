@@ -1,6 +1,7 @@
 """REST Server for the MADSci Data Manager"""
 
 import json
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Optional
@@ -10,11 +11,21 @@ from fastapi import FastAPI, Form, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
-from madsci.common.types.datapoint_types import DataManagerDefinition, DataPoint
+from madsci.common.object_storage_helpers import (
+    ObjectNamingStrategy,
+    create_minio_client,
+    upload_file_to_object_storage,
+)
+from madsci.common.types.datapoint_types import (
+    DataManagerDefinition,
+    DataPoint,
+    ObjectStorageDefinition,
+)
+from minio import Minio
 from pymongo import MongoClient
 
 
-def create_data_server(
+def create_data_server(  # noqa: C901, PLR0915
     data_manager_definition: Optional[DataManagerDefinition] = None,
     db_client: Optional[MongoClient] = None,
 ) -> FastAPI:
@@ -25,6 +36,11 @@ def create_data_server(
     )
     if db_client is None:
         db_client = MongoClient(data_manager_definition.db_url)
+
+    # Initialize MinIO client if configuration is provided
+    minio_client = None
+    if data_manager_definition.minio_client_config:
+        minio_client = create_minio_client(data_manager_definition.minio_client_config)
 
     app = FastAPI()
     datapoints_db = db_client["madsci_data"]
@@ -38,29 +54,115 @@ def create_data_server(
         """Return the DataPoint Manager Definition"""
         return data_manager_definition
 
+    def _upload_file_to_minio(
+        minio_client: Minio,
+        object_storage_config: ObjectStorageDefinition,
+        file_path: Path,
+        filename: str,
+        label: Optional[str] = None,
+        metadata: Optional[dict[str, str]] = None,
+    ) -> Optional[dict[str, Any]]:
+        """Upload a file to MinIO object storage and return object storage info."""
+        if minio_client is None:
+            return None
+
+        # Use the helper function with server's timestamped naming strategy
+        return upload_file_to_object_storage(
+            minio_client=minio_client,
+            object_storage_config=object_storage_config,
+            file_path=file_path,
+            bucket_name=object_storage_config.default_bucket,
+            object_name=None,  # Let the helper generate the name
+            content_type=None,  # Let the helper detect it
+            metadata=metadata,
+            naming_strategy=ObjectNamingStrategy.TIMESTAMPED_PATH,  # Server uses timestamped paths
+            public_endpoint=None,  # Use default endpoint logic
+            label=label or filename,
+        )
+
     @app.post("/datapoint")
     async def create_datapoint(
         datapoint: Annotated[str, Form()], files: list[UploadFile] = []
     ) -> Any:
         """Create a new datapoint."""
         data = json.loads(datapoint)
-        datapoint = DataPoint.discriminate(data)
-        for file in files:
-            time = datetime.now()
-            path = (
-                Path(data_manager_definition.file_storage_path).expanduser()
-                / str(time.year)
-                / str(time.month)
-                / str(time.day)
-            )
-            path.mkdir(parents=True, exist_ok=True)
-            final_path = path / (datapoint.datapoint_id + "_" + file.filename)
-            with Path.open(final_path, "wb") as f:
-                contents = file.file.read()
-                f.write(contents)
-            datapoint.path = str(final_path)
-        datapoints.insert_one(datapoint.model_dump(mode="json"))
-        return datapoint
+        datapoint_obj = DataPoint.discriminate(data)
+
+        # Handle file uploads if present
+        if files:
+            for file in files:
+                # Check if this is a file datapoint and MinIO is configured
+                if (
+                    datapoint_obj.data_type.value == "file"
+                    and minio_client is not None
+                    and data_manager_definition.minio_client_config
+                ):
+                    # Use MinIO object storage instead of local storage
+                    # First, save file temporarily to upload to MinIO
+                    import tempfile
+
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, suffix=f"_{file.filename}"
+                    ) as temp_file:
+                        contents = file.file.read()
+                        temp_file.write(contents)
+                        temp_file.flush()
+                        temp_path = Path(temp_file.name)
+
+                    # Upload to MinIO object storage
+                    object_storage_info = _upload_file_to_minio(
+                        minio_client=minio_client,
+                        object_storage_config=data_manager_definition.minio_client_config,
+                        file_path=temp_path,
+                        filename=file.filename,
+                        label=datapoint_obj.label,
+                        metadata={"original_datapoint_id": datapoint_obj.datapoint_id},
+                    )
+
+                    # Clean up temporary file
+                    temp_path.unlink()
+
+                    # If upload was successful, store object storage information in database
+                    if object_storage_info:
+                        # Create a combined dictionary with both datapoint and object storage info
+                        datapoint_dict = datapoint_obj.model_dump(mode="json")
+                        datapoint_dict.update(object_storage_info)
+                        # Update data_type to indicate this is now an object storage datapoint
+                        datapoint_dict["data_type"] = "object_storage"
+                        datapoints.insert_one(datapoint_dict)
+                        # Return the transformed datapoint
+                        return DataPoint.discriminate(datapoint_dict)
+                    # If MinIO upload failed, fall back to local storage
+                    warnings.warn(
+                        "MinIO upload failed, falling back to local file storage",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                # Fallback to local storage
+                time = datetime.now()
+                path = (
+                    Path(data_manager_definition.file_storage_path).expanduser()
+                    / str(time.year)
+                    / str(time.month)
+                    / str(time.day)
+                )
+                path.mkdir(parents=True, exist_ok=True)
+                final_path = path / (datapoint_obj.datapoint_id + "_" + file.filename)
+
+                # Reset file position and save locally
+                file.file.seek(0)
+                with Path.open(final_path, "wb") as f:
+                    contents = file.file.read()
+                    f.write(contents)
+                datapoint_obj.path = str(final_path)
+                datapoints.insert_one(datapoint_obj.model_dump(mode="json"))
+                return datapoint_obj
+        else:
+            # No files - just insert the datapoint (for ValueDataPoint, etc.)
+            datapoints.insert_one(datapoint_obj.model_dump(mode="json"))
+            return datapoint_obj
+
+        return None
 
     @app.get("/datapoint/{datapoint_id}")
     async def get_datapoint(datapoint_id: str) -> Any:
