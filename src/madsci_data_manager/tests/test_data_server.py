@@ -484,7 +484,8 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
         ).json()
 
         # Verify MinIO client methods were called
-        mock_minio_client.bucket_exists.assert_called_once_with("madsci-test")
+        assert mock_minio_client.bucket_exists.call_count == 2
+        mock_minio_client.bucket_exists.assert_called_with("madsci-test")
         mock_minio_client.fput_object.assert_called_once()
 
         # Verify the fput_object call arguments
