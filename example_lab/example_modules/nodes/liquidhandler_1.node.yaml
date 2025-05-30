@@ -6,7 +6,3 @@ node_type: device
 module_name: liquidhandler
 module_version: 0.0.1
 capabilities: null
-commands: {}
-is_template: false
-config_defaults:
-  port: 2000

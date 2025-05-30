@@ -17,6 +17,7 @@ config:
   scheduler: madsci.workcell_manager.schedulers.default_scheduler
   mongo_url: mongodb://localhost:27017
   get_action_result_retries: 3
+  minio_client_config: null
 nodes:
   liquidhandler_1: http://localhost:2000
   platereader_1: http://localhost:2002

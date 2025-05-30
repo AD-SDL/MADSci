@@ -24,7 +24,6 @@ from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
-    NodeConfig,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
@@ -47,7 +46,7 @@ class RestNode(AbstractNode):
         RestNodeClient.supported_capabilities
     )
     """The default supported capabilities of this node module class."""
-    config: NodeConfig = RestNodeConfig()
+    config: RestNodeConfig = RestNodeConfig()
     """The configuration for the node."""
 
     """------------------------------------------------------------------------------------------------"""
@@ -57,26 +56,23 @@ class RestNode(AbstractNode):
     def __init__(self, *args: Any, **kwargs: Any) -> "RestNode":
         """Initialize the node class."""
         super().__init__(*args, **kwargs)
-        host = getattr(self.config, "host", "localhost")
-        port = getattr(self.config, "port", 2000)
-        scheme = getattr(self.config, "protocol", "http")
-        self.node_info.node_url = AnyUrl.build(
-            scheme=scheme,
-            host=host,
-            port=port,
-        )
+        self.node_info.node_url = getattr(self.config, "node_url", None)
 
     def start_node(self, testing: bool = False) -> None:
         """Start the node."""
-        host = getattr(self.config, "host", "localhost")
-        port = getattr(self.config, "port", 2000)
+        url = AnyUrl(getattr(self.config, "node_url", "http://127.0.0.1:2000"))
         if not testing:
             self.logger.log_debug("Running node in production mode")
             import uvicorn
 
             self.rest_api = FastAPI(lifespan=self._lifespan)
             self._configure_routes()
-            uvicorn.run(self.rest_api, host=host, port=port)
+            uvicorn.run(
+                self.rest_api,
+                host=url.host if url.host else "127.0.0.1",
+                port=url.port if url.port else 2000,
+                **getattr(self.config, "uvicorn_kwargs", {}),
+            )
         else:
             self.logger.log_debug("Running node in test mode")
             self.rest_api = FastAPI(lifespan=self._lifespan)

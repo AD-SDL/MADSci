@@ -68,7 +68,6 @@ class EventClient:
             "Event logger {self.name} initialized.",
         )
         self.log_debug(self.config)
-        print(self.config.log_level)
 
     def get_log(self) -> dict[str, Event]:
         """Read the log"""
