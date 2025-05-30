@@ -12,7 +12,6 @@ from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
@@ -20,6 +19,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
@@ -52,11 +52,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         else:
             with state_handler.wc_state_lock():
                 state_handler.initialize_workcell_state(
-                    resource_client=ResourceClient(
-                        url=workcell.config.resource_server_url
-                    )
-                    if workcell.config.resource_server_url is not None
-                    else None,
+                    resource_client=ResourceClient()
                 )
         yield
 
@@ -107,7 +103,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 node_url=node_url,
                 node_description=node_description,
             )
-            workcell.to_yaml(workcell._definition_path)
+            # TODO: Save the workcell definition to the YAML
         return state_handler.get_node(node_name)
 
     @app.get("/admin/{command}")

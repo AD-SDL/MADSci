@@ -45,7 +45,6 @@ def create_data_server(  # noqa: C901, PLR0915
     app = FastAPI()
     datapoints_db = db_client["madsci_data"]
     datapoints = datapoints_db["datapoints"]
-    datapoints.create_index("datapoint_id", unique=True, background=True)
 
     @app.get("/")
     @app.get("/info")
@@ -85,8 +84,7 @@ def create_data_server(  # noqa: C901, PLR0915
         datapoint: Annotated[str, Form()], files: list[UploadFile] = []
     ) -> Any:
         """Create a new datapoint."""
-        data = json.loads(datapoint)
-        datapoint_obj = DataPoint.discriminate(data)
+        datapoint_obj = DataPoint.discriminate(json.loads(datapoint))
 
         # Handle file uploads if present
         if files:
@@ -125,7 +123,7 @@ def create_data_server(  # noqa: C901, PLR0915
                     # If upload was successful, store object storage information in database
                     if object_storage_info:
                         # Create a combined dictionary with both datapoint and object storage info
-                        datapoint_dict = datapoint_obj.model_dump(mode="json")
+                        datapoint_dict = datapoint_obj.to_mongo()
                         datapoint_dict.update(object_storage_info)
                         # Update data_type to indicate this is now an object storage datapoint
                         datapoint_dict["data_type"] = "object_storage"
@@ -155,11 +153,11 @@ def create_data_server(  # noqa: C901, PLR0915
                     contents = file.file.read()
                     f.write(contents)
                 datapoint_obj.path = str(final_path)
-                datapoints.insert_one(datapoint_obj.model_dump(mode="json"))
+                datapoints.insert_one(datapoint_obj.to_mongo())
                 return datapoint_obj
         else:
             # No files - just insert the datapoint (for ValueDataPoint, etc.)
-            datapoints.insert_one(datapoint_obj.model_dump(mode="json"))
+            datapoints.insert_one(datapoint_obj.to_mongo())
             return datapoint_obj
 
         return None
@@ -167,13 +165,18 @@ def create_data_server(  # noqa: C901, PLR0915
     @app.get("/datapoint/{datapoint_id}")
     async def get_datapoint(datapoint_id: str) -> Any:
         """Look up a datapoint by datapoint_id"""
-        datapoint = datapoints.find_one({"datapoint_id": datapoint_id})
+        datapoint = datapoints.find_one({"_id": datapoint_id})
+        if not datapoint:
+            return JSONResponse(
+                status_code=404,
+                content={"message": f"Datapoint with id {datapoint_id} not found."},
+            )
         return DataPoint.discriminate(datapoint)
 
     @app.get("/datapoint/{datapoint_id}/value")
     async def get_datapoint_value(datapoint_id: str) -> Response:
         """Returns a specific data point's value. If this is a file, it will return the file."""
-        datapoint = datapoints.find_one({"datapoint_id": datapoint_id})
+        datapoint = datapoints.find_one({"_id": datapoint_id})
         datapoint = DataPoint.discriminate(datapoint)
         if datapoint.data_type == "file":
             return FileResponse(datapoint.path)
@@ -186,7 +189,7 @@ def create_data_server(  # noqa: C901, PLR0915
             datapoints.find({}).sort("data_timestamp", -1).limit(number).to_list()
         )
         return {
-            datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
+            datapoint["_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 
@@ -195,7 +198,7 @@ def create_data_server(  # noqa: C901, PLR0915
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
         datapoint_list = datapoints.find(selector).to_list()
         return {
-            datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
+            datapoint["_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 

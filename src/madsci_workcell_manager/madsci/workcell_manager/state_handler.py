@@ -42,7 +42,6 @@ class WorkcellStateHandler:
         Initialize a StateManager for a given workcell.
         """
         self._workcell_id = workcell_definition.workcell_id
-        self._workcell_definition_path = workcell_definition._definition_path
         self._redis_host = workcell_definition.config.redis_host
         self._redis_port = workcell_definition.config.redis_port
         self._redis_password = workcell_definition.config.redis_password
@@ -75,9 +74,7 @@ class WorkcellStateHandler:
             self.set_node(key, node)
         # * Initialize Locations and Resources
         self.initialize_locations_and_resources(resource_client)
-        updated_workcell = self.get_workcell_definition()
-        if self._workcell_definition_path is not None:
-            updated_workcell.to_yaml(self._workcell_definition_path)
+        # TODO: Update the workcell definition with the new locations and resources
         status = self.get_workcell_status()
         status.initializing = False
         self.set_workcell_status(status)
@@ -110,7 +107,9 @@ class WorkcellStateHandler:
                 self.set_location(existing_location)
             except KeyError:
                 # * Create new location if it doesn't exist
-                self.set_location(Location.model_validate(location_definition))
+                self.set_location(
+                    Location.model_validate(location_definition.model_dump())
+                )
             workcell.locations[index] = location_definition
         self.set_workcell_definition(workcell)
 

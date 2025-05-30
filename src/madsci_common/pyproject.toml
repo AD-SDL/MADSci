@@ -25,7 +25,9 @@ dependencies = [
     "python-multipart>=0.0.17",
     "pydantic-extra-types>=2.10.2",
     "semver>=3.0.4",
-    "multiprocess >= 0.70.17"
+    "multiprocess >= 0.70.17",
+    "pydantic-settings>=2.9.1",
+    "pydantic-settings-export>=1.0.2"
 ]
 
 

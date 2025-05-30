@@ -87,7 +87,8 @@ def test_get_datapoint(client: DataClient) -> None:
 def test_get_datapoint_value(client: DataClient) -> None:
     """Test getting a datapoint value using DataClient"""
     datapoint = ValueDataPoint(label="Test", value="test_value")
-    client.submit_datapoint(datapoint)
+    submitted_datapoint = client.submit_datapoint(datapoint)
+    assert submitted_datapoint.datapoint_id == datapoint.datapoint_id
     fetched_value = client.get_datapoint_value(datapoint.datapoint_id)
     assert fetched_value == "test_value"
 
@@ -142,9 +143,7 @@ def test_local_only_dataclient(tmp_path: str) -> None:
     fetched_file_path = Path(tmp_path) / "fetched_test.txt"
     client.save_datapoint_value(datapoint.datapoint_id, fetched_file_path)
     assert fetched_file_path.read_text() == "test_value"
-    file_datapoint = FileDataPoint(
-        label="Test", value="test_value", path=fetched_file_path
-    )
+    file_datapoint = FileDataPoint(label="Test", path=fetched_file_path)
     created_datapoint = client.submit_datapoint(file_datapoint)
     assert created_datapoint.datapoint_id == file_datapoint.datapoint_id
     fetched_datapoint = client.get_datapoint(file_datapoint.datapoint_id)
@@ -376,9 +375,10 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
     file_path.write_text(file_content)
 
     # Initialize DataClient with the test MinIO configuration
-    client = DataClient(
-        object_storage_config=minio_config,
-    )
+    with pytest.warns(UserWarning):
+        client = DataClient(
+            object_storage_config=minio_config,
+        )
 
     # Create file datapoint
     file_datapoint = FileDataPoint(label=file_path.name, path=str(file_path))
@@ -439,9 +439,10 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     file_path.write_text(file_content)
 
     # Initialize DataClient with the test MinIO configuration
-    client = DataClient(
-        object_storage_config=minio_config,
-    )
+    with pytest.warns(UserWarning):
+        client = DataClient(
+            object_storage_config=minio_config,
+        )
 
     # Custom metadata for the object
     metadata = {

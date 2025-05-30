@@ -4,11 +4,17 @@ from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional, Union
 
+from bson.objectid import ObjectId
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
-from madsci.common.types.event_types import EventClientConfig
+from madsci.common.types.base_types import MadsciBaseModel, PathLike
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
-from pydantic import Field, Tag
+from madsci.common.utils import new_ulid_str
+from pydantic import (
+    AliasChoices,
+    Field,
+    Tag,
+    field_validator,
+)
 from pydantic.types import Discriminator
 
 
@@ -25,7 +31,7 @@ class DataPointTypeEnum(str, Enum):
     OBJECT_STORAGE = "object_storage"
 
 
-class DataPoint(BaseModel, extra="allow"):
+class DataPoint(MadsciBaseModel, extra="allow"):
     """An object to contain and locate data created during experiments.
 
     Attributes:
@@ -45,10 +51,20 @@ class DataPoint(BaseModel, extra="allow"):
     """Information about the ownership of the data point"""
     data_type: DataPointTypeEnum
     """type of the datapoint, inherited from class"""
-    datapoint_id: str = Field(default_factory=new_ulid_str)
+    datapoint_id: str = Field(
+        default_factory=new_ulid_str,
+        serialization_alias="_id",
+        validation_alias=AliasChoices("_id", "datapoint_id"),
+    )
     """specific id for this data point"""
     data_timestamp: datetime = Field(default_factory=datetime.now)
     """time datapoint was created"""
+
+    @field_validator("datapoint_id", mode="before")
+    @classmethod
+    def object_id_to_str(cls, v: Union[str, ObjectId]) -> str:
+        """Cast ObjectID to string."""
+        return str(v)
 
     @classmethod
     def discriminate(cls, datapoint: "DataPointDataModels") -> "DataPointDataModels":
@@ -62,9 +78,13 @@ class DataPoint(BaseModel, extra="allow"):
         """
         if isinstance(datapoint, dict):
             datapoint_type = datapoint["data_type"]
-        else:
+            return DataPointTypeMap[datapoint_type].model_validate(datapoint)
+        if isinstance(datapoint, DataPoint):
             datapoint_type = datapoint.data_type
-        return DataPointTypeMap[datapoint_type].model_validate(datapoint)
+            return DataPointTypeMap[datapoint_type].model_validate(
+                datapoint.model_dump()
+            )
+        raise TypeError(f"Expected DataPoint or dict, got {type(datapoint).__name__}")
 
 
 class FileDataPoint(DataPoint):
@@ -162,7 +182,7 @@ DataPointTypeMap = {
 }
 
 
-class ObjectStorageDefinition(BaseModel):
+class ObjectStorageDefinition(MadsciBaseModel):
     """Configuration for S3-compatible object storage."""
 
     endpoint: str
@@ -187,7 +207,6 @@ class DataManagerDefinition(ManagerDefinition):
         host: The hostname or IP address of the Data Manager server.
         port: The port number of the Data Manager server.
         db_url: The URL of the database used by the Data Manager.
-        event_client_config: The configuration for a MADSci event client.
     """
 
     manager_type: Literal[ManagerType.DATA_MANAGER] = Field(
@@ -214,11 +233,6 @@ class DataManagerDefinition(ManagerDefinition):
         title="File Storage Path",
         description="The path where files are stored on the server.",
         default="~/.madsci/datapoints",
-    )
-    event_client_config: Optional[EventClientConfig] = Field(
-        title="Event Client Configuration",
-        description="The configuration for a MADSci event client.",
-        default=None,
     )
     minio_client_config: Optional[ObjectStorageDefinition] = Field(
         title="MinIO Client Configuration",

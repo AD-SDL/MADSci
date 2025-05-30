@@ -1,13 +1,7 @@
 node_name: platereader_1
 node_id: 01JR1CGN7GXM8JN1X1GT23ZQ5M
-node_url: null
 node_description: The plate reader for the example lab
 node_type: device
 module_name: platereader
 module_version: 0.0.1
 capabilities: null
-commands: {}
-is_template: false
-config_defaults:
-  host: 0.0.0.0
-  port: 2002

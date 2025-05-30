@@ -14,6 +14,7 @@ from madsci.common.object_storage_helpers import (
     upload_file_to_object_storage,
 )
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataPoint,
     DataPointTypeEnum,
@@ -27,6 +28,7 @@ class DataClient:
     """Client for the MADSci Experiment Manager."""
 
     url: AnyUrl
+    context: MadsciContext
 
     def __init__(
         self,
@@ -35,7 +37,9 @@ class DataClient:
         object_storage_config: Optional[ObjectStorageDefinition] = None,
     ) -> "DataClient":
         """Create a new Datapoint Client."""
-        self.url = AnyUrl(url) if url is not None else None
+        self.context = MadsciContext()
+        self.url = AnyUrl(url) if url else None
+        self.url = self.url or self.context.data_server_url
         if self.url is None:
             warnings.warn(
                 "No URL provided for the data client. Cannot persist datapoints.",
@@ -51,7 +55,7 @@ class DataClient:
             self._minio_client = create_minio_client(object_storage_config)
 
     def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
-        """Get a datapoint metadata by ID, either from local storage or server."""
+        """Get a datapoint's metadata by ID, either from local storage or server."""
         if self.url is None:
             if datapoint_id in self._local_datapoints:
                 return self._local_datapoints[datapoint_id]
@@ -202,7 +206,7 @@ class DataClient:
         """
         # Case 1: Handle ObjectStorageDataPoint with path directly
         if (
-            datapoint.data_type.value == "object_storage"
+            datapoint.data_type == DataPointTypeEnum.OBJECT_STORAGE
             and hasattr(datapoint, "path")
             and self._minio_client is not None
         ):
@@ -224,7 +228,7 @@ class DataClient:
                 )
         # Case2: check if this is a file datapoint and object storage is configured
         if (
-            datapoint.data_type.value == "file"  # Convert to string for comparison
+            datapoint.data_type == DataPointTypeEnum.FILE
             and self._minio_client is not None
         ):
             try:
@@ -252,7 +256,7 @@ class DataClient:
             self._local_datapoints[datapoint.datapoint_id] = datapoint
             return datapoint
 
-        if datapoint.data_type == "file":
+        if datapoint.data_type == DataPointTypeEnum.FILE:
             files = {
                 (
                     "files",

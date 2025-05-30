@@ -18,7 +18,7 @@ from madsci.common.types.action_types import ActionRequest, ActionResult, Action
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
-from madsci.common.types.event_types import Event, EventClientConfig, EventType
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
@@ -45,17 +45,9 @@ class Engine:
         """Initialize the scheduler."""
         self.state_handler = state_handler
         self.workcell_definition = state_handler.get_workcell_definition()
-        self.workcell_definition.config.event_client_config = (
-            self.workcell_definition.config.event_client_config or EventClientConfig()
+        self.logger = EventClient(
+            name=f"workcell.{self.workcell_definition.workcell_name}"
         )
-        self.workcell_definition.config.event_client_config.source.workcell_id = (
-            self.workcell_definition.workcell_id
-        )
-        self.workcell_definition.config.event_client_config.source.manager_id = (
-            self.workcell_definition.workcell_id
-        )
-        self.logger = EventClient(self.workcell_definition.config.event_client_config)
-        self.logger.source.workcell_id = self.workcell_definition.workcell_id
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(
             self.workcell_definition.config.scheduler
@@ -63,10 +55,8 @@ class Engine:
         self.scheduler = scheduler_module.Scheduler(
             self.workcell_definition, self.state_handler
         )
-        self.data_client = DataClient(self.workcell_definition.config.data_server_url)
-        self.resource_client = ResourceClient(
-            self.workcell_definition.config.resource_server_url
-        )
+        self.data_client = DataClient()
+        self.resource_client = ResourceClient()
         self.logger.log_debug(self.data_client.url)
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state(
@@ -418,11 +408,10 @@ class Engine:
             node.status = NodeStatus(errored=True, errors=[error])
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
-            source = (
-                self.workcell_definition.config.event_client_config.source
-                or OwnershipInfo()
+            source = OwnershipInfo(
+                workcell_id=self.workcell_definition.workcell_id,
+                node_id=node.info.node_id if node.info else None,
             )
-            source.node_id = node.info.node_id if node.info else None
             self.logger.log_warning(
                 event=Event(
                     event_type=EventType.NODE_STATUS_UPDATE,

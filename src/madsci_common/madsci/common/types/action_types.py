@@ -4,9 +4,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import BaseModel, Error, PathLike, new_ulid_str
+from madsci.common.types.base_types import Error, MadsciBaseModel, PathLike
 from madsci.common.types.datapoint_types import DataPoint
-from madsci.common.utils import localnow
+from madsci.common.utils import localnow, new_ulid_str
 from pydantic import Field
 from pydantic.functional_validators import field_validator, model_validator
 
@@ -34,7 +34,7 @@ class ActionStatus(str, Enum):
         ]
 
 
-class ActionRequest(BaseModel):
+class ActionRequest(MadsciBaseModel):
     """Request to perform an action on a node"""
 
     action_id: str = Field(
@@ -181,7 +181,7 @@ class ActionRequest(BaseModel):
         )
 
 
-class ActionResult(BaseModel):
+class ActionResult(MadsciBaseModel):
     """Result of an action."""
 
     action_id: str = Field(
@@ -286,7 +286,7 @@ class ActionUnknown(ActionResult):
     status: Literal[ActionStatus.UNKNOWN] = ActionStatus.UNKNOWN
 
 
-class ActionDefinition(BaseModel):
+class ActionDefinition(MadsciBaseModel):
     """Definition of an action."""
 
     name: str = Field(
@@ -399,7 +399,7 @@ class ActionDefinition(BaseModel):
         return v
 
 
-class ArgumentDefinition(BaseModel):
+class ArgumentDefinition(MadsciBaseModel):
     """Defines an argument for a node action"""
 
     name: str = Field(
@@ -444,7 +444,7 @@ class FileArgumentDefinition(ArgumentDefinition):
     )
 
 
-class ActionResultDefinition(BaseModel):
+class ActionResultDefinition(MadsciBaseModel):
     """Defines a result for a node action"""
 
     result_label: str = Field(

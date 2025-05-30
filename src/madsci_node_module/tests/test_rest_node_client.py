@@ -11,10 +11,10 @@ from madsci.common.types.action_types import (
     ActionRunning,
     ActionStatus,
     ActionSucceeded,
-    new_ulid_str,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import NodeInfo, NodeSetConfigResponse, NodeStatus
+from madsci.common.utils import new_ulid_str
 
 
 @pytest.fixture
