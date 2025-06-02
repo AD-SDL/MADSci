@@ -59,7 +59,10 @@ def test_client(
 ) -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
     app = create_workcell_server(
-        workcell, redis_server, mongo_server, start_engine=False
+        workcell=workcell,
+        redis_connection=redis_server,
+        mongo_connection=mongo_server,
+        start_engine=False,
     )
     client = TestClient(app)
     with client:

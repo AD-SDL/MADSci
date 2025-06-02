@@ -209,7 +209,7 @@ class DataManagerSettings(
     json_file=("settings.json", "data.settings.json"),
     env_prefix="DATA_",
 ):
-    """Settings for the MADSci Lab."""
+    """Settings for the MADSci Data Manager."""
 
     data_server_url: AnyUrl = Field(
         title="Lab URL",

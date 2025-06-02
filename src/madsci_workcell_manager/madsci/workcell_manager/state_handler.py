@@ -13,6 +13,7 @@ from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.resource_types import Resource
 from madsci.common.types.workcell_types import (
     WorkcellDefinition,
+    WorkcellSettings,
     WorkcellState,
     WorkcellStatus,
 )
@@ -31,28 +32,30 @@ class WorkcellStateHandler:
 
     state_change_marker = "0"
     _redis_connection: Any = None
+    shutdown: bool = False
 
     def __init__(
         self,
         workcell_definition: WorkcellDefinition,
+        workcell_settings: Optional[WorkcellSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
     ) -> None:
         """
         Initialize a StateManager for a given workcell.
         """
+        self.workcell_settings = workcell_settings or WorkcellSettings()
         self._workcell_id = workcell_definition.workcell_id
-        self._redis_host = workcell_definition.config.redis_host
-        self._redis_port = workcell_definition.config.redis_port
-        self._redis_password = workcell_definition.config.redis_password
+        self._redis_host = self.workcell_settings.redis_host
+        self._redis_port = self.workcell_settings.redis_port
+        self._redis_password = self.workcell_settings.redis_password
         self._redis_connection = redis_connection
         if mongo_connection is not None:
             self.db_connection = mongo_connection
         else:
-            self.db_client = MongoClient(workcell_definition.config.mongo_url)
+            self.db_client = MongoClient(self.workcell_settings.mongo_url)
             self.db_connection = self.db_client["workcell_manager"]
         self.archived_workflows = self.db_connection["archived_workflows"]
-        self.shutdown = False
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
 
@@ -67,11 +70,7 @@ class WorkcellStateHandler:
         self.state_change_marker = "0"
         # * Initialize Nodes
         for key, value in self.get_workcell_definition().nodes.items():
-            if isinstance(value, NodeDefinition):
-                node = Node(node_url=value.node_url)
-            elif isinstance(value, (AnyUrl, str)):
-                node = Node(node_url=AnyUrl(value))
-            self.set_node(key, node)
+            self.set_node(key, Node(node_url=AnyUrl(value)))
         # * Initialize Locations and Resources
         self.initialize_locations_and_resources(resource_client)
         # TODO: Update the workcell definition with the new locations and resources

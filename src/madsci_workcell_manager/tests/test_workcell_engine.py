@@ -15,7 +15,7 @@ from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellConfig, WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellSettings
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -42,7 +42,7 @@ def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
     workcell_def = WorkcellDefinition(
         workcell_name="Test Workcell",
-        config=WorkcellConfig(),
+        config=WorkcellSettings(),
     )
     return WorkcellStateHandler(
         workcell_definition=workcell_def, redis_connection=redis_server

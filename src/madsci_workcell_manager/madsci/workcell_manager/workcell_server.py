@@ -4,17 +4,24 @@ import json
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
+from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
-from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
+from madsci.common.types.workcell_types import (
+    WorkcellDefinition,
+    WorkcellSettings,
+    WorkcellState,
+)
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
@@ -32,12 +39,31 @@ from pymongo.synchronous.database import Database
 
 
 def create_workcell_server(  # noqa: C901, PLR0915
-    workcell: WorkcellDefinition,
+    workcell: Optional[WorkcellDefinition] = None,
+    workcell_settings: Optional[WorkcellSettings] = None,
+    context: Optional[MadsciContext] = None,
     redis_connection: Optional[Any] = None,
     mongo_connection: Optional[Database] = None,
     start_engine: bool = True,
 ) -> FastAPI:
     """Creates a Workcell Manager's REST server."""
+
+    logger = EventClient()
+    workcell_settings = workcell_settings or WorkcellSettings()
+    if not workcell:
+        workcell_path = Path(workcell_settings.workcell_definition)
+        if workcell_path.exists():
+            workcell = WorkcellDefinition.from_yaml(workcell_path)
+        else:
+            workcell = WorkcellDefinition()
+        logger.info(f"Writing to workcell definition file: {workcell_path}")
+        workcell.to_yaml(workcell_path)
+    logger = EventClient(
+        name=f"workcell.{workcell.workcell_name}",
+    )
+    logger.info(workcell)
+    context = context or MadsciContext()
+    logger.info(context)
 
     state_handler = WorkcellStateHandler(
         workcell, redis_connection=redis_connection, mongo_connection=mongo_connection
@@ -370,15 +396,10 @@ def create_workcell_server(  # noqa: C901, PLR0915
 if __name__ == "__main__":
     import uvicorn
 
-    workcell = None
-    workcell = WorkcellDefinition.load_model(require_unique=True)
-    if workcell is None:
-        raise ValueError(
-            "No workcell manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
-        )
-    app = create_workcell_server(workcell)
+    workcell_settings = WorkcellSettings()
+    app = create_workcell_server(workcell_settings=workcell_settings)
     uvicorn.run(
         app,
-        host=workcell.config.host,
-        port=workcell.config.port,
+        host=workcell_settings.workcell_server_url.host,
+        port=workcell_settings.workcell_server_url.port or 8000,
     )
