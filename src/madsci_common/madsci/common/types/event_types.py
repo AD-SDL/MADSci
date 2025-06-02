@@ -8,12 +8,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
+from bson.objectid import ObjectId
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.utils import new_ulid_str
-from madsci.common.validators import ulid_validator
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic.functional_validators import field_validator
 
 
@@ -24,6 +24,8 @@ class Event(MadsciBaseModel):
         title="Event ID",
         description="The ID of the event.",
         default_factory=new_ulid_str,
+        serialization_alias="_id",
+        validation_alias=AliasChoices("_id", "event_id"),
     )
     event_type: "EventType" = Field(
         title="Event Type",
@@ -56,7 +58,11 @@ class Event(MadsciBaseModel):
         default_factory=dict,
     )
 
-    is_ulid = field_validator("event_id", mode="after")(ulid_validator)
+    @field_validator("event_id", mode="before")
+    @classmethod
+    def object_id_to_str(cls, v: Union[str, ObjectId]) -> str:
+        """Cast ObjectID to string."""
+        return str(v)
 
 
 class EventLogLevel(int, Enum):
@@ -211,40 +217,66 @@ class EmailAlertsConfig(MadsciBaseModel):
     )
 
 
-class EventManagerSettings(MadsciBaseSettings):
+class EventManagerSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "events.env"),
+    toml_file=("settings.toml", "events.settings.toml"),
+    yaml_file=("settings.yaml", "events.settings.yaml"),
+    json_file=("settings.json", "events.settings.json"),
+    env_prefix="EVENTS_",
+):
     """Handles settings and configuration for the Event Manager."""
 
-
-class EventManagerDefinition(ManagerDefinition):
-    """Definition for a Squid Event Manager"""
-
-    manager_type: Literal[ManagerType.EVENT_MANAGER] = Field(
-        title="Manager Type",
-        description="The type of the event manager",
-        default=ManagerType.EVENT_MANAGER,
+    event_server_url: str = Field(
+        title="Event Server URL",
+        description="The URL of the Event Manager server.",
+        default="http://localhost:8001",
+        alias="event_server_url",  # * Don't double prefix
     )
-    host: str = Field(
-        default="127.0.0.1",
-        title="Server Host",
-        description="The hostname or IP address of the Event Manager server.",
-    )
-    port: int = Field(
-        default=8001,
-        title="Server Port",
-        description="The port number of the Event Manager server.",
+    event_manager_definition: PathLike = Field(
+        title="Event Manager Definition File",
+        description="Path to the event manager definition file to use.",
+        default=Path("event.manager.yaml"),
+        alias="event_manager_definition",  # * Don't double prefix
     )
     db_url: str = Field(
         default="mongodb://localhost:27017",
         title="Database URL",
         description="The URL of the database used by the Event Manager.",
     )
+    collection_name: str = Field(
+        default="madsci_events",
+        title="Collection Name",
+        description="The name of the MongoDB collection where events are stored.",
+    )
     alert_level: EventLogLevel = Field(
         default=EventLogLevel.ERROR,
         title="Alert Level",
         description="The log level at which to send an alert.",
     )
+    # TODO: Break out email alert config into separate settings
     email_alerts: Optional["EmailAlertsConfig"] = Field(
         default=None,
         title="Email Alerts Configuration",
         description="The configuration for sending email alerts.",
+    )
+
+
+class EventManagerDefinition(ManagerDefinition):
+    """Definition for a Squid Event Manager"""
+
+    name: str = Field(
+        title="Manager Name",
+        description="The name of this manager instance.",
+        default="Event Manager",
+    )
+    event_manager_id: str = Field(
+        title="Event Manager ID",
+        description="The ID of the event manager.",
+        default_factory=new_ulid_str,
+    )
+    manager_type: Literal[ManagerType.EVENT_MANAGER] = Field(
+        title="Manager Type",
+        description="The type of the event manager",
+        default=ManagerType.EVENT_MANAGER,
     )

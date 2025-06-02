@@ -5,13 +5,15 @@ from typing import Annotated, Any, Literal, Optional, Union
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     ConfigDict,
+    MadsciBaseSettings,
     MadsciSQLModel,
+    PathLike,
     PositiveInt,
     PositiveNumber,
 )
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.types.resource_types.resource_enums import ResourceTypeEnum
-from madsci.common.utils import new_name_str
+from madsci.common.utils import new_name_str, new_ulid_str
 from pydantic import AfterValidator, Field
 from pydantic.functional_validators import field_validator
 from pydantic.types import Discriminator, Tag
@@ -34,28 +36,52 @@ GridIndex2D = tuple[GridIndex, GridIndex]
 GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 
+class ResourceManagerSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "resources.env"),
+    toml_file=("settings.toml", "resources.settings.toml"),
+    yaml_file=("settings.yaml", "resources.settings.yaml"),
+    json_file=("settings.json", "resources.settings.json"),
+    env_prefix="RESOURCES_",
+):
+    """Settings for the MADSci Resource Manager."""
+
+    resource_server_url: str = Field(
+        title="Resource Server URL",
+        description="The URL of the resource manager server.",
+        default="http://localhost:8003",
+        alias="resource_server_url",  # * Don't double prefix
+    )
+    resource_manager_definition: PathLike = Field(
+        title="Resource Manager Definition File",
+        description="Path to the resource manager definition file to use.",
+        default="resource.manager.yaml",
+        alias="resource_manager_definition",  # * Don't double prefix
+    )
+    db_url: str = Field(
+        title="Database URL",
+        description="The URL of the database for the resource manager.",
+        default="postgresql://rpl:rpl@localhost:5432/resources",
+    )
+
+
 class ResourceManagerDefinition(ManagerDefinition):
     """Definition for a Resource Manager's Configuration"""
 
+    name: str = SQLField(
+        title="Manager Name",
+        description="The name of this resource manager instance.",
+        default="Resource Manager",
+    )
+    resource_manager_id: str = Field(
+        title="Resource Manager ID",
+        description="The ID of the resource manager.",
+        default_factory=new_ulid_str,
+    )
     manager_type: Literal[ManagerType.RESOURCE_MANAGER] = SQLField(
         title="Manager Type",
         description="The type of the resource manager",
         default=ManagerType.RESOURCE_MANAGER,
-    )
-    host: str = Field(
-        default="127.0.0.1",
-        title="Server Host",
-        description="The hostname or IP address of the Resource Manager server.",
-    )
-    port: int = Field(
-        default=8003,
-        title="Server Port",
-        description="The port number of the Resource Manager server.",
-    )
-    db_url: str = Field(
-        default="postgresql://rpl:rpl@localhost:5432/resources",
-        title="Database URL",
-        description="The URL of the database used by the Resource Manager.",
     )
     custom_types: dict[str, "ResourceDefinitions"] = Field(
         default_factory=dict,

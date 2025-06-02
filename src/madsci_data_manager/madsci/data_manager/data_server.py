@@ -11,13 +11,16 @@ from fastapi import FastAPI, Form, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
+from madsci.client.event_client import EventClient
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
     upload_file_to_object_storage,
 )
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
+    DataManagerSettings,
     DataPoint,
     ObjectStorageDefinition,
 )
@@ -26,16 +29,35 @@ from pymongo import MongoClient
 
 
 def create_data_server(  # noqa: C901, PLR0915
+    data_manager_settings: Optional[DataManagerSettings] = None,
     data_manager_definition: Optional[DataManagerDefinition] = None,
     db_client: Optional[MongoClient] = None,
+    context: Optional[MadsciContext] = None,
 ) -> FastAPI:
     """Creates a Data Manager's REST server."""
+    logger = EventClient()
 
-    data_manager_definition = (
-        data_manager_definition or DataManagerDefinition.load_model()
+    data_manager_settings = data_manager_settings or DataManagerSettings()
+    logger.log_info(data_manager_settings)
+    if not data_manager_definition:
+        def_path = Path(data_manager_settings.data_manager_definition).expanduser()
+        if def_path.exists():
+            data_manager_definition = DataManagerDefinition.from_yaml(
+                def_path,
+            )
+        else:
+            data_manager_definition = DataManagerDefinition()
+        logger.log_info(f"Writing to data manager definition file: {def_path}")
+        data_manager_definition.to_yaml(def_path)
+    logger = EventClient(
+        name=f"data_manager.{data_manager_definition.name}",
     )
+    logger.log_info(data_manager_definition)
+    context = context or MadsciContext()
+    logger.log_info(context)
+
     if db_client is None:
-        db_client = MongoClient(data_manager_definition.db_url)
+        db_client = MongoClient(data_manager_settings.db_url)
 
     # Initialize MinIO client if configuration is provided
     minio_client = None
@@ -139,7 +161,7 @@ def create_data_server(  # noqa: C901, PLR0915
                 # Fallback to local storage
                 time = datetime.now()
                 path = (
-                    Path(data_manager_definition.file_storage_path).expanduser()
+                    Path(data_manager_settings.file_storage_path).expanduser()
                     / str(time.year)
                     / str(time.month)
                     / str(time.day)
@@ -214,14 +236,14 @@ def create_data_server(  # noqa: C901, PLR0915
 
 
 if __name__ == "__main__":
-    data_manager_definition = DataManagerDefinition.load_model()
-    db_client = MongoClient(data_manager_definition.db_url)
+    data_manager_settings = DataManagerSettings()
+    db_client = MongoClient(data_manager_settings.db_url)
     app = create_data_server(
-        data_manager_definition=data_manager_definition,
+        data_manager_settings=data_manager_settings,
         db_client=db_client,
     )
     uvicorn.run(
         app,
-        host=data_manager_definition.host,
-        port=data_manager_definition.port,
+        host=data_manager_settings.data_server_url.host,
+        port=data_manager_settings.data_server_url.port,
     )

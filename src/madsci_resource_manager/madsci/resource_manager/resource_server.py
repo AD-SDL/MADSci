@@ -1,6 +1,6 @@
 """Fast API Server for Resources"""
 
-import logging
+from pathlib import Path
 from typing import Optional, Union
 
 from fastapi import FastAPI
@@ -19,6 +19,7 @@ from madsci.common.types.resource_types import (
 from madsci.common.types.resource_types.definitions import (
     ResourceDefinitions,
     ResourceManagerDefinition,
+    ResourceManagerSettings,
 )
 from madsci.common.types.resource_types.server_types import (
     PushResourceBody,
@@ -31,28 +32,41 @@ from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_tables import ResourceHistoryTable
 from sqlalchemy.exc import NoResultFound
 
-logger = logging.getLogger(__name__)
-
 
 def create_resource_server(  # noqa: C901, PLR0915
     resource_manager_definition: Optional[ResourceManagerDefinition] = None,
+    resource_server_settings: Optional[ResourceManagerSettings] = None,
     resource_interface: Optional[ResourceInterface] = None,
 ) -> FastAPI:
     """Creates a Resource Manager's REST server."""
+    logger = EventClient()
+    resource_server_settings = resource_server_settings or ResourceManagerSettings()
+    logger.log_info(resource_server_settings)
+
     if not resource_manager_definition:
-        resource_manager_definition = ResourceManagerDefinition.load_model()
+        def_path = Path(
+            resource_server_settings.resource_manager_definition
+        ).expanduser()
+        if def_path.exists():
+            resource_manager_definition = ResourceManagerDefinition.from_yaml(
+                def_path,
+            )
+        else:
+            resource_manager_definition = ResourceManagerDefinition()
+        logger.log_info(f"Writing to resource manager definition file: {def_path}")
+        resource_manager_definition.to_yaml(def_path)
 
     # * Configure the event client
-    logger = EventClient(
-        name=f"resource_manager.{resource_manager_definition.name}"
-    ).logger
+    logger = EventClient(name=f"resource_manager.{resource_manager_definition.name}")
+    logger.log_info(resource_manager_definition)
 
     if not resource_interface:
         resource_interface = ResourceInterface(
-            url=resource_manager_definition.db_url, logger=logger
+            url=resource_server_settings.db_url, logger=logger
         )
         logger.info(resource_interface)
         logger.info(resource_interface.session)
+
     app = FastAPI()
 
     @app.get("/")
@@ -506,12 +520,12 @@ def create_resource_server(  # noqa: C901, PLR0915
 if __name__ == "__main__":
     import uvicorn
 
-    resource_manager_definition = ResourceManagerDefinition.load_model()
+    resource_server_settings = ResourceManagerSettings()
     app = create_resource_server(
-        resource_manager_definition=resource_manager_definition,
+        resource_server_settings=resource_server_settings,
     )
     uvicorn.run(
         app,
-        host=resource_manager_definition.host,
-        port=resource_manager_definition.port,
+        host=resource_server_settings.resource_server_url.host,
+        port=resource_server_settings.resource_server_url.port,
     )

@@ -2,15 +2,17 @@
 
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Annotated, Any, Literal, Optional, Union
 
 from bson.objectid import ObjectId
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.utils import new_ulid_str
 from pydantic import (
     AliasChoices,
+    AnyUrl,
     Field,
     Tag,
     field_validator,
@@ -199,30 +201,27 @@ class ObjectStorageDefinition(MadsciBaseModel):
     """Optional for AWS S3/other providers"""
 
 
-class DataManagerDefinition(ManagerDefinition):
-    """Definition for a Squid Data Manager.
+class DataManagerSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "data.env"),
+    toml_file=("settings.toml", "data.settings.toml"),
+    yaml_file=("settings.yaml", "data.settings.yaml"),
+    json_file=("settings.json", "data.settings.json"),
+    env_prefix="DATA_",
+):
+    """Settings for the MADSci Lab."""
 
-    Attributes:
-        manager_type: The type of the event manager.
-        host: The hostname or IP address of the Data Manager server.
-        port: The port number of the Data Manager server.
-        db_url: The URL of the database used by the Data Manager.
-    """
-
-    manager_type: Literal[ManagerType.DATA_MANAGER] = Field(
-        title="Manager Type",
-        description="The type of the event manager",
-        default=ManagerType.DATA_MANAGER,
+    data_server_url: AnyUrl = Field(
+        title="Lab URL",
+        description="The URL of the lab manager.",
+        default=AnyUrl("http://localhost:8004"),
+        alias="data_server_url",  # * Don't double prefix
     )
-    host: str = Field(
-        default="127.0.0.1",
-        title="Server Host",
-        description="The hostname or IP address of the Data Manager server.",
-    )
-    port: int = Field(
-        default=8004,
-        title="Server Port",
-        description="The port number of the Data Manager server.",
+    data_manager_definition: PathLike = Field(
+        title="Data Manager Definition File",
+        description="Path to the data manager definition file to use.",
+        default=Path("data.manager.yaml"),
+        alias="data_manager_definition",  # * Don't double prefix
     )
     db_url: str = Field(
         default="mongodb://localhost:27017",
@@ -234,6 +233,34 @@ class DataManagerDefinition(ManagerDefinition):
         description="The path where files are stored on the server.",
         default="~/.madsci/datapoints",
     )
+
+
+class DataManagerDefinition(ManagerDefinition):
+    """Definition for a Squid Data Manager.
+
+    Attributes:
+        manager_type: The type of the event manager.
+        host: The hostname or IP address of the Data Manager server.
+        port: The port number of the Data Manager server.
+        db_url: The URL of the database used by the Data Manager.
+    """
+
+    name: str = Field(
+        title="Manager Name",
+        description="The name of this manager instance.",
+        default="Data Manager",
+    )
+    data_manager_id: str = Field(
+        title="Data Manager ID",
+        description="The ID of the data manager.",
+        default_factory=new_ulid_str,
+    )
+    manager_type: Literal[ManagerType.DATA_MANAGER] = Field(
+        title="Manager Type",
+        description="The type of the event manager",
+        default=ManagerType.DATA_MANAGER,
+    )
+    # TODO: Move to pydantic settings
     minio_client_config: Optional[ObjectStorageDefinition] = Field(
         title="MinIO Client Configuration",
         description="Configuration for MinIO client for object storage.",

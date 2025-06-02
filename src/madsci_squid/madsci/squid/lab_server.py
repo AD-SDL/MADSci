@@ -30,7 +30,6 @@ def create_lab_server(
             )
         else:
             lab_definition = LabDefinition()
-            lab_def_path.parent.mkdir(parents=True, exist_ok=True)
         logger.log_info(f"Writing to lab definition file: {lab_def_path}")
         lab_definition.to_yaml(lab_def_path)
     logger = EventClient(

@@ -90,7 +90,7 @@ class LabDefinition(ManagerDefinition):
     name: str = Field(
         title="Lab Name",
         description="The name of the lab.",
-        default="MADSci Lab",
+        default="MADSci Lab Manager",
     )
     lab_id: str = Field(
         title="Lab ID",

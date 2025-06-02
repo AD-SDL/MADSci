@@ -5,38 +5,64 @@ from typing import Literal, Optional, Union
 
 from bson.objectid import ObjectId
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, datetime
+from madsci.common.types.base_types import (
+    MadsciBaseModel,
+    MadsciBaseSettings,
+    PathLike,
+    datetime,
+)
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.utils import new_ulid_str
 from pydantic import Field, field_validator
 
 
+class ExperimentManagerSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "experiments.env"),
+    toml_file=("settings.toml", "experiments.settings.toml"),
+    yaml_file=("settings.yaml", "experiments.settings.yaml"),
+    json_file=("settings.json", "experiments.settings.json"),
+    env_prefix="EXPERIMENTS_",
+):
+    """Settings for the MADSci Experiment Manager."""
+
+    experiment_server_url: str = Field(
+        title="Experiment Server URL",
+        description="The URL of the experiment manager server.",
+        default="http://localhost:8002",
+        alias="experiment_server_url",  # * Don't double prefix
+    )
+    experiment_manager_definition: PathLike = Field(
+        title="Experiment Manager Definition File",
+        description="Path to the experiment manager definition file to use.",
+        default="experiment.manager.yaml",
+        alias="experiment_manager_definition",  # * Don't double prefix
+    )
+    db_url: str = Field(
+        title="Database URL",
+        description="The URL of the database for the experiment manager.",
+        default="mongodb://localhost:27017",
+    )
+
+
 class ExperimentManagerDefinition(ManagerDefinition):
     """Definition for an Experiment Manager."""
 
+    name: str = Field(
+        title="Manager Name",
+        description="The name of this experiment manager instance.",
+        default="Experiment Manager",
+    )
+    experiment_manager_id: str = Field(
+        title="Experiment Manager ID",
+        description="The ID of the experiment manager.",
+        default_factory=new_ulid_str,
+    )
     manager_type: Literal[ManagerType.EXPERIMENT_MANAGER] = Field(
         title="Manager Type",
         description="The type of the event manager",
         default=ManagerType.EXPERIMENT_MANAGER,
-    )
-    host: str = Field(
-        title="Server Host",
-        description="The host of the experiment manager.",
-        default="127.0.0.1",
-    )
-    port: int = Field(
-        title="Server Port",
-        description="The port of the experiment manager.",
-        default=8002,
-    )
-    db_url: str = Field(
-        title="Database URL",
-        description="The URL of the database for the experidict[str, Any]ment manager.",
-        default="mongodb://localhost:27017",
-    )
-    lab_server_url: Optional[str] = Field(
-        title="Lab Manager URL", description="URL for the lab manager", default=None
     )
 
 

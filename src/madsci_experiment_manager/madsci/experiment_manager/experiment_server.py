@@ -1,6 +1,7 @@
 """REST API and Server for the Experiment Manager."""
 
 import datetime
+from pathlib import Path
 from typing import Optional
 
 import uvicorn
@@ -11,6 +12,7 @@ from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentManagerDefinition,
+    ExperimentManagerSettings,
     ExperimentRegistration,
     ExperimentStatus,
 )
@@ -20,27 +22,35 @@ from pymongo.database import Database
 
 def create_experiment_server(  # noqa: C901, PLR0915
     experiment_manager_definition: Optional[ExperimentManagerDefinition] = None,
+    experiment_manager_settings: Optional[ExperimentManagerSettings] = None,
     db_connection: Optional[Database] = None,
 ) -> FastAPI:
     """Creates an Experiment Manager's REST server."""
-
-    if not experiment_manager_definition:
-        experiment_manager_definition = ExperimentManagerDefinition.load_model(
-            require_unique=True
-        )
-
-    if not experiment_manager_definition:
-        raise ValueError(
-            "No experiment manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
-        )
-
-    # * Logger
     logger = EventClient()
+    experiment_manager_settings = (
+        experiment_manager_settings or ExperimentManagerSettings()
+    )
+    logger.log_info(experiment_manager_settings)
+    if not experiment_manager_definition:
+        def_path = Path(
+            experiment_manager_settings.experiment_manager_definition
+        ).expanduser()
+        if def_path.exists():
+            experiment_manager_definition = ExperimentManagerDefinition.from_yaml(
+                def_path,
+            )
+        else:
+            experiment_manager_definition = ExperimentManagerDefinition()
+        logger.log_info(f"Writing to experiment manager definition file: {def_path}")
+        experiment_manager_definition.to_yaml(def_path)
+    logger = EventClient(
+        name=f"experiment_manager.{experiment_manager_definition.name}",
+    )
     logger.log_info(experiment_manager_definition)
 
     # * DB Config
     if db_connection is None:
-        db_client = MongoClient(experiment_manager_definition.db_url)
+        db_client = MongoClient(experiment_manager_settings.db_url)
         db_connection = db_client["experiment_manager"]
     experiments = db_connection["experiments"]
 
@@ -204,14 +214,12 @@ def create_experiment_server(  # noqa: C901, PLR0915
 
 
 if __name__ == "__main__":
-    experiment_manager_definition = ExperimentManagerDefinition.load_model(
-        require_unique=True
-    )
+    experiment_manager_settings = ExperimentManagerSettings()
     app = create_experiment_server(
-        experiment_manager_definition=experiment_manager_definition
+        experiment_manager_settings=experiment_manager_settings,
     )
     uvicorn.run(
         app,
-        host=experiment_manager_definition.host,
-        port=experiment_manager_definition.port,
+        host=experiment_manager_settings.experiment_server_url.host,
+        port=experiment_manager_settings.experiment_server_url.port,
     )
