@@ -19,13 +19,13 @@ from typing import (
 
 from madsci.client.event_client import (
     EventClient,
-    default_logger,
 )
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
+from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionRequest,
@@ -36,7 +36,6 @@ from madsci.common.types.action_types import (
     LocationArgumentDefinition,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import Event, EventType
@@ -92,7 +91,7 @@ class AbstractNode:
     """The default supported capabilities of this node module class."""
     config: ClassVar[NodeConfig] = NodeConfig()
     """The node config model. This is the model that will be used to validate the node configuration."""
-    context: ClassVar[Optional[MadsciContext]] = None
+    context: ClassVar[MadsciContext] = MadsciContext()
     """The context for the node. This allows the node to access the MADSci context, including the event client and resource client."""
 
     def __init__(
@@ -116,42 +115,43 @@ class AbstractNode:
             else:
                 self.node_definition = NodeDefinition.from_yaml(node_definition_path)
 
-        self._configure_clients()
+        with ownership_context(node_id=self.node_definition.node_id):
+            self._configure_clients()
 
-        # * Check Node Version
-        if (
-            Version.parse(self.module_version).compare(
-                self.node_definition.module_version
-            )
-            < 0
-        ):
-            self.logger.log_warning(
-                "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
-            )
-
-        # * Synthesize the node info
-        self.node_info = NodeInfo.from_node_def_and_config(
-            self.node_definition, self.config
-        )
-
-        # * Combine the node definition and classes's capabilities
-        self._populate_capabilities()
-
-        # * Add the action decorators to the node (and node info)
-        for action_callable in self.__class__.__dict__.values():
-            if hasattr(action_callable, "__is_madsci_action__"):
-                self._add_action(
-                    func=action_callable,
-                    action_name=action_callable.__madsci_action_name__,
-                    description=action_callable.__madsci_action_description__,
-                    blocking=action_callable.__madsci_action_blocking__,
+            # * Check Node Version
+            if (
+                Version.parse(self.module_version).compare(
+                    self.node_definition.module_version
+                )
+                < 0
+            ):
+                self.logger.log_warning(
+                    "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
                 )
 
-        # * Save the node info and update definition, if possible
-        # TODO: Figure out a sane strategy for writing out node info and updating node definition
+            # * Synthesize the node info
+            self.node_info = NodeInfo.from_node_def_and_config(
+                self.node_definition, self.config
+            )
 
-        # * Add a lock for thread safety with blocking actions
-        self._action_lock = threading.Lock()
+            # * Combine the node definition and classes's capabilities
+            self._populate_capabilities()
+
+            # * Add the action decorators to the node (and node info)
+            for action_callable in self.__class__.__dict__.values():
+                if hasattr(action_callable, "__is_madsci_action__"):
+                    self._add_action(
+                        func=action_callable,
+                        action_name=action_callable.__madsci_action_name__,
+                        description=action_callable.__madsci_action_description__,
+                        blocking=action_callable.__madsci_action_blocking__,
+                    )
+
+            # * Save the node info and update definition, if possible
+            # TODO: Figure out a sane strategy for writing out node info and updating node definition
+
+            # * Add a lock for thread safety with blocking actions
+            self._action_lock = threading.Lock()
 
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
@@ -160,16 +160,17 @@ class AbstractNode:
     def start_node(self) -> None:
         """Called once to start the node."""
 
-        # * Update EventClient with logging parameters
-        self._configure_clients()
+        with ownership_context(node_id=self.node_definition.node_id):
+            # * Update EventClient with logging parameters
+            self._configure_clients()
 
-        # * Log startup info
-        self.logger.log_debug(f"{self.node_definition=}")
+            # * Log startup info
+            self.logger.log_debug(f"{self.node_definition=}")
 
-        # * Kick off the startup logic in a separate thread
-        # * This allows implementations to start servers, listeners, etc.
-        # * in parrallel
-        self._startup()
+            # * Kick off the startup logic in a separate thread
+            # * This allows implementations to start servers, listeners, etc.
+            # * in parrallel
+            self._startup()
 
     def status_handler(self) -> None:
         """Called periodically to update the node status. Should set `self.node_status`"""
@@ -358,7 +359,6 @@ class AbstractNode:
         """Configure the event and resource clients."""
         self.logger = self.event_client = EventClient(
             name=f"node.{self.node_definition.node_name}",
-            source=OwnershipInfo(node_id=self.node_definition.node_id),
         )
         self.resource_client = ResourceClient(event_client=self.event_client)
 
@@ -528,14 +528,14 @@ class AbstractNode:
                 if arg_name in parameters:
                     arg_dict[arg_name] = arg_value
                 else:
-                    default_logger.log_warning(
+                    EventClient().log_warning(
                         f"Ignoring unexpected argument {arg_name}"
                     )
             for file in action_request.files:
                 if file in parameters:
                     arg_dict[file] = action_request.files[file]
                 else:
-                    default_logger.log_warning(f"Ignoring unexpected file {file}")
+                    EventClient().log_warning(f"Ignoring unexpected file {file}")
 
         # Validate any arguments that expect a LocationArgument
 

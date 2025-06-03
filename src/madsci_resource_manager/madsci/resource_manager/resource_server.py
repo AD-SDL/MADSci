@@ -1,13 +1,15 @@
 """Fast API Server for Resources"""
 
 from pathlib import Path
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
+import fastapi
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from madsci.client.event_client import EventClient
+from madsci.common.ownership import ownership_context
 from madsci.common.types.resource_types import (
     ContainerDataModels,
     Queue,
@@ -56,18 +58,30 @@ def create_resource_server(  # noqa: C901, PLR0915
         logger.log_info(f"Writing to resource manager definition file: {def_path}")
         resource_manager_definition.to_yaml(def_path)
 
-    # * Configure the event client
-    logger = EventClient(name=f"resource_manager.{resource_manager_definition.name}")
-    logger.log_info(resource_manager_definition)
-
-    if not resource_interface:
-        resource_interface = ResourceInterface(
-            url=resource_server_settings.db_url, logger=logger
+    with ownership_context(manager_id=resource_manager_definition.resource_manager_id):
+        logger = EventClient(
+            name=f"resource_manager.{resource_manager_definition.name}"
         )
-        logger.info(resource_interface)
-        logger.info(resource_interface.session)
+        logger.log_info(resource_manager_definition)
+
+        if not resource_interface:
+            resource_interface = ResourceInterface(
+                url=resource_server_settings.db_url, logger=logger
+            )
+            logger.info(resource_interface)
+            logger.info(resource_interface.session)
 
     app = FastAPI()
+
+    @app.middleware("http")
+    async def ownership_middleware(
+        request: fastapi.Request, call_next: Callable
+    ) -> fastapi.Response:
+        """Middleware to set ownership context for each request."""
+        with ownership_context(
+            manager_id=resource_manager_definition.resource_manager_id
+        ):
+            return await call_next(request)
 
     @app.get("/")
     @app.get("/info")

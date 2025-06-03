@@ -13,7 +13,11 @@ init:
 # Create a .env file for the docker compose
 env:
   @test -e .env || cp .env.example .env
-  @sed -i "s|^REPO_PATH=.*|REPO_PATH=$(dirname {{justfile()}})|" .env
+  @if [[ "$OSTYPE" == darwin* ]]; then \
+    sed -i '' "s|^REPO_PATH=.*|REPO_PATH=$(dirname {{justfile()}})|" .env; \
+  else \
+    sed -i "s|^REPO_PATH=.*|REPO_PATH=$(dirname {{justfile()}})|" .env; \
+  fi
   @mkdir -p $(dirname {{justfile()}})/.madsci
 
 # Source the venv

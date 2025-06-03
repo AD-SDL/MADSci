@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.step_types import Step, StepDefinition
@@ -158,8 +159,8 @@ class Workflow(WorkflowDefinition):
     """Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory=dict)
     """parameter values used in this workflow"""
-    ownership_info: OwnershipInfo = Field(default_factory=OwnershipInfo)
-    """ID of the experiment this workflow is a part of"""
+    ownership_info: OwnershipInfo = Field(default_factory=get_current_ownership_info)
+    """Ownership information for the workflow run"""
     status: WorkflowStatus = Field(default_factory=WorkflowStatus)
     """current status of the workflow"""
     step_index: int = 0

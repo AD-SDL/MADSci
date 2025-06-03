@@ -6,7 +6,6 @@ from typing import Annotated, Any, Optional
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
@@ -51,11 +50,8 @@ class RobotArmNode(RestNode):
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
         self.robot_arm = RobotArmInterface(logger=self.logger)
-        ownership_info = OwnershipInfo(node_id=self.node_definition.node_id)
         resource_name = "robot_arm_gripper_" + str(self.node_definition.node_name)
-        slot_def = SlotResourceDefinition(
-            resource_name=resource_name, owner=ownership_info
-        )
+        slot_def = SlotResourceDefinition(resource_name=resource_name)
         self.gripper = self.resource_client.init_resource(slot_def)
         self.logger.log("Robot arm initialized!")
 

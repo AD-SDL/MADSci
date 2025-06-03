@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Literal, Optional, Union
 
 from bson.objectid import ObjectId
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     MadsciBaseModel,
@@ -86,7 +87,7 @@ class ExperimentDesign(MadsciBaseModel):
     ownership_info: OwnershipInfo = Field(
         title="Ownership Info",
         description="Information about the users, campaigns, etc. that this design is owned by.",
-        default_factory=OwnershipInfo,
+        default_factory=get_current_ownership_info,
     )
 
     def new_experiment(
@@ -154,7 +155,7 @@ class Experiment(MadsciBaseModel):
     ownership_info: OwnershipInfo = Field(
         title="Ownership Info",
         description="Information about the ownership of the experiment.",
-        default_factory=OwnershipInfo,
+        default_factory=get_current_ownership_info,
     )
     run_name: Optional[str] = Field(
         title="Run Name",
@@ -218,7 +219,7 @@ class ExperimentalCampaign(MadsciBaseModel):
     ownership_info: OwnershipInfo = Field(
         title="Ownership Info",
         description="Information about the ownership of the campaign.",
-        default_factory=OwnershipInfo,
+        default_factory=get_current_ownership_info,
     )
     created_at: datetime = Field(
         title="Registered At",

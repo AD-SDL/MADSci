@@ -14,8 +14,8 @@ from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.event_types import Event, EventType
@@ -404,14 +404,13 @@ class Engine:
             node.status = NodeStatus(errored=True, errors=[error])
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
-            source = OwnershipInfo(
+            with ownership_context(
                 workcell_id=self.workcell_definition.workcell_id,
                 node_id=node.info.node_id if node.info else None,
-            )
-            self.logger.log_warning(
-                event=Event(
-                    event_type=EventType.NODE_STATUS_UPDATE,
-                    source=source,
-                    event_data=node.status,
+            ):
+                self.logger.log_warning(
+                    event=Event(
+                        event_type=EventType.NODE_STATUS_UPDATE,
+                        event_data=node.status,
+                    )
                 )
-            )

@@ -40,6 +40,7 @@ class MadsciBaseSettings(BaseSettings):
         extra="ignore",
         cli_parse_args=True,
         cli_ignore_unknown_args=True,
+        _env_parse_none_str="None",
     )
     """Configuration for the settings model."""
 

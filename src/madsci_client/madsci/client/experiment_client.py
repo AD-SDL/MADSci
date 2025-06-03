@@ -3,7 +3,6 @@
 from typing import Optional, Union
 
 import requests
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.experiment_types import (
     Experiment,
@@ -24,10 +23,8 @@ class ExperimentClient:
     def __init__(
         self,
         experiment_server_url: Optional[Union[str, AnyUrl]] = None,
-        ownership_info: Optional[OwnershipInfo] = None,
     ) -> "ExperimentClient":
         """Create a new Experiment Client."""
-        self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
         self.context = MadsciContext()
         self.experiment_server_url = (
             experiment_server_url or self.context.experiment_server_url

@@ -2,6 +2,7 @@
 
 from typing import Annotated, Any, Literal, Optional, Union
 
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     ConfigDict,
@@ -14,7 +15,7 @@ from madsci.common.types.base_types import (
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.types.resource_types.resource_enums import ResourceTypeEnum
 from madsci.common.utils import new_name_str, new_ulid_str
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic.types import Discriminator, Tag
 from sqlalchemy.dialects.postgresql import JSON
@@ -46,7 +47,7 @@ class ResourceManagerSettings(
 ):
     """Settings for the MADSci Resource Manager."""
 
-    resource_server_url: str = Field(
+    resource_server_url: AnyUrl = Field(
         title="Resource Server URL",
         description="The URL of the resource manager server.",
         default="http://localhost:8003",
@@ -147,7 +148,7 @@ class ResourceDefinition(MadsciSQLModel, table=False, extra="allow"):
         description="A description of the resource.",
     )
     owner: OwnershipInfo = SQLField(
-        default_factory=OwnershipInfo,
+        default_factory=get_current_ownership_info,
         title="Ownership Info",
         description="The owner of this resource",
         sa_type=JSON,

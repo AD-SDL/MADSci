@@ -7,8 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import UploadFile
-from madsci.client.event_client import default_logger
-from madsci.common.types.auth_types import OwnershipInfo
+from madsci.client.event_client import EventClient
 from madsci.common.types.location_types import Location, LocationArgument
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
@@ -80,7 +79,6 @@ def create_workflow(
     workflow_def: WorkflowDefinition,
     workcell: WorkcellDefinition,
     state_handler: WorkcellStateHandler,
-    ownership_info: Optional[OwnershipInfo] = None,
     parameters: Optional[dict[str, Any]] = None,
 ) -> Workflow:
     """Pulls the workcell and builds a list of dictionary steps to be executed
@@ -112,7 +110,6 @@ def create_workflow(
     wf_dict.update(
         {
             "label": workflow_def.name,
-            "ownership_info": ownership_info.model_dump(mode="json"),
             "parameter_values": parameters,
         }
     )
@@ -125,7 +122,7 @@ def create_workflow(
         valid, validation_string = validate_step(
             working_step, state_handler=state_handler
         )
-        default_logger.log_info(validation_string)
+        EventClient().log_info(validation_string)
         if not valid:
             raise ValueError(validation_string)
         steps.append(working_step)
@@ -189,7 +186,7 @@ def save_workflow_files(
                 for step_file_key, step_file_path in step.files.items():
                     if step_file_path == file.filename:
                         step.files[step_file_key] = str(file_path)
-                        default_logger.log_info(
+                        EventClient().log_info(
                             f"{step_file_key}: {file_path} ({step_file_path})"
                         )
     return workflow

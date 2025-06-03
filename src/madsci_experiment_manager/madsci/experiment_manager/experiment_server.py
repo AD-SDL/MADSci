@@ -2,12 +2,13 @@
 
 import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient, EventType
+from madsci.common.ownership import ownership_context
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
@@ -46,7 +47,10 @@ def create_experiment_server(  # noqa: C901, PLR0915
     logger = EventClient(
         name=f"experiment_manager.{experiment_manager_definition.name}",
     )
-    logger.log_info(experiment_manager_definition)
+    with ownership_context(
+        manager_id=experiment_manager_definition.experiment_manager_id
+    ):
+        logger.log_info(experiment_manager_definition)
 
     # * DB Config
     if db_connection is None:
@@ -55,6 +59,14 @@ def create_experiment_server(  # noqa: C901, PLR0915
     experiments = db_connection["experiments"]
 
     app = FastAPI()
+
+    @app.middleware("http")
+    async def ownership_middleware(request: Request, call_next: Callable) -> Response:
+        """Middleware to set ownership context for each request."""
+        with ownership_context(
+            manager_id=experiment_manager_definition.experiment_manager_id
+        ):
+            return await call_next(request)
 
     @app.get("/")
     @app.get("/info")

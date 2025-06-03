@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Optional, Union
 
 from bson.objectid import ObjectId
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
@@ -49,7 +50,9 @@ class DataPoint(MadsciBaseModel, extra="allow"):
 
     label: str
     """Label of this data point"""
-    ownership_info: Optional[OwnershipInfo] = Field(default_factory=OwnershipInfo)
+    ownership_info: Optional[OwnershipInfo] = Field(
+        default_factory=get_current_ownership_info
+    )
     """Information about the ownership of the data point"""
     data_type: DataPointTypeEnum
     """type of the datapoint, inherited from class"""

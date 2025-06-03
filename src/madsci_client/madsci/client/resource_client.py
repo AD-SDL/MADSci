@@ -6,7 +6,6 @@ from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.resource_types import (
     GridIndex2D,
@@ -35,13 +34,10 @@ class ResourceClient:
         self,
         url: Optional[Union[str, AnyUrl]] = None,
         event_client: Optional[EventClient] = None,
-        ownership_info: Optional[OwnershipInfo] = None,
     ) -> None:
         """Initialize the resource client."""
-        self.context = MadsciContext()
-        self.url = str(url) if url is not None else None
-        self.url = self.url or self.context.resource_server_url
-        self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
+        self.context = MadsciContext(resource_server_url=url)
+        self.url = self.context.resource_server_url
         if self.url is not None and str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
         if self.url is not None:

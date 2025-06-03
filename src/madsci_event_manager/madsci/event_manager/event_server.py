@@ -1,12 +1,13 @@
 """REST Server for the MADSci Event Manager"""
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.params import Body
 from madsci.client.event_client import EventClient
+from madsci.common.ownership import ownership_context
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import (
     Event,
@@ -27,6 +28,7 @@ def create_event_server(  # noqa: C901
     """Creates an Event Manager's REST server."""
 
     logger = EventClient()
+    logger.event_server = None  # * Ensure we don't recursively log events
 
     event_manager_settings = event_manager_settings or EventManagerSettings()
     logger.log_info(event_manager_settings)
@@ -41,16 +43,24 @@ def create_event_server(  # noqa: C901
             event_manager_definition = EventManagerDefinition()
         logger.log_info(f"Writing to event manager definition file: {def_path}")
         event_manager_definition.to_yaml(def_path)
-    logger = EventClient(name=f"event_manager.{event_manager_definition.name}")
-    logger.log_info(event_manager_definition)
-    if db_connection is None:
-        db_client = MongoClient(event_manager_settings.db_url)
-        db_connection = db_client[event_manager_settings.collection_name]
-    context = context or MadsciContext()
-    logger.log_info(context)
+    with ownership_context(manager_id=event_manager_definition.event_manager_id):
+        logger = EventClient(name=f"event_manager.{event_manager_definition.name}")
+        logger.event_server = None  # * Ensure we don't recursively log events
+        logger.log_info(event_manager_definition)
+        if db_connection is None:
+            db_client = MongoClient(event_manager_settings.db_url)
+            db_connection = db_client[event_manager_settings.collection_name]
+        context = context or MadsciContext()
+        logger.log_info(context)
 
     app = FastAPI()
     events = db_connection["events"]
+
+    # Middleware to set ownership context for each request
+    @app.middleware("http")
+    async def ownership_middleware(request: Request, call_next: Callable) -> Response:
+        with ownership_context(manager_id=event_manager_definition.event_manager_id):
+            return await call_next(request)
 
     @app.get("/")
     @app.get("/info")

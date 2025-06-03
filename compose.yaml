@@ -89,14 +89,14 @@ services:
   event_manager:
     <<: *madsci-service
     container_name: event_manager
-    command: python -m madsci.event_manager.event_server --definition /home/madsci/example_lab/managers/example_event_manager.manager.yaml
+    command: python -m madsci.event_manager.event_server
     depends_on:
       - mongodb
 
   experiment_manager:
     <<: *madsci-service
     container_name: experiment_manager
-    command: python -m madsci.experiment_manager.experiment_server --definition /home/madsci/example_lab/managers/example_experiment_manager.manager.yaml
+    command: python -m madsci.experiment_manager.experiment_server
     depends_on:
       - mongodb
       - lab_manager
@@ -104,20 +104,22 @@ services:
   resource_manager:
     <<: *madsci-service
     container_name: resource_manager
-    command: python -m madsci.resource_manager.resource_server --definition /home/madsci/example_lab/managers/example_resource_manager.manager.yaml
+    command: python -m madsci.resource_manager.resource_server
     depends_on:
       - postgres
+      - event_manager
 
   data_manager:
     <<: *madsci-service
     container_name: data_manager
-    command: python -m madsci.data_manager.data_server --definition /home/madsci/example_lab/managers/example_data_manager.manager.yaml
+    command: python -m madsci.data_manager.data_server
     depends_on:
       - mongodb
+      - event_manager
   workcell_manager:
     <<: *madsci-service
     container_name: workcell_manager
-    command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 0 --definition /home/madsci/example_lab/managers/example_workcell_manager.manager.yaml
+    command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 0
     depends_on:
       - redis
       - mongodb
@@ -130,15 +132,15 @@ services:
   liquidhandler:
     <<: *madsci-service
     container_name: liquidhandler
-    command: python example_modules/liquidhandler.py --definition example_modules/nodes/liquidhandler_1.node.yaml
+    command: python example_modules/liquidhandler.py --node_definition node_definitions/liquidhandler_1.node.yaml
 
   robotarm:
     <<: *madsci-service
     container_name: robotarm
-    command: python example_modules/robotarm.py --definition example_modules/nodes/robotarm_1.node.yaml
+    command: python example_modules/robotarm.py --node_definition node_definitions/robotarm_1.node.yaml
 
 
   platereader:
     <<: *madsci-service
     container_name: platereader
-    command: python example_modules/platereader.py --definition example_modules/nodes/platereader_1.node.yaml
+    command: python example_modules/platereader.py --node_definition node_definitions/platereader_1.node.yaml

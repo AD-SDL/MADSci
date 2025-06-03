@@ -1,7 +1,7 @@
 """Types for MADSci Workcell configuration."""
 
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import (
     Error,
@@ -42,14 +42,6 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
         title="Workcell Description",
         description="A description of the workcell.",
     )
-    config: Annotated[
-        "WorkcellSettings",
-        Field(
-            title="Workcell Configuration",
-            description="The configuration for the workcell.",
-            default_factory=lambda: WorkcellSettings(),
-        ),
-    ]  # TODO: Remove
     nodes: dict[str, AnyUrl] = Field(
         default_factory=dict,
         title="Workcell Node URLs",
@@ -61,11 +53,10 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
         description="The Locations used in the workcell.",
     )
 
-    @computed_field
     @property
     def workcell_directory(self) -> Path:
         """The directory for the workcell."""
-        return Path(self.config.workcells_directory) / self.workcell_name
+        return Path(WorkcellSettings().workcells_directory) / self.workcell_name
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
 

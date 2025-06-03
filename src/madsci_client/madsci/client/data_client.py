@@ -13,7 +13,7 @@ from madsci.common.object_storage_helpers import (
     get_object_data_from_storage,
     upload_file_to_object_storage,
 )
-from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataPoint,
@@ -33,13 +33,11 @@ class DataClient:
     def __init__(
         self,
         url: Optional[Union[str, AnyUrl]] = None,
-        ownership_info: Optional[OwnershipInfo] = None,
         object_storage_config: Optional[ObjectStorageDefinition] = None,
     ) -> "DataClient":
         """Create a new Datapoint Client."""
         self.context = MadsciContext()
-        self.url = AnyUrl(url) if url else None
-        self.url = self.url or self.context.data_server_url
+        self.url = (AnyUrl(url) if url else None) or self.context.data_server_url
         if self.url is None:
             warnings.warn(
                 "No URL provided for the data client. Cannot persist datapoints.",
@@ -47,7 +45,6 @@ class DataClient:
                 stacklevel=2,
             )
         self._local_datapoints = {}
-        self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
         self.object_storage_config = object_storage_config
         self._minio_client = None
 
@@ -330,9 +327,7 @@ class DataClient:
         datapoint_dict = {
             "data_type": "object_storage",
             "path": str(Path(file_path).expanduser().resolve()),
-            "ownership_info": self.ownership_info.model_dump()
-            if self.ownership_info
-            else {},
+            "ownership_info": get_current_ownership_info().model_dump(mode="json"),
             **object_storage_info,  # Unpack all the storage info
         }
 
