@@ -18,7 +18,7 @@ from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataPoint,
     DataPointTypeEnum,
-    ObjectStorageDefinition,
+    ObjectStorageSettings,
 )
 from pydantic import AnyUrl
 from ulid import ULID
@@ -29,11 +29,12 @@ class DataClient:
 
     url: AnyUrl
     context: MadsciContext
+    _minio_client: Optional[ObjectStorageSettings] = None
 
     def __init__(
         self,
         url: Optional[Union[str, AnyUrl]] = None,
-        object_storage_config: Optional[ObjectStorageDefinition] = None,
+        object_storage_settings: Optional[ObjectStorageSettings] = None,
     ) -> "DataClient":
         """Create a new Datapoint Client."""
         self.context = MadsciContext()
@@ -45,11 +46,12 @@ class DataClient:
                 stacklevel=2,
             )
         self._local_datapoints = {}
-        self.object_storage_config = object_storage_config
-        self._minio_client = None
-
-        if object_storage_config:
-            self._minio_client = create_minio_client(object_storage_config)
+        self.object_storage_settings = (
+            object_storage_settings or ObjectStorageSettings()
+        )
+        self._minio_client = create_minio_client(
+            object_storage_settings=self.object_storage_settings
+        )
 
     def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
         """Get a datapoint's metadata by ID, either from local storage or server."""
@@ -302,14 +304,12 @@ class DataClient:
             ValueError: If object storage is not configured or operation fails
         """
         if self._minio_client is None:
-            raise ValueError(
-                "Object storage is not configured. Initialize DataClient with object_storage_config."
-            )
+            raise ValueError("Object storage is not configured.")
 
         # Use the helper function to upload the file
         object_storage_info = upload_file_to_object_storage(
             minio_client=self._minio_client,
-            object_storage_config=self.object_storage_config,
+            object_storage_settings=self.object_storage_settings,
             file_path=file_path,
             bucket_name=bucket_name,
             object_name=object_name,

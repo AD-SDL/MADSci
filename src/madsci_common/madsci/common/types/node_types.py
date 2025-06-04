@@ -14,7 +14,6 @@ from madsci.common.types.base_types import (
     MadsciBaseSettings,
     PathLike,
 )
-from madsci.common.types.datapoint_types import ObjectStorageDefinition
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import (
@@ -73,11 +72,6 @@ class NodeConfig(
         title="State Update Interval",
         description="The interval in seconds at which the node should update its state.",
         default=2.0,
-    )
-    minio_client_config: Optional[ObjectStorageDefinition] = Field(
-        title="Object Storage Configuration",
-        description="Configuration for S3-compatible object storage using MinIO.",
-        default=None,
     )
 
 

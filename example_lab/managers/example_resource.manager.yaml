@@ -1,10 +1,5 @@
 name: Example Resource Manager
-description: null
+description: An example resource manager
 manager_type: resource_manager
 resource_manager_id: 01JWVNE903BCECPSA9GE4XPKEM
 custom_types: {}
-manager_id: 01JMYYTZV8GYXD5P5GGC6Z3RH0
-url: null
-host: 0.0.0.0
-port: 8004
-db_url: postgresql://rpl:rpl@localhost:5432/resources

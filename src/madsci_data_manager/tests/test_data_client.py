@@ -19,7 +19,7 @@ from madsci.common.types.datapoint_types import (
     DataPointTypeEnum,
     FileDataPoint,
     ObjectStorageDataPoint,
-    ObjectStorageDefinition,
+    ObjectStorageSettings,
     ValueDataPoint,
 )
 from madsci.data_manager.data_server import create_data_server
@@ -355,7 +355,7 @@ def minio_config(minio_server):  # noqa
     """
     Fixture that provides MinIO configuration for individual tests.
     """
-    return ObjectStorageDefinition(
+    return ObjectStorageSettings(
         endpoint=minio_server["endpoint"],
         access_key=minio_server["access_key"],
         secret_key=minio_server["secret_key"],
@@ -377,7 +377,7 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
     # Initialize DataClient with the test MinIO configuration
     with pytest.warns(UserWarning):
         client = DataClient(
-            object_storage_config=minio_config,
+            object_storage_settings=minio_config,
         )
 
     # Create file datapoint
@@ -441,7 +441,7 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     # Initialize DataClient with the test MinIO configuration
     with pytest.warns(UserWarning):
         client = DataClient(
-            object_storage_config=minio_config,
+            object_storage_settings=minio_config,
         )
 
     # Custom metadata for the object
@@ -603,7 +603,7 @@ def test_s3_provider_configurations():
     """Test that different S3 provider configurations are valid."""
 
     # AWS S3 config
-    aws_config = ObjectStorageDefinition(
+    aws_config = ObjectStorageSettings(
         endpoint="s3.amazonaws.com",
         access_key="AKIAIOSFODNN7EXAMPLE",  # Example key format
         secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -613,7 +613,7 @@ def test_s3_provider_configurations():
     )
 
     # GCS config
-    gcs_config = ObjectStorageDefinition(
+    gcs_config = ObjectStorageSettings(
         endpoint="storage.googleapis.com",
         access_key="GOOGTS7C7FIS2E4U4RBGEXAMPLE",  # Example HMAC key format
         secret_key="bGoa+V7g/yqDXvKRqq+JTFn4uQZbPiQJo8rkEXAMPLE",
@@ -622,7 +622,7 @@ def test_s3_provider_configurations():
     )
 
     # DigitalOcean Spaces config
-    do_config = ObjectStorageDefinition(
+    do_config = ObjectStorageSettings(
         endpoint="nyc3.digitaloceanspaces.com",
         access_key="DO00EXAMPLE12345678",
         secret_key="doe_secret_key_example_123456789abcdef",

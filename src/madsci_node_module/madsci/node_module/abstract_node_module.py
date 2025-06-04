@@ -275,7 +275,13 @@ class AbstractNode:
         """Set configuration values of the node."""
 
         try:
-            self.config = self.config.model_copy(update=new_config)
+            for key, value in new_config.items():
+                if hasattr(self.config, key):
+                    setattr(self.config, key, value)
+                else:
+                    raise ValueError(
+                        f"Configuration key '{key}' is not valid for this node."
+                    )
             return NodeSetConfigResponse(
                 success=True,
             )

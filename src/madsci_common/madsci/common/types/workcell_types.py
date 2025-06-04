@@ -9,7 +9,6 @@ from madsci.common.types.base_types import (
     MadsciBaseSettings,
     PathLike,
 )
-from madsci.common.types.datapoint_types import ObjectStorageDefinition
 from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.node_types import Node
@@ -229,9 +228,4 @@ class WorkcellSettings(
         default=3,
         title="Get Action Result Retries",
         description="Number of times to retry getting an action result",
-    )
-    minio_client_config: Optional[ObjectStorageDefinition] = Field(
-        title="Object Storage Configuration",
-        description="Configuration for S3-compatible object storage using MinIO.",
-        default=None,
     )

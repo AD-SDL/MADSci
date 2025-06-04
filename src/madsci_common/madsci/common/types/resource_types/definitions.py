@@ -62,7 +62,7 @@ class ResourceManagerSettings(
     db_url: str = Field(
         title="Database URL",
         description="The URL of the database for the resource manager.",
-        default="postgresql://rpl:rpl@localhost:5432/resources",
+        default="postgresql://madsci:madsci@localhost:5432/resources",
     )
 
 

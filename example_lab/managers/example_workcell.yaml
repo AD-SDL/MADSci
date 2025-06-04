@@ -1,7 +1,7 @@
 workcell_name: Example Workcell
 manager_type: workcell_manager
 workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
-description: null
+description: An example workcell, consisiting of a (fake) liquid handler, a (fake) plate reader, and a (fake) robot arm.
 nodes:
   liquidhandler_1: http://localhost:2000
   platereader_1: http://localhost:2002

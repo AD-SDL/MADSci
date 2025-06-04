@@ -2,4 +2,3 @@ name: Example Data Manager
 description: An example data manager
 manager_type: data_manager
 data_manager_id: 01JWV7A7TRQM9DGGT5PR6Z0BT6
-minio_client_config: null

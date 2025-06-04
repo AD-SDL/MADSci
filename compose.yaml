@@ -52,8 +52,8 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=rpl
-      - POSTGRES_PASSWORD=rpl
+      - POSTGRES_USER=madsci
+      - POSTGRES_PASSWORD=madsci
       - POSTGRES_DB=resources
     ports:
       - 5432:5432
