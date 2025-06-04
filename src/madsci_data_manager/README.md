@@ -21,9 +21,9 @@ The MADSci Data Manager is available via [the Python Package Index](https://pypi
 pip install madsci.data_manager
 ```
 
-This python package is also included as part of the [madsci Docker image](https://github.com/orgs/AD-SDL/packages/container/package/madsci). You can see an example docker image in [this example compose file](./data_manager.compose.yaml).
+This python package is also included as part of the [madsci Docker image](https://github.com/orgs/AD-SDL/packages/container/package/madsci). You can see example docker usage in [the Example Lab Compose File](../../compose.yaml).
 
-Note that you will also need a MongoDB database (included in the example compose file)
+Note that you will also need a MongoDB database (included in the example compose file), and can optionally use a MinIO or other S3 compatible object storage for storing files.
 
 ## Usage
 
@@ -32,11 +32,9 @@ Note that you will also need a MongoDB database (included in the example compose
 To create and run a new MADSci Data Manager, do the following in your MADSci lab directory:
 
 - If you're not using docker compose, provision and configure a MongoDB instance.
-- If you're using docker compose, define your data manager and mongodb services based on the [example compose file](./data_manager.compose.yaml).
+- If you're using docker compose, define your data manager and mongodb services based on the [example compose file](../../compose.yaml).
 
 ```bash
-# Create a Data Manager Definition
-madsci manager add -t data_manager
 # Start the database and Data Manager Server
 docker compose up
 # OR
@@ -167,10 +165,10 @@ The MadSci Data Client supports multiple cloud storage providers through S3-comp
 ### AWS S3
 
 ```python
-from madsci.common.types.datapoint_types import ObjectStorageDefinition
+from madsci.common.types.datapoint_types import ObjectStorageSettings
 from madsci.client.data_client import DataClient
 
-aws_config = ObjectStorageDefinition(
+aws_config = ObjectStorageSettings(
     endpoint="s3.amazonaws.com",
     access_key="AKIAIOSFODNN7EXAMPLE",  # Your AWS Access Key ID
     secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # Your AWS Secret Access Key
@@ -179,7 +177,7 @@ aws_config = ObjectStorageDefinition(
     region="us-east-1"  # Specify your AWS region
 )
 
-client = DataClient(object_storage_config=aws_config)
+client = DataClient(object_storage_settings=aws_config)
 ```
 
 ### Google Cloud Storage (GCS)
@@ -187,7 +185,7 @@ client = DataClient(object_storage_config=aws_config)
 GCS requires HMAC keys for S3-compatible access:
 
 ```python
-gcs_config = ObjectStorageDefinition(
+gcs_config = ObjectStorageSettings(
     endpoint="storage.googleapis.com",
     access_key="GOOGTS7C7FIS2E4U4RBGEXAMPLE",  # Your GCS HMAC Access Key
     secret_key="bGoa+V7g/yqDXvKRqq+JTFn4uQZbPiQJo8rkEXAMPLE",  # Your GCS HMAC Secret
@@ -195,7 +193,7 @@ gcs_config = ObjectStorageDefinition(
     default_bucket="my-gcs-bucket"
 )
 
-client = DataClient(object_storage_config=gcs_config)
+client = DataClient(object_storage_settings=gcs_config)
 ```
 
 ## Authentication Setup

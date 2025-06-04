@@ -187,21 +187,44 @@ DataPointTypeMap = {
 }
 
 
-class ObjectStorageDefinition(MadsciBaseModel):
-    """Configuration for S3-compatible object storage."""
+class ObjectStorageSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "object_storage.env"),
+    toml_file=("settings.toml", "object_storage.settings.toml"),
+    yaml_file=("settings.yaml", "object_storage.settings.yaml"),
+    json_file=("settings.json", "object_storage.settings.json"),
+    env_prefix="OBJECT_STORAGE_",
+):
+    """Settings for S3-compatible object storage."""
 
-    endpoint: str
-    """Endpoint for S3-compatible storage (e.g., 'minio.example.com:9000')"""
-    access_key: str
-    """Access key for authentication"""
-    secret_key: str
-    """Secret key for authentication"""
-    secure: bool = False
-    """Whether to use HTTPS (True) or HTTP (False)"""
-    default_bucket: str = "madsci-data"
-    """Default bucket to use for storing data"""
-    region: Optional[str] = None
-    """Optional for AWS S3/other providers"""
+    endpoint: Optional[str] = Field(
+        default=None,
+        title="Endpoint",
+        description="Endpoint for S3-compatible storage (e.g., 'minio.example.com:9000')",
+    )
+    access_key: str = Field(
+        title="Access Key", description="Access key for authentication", default=""
+    )
+    secret_key: str = Field(
+        title="Secret Key",
+        description="Secret key for authentication",
+        default="",
+    )
+    secure: bool = Field(
+        default=False,
+        title="Secure",
+        description="Whether to use HTTPS (True) or HTTP (False)",
+    )
+    default_bucket: str = Field(
+        default="madsci-data",
+        title="Default Bucket",
+        description="Default bucket to use for storing data",
+    )
+    region: Optional[str] = Field(
+        default=None,
+        title="Region",
+        description="Optional for AWS S3/other providers",
+    )
 
 
 class DataManagerSettings(
@@ -262,10 +285,4 @@ class DataManagerDefinition(ManagerDefinition):
         title="Manager Type",
         description="The type of the event manager",
         default=ManagerType.DATA_MANAGER,
-    )
-    # TODO: Move to pydantic settings
-    minio_client_config: Optional[ObjectStorageDefinition] = Field(
-        title="MinIO Client Configuration",
-        description="Configuration for MinIO client for object storage.",
-        default=None,
     )

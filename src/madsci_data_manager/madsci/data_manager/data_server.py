@@ -23,7 +23,7 @@ from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
     DataManagerSettings,
     DataPoint,
-    ObjectStorageDefinition,
+    ObjectStorageSettings,
 )
 from minio import Minio
 from pymongo import MongoClient
@@ -32,6 +32,7 @@ from pymongo import MongoClient
 def create_data_server(  # noqa: C901, PLR0915
     data_manager_settings: Optional[DataManagerSettings] = None,
     data_manager_definition: Optional[DataManagerDefinition] = None,
+    object_storage_settings: Optional[ObjectStorageSettings] = None,
     db_client: Optional[MongoClient] = None,
     context: Optional[MadsciContext] = None,
 ) -> FastAPI:
@@ -63,11 +64,9 @@ def create_data_server(  # noqa: C901, PLR0915
             db_client = MongoClient(data_manager_settings.db_url)
 
         # Initialize MinIO client if configuration is provided
-        minio_client = None
-        if data_manager_definition.minio_client_config:
-            minio_client = create_minio_client(
-                data_manager_definition.minio_client_config
-            )
+        minio_client = create_minio_client(
+            object_storage_settings=object_storage_settings
+        )
 
         app = FastAPI()
         datapoints_db = db_client["madsci_data"]
@@ -90,7 +89,6 @@ def create_data_server(  # noqa: C901, PLR0915
 
     def _upload_file_to_minio(
         minio_client: Minio,
-        object_storage_config: ObjectStorageDefinition,
         file_path: Path,
         filename: str,
         label: Optional[str] = None,
@@ -103,12 +101,14 @@ def create_data_server(  # noqa: C901, PLR0915
         # Use the helper function with server's timestamped naming strategy
         return upload_file_to_object_storage(
             minio_client=minio_client,
-            object_storage_config=object_storage_config,
             file_path=file_path,
-            bucket_name=object_storage_config.default_bucket,
+            bucket_name=(
+                object_storage_settings or ObjectStorageSettings()
+            ).default_bucket,
             metadata=metadata,
             naming_strategy=ObjectNamingStrategy.TIMESTAMPED_PATH,  # Server uses timestamped paths
             label=label or filename,
+            object_storage_settings=object_storage_settings,
         )
 
     @app.post("/datapoint")
@@ -122,11 +122,7 @@ def create_data_server(  # noqa: C901, PLR0915
         if files:
             for file in files:
                 # Check if this is a file datapoint and MinIO is configured
-                if (
-                    datapoint_obj.data_type.value == "file"
-                    and minio_client is not None
-                    and data_manager_definition.minio_client_config
-                ):
+                if datapoint_obj.data_type.value == "file" and minio_client is not None:
                     # Use MinIO object storage instead of local storage
                     # First, save file temporarily to upload to MinIO
                     import tempfile
@@ -142,7 +138,6 @@ def create_data_server(  # noqa: C901, PLR0915
                     # Upload to MinIO object storage
                     object_storage_info = _upload_file_to_minio(
                         minio_client=minio_client,
-                        object_storage_config=data_manager_definition.minio_client_config,
                         file_path=temp_path,
                         filename=file.filename,
                         label=datapoint_obj.label,

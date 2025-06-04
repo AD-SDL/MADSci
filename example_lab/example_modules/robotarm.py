@@ -31,7 +31,7 @@ class RobotArmInterface:
         self, device_number: int = 0, logger: Optional[EventClient] = None
     ) -> "RobotArmInterface":
         """Initialize the robot arm."""
-        self.logger = logger if logger else EventClient()
+        self.logger = logger or EventClient()
         self.device_number = device_number
 
     def run_command(self, command: str) -> None:

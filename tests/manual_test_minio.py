@@ -18,7 +18,8 @@ from madsci.client.data_client import DataClient
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.datapoint_types import (  # noqa
     FileDataPoint,
-    ObjectStorageDefinition,
+    ObjectStorageSettings,
+    ObjectStorageSettings,
 )
 
 
@@ -37,7 +38,7 @@ def test_object_storage(file_path: str) -> None:
     logger.info(f"Testing with file: {file_path}")
 
     # Create MinIO configuration
-    minio_config = ObjectStorageDefinition(
+    minio_config = ObjectStorageSettings(
         endpoint="localhost:9000",
         access_key="minioadmin",
         secret_key="minioadmin",  # noqa
@@ -48,7 +49,7 @@ def test_object_storage(file_path: str) -> None:
     # Initialize DataClient
     client = DataClient(
         url=None,  # Local mode
-        object_storage_config=minio_config,
+        object_storage_settings=minio_config,
     )
 
     try:

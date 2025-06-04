@@ -28,7 +28,7 @@ class LiquidHandlerInterface:
         self, device_number: int = 0, logger: Optional[EventClient] = None
     ) -> "LiquidHandlerInterface":
         """Initialize the liquid handler."""
-        self.logger = logger if logger else EventClient()
+        self.logger = logger or EventClient()
         self.device_number = device_number
 
     def run_command(self, command: str) -> None:
