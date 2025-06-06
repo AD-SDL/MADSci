@@ -9,16 +9,11 @@ init:
   @pdm install -G:all
   @OSTYPE="" . .venv/bin/activate
   @which pre-commit && pre-commit install && pre-commit autoupdate || true
+  @mkdir -p $(dirname {{justfile()}})/.madsci
 
 # Create a .env file for the docker compose
 env:
   @test -e .env || cp .env.example .env
-  @if [[ "$OSTYPE" == darwin* ]]; then \
-    sed -i '' "s|^REPO_PATH=.*|REPO_PATH=$(dirname {{justfile()}})|" .env; \
-  else \
-    sed -i "s|^REPO_PATH=.*|REPO_PATH=$(dirname {{justfile()}})|" .env; \
-  fi
-  @mkdir -p $(dirname {{justfile()}})/.madsci
 
 # Source the venv
 venv:
