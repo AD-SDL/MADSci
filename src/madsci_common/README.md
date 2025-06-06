@@ -24,6 +24,6 @@ MADSci uses [Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydant
 
 ![Settings Precedence](./assets/drawio/config_precedence.drawio.svg)
 
-Details for the specific configuration supported/required by a given subsystem are included in the documentation for that component.
+Detailed documentation for what configuration can be set is included in the [Configuration.md](../../Configuration.md), and an example [.env](../../.env.example) is included in the root of the MADSci repository.
 
 In general, each subsystem supports configuration via both a generic file (`.env`, `settings.yaml`, etc), and a subsystem-specific file (`event_client.env`, `event_client.yaml`, etc). In such cases, the subsystem specific version takes precedence over the generic version.

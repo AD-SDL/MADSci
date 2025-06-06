@@ -411,22 +411,34 @@ def threaded_daemon(func: callable) -> callable:
 
 def pretty_type_repr(type_hint: Any) -> str:
     """Returns a pretty string representation of a type hint, including subtypes."""
-    type_name = getattr(type_hint, "__name__", None)
-    if type_name is None:
-        if get_origin(type_hint):
-            type_name = get_origin(type_hint).__name__
-        else:
-            type_name = str(type_hint)
-    if (
-        "__args__" in dir(type_hint) and type_hint.__args__
-    ):  # * If the type has subtype info
-        type_name += "["
-        for subtype in type_hint.__args__:
-            type_name += pretty_type_repr(subtype)
-            type_name += ", "
-        type_name = type_name[:-2]
-        type_name += "]"
-    return type_name
+    type_name = None
+    try:
+        type_name = getattr(type_hint, "__name__", None)
+        if type_name is None:
+            type_origin = get_origin(type_hint)
+            type_name = (
+                getattr(type_origin, "__name__", None)
+                or getattr(type_origin, "__qualname__", None)
+                or str(type_hint)
+            )
+        if (
+            "__args__" in dir(type_hint) and type_hint.__args__
+        ):  # * If the type has subtype info
+            type_name += "["
+            for subtype in type_hint.__args__:
+                type_name += pretty_type_repr(subtype)
+                type_name += ", "
+            type_name = type_name[:-2]
+            type_name += "]"
+        return type_name
+    except Exception:
+        import warnings
+
+        warnings.warn(
+            f"Failed to get pretty type representation for {type_hint}. Returning raw type.",
+            stacklevel=2,
+        )
+        return type_name
 
 
 @threaded_daemon
