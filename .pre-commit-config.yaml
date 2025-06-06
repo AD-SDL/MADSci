@@ -16,7 +16,7 @@ repos:
       - id: nbstripout
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.11.10
+    rev: v0.11.13
     hooks:
       # Run the linter.
       - id: ruff
@@ -27,3 +27,10 @@ repos:
     rev: v1.0.0
     hooks:
     - id: check-json5
+  - repo: https://github.com/jag-k/pydantic-settings-export
+    # Use a tag version with the `v` prefix (e.g. v1.0.0)
+    rev: v1.0.2
+    hooks:
+     - id: pydantic-settings-export
+       entry: pdm run pydantic-settings-export
+       files: ^src/madsci_common/madsci/common/types/.*\.py$

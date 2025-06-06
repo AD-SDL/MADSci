@@ -10,18 +10,18 @@ from fastapi.staticfiles import StaticFiles
 from madsci.client.event_client import EventClient
 from madsci.common.ownership import ownership_context
 from madsci.common.types.context_types import MadsciContext
-from madsci.common.types.lab_types import LabDefinition, LabSettings
+from madsci.common.types.lab_types import LabDefinition, LabManagerSettings
 
 
 def create_lab_server(
-    lab_settings: Optional[LabSettings] = None,
+    lab_settings: Optional[LabManagerSettings] = None,
     lab_definition: Optional[LabDefinition] = None,
     context: Optional[MadsciContext] = None,
 ) -> FastAPI:
     """Creates an lab Manager's REST server."""
     logger = EventClient()
 
-    lab_settings = lab_settings or LabSettings()
+    lab_settings = lab_settings or LabManagerSettings()
     logger.log_info(lab_settings)
     if not lab_definition:
         lab_def_path = Path(lab_settings.lab_definition).expanduser()
@@ -81,7 +81,7 @@ def create_lab_server(
 
 
 if __name__ == "__main__":
-    lab_settings = LabSettings()
+    lab_settings = LabManagerSettings()
     context = MadsciContext()
     app = create_lab_server(lab_settings=lab_settings, context=context)
     uvicorn.run(

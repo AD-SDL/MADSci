@@ -14,7 +14,7 @@ from pydantic import ConfigDict, Field
 from pydantic.networks import AnyUrl
 
 
-class LabSettings(
+class LabManagerSettings(
     MadsciBaseSettings,
     env_file=(".env", "lab.env"),
     toml_file=("settings.toml", "lab.settings.toml"),

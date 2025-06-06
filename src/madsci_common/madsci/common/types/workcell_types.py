@@ -55,7 +55,7 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
     @property
     def workcell_directory(self) -> Path:
         """The directory for the workcell."""
-        return Path(WorkcellSettings().workcells_directory) / self.workcell_name
+        return Path(WorkcellManagerSettings().workcells_directory) / self.workcell_name
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
 
@@ -156,7 +156,7 @@ class WorkcellState(MadsciBaseModel):
     )
 
 
-class WorkcellSettings(
+class WorkcellManagerSettings(
     MadsciBaseSettings,
     env_file=(".env", "workcell.env"),
     toml_file=("settings.toml", "workcell.settings.toml"),

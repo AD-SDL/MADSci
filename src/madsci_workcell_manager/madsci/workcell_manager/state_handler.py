@@ -13,7 +13,7 @@ from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.resource_types import Resource
 from madsci.common.types.workcell_types import (
     WorkcellDefinition,
-    WorkcellSettings,
+    WorkcellManagerSettings,
     WorkcellState,
     WorkcellStatus,
 )
@@ -37,14 +37,14 @@ class WorkcellStateHandler:
     def __init__(
         self,
         workcell_definition: WorkcellDefinition,
-        workcell_settings: Optional[WorkcellSettings] = None,
+        workcell_settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
     ) -> None:
         """
         Initialize a StateManager for a given workcell.
         """
-        self.workcell_settings = workcell_settings or WorkcellSettings()
+        self.workcell_settings = workcell_settings or WorkcellManagerSettings()
         self._workcell_id = workcell_definition.workcell_id
         self._redis_host = self.workcell_settings.redis_host
         self._redis_port = self.workcell_settings.redis_port

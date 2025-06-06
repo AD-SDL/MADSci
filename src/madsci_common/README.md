@@ -21,3 +21,9 @@ You can import these types from `madsci.common.types`, where they are organized 
 ## Settings
 
 MADSci uses [Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) to configure many of it's subsystems. This allows users to configure managers, clients, nodes, and other MADSci components using command line arguments, environment variables, settings files in various formats (`.env`, `.toml`, `.yaml`, `.json`), and secrets files.
+
+![Settings Precedence](./assets/drawio/config_precedence.drawio.svg)
+
+Details for the specific configuration supported/required by a given subsystem are included in the documentation for that component.
+
+In general, each subsystem supports configuration via both a generic file (`.env`, `settings.yaml`, etc), and a subsystem-specific file (`event_client.env`, `event_client.yaml`, etc). In such cases, the subsystem specific version takes precedence over the generic version.

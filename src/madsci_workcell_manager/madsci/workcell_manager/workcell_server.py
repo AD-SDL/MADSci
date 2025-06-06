@@ -20,7 +20,7 @@ from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import (
     WorkcellDefinition,
-    WorkcellSettings,
+    WorkcellManagerSettings,
     WorkcellState,
 )
 from madsci.common.types.workflow_types import (
@@ -41,7 +41,7 @@ from pymongo.synchronous.database import Database
 
 def create_workcell_server(  # noqa: C901, PLR0915
     workcell: Optional[WorkcellDefinition] = None,
-    workcell_settings: Optional[WorkcellSettings] = None,
+    workcell_settings: Optional[WorkcellManagerSettings] = None,
     context: Optional[MadsciContext] = None,
     redis_connection: Optional[Any] = None,
     mongo_connection: Optional[Database] = None,
@@ -50,7 +50,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
     """Creates a Workcell Manager's REST server."""
 
     logger = EventClient()
-    workcell_settings = workcell_settings or WorkcellSettings()
+    workcell_settings = workcell_settings or WorkcellManagerSettings()
     if not workcell:
         workcell_path = Path(workcell_settings.workcell_definition)
         if workcell_path.exists():
@@ -415,7 +415,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
 if __name__ == "__main__":
     import uvicorn
 
-    workcell_settings = WorkcellSettings()
+    workcell_settings = WorkcellManagerSettings()
     app = create_workcell_server(workcell_settings=workcell_settings)
     uvicorn.run(
         app,

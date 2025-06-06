@@ -25,7 +25,7 @@ x-madsci-service: &madsci-service
     - GROUP_ID=${GROUP_ID:-1000}
   network_mode: host
   env_file:
-    - .env
+    - .env # Optional: Load environment variables from a .env file
   volumes:
     - ${REPO_PATH:-.}/example_lab:/home/madsci/example_lab
     - ${REPO_PATH:-.}/.madsci:/home/madsci/.madsci
