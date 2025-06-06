@@ -686,8 +686,6 @@ class AbstractNode:
                 f"Failed to update node info file: {e}",
             )
 
-        # TODO: Update the node definition file if it exists
-
     def _check_required_args(self, action_request: ActionRequest) -> None:
         """Check that all required arguments are present in the action request."""
         missing_args = [

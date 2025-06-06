@@ -1091,7 +1091,7 @@ files = [
 
 [[package]]
 name = "madsci-client"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_client"
@@ -1106,7 +1106,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_common"
@@ -1133,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-data-manager"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_data_manager"
@@ -1146,7 +1146,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-event-manager"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_event_manager"
@@ -1159,7 +1159,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-manager"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_experiment_manager"
@@ -1173,7 +1173,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-node-module"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_node_module"
@@ -1186,7 +1186,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_resource_manager"
@@ -1200,7 +1200,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_squid"
@@ -1213,7 +1213,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-workcell-manager"
-version = "0.3.0"
+version = "0.4.0"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_workcell_manager"
@@ -2408,21 +2408,22 @@ files = [
 
 [[package]]
 name = "pytest"
-version = "8.3.5"
-requires_python = ">=3.8"
+version = "8.4.0"
+requires_python = ">=3.9"
 summary = "pytest: simple powerful testing with Python"
 groups = ["dev"]
 dependencies = [
-    "colorama; sys_platform == \"win32\"",
-    "exceptiongroup>=1.0.0rc8; python_version < \"3.11\"",
-    "iniconfig",
-    "packaging",
+    "colorama>=0.4; sys_platform == \"win32\"",
+    "exceptiongroup>=1; python_version < \"3.11\"",
+    "iniconfig>=1",
+    "packaging>=20",
     "pluggy<2,>=1.5",
+    "pygments>=2.7.2",
     "tomli>=1; python_version < \"3.11\"",
 ]
 files = [
-    {file = "pytest-8.3.5-py3-none-any.whl", hash = "sha256:c69214aa47deac29fad6c2a4f590b9c4a9fdb16a403176fe154b79c0b4d4d820"},
-    {file = "pytest-8.3.5.tar.gz", hash = "sha256:f4efe70cc14e511565ac476b57c279e12a855b11f48f212af1080ef2263d3845"},
+    {file = "pytest-8.4.0-py3-none-any.whl", hash = "sha256:f40f825768ad76c0977cbacdf1fd37c6f7a468e460ea6a0636078f8972d4517e"},
+    {file = "pytest-8.4.0.tar.gz", hash = "sha256:14d920b48472ea0dbf68e45b96cd1ffda4705f33307dcc86c676c1b5104838a6"},
 ]
 
 [[package]]
