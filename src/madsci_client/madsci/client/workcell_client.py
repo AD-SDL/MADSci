@@ -25,7 +25,7 @@ from rich import print
 class WorkcellClient:
     """A client for interacting with the Workcell Manager to perform various actions."""
 
-    context: MadsciContext = MadsciContext()
+    context: MadsciContext
 
     def __init__(
         self,
@@ -42,7 +42,8 @@ class WorkcellClient:
         working_directory : str, optional
             The directory to look for relative paths. Defaults to "./".
         """
-        self.url = workcell_server_url or self.context.workcell_server_url
+        self.context = MadsciContext(workcell_server_url=workcell_server_url)
+        self.url = self.context.workcell_server_url
         if not self.url:
             raise ValueError(
                 "Workcell server URL is not provided and cannot be found in the context."

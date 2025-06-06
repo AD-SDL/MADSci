@@ -11,6 +11,7 @@ from madsci.client.experiment_client import ExperimentClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
+from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.experiment_types import (
@@ -20,7 +21,7 @@ from madsci.common.types.experiment_types import (
 )
 from madsci.common.types.location_types import Location
 from madsci.common.types.resource_types import Resource
-from madsci.common.utils import PathLike, threaded_daemon
+from madsci.common.utils import threaded_daemon
 from pydantic import AnyUrl
 from rich import print
 
@@ -40,13 +41,13 @@ class ExperimentApplication:
     """The event logger for the experiment."""
     context: MadsciContext = MadsciContext()
     """The context for the experiment application."""
-    workcell_client: WorkcellClient = WorkcellClient()
+    workcell_client: WorkcellClient
     """Client for managing workcells."""
-    resource_client: ResourceClient = ResourceClient()
+    resource_client: ResourceClient
     """Client for managing resources."""
-    data_client: DataClient = DataClient()
+    data_client: DataClient
     """Client for managing data."""
-    experiment_client: ExperimentClient = ExperimentClient()
+    experiment_client: ExperimentClient
     """Client for managing experiments."""
 
     def __init__(
@@ -68,6 +69,10 @@ class ExperimentApplication:
         self.experiment_client = ExperimentClient(
             experiment_server_url=self.context.experiment_server_url
         )
+        self.workcell_client = WorkcellClient()
+        self.data_client = DataClient()
+        self.resource_client = ResourceClient()
+        self.event_client = self.logger = EventClient()
 
     @classmethod
     def start_new(
@@ -310,31 +315,3 @@ class ExperimentApplication:
                 resource_child = resource.children[condition.key]
             return self.check_resource_field(resource_child, condition)
         return False
-
-
-if __name__ == "__main__":
-    import datetime
-
-    class MyExperimentApplication(ExperimentApplication):
-        """An example experiment application."""
-
-        experiment_design = ExperimentDesign(
-            experiment_name="My Example Experiment",
-            experiment_description="An example experimental design",
-        )
-        url = "http://localhost:8002"
-
-        def loop(self, iterations: int = 10) -> None:
-            """Run the experiment loop."""
-            for i in range(iterations):
-                time.sleep(10)
-                self.check_experiment_status()
-                self.logger.log_info(f"Running experiment loop {i}")
-
-    experiment_app = MyExperimentApplication()
-    current_time = datetime.datetime.now()
-    with experiment_app.manage_experiment(
-        run_name=f"My Experiment Run {current_time}",
-        run_description=f"Run for my example experiment, started at ~{current_time}",
-    ):
-        experiment_app.loop(iterations=10)
