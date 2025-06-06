@@ -225,7 +225,7 @@ class ExperimentApplication:
             self.logger.log_error(exception.message)
             raise exception
 
-    def get_resource_from_condition(self, condition: Condition) -> Resource | None:
+    def get_resource_from_condition(self, condition: Condition) -> Optional[Resource]:
         """gets a resource from a condition"""
         resource = None
         if condition.resource_id:
