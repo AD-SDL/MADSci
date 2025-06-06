@@ -16,5 +16,7 @@ jobs:
       name: Setup Python
       with:
         python-version: 3.9
+    - name: Install dependencies
+      run: pdm install
     - uses: pre-commit/action@v3.0.1
       name: Run Pre-Commit Checks
