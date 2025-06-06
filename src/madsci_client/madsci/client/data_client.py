@@ -1,11 +1,11 @@
 """Client for the MADSci Experiment Manager."""
 
-import warnings
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
+from madsci.client.event_client import EventClient
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
@@ -20,6 +20,7 @@ from madsci.common.types.datapoint_types import (
     DataPointTypeEnum,
     ObjectStorageSettings,
 )
+from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 from ulid import ULID
 
@@ -39,11 +40,11 @@ class DataClient:
         """Create a new Datapoint Client."""
         self.context = MadsciContext()
         self.url = (AnyUrl(url) if url else None) or self.context.data_server_url
+        self.logger = EventClient()
         if self.url is None:
-            warnings.warn(
+            self.logger.warn(
                 "No URL provided for the data client. Cannot persist datapoints.",
-                UserWarning,
-                stacklevel=2,
+                warning_category=MadsciLocalOnlyWarning,
             )
         self._local_datapoints = {}
         self.object_storage_settings = (
@@ -80,10 +81,8 @@ class DataClient:
                     return data
                 # Fall back to server API if object storage fails
             else:
-                warnings.warn(
+                self.logger.warn(
                     "Cannot access object_storage datapoint: MinIO client not configured",
-                    UserWarning,
-                    stacklevel=2,
                 )
 
         # Handle file datapoints
@@ -93,10 +92,8 @@ class DataClient:
                     with Path(datapoint.path).resolve().expanduser().open("rb") as f:
                         return f.read()
                 except Exception as e:
-                    warnings.warn(
+                    self.logger.warn(
                         f"Failed to read file from path: {e!s}",
-                        UserWarning,
-                        stacklevel=2,
                     )
 
         # Handle value datapoints
@@ -220,10 +217,8 @@ class DataClient:
                     metadata=getattr(datapoint, "custom_metadata", None),
                 )
             except Exception as e:
-                warnings.warn(
+                self.logger.warn(
                     f"Failed to upload ObjectStorageDataPoint: {e!s}",
-                    UserWarning,
-                    stacklevel=2,
                 )
         # Case2: check if this is a file datapoint and object storage is configured
         if (
@@ -242,10 +237,8 @@ class DataClient:
                 if object_datapoint is not None:
                     return object_datapoint
             except Exception as e:
-                warnings.warn(
+                self.logger.warn(
                     f"Failed to upload to object storage, falling back: {e!s}",
-                    UserWarning,
-                    stacklevel=2,
                 )
                 # Fall back to regular submission if object storage fails
 

@@ -6,6 +6,7 @@ import json
 import logging
 import queue
 import time
+import warnings
 from collections import OrderedDict
 from pathlib import Path
 from threading import Lock, Thread
@@ -137,6 +138,7 @@ class EventClient:
         event: Union[Event, Any],
         level: Optional[int] = None,
         alert: Optional[bool] = None,
+        warning_category: Optional[Warning] = None,
     ) -> None:
         """Log an event."""
 
@@ -158,6 +160,12 @@ class EventClient:
             event = self._new_event_for_log(event, level)
         event.log_level = level if level else event.log_level
         event.alert = alert if alert is not None else event.alert
+        if warning_category:
+            warnings.warn(
+                event.model_dump_json(),
+                category=warning_category,
+                stacklevel=3,
+            )
         self.logger.log(event.log_level, event.model_dump_json())
         # * Log the event to the event server if configured
         # * Only log if the event is at the same level or higher than the logger
@@ -178,11 +186,14 @@ class EventClient:
 
     info = log_info
 
-    def log_warning(self, event: Union[Event, str]) -> None:
+    def log_warning(
+        self, event: Union[Event, str], warning_category: Warning = UserWarning
+    ) -> None:
         """Log an event at the warning level."""
-        self.log(event, logging.WARNING)
+        self.log(event, logging.WARNING, warning_category=warning_category)
 
     warning = log_warning
+    warn = log_warning
 
     def log_error(self, event: Union[Event, str]) -> None:
         """Log an event at the error level."""

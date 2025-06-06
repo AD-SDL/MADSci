@@ -11,6 +11,7 @@ import socket
 import subprocess
 import tempfile
 
+from madsci.common.warnings import MadsciLocalOnlyWarning
 import pytest
 import requests
 from madsci.client.data_client import DataClient
@@ -131,7 +132,7 @@ def test_file_datapoint(client: DataClient, tmp_path: str) -> None:
 def test_local_only_dataclient(tmp_path: str) -> None:
     """Test a dataclient without a URL (i.e. local only)"""
     client = None
-    with pytest.warns(UserWarning):
+    with pytest.warns(MadsciLocalOnlyWarning):
         client = DataClient()
     datapoint = ValueDataPoint(label="Test", value="test_value")
     created_datapoint = client.submit_datapoint(datapoint)
@@ -375,7 +376,7 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
     file_path.write_text(file_content)
 
     # Initialize DataClient with the test MinIO configuration
-    with pytest.warns(UserWarning):
+    with pytest.warns(MadsciLocalOnlyWarning):
         client = DataClient(
             object_storage_settings=minio_config,
         )
@@ -439,7 +440,7 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     file_path.write_text(file_content)
 
     # Initialize DataClient with the test MinIO configuration
-    with pytest.warns(UserWarning):
+    with pytest.warns(MadsciLocalOnlyWarning):
         client = DataClient(
             object_storage_settings=minio_config,
         )

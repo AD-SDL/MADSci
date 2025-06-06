@@ -17,6 +17,7 @@ from typing import (
     get_type_hints,
 )
 
+from madsci.client.data_client import DataClient
 from madsci.client.event_client import (
     EventClient,
 )
@@ -90,9 +91,13 @@ class AbstractNode:
     )
     """The default supported capabilities of this node module class."""
     config: ClassVar[NodeConfig] = NodeConfig()
-    """The node config model. This is the model that will be used to validate the node configuration."""
+    """The node configuration."""
+    config_model: ClassVar[type[NodeConfig]] = NodeConfig
+    """The node config model class. This is the class that will be used to instantiate self.config."""
     context: ClassVar[MadsciContext] = MadsciContext()
     """The context for the node. This allows the node to access the MADSci context, including the event client and resource client."""
+    _action_lock: ClassVar[threading.Lock] = threading.Lock()
+    """Ensures only one blocking action can run at a time."""
 
     def __init__(
         self,
@@ -102,6 +107,8 @@ class AbstractNode:
         """Initialize the node class."""
 
         self.config = node_config or self.config
+        if not self.config:
+            self.config = self.config_model()
         self.node_definition = node_definition
         if self.node_definition is None:
             node_definition_path = getattr(
@@ -148,10 +155,8 @@ class AbstractNode:
                     )
 
             # * Save the node info and update definition, if possible
-            # TODO: Figure out a sane strategy for writing out node info and updating node definition
-
-            # * Add a lock for thread safety with blocking actions
-            self._action_lock = threading.Lock()
+            if self.config.update_node_files:
+                self._update_node_info_and_definition()
 
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
@@ -367,6 +372,7 @@ class AbstractNode:
             name=f"node.{self.node_definition.node_name}",
         )
         self.resource_client = ResourceClient(event_client=self.event_client)
+        self.data_client = DataClient()
 
     def _add_action(
         self,
@@ -669,6 +675,7 @@ class AbstractNode:
     def _update_node_info_and_definition(self) -> None:
         """Update the node info and definition files, if possible."""
         try:
+            self.node_definition.to_yaml(self.config.node_definition)
             if not self.config.node_info_path:
                 self.node_info_path = Path(self.config.node_definition).with_name(
                     f"{self.node_definition.node_name}.info.yaml"

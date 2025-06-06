@@ -50,6 +50,8 @@ class RestNode(AbstractNode):
     """The default supported capabilities of this node module class."""
     config: RestNodeConfig = RestNodeConfig()
     """The configuration for the node."""
+    config_model = RestNodeConfig
+    """The node config model class. This is the class that will be used to instantiate self.config."""
 
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""

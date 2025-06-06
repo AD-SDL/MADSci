@@ -21,6 +21,7 @@ from madsci.common.types.resource_types.server_types import (
     ResourceHistoryGetQuery,
     SetChildBody,
 )
+from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 
 
@@ -56,7 +57,8 @@ class ResourceClient:
         self.logger = event_client if event_client is not None else EventClient()
         if self.url is None:
             self.logger.log_warning(
-                "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION."
+                "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
+                warning_category=MadsciLocalOnlyWarning,
             )
 
     def add_resource(self, resource: Resource) -> Resource:

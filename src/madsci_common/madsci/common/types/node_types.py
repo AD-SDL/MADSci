@@ -60,8 +60,13 @@ class NodeConfig(
     )
     node_info_path: Optional[PathLike] = Field(
         title="Node Info Path",
-        description="Path to the node info file. If set, the node will export its info to this path on startup.",
+        description="Path to export the generated node info file. If not set, will use the node name and the node_definition's path.",
         default=None,
+    )
+    update_node_files: bool = Field(
+        title="Update Node Files",
+        description="Whether to update the node definition and info files on startup. If set to False, the node will not update the files even if they are out of date.",
+        default=True,
     )
     status_update_interval: Optional[float] = Field(
         title="Status Update Interval",
@@ -197,10 +202,10 @@ class NodeDefinition(MadsciBaseModel):
         description="A description of the node.",
         default=None,
     )
-    node_type: Optional[NodeType] = Field(
+    node_type: NodeType = Field(
         title="Node Type",
         description="The type of thing this node provides an interface for.",
-        default=None,
+        default=NodeType.DEVICE,
     )
     module_name: str = Field(
         title="Node Module Name",
