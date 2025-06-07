@@ -1,5 +1,6 @@
 """Base Node Module helper classes."""
 
+import contextlib
 import inspect
 import threading
 import traceback
@@ -16,14 +17,16 @@ from typing import (
     get_type_hints,
 )
 
+from madsci.client.data_client import DataClient
 from madsci.client.event_client import (
     EventClient,
-    default_logger,
 )
 from madsci.client.node.abstract_node_client import AbstractNodeClient
+from madsci.client.resource_client import ResourceClient
 from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
+from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionRequest,
@@ -34,9 +37,9 @@ from madsci.common.types.action_types import (
     LocationArgumentDefinition,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
-from madsci.common.types.event_types import Event, EventClientConfig, EventType
+from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import (
     LocationArgument,
 )
@@ -79,12 +82,6 @@ class AbstractNode:
     """The handlers for the actions that the node supports."""
     action_history: ClassVar[dict[str, list[ActionResult]]] = {}
     """The history of the actions that the node has performed."""
-    status_update_interval: ClassVar[float] = 2.0
-    """The interval at which the status handler is called. Overridable by config."""
-    state_update_interval: ClassVar[float] = 2.0
-    """The interval at which the state handler is called. Overridable by config."""
-    node_info_path: ClassVar[Optional[Path]] = None
-    """The path to the node info file. If unset, defaults to '<node_definition_path>.info.yaml'"""
     logger: ClassVar[EventClient] = EventClient()
     """The event logger for this node"""
     module_version: ClassVar[str] = "0.0.1"
@@ -93,6 +90,14 @@ class AbstractNode:
         AbstractNodeClient.supported_capabilities
     )
     """The default supported capabilities of this node module class."""
+    config: ClassVar[NodeConfig] = NodeConfig()
+    """The node configuration."""
+    config_model: ClassVar[type[NodeConfig]] = NodeConfig
+    """The node config model class. This is the class that will be used to instantiate self.config."""
+    context: ClassVar[MadsciContext] = MadsciContext()
+    """The context for the node. This allows the node to access the MADSci context, including the event client and resource client."""
+    _action_lock: ClassVar[threading.Lock] = threading.Lock()
+    """Ensures only one blocking action can run at a time."""
 
     def __init__(
         self,
@@ -101,57 +106,57 @@ class AbstractNode:
     ) -> "AbstractNode":
         """Initialize the node class."""
 
-        # * Load the node definition
-        if node_definition is None:
-            self.node_definition = NodeDefinition.load_model(require_unique=True)
-        else:
-            self.node_definition = node_definition
+        self.config = node_config or self.config
+        if not self.config:
+            self.config = self.config_model()
+        self.node_definition = node_definition
         if self.node_definition is None:
-            raise ValueError("Node definition not found, aborting node initialization")
-        if self.node_definition.is_template:
-            raise ValueError(
-                "Node definition is a template, please use a specific node definition instead."
+            node_definition_path = getattr(
+                self.config, "node_definition", "default.node.yaml"
             )
+            if not Path(node_definition_path).exists():
+                self.logger.log_warning(
+                    f"Node definition file '{node_definition_path}' not found, using default node definition."
+                )
+                self.node_definition = NodeDefinition()
+            else:
+                self.node_definition = NodeDefinition.from_yaml(node_definition_path)
 
-        # * Load the node config
-        self._initialize_node_config(node_config)
+        with ownership_context(node_id=self.node_definition.node_id):
+            self._configure_clients()
 
-        self._configure_events()
-
-        # * Check Node Version
-        if (
-            Version.parse(self.module_version).compare(
-                self.node_definition.module_version
-            )
-            < 0
-        ):
-            self.logger.log_warning(
-                "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
-            )
-
-        # * Synthesize the node info
-        self.node_info = NodeInfo.from_node_def_and_config(
-            self.node_definition, self.config
-        )
-
-        # * Combine the node definition and classes's capabilities
-        self._populate_capabilities()
-
-        # * Add the action decorators to the node (and node info)
-        for action_callable in self.__class__.__dict__.values():
-            if hasattr(action_callable, "__is_madsci_action__"):
-                self._add_action(
-                    func=action_callable,
-                    action_name=action_callable.__madsci_action_name__,
-                    description=action_callable.__madsci_action_description__,
-                    blocking=action_callable.__madsci_action_blocking__,
+            # * Check Node Version
+            if (
+                Version.parse(self.module_version).compare(
+                    self.node_definition.module_version
+                )
+                < 0
+            ):
+                self.logger.log_warning(
+                    "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
                 )
 
-        # * Save the node info and update definition, if possible
-        self._update_node_info_and_definition()
+            # * Synthesize the node info
+            self.node_info = NodeInfo.from_node_def_and_config(
+                self.node_definition, self.config
+            )
 
-        # * Add a lock for thread safety with blocking actions
-        self._action_lock = threading.Lock()
+            # * Combine the node definition and classes's capabilities
+            self._populate_capabilities()
+
+            # * Add the action decorators to the node (and node info)
+            for action_callable in self.__class__.__dict__.values():
+                if hasattr(action_callable, "__is_madsci_action__"):
+                    self._add_action(
+                        func=action_callable,
+                        action_name=action_callable.__madsci_action_name__,
+                        description=action_callable.__madsci_action_description__,
+                        blocking=action_callable.__madsci_action_blocking__,
+                    )
+
+            # * Save the node info and update definition, if possible
+            if self.config.update_node_files:
+                self._update_node_info_and_definition()
 
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
@@ -160,16 +165,17 @@ class AbstractNode:
     def start_node(self) -> None:
         """Called once to start the node."""
 
-        # * Update EventClient with logging parameters
-        self._configure_events()
+        with ownership_context(node_id=self.node_definition.node_id):
+            # * Update EventClient with logging parameters
+            self._configure_clients()
 
-        # * Log startup info
-        self.logger.log_debug(f"{self.node_definition=}")
+            # * Log startup info
+            self.logger.log_debug(f"{self.node_definition=}")
 
-        # * Kick off the startup logic in a separate thread
-        # * This allows implementations to start servers, listeners, etc.
-        # * in parrallel
-        self._startup()
+            # * Kick off the startup logic in a separate thread
+            # * This allows implementations to start servers, listeners, etc.
+            # * in parrallel
+            self._startup()
 
     def status_handler(self) -> None:
         """Called periodically to update the node status. Should set `self.node_status`"""
@@ -274,7 +280,13 @@ class AbstractNode:
         """Set configuration values of the node."""
 
         try:
-            self.config = self.config.model_copy(update=new_config)
+            for key, value in new_config.items():
+                if hasattr(self.config, key):
+                    setattr(self.config, key, value)
+                else:
+                    raise ValueError(
+                        f"Configuration key '{key}' is not valid for this node."
+                    )
             return NodeSetConfigResponse(
                 success=True,
             )
@@ -354,85 +366,20 @@ class AbstractNode:
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
 
-    def _initialize_node_config(self, node_config: Optional[NodeConfig] = None) -> None:
-        if node_config is not None:
-            self.config = node_config
-        else:
-            # * Load the config from the command line
-            if getattr(self, "config_model", None) is not None:
-                # * If the node has a config model, use it to set the config
-                config_model = self.config_model
-            elif getattr(self, "config", None) is not None:
-                # * If the node has a config attribute, use it's class to set the config
-                config_model = self.config.__class__
-            else:
-                # * If the node has neither, use the default NodeConfig model
-                config_model = NodeConfig
-            self.config = config_model.set_fields_from_cli(
-                model_instance=self.config if self.config else None,
-                override_defaults=self.node_definition.config_defaults,
-            )
-
-        # * Set general node config
-        state_update_interval = getattr(
-            self.config,
-            "state_update_interval",
-            self.state_update_interval,
-        )
-        self.state_update_interval = (
-            state_update_interval
-            if state_update_interval is not None
-            else self.state_update_interval
-        )
-        status_update_interval = getattr(
-            self.config,
-            "status_update_interval",
-            self.status_update_interval,
-        )
-        self.status_update_interval = (
-            status_update_interval
-            if status_update_interval is not None
-            else self.status_update_interval
-        )
-
-    def _configure_events(self) -> None:
-        """Configure the event logger."""
-        event_client_config = EventClientConfig(
+    def _configure_clients(self) -> None:
+        """Configure the event and resource clients."""
+        self.logger = self.event_client = EventClient(
             name=f"node.{self.node_definition.node_name}",
-            source=OwnershipInfo(node_id=self.node_definition.node_id),
         )
-        self.logger = EventClient(
-            config=event_client_config,
-        )
-        if (
-            new_event_client_config := getattr(self.config, "event_client_config", None)
-        ) is not None:
-            try:
-                event_client_config = EventClientConfig.model_validate(
-                    new_event_client_config
-                )
-                if not event_client_config.name:
-                    event_client_config.name = f"node.{self.node_definition.node_name}"
-                if not event_client_config.source:
-                    event_client_config.source = OwnershipInfo(
-                        node_id=self.node_definition.node_id
-                    )
-                else:
-                    event_client_config.source.node_id = self.node_definition.node_id
-                self.logger = EventClient(
-                    config=event_client_config,
-                )
-            except ValidationError:
-                self.logger.log_warning(
-                    "Invalid event client config, using default values",
-                )
+        self.resource_client = ResourceClient(event_client=self.event_client)
+        self.data_client = DataClient()
 
     def _add_action(
         self,
         func: Callable,
         action_name: str,
         description: str,
-        blocking: bool = False,
+        blocking: bool = True,
     ) -> None:
         """Add an action to the node module.
 
@@ -593,14 +540,14 @@ class AbstractNode:
                 if arg_name in parameters:
                     arg_dict[arg_name] = arg_value
                 else:
-                    default_logger.log_warning(
+                    EventClient().log_warning(
                         f"Ignoring unexpected argument {arg_name}"
                     )
             for file in action_request.files:
                 if file in parameters:
                     arg_dict[file] = action_request.files[file]
                 else:
-                    default_logger.log_warning(f"Ignoring unexpected file {file}")
+                    EventClient().log_warning(f"Ignoring unexpected file {file}")
 
         # Validate any arguments that expect a LocationArgument
 
@@ -644,30 +591,24 @@ class AbstractNode:
         action_callable: callable,
         arg_dict: dict[str, Any],
     ) -> None:
-        self._action_lock.acquire()
         try:
-            # * If the action is marked as blocking, set the node status to not ready for the duration of the action, otherwise release the lock immediately
-            if self.node_info.actions[action_request.action_name].blocking:
-                self.node_status.busy = True
+            with (
+                self._action_lock
+                if self.node_info.actions[action_request.action_name].blocking
+                else contextlib.nullcontext()
+            ):
                 try:
+                    if self.node_info.actions[action_request.action_name].blocking:
+                        self.node_status.busy = True
                     result = action_callable(**arg_dict)
                 except Exception as e:
                     self._exception_handler(e)
                     result = action_request.failed(errors=Error.from_exception(e))
                 finally:
-                    self.node_status.busy = False
-            else:
-                if self._action_lock.locked():
-                    self._action_lock.release()
-                try:
-                    result = action_callable(**arg_dict)
-                except Exception as e:
-                    self._exception_handler(e)
-                    result = action_request.failed(errors=Error.from_exception(e))
+                    if self.node_info.actions[action_request.action_name].blocking:
+                        self.node_status.busy = False
         finally:
             self.node_status.running_actions.discard(action_request.action_id)
-            if self._action_lock.locked():
-                self._action_lock.release()
         if isinstance(result, ActionResult):
             # * Make sure the action ID is set correctly on the result
             result.action_id = action_request.action_id
@@ -734,25 +675,16 @@ class AbstractNode:
     def _update_node_info_and_definition(self) -> None:
         """Update the node info and definition files, if possible."""
         try:
-            if self.node_info_path:
-                self.node_info.to_yaml(self.node_info_path)
-            elif self.node_definition._definition_path:
-                self.node_info_path = Path(
-                    self.node_definition._definition_path,
-                ).with_suffix(".info.yaml")
-                self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
+            self.node_definition.to_yaml(self.config.node_definition)
+            if not self.config.node_info_path:
+                self.node_info_path = Path(self.config.node_definition).with_name(
+                    f"{self.node_definition.node_name}.info.yaml"
+                )
+            self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
         except Exception as e:
             self.logger.log_warning(
                 f"Failed to update node info file: {e}",
             )
-
-        if self.node_definition._definition_path:
-            try:
-                self.node_definition.to_yaml(self.node_definition._definition_path)
-            except Exception as e:
-                self.logger.log_warning(
-                    f"Failed to update node definition file: {e}",
-                )
 
     def _check_required_args(self, action_request: ActionRequest) -> None:
         """Check that all required arguments are present in the action request."""
@@ -770,7 +702,7 @@ class AbstractNode:
 
     @threaded_daemon
     def _startup(self) -> None:
-        """The startup thread for the REST API."""
+        """The startup thread for the node."""
         try:
             # * Create a clean status and mark the node as initializing
             self.node_status.initializing = True
@@ -780,8 +712,12 @@ class AbstractNode:
             self.node_status.stopped = False
             self.startup_handler()
             # * Start status and state update loops
-            repeat_on_interval(self.status_update_interval, self._update_status)
-            repeat_on_interval(self.state_update_interval, self._update_state)
+            repeat_on_interval(
+                getattr(self.config, "status_update_interval", 2.0), self._update_status
+            )
+            repeat_on_interval(
+                getattr(self.config, "state_update_interval", 2.0), self._update_state
+            )
 
         except Exception as exception:
             # * Handle any exceptions that occurred during startup

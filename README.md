@@ -70,7 +70,7 @@ Some notes for setting up a development environment for the MADSci core packages
     - We use [PDM](https://pdm-project.org/latest/) to make installing the `madsci` python packages and managing dependencies easier
     - Alternatively, we recommend using [Virtual Environments](https://realpython.com/python-virtual-environments-a-primer/)
 - To build and/or use the MADSci docker containers, install [Docker](https://docs.docker.com/engine/install/)
-    - You only need the Docker Container Engine, which can be installed standalone on Linux, on Mac or Windows, you'll need to install Docker Desktop or an alternative
+    - You only need the Docker Container Engine, which can be installed standalone on Linux; on Mac or Windows, you'll need to install Docker Desktop or an alternative
     - If your organization doesn't allow Docker Desktop, or if you simply prefer an open source alternative, we recommend [Rancher Desktop](https://rancherdesktop.io/) or [Podman](https://podman.io/)
 - We use the [just](https://github.com/casey/just) command runner for developer helper commands
     - To see all available commands, run `just list` or look at the [justfile](./.justfile) (useful even if you don't want to use just)
@@ -84,7 +84,7 @@ See [Visual Studio Code Dev Container Documentation](https://code.visualstudio.c
 
 ### Running Automated Tests
 
-1. Install the python locally using PDM or pip (see above)
+1. Install the python packages locally using PDM or pip (see above)
 1. Ensure you've activated any relevant virtual environments
 1. Run `pytest` in the root directory of the repository
     1. To run only the tests for a specific component, such as the workcell manager, change directories into the relevant subdirectory in `src/`, or use `pytest -k EXPRESSION` to filter the tests by test name/parent class

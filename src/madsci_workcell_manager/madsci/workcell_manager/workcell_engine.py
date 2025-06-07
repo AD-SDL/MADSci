@@ -14,11 +14,11 @@ from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
-from madsci.common.types.event_types import Event, EventClientConfig, EventType
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
@@ -45,34 +45,23 @@ class Engine:
         """Initialize the scheduler."""
         self.state_handler = state_handler
         self.workcell_definition = state_handler.get_workcell_definition()
-        self.workcell_definition.config.event_client_config = (
-            self.workcell_definition.config.event_client_config or EventClientConfig()
+        self.workcell_settings = self.state_handler.workcell_settings
+        self.logger = EventClient(
+            name=f"workcell.{self.workcell_definition.workcell_name}"
         )
-        self.workcell_definition.config.event_client_config.source.workcell_id = (
-            self.workcell_definition.workcell_id
-        )
-        self.workcell_definition.config.event_client_config.source.manager_id = (
-            self.workcell_definition.workcell_id
-        )
-        self.logger = EventClient(self.workcell_definition.config.event_client_config)
-        self.logger.source.workcell_id = self.workcell_definition.workcell_id
         cancel_active_workflows(state_handler)
-        scheduler_module = importlib.import_module(
-            self.workcell_definition.config.scheduler
-        )
+        scheduler_module = importlib.import_module(self.workcell_settings.scheduler)
         self.scheduler = scheduler_module.Scheduler(
             self.workcell_definition, self.state_handler
         )
-        self.data_client = DataClient(self.workcell_definition.config.data_server_url)
-        self.resource_client = ResourceClient(
-            self.workcell_definition.config.resource_server_url
-        )
+        self.data_client = DataClient()
+        self.resource_client = ResourceClient()
         self.logger.log_debug(self.data_client.url)
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state(
                 self.resource_client,
             )
-        time.sleep(self.workcell_definition.config.cold_start_delay)
+        time.sleep(self.workcell_settings.cold_start_delay)
         self.logger.log_info("Engine initialized, waiting for workflows...")
 
     @threaded_daemon
@@ -89,13 +78,13 @@ class Engine:
                 self.workcell_definition = self.state_handler.get_workcell_definition()
                 if (
                     time.time() - node_tick
-                    > self.workcell_definition.config.node_update_interval
+                    > self.workcell_settings.node_update_interval
                 ):
                     self.update_active_nodes(self.state_handler)
                     node_tick = time.time()
                 if (
                     time.time() - scheduler_tick
-                    > self.workcell_definition.config.scheduler_update_interval
+                    > self.workcell_settings.scheduler_update_interval
                 ):
                     with self.state_handler.wc_state_lock():
                         self.state_handler.update_workflow_queue()
@@ -123,14 +112,14 @@ class Engine:
             except Exception as e:
                 self.logger.log_error(e)
                 self.logger.log_warning(
-                    f"Error in engine loop, waiting {self.workcell_definition.config.node_update_interval} seconds before trying again."
+                    f"Error in engine loop, waiting {self.workcell_settings.node_update_interval} seconds before trying again."
                 )
                 with self.state_handler.wc_state_lock():
                     workcell_status = self.state_handler.get_workcell_status()
                     workcell_status.errored = True
                     workcell_status.errors.append(Error.from_exception(e))
                     self.state_handler.set_workcell_status(workcell_status)
-                time.sleep(self.workcell_definition.config.node_update_interval)
+                time.sleep(self.workcell_settings.node_update_interval)
 
     def run_next_step(self, await_step_completion: bool = False) -> Optional[Workflow]:
         """Runs the next step in the workflow with the highest priority. Returns information about the workflow it ran, if any."""
@@ -272,10 +261,7 @@ class Engine:
                 else:
                     response.errors.append(Error.from_exception(e))
                 self.handle_response(wf, step, response)
-                if (
-                    retry_count
-                    >= self.workcell_definition.config.get_action_result_retries
-                ):
+                if retry_count >= self.workcell_settings.get_action_result_retries:
                     self.logger.log_error(
                         f"Exceeded maximum number of retries for querying action {action_id} for step {step.step_id}"
                     )
@@ -418,15 +404,13 @@ class Engine:
             node.status = NodeStatus(errored=True, errors=[error])
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
-            source = (
-                self.workcell_definition.config.event_client_config.source
-                or OwnershipInfo()
-            )
-            source.node_id = node.info.node_id if node.info else None
-            self.logger.log_warning(
-                event=Event(
-                    event_type=EventType.NODE_STATUS_UPDATE,
-                    source=source,
-                    event_data=node.status,
+            with ownership_context(
+                workcell_id=self.workcell_definition.workcell_id,
+                node_id=node.info.node_id if node.info else None,
+            ):
+                self.logger.log_warning(
+                    event=Event(
+                        event_type=EventType.NODE_STATUS_UPDATE,
+                        event_data=node.status,
+                    )
                 )
-            )

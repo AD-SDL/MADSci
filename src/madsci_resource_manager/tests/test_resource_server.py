@@ -2,7 +2,6 @@
 
 import pytest
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.resource_types import (
     Consumable,
     Container,
@@ -17,6 +16,7 @@ from madsci.common.types.resource_types.definitions import (
     ResourceDefinition,
     ResourceManagerDefinition,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_server import (
     ResourceGetQuery,

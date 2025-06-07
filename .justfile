@@ -9,13 +9,15 @@ init:
   @pdm install -G:all
   @OSTYPE="" . .venv/bin/activate
   @which pre-commit && pre-commit install && pre-commit autoupdate || true
+  @mkdir -p $(dirname {{justfile()}})/.madsci
 
 # Create a .env file for the docker compose
 env:
   @test -e .env || cp .env.example .env
-  @sed -i "s|^REPO_PATH=.*|REPO_PATH=$(dirname {{justfile()}})|" .env
-  @mkdir -p $(dirname {{justfile()}})/.madsci
 
+# Source the venv
+venv:
+  @$(pdm venv activate)
 
 
 # Run the pre-commit checks

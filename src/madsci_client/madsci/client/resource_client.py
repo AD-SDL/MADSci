@@ -6,7 +6,7 @@ from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
-from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -21,22 +21,24 @@ from madsci.common.types.resource_types.server_types import (
     ResourceHistoryGetQuery,
     SetChildBody,
 )
+from madsci.common.warnings import MadsciLocalOnlyWarning
+from pydantic import AnyUrl
 
 
 class ResourceClient:
     """REST client for interacting with a MADSci Resource Manager."""
 
     local_resources: dict[str, ResourceDataModels]
+    context: Optional[MadsciContext] = None
 
     def __init__(
         self,
-        url: Optional[str] = None,
+        url: Optional[Union[str, AnyUrl]] = None,
         event_client: Optional[EventClient] = None,
-        ownership_info: Optional[OwnershipInfo] = None,
     ) -> None:
         """Initialize the resource client."""
-        self.url = str(url) if url is not None else None
-        self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
+        self.context = MadsciContext(resource_server_url=url)
+        self.url = self.context.resource_server_url
         if self.url is not None and str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
         if self.url is not None:
@@ -55,7 +57,8 @@ class ResourceClient:
         self.logger = event_client if event_client is not None else EventClient()
         if self.url is None:
             self.logger.log_warning(
-                "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION."
+                "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
+                warning_category=MadsciLocalOnlyWarning,
             )
 
     def add_resource(self, resource: Resource) -> Resource:

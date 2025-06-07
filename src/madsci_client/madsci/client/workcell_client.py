@@ -8,8 +8,9 @@ from typing import Any, Optional, Union
 import requests
 from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
-from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import new_ulid_str
+from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.base_types import PathLike
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellState
@@ -17,36 +18,37 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.utils import PathLike
+from madsci.common.utils import new_ulid_str
 from rich import print
 
 
 class WorkcellClient:
     """A client for interacting with the Workcell Manager to perform various actions."""
 
+    context: MadsciContext
+
     def __init__(
         self,
-        workcell_manager_url: str,
+        workcell_server_url: Optional[str] = None,
         working_directory: str = "./",
-        ownership_info: Optional[OwnershipInfo] = None,
     ) -> None:
         """
         Initialize the WorkcellClient.
 
         Parameters
         ----------
-        workcell_manager_url : str
+        workcell_server_url : Optional[str]
             The base URL of the Workcell Manager.
         working_directory : str, optional
             The directory to look for relative paths. Defaults to "./".
-        ownership_info : Optional[OwnershipInfo], optional
-            Ownership information for workflows, by default None.
         """
-        self.url = workcell_manager_url
+        self.context = MadsciContext(workcell_server_url=workcell_server_url)
+        self.url = self.context.workcell_server_url
+        if not self.url:
+            raise ValueError(
+                "Workcell server URL is not provided and cannot be found in the context."
+            )
         self.working_directory = Path(working_directory).expanduser()
-        self.ownership_info = ownership_info
-        if self.ownership_info is None:
-            self.ownership_info = OwnershipInfo()
         if str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
 
@@ -117,9 +119,7 @@ class WorkcellClient:
                 "workflow": workflow.model_dump_json(),
                 "parameters": json.dumps(parameters) if parameters else None,
                 "validate_only": validate_only,
-                "ownership_info": self.ownership_info.model_dump_json()
-                if self.ownership_info
-                else None,
+                "ownership_info": get_current_ownership_info().model_dump_json(),
             },
             files={
                 (

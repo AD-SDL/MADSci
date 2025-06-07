@@ -4,15 +4,16 @@ from datetime import datetime
 from typing import Any, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.resource_types.definitions import ResourceDefinitions
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field
 from pydantic.functional_validators import field_validator
 
 
-class LocationDefinition(BaseModel):
-    """The Definition of a Workcell Location."""
+class LocationDefinition(MadsciBaseModel):
+    """The Definition of a Location in a setup."""
 
     location_name: str = Field(
         title="Location Name",
@@ -39,11 +40,6 @@ class LocationDefinition(BaseModel):
         default=None,
         discriminator="base_type",
     )
-    resource_id: Optional[str] = Field(
-        title="Resource ID",
-        description="The ID of an existing Resource associated with the location, if any. If not provided, a new Resource will be created based on the resource_definition, if one is provided. If not, no Resource will be associated with the location.",
-        default=None,
-    )
 
     is_ulid = field_validator("location_id")(ulid_validator)
 
@@ -56,11 +52,16 @@ class Location(LocationDefinition):
         description="The reservation for the location.",
         default=None,
     )
+    resource_id: Optional[str] = Field(
+        title="Resource ID",
+        description="The ID of an existing Resource associated with the location, if any.",
+        default=None,
+    )
 
     is_ulid = field_validator("location_id")(ulid_validator)
 
 
-class LocationReservation(BaseModel):
+class LocationReservation(MadsciBaseModel):
     """Reservation of a MADSci Location."""
 
     owned_by: OwnershipInfo = Field(
@@ -89,7 +90,7 @@ class LocationReservation(BaseModel):
         )
 
 
-class LocationArgument(BaseModel):
+class LocationArgument(MadsciBaseModel):
     """Location Argument to be used by MADSCI nodes."""
 
     location: Any

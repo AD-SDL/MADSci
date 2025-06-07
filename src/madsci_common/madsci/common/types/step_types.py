@@ -4,13 +4,14 @@ from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 from madsci.common.types.action_types import ActionResult, ActionStatus
-from madsci.common.types.base_types import BaseModel, PathLike, new_ulid_str
+from madsci.common.types.base_types import MadsciBaseModel, PathLike
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.location_types import LocationArgument
-from sqlmodel.main import Field
+from madsci.common.utils import new_ulid_str
+from pydantic import Field
 
 
-class StepDefinition(BaseModel):
+class StepDefinition(MadsciBaseModel):
     """A definition of a step in a workflow."""
 
     name: str = Field(
