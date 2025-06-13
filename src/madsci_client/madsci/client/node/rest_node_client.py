@@ -14,7 +14,7 @@ from madsci.client.node.abstract_node_client import (
 )
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.event_types import Event, EventClientConfig
+from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -48,12 +48,10 @@ class RestNodeClient(AbstractNodeClient):
         get_resources=False,
     )
 
-    def __init__(
-        self, url: AnyUrl, event_client_config: Optional[EventClientConfig] = None
-    ) -> "RestNodeClient":
+    def __init__(self, url: AnyUrl) -> "RestNodeClient":
         """Initialize the client."""
         super().__init__(url)
-        self.logger = EventClient(config=event_client_config)
+        self.logger = EventClient()
 
     def send_action(
         self,
@@ -91,9 +89,12 @@ class RestNodeClient(AbstractNodeClient):
             self.logger.log_error(f"{rest_response.status_code}: {rest_response.text}")
             raise e
         if "x-madsci-status" in rest_response.headers:
+            self.logger.log_info("Processing file response")
             response = process_file_response(rest_response)
         else:
+            self.logger.log_info("Processing JSON response")
             response = ActionResult.model_validate(rest_response.json())
+        self.logger.log_critical(response)
         if await_result and not response.status.is_terminal:
             response = self.await_action_result(response.action_id, timeout=timeout)
         return response

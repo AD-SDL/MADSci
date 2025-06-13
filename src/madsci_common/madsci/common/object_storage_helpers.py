@@ -7,7 +7,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from madsci.common.types.datapoint_types import ObjectStorageDefinition
+from madsci.common.types.datapoint_types import (
+    ObjectStorageSettings,
+)
 from minio import Minio
 
 
@@ -19,25 +21,28 @@ class ObjectNamingStrategy(Enum):
 
 
 def create_minio_client(
-    object_storage_config: ObjectStorageDefinition,
+    object_storage_settings: Optional[ObjectStorageSettings] = None,
 ) -> Union[Minio, None]:
     """Initialize the object storage client using the provided configuration."""
+    object_storage_settings = object_storage_settings or ObjectStorageSettings()
+    if not object_storage_settings.endpoint:
+        return None
     try:
         minio_client = Minio(
-            endpoint=object_storage_config.endpoint,
-            access_key=object_storage_config.access_key,
-            secret_key=object_storage_config.secret_key,
-            secure=object_storage_config.secure,
-            region=object_storage_config.region
-            if object_storage_config.region
+            endpoint=object_storage_settings.endpoint,
+            access_key=object_storage_settings.access_key,
+            secret_key=object_storage_settings.secret_key,
+            secure=object_storage_settings.secure,
+            region=object_storage_settings.region
+            if object_storage_settings.region
             else None,
         )
 
         try:
             if not ensure_bucket_exists(
-                minio_client, object_storage_config.default_bucket
+                minio_client, object_storage_settings.default_bucket
             ):
-                minio_client.make_bucket(object_storage_config.default_bucket)
+                minio_client.make_bucket(object_storage_settings.default_bucket)
 
         except Exception as bucket_error:
             # Bucket creation failed - this is OK for many scenarios:
@@ -45,7 +50,7 @@ def create_minio_client(
             # - GCS: Bucket created via GCP console
             # - Bucket already exists but bucket_exists() failed due to permissions
             warnings.warn(
-                f"Could not create bucket '{object_storage_config.default_bucket}': {bucket_error!s}. "
+                f"Could not create bucket '{object_storage_settings.default_bucket}': {bucket_error!s}. "
                 f"Assuming bucket exists and continuing. If uploads fail, please ensure "
                 f"the bucket exists and you have appropriate permissions.",
                 UserWarning,
@@ -127,7 +132,7 @@ def generate_object_name(
 
 
 def construct_object_url(
-    object_storage_config: ObjectStorageDefinition,
+    object_storage_settings: Optional[ObjectStorageSettings],
     bucket_name: str,
     object_name: str,
     public_endpoint: Optional[str] = None,
@@ -135,7 +140,7 @@ def construct_object_url(
     """Construct a URL for accessing an object in storage.
 
     Args:
-        object_storage_config: Object storage configuration
+        object_storage_settings: Object storage configuration
         bucket_name: Name of the bucket
         object_name: Name of the object
         public_endpoint: Optional public endpoint override
@@ -143,11 +148,12 @@ def construct_object_url(
     Returns:
         Complete URL to the object
     """
+    object_storage_settings = object_storage_settings or ObjectStorageSettings()
     # Determine the appropriate endpoint for the URL
     if public_endpoint:
         endpoint_for_url = public_endpoint
     else:
-        endpoint_for_url = object_storage_config.endpoint
+        endpoint_for_url = object_storage_settings.endpoint
         # If this is a MinIO deployment, use port 9001 for web access instead of 9000
         if ":9000" in endpoint_for_url and (
             "localhost" in endpoint_for_url or "127.0.0.1" in endpoint_for_url
@@ -156,13 +162,12 @@ def construct_object_url(
             endpoint_for_url = endpoint_for_url.replace(":9000", ":9001")
 
     # Construct the object URL
-    protocol = "https" if object_storage_config.secure else "http"
+    protocol = "https" if object_storage_settings.secure else "http"
     return f"{protocol}://{endpoint_for_url}/{bucket_name}/{object_name}"
 
 
 def upload_file_to_object_storage(
     minio_client: Minio,
-    object_storage_config: ObjectStorageDefinition,
     file_path: Union[str, Path],
     bucket_name: Optional[str] = None,
     object_name: Optional[str] = None,
@@ -171,12 +176,13 @@ def upload_file_to_object_storage(
     naming_strategy: ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY,
     public_endpoint: Optional[str] = None,
     label: Optional[str] = None,
+    object_storage_settings: Optional[ObjectStorageSettings] = None,
 ) -> Optional[dict[str, Any]]:
     """Upload a file to object storage and return storage information.
 
     Args:
         minio_client: The MinIO client instance
-        object_storage_config: Object storage configuration
+        object_storage_settings: Object storage configuration
         file_path: Path to the file to upload
         bucket_name: Name of the bucket (defaults to config default_bucket)
         object_name: Name for the object (auto-generated if not provided)
@@ -196,6 +202,7 @@ def upload_file_to_object_storage(
             stacklevel=2,
         )
         return None
+    object_storage_settings = object_storage_settings or ObjectStorageSettings()
 
     # Convert to Path object and resolve
     file_path = Path(file_path).expanduser().resolve()
@@ -209,7 +216,7 @@ def upload_file_to_object_storage(
         return None
 
     # Use defaults if not specified
-    bucket_name = bucket_name or object_storage_config.default_bucket
+    bucket_name = bucket_name or object_storage_settings.default_bucket
     object_name = object_name or generate_object_name(file_path.name, naming_strategy)
     content_type = content_type or get_content_type(file_path)
     label = label or file_path.name
@@ -240,13 +247,13 @@ def upload_file_to_object_storage(
 
     # Construct the object URL
     url = construct_object_url(
-        object_storage_config, bucket_name, object_name, public_endpoint
+        object_storage_settings, bucket_name, object_name, public_endpoint
     )
 
     # Determine public endpoint for response
     final_public_endpoint = public_endpoint
     if not final_public_endpoint:
-        final_public_endpoint = object_storage_config.endpoint
+        final_public_endpoint = object_storage_settings.endpoint
         if ":9000" in final_public_endpoint and (
             "localhost" in final_public_endpoint or "127.0.0.1" in final_public_endpoint
         ):
@@ -255,7 +262,7 @@ def upload_file_to_object_storage(
     return {
         "bucket_name": bucket_name,
         "object_name": object_name,
-        "storage_endpoint": object_storage_config.endpoint,
+        "storage_endpoint": object_storage_settings.endpoint,
         "public_endpoint": final_public_endpoint,
         "url": url,
         "label": label,

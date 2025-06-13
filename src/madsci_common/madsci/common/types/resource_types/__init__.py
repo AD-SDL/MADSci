@@ -4,7 +4,7 @@ import re
 import string
 from typing import Annotated, Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import PositiveInt, PositiveNumber, new_ulid_str
+from madsci.common.types.base_types import PositiveInt, PositiveNumber
 from madsci.common.types.resource_types.definitions import (
     AssetResourceDefinition,
     CollectionResourceDefinition,
@@ -31,6 +31,7 @@ from madsci.common.types.resource_types.resource_enums import (
     ContainerTypeEnum,
     ResourceTypeEnum,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import (
     AnyUrl,

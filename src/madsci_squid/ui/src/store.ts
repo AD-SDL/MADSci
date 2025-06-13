@@ -35,15 +35,15 @@ async function get_events(experiment_id: string) {
     return Object.values(await ((await fetch(main_url.value.concat("/experiments/".concat(experiment_id).concat("/events"))))).json());
 }
 watchEffect(async () => {
-    urls.value = await ((await fetch(main_url.value.concat("/urls"))).json())
-    state_url.value = urls.value.workcell_manager.concat("state")
-    resources_url.value = urls.value.resource_manager
-    experiments_url.value = urls.value.experiment_manager.concat("experiments")
-    campaigns_url.value = main_url.value.concat("/campaigns/all")
-    workcell_info_url.value = urls.value.workcell_manager.concat("workcell")
-    active_workflows_url.value = urls.value.workcell_manager.concat("workflows/active")
-    archived_workflows_url.value = urls.value.workcell_manager.concat("workflows/archived")
-    events_url.value = main_url.value.concat("/events/all")
+    urls.value = await ((await fetch(main_url.value.concat("/context"))).json())
+    state_url.value = urls.value.workcell_server_url.concat("state")
+    resources_url.value = urls.value.resource_server_url
+    experiments_url.value = urls.value.experiment_server_url.concat("experiments")
+    campaigns_url.value = urls.value.experiment_server_url.concat("campaigns")
+    workcell_info_url.value = urls.value.workcell_server_url.concat("workcell")
+    active_workflows_url.value = urls.value.workcell_server_url.concat("workflows/active")
+    archived_workflows_url.value = urls.value.workcell_server_url.concat("workflows/archived")
+    events_url.value = urls.value.event_server_url.concat("events")
 
     updateResources()
     setInterval(updateWorkcellState, 1000)
@@ -53,7 +53,7 @@ watchEffect(async () => {
     // setInterval(updateEvents, 10000);
 
     async function updateResources() {
-        resources.value = await ((await fetch(urls.value.resource_manager.concat('resource/query'), {
+        resources.value = await ((await fetch(resources_url.value.concat('resource/query'), {
             method: "POST",
             body: JSON.stringify({"multiple": true}),
             headers: {

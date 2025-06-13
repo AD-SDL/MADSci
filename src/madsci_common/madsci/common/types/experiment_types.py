@@ -1,72 +1,73 @@
 """Types for interacting with MADSci experiments and the Experiment Manager."""
 
 from enum import Enum
-from typing import ClassVar, Literal, Optional, Union
+from typing import Literal, Optional, Union
 
 from bson.objectid import ObjectId
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, datetime, new_ulid_str
+from madsci.common.types.base_types import (
+    MadsciBaseModel,
+    MadsciBaseSettings,
+    PathLike,
+    datetime,
+)
 from madsci.common.types.condition_types import Conditions
-from madsci.common.types.event_types import EventClientConfig
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.utils import new_ulid_str
 from pydantic import Field, field_validator
+
+
+class ExperimentManagerSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "experiments.env"),
+    toml_file=("settings.toml", "experiments.settings.toml"),
+    yaml_file=("settings.yaml", "experiments.settings.yaml"),
+    json_file=("settings.json", "experiments.settings.json"),
+    env_prefix="EXPERIMENTS_",
+):
+    """Settings for the MADSci Experiment Manager."""
+
+    experiment_server_url: str = Field(
+        title="Experiment Server URL",
+        description="The URL of the experiment manager server.",
+        default="http://localhost:8002",
+        alias="experiment_server_url",  # * Don't double prefix
+    )
+    experiment_manager_definition: PathLike = Field(
+        title="Experiment Manager Definition File",
+        description="Path to the experiment manager definition file to use.",
+        default="experiment.manager.yaml",
+        alias="experiment_manager_definition",  # * Don't double prefix
+    )
+    db_url: str = Field(
+        title="Database URL",
+        description="The URL of the database for the experiment manager.",
+        default="mongodb://localhost:27017",
+    )
 
 
 class ExperimentManagerDefinition(ManagerDefinition):
     """Definition for an Experiment Manager."""
 
-    _definition_file_patterns: ClassVar[list] = [
-        "*experiment_manager.yaml",
-        "*experiment_manager.yml",
-    ]
-    _definition_cli_flags: ClassVar[list] = ["--experiment-manager", "--definition"]
-
+    name: str = Field(
+        title="Manager Name",
+        description="The name of this experiment manager instance.",
+        default="Experiment Manager",
+    )
+    experiment_manager_id: str = Field(
+        title="Experiment Manager ID",
+        description="The ID of the experiment manager.",
+        default_factory=new_ulid_str,
+    )
     manager_type: Literal[ManagerType.EXPERIMENT_MANAGER] = Field(
         title="Manager Type",
         description="The type of the event manager",
         default=ManagerType.EXPERIMENT_MANAGER,
     )
-    host: str = Field(
-        title="Server Host",
-        description="The host of the experiment manager.",
-        default="127.0.0.1",
-    )
-    port: int = Field(
-        title="Server Port",
-        description="The port of the experiment manager.",
-        default=8002,
-    )
-    db_url: str = Field(
-        title="Database URL",
-        description="The URL of the database for the experidict[str, Any]ment manager.",
-        default="mongodb://localhost:27017",
-    )
-    lab_manager_url: Optional[str] = Field(
-        title="Lab Manager URL", description="URL for the lab manager", default=None
-    )
-    workcell_manager_url: Optional[str] = Field(
-        title="Workcell Manager URL",
-        description="URL for the workcell manager",
-        default=None,
-    )
-    resource_manager_url: Optional[str] = Field(
-        title="Resource Manager URL",
-        description="URL for the resource manager",
-        default=None,
-    )
-    data_manager_url: Optional[str] = Field(
-        title="Data Manager URL",
-        description="URL for the data manager",
-        default=None,
-    )
-    event_client_config: Optional[EventClientConfig] = Field(
-        title="Event Client Configuration",
-        description="The configuration for a MADSci event client.",
-        default=None,
-    )
 
 
-class ExperimentDesign(BaseModel):
+class ExperimentDesign(MadsciBaseModel):
     """A design for a MADSci experiment."""
 
     experiment_name: str = Field(
@@ -86,12 +87,7 @@ class ExperimentDesign(BaseModel):
     ownership_info: OwnershipInfo = Field(
         title="Ownership Info",
         description="Information about the users, campaigns, etc. that this design is owned by.",
-        default_factory=OwnershipInfo,
-    )
-    event_client_config: Optional["EventClientConfig"] = Field(
-        title="Event Client Configuration",
-        description="The configuration for a MADSci event client.",
-        default=None,
+        default_factory=get_current_ownership_info,
     )
 
     def new_experiment(
@@ -105,7 +101,7 @@ class ExperimentDesign(BaseModel):
         )
 
 
-class ExperimentRegistration(BaseModel):
+class ExperimentRegistration(MadsciBaseModel):
     """Experiment Run Registration request body"""
 
     experiment_design: ExperimentDesign
@@ -130,7 +126,7 @@ class ExperimentStatus(str, Enum):
     """Experiment status is unknown."""
 
 
-class Experiment(BaseModel):
+class Experiment(MadsciBaseModel):
     """A MADSci experiment."""
 
     experiment_id: str = Field(
@@ -144,9 +140,7 @@ class Experiment(BaseModel):
     @classmethod
     def object_id_to_str(cls, v: Union[str, ObjectId]) -> str:
         """Cast ObjectID to string."""
-        if isinstance(v, ObjectId):
-            return str(v)
-        return v
+        return str(v)
 
     status: ExperimentStatus = Field(
         title="Experiment Status",
@@ -161,7 +155,7 @@ class Experiment(BaseModel):
     ownership_info: OwnershipInfo = Field(
         title="Ownership Info",
         description="Information about the ownership of the experiment.",
-        default_factory=OwnershipInfo,
+        default_factory=get_current_ownership_info,
     )
     run_name: Optional[str] = Field(
         title="Run Name",
@@ -200,7 +194,7 @@ class Experiment(BaseModel):
         )
 
 
-class ExperimentalCampaign(BaseModel):
+class ExperimentalCampaign(MadsciBaseModel):
     """A campaign consisting of one or more related experiments."""
 
     campaign_id: str = Field(
@@ -225,7 +219,7 @@ class ExperimentalCampaign(BaseModel):
     ownership_info: OwnershipInfo = Field(
         title="Ownership Info",
         description="Information about the ownership of the campaign.",
-        default_factory=OwnershipInfo,
+        default_factory=get_current_ownership_info,
     )
     created_at: datetime = Field(
         title="Registered At",

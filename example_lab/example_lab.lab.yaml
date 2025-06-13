@@ -1,11 +1,4 @@
-name: RPL_SDL_Lab_Manager
-description: The primary lab manager for the RPL SDL
+name: Example_Lab_Manager
+description: A simple example of a lab manager definition
 manager_type: lab_manager
-url: http://localhost:8000
-host: 0.0.0.0
-port: 8000
-managers:
-  workcell_manager: http://localhost:8013
-  resource_manager: http://localhost:8004
-  data_manager: http://localhost:8003
-  experiment_manager: http://localhost:8002
+lab_id: 01JVDFED2K18FVF0E7JM7SX09F

@@ -1,17 +1,19 @@
 """REST API and Server for the Experiment Manager."""
 
 import datetime
-from typing import Optional
+from pathlib import Path
+from typing import Callable, Optional
 
-import requests
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient, EventType
+from madsci.common.ownership import ownership_context
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentManagerDefinition,
+    ExperimentManagerSettings,
     ExperimentRegistration,
     ExperimentStatus,
 )
@@ -21,46 +23,50 @@ from pymongo.database import Database
 
 def create_experiment_server(  # noqa: C901, PLR0915
     experiment_manager_definition: Optional[ExperimentManagerDefinition] = None,
+    experiment_manager_settings: Optional[ExperimentManagerSettings] = None,
     db_connection: Optional[Database] = None,
 ) -> FastAPI:
     """Creates an Experiment Manager's REST server."""
-
+    logger = EventClient()
+    experiment_manager_settings = (
+        experiment_manager_settings or ExperimentManagerSettings()
+    )
+    logger.log_info(experiment_manager_settings)
     if not experiment_manager_definition:
-        experiment_manager_definition = ExperimentManagerDefinition.load_model(
-            require_unique=True
-        )
-
-    if not experiment_manager_definition:
-        raise ValueError(
-            "No experiment manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
-        )
-
-    # * Logger
-    logger = EventClient(experiment_manager_definition.event_client_config)
-    logger.log_info(experiment_manager_definition)
-
-    if experiment_manager_definition.lab_manager_url is not None:
-        try:
-            urls = requests.get(
-                experiment_manager_definition.lab_manager_url + "/urls", timeout=10
-            ).json()
-            experiment_manager_definition.workcell_manager_url = urls[
-                "workcell_manager"
-            ]
-            experiment_manager_definition.resource_manager_url = urls[
-                "resource_manager"
-            ]
-            experiment_manager_definition.data_manager_url = urls["data_manager"]
-        except Exception as e:
-            logger.log_error(e)
+        def_path = Path(
+            experiment_manager_settings.experiment_manager_definition
+        ).expanduser()
+        if def_path.exists():
+            experiment_manager_definition = ExperimentManagerDefinition.from_yaml(
+                def_path,
+            )
+        else:
+            experiment_manager_definition = ExperimentManagerDefinition()
+        logger.log_info(f"Writing to experiment manager definition file: {def_path}")
+        experiment_manager_definition.to_yaml(def_path)
+    logger = EventClient(
+        name=f"experiment_manager.{experiment_manager_definition.name}",
+    )
+    with ownership_context(
+        manager_id=experiment_manager_definition.experiment_manager_id
+    ):
+        logger.log_info(experiment_manager_definition)
 
     # * DB Config
     if db_connection is None:
-        db_client = MongoClient(experiment_manager_definition.db_url)
+        db_client = MongoClient(experiment_manager_settings.db_url)
         db_connection = db_client["experiment_manager"]
     experiments = db_connection["experiments"]
 
     app = FastAPI()
+
+    @app.middleware("http")
+    async def ownership_middleware(request: Request, call_next: Callable) -> Response:
+        """Middleware to set ownership context for each request."""
+        with ownership_context(
+            manager_id=experiment_manager_definition.experiment_manager_id
+        ):
+            return await call_next(request)
 
     @app.get("/")
     @app.get("/info")
@@ -220,14 +226,12 @@ def create_experiment_server(  # noqa: C901, PLR0915
 
 
 if __name__ == "__main__":
-    experiment_manager_definition = ExperimentManagerDefinition.load_model(
-        require_unique=True
-    )
+    experiment_manager_settings = ExperimentManagerSettings()
     app = create_experiment_server(
-        experiment_manager_definition=experiment_manager_definition
+        experiment_manager_settings=experiment_manager_settings,
     )
     uvicorn.run(
         app,
-        host=experiment_manager_definition.host,
-        port=experiment_manager_definition.port,
+        host=experiment_manager_settings.experiment_server_url.host,
+        port=experiment_manager_settings.experiment_server_url.port,
     )

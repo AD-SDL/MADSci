@@ -7,29 +7,31 @@ import tempfile
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 
+from fastapi import Request, Response
 from fastapi.applications import FastAPI
 from fastapi.background import BackgroundTasks
 from fastapi.datastructures import UploadFile
 from fastapi.routing import APIRouter
 from madsci.client.node.rest_node_client import RestNodeClient
+from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.base_types import Error, new_ulid_str
+from madsci.common.types.base_types import Error
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
-    NodeConfig,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
     RestNodeConfig,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
@@ -46,8 +48,10 @@ class RestNode(AbstractNode):
         RestNodeClient.supported_capabilities
     )
     """The default supported capabilities of this node module class."""
-    config: NodeConfig = RestNodeConfig()
+    config: RestNodeConfig = RestNodeConfig()
     """The configuration for the node."""
+    config_model = RestNodeConfig
+    """The node config model class. This is the class that will be used to instantiate self.config."""
 
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
@@ -56,30 +60,37 @@ class RestNode(AbstractNode):
     def __init__(self, *args: Any, **kwargs: Any) -> "RestNode":
         """Initialize the node class."""
         super().__init__(*args, **kwargs)
-        host = getattr(self.config, "host", "localhost")
-        port = getattr(self.config, "port", 2000)
-        scheme = getattr(self.config, "protocol", "http")
-        self.node_info.node_url = AnyUrl.build(
-            scheme=scheme,
-            host=host,
-            port=port,
-        )
+        self.node_info.node_url = getattr(self.config, "node_url", None)
 
     def start_node(self, testing: bool = False) -> None:
         """Start the node."""
-        host = getattr(self.config, "host", "localhost")
-        port = getattr(self.config, "port", 2000)
-        if not testing:
-            self.logger.log_debug("Running node in production mode")
-            import uvicorn
+        with ownership_context(node_id=self.node_definition.node_id):
+            url = AnyUrl(getattr(self.config, "node_url", "http://127.0.0.1:2000"))
+            if not testing:
+                self.logger.log_debug("Running node in production mode")
+                import uvicorn
 
-            self.rest_api = FastAPI(lifespan=self._lifespan)
-            self._configure_routes()
-            uvicorn.run(self.rest_api, host=host, port=port)
-        else:
-            self.logger.log_debug("Running node in test mode")
-            self.rest_api = FastAPI(lifespan=self._lifespan)
-            self._configure_routes()
+                self.rest_api = FastAPI(lifespan=self._lifespan)
+
+                # Middleware to set ownership context for each request
+                @self.rest_api.middleware("http")
+                async def ownership_middleware(
+                    request: Request, call_next: Callable
+                ) -> Response:
+                    with ownership_context(node_id=self.node_definition.node_id):
+                        return await call_next(request)
+
+                self._configure_routes()
+                uvicorn.run(
+                    self.rest_api,
+                    host=url.host if url.host else "127.0.0.1",
+                    port=url.port if url.port else 2000,
+                    **getattr(self.config, "uvicorn_kwargs", {}),
+                )
+            else:
+                self.logger.log_debug("Running node in test mode")
+                self.rest_api = FastAPI(lifespan=self._lifespan)
+                self._configure_routes()
 
     """------------------------------------------------------------------------------------------------"""
     """Interface Methods"""

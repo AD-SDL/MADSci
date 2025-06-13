@@ -11,6 +11,7 @@ import socket
 import subprocess
 import tempfile
 
+from madsci.common.warnings import MadsciLocalOnlyWarning
 import pytest
 import requests
 from madsci.client.data_client import DataClient
@@ -19,7 +20,7 @@ from madsci.common.types.datapoint_types import (
     DataPointTypeEnum,
     FileDataPoint,
     ObjectStorageDataPoint,
-    ObjectStorageDefinition,
+    ObjectStorageSettings,
     ValueDataPoint,
 )
 from madsci.data_manager.data_server import create_data_server
@@ -87,7 +88,8 @@ def test_get_datapoint(client: DataClient) -> None:
 def test_get_datapoint_value(client: DataClient) -> None:
     """Test getting a datapoint value using DataClient"""
     datapoint = ValueDataPoint(label="Test", value="test_value")
-    client.submit_datapoint(datapoint)
+    submitted_datapoint = client.submit_datapoint(datapoint)
+    assert submitted_datapoint.datapoint_id == datapoint.datapoint_id
     fetched_value = client.get_datapoint_value(datapoint.datapoint_id)
     assert fetched_value == "test_value"
 
@@ -130,7 +132,7 @@ def test_file_datapoint(client: DataClient, tmp_path: str) -> None:
 def test_local_only_dataclient(tmp_path: str) -> None:
     """Test a dataclient without a URL (i.e. local only)"""
     client = None
-    with pytest.warns(UserWarning):
+    with pytest.warns(MadsciLocalOnlyWarning):
         client = DataClient()
     datapoint = ValueDataPoint(label="Test", value="test_value")
     created_datapoint = client.submit_datapoint(datapoint)
@@ -142,9 +144,7 @@ def test_local_only_dataclient(tmp_path: str) -> None:
     fetched_file_path = Path(tmp_path) / "fetched_test.txt"
     client.save_datapoint_value(datapoint.datapoint_id, fetched_file_path)
     assert fetched_file_path.read_text() == "test_value"
-    file_datapoint = FileDataPoint(
-        label="Test", value="test_value", path=fetched_file_path
-    )
+    file_datapoint = FileDataPoint(label="Test", path=fetched_file_path)
     created_datapoint = client.submit_datapoint(file_datapoint)
     assert created_datapoint.datapoint_id == file_datapoint.datapoint_id
     fetched_datapoint = client.get_datapoint(file_datapoint.datapoint_id)
@@ -356,7 +356,7 @@ def minio_config(minio_server):  # noqa
     """
     Fixture that provides MinIO configuration for individual tests.
     """
-    return ObjectStorageDefinition(
+    return ObjectStorageSettings(
         endpoint=minio_server["endpoint"],
         access_key=minio_server["access_key"],
         secret_key=minio_server["secret_key"],
@@ -376,9 +376,10 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
     file_path.write_text(file_content)
 
     # Initialize DataClient with the test MinIO configuration
-    client = DataClient(
-        object_storage_config=minio_config,
-    )
+    with pytest.warns(MadsciLocalOnlyWarning):
+        client = DataClient(
+            object_storage_settings=minio_config,
+        )
 
     # Create file datapoint
     file_datapoint = FileDataPoint(label=file_path.name, path=str(file_path))
@@ -439,9 +440,10 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     file_path.write_text(file_content)
 
     # Initialize DataClient with the test MinIO configuration
-    client = DataClient(
-        object_storage_config=minio_config,
-    )
+    with pytest.warns(MadsciLocalOnlyWarning):
+        client = DataClient(
+            object_storage_settings=minio_config,
+        )
 
     # Custom metadata for the object
     metadata = {
@@ -602,7 +604,7 @@ def test_s3_provider_configurations():
     """Test that different S3 provider configurations are valid."""
 
     # AWS S3 config
-    aws_config = ObjectStorageDefinition(
+    aws_config = ObjectStorageSettings(
         endpoint="s3.amazonaws.com",
         access_key="AKIAIOSFODNN7EXAMPLE",  # Example key format
         secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
@@ -612,7 +614,7 @@ def test_s3_provider_configurations():
     )
 
     # GCS config
-    gcs_config = ObjectStorageDefinition(
+    gcs_config = ObjectStorageSettings(
         endpoint="storage.googleapis.com",
         access_key="GOOGTS7C7FIS2E4U4RBGEXAMPLE",  # Example HMAC key format
         secret_key="bGoa+V7g/yqDXvKRqq+JTFn4uQZbPiQJo8rkEXAMPLE",
@@ -621,7 +623,7 @@ def test_s3_provider_configurations():
     )
 
     # DigitalOcean Spaces config
-    do_config = ObjectStorageDefinition(
+    do_config = ObjectStorageSettings(
         endpoint="nyc3.digitaloceanspaces.com",
         access_key="DO00EXAMPLE12345678",
         secret_key="doe_secret_key_example_123456789abcdef",

@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
     FileDataPoint,
-    ObjectStorageDefinition,
+    ObjectStorageSettings,
     ValueDataPoint,
 )
 from madsci.data_manager.data_server import create_data_server
@@ -444,19 +444,20 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
         "madsci.common.object_storage_helpers.Minio", return_value=mock_minio_client
     ):
         # Create DataManager with MinIO config
-        data_manager_def_with_minio = DataManagerDefinition(
+        data_manager_def = DataManagerDefinition(
             name="test_data_manager_with_minio",
-            minio_client_config=ObjectStorageDefinition(
+        )
+
+        app = create_data_server(
+            data_manager_definition=data_manager_def,
+            db_client=db_connection,
+            object_storage_settings=ObjectStorageSettings(
                 endpoint="localhost:9000",
                 access_key="minioadmin",
                 secret_key="minioadmin",  # noqa
                 secure=False,
                 default_bucket="madsci-test",
             ),
-        )
-
-        app = create_data_server(
-            data_manager_definition=data_manager_def_with_minio, db_client=db_connection
         )
         test_client = TestClient(app)
 
@@ -526,19 +527,20 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
 def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:  # noqa
     """Test actual MinIO upload using the subprocess MinIO server."""
     # No mocks - use real MinIO from the fixture
-    data_manager_def_with_minio = DataManagerDefinition(
+    data_manager_def = DataManagerDefinition(
         name="test_data_manager_with_minio",
-        minio_client_config=ObjectStorageDefinition(
+    )
+
+    app = create_data_server(
+        data_manager_definition=data_manager_def,
+        db_client=db_connection,
+        object_storage_settings=ObjectStorageSettings(
             endpoint=minio_server["endpoint"],
             access_key=minio_server["access_key"],
             secret_key=minio_server["secret_key"],
             secure=False,
             default_bucket="test-bucket",
         ),
-    )
-
-    app = create_data_server(
-        data_manager_definition=data_manager_def_with_minio, db_client=db_connection
     )
     test_client = TestClient(app)
 

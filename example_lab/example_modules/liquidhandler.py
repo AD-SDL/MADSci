@@ -28,7 +28,7 @@ class LiquidHandlerInterface:
         self, device_number: int = 0, logger: Optional[EventClient] = None
     ) -> "LiquidHandlerInterface":
         """Initialize the liquid handler."""
-        self.logger = logger if logger else EventClient()
+        self.logger = logger or EventClient()
         self.device_number = device_number
 
     def run_command(self, command: str) -> None:
@@ -42,7 +42,7 @@ class LiquidHandlerNode(RestNode):
     """A fake liquid handler node module for testing."""
 
     liquid_handler: LiquidHandlerInterface = None
-    config_model = LiquidHandlerConfig
+    config = LiquidHandlerConfig()
 
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
