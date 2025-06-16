@@ -89,7 +89,7 @@ class WorkcellStateHandler:
             if (
                 location_definition.resource_definition is not None
                 and resource_client is not None
-                and location_definition.resource_id is None
+                and (getattr(location_definition, "resource_id", None)) is None # LocationDefinition doesn't already have a resource ID, only Location subclass.
             ):
                 resource = Resource.discriminate(
                     location_definition.resource_definition

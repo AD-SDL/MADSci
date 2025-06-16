@@ -86,12 +86,14 @@ services:
     command: python -m madsci.squid.lab_server
     depends_on:
       - event_manager
+
   event_manager:
     <<: *madsci-service
     container_name: event_manager
     command: python -m madsci.event_manager.event_server
     depends_on:
       - mongodb
+
 
   experiment_manager:
     <<: *madsci-service
@@ -100,6 +102,7 @@ services:
     depends_on:
       - mongodb
       - lab_manager
+
 
   resource_manager:
     <<: *madsci-service
@@ -116,6 +119,7 @@ services:
     depends_on:
       - mongodb
       - event_manager
+
   workcell_manager:
     <<: *madsci-service
     container_name: workcell_manager
@@ -138,9 +142,12 @@ services:
     <<: *madsci-service
     container_name: robotarm
     command: python example_modules/robotarm.py --node_definition node_definitions/robotarm_1.node.yaml
-
+    environment:
+      - NODE_NODE_URL=http://localhost:2001/
 
   platereader:
     <<: *madsci-service
     container_name: platereader
     command: python example_modules/platereader.py --node_definition node_definitions/platereader_1.node.yaml
+    environment:
+      - NODE_NODE_URL=http://localhost:2002/

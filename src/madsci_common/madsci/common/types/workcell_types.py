@@ -46,7 +46,7 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
         title="Workcell Node URLs",
         description="The URL for each node in the workcell.",
     )
-    locations: list[LocationDefinition] = Field(
+    locations: list[Location] = Field( # ***
         default_factory=list,
         title="Workcell Locations",
         description="The Locations used in the workcell.",
