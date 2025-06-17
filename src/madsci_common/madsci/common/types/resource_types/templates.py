@@ -3,6 +3,8 @@
 from typing import Any, Optional
 
 from madsci.common.types.base_types import BaseModel
+from madsci.common.types.resource_types import RESOURCE_TYPE_MAP, ResourceDefinition
+from madsci.common.types.resource_types.custom_types import CustomResourceTypes
 from pydantic import Field, field_validator
 
 
@@ -87,4 +89,107 @@ class TemplateValidationResult(BaseModel):
         default_factory=list,
         title="Validation Warnings",
         description="List of validation warning messages",
+    )
+
+
+def create_resource_from_template(
+    template: ResourceTemplate,
+    request: TemplateCreateRequest,
+    available_custom_types: dict[str, CustomResourceTypes],
+) -> ResourceDefinition:
+    """
+    Create a ResourceDefinition from a template and creation request.
+
+    Args:
+        template: The ResourceTemplate to use
+        request: The creation request with overrides
+        available_custom_types: dict mapping custom type names to CustomResourceType instances
+
+    Returns:
+        A properly configured ResourceDefinition instance
+
+    Raises:
+        ValueError: If template references unknown custom type or validation fails
+    """
+    # Look up the referenced custom type
+    if template.base_custom_type_name not in available_custom_types:
+        raise ValueError(f"Unknown custom type: {template.base_custom_type_name}")
+
+    custom_type = available_custom_types[template.base_custom_type_name]
+
+    # Get the base_type to determine which ResourceDefinition class to use
+    base_type = custom_type.base_type
+    if base_type not in RESOURCE_TYPE_MAP:
+        raise ValueError(f"Unknown base type: {base_type}")
+
+    definition_class = RESOURCE_TYPE_MAP[base_type]["definition"]
+
+    # Start with template defaults
+    resource_data = template.defaults.copy()
+
+    # Apply user overrides
+    resource_data.update(request.overrides)
+
+    # Set required fields if not already provided
+    if request.resource_name:
+        resource_data["resource_name"] = request.resource_name
+
+    # Ensure resource_class points to the custom type
+    resource_data["resource_class"] = template.base_custom_type_name
+
+    # Ensure base_type matches the custom type
+    resource_data["base_type"] = base_type
+
+    # Create and return the ResourceDefinition instance
+    return definition_class.model_validate(resource_data)
+
+
+def validate_template(
+    template: ResourceTemplate, available_custom_types: dict[str, CustomResourceTypes]
+) -> TemplateValidationResult:
+    """
+    Validate that a template is properly configured.
+
+    Args:
+        template: The ResourceTemplate to validate
+        available_custom_types: dict mapping custom type names to CustomResourceType instances
+
+    Returns:
+        TemplateValidationResult with validation status and any errors
+    """
+    errors = []
+    warnings = []
+
+    # Check if referenced custom type exists
+    if template.base_custom_type_name not in available_custom_types:
+        errors.append(
+            f"Template references unknown custom type: {template.base_custom_type_name}"
+        )
+        return TemplateValidationResult(
+            is_valid=False, errors=errors, warnings=warnings
+        )
+
+    custom_type = available_custom_types[template.base_custom_type_name]
+
+    # Check if base_type is supported
+    if custom_type.base_type not in RESOURCE_TYPE_MAP:
+        errors.append(f"Custom type has unsupported base_type: {custom_type.base_type}")
+
+    # Try to create a minimal ResourceDefinition to check if defaults are valid
+    try:
+        definition_class = RESOURCE_TYPE_MAP[custom_type.base_type]["definition"]
+        test_data = template.defaults.copy()
+        test_data.update(
+            {
+                "resource_name": "test_validation",
+                "resource_class": template.base_custom_type_name,
+                "base_type": custom_type.base_type,
+            }
+        )
+        definition_class.model_validate(test_data)
+    except Exception as e:
+        errors.append(f"Template defaults are invalid: {e!s}")
+
+    return TemplateValidationResult(
+        is_valid=len(errors) == 0, errors=errors, warnings=warnings
     )
