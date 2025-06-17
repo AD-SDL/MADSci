@@ -15,7 +15,7 @@ from madsci.common.types.base_types import (
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.lab_types import ManagerDefinition, ManagerType
 from madsci.common.utils import new_ulid_str
-from pydantic import Field, field_validator
+from pydantic import AnyUrl, Field, field_validator
 
 
 class ExperimentManagerSettings(
@@ -28,7 +28,7 @@ class ExperimentManagerSettings(
 ):
     """Settings for the MADSci Experiment Manager."""
 
-    experiment_server_url: str = Field(
+    experiment_server_url: AnyUrl = Field(
         title="Experiment Server URL",
         description="The URL of the experiment manager server.",
         default="http://localhost:8002",
