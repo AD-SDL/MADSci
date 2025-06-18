@@ -230,7 +230,7 @@ if __name__ == "__main__":
     app = create_experiment_server(
         experiment_manager_settings=experiment_manager_settings,
     )
-    parsed_url = urlparse(experiment_manager_settings.experiment_server_url)
+    parsed_url = urlparse(str(experiment_manager_settings.experiment_server_url))
     host = parsed_url.hostname
     port = parsed_url.port
     uvicorn.run(

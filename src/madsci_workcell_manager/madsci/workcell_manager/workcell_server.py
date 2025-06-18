@@ -56,7 +56,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         if workcell_path.exists():
             workcell = WorkcellDefinition.from_yaml(workcell_path)
         else:
-            workcell = WorkcellDefinition()
+            workcell = WorkcellDefinition(workcell_name="default_workcell")
         logger.info(f"Writing to workcell definition file: {workcell_path}")
         workcell.to_yaml(workcell_path)
     with ownership_context(
@@ -94,6 +94,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             yield
 
     app = FastAPI(lifespan=lifespan)
+
 
     @app.middleware("http")
     async def ownership_middleware(request: Request, call_next: Callable) -> Response:

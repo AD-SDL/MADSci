@@ -41,8 +41,8 @@ services:
     restart: unless-stopped
     ports:
       - 27017:27017
-    volumes:
-      - mongodb_data:/data/db
+    # volumes:
+    #   - mongodb_data:/data/db
 
   redis:
     container_name: redis
@@ -50,8 +50,8 @@ services:
     restart: unless-stopped
     ports:
       - 6379:6379
-    volumes:
-      - redis_data:/data
+    # volumes:
+    #   - redis_data:/data
   postgres:
     container_name: postgres
     image: postgres:17
@@ -62,8 +62,8 @@ services:
       - POSTGRES_DB=resources
     ports:
       - 5432:5432
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data
   minio:
     container_name: minio
     image: minio/minio
@@ -159,8 +159,8 @@ services:
     environment:
       - NODE_NODE_URL=http://localhost:2002/
 
-volumes:
-  mongodb_data:
-  postgres_data:
-  redis_data:
+# volumes:
+#   mongodb_data:
+#   postgres_data:
+#   redis_data:
 

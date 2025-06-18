@@ -160,16 +160,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { get_status } from '../store';
-import { urls } from "@/store";
-declare function require(name: string): any;
-import * as yaml from 'js-yaml';
-import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
+
+import { ref } from 'vue';
+
+import * as yaml from 'js-yaml';
+import { json } from 'stream/consumers';
+import VueJsonPretty from 'vue-json-pretty';
+
+import { urls } from '@/store';
+
+import { get_status } from '../store';
 import LockUnlockButton from './AdminButtons/LockUnlockButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
-import { json } from 'stream/consumers';
+
+declare function require(name: string): any;
+
 const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
 const arg_headers = [
   { title: 'Name', key: 'name' },
@@ -253,6 +259,7 @@ function set_text(action: any) {
         "args : \n\t\t").concat(cleanArgs(input_args)).concat("locations : \n\t\t").concat(cleanArgs(input_locations)).concat("checks : null \n\tcomment: a comment! \n\t")
 }
 async function send_wf(action: any) {
+  console.log("send_wf called with action:", action);
   var wf: any = {}
   wf.name = action.name
   wf.metadata = {
@@ -326,7 +333,10 @@ async function send_wf(action: any) {
       formData.append("files", file.value)
     }
   })
-  fetch(urls.value.workcell_manager.concat('workflow'), {
+  console.log(urls)
+  console.log(urls.value)
+  console.log(urls.value.workcell_manager)
+  fetch(urls.value.workcell_server_url.concat('workflow'), {
     method: "POST",
     body: formData
   });
