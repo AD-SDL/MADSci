@@ -41,12 +41,17 @@ services:
     restart: unless-stopped
     ports:
       - 27017:27017
+    # volumes:
+    #   - mongodb_data:/data/db
+
   redis:
     container_name: redis
     image: redis:7.4
     restart: unless-stopped
     ports:
       - 6379:6379
+    # volumes:
+    #   - redis_data:/data
   postgres:
     container_name: postgres
     image: postgres:17
@@ -57,6 +62,8 @@ services:
       - POSTGRES_DB=resources
     ports:
       - 5432:5432
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data
   minio:
     container_name: minio
     image: minio/minio
@@ -86,12 +93,14 @@ services:
     command: python -m madsci.squid.lab_server
     depends_on:
       - event_manager
+
   event_manager:
     <<: *madsci-service
     container_name: event_manager
     command: python -m madsci.event_manager.event_server
     depends_on:
       - mongodb
+
 
   experiment_manager:
     <<: *madsci-service
@@ -100,6 +109,7 @@ services:
     depends_on:
       - mongodb
       - lab_manager
+
 
   resource_manager:
     <<: *madsci-service
@@ -116,6 +126,7 @@ services:
     depends_on:
       - mongodb
       - event_manager
+
   workcell_manager:
     <<: *madsci-service
     container_name: workcell_manager
@@ -138,9 +149,18 @@ services:
     <<: *madsci-service
     container_name: robotarm
     command: python example_modules/robotarm.py --node_definition node_definitions/robotarm_1.node.yaml
-
+    environment:
+      - NODE_NODE_URL=http://localhost:2001/
 
   platereader:
     <<: *madsci-service
     container_name: platereader
     command: python example_modules/platereader.py --node_definition node_definitions/platereader_1.node.yaml
+    environment:
+      - NODE_NODE_URL=http://localhost:2002/
+
+# volumes:
+#   mongodb_data:
+#   postgres_data:
+#   redis_data:
+
