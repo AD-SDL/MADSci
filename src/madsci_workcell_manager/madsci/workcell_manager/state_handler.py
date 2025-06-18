@@ -88,10 +88,6 @@ class WorkcellStateHandler:
             if (
                 location_definition.resource_definition is not None
                 and resource_client is not None
-<<<<<<< HEAD
-                and (getattr(location_definition, "resource_id", None)) is None # LocationDefinition doesn't already have a resource ID, only Location subclass.
-=======
->>>>>>> origin/main
             ):
                 resource = resource_client.init_resource(
                     resource_definition=location_definition.resource_definition
