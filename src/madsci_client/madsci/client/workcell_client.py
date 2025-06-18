@@ -42,7 +42,11 @@ class WorkcellClient:
         working_directory : str, optional
             The directory to look for relative paths. Defaults to "./".
         """
-        self.context = MadsciContext(workcell_server_url=workcell_server_url)
+        self.context = (
+            MadsciContext(workcell_server_url=workcell_server_url)
+            if workcell_server_url
+            else MadsciContext()
+        )
         self.url = self.context.workcell_server_url
         if not self.url:
             raise ValueError(

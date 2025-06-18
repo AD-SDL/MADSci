@@ -25,10 +25,12 @@ class ExperimentClient:
         experiment_server_url: Optional[Union[str, AnyUrl]] = None,
     ) -> "ExperimentClient":
         """Create a new Experiment Client."""
-        self.context = MadsciContext()
-        self.experiment_server_url = (
-            experiment_server_url or self.context.experiment_server_url
+        self.context = (
+            MadsciContext(experiment_server_url=experiment_server_url)
+            if experiment_server_url
+            else MadsciContext()
         )
+        self.experiment_server_url = self.context.experiment_server_url
         if not self.experiment_server_url:
             raise ValueError(
                 "No experiment server URL provided, please specify a URL or set the context."

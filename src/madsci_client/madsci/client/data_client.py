@@ -38,8 +38,8 @@ class DataClient:
         object_storage_settings: Optional[ObjectStorageSettings] = None,
     ) -> "DataClient":
         """Create a new Datapoint Client."""
-        self.context = MadsciContext()
-        self.url = (AnyUrl(url) if url else None) or self.context.data_server_url
+        self.context = MadsciContext(data_server_url=url) if url else MadsciContext()
+        self.url = self.context.data_server_url
         self.logger = EventClient()
         if self.url is None:
             self.logger.warn(

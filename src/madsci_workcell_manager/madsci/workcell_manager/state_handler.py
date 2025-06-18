@@ -10,7 +10,6 @@ from fastapi import HTTPException
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
-from madsci.common.types.resource_types import Resource
 from madsci.common.types.workcell_types import (
     WorkcellDefinition,
     WorkcellManagerSettings,
@@ -84,33 +83,19 @@ class WorkcellStateHandler:
     ) -> None:
         """Set the workcell's location based on the location definitions in the workcell, and create resources if necessary/possible"""
         workcell = self.get_workcell_definition()
-        for index in range(len(workcell.locations)):
-            location_definition = workcell.locations[index]
+        for location_definition in workcell.locations:
+            resource = None
             if (
                 location_definition.resource_definition is not None
                 and resource_client is not None
-                and location_definition.resource_id is None
             ):
-                resource = Resource.discriminate(
-                    location_definition.resource_definition
+                resource = resource_client.init_resource(
+                    resource_definition=location_definition.resource_definition
                 )
-
-                resource = resource_client.add_resource(resource)
-                location_definition.resource_id = resource.resource_id
-            try:
-                # * Update existing location if it exists
-                existing_location = self.get_location(location_definition.location_id)
-                existing_location = existing_location.model_copy(
-                    update=location_definition.model_dump()
-                )
-                self.set_location(existing_location)
-            except KeyError:
-                # * Create new location if it doesn't exist
-                self.set_location(
-                    Location.model_validate(location_definition.model_dump())
-                )
-            workcell.locations[index] = location_definition
-        self.set_workcell_definition(workcell)
+            location = Location.model_validate(location_definition.model_dump())
+            if resource:
+                location.resource_id = resource.resource_id
+            self.set_location(location)
 
     @property
     def _workcell_prefix(self) -> str:
