@@ -57,8 +57,11 @@ class ExperimentApplication:
         experiment: Optional[Experiment] = None,
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
-        if experiment_server_url:
-            self.context = MadsciContext(experiment_server_url=experiment_server_url)
+        self.context = (
+            MadsciContext(experiment_server_url=experiment_server_url)
+            if experiment_server_url
+            else MadsciContext()
+        )
         self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)

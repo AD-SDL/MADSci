@@ -41,12 +41,17 @@ services:
     restart: unless-stopped
     ports:
       - 27017:27017
+    volumes:
+      - mongodb_data:/data/db
+
   redis:
     container_name: redis
     image: redis:7.4
     restart: unless-stopped
     ports:
       - 6379:6379
+    volumes:
+      - redis_data:/data
   postgres:
     container_name: postgres
     image: postgres:17
@@ -57,6 +62,8 @@ services:
       - POSTGRES_DB=resources
     ports:
       - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
   minio:
     container_name: minio
     image: minio/minio
@@ -151,3 +158,9 @@ services:
     command: python example_modules/platereader.py --node_definition node_definitions/platereader_1.node.yaml
     environment:
       - NODE_NODE_URL=http://localhost:2002/
+
+volumes:
+  mongodb_data:
+  postgres_data:
+  redis_data:
+

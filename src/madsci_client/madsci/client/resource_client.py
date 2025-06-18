@@ -37,7 +37,9 @@ class ResourceClient:
         event_client: Optional[EventClient] = None,
     ) -> None:
         """Initialize the resource client."""
-        self.context = MadsciContext(resource_server_url=url)
+        self.context = (
+            MadsciContext(resource_server_url=url) if url else MadsciContext()
+        )
         self.url = self.context.resource_server_url
         if self.url is not None and str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
