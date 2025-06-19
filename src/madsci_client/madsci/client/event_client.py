@@ -99,7 +99,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = requests.get(
-                self.event_server + "/events",
+                str(self.event_server) + "/events",
                 timeout=10,
                 params={"number": number, "level": level},
             )
@@ -122,7 +122,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = requests.get(
-                self.event_server + "/events",
+                str(self.event_server) + "/events",
                 timeout=10,
                 params={"selector": selector},
             )
