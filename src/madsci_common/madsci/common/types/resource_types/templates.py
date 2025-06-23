@@ -1,195 +1,237 @@
-"""Resource Template Models for MADSci - Smart defaults and validation for resource creation."""
+"""
+MADSci Resource Templates - Simple File-Based Approach
 
+Templates are automatically available when imported - no manual registration needed.
+Simple interface: import templates, see what's available, create resources.
+"""
+# flake8: noqa
+
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Optional
 
-from madsci.common.types.base_types import BaseModel
-from madsci.common.types.resource_types import RESOURCE_TYPE_MAP, ResourceDefinition
-from madsci.common.types.resource_types.custom_types import CustomResourceTypes
-from pydantic import Field, field_validator
+from madsci.common.types.resource_types import RESOURCE_TYPE_MAP
+from madsci.common.types.resource_types.definitions import ResourceDefinitions
+from madsci.common.types.resource_types.resource_enums import ResourceTypeEnum
 
 
-class ResourceTemplate(BaseModel):
-    """Template for creating ResourceDefinitions with smart defaults."""
+class TemplateSource(str, Enum):
+    """Source of a resource template."""
 
-    template_name: str = Field(
-        title="Template Name",
-        description="Unique name for this template",
-    )
-    template_description: Optional[str] = Field(
-        default=None,
-        title="Template Description",
-        description="Description of what this template is for",
-    )
-    base_custom_type_name: str = Field(
-        title="Base Custom Type Name",
-        description="Name of the CustomResourceType this template is based on",
-    )
-    defaults: dict[str, Any] = Field(
-        default_factory=dict,
-        title="Default Values",
-        description="Default values to apply when creating resources from this template",
-    )
-    tags: list[str] = Field(
-        default_factory=list,
-        title="Tags",
-        description="Tags for organizing and searching templates",
-    )
-    created_by: Optional[str] = Field(
-        default=None,
-        title="Created By",
-        description="User who created this template",
-    )
-    version: str = Field(
-        default="1.0.0",
-        title="Version",
-        description="Version of this template",
-    )
-
-    @field_validator("template_name")
-    @classmethod
-    def validate_template_name(cls, v: str) -> str:
-        """Validate template name is not empty."""
-        if not v or not v.strip():
-            raise ValueError("Template name cannot be empty")
-        return v.strip()
+    NODE = "node"
+    MANAGER = "manager"
+    EXPERIMENT = "experiment"
+    SYSTEM = "system"
+    USER = "user"
 
 
-class TemplateCreateRequest(BaseModel):
-    """Request to create a resource from a template."""
+@dataclass
+class ResourceTemplate:
+    """
+    A resource template with default values and constraints.
 
-    template_name: str = Field(
-        title="Template Name",
-        description="Name of the template to use",
-    )
-    overrides: dict[str, Any] = Field(
-        default_factory=dict,
-        title="Override Values",
-        description="Values to override from the template defaults",
-    )
-    resource_name: Optional[str] = Field(
-        default=None,
-        title="Resource Name",
-        description="Specific name for the resource (if not provided, will use template defaults)",
-    )
+    Define these in files just like ResourceTypes - simple and maintainable.
+    """
+
+    # Required fields (no defaults) must come first
+    template_name: str
+    display_name: str
+    base_type: ResourceTypeEnum
+
+    # Optional fields (with defaults) come after
+    description: str = ""
+    resource_class: Optional[str] = None  # Custom type name if applicable
+    default_values: dict[str, Any] = field(default_factory=dict)
+    required_overrides: list[str] = field(
+        default_factory=list
+    )  # Fields user must provide
+    source: TemplateSource = TemplateSource.USER
+    tags: list[str] = field(default_factory=list)
 
 
-class TemplateValidationResult(BaseModel):
-    """Result of template validation."""
+class TemplateRegistry:
+    """Simple registry that auto-manages templates."""
 
-    is_valid: bool = Field(
-        title="Is Valid",
-        description="Whether the template/creation request is valid",
-    )
-    errors: list[str] = Field(
-        default_factory=list,
-        title="Validation Errors",
-        description="List of validation error messages",
-    )
-    warnings: list[str] = Field(
-        default_factory=list,
-        title="Validation Warnings",
-        description="List of validation warning messages",
-    )
+    def __init__(self):
+        self._templates: dict[str, ResourceTemplate] = {}
+
+    def _auto_register(self, template: ResourceTemplate) -> None:
+        """Internal method for auto-registration."""
+        self._templates[template.template_name] = template
+
+    def add_template(self, template: ResourceTemplate) -> None:
+        """Add a new template (for dynamic additions)."""
+        self._templates[template.template_name] = template
+
+    def get(self, template_name: str) -> Optional[ResourceTemplate]:
+        """Get a template by name."""
+        return self._templates.get(template_name)
+
+    def get_all_templates(self) -> dict[str, ResourceTemplate]:
+        """Get all templates as a dictionary."""
+        return self._templates.copy()
+
+    def get_template_names(self) -> list[str]:
+        """Get list of all template names."""
+        return list(self._templates.keys())
+
+    def get_templates_by_category(self) -> dict[str, list[str]]:
+        """Get templates organized by category (base_type)."""
+        categories = {}
+        for name, template in self._templates.items():
+            category = template.base_type.value
+            if category not in categories:
+                categories[category] = []
+            categories[category].append(name)
+        return categories
+
+    def get_templates_by_tags(self, tags: list[str]) -> list[str]:
+        """Get template names that have any of the specified tags."""
+        matching = []
+        for name, template in self._templates.items():
+            if any(tag in template.tags for tag in tags):
+                matching.append(name)
+        return matching
+
+    def list_templates(self, **filters) -> list[ResourceTemplate]:
+        """list templates with optional filtering."""
+        templates = list(self._templates.values())
+
+        if "source" in filters:
+            templates = [t for t in templates if t.source == filters["source"]]
+        if "base_type" in filters:
+            templates = [t for t in templates if t.base_type == filters["base_type"]]
+        if "tags" in filters:
+            filter_tags = filters["tags"]
+            templates = [
+                t for t in templates if any(tag in t.tags for tag in filter_tags)
+            ]
+
+        return templates
+
+
+_template_registry = TemplateRegistry()
 
 
 def create_resource_from_template(
-    template: ResourceTemplate,
-    request: TemplateCreateRequest,
-    available_custom_types: dict[str, CustomResourceTypes],
-) -> ResourceDefinition:
+    template_name: str, resource_name: str, **overrides
+) -> ResourceDefinitions:
     """
-    Create a ResourceDefinition from a template and creation request.
+    Create a ResourceDefinition from a template.
 
-    Args:
-        template: The ResourceTemplate to use
-        request: The creation request with overrides
-        available_custom_types: dict mapping custom type names to CustomResourceType instances
-
-    Returns:
-        A properly configured ResourceDefinition instance
-
-    Raises:
-        ValueError: If template references unknown custom type or validation fails
+    Simple function that merges template defaults with user overrides.
     """
-    # Look up the referenced custom type
-    if template.base_custom_type_name not in available_custom_types:
-        raise ValueError(f"Unknown custom type: {template.base_custom_type_name}")
+    template = _template_registry.get(template_name)
+    if not template:
+        available = _template_registry.get_template_names()
+        raise ValueError(
+            f"Template '{template_name}' not found. Available: {available}"
+        )
 
-    custom_type = available_custom_types[template.base_custom_type_name]
-
-    # Get the base_type to determine which ResourceDefinition class to use
-    base_type = custom_type.base_type
-    if base_type not in RESOURCE_TYPE_MAP:
-        raise ValueError(f"Unknown base type: {base_type}")
-
-    definition_class = RESOURCE_TYPE_MAP[base_type]["definition"]
+    # Check required overrides
+    missing_required = [
+        field for field in template.required_overrides if field not in overrides
+    ]
+    if missing_required:
+        raise ValueError(f"Missing required fields: {missing_required}")
 
     # Start with template defaults
-    resource_data = template.defaults.copy()
+    resource_data = template.default_values.copy()
+
+    # Add resource name and type info
+    resource_data["resource_name"] = resource_name
+    resource_data["base_type"] = template.base_type
+    if template.resource_class:
+        resource_data["resource_class"] = template.resource_class
 
     # Apply user overrides
-    resource_data.update(request.overrides)
+    resource_data.update(overrides)
 
-    # Set required fields if not already provided
-    if request.resource_name:
-        resource_data["resource_name"] = request.resource_name
+    if template.base_type not in RESOURCE_TYPE_MAP:
+        raise ValueError(f"Unknown base type: {template.base_type}")
 
-    # Ensure resource_class points to the custom type
-    resource_data["resource_class"] = template.base_custom_type_name
+    definition_class = RESOURCE_TYPE_MAP[template.base_type]["definition"]
 
-    # Ensure base_type matches the custom type
-    resource_data["base_type"] = base_type
-
-    # Create and return the ResourceDefinition instance
+    # Create and return the resource
     return definition_class.model_validate(resource_data)
 
 
-def validate_template(
-    template: ResourceTemplate, available_custom_types: dict[str, CustomResourceTypes]
-) -> TemplateValidationResult:
+def add_template(template: ResourceTemplate) -> None:
     """
-    Validate that a template is properly configured.
+    Add a new template dynamically.
 
-    Args:
-        template: The ResourceTemplate to validate
-        available_custom_types: dict mapping custom type names to CustomResourceType instances
-
-    Returns:
-        TemplateValidationResult with validation status and any errors
+    This could be enhanced to write to template files for persistence.
     """
-    errors = []
-    warnings = []
+    _template_registry.add_template(template)
 
-    # Check if referenced custom type exists
-    if template.base_custom_type_name not in available_custom_types:
-        errors.append(
-            f"Template references unknown custom type: {template.base_custom_type_name}"
-        )
-        return TemplateValidationResult(
-            is_valid=False, errors=errors, warnings=warnings
-        )
 
-    custom_type = available_custom_types[template.base_custom_type_name]
+def validate_resource_against_template(
+    resource: ResourceDefinitions, template_name: str
+) -> bool:
+    """Validate that a resource matches a template's expectations."""
+    template = _template_registry.get(template_name)
+    if not template:
+        return False
 
-    # Check if base_type is supported
-    if custom_type.base_type not in RESOURCE_TYPE_MAP:
-        errors.append(f"Custom type has unsupported base_type: {custom_type.base_type}")
+    # Basic type checking
+    if resource.base_type != template.base_type:
+        return False
 
-    # Try to create a minimal ResourceDefinition to check if defaults are valid
-    try:
-        definition_class = RESOURCE_TYPE_MAP[custom_type.base_type]["definition"]
-        test_data = template.defaults.copy()
-        test_data.update(
-            {
-                "resource_name": "test_validation",
-                "resource_class": template.base_custom_type_name,
-                "base_type": custom_type.base_type,
-            }
-        )
-        definition_class.model_validate(test_data)
-    except Exception as e:
-        errors.append(f"Template defaults are invalid: {e!s}")
+    if (
+        template.resource_class
+        and getattr(resource, "resource_class", None) != template.resource_class
+    ):
+        return False
 
-    return TemplateValidationResult(
-        is_valid=len(errors) == 0, errors=errors, warnings=warnings
-    )
+    return True
+
+
+# Convenience functions for easy access to templates
+def get_all_templates() -> dict[str, ResourceTemplate]:
+    """Get all available templates as a dictionary."""
+    return _template_registry.get_all_templates()
+
+
+def get_template_names() -> list[str]:
+    """Get list of all available template names."""
+    return _template_registry.get_template_names()
+
+
+def get_templates_by_category() -> dict[str, list[str]]:
+    """Get templates organized by resource type."""
+    return _template_registry.get_templates_by_category()
+
+
+def get_templates_by_tags(tags: list[str]) -> list[str]:
+    """Get template names that match any of the given tags."""
+    return _template_registry.get_templates_by_tags(tags)
+
+
+def get_template_info(template_name: str) -> Optional[dict[str, Any]]:
+    """Get detailed information about a template."""
+    template = _template_registry.get(template_name)
+    if not template:
+        return None
+
+    return {
+        "name": template.template_name,
+        "display_name": template.display_name,
+        "description": template.description,
+        "base_type": template.base_type.value,
+        "resource_class": template.resource_class,
+        "default_values": template.default_values,
+        "required_overrides": template.required_overrides,
+        "source": template.source.value,
+        "tags": template.tags,
+    }
+
+
+def list_templates(**filters) -> list[ResourceTemplate]:
+    """list available templates with optional filtering."""
+    return _template_registry.list_templates(**filters)
+
+
+# Auto-registration helper (used internally by template definition files)
+def _auto_register_template(template: ResourceTemplate) -> None:
+    """Internal function for auto-registering templates when modules are imported."""
+    _template_registry._auto_register(template)
