@@ -24,7 +24,7 @@ Configuration for an Event Client.
 | Name                                     | Type                         | Default            | Description                        | Example            |
 |------------------------------------------|------------------------------|--------------------|------------------------------------|--------------------|
 | `EVENT_CLIENT_NAME`                      | `string` \| `NoneType`       | `null`             | The name of the event client.      | `null`             |
-| `EVENT_SERVER_URL` \| `EVENT_SERVER_URL` | `string` \| `NoneType`       | `null`             | The URL of the event server.       | `null`             |
+| `EVENT_SERVER_URL` \| `EVENT_SERVER_URL` | `AnyUrl` \| `NoneType`       | `null`             | The URL of the event server.       | `null`             |
 | `EVENT_CLIENT_LOG_LEVEL`                 | `integer` \| `EventLogLevel` | `20`               | The log level of the event client. | `20`               |
 | `EVENT_CLIENT_LOG_DIR`                   | `string` \| `Path`           | `"~/.madsci/logs"` | The directory to store logs in.    | `"~/.madsci/logs"` |
 
