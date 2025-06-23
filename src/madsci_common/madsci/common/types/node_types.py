@@ -66,7 +66,7 @@ class NodeConfig(
     update_node_files: bool = Field(
         title="Update Node Files",
         description="Whether to update the node definition and info files on startup. If set to False, the node will not update the files even if they are out of date.",
-        default=False,
+        default=True,
     )
     status_update_interval: Optional[float] = Field(
         title="Status Update Interval",

@@ -224,18 +224,13 @@ def create_experiment_server(  # noqa: C901, PLR0915
 
     return app
 
-from urllib.parse import urlparse
 if __name__ == "__main__":
     experiment_manager_settings = ExperimentManagerSettings()
     app = create_experiment_server(
         experiment_manager_settings=experiment_manager_settings,
     )
-    parsed_url = urlparse(str(experiment_manager_settings.experiment_server_url))
-    host = parsed_url.hostname
-    port = parsed_url.port
     uvicorn.run(
         app,
-        # host=experiment_manager_settings.experiment_server_url.host,
-        # port=experiment_manager_settings.experiment_server_url.port,
-        host=host, port=port
+        host=experiment_manager_settings.experiment_server_url.host,
+        port=experiment_manager_settings.experiment_server_url.port,
     )

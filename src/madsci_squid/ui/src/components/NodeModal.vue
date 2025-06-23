@@ -336,7 +336,7 @@ async function send_wf(action: any) {
   console.log(urls)
   console.log(urls.value)
   console.log(urls.value.workcell_manager)
-  fetch(urls.value.workcell_server_url.concat('workflow'), {
+  fetch(urls.value.workcell_manager.concat('workflow'), {
     method: "POST",
     body: formData
   });
