@@ -137,7 +137,7 @@ class EventClientConfig(
         description="The name of the event client.",
         default=None,
     )
-    event_server_url: Optional[str] = Field(
+    event_server_url: Optional[AnyUrl] = Field(
         title="Event Server URL",
         description="The URL of the event server.",
         default=None,
