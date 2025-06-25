@@ -134,3 +134,26 @@ def test_remove_with_descendants(session: SQLModelSession) -> None:
     # * deleted resource2 is in history
     assert len(resource2_history) == 2
     session.close()
+
+
+def test_recursive_parent_relationship_fails(session: SQLModelSession) -> None:
+    """Test that creating a recursive parent relationship raises a ValueError."""
+    resource1 = ResourceTable(resource_name="resource1")
+    resource2 = ResourceTable(resource_name="resource2", parent=resource1)
+    session.add(resource1)
+    session.add(resource2)
+    session.commit()
+
+    # Attempt to create a cycle: set resource1's parent to resource2
+    resource1.parent = resource2
+    session.add(resource1)
+    with pytest.raises(ValueError, match="Recursive parent relationship detected"):
+        session.commit()
+    session.rollback()
+
+    # Also test direct self-parenting
+    resource1.parent = resource1
+    session.add(resource1)
+    with pytest.raises(ValueError, match="Recursive parent relationship detected"):
+        session.commit()
+    session.rollback()

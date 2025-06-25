@@ -22,6 +22,8 @@ class PlateReaderInterface:
 
     status_code: int = 0
     device_number: int = 0
+    config: PlateReaderConfig = PlateReaderConfig()
+    config_model = PlateReaderConfig
 
     def __init__(
         self, device_number: int = 0, logger: Optional[EventClient] = None

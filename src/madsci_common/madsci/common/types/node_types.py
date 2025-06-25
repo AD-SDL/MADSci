@@ -87,6 +87,7 @@ class RestNodeConfig(NodeConfig):
         title="Node URL",
         description="The URL used to communicate with the node. This is the base URL for the REST API.",
         default=AnyUrl("http://127.0.0.1:2000"),
+        alias="node_url",  # * Don't double prefix
     )
     uvicorn_kwargs: dict[str, Any] = Field(
         title="Uvicorn Configuration",
