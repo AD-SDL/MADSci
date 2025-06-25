@@ -42,7 +42,8 @@ class LiquidHandlerNode(RestNode):
     """A fake liquid handler node module for testing."""
 
     liquid_handler: LiquidHandlerInterface = None
-    config = LiquidHandlerConfig()
+    config: LiquidHandlerConfig = LiquidHandlerConfig()
+    config_model = LiquidHandlerConfig
 
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""

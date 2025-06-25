@@ -1,11 +1,12 @@
 workcell_name: Example Workcell
 manager_type: workcell_manager
 workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
-description: An example workcell, consisiting of a (fake) liquid handler, a (fake) plate reader, and a (fake) robot arm.
+description: An example workcell, consisiting of a (fake) liquid handler, a (fake)
+  plate reader, and a (fake) robot arm.
 nodes:
-  liquidhandler_1: http://localhost:2000
-  platereader_1: http://localhost:2002
-  robotarm_1: http://localhost:2001
+  liquidhandler_1: http://localhost:2000/
+  robotarm_1: http://localhost:2001/
+  platereader_1: http://localhost:2002/
 locations:
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
@@ -28,7 +29,6 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JTV7FD6HXW3XTFNYJ52GJKSR
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
@@ -50,4 +50,3 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JTV7FD8XKV1NY0FJ2BQF2THR
