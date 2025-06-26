@@ -1,14 +1,14 @@
 """REST API and Server for the lab Manager."""
 
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from madsci.client.event_client import EventClient
-from madsci.common.ownership import ownership_context
+from madsci.common.ownership import global_ownership_info
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.lab_types import LabDefinition, LabManagerSettings
 
@@ -33,27 +33,16 @@ def create_lab_server(
             lab_definition = LabDefinition()
         logger.log_info(f"Writing to lab definition file: {lab_def_path}")
         lab_definition.to_yaml(lab_def_path)
-    with ownership_context(
-        manager_id=lab_definition.lab_id,
-        lab_id=lab_definition.lab_id,
-    ):
-        logger = EventClient(
-            name=f"lab_manager.{lab_definition.name}",
-        )
-        logger.log_info(lab_definition)
-        context = context or MadsciContext()
-        logger.log_info(context)
+    global_ownership_info.manager_id = lab_definition.lab_id
+    global_ownership_info.lab_id = lab_definition.lab_id
+    logger = EventClient(
+        name=f"lab_manager.{lab_definition.name}",
+    )
+    logger.log_info(lab_definition)
+    context = context or MadsciContext()
+    logger.log_info(context)
 
     app = FastAPI()
-
-    @app.middleware("http")
-    async def ownership_middleware(request: Request, call_next: Callable) -> Response:
-        """Middleware to set ownership context for each request."""
-        with ownership_context(
-            manager_id=lab_definition.lab_id,
-            lab_id=lab_definition.lab_id,
-        ):
-            return await call_next(request)
 
     @app.get("/context")
     async def get_context() -> MadsciContext:
