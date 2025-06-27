@@ -26,7 +26,6 @@ from madsci.common.types.resource_types import (
 from madsci.common.types.resource_types.definitions import (
     ResourceDefinitions,
 )
-from madsci.common.types.resource_types.resource_enums import TemplateSource
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
     ResourceTable,
@@ -856,21 +855,21 @@ class ResourceInterface:
         template_name: str,
         description: str = "",
         required_overrides: Optional[list[str]] = None,
-        source: TemplateSource = TemplateSource.SYSTEM,
+        source: str = "system",
         tags: Optional[list[str]] = None,
         created_by: Optional[str] = None,
         version: str = "1.0.0",
         parent_session: Optional[Session] = None,
     ) -> ResourceDataModels:
         """
-        Create a template from a regular resource.
+        Create a template from a resource.
 
         Args:
             resource (ResourceDataModels): The resource to use as a template.
             template_name (str): Unique name for the template.
             description (str): Description of what this template creates.
             required_overrides (Optional[list[str]]): Fields that must be provided when using template.
-            source (TemplateSource): Source of the template.
+            source (str): Source of the template.
             tags (Optional[list[str]]): Tags for categorization.
             created_by (Optional[str]): Creator identifier.
             version (str): Template version.
@@ -905,7 +904,7 @@ class ResourceInterface:
                     "template_name": template_name,
                     "description": description,
                     "required_overrides": required_overrides or [],
-                    "source": source,
+                    "source": source.lower(),
                     "tags": tags or [],
                     "created_by": created_by,
                     "version": version,
@@ -933,7 +932,7 @@ class ResourceInterface:
         parent_session: Optional[Session] = None,
     ) -> Optional[ResourceDataModels]:
         """
-        Get a template by name, returned as a regular resource.
+        Get a template by name, returned as a resource.
 
         Args:
             template_name (str): Name of the template to retrieve.
@@ -1061,17 +1060,17 @@ class ResourceInterface:
 
     def list_templates(
         self,
-        source: Optional[TemplateSource] = None,
+        source: Optional[str] = None,
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
         created_by: Optional[str] = None,
         parent_session: Optional[Session] = None,
     ) -> list[ResourceDataModels]:
         """
-        List templates with optional filtering, returned as regular resources.
+        List templates with optional filtering, returned as resources.
 
         Args:
-            source (Optional[TemplateSource]): Filter by template source.
+            source (Optional[str]): Filter by template source.
             base_type (Optional[str]): Filter by base resource type.
             tags (Optional[list[str]]): Filter by templates that have any of these tags.
             created_by (Optional[str]): Filter by creator.
@@ -1086,7 +1085,9 @@ class ResourceInterface:
 
                 # Apply simple filters first
                 if source:
-                    statement = statement.where(ResourceTemplateTable.source == source)
+                    statement = statement.where(
+                        ResourceTemplateTable.source == source.lower()
+                    )
                 if base_type:
                     statement = statement.where(
                         ResourceTemplateTable.base_type == base_type
@@ -1149,17 +1150,17 @@ class ResourceInterface:
         parent_session: Optional[Session] = None,
     ) -> ResourceDataModels:
         """
-        Create a resource from a template and add it to the regular resource table.
+        Create a resource from a template and add it to the resource table.
 
         Args:
             template_name (str): Name of the template to use.
             resource_name (str): Name for the new resource.
             overrides (Optional[dict]): Values to override template defaults.
-            add_to_database (bool): Whether to add the resource to the regular resource table.
+            add_to_database (bool): Whether to add the resource to the resource table.
             parent_session (Optional[Session]): Optional parent session.
 
         Returns:
-            ResourceDataModels: The created resource (stored in regular resource table).
+            ResourceDataModels: The created resource (stored in resource table).
         """
         try:
             with self.get_session(parent_session) as session:
@@ -1207,11 +1208,11 @@ class ResourceInterface:
                 # Add to database if requested
                 if add_to_database:
                     self.logger.info(
-                        f"Adding resource '{resource_name}' to regular resource table..."
+                        f"Adding resource '{resource_name}' to resource table..."
                     )
                     resource = self.add_resource(resource, parent_session=session)
                     self.logger.info(
-                        f"✅ Resource '{resource_name}' stored in regular resource table with ID: {resource.resource_id}"
+                        f"✅ Resource '{resource_name}' stored in resource table with ID: {resource.resource_id}"
                     )
                 else:
                     self.logger.info(
