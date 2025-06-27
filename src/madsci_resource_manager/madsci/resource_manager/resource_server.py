@@ -1,7 +1,7 @@
 """Fast API Server for Resources"""
 
 import logging
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
@@ -21,11 +21,15 @@ from madsci.common.types.resource_types.definitions import (
     ResourceManagerDefinition,
 )
 from madsci.common.types.resource_types.server_types import (
+    CreateResourceFromTemplateBody,
     PushResourceBody,
     RemoveChildBody,
     ResourceGetQuery,
     ResourceHistoryGetQuery,
     SetChildBody,
+    TemplateCreateBody,
+    TemplateGetQuery,
+    TemplateUpdateBody,
 )
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_tables import ResourceHistoryTable
@@ -238,6 +242,143 @@ def create_resource_server(  # noqa: C901, PLR0915
         except Exception as e:
             logger.error(e)
             raise e
+
+    @app.post("/templates")
+    async def create_template(body: TemplateCreateBody) -> ResourceDataModels:
+        """Create a new resource template from a resource."""
+        try:
+            return resource_interface.create_template(
+                resource=body.resource,
+                template_name=body.template_name,
+                description=body.description,
+                required_overrides=body.required_overrides,
+                source=body.source.lower() if body.source else "system",
+                tags=body.tags,
+                created_by=body.created_by,
+                version=body.version,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/templates/query")
+    async def list_templates(query: TemplateGetQuery) -> list[ResourceDataModels]:
+        """List templates with optional filtering."""
+        try:
+            return resource_interface.list_templates(
+                source=query.source.lower() if query.source else None,
+                base_type=query.base_type,
+                tags=query.tags,
+                created_by=query.created_by,
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/templates")
+    async def list_templates_simple() -> list[ResourceDataModels]:
+        """List all templates (simple endpoint without filtering)."""
+        try:
+            return resource_interface.list_templates()
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/templates/categories")
+    async def get_templates_by_category() -> dict[str, list[str]]:
+        """Get templates organized by base_type category."""
+        try:
+            logger.info("Fetching templates by category")
+            return resource_interface.get_templates_by_category()
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/templates/{template_name}")
+    async def get_template(template_name: str) -> ResourceDataModels:
+        """Get a template by name."""
+        try:
+            template = resource_interface.get_template(template_name)
+            if not template:
+                raise HTTPException(
+                    status_code=404, detail=f"Template '{template_name}' not found"
+                )
+            return template
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/templates/{template_name}/info")
+    async def get_template_info(template_name: str) -> dict[str, Any]:
+        """Get detailed template metadata."""
+        try:
+            template_info = resource_interface.get_template_info(template_name)
+            if not template_info:
+                raise HTTPException(
+                    status_code=404, detail=f"Template '{template_name}' not found"
+                )
+            return template_info
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.put("/templates/{template_name}")
+    async def update_template(
+        template_name: str, body: TemplateUpdateBody
+    ) -> ResourceDataModels:
+        """Update an existing template."""
+        try:
+            # Apply .lower() to source if it's being updated
+            updates = body.updates.copy()
+            if updates.get("source"):
+                updates["source"] = updates["source"].lower()
+
+            return resource_interface.update_template(template_name, updates)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.delete("/templates/{template_name}")
+    async def delete_template(template_name: str) -> dict[str, str]:
+        """Delete a template from the database."""
+        try:
+            deleted = resource_interface.delete_template(template_name)
+            if not deleted:
+                raise HTTPException(
+                    status_code=404, detail=f"Template '{template_name}' not found"
+                )
+            return {"message": f"Template '{template_name}' deleted successfully"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.post("/templates/{template_name}/create_resource")
+    async def create_resource_from_template(
+        template_name: str, body: CreateResourceFromTemplateBody
+    ) -> ResourceDataModels:
+        """Create a resource from a template."""
+        try:
+            return resource_interface.create_resource_from_template(
+                template_name=template_name,
+                resource_name=body.resource_name,
+                overrides=body.overrides,
+                add_to_database=body.add_to_database,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.post("/resource/{resource_id}/push")
     async def push(
@@ -513,6 +654,7 @@ if __name__ == "__main__":
     import uvicorn
 
     resource_manager_definition = ResourceManagerDefinition.load_model()
+    resource_manager_definition.db_url = "postgresql://rpl:rpl@localhost:5432/resources"
     app = create_resource_server(
         resource_manager_definition=resource_manager_definition,
     )
