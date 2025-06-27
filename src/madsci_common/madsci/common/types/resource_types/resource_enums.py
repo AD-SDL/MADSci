@@ -56,3 +56,13 @@ class ResourceTypeEnum(str, Enum):
     grid = "grid"
     voxel_grid = "voxel_grid"
     pool = "pool"
+
+
+class TemplateSource(str, Enum):
+    """Source of a resource template."""
+
+    NODE = "node"
+    MANAGER = "manager"
+    EXPERIMENT = "experiment"
+    SYSTEM = "system"
+    USER = "user"
