@@ -521,7 +521,7 @@ def create_resource_server(  # noqa: C901, PLR0915
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

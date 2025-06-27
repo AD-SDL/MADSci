@@ -89,7 +89,18 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 )
         yield
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(
+        lifespan=lifespan,
+        title=workcell.workcell_name,
+        description=workcell.description,
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/")
     @app.get("/info")
@@ -139,7 +150,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             # TODO: Save the workcell definition to the YAML
         return state_handler.get_node(node_name)
 
-    @app.get("/admin/{command}")
+    @app.post("/admin/{command}")
     def send_admin_command(command: str) -> list:
         """Send an admin command to all capable nodes."""
         responses = []
@@ -150,7 +161,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 responses.append(response)
         return responses
 
-    @app.get("/admin/{command}/{node}")
+    @app.post("/admin/{command}/{node}")
     def send_admin_command_to_node(command: str, node: str) -> list:
         """Send admin command to a node."""
         responses = []
@@ -387,14 +398,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
             location.resource_id = resource_id
             state_handler.set_location(location)
         return state_handler.get_location(location_id)
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
     return app
 

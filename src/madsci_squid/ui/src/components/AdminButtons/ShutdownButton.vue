@@ -22,7 +22,7 @@
 </template>
 
 <script lang="ts" setup>
-    import { main_url } from "@/store";
+    import { urls } from "@/store";
 import { ref, watchEffect } from 'vue';
 
     const props = defineProps<{
@@ -37,11 +37,11 @@ import { ref, watchEffect } from 'vue';
     // Format shutdown url
     watchEffect(() => {
         if (props.module) {
-            shutdown_url.value = main_url.value.concat('/admin/shutdown/'.concat(props.module))
+            shutdown_url.value = urls.value.workcell_server_url.concat('admin/shutdown/'.concat(props.module))
             hoverText.value = "Shutdown Module"
         }
         else {
-            shutdown_url.value = main_url.value.concat('/admin/shutdown')
+            shutdown_url.value = urls.value.workcell_server_url.concat('admin/shutdown')
             hoverText.value = "Shutdown WEI Server and Dashboard"
         }
     })
