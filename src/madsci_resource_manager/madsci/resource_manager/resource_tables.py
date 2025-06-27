@@ -10,7 +10,6 @@ from madsci.common.types.resource_types import (
     ResourceDataModels,
     ResourceTypeEnum,
 )
-from madsci.common.types.resource_types.resource_enums import TemplateSource
 from pydantic.config import ConfigDict
 from pydantic.types import Decimal
 from sqlalchemy import event
@@ -333,8 +332,7 @@ class ResourceTemplateTable(ResourceTableBase, table=True):
         title="Template Source",
         description="The source/origin of this template (SYSTEM, NODE, EXPERIMENT, etc.).",
         nullable=False,
-        sa_type=Enum(TemplateSource),
-        default=TemplateSource.SYSTEM,
+        default="system",
     )
     tags: list[str] = Field(
         title="Tags",
