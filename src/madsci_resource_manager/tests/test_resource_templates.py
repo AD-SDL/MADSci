@@ -5,239 +5,353 @@ Templates are automatically available when imported - no registration needed!
 """
 
 # flake8: noqa
-# Import templates and functions from your actual path
-from madsci.common.types.resource_types.templates import (
-    create_resource_from_template,
-    get_all_templates,
-    get_template_info,
-    get_template_names,
-    get_templates_by_category,
-    get_templates_by_tags,
-    list_templates,
+"""
+Updated tests for simplified template interface.
+Templates are now regular resources - much simpler!
+"""
+from madsci.common.types.resource_types import Container
+from madsci.common.types.resource_types.resource_enums import (
+    ResourceTypeEnum,
+    ContainerTypeEnum,
 )
+from madsci.resource_manager.resource_tables import TemplateSource
+from madsci.resource_manager.resource_interface import ResourceInterface
 
-# Import template definitions from your actual module - this auto-registers all templates
 
+def test_template_interface():
+    """Basic tests for template management functionality."""
+    print("🧪 Starting Simplified Template Interface Tests...")
 
-def example1_basic_usage():
-    """Example 1: Templates are automatically available."""
-    print("=" * 60)
-    print("EXAMPLE 1: Templates Available Immediately")
-    print("=" * 60)
+    # Initialize interface
+    interface = ResourceInterface(url="postgresql://rpl:rpl@localhost:5432/resources")
 
-    # No registration needed! Templates are available immediately
-    all_templates = get_all_templates()
-    print(f"Available templates: {len(all_templates)}")
+    # Test data - create a regular resource to use as template
 
-    # Show template names
-    template_names = get_template_names()
-    print("Template names:")
-    for name in template_names[:8]:  # Show first 8
-        print(f"  - {name}")
+    # Create a sample plate resource
+    plate_resource = Container(
+        resource_name="SamplePlate96Well",
+        base_type=ContainerTypeEnum.container,
+        resource_class="Plate96Well",
+        rows=8,
+        columns=12,
+        capacity=96,
+        attributes={"well_volume": 200, "material": "polystyrene"},
+    )
 
-    # Show by category
-    categories = get_templates_by_category()
-    print("\nTemplates by category:")
-    for category, names in categories.items():
-        print(f"  {category}: {len(names)} templates")
-
-    print("\n" + "-" * 40)
-    print("Creating resources:")
-    print("-" * 40)
-
-    # Create a PCR machine - simple!
+    # Test 1: Create Template from Resource
+    print("\nTesting create_template()...")
     try:
-        pcr_machine = create_resource_from_template(
-            template_name="pcr_biorad_cfx96",
-            resource_name="Lab_PCR_Alpha",
-            # Add additional custom attributes to existing list
-            custom_attributes=[
-                {"attribute_name": "serial_number", "value": "CFX96-001"}
-            ],
-            location="Lab B",
+        template_resource = interface.create_template(
+            resource=plate_resource,
+            template_name="test_plate_template",
+            description="A template for creating 96-well plates for testing",
+            required_overrides=["resource_name"],
+            source=TemplateSource.SYSTEM,
+            tags=["plate", "96-well", "testing"],
+            created_by="test_system",
         )
-        print(f"✓ Created PCR machine: {pcr_machine.resource_name}")
+        # print(template_resource)
+        print(f"  Created template: {template_resource.resource_name}")
+        print(f"   Base type: {template_resource.base_type}")
+        print(f"   Resource class: {template_resource.resource_class}")
+        print(
+            f"   Rows: {template_resource.rows}, Columns: {template_resource.columns}"
+        )
+        print(f"   Capacity: {template_resource.capacity}")
+        print(f"   Attributes: {template_resource.attributes}")
+    except Exception as e:
+        print(f"❌ Failed to create template: {e}")
+
+    # Test 2: Get Template
+    print("\nTesting get_template()...")
+    try:
+        retrieved_template = interface.get_template("test_plate_template")
+        # print(retrieved_template)
+        if retrieved_template:
+            print(f"  Retrieved template: {retrieved_template.resource_name}")
+            print(f"   Type: {type(retrieved_template).__name__}")
+            print(
+                f"   Rows: {retrieved_template.rows}, Columns: {retrieved_template.columns}"
+            )
+            print(f"   Resource ID: {retrieved_template.resource_id}")
+        else:
+            print("❌ Template not found")
+    except Exception as e:
+        print(f"❌ Failed to get template: {e}")
+
+    # Test 3: Get Template Info (metadata)
+    print("\nTesting get_template_info()...")
+    try:
+        template_info = interface.get_template_info("test_plate_template")
+        if template_info:
+            print(f"✅ Template metadata:")
+            print(f"   Description: {template_info['description']}")
+            print(f"   Required overrides: {template_info['required_overrides']}")
+            print(f"   Source: {template_info['source']}")
+            print(f"   Tags: {template_info['tags']}")
+            print(f"   Created by: {template_info['created_by']}")
+            print(
+                f"   Default values keys: {list(template_info['default_values'].keys())}"
+            )
+        else:
+            print("❌ Template info not found")
+            return False
+    except Exception as e:
+        print(f"❌ Failed to get template info: {e}")
+        return False
+
+    # Test 4: List Templates
+    print("\nTesting list_templates()...")
+    try:
+        all_templates = interface.list_templates()
+        print(f"Found {len(all_templates)} templates")
+        for template in all_templates:
+            print(f"   - {template.resource_name} ({template.base_type})")
+
+        # Test filtering by source
+        system_templates = interface.list_templates(source=TemplateSource.SYSTEM)
+        print(f"Found {len(system_templates)} SYSTEM templates")
+
+        # Test filtering by tags
+        plate_templates = interface.list_templates(tags=["plate"])
+        print(f"Found {len(plate_templates)} templates with 'plate' tag")
 
     except Exception as e:
-        print(f"✗ Error creating PCR machine: {e}")
+        print(f"Failed to list templates: {e}")
 
-    # Create a microplate
+    # Test 5: Update Template
+    print("\nTesting update_template()...")
     try:
-        plate = create_resource_from_template(
-            template_name="microplate_96_well_standard", resource_name="Assay_Plate_001"
+        updated_template = interface.update_template(
+            "test_plate_template",
+            {
+                "description": "Updated description for 96-well plate template",
+                "tags": ["plate", "96-well", "testing", "updated"],
+                "capacity": 100,  # Update a resource field too
+            },
         )
-        print(f"✓ Created microplate: {plate.resource_name}")
+        print(f"   Updated template: {updated_template.resource_name}")
+        print(f"   New capacity: {updated_template.capacity}")
+
+        # Check the metadata was updated too
+        updated_info = interface.get_template_info("test_plate_template")
+        print(f"   New description: {updated_info['description']}")
+        print(f"   New tags: {updated_info['tags']}")
 
     except Exception as e:
-        print(f"✗ Error creating microplate: {e}")
+        print(f"Failed to update template: {e}")
 
-
-def example2_template_discovery():
-    """Example 2: Discovering available templates."""
-    print("\n" + "=" * 60)
-    print("EXAMPLE 2: Template Discovery")
-    print("=" * 60)
-
-    # Find PCR-related templates
-    pcr_templates = get_templates_by_tags(["pcr"])
-    print(f"PCR templates: {pcr_templates}")
-
-    # Find lab equipment
-    equipment_templates = get_templates_by_tags(["lab_equipment"])
-    print(f"Lab equipment: {equipment_templates}")
-
-    # Find gripper templates
-    gripper_templates = get_templates_by_tags(["gripper"])
-    print(f"Gripper templates: {gripper_templates}")
-
-    # Find pool resources
-    pool_templates = get_templates_by_tags(["pool"])
-    print(f"Pool templates: {pool_templates}")
-
-    # Find by base type
-    from madsci.common.types.resource_types.resource_enums import ResourceTypeEnum
-
-    pool_resources = list_templates(base_type=ResourceTypeEnum.pool)
-    print(f"Pool resource templates: {len(pool_resources)}")
-
-    print("\n" + "-" * 40)
-    print("Template details:")
-    print("-" * 40)
-
-    # Get detailed info about a template
-    pcr_info = get_template_info("pcr_biorad_cfx96")
-    if pcr_info:
-        print(f"Template: {pcr_info['display_name']}")
-        print(f"Description: {pcr_info['description']}")
-        print(f"Required overrides: {pcr_info['required_overrides']}")
-        print(f"Tags: {pcr_info['tags']}")
-
-
-def example3_template_inspection():
-    """Example 3: Inspecting what's available."""
-    print("\n" + "=" * 60)
-    print("EXAMPLE 3: Template Inspection")
-    print("=" * 60)
-
-    # Get all templates as a dictionary
-    all_templates = get_all_templates()
-    print(f"Total templates available: {len(all_templates)}")
-
-    print("\nTemplate overview:")
-    for name, template in list(all_templates.items())[:5]:  # Show first 5
-        print(f"  {name}:")
-        print(f"    Type: {template.base_type.value}")
-        print(f"    Source: {template.source.value}")
-        print(f"    Required: {template.required_overrides}")
-
-    # Show templates by category
-    print("\nBy resource type:")
-    categories = get_templates_by_category()
-    for resource_type, names in categories.items():
-        print(f"  {resource_type}: {names}")
-
-
-def example4_practical_workflow():
-    """Example 4: Practical workflow - creating resources that work."""
-    print("\n" + "=" * 60)
-    print("EXAMPLE 4: Practical Workflow")
-    print("=" * 60)
-
-    print("Setting up lab experiment with working templates...")
-
-    resources_created = []
-
-    # 1. Create a basic microplate
+    # Test 6: Create Resource from Template
+    print("\nTesting create_resource_from_template()...")
     try:
-        plate = create_resource_from_template(
-            "microplate_96_well_standard", "Assay_Plate_001"
+        # Test with valid overrides
+        new_resource = interface.create_resource_from_template(
+            template_name="test_plate_template",
+            resource_name="TestPlate001",
+            overrides={
+                "owner": {"node": "test_node", "experiment": "test_exp"},
+                "attributes": {"batch_number": "B001", "expiry_date": "2025-12-31"},
+                "capacity": 100,  # Override capacity
+            },
         )
-        resources_created.append(plate)
-        print(f"✓ Microplate: {plate.resource_name}")
-    except Exception as e:
-        print(f"✗ Microplate failed: {e}")
+        print(f"   Created resource: {new_resource.resource_name}")
+        print(f"   Resource ID: {new_resource.resource_id}")
+        print(f"   Type: {type(new_resource).__name__}")
+        print(f"   Base type: {new_resource.base_type}")
+        print(f"   Rows: {new_resource.rows}, Columns: {new_resource.columns}")
+        print(f"   Capacity: {new_resource.capacity}")
+        print(f"   Attributes: {new_resource.attributes}")
 
-    # 2. Create water pool
-    try:
-        water_pool = create_resource_from_template(
-            "water_nuclease_free_pool", "Water_Pool_A", total_quantity=1000.0
-        )
-        resources_created.append(water_pool)
-        print(f"✓ Water pool: {water_pool.resource_name}")
-    except Exception as e:
-        print(f"✗ Water pool failed: {e}")
-
-    # 3. Create tip pool
-    try:
-        tip_pool = create_resource_from_template(
-            "pipette_tips_p200_pool", "Tips_Pool_A", total_quantity=5000
-        )
-        resources_created.append(tip_pool)
-        print(f"✓ Tip pool: {tip_pool.resource_name}")
-    except Exception as e:
-        print(f"✗ Tip pool failed: {e}")
-
-    print(f"\nCreated {len(resources_created)} resources")
-    print("💡 Templates working correctly!")
-
-
-def example5_error_handling():
-    """Example 5: Error handling."""
-    print("\n" + "=" * 60)
-    print("EXAMPLE 5: Error Handling")
-    print("=" * 60)
-
-    # Try with non-existent template
-    try:
-        resource = create_resource_from_template(
-            "nonexistent_template", "Test_Resource"
-        )
-        print("✗ Should have failed!")
-    except ValueError as e:
-        print(f"✓ Correctly caught bad template: {e}")
-
-    # Try without required fields
-    try:
-        water_pool = create_resource_from_template(
-            "water_nuclease_free_pool",
-            "Incomplete_Pool",
-            # Missing required total_quantity
-        )
-        print("✗ Should have failed!")
-    except ValueError as e:
-        print(f"✓ Correctly caught missing required field: {e}")
-
-
-def run_examples():
-    """Run all examples showing the simplified template system."""
-    print("MADSci Auto-Available Template System")
-    print("Templates automatically ready when imported!\n")
-
-    try:
-        example1_basic_usage()
-        example2_template_discovery()
-        example3_template_inspection()
-        example4_practical_workflow()
-        example5_error_handling()
-
-        print("\n" + "=" * 60)
-        print("SUCCESS! Auto-available template system! 🎉")
-        print("=" * 60)
-        print("Templates automatically available when imported")
-        print("No manual registration required")
-        print("Easy discovery with get_template_names(), get_templates_by_category()")
-        print("Simple create_resource_from_template(name, resource_name, **overrides)")
-        print("Complete template information available")
-        print("Includes grippers, pools, and all resource types")
-        print("Handles custom_attributes as list format")
+        # Verify it's different from template (different ID)
+        template = interface.get_template("test_plate_template")
+        print(f"   Template ID: {template.resource_id}")
+        print(f"   Resource ID: {new_resource.resource_id}")
+        print(f"   Different IDs: {template.resource_id != new_resource.resource_id}")
 
     except Exception as e:
-        print(f"\n✗ Error in examples: {e}")
-        import traceback
+        print(f"❌ Failed to create resource from template: {e}")
 
-        traceback.print_exc()
+    # Test 7: Get Templates by Category
+    print("\nTesting get_templates_by_category()...")
+    try:
+        categories = interface.get_templates_by_category()
+        print(f"✅ Template categories: {categories}")
+        for category, template_names in categories.items():
+            print(f"   {category}: {template_names}")
+    except Exception as e:
+        print(f"❌ Failed to get templates by category: {e}")
+
+    # Test 8: Get Templates by Tags
+    print("\nTesting get_templates_by_tags()...")
+    try:
+        plate_template_names = interface.get_templates_by_tags(["plate"])
+        print(f"✅ Templates with 'plate' tag: {plate_template_names}")
+
+        testing_template_names = interface.get_templates_by_tags(["testing", "updated"])
+        print(
+            f"✅ Templates with 'testing' or 'updated' tags: {testing_template_names}"
+        )
+    except Exception as e:
+        print(f"❌ Failed to get templates by tags: {e}")
+
+    # Test 9: Test Non-existent Template
+    print("\nTesting error handling...")
+    try:
+        non_existent = interface.get_template("this_template_does_not_exist")
+        if non_existent is None:
+            print("✅ Correctly returned None for non-existent template")
+        else:
+            print("❌ Should have returned None for non-existent template")
+
+        # Test creating resource from non-existent template
+        try:
+            interface.create_resource_from_template(
+                template_name="fake_template",
+                resource_name="TestResource",
+                add_to_database=False,
+            )
+            print("❌ Should have failed with non-existent template")
+        except ValueError as ve:
+            print(f"✅ Correctly caught non-existent template error: {ve}")
+
+    except Exception as e:
+        print(f"❌ Error handling test failed: {e}")
+    """
+    # Test 10: Delete Template
+    print("\n🔟 Testing delete_template()...")
+    try:
+        deleted = interface.delete_template("test_plate_template")
+        if deleted:
+            print("✅ Successfully deleted test template")
+
+            # Verify it's gone
+            retrieved = interface.get_template("test_plate_template")
+            if retrieved is None:
+                print("✅ Confirmed template was deleted")
+            else:
+                print("❌ Template still exists after deletion")
+        else:
+            print("❌ Delete returned False")
+
+        # Test deleting non-existent template
+        deleted_again = interface.delete_template("test_plate_template")
+        if not deleted_again:
+            print("✅ Correctly returned False for deleting non-existent template")
+        else:
+            print("❌ Should have returned False for non-existent template")
+
+    except Exception as e:
+        print(f"❌ Failed to delete template: {e}")
+
+    print("\n🎉 All simplified template interface tests passed!")
+    """
 
 
-# Run examples when script is executed
+def test_template_edge_cases():
+    """Test edge cases with the simplified approach."""
+    print("\n🔍 Testing Edge Cases...")
+
+    interface = ResourceInterface(url="postgresql://rpl:rpl@localhost:5432/resources")
+
+    # Test with minimal resource
+    from madsci.common.types.resource_types import Resource
+
+    minimal_resource = Resource(resource_name="MinimalResource")
+
+    print("\n🧪 Testing minimal resource template...")
+    try:
+        template = interface.create_template(
+            resource=minimal_resource,
+            template_name="minimal_test",
+            description="Minimal test template",
+        )
+        print(f"✅ Created minimal template: {template.resource_name}")
+        print(f"   Type: {type(template).__name__}")
+
+        # Create resource from minimal template
+        new_resource = interface.create_resource_from_template(
+            template_name="minimal_test",
+            resource_name="MinimalResourceCopy",
+            add_to_database=True,
+        )
+        print(
+            f"✅ Created resource from minimal template: {new_resource.resource_name}"
+        )
+        print(f"   Type: {type(new_resource).__name__}")
+
+        # Clean up
+        # interface.delete_template("minimal_test")
+        # print("✅ Cleaned up minimal template")
+
+    except Exception as e:
+        print(f"❌ Minimal template test failed: {e}")
+        return False
+
+    # Test template with complex attributes
+    print("\n🧪 Testing complex resource template...")
+    try:
+        complex_resource = Container(
+            resource_name="ComplexPlate",
+            base_type=ContainerTypeEnum.container,
+            rows=16,
+            columns=24,
+            capacity=384,
+            attributes={
+                "plate_type": "384-well",
+                "well_volume": 50,
+                "coating": "tissue_culture",
+                "sterile": True,
+                "lot_number": "LOT12345",
+                "specifications": {
+                    "bottom_type": "flat",
+                    "color": "clear",
+                    "lid_type": "standard",
+                },
+            },
+        )
+
+        template = interface.create_template(
+            resource=complex_resource,
+            template_name="complex_384_plate",
+            description="384-well plate with complex attributes",
+            required_overrides=["resource_name", "attributes.lot_number"],
+            tags=["plate", "384-well", "complex", "tissue-culture"],
+            source=TemplateSource.SYSTEM,
+        )
+
+        print(f"✅ Created complex template: {template.resource_name}")
+        print(f"   Attributes keys: {list(template.attributes.keys())}")
+
+        # Test creating from complex template
+        new_complex = interface.create_resource_from_template(
+            template_name="complex_384_plate",
+            resource_name="TestComplex001",
+            overrides={
+                "attributes": {
+                    **template.attributes,  # Keep existing attributes
+                    "lot_number": "LOT99999",  # Override required field
+                    "expiry_date": "2026-01-01",  # Add new field
+                }
+            },
+            add_to_database=True,
+        )
+
+        print(f"✅ Created complex resource: {new_complex.resource_name}")
+        print(f"   Lot number: {new_complex.attributes.get('lot_number')}")
+        print(f"   Expiry date: {new_complex.attributes.get('expiry_date')}")
+
+        # Clean up
+        # interface.delete_template("complex_384_plate")
+        # print("✅ Cleaned up complex template")
+
+    except Exception as e:
+        print(f"❌ Complex template test failed: {e}")
+        return False
+
+    print("✅ Edge case tests passed!")
+    return True
+
+
 if __name__ == "__main__":
-    run_examples()
+    test_template_interface()
+    test_template_edge_cases()
