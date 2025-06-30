@@ -41,13 +41,13 @@ const hoverText = ref('')
 // Format pause and resume urls
 watchEffect(() => {
     if (props.module) {
-        pause_url.value = urls.value.workcell_manager.concat('admin/pause/'.concat(props.module))
-        resume_url.value = urls.value.workcell_manager.value.concat('admin/resume/'.concat(props.module))
+        pause_url.value = urls.value.workcell_server_url.concat('admin/pause/'.concat(props.module))
+        resume_url.value = urls.value.workcell_server_url.concat('admin/resume/'.concat(props.module))
         hoverText.value = "Module"
     }
     else {
-        pause_url.value = urls.value.workcell_manager.value.concat('admin/pause')
-        resume_url.value = urls.value.workcell_manager.value.concat('admin/resume')
+        pause_url.value = urls.value.workcell_server_url.concat('admin/pause')
+        resume_url.value = urls.value.workcell_server_url.concat('admin/resume')
         hoverText.value = "Workcell"
     }
 })
