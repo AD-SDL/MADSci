@@ -1,11 +1,13 @@
 workcell_name: Example Workcell
 manager_type: workcell_manager
 workcell_id: 01JK7069DXAKAMWE0PDX6EY1PC
-description: An example workcell, consisiting of a (fake) liquid handler, a (fake) plate reader, and a (fake) robot arm.
+description: An example workcell, consisiting of a (fake) liquid handler, a (fake)
+  plate reader, and a (fake) robot arm.
 nodes:
-  liquidhandler_1: http://localhost:2000
-  platereader_1: http://localhost:2002
-  robotarm_1: http://localhost:2001
+  liquidhandler_1: http://localhost:2000/
+  platereader_1: http://localhost:2002/
+  robotarm_1: http://localhost:2001/
+  example_app: http://localhost:6000/
 locations:
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
@@ -28,7 +30,7 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JTV7FD6HXW3XTFNYJ52GJKSR
+    resource_type: ''
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
@@ -50,4 +52,24 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-  resource_id: 01JTV7FD8XKV1NY0FJ2BQF2THR
+    resource_type: ''
+config:
+  host: 127.0.0.1
+  port: 8013
+  workcells_directory: ~/.madsci/workcells
+  redis_host: localhost
+  redis_port: 6379
+  redis_password: null
+  event_client_config: null
+  scheduler_update_interval: 2.0
+  node_update_interval: 1.0
+  auto_start: true
+  clear_workflows: false
+  cold_start_delay: 0
+  scheduler: madsci.workcell_manager.schedulers.default_scheduler
+  data_server_url: null
+  resource_server_url: null
+  mongo_url: null
+  static_files_path: null
+  get_action_result_retries: 3
+workcell_directory: ~/.madsci/workcells/Example Workcell
