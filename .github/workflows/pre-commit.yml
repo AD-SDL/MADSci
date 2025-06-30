@@ -12,9 +12,11 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       name: Checkout code
-    - uses: actions/setup-python@v4
-      name: Setup Python
+    - name: Setup PDM
+      uses: pdm-project/setup-pdm@v3
       with:
         python-version: 3.9
+    - name: Install dependencies
+      run: pdm install
     - uses: pre-commit/action@v3.0.1
       name: Run Pre-Commit Checks

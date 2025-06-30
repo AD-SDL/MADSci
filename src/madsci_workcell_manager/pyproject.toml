@@ -1,6 +1,6 @@
 [project]
 name = "madsci.workcell_manager"
-version = "0.3.1"
+version = "0.4.3"
 description = "The Modular Autonomous Discovery for Science (MADSci) Workcell Manager."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},

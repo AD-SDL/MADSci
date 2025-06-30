@@ -37,15 +37,8 @@ class AbstractScheduler:
         self.state_handler = state_handler
         self.workcell_definition = workcell_definition
         self.running = True
-        self.logger = EventClient(
-            config=self.workcell_definition.config.event_client_config
-        )
-        if self.workcell_definition.config.resource_server_url is not None:
-            self.resource_client = ResourceClient(
-                url=self.workcell_definition.config.resource_server_url
-            )
-        else:
-            self.resource_client = None
+        self.logger = EventClient()
+        self.resource_client = ResourceClient()
 
     def run_iteration(self, workflows: list[Workflow]) -> dict[str, SchedulerMetadata]:
         """Run an iteration of the scheduler and return a mapping of workflow IDs to SchedulerMetadata"""

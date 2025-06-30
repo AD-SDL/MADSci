@@ -4,48 +4,81 @@ import json
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Callable, Optional
 
 import uvicorn
-from fastapi import FastAPI, Form, Response, UploadFile
+from fastapi import FastAPI, Form, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
+from madsci.client.event_client import EventClient
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
     upload_file_to_object_storage,
 )
+from madsci.common.ownership import ownership_context
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
+    DataManagerSettings,
     DataPoint,
-    ObjectStorageDefinition,
+    ObjectStorageSettings,
 )
 from minio import Minio
 from pymongo import MongoClient
 
 
 def create_data_server(  # noqa: C901, PLR0915
+    data_manager_settings: Optional[DataManagerSettings] = None,
     data_manager_definition: Optional[DataManagerDefinition] = None,
+    object_storage_settings: Optional[ObjectStorageSettings] = None,
     db_client: Optional[MongoClient] = None,
+    context: Optional[MadsciContext] = None,
 ) -> FastAPI:
     """Creates a Data Manager's REST server."""
+    logger = EventClient()
 
-    data_manager_definition = (
-        data_manager_definition or DataManagerDefinition.load_model()
-    )
-    if db_client is None:
-        db_client = MongoClient(data_manager_definition.db_url)
+    data_manager_settings = data_manager_settings or DataManagerSettings()
+    logger.log_info(data_manager_settings)
+    if not data_manager_definition:
+        def_path = Path(data_manager_settings.data_manager_definition).expanduser()
+        if def_path.exists():
+            data_manager_definition = DataManagerDefinition.from_yaml(
+                def_path,
+            )
+        else:
+            data_manager_definition = DataManagerDefinition()
+        logger.log_info(f"Writing to data manager definition file: {def_path}")
+        data_manager_definition.to_yaml(def_path)
 
-    # Initialize MinIO client if configuration is provided
-    minio_client = None
-    if data_manager_definition.minio_client_config:
-        minio_client = create_minio_client(data_manager_definition.minio_client_config)
+    with ownership_context(manager_id=data_manager_definition.data_manager_id):
+        logger = EventClient(
+            name=f"data_manager.{data_manager_definition.name}",
+        )
+        logger.log_info(data_manager_definition)
+        context = context or MadsciContext()
+        logger.log_info(context)
 
-    app = FastAPI()
-    datapoints_db = db_client["madsci_data"]
-    datapoints = datapoints_db["datapoints"]
-    datapoints.create_index("datapoint_id", unique=True, background=True)
+        if db_client is None:
+            db_client = MongoClient(data_manager_settings.db_url)
+
+        # Initialize MinIO client if configuration is provided
+        minio_client = create_minio_client(
+            object_storage_settings=object_storage_settings
+        )
+
+        app = FastAPI()
+        datapoints_db = db_client["madsci_data"]
+        datapoints = datapoints_db["datapoints"]
+
+        # Middleware to set ownership context for each request
+        @app.middleware("http")
+        async def ownership_middleware(
+            request: Request, call_next: Callable
+        ) -> Response:
+            with ownership_context(manager_id=data_manager_definition.data_manager_id):
+                return await call_next(request)
 
     @app.get("/")
     @app.get("/info")
@@ -56,7 +89,6 @@ def create_data_server(  # noqa: C901, PLR0915
 
     def _upload_file_to_minio(
         minio_client: Minio,
-        object_storage_config: ObjectStorageDefinition,
         file_path: Path,
         filename: str,
         label: Optional[str] = None,
@@ -69,15 +101,14 @@ def create_data_server(  # noqa: C901, PLR0915
         # Use the helper function with server's timestamped naming strategy
         return upload_file_to_object_storage(
             minio_client=minio_client,
-            object_storage_config=object_storage_config,
             file_path=file_path,
-            bucket_name=object_storage_config.default_bucket,
-            object_name=None,  # Let the helper generate the name
-            content_type=None,  # Let the helper detect it
+            bucket_name=(
+                object_storage_settings or ObjectStorageSettings()
+            ).default_bucket,
             metadata=metadata,
             naming_strategy=ObjectNamingStrategy.TIMESTAMPED_PATH,  # Server uses timestamped paths
-            public_endpoint=None,  # Use default endpoint logic
             label=label or filename,
+            object_storage_settings=object_storage_settings,
         )
 
     @app.post("/datapoint")
@@ -85,18 +116,13 @@ def create_data_server(  # noqa: C901, PLR0915
         datapoint: Annotated[str, Form()], files: list[UploadFile] = []
     ) -> Any:
         """Create a new datapoint."""
-        data = json.loads(datapoint)
-        datapoint_obj = DataPoint.discriminate(data)
+        datapoint_obj = DataPoint.discriminate(json.loads(datapoint))
 
         # Handle file uploads if present
         if files:
             for file in files:
                 # Check if this is a file datapoint and MinIO is configured
-                if (
-                    datapoint_obj.data_type.value == "file"
-                    and minio_client is not None
-                    and data_manager_definition.minio_client_config
-                ):
+                if datapoint_obj.data_type.value == "file" and minio_client is not None:
                     # Use MinIO object storage instead of local storage
                     # First, save file temporarily to upload to MinIO
                     import tempfile
@@ -112,7 +138,6 @@ def create_data_server(  # noqa: C901, PLR0915
                     # Upload to MinIO object storage
                     object_storage_info = _upload_file_to_minio(
                         minio_client=minio_client,
-                        object_storage_config=data_manager_definition.minio_client_config,
                         file_path=temp_path,
                         filename=file.filename,
                         label=datapoint_obj.label,
@@ -125,7 +150,7 @@ def create_data_server(  # noqa: C901, PLR0915
                     # If upload was successful, store object storage information in database
                     if object_storage_info:
                         # Create a combined dictionary with both datapoint and object storage info
-                        datapoint_dict = datapoint_obj.model_dump(mode="json")
+                        datapoint_dict = datapoint_obj.to_mongo()
                         datapoint_dict.update(object_storage_info)
                         # Update data_type to indicate this is now an object storage datapoint
                         datapoint_dict["data_type"] = "object_storage"
@@ -141,7 +166,7 @@ def create_data_server(  # noqa: C901, PLR0915
                 # Fallback to local storage
                 time = datetime.now()
                 path = (
-                    Path(data_manager_definition.file_storage_path).expanduser()
+                    Path(data_manager_settings.file_storage_path).expanduser()
                     / str(time.year)
                     / str(time.month)
                     / str(time.day)
@@ -155,11 +180,11 @@ def create_data_server(  # noqa: C901, PLR0915
                     contents = file.file.read()
                     f.write(contents)
                 datapoint_obj.path = str(final_path)
-                datapoints.insert_one(datapoint_obj.model_dump(mode="json"))
+                datapoints.insert_one(datapoint_obj.to_mongo())
                 return datapoint_obj
         else:
             # No files - just insert the datapoint (for ValueDataPoint, etc.)
-            datapoints.insert_one(datapoint_obj.model_dump(mode="json"))
+            datapoints.insert_one(datapoint_obj.to_mongo())
             return datapoint_obj
 
         return None
@@ -167,13 +192,18 @@ def create_data_server(  # noqa: C901, PLR0915
     @app.get("/datapoint/{datapoint_id}")
     async def get_datapoint(datapoint_id: str) -> Any:
         """Look up a datapoint by datapoint_id"""
-        datapoint = datapoints.find_one({"datapoint_id": datapoint_id})
+        datapoint = datapoints.find_one({"_id": datapoint_id})
+        if not datapoint:
+            return JSONResponse(
+                status_code=404,
+                content={"message": f"Datapoint with id {datapoint_id} not found."},
+            )
         return DataPoint.discriminate(datapoint)
 
     @app.get("/datapoint/{datapoint_id}/value")
     async def get_datapoint_value(datapoint_id: str) -> Response:
         """Returns a specific data point's value. If this is a file, it will return the file."""
-        datapoint = datapoints.find_one({"datapoint_id": datapoint_id})
+        datapoint = datapoints.find_one({"_id": datapoint_id})
         datapoint = DataPoint.discriminate(datapoint)
         if datapoint.data_type == "file":
             return FileResponse(datapoint.path)
@@ -186,7 +216,7 @@ def create_data_server(  # noqa: C901, PLR0915
             datapoints.find({}).sort("data_timestamp", -1).limit(number).to_list()
         )
         return {
-            datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
+            datapoint["_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 
@@ -195,7 +225,7 @@ def create_data_server(  # noqa: C901, PLR0915
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
         datapoint_list = datapoints.find(selector).to_list()
         return {
-            datapoint["datapoint_id"]: DataPoint.discriminate(datapoint)
+            datapoint["_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 
@@ -211,14 +241,14 @@ def create_data_server(  # noqa: C901, PLR0915
 
 
 if __name__ == "__main__":
-    data_manager_definition = DataManagerDefinition.load_model()
-    db_client = MongoClient(data_manager_definition.db_url)
+    data_manager_settings = DataManagerSettings()
+    db_client = MongoClient(data_manager_settings.db_url)
     app = create_data_server(
-        data_manager_definition=data_manager_definition,
+        data_manager_settings=data_manager_settings,
         db_client=db_client,
     )
     uvicorn.run(
         app,
-        host=data_manager_definition.host,
-        port=data_manager_definition.port,
+        host=data_manager_settings.data_server_url.host,
+        port=data_manager_settings.data_server_url.port,
     )

@@ -3,8 +3,8 @@
 from enum import Enum
 from typing import Any, Optional
 
-from madsci.common.types.base_types import BaseModel, Error
-from sqlmodel.main import Field
+from madsci.common.types.base_types import Error, MadsciBaseModel
+from pydantic import Field
 
 
 class AdminCommands(str, Enum):
@@ -21,7 +21,7 @@ class AdminCommands(str, Enum):
     GET_LOCATION = "get_location"
 
 
-class AdminCommandResponse(BaseModel):
+class AdminCommandResponse(MadsciBaseModel):
     """Response from an Admin Command"""
 
     success: bool = Field(

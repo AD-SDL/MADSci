@@ -1,6 +1,7 @@
 """Automated unit tests for the Workcell Engine, using pytest."""
 
 import copy
+import warnings
 from unittest.mock import patch
 
 import pytest
@@ -10,11 +11,10 @@ from madsci.common.types.action_types import (
     ActionStatus,
     ActionSucceeded,
 )
-from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellConfig, WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -41,7 +41,6 @@ def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
     workcell_def = WorkcellDefinition(
         workcell_name="Test Workcell",
-        config=WorkcellConfig(data_server_url="http://localhost:8000"),
     )
     return WorkcellStateHandler(
         workcell_definition=workcell_def, redis_connection=redis_server
@@ -51,7 +50,9 @@ def state_handler(redis_server: Redis) -> WorkcellStateHandler:
 @pytest.fixture
 def engine(state_handler: WorkcellStateHandler) -> Engine:
     """Fixture for creating an Engine instance."""
-    return Engine(state_handler=state_handler)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        return Engine(state_handler=state_handler)
 
 
 def test_engine_initialization(engine: Engine) -> None:
@@ -94,7 +95,6 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellStateHandler) ->
         name="Test Workflow",
         steps=[step],
         status=WorkflowStatus(running=True),
-        ownership_info=OwnershipInfo(),
     )
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(
@@ -135,7 +135,6 @@ def test_run_single_step_of_workflow_with_multiple_steps(
         name="Test Workflow",
         steps=[step1, step2],
         status=WorkflowStatus(running=True),
-        ownership_info=OwnershipInfo(),
     )
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(
@@ -302,7 +301,6 @@ def test_run_step_send_action_exception_then_get_action_result_success(
         name="Test Workflow",
         steps=[step],
         status=WorkflowStatus(running=True),
-        ownership_info=OwnershipInfo(),
     )
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(
@@ -348,7 +346,6 @@ def test_run_step_send_action_and_get_action_result_fail(
         name="Test Workflow",
         steps=[step],
         status=WorkflowStatus(running=True),
-        ownership_info=OwnershipInfo(),
     )
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(

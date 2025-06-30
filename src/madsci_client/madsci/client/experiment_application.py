@@ -11,7 +11,9 @@ from madsci.client.experiment_client import ExperimentClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
+from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -33,55 +35,68 @@ class ExperimentApplication:
 
     experiment: Optional[Experiment] = None
     """The current experiment being run."""
-    experiment_design: Optional[ExperimentDesign] = None
+    experiment_design: Optional[Union[ExperimentDesign, PathLike]] = None
     """The design of the experiment."""
-    url: AnyUrl = AnyUrl("http://localhost:8002")
-    """The URL of the experiment manager server."""
-    logger = EventClient()
+    logger = event_client = EventClient()
     """The event logger for the experiment."""
+    context: MadsciContext = MadsciContext()
+    """The context for the experiment application."""
+    workcell_client: WorkcellClient
+    """Client for managing workcells."""
+    resource_client: ResourceClient
+    """Client for managing resources."""
+    data_client: DataClient
+    """Client for managing data."""
+    experiment_client: ExperimentClient
+    """Client for managing experiments."""
 
     def __init__(
         self,
-        url: Optional[AnyUrl] = None,
+        experiment_server_url: Optional[AnyUrl] = None,
         experiment_design: Optional[Union[str, Path, ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
-        self.url = AnyUrl(url) if url else self.url
-        if experiment_design:
-            self.experiment_design = experiment_design
+        self.context = (
+            MadsciContext(experiment_server_url=experiment_server_url)
+            if experiment_server_url
+            else MadsciContext()
+        )
+        self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
 
         self.experiment = experiment if experiment else self.experiment
 
-        self.experiment_client = ExperimentClient(url=self.url)
-
-        self.workcell_client = WorkcellClient(
-            self.experiment_client.workcell_client_url
+        # * Re-initialize expeirment client in-case user provided a different server URL
+        self.experiment_client = ExperimentClient(
+            experiment_server_url=self.context.experiment_server_url
         )
-        self.resource_client = ResourceClient(
-            self.experiment_client.resource_client_url
-        )
-        self.data_client = DataClient(self.experiment_client.data_client_url)
-        if self.experiment_design and self.experiment_design.event_client_config:
-            self.logger = EventClient(config=self.experiment_design.event_client_config)
+        self.workcell_client = WorkcellClient()
+        self.data_client = DataClient()
+        self.resource_client = ResourceClient()
+        self.event_client = self.logger = EventClient()
 
     @classmethod
     def start_new(
-        cls, url: AnyUrl, experiment_design: ExperimentDesign
+        cls,
+        experiment_server_url: Optional[AnyUrl] = None,
+        experiment_design: Optional[ExperimentDesign] = None,
     ) -> "ExperimentApplication":
         """Create a new experiment application with a new experiment."""
-        self = cls(url=url, experiment_design=experiment_design)
+        self = cls(
+            experiment_server_url=experiment_server_url,
+            experiment_design=experiment_design,
+        )
         self.start_experiment_run()
         return self
 
     @classmethod
     def continue_experiment(
-        cls, url: AnyUrl, experiment: Experiment
+        cls, experiment: Experiment, experiment_server_url: Optional[AnyUrl] = None
     ) -> "ExperimentApplication":
         """Create a new experiment application with an existing experiment."""
-        self = cls(url=url, experiment=experiment)
+        self = cls(experiment_server_url=experiment_server_url, experiment=experiment)
         self.experiment_client.continue_experiment(
             experiment_id=experiment.experiment_id
         )
@@ -149,7 +164,7 @@ class ExperimentApplication:
         )
 
     def fail_experiment(self) -> None:
-        """Fail the experiment."""
+        """Mark an experiment as failed."""
         self.experiment = self.experiment_client.end_experiment(
             experiment_id=self.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
@@ -213,7 +228,7 @@ class ExperimentApplication:
             self.logger.log_error(exception.message)
             raise exception
 
-    def get_resource_from_condition(self, condition: Condition) -> Resource | None:
+    def get_resource_from_condition(self, condition: Condition) -> Optional[Resource]:
         """gets a resource from a condition"""
         resource = None
         if condition.resource_id:
@@ -303,31 +318,3 @@ class ExperimentApplication:
                 resource_child = resource.children[condition.key]
             return self.check_resource_field(resource_child, condition)
         return False
-
-
-if __name__ == "__main__":
-    import datetime
-
-    class MyExperimentApplication(ExperimentApplication):
-        """An example experiment application."""
-
-        experiment_design = ExperimentDesign(
-            experiment_name="My Example Experiment",
-            experiment_description="An example experimental design",
-        )
-        url = "http://localhost:8002"
-
-        def loop(self, iterations: int = 10) -> None:
-            """Run the experiment loop."""
-            for i in range(iterations):
-                time.sleep(10)
-                self.check_experiment_status()
-                self.logger.log_info(f"Running experiment loop {i}")
-
-    experiment_app = MyExperimentApplication()
-    current_time = datetime.datetime.now()
-    with experiment_app.manage_experiment(
-        run_name=f"My Experiment Run {current_time}",
-        run_description=f"Run for my example experiment, started at ~{current_time}",
-    ):
-        experiment_app.loop(iterations=10)

@@ -4,11 +4,16 @@ import contextlib
 import inspect
 import json
 import logging
+import queue
+import time
+import warnings
 from collections import OrderedDict
 from pathlib import Path
+from threading import Lock, Thread
 from typing import Any, Optional, Union
 
 import requests
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import (
     Event,
     EventClientConfig,
@@ -23,6 +28,10 @@ class EventClient:
     """A logger and event handler for MADSci system components."""
 
     config: Optional[EventClientConfig] = None
+    _event_buffer = queue.Queue()
+    _buffer_lock = Lock()
+    _retry_thread = None
+    _retrying = False
 
     def __init__(
         self,
@@ -33,12 +42,12 @@ class EventClient:
 
         Keyword Arguments are used to override the values of the passed in/default config.
         """
-        if config is not None:
-            self.config = config
-            if kwargs:
-                [self.config.__setattr__(key, value) for key, value in kwargs.items()]
+        if kwargs:
+            self.config = (
+                EventClientConfig(**kwargs) if not config else config.__init__(**kwargs)
+            )
         else:
-            self.config = EventClientConfig(**kwargs)
+            self.config = config or EventClientConfig()
         if self.config.name:
             self.name = self.config.name
         else:
@@ -63,14 +72,13 @@ class EventClient:
                 self.logger.removeHandler(handler)
         file_handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
         self.logger.addHandler(file_handler)
-        self.event_server = self.config.event_server_url
-        self.source = self.config.source
-        self.log_debug(
-            Event(
-                event_type=EventType.LOG_INFO,
-                event_data=f"Event logger {self.name} initialized.",
-            )
+        self.event_server = (
+            self.config.event_server_url or MadsciContext().event_server_url
         )
+        self.log_debug(
+            "Event logger {self.name} initialized.",
+        )
+        self.log_debug(self.config)
 
     def get_log(self) -> dict[str, Event]:
         """Read the log"""
@@ -91,7 +99,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = requests.get(
-                self.event_server + "/events",
+                str(self.event_server) + "/events",
                 timeout=10,
                 params={"number": number, "level": level},
             )
@@ -114,7 +122,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = requests.get(
-                self.event_server + "/events",
+                str(self.event_server) + "/events",
                 timeout=10,
                 params={"selector": selector},
             )
@@ -130,6 +138,7 @@ class EventClient:
         event: Union[Event, Any],
         level: Optional[int] = None,
         alert: Optional[bool] = None,
+        warning_category: Optional[Warning] = None,
     ) -> None:
         """Log an event."""
 
@@ -150,15 +159,20 @@ class EventClient:
         if not isinstance(event, Event):
             event = self._new_event_for_log(event, level)
         event.log_level = level if level else event.log_level
-        event.source = event.source if event.source is not None else self.source
         event.alert = alert if alert is not None else event.alert
+        if warning_category:
+            warnings.warn(
+                event.model_dump_json(),
+                category=warning_category,
+                stacklevel=3,
+            )
         self.logger.log(event.log_level, event.model_dump_json())
         # * Log the event to the event server if configured
         # * Only log if the event is at the same level or higher than the logger
         if self.logger.getEffectiveLevel() <= event.log_level:
             print(f"{event.event_timestamp} ({event.event_type}): {event.event_data}")
             if self.event_server:
-                self._send_event_to_event_server(event)
+                self._send_event_to_event_server_task(event)
 
     def log_debug(self, event: Union[Event, str]) -> None:
         """Log an event at the debug level."""
@@ -172,11 +186,14 @@ class EventClient:
 
     info = log_info
 
-    def log_warning(self, event: Union[Event, str]) -> None:
+    def log_warning(
+        self, event: Union[Event, str], warning_category: Warning = UserWarning
+    ) -> None:
         """Log an event at the warning level."""
-        self.log(event, logging.WARNING)
+        self.log(event, logging.WARNING, warning_category=warning_category)
 
     warning = log_warning
+    warn = log_warning
 
     def log_error(self, event: Union[Event, str]) -> None:
         """Log an event at the error level."""
@@ -196,16 +213,54 @@ class EventClient:
 
     alert = log_alert
 
+    def _start_retry_thread(self) -> None:
+        with self._buffer_lock:
+            if not self._retrying:
+                self._retrying = True
+                self._retry_thread = Thread(
+                    target=self._retry_buffered_events, daemon=True
+                )
+                self._retry_thread.start()
+
+    def _retry_buffered_events(self) -> None:
+        backoff = 2
+        max_backoff = 60
+        while not self._event_buffer.empty():
+            try:
+                event = self._event_buffer.get()
+                self._send_event_to_event_server(event, retrying=True)
+                backoff = 2  # Reset backoff on success
+            except Exception:
+                time.sleep(backoff)
+                backoff = min(backoff * 2, max_backoff)
+                self._event_buffer.put(event)  # Re-add the event to the buffer
+        with self._buffer_lock:
+            self._retrying = False
+
     @threaded_task
-    def _send_event_to_event_server(self, event: Event) -> None:
-        """Send an event to the event manager."""
-        response = requests.post(
-            url=self.event_server + "/event",
-            json=event.model_dump(mode="json"),
-            timeout=10,
-        )
-        if not response.ok:
-            response.raise_for_status()
+    def _send_event_to_event_server_task(
+        self, event: Event, retrying: bool = False
+    ) -> None:
+        """Send an event to the event manager. Buffer on failure."""
+        self._send_event_to_event_server(event, retrying=retrying)
+
+    def _send_event_to_event_server(self, event: Event, retrying: bool = False) -> None:
+        """Send an event to the event manager. Buffer on failure."""
+        try:
+            response = requests.post(
+                url=self.event_server + "/event",
+                json=event.model_dump(mode="json"),
+                timeout=10,
+            )
+            if not response.ok:
+                response.raise_for_status()
+        except Exception:
+            if not retrying:
+                self._event_buffer.put(event)
+                self._start_retry_thread()
+            else:
+                # If already retrying, just re-raise to trigger backoff
+                raise
 
     def _new_event_for_log(self, event_data: Any, level: int) -> Event:
         """Create a new log event from arbitrary data"""
@@ -236,8 +291,3 @@ class EventClient:
             event_type=event_type,
             event_data=event_data,
         )
-
-
-default_logger = EventClient(
-    config=EventClientConfig(name="madsci_default_log", log_level=logging.INFO)
-)

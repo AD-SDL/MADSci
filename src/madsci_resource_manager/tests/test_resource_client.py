@@ -7,10 +7,10 @@ from unittest.mock import patch
 import pytest
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.resource_types import Consumable, ResourceDefinition
 from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
 from madsci.common.types.resource_types.resource_enums import ContainerTypeEnum
+from madsci.common.utils import new_ulid_str
 from madsci.resource_manager.resource_interface import (
     Container,
     ResourceInterface,

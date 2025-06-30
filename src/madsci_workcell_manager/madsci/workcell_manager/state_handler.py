@@ -10,9 +10,9 @@ from fastapi import HTTPException
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
-from madsci.common.types.resource_types import Resource
 from madsci.common.types.workcell_types import (
     WorkcellDefinition,
+    WorkcellManagerSettings,
     WorkcellState,
     WorkcellStatus,
 )
@@ -31,29 +31,30 @@ class WorkcellStateHandler:
 
     state_change_marker = "0"
     _redis_connection: Any = None
+    shutdown: bool = False
 
     def __init__(
         self,
         workcell_definition: WorkcellDefinition,
+        workcell_settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
     ) -> None:
         """
         Initialize a StateManager for a given workcell.
         """
+        self.workcell_settings = workcell_settings or WorkcellManagerSettings()
         self._workcell_id = workcell_definition.workcell_id
-        self._workcell_definition_path = workcell_definition._definition_path
-        self._redis_host = workcell_definition.config.redis_host
-        self._redis_port = workcell_definition.config.redis_port
-        self._redis_password = workcell_definition.config.redis_password
+        self._redis_host = self.workcell_settings.redis_host
+        self._redis_port = self.workcell_settings.redis_port
+        self._redis_password = self.workcell_settings.redis_password
         self._redis_connection = redis_connection
         if mongo_connection is not None:
             self.db_connection = mongo_connection
         else:
-            self.db_client = MongoClient(workcell_definition.config.mongo_url)
+            self.db_client = MongoClient(self.workcell_settings.mongo_url)
             self.db_connection = self.db_client["workcell_manager"]
         self.archived_workflows = self.db_connection["archived_workflows"]
-        self.shutdown = False
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
 
@@ -68,16 +69,10 @@ class WorkcellStateHandler:
         self.state_change_marker = "0"
         # * Initialize Nodes
         for key, value in self.get_workcell_definition().nodes.items():
-            if isinstance(value, NodeDefinition):
-                node = Node(node_url=value.node_url)
-            elif isinstance(value, (AnyUrl, str)):
-                node = Node(node_url=AnyUrl(value))
-            self.set_node(key, node)
+            self.set_node(key, Node(node_url=AnyUrl(value)))
         # * Initialize Locations and Resources
         self.initialize_locations_and_resources(resource_client)
-        updated_workcell = self.get_workcell_definition()
-        if self._workcell_definition_path is not None:
-            updated_workcell.to_yaml(self._workcell_definition_path)
+        # TODO: Update the workcell definition with the new locations and resources
         status = self.get_workcell_status()
         status.initializing = False
         self.set_workcell_status(status)
@@ -88,31 +83,19 @@ class WorkcellStateHandler:
     ) -> None:
         """Set the workcell's location based on the location definitions in the workcell, and create resources if necessary/possible"""
         workcell = self.get_workcell_definition()
-        for index in range(len(workcell.locations)):
-            location_definition = workcell.locations[index]
+        for location_definition in workcell.locations:
+            resource = None
             if (
                 location_definition.resource_definition is not None
                 and resource_client is not None
-                and location_definition.resource_id is None
             ):
-                resource = Resource.discriminate(
-                    location_definition.resource_definition
+                resource = resource_client.init_resource(
+                    resource_definition=location_definition.resource_definition
                 )
-
-                resource = resource_client.add_resource(resource)
-                location_definition.resource_id = resource.resource_id
-            try:
-                # * Update existing location if it exists
-                existing_location = self.get_location(location_definition.location_id)
-                existing_location = existing_location.model_copy(
-                    update=location_definition.model_dump()
-                )
-                self.set_location(existing_location)
-            except KeyError:
-                # * Create new location if it doesn't exist
-                self.set_location(Location.model_validate(location_definition))
-            workcell.locations[index] = location_definition
-        self.set_workcell_definition(workcell)
+            location = Location.model_validate(location_definition.model_dump())
+            if resource:
+                location.resource_id = resource.resource_id
+            self.set_location(location)
 
     @property
     def _workcell_prefix(self) -> str:

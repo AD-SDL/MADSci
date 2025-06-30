@@ -4,7 +4,7 @@ import re
 import string
 from typing import Annotated, Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import PositiveInt, PositiveNumber, new_ulid_str
+from madsci.common.types.base_types import PositiveInt, PositiveNumber
 from madsci.common.types.resource_types.definitions import (
     AssetResourceDefinition,
     CollectionResourceDefinition,
@@ -31,6 +31,7 @@ from madsci.common.types.resource_types.resource_enums import (
     ContainerTypeEnum,
     ResourceTypeEnum,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import (
     AnyUrl,
@@ -105,12 +106,16 @@ class Resource(ResourceDefinition, extra="allow", table=False):
     is_ulid = field_validator("resource_id")(ulid_validator)
 
     @classmethod
-    def discriminate(cls, resource: dict) -> "Resource":
+    def discriminate(
+        cls, resource: Union[dict, "Resource", ResourceDefinition]
+    ) -> "Resource":
         """Discriminate the resource based on its base type."""
         if isinstance(resource, dict):
             resource_type = resource.get("base_type")
-        else:
+        elif isinstance(resource, (Resource, ResourceDefinition)):
             resource_type = resource.base_type
+        else:
+            raise ValueError(f"Resource cannot be {type(resource)}.")
         return RESOURCE_TYPE_MAP[resource_type]["model"].model_validate(resource)
 
 

@@ -47,7 +47,10 @@ def test_client(
 ) -> TestClient:
     """Workcell Server Test Client Fixture"""
     app = create_workcell_server(
-        workcell, redis_server, mongo_server, start_engine=False
+        workcell=workcell,
+        redis_connection=redis_server,
+        mongo_connection=mongo_server,
+        start_engine=False,
     )
     return TestClient(app)
 

@@ -13,6 +13,7 @@ from madsci.common.types.event_types import (
     EmailAlertsConfig,
     Event,
     EventManagerDefinition,
+    EventManagerSettings,
     EventType,
 )
 from madsci.event_manager.event_server import create_event_server
@@ -21,6 +22,8 @@ from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
 event_manager_def = EventManagerDefinition(
     name="test_event_manager",
+)
+event_manager_settings = EventManagerSettings(
     email_alerts=EmailAlertsConfig(email_addresses=["test@example.com"]),
 )
 
@@ -38,6 +41,7 @@ db_connection = create_mongo_fixture()
 def test_client(db_connection: Database) -> TestClient:
     """Event Server Test Client Fixture"""
     app = create_event_server(
+        event_manager_settings=event_manager_settings,
         event_manager_definition=event_manager_def,
         db_connection=db_connection,
     )
@@ -116,7 +120,7 @@ def test_event_alert(test_client: TestClient) -> None:
     # Create an event that should trigger an alert
     alert_event = Event(
         event_type=EventType.TEST,
-        log_level=event_manager_def.alert_level,
+        log_level=event_manager_settings.alert_level,
         alert=True,
         event_data={"alert": "This is a test alert"},
     )
@@ -130,5 +134,5 @@ def test_event_alert(test_client: TestClient) -> None:
         # Assert that the email alert was sent
         mock_send_email.assert_called()
         assert mock_send_email.call_count == len(
-            event_manager_def.email_alerts.email_addresses
+            event_manager_settings.email_alerts.email_addresses
         )

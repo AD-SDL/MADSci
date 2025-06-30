@@ -232,6 +232,38 @@ class ResourceTable(ResourceTableBase, table=True):
         """
         return {child.key: child for child in self.children_list}
 
+    def check_no_recursive_parent(self) -> None:
+        """
+        Check for recursive parent relationships (cycles) in the parent chain.
+        Raises ValueError if a cycle is detected.
+        """
+        visited = set()
+        current = self
+        while current.parent is not None:
+            parent_id = getattr(current.parent, "resource_id", None)
+            if parent_id is None:
+                break
+            if parent_id == self.resource_id or parent_id in visited:
+                raise ValueError(
+                    f"Recursive parent relationship detected for resource_id {self.resource_id}"
+                )
+            visited.add(parent_id)
+            current = current.parent
+
+
+# Add event listener to check for recursive parent relationships before flush
+@event.listens_for(Session, "before_flush")
+def prevent_recursive_parent_relationships(
+    session: Session, _flush_context: Any, _instances: Any
+) -> None:
+    """
+    Event listener to prevent recursive parent relationships in ResourceTable before flush.
+    Raises ValueError if a cycle is detected.
+    """
+    for obj in session.new.union(session.dirty):
+        if isinstance(obj, ResourceTable):
+            obj.check_no_recursive_parent()
+
 
 class ResourceHistoryTable(ResourceTableBase, table=True):
     """The table for storing information about historical Resources."""

@@ -1,6 +1,6 @@
 [project]
 name = "madsci"
-version = "0.3.1"
+version = "0.4.3"
 dependencies = []
 readme="README.md"
 requires-python = ">=3.9.1"
@@ -16,8 +16,35 @@ dev = [
     "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
     "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
     "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
+]
+
+[dependency-groups]
+dev = [
     "pytest>=8.3.4",
     "pytest-mock-resources[docker,mongo]>=2.12.2",
     "ipykernel>=6.29.5",
     "pre-commit>=4",
+    "pydantic-settings-export>=1.0.2",
 ]
+
+[tool.pydantic_settings_export]
+project_dir = "."
+default_settings = [
+    "madsci.common.types.context_types:MadsciContext",
+    "madsci.common.types.event_types:EventClientConfig",
+    "madsci.common.types.datapoint_types:ObjectStorageSettings",
+    "madsci.common.types.datapoint_types:DataManagerSettings",
+    "madsci.common.types.event_types:EventManagerSettings",
+    "madsci.common.types.workcell_types:WorkcellManagerSettings",
+    "madsci.common.types.experiment_types:ExperimentManagerSettings",
+    "madsci.common.types.resource_types.definitions:ResourceManagerSettings",
+    "madsci.common.types.lab_types:LabManagerSettings",
+]
+
+# Generate Markdown docs
+[[tool.pydantic_settings_export.generators.markdown]]
+paths = ["Configuration.md"]
+
+# Generate .env example
+[[tool.pydantic_settings_export.generators.dotenv]]
+paths = [".env.example"]

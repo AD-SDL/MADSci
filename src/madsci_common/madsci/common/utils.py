@@ -2,16 +2,20 @@
 
 import json
 import sys
+import typing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Optional, Union, get_args, get_origin
 
-from madsci.common.types.base_types import BaseModel, PathLike
 from pydantic import ValidationError
 from pydantic_core._pydantic_core import PydanticUndefined
 from rich.console import Console
+from ulid import ULID
 
 console = Console()
+
+if typing.TYPE_CHECKING:
+    from madsci.common.types.base_types import MadsciBaseModel, PathLike
 
 
 def utcnow() -> datetime:
@@ -40,7 +44,7 @@ def to_snake_case(name: str) -> str:
 
 def search_for_file_pattern(
     pattern: str,
-    start_dir: Optional[PathLike] = None,
+    start_dir: Optional["PathLike"] = None,
     parents: bool = True,
     children: bool = True,
 ) -> list[str]:
@@ -71,7 +75,9 @@ def search_for_file_pattern(
     return results
 
 
-def save_model(path: PathLike, model: BaseModel, overwrite_check: bool = True) -> None:
+def save_model(
+    path: "PathLike", model: "MadsciBaseModel", overwrite_check: bool = True
+) -> None:
     """Save a MADSci model to a YAML file, optionally with a check to overwrite if the file already exists."""
     try:
         model.model_validate(model)
@@ -274,7 +280,9 @@ def prompt_from_list(
     return response
 
 
-def prompt_from_pydantic_model(model: BaseModel, prompt: str, **kwargs: Any) -> str:
+def prompt_from_pydantic_model(
+    model: "MadsciBaseModel", prompt: str, **kwargs: Any
+) -> str:
     """Prompt the user for input from a pydantic model.
 
     Args:
@@ -403,22 +411,34 @@ def threaded_daemon(func: callable) -> callable:
 
 def pretty_type_repr(type_hint: Any) -> str:
     """Returns a pretty string representation of a type hint, including subtypes."""
-    type_name = getattr(type_hint, "__name__", None)
-    if type_name is None:
-        if get_origin(type_hint):
-            type_name = get_origin(type_hint).__name__
-        else:
-            type_name = str(type_hint)
-    if (
-        "__args__" in dir(type_hint) and type_hint.__args__
-    ):  # * If the type has subtype info
-        type_name += "["
-        for subtype in type_hint.__args__:
-            type_name += pretty_type_repr(subtype)
-            type_name += ", "
-        type_name = type_name[:-2]
-        type_name += "]"
-    return type_name
+    type_name = None
+    try:
+        type_name = getattr(type_hint, "__name__", None)
+        if type_name is None:
+            type_origin = get_origin(type_hint)
+            type_name = (
+                getattr(type_origin, "__name__", None)
+                or getattr(type_origin, "__qualname__", None)
+                or str(type_hint)
+            )
+        if (
+            "__args__" in dir(type_hint) and type_hint.__args__
+        ):  # * If the type has subtype info
+            type_name += "["
+            for subtype in type_hint.__args__:
+                type_name += pretty_type_repr(subtype)
+                type_name += ", "
+            type_name = type_name[:-2]
+            type_name += "]"
+        return type_name
+    except Exception:
+        import warnings
+
+        warnings.warn(
+            f"Failed to get pretty type representation for {type_hint}. Returning raw type.",
+            stacklevel=2,
+        )
+        return type_name
 
 
 @threaded_daemon
@@ -441,3 +461,10 @@ def is_optional(type_hint: Any) -> bool:
 def is_annotated(type_hint: Any) -> bool:
     """Check if a type hint is an annotated type."""
     return get_origin(type_hint) is Annotated
+
+
+def new_ulid_str() -> str:
+    """
+    Generate a new ULID string.
+    """
+    return str(ULID())

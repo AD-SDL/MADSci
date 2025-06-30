@@ -1,11 +1,11 @@
 """Client for the MADSci Experiment Manager."""
 
-import warnings
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
+from madsci.client.event_client import EventClient
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
@@ -13,12 +13,14 @@ from madsci.common.object_storage_helpers import (
     get_object_data_from_storage,
     upload_file_to_object_storage,
 )
-from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataPoint,
     DataPointTypeEnum,
-    ObjectStorageDefinition,
+    ObjectStorageSettings,
 )
+from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 from ulid import ULID
 
@@ -27,31 +29,33 @@ class DataClient:
     """Client for the MADSci Experiment Manager."""
 
     url: AnyUrl
+    context: MadsciContext
+    _minio_client: Optional[ObjectStorageSettings] = None
 
     def __init__(
         self,
         url: Optional[Union[str, AnyUrl]] = None,
-        ownership_info: Optional[OwnershipInfo] = None,
-        object_storage_config: Optional[ObjectStorageDefinition] = None,
+        object_storage_settings: Optional[ObjectStorageSettings] = None,
     ) -> "DataClient":
         """Create a new Datapoint Client."""
-        self.url = AnyUrl(url) if url is not None else None
+        self.context = MadsciContext(data_server_url=url) if url else MadsciContext()
+        self.url = self.context.data_server_url
+        self.logger = EventClient()
         if self.url is None:
-            warnings.warn(
+            self.logger.warn(
                 "No URL provided for the data client. Cannot persist datapoints.",
-                UserWarning,
-                stacklevel=2,
+                warning_category=MadsciLocalOnlyWarning,
             )
         self._local_datapoints = {}
-        self.ownership_info = ownership_info if ownership_info else OwnershipInfo()
-        self.object_storage_config = object_storage_config
-        self._minio_client = None
-
-        if object_storage_config:
-            self._minio_client = create_minio_client(object_storage_config)
+        self.object_storage_settings = (
+            object_storage_settings or ObjectStorageSettings()
+        )
+        self._minio_client = create_minio_client(
+            object_storage_settings=self.object_storage_settings
+        )
 
     def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
-        """Get a datapoint metadata by ID, either from local storage or server."""
+        """Get a datapoint's metadata by ID, either from local storage or server."""
         if self.url is None:
             if datapoint_id in self._local_datapoints:
                 return self._local_datapoints[datapoint_id]
@@ -77,10 +81,8 @@ class DataClient:
                     return data
                 # Fall back to server API if object storage fails
             else:
-                warnings.warn(
+                self.logger.warn(
                     "Cannot access object_storage datapoint: MinIO client not configured",
-                    UserWarning,
-                    stacklevel=2,
                 )
 
         # Handle file datapoints
@@ -90,10 +92,8 @@ class DataClient:
                     with Path(datapoint.path).resolve().expanduser().open("rb") as f:
                         return f.read()
                 except Exception as e:
-                    warnings.warn(
+                    self.logger.warn(
                         f"Failed to read file from path: {e!s}",
-                        UserWarning,
-                        stacklevel=2,
                     )
 
         # Handle value datapoints
@@ -202,7 +202,7 @@ class DataClient:
         """
         # Case 1: Handle ObjectStorageDataPoint with path directly
         if (
-            datapoint.data_type.value == "object_storage"
+            datapoint.data_type == DataPointTypeEnum.OBJECT_STORAGE
             and hasattr(datapoint, "path")
             and self._minio_client is not None
         ):
@@ -217,14 +217,12 @@ class DataClient:
                     metadata=getattr(datapoint, "custom_metadata", None),
                 )
             except Exception as e:
-                warnings.warn(
+                self.logger.warn(
                     f"Failed to upload ObjectStorageDataPoint: {e!s}",
-                    UserWarning,
-                    stacklevel=2,
                 )
         # Case2: check if this is a file datapoint and object storage is configured
         if (
-            datapoint.data_type.value == "file"  # Convert to string for comparison
+            datapoint.data_type == DataPointTypeEnum.FILE
             and self._minio_client is not None
         ):
             try:
@@ -239,10 +237,8 @@ class DataClient:
                 if object_datapoint is not None:
                     return object_datapoint
             except Exception as e:
-                warnings.warn(
+                self.logger.warn(
                     f"Failed to upload to object storage, falling back: {e!s}",
-                    UserWarning,
-                    stacklevel=2,
                 )
                 # Fall back to regular submission if object storage fails
 
@@ -252,7 +248,7 @@ class DataClient:
             self._local_datapoints[datapoint.datapoint_id] = datapoint
             return datapoint
 
-        if datapoint.data_type == "file":
+        if datapoint.data_type == DataPointTypeEnum.FILE:
             files = {
                 (
                     "files",
@@ -301,14 +297,12 @@ class DataClient:
             ValueError: If object storage is not configured or operation fails
         """
         if self._minio_client is None:
-            raise ValueError(
-                "Object storage is not configured. Initialize DataClient with object_storage_config."
-            )
+            raise ValueError("Object storage is not configured.")
 
         # Use the helper function to upload the file
         object_storage_info = upload_file_to_object_storage(
             minio_client=self._minio_client,
-            object_storage_config=self.object_storage_config,
+            object_storage_settings=self.object_storage_settings,
             file_path=file_path,
             bucket_name=bucket_name,
             object_name=object_name,
@@ -326,9 +320,7 @@ class DataClient:
         datapoint_dict = {
             "data_type": "object_storage",
             "path": str(Path(file_path).expanduser().resolve()),
-            "ownership_info": self.ownership_info.model_dump()
-            if self.ownership_info
-            else {},
+            "ownership_info": get_current_ownership_info().model_dump(mode="json"),
             **object_storage_info,  # Unpack all the storage info
         }
 

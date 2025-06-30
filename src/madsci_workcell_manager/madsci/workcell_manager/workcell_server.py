@@ -4,22 +4,30 @@ import json
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Annotated, Any, Optional, Union
+from pathlib import Path
+from typing import Annotated, Any, Callable, Optional, Union
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
+from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import new_ulid_str
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
-from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
+from madsci.common.types.workcell_types import (
+    WorkcellDefinition,
+    WorkcellManagerSettings,
+    WorkcellState,
+)
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
@@ -32,35 +40,69 @@ from pymongo.synchronous.database import Database
 
 
 def create_workcell_server(  # noqa: C901, PLR0915
-    workcell: WorkcellDefinition,
+    workcell: Optional[WorkcellDefinition] = None,
+    workcell_settings: Optional[WorkcellManagerSettings] = None,
+    context: Optional[MadsciContext] = None,
     redis_connection: Optional[Any] = None,
     mongo_connection: Optional[Database] = None,
     start_engine: bool = True,
 ) -> FastAPI:
     """Creates a Workcell Manager's REST server."""
 
-    state_handler = WorkcellStateHandler(
-        workcell, redis_connection=redis_connection, mongo_connection=mongo_connection
-    )
+    logger = EventClient()
+    workcell_settings = workcell_settings or WorkcellManagerSettings()
+    if not workcell:
+        workcell_path = Path(workcell_settings.workcell_definition)
+        if workcell_path.exists():
+            workcell = WorkcellDefinition.from_yaml(workcell_path)
+        else:
+            workcell = WorkcellDefinition()
+        logger.info(f"Writing to workcell definition file: {workcell_path}")
+        workcell.to_yaml(workcell_path)
+    with ownership_context(
+        workcell_id=workcell.workcell_id,
+        manager_id=workcell.workcell_id,
+    ):
+        logger = EventClient(
+            name=f"workcell.{workcell.workcell_name}",
+        )
+        logger.info(workcell)
+        context = context or MadsciContext()
+        logger.info(context)
+
+        state_handler = WorkcellStateHandler(
+            workcell,
+            redis_connection=redis_connection,
+            mongo_connection=mongo_connection,
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
         """Start the REST server and initialize the state handler and engine"""
-        if start_engine:
-            engine = Engine(state_handler)
-            engine.spin()
-        else:
-            with state_handler.wc_state_lock():
-                state_handler.initialize_workcell_state(
-                    resource_client=ResourceClient(
-                        url=workcell.config.resource_server_url
+        with ownership_context(
+            workcell_id=workcell.workcell_id,
+            manager_id=workcell.workcell_id,
+        ):
+            if start_engine:
+                engine = Engine(state_handler)
+                engine.spin()
+            else:
+                with state_handler.wc_state_lock():
+                    state_handler.initialize_workcell_state(
+                        resource_client=ResourceClient()
                     )
-                    if workcell.config.resource_server_url is not None
-                    else None,
-                )
-        yield
+            yield
 
     app = FastAPI(lifespan=lifespan)
+
+    @app.middleware("http")
+    async def ownership_middleware(request: Request, call_next: Callable) -> Response:
+        """Middleware to set ownership context for each request."""
+        with ownership_context(
+            workcell_id=workcell.workcell_id,
+            manager_id=workcell.workcell_id,
+        ):
+            return await call_next(request)
 
     @app.get("/")
     @app.get("/info")
@@ -107,7 +149,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 node_url=node_url,
                 node_description=node_description,
             )
-            workcell.to_yaml(workcell._definition_path)
+            # TODO: Save the workcell definition to the YAML
         return state_handler.get_node(node_name)
 
     @app.get("/admin/{command}")
@@ -277,37 +319,36 @@ def create_workcell_server(  # noqa: C901, PLR0915
             if ownership_info
             else OwnershipInfo()
         )
-
-        if parameters is None or parameters == "":
-            parameters = {}
-        else:
-            parameters = json.loads(parameters)
-            if not isinstance(parameters, dict) or not all(
-                isinstance(k, str) for k in parameters
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Parameters must be a dictionary with string keys",
-                )
-        workcell = state_handler.get_workcell_definition()
-        wf = create_workflow(
-            workflow_def=wf_def,
-            workcell=workcell,
-            ownership_info=ownership_info,
-            parameters=parameters,
-            state_handler=state_handler,
-        )
-
-        if not validate_only:
-            wf = save_workflow_files(
-                working_directory=workcell.workcell_directory,
-                workflow=wf,
-                files=files,
+        with ownership_context(**ownership_info.model_dump(exclude_none=True)):
+            if parameters is None or parameters == "":
+                parameters = {}
+            else:
+                parameters = json.loads(parameters)
+                if not isinstance(parameters, dict) or not all(
+                    isinstance(k, str) for k in parameters
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Parameters must be a dictionary with string keys",
+                    )
+            workcell = state_handler.get_workcell_definition()
+            wf = create_workflow(
+                workflow_def=wf_def,
+                workcell=workcell,
+                parameters=parameters,
+                state_handler=state_handler,
             )
-            with state_handler.wc_state_lock():
-                state_handler.set_active_workflow(wf)
-                state_handler.enqueue_workflow(wf.workflow_id)
-        return wf
+
+            if not validate_only:
+                wf = save_workflow_files(
+                    working_directory=workcell.workcell_directory,
+                    workflow=wf,
+                    files=files,
+                )
+                with state_handler.wc_state_lock():
+                    state_handler.set_active_workflow(wf)
+                    state_handler.enqueue_workflow(wf.workflow_id)
+            return wf
 
     @app.get("/locations")
     def get_locations() -> dict[str, Location]:
@@ -374,15 +415,10 @@ def create_workcell_server(  # noqa: C901, PLR0915
 if __name__ == "__main__":
     import uvicorn
 
-    workcell = None
-    workcell = WorkcellDefinition.load_model(require_unique=True)
-    if workcell is None:
-        raise ValueError(
-            "No workcell manager definition found, please specify a path with --definition, or add it to your lab definition's 'managers' section"
-        )
-    app = create_workcell_server(workcell)
+    workcell_settings = WorkcellManagerSettings()
+    app = create_workcell_server(workcell_settings=workcell_settings)
     uvicorn.run(
         app,
-        host=workcell.config.host,
-        port=workcell.config.port,
+        host=workcell_settings.workcell_server_url.host,
+        port=workcell_settings.workcell_server_url.port or 8000,
     )

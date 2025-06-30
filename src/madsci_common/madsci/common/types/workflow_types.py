@@ -3,14 +3,16 @@
 from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, new_ulid_str
+from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.step_types import Step, StepDefinition
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field, field_validator
 
 
-class WorkflowStatus(BaseModel):
+class WorkflowStatus(MadsciBaseModel):
     """Representation of the status of a Workflow"""
 
     current_step_index: int = 0
@@ -87,7 +89,7 @@ class WorkflowStatus(BaseModel):
         return "Unknown"
 
 
-class WorkflowParameter(BaseModel):
+class WorkflowParameter(MadsciBaseModel):
     """container for a workflow parameter"""
 
     name: str
@@ -96,7 +98,7 @@ class WorkflowParameter(BaseModel):
     """ the default value of the parameter"""
 
 
-class WorkflowMetadata(BaseModel, extra="allow"):
+class WorkflowMetadata(MadsciBaseModel, extra="allow"):
     """Metadata container"""
 
     author: Optional[str] = None
@@ -107,7 +109,7 @@ class WorkflowMetadata(BaseModel, extra="allow"):
     """Version of the object"""
 
 
-class WorkflowDefinition(BaseModel):
+class WorkflowDefinition(MadsciBaseModel):
     """Grand container that pulls all info of a workflow together"""
 
     name: str
@@ -133,7 +135,7 @@ class WorkflowDefinition(BaseModel):
         return v
 
 
-class SchedulerMetadata(BaseModel):
+class SchedulerMetadata(MadsciBaseModel):
     """Scheduler information"""
 
     ready_to_run: bool = False
@@ -157,8 +159,8 @@ class Workflow(WorkflowDefinition):
     """Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory=dict)
     """parameter values used in this workflow"""
-    ownership_info: OwnershipInfo = Field(default_factory=OwnershipInfo)
-    """ID of the experiment this workflow is a part of"""
+    ownership_info: OwnershipInfo = Field(default_factory=get_current_ownership_info)
+    """Ownership information for the workflow run"""
     status: WorkflowStatus = Field(default_factory=WorkflowStatus)
     """current status of the workflow"""
     step_index: int = 0

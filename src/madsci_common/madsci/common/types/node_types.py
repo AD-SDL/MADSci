@@ -2,28 +2,32 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, ClassVar, Optional
+from pathlib import Path
+from typing import Any, Optional
 
 from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.admin_command_types import AdminCommands
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel, Error, new_ulid_str
-from madsci.common.types.datapoint_types import ObjectStorageDefinition
-from madsci.common.types.event_types import EventClientConfig
+from madsci.common.types.base_types import (
+    Error,
+    MadsciBaseModel,
+    MadsciBaseSettings,
+    PathLike,
+)
+from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import (
+    Field,
     SerializationInfo,
     SerializerFunctionWrapHandler,
     field_serializer,
     model_serializer,
 )
-from pydantic.config import ConfigDict
 from pydantic.fields import computed_field
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from pydantic_extra_types.semantic_version import SemanticVersion
 from semver import Version
-from sqlmodel.main import Field
 
 
 class NodeType(str, Enum):
@@ -38,11 +42,32 @@ class NodeType(str, Enum):
     TRANSFER_MANAGER = "transfer_manager"
 
 
-class NodeConfig(BaseModel):
+class NodeConfig(
+    MadsciBaseSettings,
+    env_file=(".env", "node.env"),
+    toml_file=("settings.toml", "node.settings.toml"),
+    yaml_file=("settings.yaml", "node.settings.yaml"),
+    json_file=("settings.json", "node.settings.json"),
+    env_prefix="NODE_",
+):
     """Basic Configuration for a MADSci Node."""
 
-    model_config = ConfigDict(extra="allow")
-
+    node_definition: Optional[PathLike] = Field(
+        title="Node Definition File",
+        description="Path to the node definition file to use. If set, the node will load the definition from this file on startup. Otherwise, a default configuration will be created.",
+        default=Path("default.node.yaml"),
+        alias="node_definition",  # * Don't double prefix
+    )
+    node_info_path: Optional[PathLike] = Field(
+        title="Node Info Path",
+        description="Path to export the generated node info file. If not set, will use the node name and the node_definition's path.",
+        default=None,
+    )
+    update_node_files: bool = Field(
+        title="Update Node Files",
+        description="Whether to update the node definition and info files on startup. If set to False, the node will not update the files even if they are out of date.",
+        default=True,
+    )
     status_update_interval: Optional[float] = Field(
         title="Status Update Interval",
         description="The interval in seconds at which the node should update its status.",
@@ -53,44 +78,25 @@ class NodeConfig(BaseModel):
         description="The interval in seconds at which the node should update its state.",
         default=2.0,
     )
-    event_client_config: Optional[EventClientConfig] = Field(
-        title="Event Client Configuration",
-        description="The configuration for a MADSci event client.",
-        default=None,
-    )
-    resource_server_url: Optional[AnyUrl] = Field(
-        title="Resource Client URL",
-        description="The URL of the resource server for this node to use.",
-        default=None,
-    )
-    minio_client_config: Optional[ObjectStorageDefinition] = Field(
-        title="Object Storage Configuration",
-        description="Configuration for S3-compatible object storage using MinIO.",
-        default=None,
-    )
 
 
 class RestNodeConfig(NodeConfig):
     """Default Configuration for a MADSci Node that communicates over REST."""
 
-    host: str = Field(
-        title="Host",
-        description="The host of the REST API.",
-        default="127.0.0.1",
+    node_url: AnyUrl = Field(
+        title="Node URL",
+        description="The URL used to communicate with the node. This is the base URL for the REST API.",
+        default=AnyUrl("http://127.0.0.1:2000"),
+        alias="node_url",  # * Don't double prefix
     )
-    port: int = Field(
-        title="Port",
-        description="The port of the REST API.",
-        default=2000,
-    )
-    protocol: str = Field(
-        title="Protocol",
-        description="The protocol of the REST API, either 'http' or 'https'.",
-        default="http",
+    uvicorn_kwargs: dict[str, Any] = Field(
+        title="Uvicorn Configuration",
+        description="Configuration for the Uvicorn server that runs the REST API.",
+        default_factory=dict,
     )
 
 
-class NodeClientCapabilities(BaseModel):
+class NodeClientCapabilities(MadsciBaseModel):
     """Capabilities of a MADSci Node Client. Default values are None, meaning the capability is not explicitly set. If a capability is set to False, it is explicitly not supported."""
 
     get_info: Optional[bool] = Field(
@@ -185,29 +191,22 @@ class NodeCapabilities(NodeClientCapabilities):
         return sorted(admin_commands)
 
 
-class NodeDefinition(BaseModel):
+class NodeDefinition(MadsciBaseModel):
     """Definition of a MADSci Node, a unique instance of a MADSci Node Module."""
-
-    _definition_file_patterns: ClassVar[list[str]] = ["*.node.yaml"]
 
     node_name: str = Field(title="Node Name", description="The name of the node.")
     node_id: str = Field(
         title="Node ID", description="The ID of the node.", default_factory=new_ulid_str
-    )
-    node_url: Optional[AnyUrl] = Field(
-        title="Node URL",
-        description="The URL used to communicate with the node.",
-        default=None,
     )
     node_description: Optional[str] = Field(
         title="Description",
         description="A description of the node.",
         default=None,
     )
-    node_type: Optional[NodeType] = Field(
+    node_type: NodeType = Field(
         title="Node Type",
         description="The type of thing this node provides an interface for.",
-        default=None,
+        default=NodeType.DEVICE,
     )
     module_name: str = Field(
         title="Node Module Name",
@@ -223,36 +222,11 @@ class NodeDefinition(BaseModel):
         title="Node Capabilities",
         description="Explicitly override the capabilities of the node.",
     )
-    commands: dict[str, str] = Field(
-        title="Node Commands",
-        description="The commands that the node supports. These can be used to stop, start, or otherwise administrate the node(s).",
-        default_factory=dict,
-    )
-    is_template: bool = Field(
-        default=False,
-        title="Is Template",
-        description="Whether this is a template definition.",
-    )
-    config_defaults: dict[str, Any] = Field(
-        default_factory=dict,
-        title="Node Configuration Defaults",
-        description="Default values to use for configuration parameters for this particular node.",
-    )
 
     is_ulid = field_validator("node_id")(ulid_validator)
 
-    @model_serializer(mode="wrap")
-    def exclude_node_id_on_templates(
-        self, nxt: SerializerFunctionWrapHandler, info: SerializationInfo
-    ) -> dict[str, Any]:
-        """Exclude node_id on templates."""
-        serialized = nxt(self, info)
-        if self.is_template:
-            serialized.pop("node_id")
-        return serialized
 
-
-class Node(BaseModel, arbitrary_types_allowed=True):
+class Node(MadsciBaseModel, arbitrary_types_allowed=True):
     """A runtime representation of a MADSci Node used in a Workcell."""
 
     node_url: AnyUrl = Field(
@@ -284,6 +258,11 @@ class Node(BaseModel, arbitrary_types_allowed=True):
 class NodeInfo(NodeDefinition):
     """Information about a MADSci Node."""
 
+    node_url: Optional[AnyUrl] = Field(
+        title="Node URL",
+        description="The URL used to communicate with the node.",
+        default=None,
+    )
     actions: dict[str, "ActionDefinition"] = Field(
         title="Node Actions",
         description="The actions that the node supports.",
@@ -314,7 +293,7 @@ class NodeInfo(NodeDefinition):
         )
 
 
-class NodeStatus(BaseModel):
+class NodeStatus(MadsciBaseModel):
     """Status of a MADSci Node."""
 
     busy: bool = Field(
@@ -413,7 +392,7 @@ class NodeStatus(BaseModel):
         return "Node is ready"
 
 
-class NodeReservation(BaseModel):
+class NodeReservation(MadsciBaseModel):
     """Reservation of a MADSci Node."""
 
     owned_by: OwnershipInfo = Field(
@@ -442,7 +421,7 @@ class NodeReservation(BaseModel):
         )
 
 
-class NodeSetConfigResponse(BaseModel):
+class NodeSetConfigResponse(MadsciBaseModel):
     """Response from a Node Set Config Request"""
 
     success: bool = Field(

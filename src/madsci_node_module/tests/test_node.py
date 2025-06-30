@@ -20,6 +20,7 @@ class TestNodeConfig(RestNodeConfig):
     """An optional parameter."""
     test_default_param: int = 42
     """A parameter with a default value."""
+    update_node_files: bool = False
 
 
 class TestNodeInterface:
@@ -48,6 +49,7 @@ class TestNode(RestNode):
     __test__ = False
 
     test_interface: TestNodeInterface = None
+    config: TestNodeConfig
     config_model = TestNodeConfig
 
     def startup_handler(self) -> None:

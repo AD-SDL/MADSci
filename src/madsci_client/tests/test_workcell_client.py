@@ -7,9 +7,9 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
-from madsci.common.types.base_types import new_ulid_str
 from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
+from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.workcell_server import (
     WorkflowDefinition,
     create_workcell_server,
@@ -59,7 +59,10 @@ def test_client(
 ) -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
     app = create_workcell_server(
-        workcell, redis_server, mongo_server, start_engine=False
+        workcell=workcell,
+        redis_connection=redis_server,
+        mongo_connection=mongo_server,
+        start_engine=False,
     )
     client = TestClient(app)
     with client:
@@ -89,7 +92,7 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
 
         mock_requests.delete.side_effect = delete_no_timeout
 
-        yield WorkcellClient(workcell_manager_url="http://testserver")
+        yield WorkcellClient(workcell_server_url="http://testserver")
 
 
 def test_get_nodes(client: WorkcellClient) -> None:

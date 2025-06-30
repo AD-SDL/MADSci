@@ -22,12 +22,14 @@ class PlateReaderInterface:
 
     status_code: int = 0
     device_number: int = 0
+    config: PlateReaderConfig = PlateReaderConfig()
+    config_model = PlateReaderConfig
 
     def __init__(
         self, device_number: int = 0, logger: Optional[EventClient] = None
     ) -> "PlateReaderInterface":
         """Initialize the plate reader."""
-        self.logger = logger if logger else EventClient()
+        self.logger = logger or EventClient()
         self.device_number = device_number
 
     def run_command(self, command: str) -> None:

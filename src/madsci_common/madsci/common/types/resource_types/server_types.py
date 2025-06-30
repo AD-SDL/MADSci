@@ -3,7 +3,7 @@
 from typing import Any, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import BaseModel
+from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.resource_types import (
     GridIndex,
     GridIndex2D,
@@ -15,7 +15,7 @@ from pydantic.config import ConfigDict
 from pydantic.types import datetime
 
 
-class ResourceRequestBase(BaseModel):
+class ResourceRequestBase(MadsciBaseModel):
     """Base class for all resource request models."""
 
     model_config = ConfigDict(
