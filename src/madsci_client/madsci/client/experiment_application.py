@@ -194,7 +194,10 @@ class ExperimentApplication(RestNode):
         self.start_experiment_run(run_name=run_name, run_description=run_description)
         try:
             yield
-        finally:
+        except Exception as e:
+            self.end_experiment(ExperimentStatus.FAILED)
+            raise(e)
+        else:
             self.end_experiment()
 
     @threaded_daemon
