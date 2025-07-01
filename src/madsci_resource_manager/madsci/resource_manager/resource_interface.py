@@ -807,7 +807,7 @@ class ResourceInterface:
     ) -> ResourceDataModels:
         """initialize a custom resource"""
         self.logger.warning(
-            "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION. Use Template methods instead."
+            "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION! Use Template methods instead."
         )
         input_dict = input_definition.model_dump(mode="json", exclude_unset=True)
         custom_dict = custom_definition.model_dump(mode="json")
