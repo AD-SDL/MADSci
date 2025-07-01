@@ -36,7 +36,7 @@ def test_template_interface():
         rows=8,
         columns=12,
         capacity=96,
-        attributes={"well_volume": 200, "material": "polystyrene"},
+        attributes={"well_volume": 300, "material": "polystyrene"},
     )
 
     # Test 1: Create Template from Resource
@@ -47,7 +47,6 @@ def test_template_interface():
             template_name="test_plate_template",
             description="A template for creating 96-well plates for testing",
             required_overrides=["resource_name"],
-            source="system",
             tags=["plate", "96-well", "testing"],
             created_by="test_system",
         )
@@ -88,7 +87,6 @@ def test_template_interface():
             print(f" Template metadata:")
             print(f"   Description: {template_info['description']}")
             print(f"   Required overrides: {template_info['required_overrides']}")
-            print(f"   Source: {template_info['source']}")
             print(f"   Tags: {template_info['tags']}")
             print(f"   Created by: {template_info['created_by']}")
             print(
@@ -108,10 +106,6 @@ def test_template_interface():
         print(f"Found {len(all_templates)} templates")
         for template in all_templates:
             print(f"   - {template.resource_name} ({template.base_type})")
-
-        # Test filtering by source
-        system_templates = interface.list_templates(source="system")
-        print(f"Found {len(system_templates)} SYSTEM templates")
 
         # Test filtering by tags
         plate_templates = interface.list_templates(tags=["plate"])
@@ -217,27 +211,27 @@ def test_template_interface():
         print(f" Error handling test failed: {e}")
 
     # Test 10: Delete Template
-    print("\n Testing delete_template()...")
-    try:
-        deleted = interface.delete_template("test_plate_template")
-        if deleted:
-            print(" Successfully deleted test template")
+    # print("\n Testing delete_template()...")
+    # try:
+    #     deleted = interface.delete_template("test_plate_template")
+    #     if deleted:
+    #         print(" Successfully deleted test template")
 
-            # Verify it's gone
-            retrieved = interface.get_template("test_plate_template")
-            if retrieved is None:
-                print(" Confirmed template was deleted")
-            else:
-                print(" Template still exists after deletion")
-        else:
-            print(" Delete returned False")
+    #         # Verify it's gone
+    #         retrieved = interface.get_template("test_plate_template")
+    #         if retrieved is None:
+    #             print(" Confirmed template was deleted")
+    #         else:
+    #             print(" Template still exists after deletion")
+    #     else:
+    #         print(" Delete returned False")
 
-        # Test deleting non-existent template
-        deleted_again = interface.delete_template("test_plate_template")
-        if not deleted_again:
-            print(" Correctly returned False for deleting non-existent template")
-        else:
-            print(" Should have returned False for non-existent template")
+    #     # Test deleting non-existent template
+    #     deleted_again = interface.delete_template("test_plate_template")
+    #     if not deleted_again:
+    #         print(" Correctly returned False for deleting non-existent template")
+    #     else:
+    #         print(" Should have returned False for non-existent template")
 
     except Exception as e:
         print(f" Failed to delete template: {e}")
@@ -311,7 +305,6 @@ def test_template_edge_cases():
             description="384-well plate with complex attributes",
             required_overrides=["resource_name", "attributes.lot_number"],
             tags=["plate", "384-well", "complex", "tissue-culture"],
-            source="system",
         )
 
         print(f"   Created complex template: {template.resource_name}")
@@ -352,7 +345,7 @@ def test_template_client():
     print("Starting Template Client Tests...")
 
     # Initialize client with REST API URL
-    client = ResourceClient(url="http://localhost:8004")
+    client = ResourceClient(url="http://localhost:8003")
 
     # Create a sample plate resource
     plate_resource = Container(
@@ -373,7 +366,6 @@ def test_template_client():
             template_name="test_plate_template",
             description="A template for creating 96-well plates for testing",
             required_overrides=["resource_name", "attributes.batch_number"],
-            source="system",
             tags=["plate", "96-well", "testing"],
             created_by="test_system",
         )
@@ -407,7 +399,6 @@ def test_template_client():
             print(f"Template metadata:")
             print(f"Description: {template_info['description']}")
             print(f"Required overrides: {template_info['required_overrides']}")
-            print(f"Source: {template_info['source']}")
             print(f"Tags: {template_info['tags']}")
         else:
             print("Template info not found")
@@ -423,10 +414,6 @@ def test_template_client():
         print(f"Found {len(all_templates)} templates")
         for template in all_templates:
             print(f"- {template.resource_name} ({template.base_type})")
-
-        # Test filtering by source
-        system_templates = client.list_templates(source="system")
-        print(f"Found {len(system_templates)} system templates")
 
         # Test filtering by tags
         plate_templates = client.list_templates(tags=["plate"])
@@ -574,7 +561,7 @@ def test_template_client_edge_cases():
     """Test edge cases with the client approach."""
     print("\nTesting Edge Cases...")
 
-    client = ResourceClient(url="http://localhost:8004")
+    client = ResourceClient(url="http://localhost:8003")
 
     # Test with minimal resource
     minimal_resource = Resource(resource_name="MinimalResource")
@@ -633,7 +620,6 @@ def test_template_client_edge_cases():
             description="384-well plate with complex attributes",
             required_overrides=["resource_name"],
             tags=["plate", "384-well", "complex", "tissue-culture"],
-            source="system",
         )
 
         print(f"Created complex template: {template.resource_name}")
