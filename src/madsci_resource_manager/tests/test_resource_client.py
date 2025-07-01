@@ -323,7 +323,6 @@ def test_create_template(client: ResourceClient) -> None:
         template_name="test_plate_template",
         description="A template for creating 96-well plates",
         required_overrides=["resource_name"],
-        source="system",
         tags=["plate", "96-well", "testing"],
         created_by="test_system",
     )
@@ -368,7 +367,6 @@ def test_list_templates(client: ResourceClient) -> None:
         resource=resource1,
         template_name="list_test_template_1",
         description="First template",
-        source="system",
         tags=["container", "test"],
     )
 
@@ -376,7 +374,6 @@ def test_list_templates(client: ResourceClient) -> None:
         resource=resource2,
         template_name="list_test_template_2",
         description="Second template",
-        source="node",
         tags=["resource", "test"],
     )
 
@@ -385,10 +382,6 @@ def test_list_templates(client: ResourceClient) -> None:
     template_names = [t.resource_name for t in all_templates]
     assert "Container1" in template_names
     assert "Resource2" in template_names
-
-    # Filter by source
-    system_templates = client.list_templates(source="system")
-    assert len(system_templates) >= 1
 
     # Filter by tags
     test_templates = client.list_templates(tags=["test"])
@@ -403,7 +396,6 @@ def test_get_template_info(client: ResourceClient) -> None:
         template_name="info_test_template",
         description="Template for info test",
         required_overrides=["resource_name", "capacity"],
-        source="system",
         tags=["info", "test"],
         created_by="test_user",
         version="2.0.0",
@@ -414,7 +406,6 @@ def test_get_template_info(client: ResourceClient) -> None:
     assert template_info is not None
     assert template_info["description"] == "Template for info test"
     assert template_info["required_overrides"] == ["resource_name", "capacity"]
-    assert template_info["source"] == "system"
     assert template_info["tags"] == ["info", "test"]
     assert template_info["created_by"] == "test_user"
     assert template_info["version"] == "2.0.0"
@@ -436,7 +427,6 @@ def test_update_template(client: ResourceClient) -> None:
         {
             "description": "Updated description",
             "tags": ["updated", "modified"],
-            "source": "node",
             "capacity": 200,
         },
     )
@@ -447,7 +437,6 @@ def test_update_template(client: ResourceClient) -> None:
     template_info = client.get_template_info("update_test_template")
     assert template_info["description"] == "Updated description"
     assert template_info["tags"] == ["updated", "modified"]
-    assert template_info["source"] == "node"
 
 
 def test_delete_template(client: ResourceClient) -> None:
