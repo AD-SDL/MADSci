@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { main_url } from "@/store";
+import { urls } from "@/store";
 import { ref, watchEffect } from 'vue';
 
 const props = defineProps<{
@@ -37,11 +37,11 @@ const hoverText = ref('')
 // Format cancel url
 watchEffect(() => {
     if (props.module) {
-        cancel_url.value = main_url.value.concat('/admin/cancel/'.concat(props.module))
+        cancel_url.value = urls.value.workcell_server_url.concat('admin/cancel/'.concat(props.module))
         hoverText.value = "Cancel Module Action"
     }
     else {
-        cancel_url.value = main_url.value.concat('/admin/cancel')
+        cancel_url.value = urls.value.workcell_server_url.concat('admin/cancel')
         hoverText.value = "Cancel All Workflows"
     }
 })

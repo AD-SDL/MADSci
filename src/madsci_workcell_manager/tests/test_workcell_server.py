@@ -104,7 +104,7 @@ def test_add_node(test_client: TestClient) -> None:
 def test_send_admin_command(test_client: TestClient) -> None:
     """Test sending an admin command to all nodes."""
     with test_client as client:
-        response = client.get("/admin/reset")
+        response = client.post("/admin/reset")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 

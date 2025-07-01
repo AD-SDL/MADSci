@@ -127,7 +127,7 @@ def create_workflow(
             raise ValueError(validation_string)
         steps.append(working_step)
 
-    wf.steps = steps
+    wf.steps = [Step.model_validate(step.model_dump()) for step in steps]
     wf.submitted_time = datetime.now()
     return wf
 

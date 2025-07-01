@@ -21,7 +21,7 @@
 </template>
 
 <script lang="ts" setup>
-    import { main_url } from "@/store";
+    import { urls } from "@/store";
 import { ref, watchEffect } from 'vue';
 
     const props = defineProps<{
@@ -34,11 +34,11 @@ import { ref, watchEffect } from 'vue';
     // Format safety stop url
     watchEffect(() => {
         if (props.module) {
-            safetyStop_url.value = main_url.value.concat('/admin/safety_stop/'.concat(props.module))
+            safetyStop_url.value = urls.value.workcell_server_url.concat('admin/safety_stop/'.concat(props.module))
             hoverText.value = "Stop Module"
         }
         else {
-            safetyStop_url.value = main_url.value.concat('/admin/safety_stop')
+            safetyStop_url.value = urls.value.workcell_server_url.concat('admin/safety_stop')
             hoverText.value = "Stop Workcell"
         }
     })

@@ -66,12 +66,12 @@ loc_text.value=props.modal_text
 
 
 async function get_location(node: string): Promise<any>{
-  var loc_data = await ((await fetch(urls.value.workcell_manager.concat('admin/get_location/').concat(node))).json())
+  var loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(node))).json())
   add_lookup_value.value = JSON.stringify(loc_data[0].data)
 }
 
 async function submit_location(node: string): Promise<any>{
-  var test = await ((await fetch(urls.value.workcell_manager.concat('location/').concat(props.modal_text.location_id).concat("/add_lookup/").concat(node),
+  var test = await ((await fetch(urls.value.workcell_server_url.concat('location/').concat(props.modal_text.location_id).concat("/add_lookup/").concat(node),
     {method: "POST",
     headers: {
     'Content-Type': 'application/json'

@@ -109,7 +109,7 @@ function addField() {
     }
 
 async function get_location(node: string): Promise<any>{
-  var loc_data = await ((await fetch(urls.value.workcell_manager.concat('admin/get_location/').concat(node))).json())
+  var loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(node))).json())
   add_lookup_value.value = JSON.stringify(loc_data[0].data)
 }
 
@@ -135,7 +135,7 @@ function submitLocation() {
     if(base_type.value != null) {
     location["resource_definition"] = resource
     }
-    fetch(urls.value.workcell_manager.concat('location'), {
+    fetch(urls.value.workcell_server_url.concat('location'), {
     method: "POST",
     headers: {
     'Content-Type': 'application/json'

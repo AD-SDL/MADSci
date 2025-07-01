@@ -15,7 +15,7 @@ from fastapi.background import BackgroundTasks
 from fastapi.datastructures import UploadFile
 from fastapi.routing import APIRouter
 from madsci.client.node.rest_node_client import RestNodeClient
-from madsci.common.ownership import ownership_context
+from madsci.common.ownership import global_ownership_info
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
@@ -64,33 +64,33 @@ class RestNode(AbstractNode):
 
     def start_node(self, testing: bool = False) -> None:
         """Start the node."""
-        with ownership_context(node_id=self.node_definition.node_id):
-            url = AnyUrl(getattr(self.config, "node_url", "http://127.0.0.1:2000"))
-            if not testing:
-                self.logger.log_debug("Running node in production mode")
-                import uvicorn
+        global_ownership_info.node_id = self.node_definition.node_id
+        url = AnyUrl(getattr(self.config, "node_url", "http://127.0.0.1:2000"))
+        if not testing:
+            self.logger.log_debug("Running node in production mode")
+            import uvicorn
 
-                self.rest_api = FastAPI(lifespan=self._lifespan)
+            self.rest_api = FastAPI(lifespan=self._lifespan)
 
-                # Middleware to set ownership context for each request
-                @self.rest_api.middleware("http")
-                async def ownership_middleware(
-                    request: Request, call_next: Callable
-                ) -> Response:
-                    with ownership_context(node_id=self.node_definition.node_id):
-                        return await call_next(request)
+            # Middleware to set ownership context for each request
+            @self.rest_api.middleware("http")
+            async def ownership_middleware(
+                request: Request, call_next: Callable
+            ) -> Response:
+                global_ownership_info.node_id = self.node_definition.node_id
+                return await call_next(request)
 
-                self._configure_routes()
-                uvicorn.run(
-                    self.rest_api,
-                    host=url.host if url.host else "127.0.0.1",
-                    port=url.port if url.port else 2000,
-                    **getattr(self.config, "uvicorn_kwargs", {}),
-                )
-            else:
-                self.logger.log_debug("Running node in test mode")
-                self.rest_api = FastAPI(lifespan=self._lifespan)
-                self._configure_routes()
+            self._configure_routes()
+            uvicorn.run(
+                self.rest_api,
+                host=url.host if url.host else "127.0.0.1",
+                port=url.port if url.port else 2000,
+                **getattr(self.config, "uvicorn_kwargs", {}),
+            )
+        else:
+            self.logger.log_debug("Running node in test mode")
+            self.rest_api = FastAPI(lifespan=self._lifespan)
+            self._configure_routes()
 
     """------------------------------------------------------------------------------------------------"""
     """Interface Methods"""
