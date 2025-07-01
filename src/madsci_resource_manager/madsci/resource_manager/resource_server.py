@@ -274,7 +274,6 @@ def create_resource_server(  # noqa: C901, PLR0915
                 template_name=body.template_name,
                 description=body.description,
                 required_overrides=body.required_overrides,
-                source=body.source.lower() if body.source else "system",
                 tags=body.tags,
                 created_by=body.created_by,
                 version=body.version,
@@ -290,7 +289,6 @@ def create_resource_server(  # noqa: C901, PLR0915
         """List templates with optional filtering."""
         try:
             return resource_interface.list_templates(
-                source=query.source.lower() if query.source else None,
                 base_type=query.base_type,
                 tags=query.tags,
                 created_by=query.created_by,
@@ -356,10 +354,7 @@ def create_resource_server(  # noqa: C901, PLR0915
     ) -> ResourceDataModels:
         """Update an existing template."""
         try:
-            # Apply .lower() to source if it's being updated
             updates = body.updates.copy()
-            if updates.get("source"):
-                updates["source"] = updates["source"].lower()
 
             return resource_interface.update_template(template_name, updates)
         except ValueError as e:
