@@ -161,6 +161,12 @@ class ResourceTableBase(Resource):
             "server_default": text("CURRENT_TIMESTAMP"),
         },
     )
+    template_name: Optional[str] = Field(
+        title="Template Name",
+        description="Name of the template this resource was created from.",
+        nullable=True,
+        default=None,
+    )
 
     def to_data_model(self, include_children: bool = True) -> ResourceDataModels:
         """
@@ -329,7 +335,7 @@ class ResourceTemplateTable(ResourceTableBase, table=True):
     template_name: str = Field(
         title="Template Name",
         description="Unique identifier and display name for the template.",
-        unique=True,  # Make template_name unique but not primary key
+        unique=True,
         nullable=False,
     )
     description: str = Field(
@@ -359,12 +365,6 @@ class ResourceTemplateTable(ResourceTableBase, table=True):
         description="List of fields that must be provided when using this template.",
         sa_type=JSON,
         default_factory=list,
-    )
-    source: str = Field(
-        title="Template Source",
-        description="The source/origin of this template (SYSTEM, NODE, EXPERIMENT, etc.).",
-        nullable=False,
-        default="system",
     )
     tags: list[str] = Field(
         title="Tags",

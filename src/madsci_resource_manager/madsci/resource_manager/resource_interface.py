@@ -11,6 +11,7 @@ from typing import Any, Optional, Union
 from madsci.client.event_client import EventClient
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
+    RESOURCE_TYPE_MAP,
     Collection,
     ConsumableTypeEnum,
     Container,
@@ -804,7 +805,10 @@ class ResourceInterface:
         input_definition: ResourceDefinitions,
         custom_definition: ResourceDefinitions,
     ) -> ResourceDataModels:
-        """initialize a customr resource"""
+        """initialize a custom resource"""
+        self.logger.warning(
+            "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION. Use Template methods instead."
+        )
         input_dict = input_definition.model_dump(mode="json", exclude_unset=True)
         custom_dict = custom_definition.model_dump(mode="json")
         custom_dict.update(**input_dict)
@@ -855,7 +859,6 @@ class ResourceInterface:
         template_name: str,
         description: str = "",
         required_overrides: Optional[list[str]] = None,
-        source: str = "system",
         tags: Optional[list[str]] = None,
         created_by: Optional[str] = None,
         version: str = "1.0.0",
@@ -869,7 +872,6 @@ class ResourceInterface:
             template_name (str): Unique name for the template.
             description (str): Description of what this template creates.
             required_overrides (Optional[list[str]]): Fields that must be provided when using template.
-            source (str): Source of the template.
             tags (Optional[list[str]]): Tags for categorization.
             created_by (Optional[str]): Creator identifier.
             version (str): Template version.
@@ -880,7 +882,7 @@ class ResourceInterface:
         """
         try:
             with self.get_session(parent_session) as session:
-                # Check if template name already exists
+                # Check if template already exists
                 existing_template = session.exec(
                     select(ResourceTemplateTable).where(
                         ResourceTemplateTable.template_name == template_name
@@ -888,42 +890,40 @@ class ResourceInterface:
                 ).first()
 
                 if existing_template:
-                    self.logger.info(
-                        f"Template '{template_name}' already exists in the database. No action taken."
-                    )
-                    return existing_template.to_data_model()
+                    session.delete(existing_template)
+                    session.flush()
 
-                # Get the resource data and add template-specific fields
+                # Prepare new template data (no source field)
                 resource_data = resource.model_dump(
                     exclude={"resource_id", "created_at", "updated_at"}
                 )
-
-                # Create template table entry with both resource and template fields
                 template_data = {
-                    **resource_data,  # Include all resource fields
+                    **resource_data,
                     "template_name": template_name,
                     "description": description,
                     "required_overrides": required_overrides or [],
-                    "source": source.lower(),
                     "tags": tags or [],
                     "created_by": created_by,
                     "version": version,
-                    "default_values": resource_data,  # Store original resource data as defaults
+                    "default_values": resource_data,
                 }
 
+                # Create new template
                 template_row = ResourceTemplateTable(**template_data)
-
                 session.add(template_row)
+
+                action = "Replaced" if existing_template else "Created"
+                self.logger.info(f"{action} template '{template_name}'")
+
                 session.commit()
                 session.refresh(template_row)
 
-                self.logger.info(
-                    f"Created template '{template_name}' from resource '{resource.resource_name}'"
-                )
                 return template_row.to_data_model()
 
         except Exception as e:
-            self.logger.error(f"Error creating template: \n{traceback.format_exc()}")
+            self.logger.error(
+                f"Error creating/updating template: \n{traceback.format_exc()}"
+            )
             raise e
 
     def get_template(
@@ -945,7 +945,7 @@ class ResourceInterface:
             with self.get_session(parent_session) as session:
                 template_row = session.exec(
                     select(ResourceTemplateTable).where(
-                        ResourceTemplateTable.template_name == template_name
+                        ResourceTemplateTable.template_name == template_name.lower()
                     )
                 ).first()
 
@@ -978,7 +978,7 @@ class ResourceInterface:
             with self.get_session(parent_session) as session:
                 template_row = session.exec(
                     select(ResourceTemplateTable).where(
-                        ResourceTemplateTable.template_name == template_name
+                        ResourceTemplateTable.template_name == template_name.lower()
                     )
                 ).one()
 
@@ -1038,7 +1038,7 @@ class ResourceInterface:
             with self.get_session(parent_session) as session:
                 template_row = session.exec(
                     select(ResourceTemplateTable).where(
-                        ResourceTemplateTable.template_name == template_name
+                        ResourceTemplateTable.template_name == template_name.lower()
                     )
                 ).first()
 
@@ -1060,7 +1060,6 @@ class ResourceInterface:
 
     def list_templates(
         self,
-        source: Optional[str] = None,
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
         created_by: Optional[str] = None,
@@ -1070,7 +1069,6 @@ class ResourceInterface:
         List templates with optional filtering, returned as resources.
 
         Args:
-            source (Optional[str]): Filter by template source.
             base_type (Optional[str]): Filter by base resource type.
             tags (Optional[list[str]]): Filter by templates that have any of these tags.
             created_by (Optional[str]): Filter by creator.
@@ -1084,10 +1082,6 @@ class ResourceInterface:
                 statement = select(ResourceTemplateTable)
 
                 # Apply simple filters first
-                if source:
-                    statement = statement.where(
-                        ResourceTemplateTable.source == source.lower()
-                    )
                 if base_type:
                     statement = statement.where(
                         ResourceTemplateTable.base_type == base_type
@@ -1167,7 +1161,7 @@ class ResourceInterface:
                 # Get the template from the template table
                 template_row = session.exec(
                     select(ResourceTemplateTable).where(
-                        ResourceTemplateTable.template_name == template_name
+                        ResourceTemplateTable.template_name == template_name.lower()
                     )
                 ).first()
 
@@ -1185,7 +1179,7 @@ class ResourceInterface:
                 resource_data = template_row.default_values.copy()
                 resource_data.update(overrides)
                 resource_data["resource_name"] = resource_name
-
+                resource_data["template_name"] = template_row.template_name.lower()
                 # Clean up template-specific fields
                 resource_data.pop("resource_id", None)
                 resource_data.pop("created_at", None)
@@ -1195,8 +1189,6 @@ class ResourceInterface:
                 self._validate_template_required_fields(template_row, resource_data)
 
                 # Create the resource
-                from madsci.common.types.resource_types import RESOURCE_TYPE_MAP
-
                 if template_row.base_type not in RESOURCE_TYPE_MAP:
                     raise ValueError(f"Unknown base type: {template_row.base_type}")
 
@@ -1249,7 +1241,7 @@ class ResourceInterface:
             with self.get_session(parent_session) as session:
                 template_row = session.exec(
                     select(ResourceTemplateTable).where(
-                        ResourceTemplateTable.template_name == template_name
+                        ResourceTemplateTable.template_name == template_name.lower()
                     )
                 ).first()
 
@@ -1260,7 +1252,6 @@ class ResourceInterface:
                     "template_name": template_row.template_name,
                     "description": template_row.description,
                     "required_overrides": template_row.required_overrides,
-                    "source": template_row.source,
                     "tags": template_row.tags,
                     "created_by": template_row.created_by,
                     "version": template_row.version,
@@ -1295,8 +1286,6 @@ class ResourceInterface:
             category = template.base_type.value
             if category not in categories:
                 categories[category] = []
-            # Templates are resources, so we need to get their template_name from the table
-            # For now, use resource_name which should be the template_name
             categories[category].append(template.resource_name)
 
         return categories

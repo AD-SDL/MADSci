@@ -111,8 +111,6 @@ class TemplateCreateBody(ResourceRequestBase):
     """Description of what this template creates."""
     required_overrides: Optional[list[str]] = None
     """Fields that must be provided when using template."""
-    source: Optional[str] = "SYSTEM"
-    """Source of the template (SYSTEM, NODE, EXPERIMENT, etc.)."""
     tags: Optional[list[str]] = None
     """Tags for categorization."""
     created_by: Optional[str] = None
@@ -124,8 +122,6 @@ class TemplateCreateBody(ResourceRequestBase):
 class TemplateGetQuery(ResourceRequestBase):
     """A request to list/filter templates."""
 
-    source: Optional[str] = None
-    """Filter by template source."""
     base_type: Optional[str] = None
     """Filter by base resource type."""
     tags: Optional[list[str]] = None
