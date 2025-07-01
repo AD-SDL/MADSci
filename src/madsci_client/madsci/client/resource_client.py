@@ -705,7 +705,6 @@ class ResourceClient:
         template_name: str,
         description: str = "",
         required_overrides: Optional[list[str]] = None,
-        source: str = "system",
         tags: Optional[list[str]] = None,
         created_by: Optional[str] = None,
         version: str = "1.0.0",
@@ -718,7 +717,6 @@ class ResourceClient:
             template_name (str): Unique name for the template.
             description (str): Description of what this template creates.
             required_overrides (Optional[list[str]]): Fields that must be provided when using template.
-            source (str): Source of the template (system, node, experiment, etc.).
             tags (Optional[list[str]]): Tags for categorization.
             created_by (Optional[str]): Creator identifier.
             version (str): Template version.
@@ -732,7 +730,6 @@ class ResourceClient:
                 template_name=template_name,
                 description=description,
                 required_overrides=required_overrides,
-                source=source,
                 tags=tags,
                 created_by=created_by,
                 version=version,
@@ -748,7 +745,6 @@ class ResourceClient:
                 "template_name": template_name,
                 "description": description,
                 "required_overrides": required_overrides or [],
-                "source": source,
                 "tags": tags or [],
                 "created_by": created_by,
                 "version": version,
@@ -782,7 +778,6 @@ class ResourceClient:
 
     def list_templates(
         self,
-        source: Optional[str] = None,
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
         created_by: Optional[str] = None,
@@ -791,7 +786,6 @@ class ResourceClient:
         List templates with optional filtering.
 
         Args:
-            source (Optional[str]): Filter by template source.
             base_type (Optional[str]): Filter by base resource type.
             tags (Optional[list[str]]): Filter by templates that have any of these tags.
             created_by (Optional[str]): Filter by creator.
@@ -800,10 +794,9 @@ class ResourceClient:
             list[ResourceDataModels]: List of template resources.
         """
         if self.url:
-            if any([source, base_type, tags, created_by]):
+            if any([base_type, tags, created_by]):
                 # Use query endpoint for filtering
                 payload = TemplateGetQuery(
-                    source=source,
                     base_type=base_type,
                     tags=tags,
                     created_by=created_by,
@@ -826,8 +819,6 @@ class ResourceClient:
         templates = []
         for template_name, template_data in self.local_templates.items():  # noqa
             # Apply filters
-            if source and template_data["source"] != source:
-                continue
             if base_type and template_data["resource"].base_type != base_type:
                 continue
             if tags and not any(tag in template_data["tags"] for tag in tags):
@@ -862,7 +853,6 @@ class ResourceClient:
                 "template_name": template_data["template_name"],
                 "description": template_data["description"],
                 "required_overrides": template_data["required_overrides"],
-                "source": template_data["source"],
                 "tags": template_data["tags"],
                 "created_by": template_data["created_by"],
                 "version": template_data["version"],
