@@ -893,7 +893,6 @@ class ResourceInterface:
                     session.delete(existing_template)
                     session.flush()
 
-                # Prepare new template data (no source field)
                 resource_data = resource.model_dump(
                     exclude={"resource_id", "created_at", "updated_at"}
                 )
@@ -1094,11 +1093,10 @@ class ResourceInterface:
                 # Get all matching templates first
                 template_rows = session.exec(statement).all()
 
-                # Filter by tags in Python if needed (more reliable than JSON operators)
                 if tags:
                     filtered_rows = []
                     for row in template_rows:
-                        row_tags = row.tags or []  # Handle None case
+                        row_tags = row.tags or []
                         # Check if any of the requested tags are in the template's tags
                         if any(tag in row_tags for tag in tags):
                             filtered_rows.append(row)
@@ -1204,7 +1202,7 @@ class ResourceInterface:
                     )
                     resource = self.add_resource(resource, parent_session=session)
                     self.logger.info(
-                        f"✅ Resource '{resource_name}' stored in resource table with ID: {resource.resource_id}"
+                        f"Resource '{resource_name}' stored in resource table with ID: {resource.resource_id}"
                     )
                 else:
                     self.logger.info(
@@ -1310,10 +1308,9 @@ class ResourceInterface:
                 # Get all templates
                 template_rows = session.exec(select(ResourceTemplateTable)).all()
 
-                # Filter by tags in Python (more reliable than database JSON operations)
                 matching_templates = []
                 for row in template_rows:
-                    row_tags = row.tags or []  # Handle None case
+                    row_tags = row.tags or []
                     # Check if any of the requested tags are in the template's tags
                     if any(tag in row_tags for tag in tags):
                         matching_templates.append(row.template_name)

@@ -211,27 +211,27 @@ def test_template_interface():
         print(f" Error handling test failed: {e}")
 
     # Test 10: Delete Template
-    # print("\n Testing delete_template()...")
-    # try:
-    #     deleted = interface.delete_template("test_plate_template")
-    #     if deleted:
-    #         print(" Successfully deleted test template")
+    print("\n Testing delete_template()...")
+    try:
+        deleted = interface.delete_template("test_plate_template")
+        if deleted:
+            print(" Successfully deleted test template")
 
-    #         # Verify it's gone
-    #         retrieved = interface.get_template("test_plate_template")
-    #         if retrieved is None:
-    #             print(" Confirmed template was deleted")
-    #         else:
-    #             print(" Template still exists after deletion")
-    #     else:
-    #         print(" Delete returned False")
+            # Verify it's gone
+            retrieved = interface.get_template("test_plate_template")
+            if retrieved is None:
+                print(" Confirmed template was deleted")
+            else:
+                print(" Template still exists after deletion")
+        else:
+            print(" Delete returned False")
 
-    #     # Test deleting non-existent template
-    #     deleted_again = interface.delete_template("test_plate_template")
-    #     if not deleted_again:
-    #         print(" Correctly returned False for deleting non-existent template")
-    #     else:
-    #         print(" Should have returned False for non-existent template")
+        # Test deleting non-existent template
+        deleted_again = interface.delete_template("test_plate_template")
+        if not deleted_again:
+            print(" Correctly returned False for deleting non-existent template")
+        else:
+            print(" Should have returned False for non-existent template")
 
     except Exception as e:
         print(f" Failed to delete template: {e}")
