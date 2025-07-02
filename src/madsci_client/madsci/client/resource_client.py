@@ -102,6 +102,9 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The initialized resource as returned by the server.
         """
+        self.logger.warning(
+            "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION! Use Template methods instead."
+        )
         if self.url:
             response = requests.post(
                 f"{self.url}/resource/init",
