@@ -11,6 +11,7 @@ from typing import Any, Optional, Union
 from madsci.client.event_client import EventClient
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
+    RESOURCE_TYPE_MAP,
     Collection,
     ConsumableTypeEnum,
     Container,
@@ -29,6 +30,7 @@ from madsci.common.types.resource_types.definitions import (
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
     ResourceTable,
+    ResourceTemplateTable,
     create_session,
 )
 from sqlalchemy import true
@@ -803,7 +805,10 @@ class ResourceInterface:
         input_definition: ResourceDefinitions,
         custom_definition: ResourceDefinitions,
     ) -> ResourceDataModels:
-        """initialize a customr resource"""
+        """initialize a custom resource"""
+        self.logger.warning(
+            "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION! Use Template methods instead."
+        )
         input_dict = input_definition.model_dump(mode="json", exclude_unset=True)
         custom_dict = custom_definition.model_dump(mode="json")
         custom_dict.update(**input_dict)
@@ -847,3 +852,473 @@ class ResourceInterface:
                 )
         resource = self.add_resource(resource)
         return self.get_resource(resource.resource_id)
+
+    def create_template(
+        self,
+        resource: ResourceDataModels,
+        template_name: str,
+        description: str = "",
+        required_overrides: Optional[list[str]] = None,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+        version: str = "1.0.0",
+        parent_session: Optional[Session] = None,
+    ) -> ResourceDataModels:
+        """
+        Create a template from a resource.
+
+        Args:
+            resource (ResourceDataModels): The resource to use as a template.
+            template_name (str): Unique name for the template.
+            description (str): Description of what this template creates.
+            required_overrides (Optional[list[str]]): Fields that must be provided when using template.
+            tags (Optional[list[str]]): Tags for categorization.
+            created_by (Optional[str]): Creator identifier.
+            version (str): Template version.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            ResourceDataModels: The template resource.
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                # Check if template already exists
+                existing_template = session.exec(
+                    select(ResourceTemplateTable).where(
+                        ResourceTemplateTable.template_name == template_name
+                    )
+                ).first()
+
+                if existing_template:
+                    session.delete(existing_template)
+                    session.flush()
+
+                resource_data = resource.model_dump(
+                    exclude={"resource_id", "created_at", "updated_at"}
+                )
+                template_data = {
+                    **resource_data,
+                    "template_name": template_name,
+                    "description": description,
+                    "required_overrides": required_overrides or [],
+                    "tags": tags or [],
+                    "created_by": created_by,
+                    "version": version,
+                    "default_values": resource_data,
+                }
+
+                # Create new template
+                template_row = ResourceTemplateTable(**template_data)
+                session.add(template_row)
+
+                action = "Replaced" if existing_template else "Created"
+                self.logger.info(f"{action} template '{template_name}'")
+
+                session.commit()
+                session.refresh(template_row)
+
+                return template_row.to_data_model()
+
+        except Exception as e:
+            self.logger.error(
+                f"Error creating/updating template: \n{traceback.format_exc()}"
+            )
+            raise e
+
+    def get_template(
+        self,
+        template_name: str,
+        parent_session: Optional[Session] = None,
+    ) -> Optional[ResourceDataModels]:
+        """
+        Get a template by name, returned as a resource.
+
+        Args:
+            template_name (str): Name of the template to retrieve.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            Optional[ResourceDataModels]: The template resource if found, None otherwise.
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                template_row = session.exec(
+                    select(ResourceTemplateTable).where(
+                        ResourceTemplateTable.template_name == template_name.lower()
+                    )
+                ).first()
+
+                if template_row:
+                    return template_row.to_data_model()
+                return None
+
+        except Exception as e:
+            self.logger.error(f"Error getting template: \n{traceback.format_exc()}")
+            raise e
+
+    def update_template(
+        self,
+        template_name: str,
+        updates: dict[str, Any],
+        parent_session: Optional[Session] = None,
+    ) -> ResourceDataModels:
+        """
+        Update an existing template.
+
+        Args:
+            template_name (str): Name of the template to update.
+            updates (dict): Dictionary of fields to update.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            ResourceDataModels: The updated template resource.
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                template_row = session.exec(
+                    select(ResourceTemplateTable).where(
+                        ResourceTemplateTable.template_name == template_name.lower()
+                    )
+                ).one()
+
+                # Update the template row with new values
+                for key, value in updates.items():
+                    if hasattr(template_row, key):
+                        setattr(template_row, key, value)
+                    else:
+                        self.logger.warning(f"Unknown field '{key}' in template update")
+
+                # If any resource fields were updated, update default_values too
+                resource_fields = {
+                    "resource_name",
+                    "base_type",
+                    "resource_class",
+                    "capacity",
+                    "rows",
+                    "columns",
+                    "layers",
+                    "quantity",
+                    "attributes",
+                }
+                updated_resource_fields = {
+                    k: v for k, v in updates.items() if k in resource_fields
+                }
+                if updated_resource_fields:
+                    current_defaults = template_row.default_values.copy()
+                    current_defaults.update(updated_resource_fields)
+                    template_row.default_values = current_defaults
+
+                session.commit()
+                session.refresh(template_row)
+
+                self.logger.info(f"Updated template '{template_name}'")
+                return template_row.to_data_model()
+
+        except Exception as e:
+            self.logger.error(f"Error updating template: \n{traceback.format_exc()}")
+            raise e
+
+    def delete_template(
+        self,
+        template_name: str,
+        parent_session: Optional[Session] = None,
+    ) -> bool:
+        """
+        Delete a template from the database.
+
+        Args:
+            template_name (str): Name of the template to delete.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            bool: True if template was deleted, False if not found.
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                template_row = session.exec(
+                    select(ResourceTemplateTable).where(
+                        ResourceTemplateTable.template_name == template_name.lower()
+                    )
+                ).first()
+
+                if not template_row:
+                    self.logger.warning(
+                        f"Template '{template_name}' not found for deletion"
+                    )
+                    return False
+
+                session.delete(template_row)
+                session.commit()
+
+                self.logger.info(f"Deleted template '{template_name}'")
+                return True
+
+        except Exception as e:
+            self.logger.error(f"Error deleting template: \n{traceback.format_exc()}")
+            raise e
+
+    def list_templates(
+        self,
+        base_type: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+        parent_session: Optional[Session] = None,
+    ) -> list[ResourceDataModels]:
+        """
+        List templates with optional filtering, returned as resources.
+
+        Args:
+            base_type (Optional[str]): Filter by base resource type.
+            tags (Optional[list[str]]): Filter by templates that have any of these tags.
+            created_by (Optional[str]): Filter by creator.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            list[ResourceDataModels]: List of template resources.
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                statement = select(ResourceTemplateTable)
+
+                # Apply simple filters first
+                if base_type:
+                    statement = statement.where(
+                        ResourceTemplateTable.base_type == base_type
+                    )
+                if created_by:
+                    statement = statement.where(
+                        ResourceTemplateTable.created_by == created_by
+                    )
+
+                # Get all matching templates first
+                template_rows = session.exec(statement).all()
+
+                if tags:
+                    filtered_rows = []
+                    for row in template_rows:
+                        row_tags = row.tags or []
+                        # Check if any of the requested tags are in the template's tags
+                        if any(tag in row_tags for tag in tags):
+                            filtered_rows.append(row)
+                    template_rows = filtered_rows
+
+                return [row.to_data_model() for row in template_rows]
+
+        except Exception as e:
+            self.logger.error(f"Error listing templates: \n{traceback.format_exc()}")
+            raise e
+
+    def _check_template_nested_field(self, data: dict, field_path: str) -> bool:
+        """Check if a nested field exists in the data using dot notation."""
+        try:
+            parts = field_path.split(".")
+            current = data
+            for part in parts:
+                if not isinstance(current, dict) or part not in current:
+                    return False
+                current = current[part]
+            return True
+        except (KeyError, TypeError, AttributeError):
+            return False
+
+    def _validate_template_required_fields(
+        self, template_row: ResourceTemplateTable, resource_data: dict
+    ) -> None:
+        """Validate that all required fields are present in the resource data."""
+        missing_required = []
+        for field in template_row.required_overrides:
+            if not self._check_template_nested_field(resource_data, field):
+                missing_required.append(field)
+
+        if missing_required:
+            raise ValueError(f"Missing required fields: {missing_required}")
+
+    def create_resource_from_template(
+        self,
+        template_name: str,
+        resource_name: str,
+        overrides: Optional[dict[str, Any]] = None,
+        add_to_database: bool = True,
+        parent_session: Optional[Session] = None,
+    ) -> ResourceDataModels:
+        """
+        Create a resource from a template and add it to the resource table.
+
+        Args:
+            template_name (str): Name of the template to use.
+            resource_name (str): Name for the new resource.
+            overrides (Optional[dict]): Values to override template defaults.
+            add_to_database (bool): Whether to add the resource to the resource table.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            ResourceDataModels: The created resource (stored in resource table).
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                # Get the template from the template table
+                template_row = session.exec(
+                    select(ResourceTemplateTable).where(
+                        ResourceTemplateTable.template_name == template_name.lower()
+                    )
+                ).first()
+
+                if not template_row:
+                    available_templates = [
+                        row.template_name
+                        for row in session.exec(select(ResourceTemplateTable)).all()
+                    ]
+                    raise ValueError(
+                        f"Template '{template_name}' not found. Available: {available_templates}"
+                    )
+
+                # Prepare resource data
+                overrides = overrides or {}
+                resource_data = template_row.default_values.copy()
+                resource_data.update(overrides)
+                resource_data["resource_name"] = resource_name
+                resource_data["template_name"] = template_row.template_name.lower()
+                # Clean up template-specific fields
+                resource_data.pop("resource_id", None)
+                resource_data.pop("created_at", None)
+                resource_data.pop("updated_at", None)
+
+                # Validate required fields
+                self._validate_template_required_fields(template_row, resource_data)
+
+                # Create the resource
+                if template_row.base_type not in RESOURCE_TYPE_MAP:
+                    raise ValueError(f"Unknown base type: {template_row.base_type}")
+
+                resource_model_class = RESOURCE_TYPE_MAP[template_row.base_type][
+                    "model"
+                ]
+                resource = resource_model_class.model_validate(resource_data)
+
+                # Add to database if requested
+                if add_to_database:
+                    self.logger.info(
+                        f"Adding resource '{resource_name}' to resource table..."
+                    )
+                    resource = self.add_resource(resource, parent_session=session)
+                    self.logger.info(
+                        f"Resource '{resource_name}' stored in resource table with ID: {resource.resource_id}"
+                    )
+                else:
+                    self.logger.info(
+                        f"Created resource '{resource_name}' from template (not added to database)"
+                    )
+
+                self.logger.info(
+                    f"Created resource '{resource_name}' from template '{template_name}'"
+                )
+                return resource
+
+        except Exception as e:
+            self.logger.error(
+                f"Error creating resource from template: \n{traceback.format_exc()}"
+            )
+            raise e
+
+    def get_template_info(
+        self,
+        template_name: str,
+        parent_session: Optional[Session] = None,
+    ) -> Optional[dict[str, Any]]:
+        """
+        Get detailed template metadata (template-specific fields).
+
+        Args:
+            template_name (str): Name of the template.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            Optional[dict]: Template metadata if found, None otherwise.
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                template_row = session.exec(
+                    select(ResourceTemplateTable).where(
+                        ResourceTemplateTable.template_name == template_name.lower()
+                    )
+                ).first()
+
+                if not template_row:
+                    return None
+
+                return {
+                    "template_name": template_row.template_name,
+                    "description": template_row.description,
+                    "required_overrides": template_row.required_overrides,
+                    "tags": template_row.tags,
+                    "created_by": template_row.created_by,
+                    "version": template_row.version,
+                    "default_values": template_row.default_values,
+                    "created_at": template_row.created_at,
+                    "updated_at": template_row.updated_at,
+                }
+
+        except Exception as e:
+            self.logger.error(
+                f"Error getting template info: \n{traceback.format_exc()}"
+            )
+            raise e
+
+    def get_templates_by_category(
+        self,
+        parent_session: Optional[Session] = None,
+    ) -> dict[str, list[str]]:
+        """
+        Get templates organized by base_type category.
+
+        Args:
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            dict[str, list[str]]: Dictionary mapping base_type to template names.
+        """
+        templates = self.list_templates(parent_session=parent_session)
+        categories = {}
+
+        for template in templates:
+            category = template.base_type.value
+            if category not in categories:
+                categories[category] = []
+            categories[category].append(template.resource_name)
+
+        return categories
+
+    def get_templates_by_tags(
+        self,
+        tags: list[str],
+        parent_session: Optional[Session] = None,
+    ) -> list[str]:
+        """
+        Get template names that have any of the specified tags.
+
+        Args:
+            tags (list[str]): Tags to search for.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            list[str]: List of template names that match any of the tags.
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                # Get all templates
+                template_rows = session.exec(select(ResourceTemplateTable)).all()
+
+                matching_templates = []
+                for row in template_rows:
+                    row_tags = row.tags or []
+                    # Check if any of the requested tags are in the template's tags
+                    if any(tag in row_tags for tag in tags):
+                        matching_templates.append(row.template_name)
+
+                return matching_templates
+
+        except Exception as e:
+            self.logger.error(
+                f"Error getting templates by tags: \n{traceback.format_exc()}"
+            )
+            raise e
