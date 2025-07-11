@@ -307,46 +307,56 @@ def create_workcell_server(  # noqa: C901, PLR0915
         - a workflow run object for the requested run_id
         """
         try:
-            wf_def = WorkflowDefinition.model_validate_json(workflow)
-        except Exception as e:
-            traceback.print_exc()
-            raise HTTPException(status_code=422, detail=str(e)) from e
+            try:
+                wf_def = WorkflowDefinition.model_validate_json(workflow)
+            except Exception as e:
+                traceback.print_exc()
+                raise HTTPException(status_code=422, detail=str(e)) from e
 
-        ownership_info = (
-            OwnershipInfo.model_validate_json(ownership_info)
-            if ownership_info
-            else OwnershipInfo()
-        )
-        with ownership_context(**ownership_info.model_dump(exclude_none=True)):
-            if parameters is None or parameters == "":
-                parameters = {}
-            else:
-                parameters = json.loads(parameters)
-                if not isinstance(parameters, dict) or not all(
-                    isinstance(k, str) for k in parameters
-                ):
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Parameters must be a dictionary with string keys",
-                    )
-            workcell = state_handler.get_workcell_definition()
-            wf = create_workflow(
-                workflow_def=wf_def,
-                workcell=workcell,
-                parameters=parameters,
-                state_handler=state_handler,
+            ownership_info = (
+                OwnershipInfo.model_validate_json(ownership_info)
+                if ownership_info
+                else OwnershipInfo()
             )
-
-            if not validate_only:
-                wf = save_workflow_files(
-                    working_directory=workcell.workcell_directory,
-                    workflow=wf,
-                    files=files,
+            with ownership_context(**ownership_info.model_dump(exclude_none=True)):
+                if parameters is None or parameters == "":
+                    parameters = {}
+                else:
+                    parameters = json.loads(parameters)
+                    if not isinstance(parameters, dict) or not all(
+                        isinstance(k, str) for k in parameters
+                    ):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Parameters must be a dictionary with string keys",
+                        )
+                workcell = state_handler.get_workcell_definition()
+                wf = create_workflow(
+                    workflow_def=wf_def,
+                    workcell=workcell,
+                    parameters=parameters,
+                    state_handler=state_handler,
                 )
-                with state_handler.wc_state_lock():
-                    state_handler.set_active_workflow(wf)
-                    state_handler.enqueue_workflow(wf.workflow_id)
-            return wf
+
+                if not validate_only:
+                    wf = save_workflow_files(
+                        working_directory=workcell.workcell_directory,
+                        workflow=wf,
+                        files=files,
+                    )
+                    with state_handler.wc_state_lock():
+                        state_handler.set_active_workflow(wf)
+                        state_handler.enqueue_workflow(wf.workflow_id)
+                return wf
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.error(f"Error starting workflow: {e}")
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error starting workflow: {e}",
+            ) from e
 
     @app.get("/locations")
     def get_locations() -> dict[str, Location]:

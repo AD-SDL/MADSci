@@ -35,7 +35,7 @@ const flowdef = ref(false)
 import { urls } from "@/store";
 
 const delete_resource = (resource_id: string) => {
-  fetch(urls.value.resource_manager.concat('resource/').concat(resource_id), {
+  fetch(urls.value.resource_server_url.concat('resource/').concat(resource_id), {
     method: "DELETE",
   });
 
