@@ -5,7 +5,7 @@ import time
 import traceback
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
@@ -27,13 +27,14 @@ from madsci.common.types.resource_types import (
 from madsci.common.types.resource_types.definitions import (
     ResourceDefinitions,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
     ResourceTable,
     ResourceTemplateTable,
     create_session,
 )
-from sqlalchemy import true
+from sqlalchemy import and_, true
 from sqlalchemy.exc import MultipleResultsFound
 from sqlmodel import Session, SQLModel, create_engine, func, select
 
@@ -478,6 +479,16 @@ class ResourceInterface:
                 raise ValueError(
                     f"The child resource {child_id} does not exist in the database and must be added. Alternatively, provide a ResourceDataModels object instead of the ID, to have the object added automatically."
                 )
+            parent_row = session.exec(
+                select(ResourceTable).filter_by(resource_id=parent_id)
+            ).one()
+
+        # Refresh to get updated children_list
+        session.refresh(parent_row)
+
+        # Update quantity based on actual children count
+        parent_row.quantity = len(parent_row.children_list)
+        session.merge(parent_row)
 
     def push(
         self, parent_id: str, child: Union[ResourceDataModels, str]
@@ -568,6 +579,10 @@ class ResourceInterface:
             session.commit()
             session.refresh(parent_row)
             session.refresh(child_row)
+            parent_row.quantity = len(parent_row.children_list)
+            session.merge(parent_row)
+            session.commit()
+            session.refresh(parent_row)
 
             return child_row.to_data_model(), parent_row.to_data_model()
 
@@ -675,6 +690,11 @@ class ResourceInterface:
             child_row.parent_id = None
             child_row.key = None
             session.merge(child_row)
+            session.commit()
+            session.refresh(container_row)
+
+            container_row.quantity = len(container_row.children_list)
+            session.merge(container_row)
             session.commit()
             session.refresh(container_row)
             return container_row.to_data_model()
@@ -1322,3 +1342,197 @@ class ResourceInterface:
                 f"Error getting templates by tags: \n{traceback.format_exc()}"
             )
             raise e
+
+    def _cleanup_expired_locks(self, session: Session) -> None:
+        """Clean up expired locks."""
+        try:
+            expired_resources = session.exec(
+                select(ResourceTable).where(
+                    and_(
+                        ResourceTable.locked_until.is_not(None),
+                        ResourceTable.locked_until <= datetime.utcnow(),
+                    )
+                )
+            ).all()
+
+            for resource in expired_resources:
+                resource.locked_until = None
+                resource.locked_by = None
+                session.merge(resource)
+
+            if expired_resources:
+                session.commit()
+                self.logger.info(f"Cleaned up {len(expired_resources)} expired locks")
+
+        except Exception as e:
+            self.logger.error(f"Error cleaning up expired locks: {e}")
+
+    def _check_resource_lock(
+        self,
+        resource_id: str,
+        client_id: Optional[str] = None,
+        session: Optional[Session] = None,
+    ) -> None:
+        """
+        Check if a resource is locked before modification.
+        Raises ValueError if locked by another client.
+        """
+        is_locked, locked_by = self.is_locked(resource_id, session)
+        if is_locked and (not client_id or locked_by != client_id):
+            return {"resource_id": resource_id, "locked_by": locked_by}
+        if is_locked and client_id == locked_by:
+            return {"resource_id": resource_id, "locked_by": client_id}
+        if not is_locked:
+            return {"resource_id": resource_id, "locked_by": None}
+        return None
+
+    def acquire_lock(
+        self,
+        resource: Union[str, ResourceDataModels],
+        lock_duration: float = 300.0,  # 5 minutes default
+        client_id: Optional[str] = None,
+        parent_session: Optional[Session] = None,
+    ) -> bool:
+        """
+        Acquire a lock on a resource.
+
+        Args:
+            resource: Resource object or resource ID
+            lock_duration: Lock duration in seconds
+            client_id: Identifier for the client acquiring the lock
+            parent_session: Optional parent session
+
+        Returns:
+            bool: True if lock was acquired, False if already locked
+        """
+
+        resource_id = resource if isinstance(resource, str) else resource.resource_id
+        client_id = client_id or new_ulid_str()
+
+        try:
+            with self.get_session(parent_session) as session:
+                # First, clean up expired locks
+                self._cleanup_expired_locks(session)
+
+                # Try to acquire the lock
+                resource_row = session.exec(
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource_id
+                    )
+                ).one()
+
+                # Check if already locked by someone else
+                if (
+                    resource_row.locked_until
+                    and resource_row.locked_until > datetime.utcnow()
+                    and resource_row.locked_by != client_id
+                ):
+                    return False
+
+                # Acquire or renew the lock
+                resource_row.locked_until = datetime.utcnow() + timedelta(
+                    seconds=lock_duration
+                )
+                resource_row.locked_by = client_id
+                session.merge(resource_row)
+                session.commit()
+
+                self.logger.info(
+                    f"Lock acquired on resource {resource_id} by {client_id}"
+                )
+                return True
+
+        except Exception as e:
+            self.logger.error(f"Error acquiring lock: {e}")
+            return False
+
+    def release_lock(
+        self,
+        resource: Union[str, ResourceDataModels],
+        client_id: Optional[str] = None,
+        parent_session: Optional[Session] = None,
+    ) -> bool:
+        """
+        Release a lock on a resource.
+
+        Args:
+            resource: Resource object or resource ID
+            client_id: Identifier for the client releasing the lock
+            parent_session: Optional parent session
+
+        Returns:
+            bool: True if lock was released, False if not locked by this client
+        """
+        resource_id = resource if isinstance(resource, str) else resource.resource_id
+
+        try:
+            with self.get_session(parent_session) as session:
+                resource_row = session.exec(
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource_id
+                    )
+                ).one()
+
+                # Check if locked by this client or lock expired
+                if (
+                    client_id
+                    and resource_row.locked_by
+                    and resource_row.locked_by != client_id
+                    and resource_row.locked_until
+                    and resource_row.locked_until > datetime.utcnow()
+                ):
+                    self.logger.warning(
+                        f"Cannot release lock on {resource_id}: not owned by {client_id}"
+                    )
+                    return False
+
+                # Release the lock
+                resource_row.locked_until = None
+                resource_row.locked_by = None
+                session.merge(resource_row)
+                session.commit()
+
+                self.logger.info(f"Lock released on resource {resource_id}")
+                return True
+
+        except Exception as e:
+            self.logger.error(f"Error releasing lock: {e}")
+            return False
+
+    def is_locked(
+        self,
+        resource: Union[str, ResourceDataModels],
+        parent_session: Optional[Session] = None,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Check if a resource is currently locked.
+
+        Args:
+            resource: Resource object or resource ID
+            parent_session: Optional parent session
+
+        Returns:
+            tuple[bool, Optional[str]]: (is_locked, locked_by)
+        """
+        resource_id = resource if isinstance(resource, str) else resource.resource_id
+
+        try:
+            with self.get_session(parent_session) as session:
+                self._cleanup_expired_locks(session)
+
+                resource_row = session.exec(
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource_id
+                    )
+                ).one()
+
+                if (
+                    resource_row.locked_until
+                    and resource_row.locked_until > datetime.utcnow()
+                ):
+                    return True, resource_row.locked_by
+                return False, None
+
+        except Exception as e:
+            self.logger.error(f"Error checking lock status: {e}")
+            return False, None
