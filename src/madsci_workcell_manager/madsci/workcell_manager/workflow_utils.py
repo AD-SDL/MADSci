@@ -20,6 +20,7 @@ from madsci.common.types.workflow_types import (
     WorkflowDefinition,
 )
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
+from pydantic import ValidationError
 
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
@@ -146,9 +147,9 @@ def replace_locations(
         if location_name_or_object is None:
             step.locations[location_arg] = None
             continue
-        # * Location is already a Location or LocationDefinition object, use it directly
-        if isinstance(location_name_or_object, (Location, LocationDefinition)):
-            step.locations[location_arg] = location_name_or_object.lookup[step.node]
+        # * Location is a LocationArgument, use it as is
+        if isinstance(location_name_or_object, LocationArgument):
+            step.locations[location_arg] = location_name_or_object
             continue
 
         # * Location is a string, find the corresponding Location object from state_handler
