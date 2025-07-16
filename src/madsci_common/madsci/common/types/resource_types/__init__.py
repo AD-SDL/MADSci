@@ -57,12 +57,11 @@ class Resource(ResourceDefinition, extra="allow", table=False):
         primary_key=True,
         sa_type=String,
     )
-    resource_url: Optional[AnyUrl] = Field(
+    resource_url: Optional[str] = Field(  # Change from AnyUrl to str to fix serialization issues with new Client Context Manager
         title="Resource URL",
         description="The URL of the resource.",
         nullable=True,
         default=None,
-        sa_type=String,
     )
     base_type: Literal[ResourceTypeEnum.resource] = Field(
         title="Resource Base Type",
