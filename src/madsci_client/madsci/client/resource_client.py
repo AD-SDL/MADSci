@@ -2,7 +2,7 @@
 
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 import requests
@@ -62,13 +62,17 @@ class ResourceWrapper:
         if name.startswith("_"):
             return getattr(self._resource, name)
 
-        # Check if it's a client method
-        if hasattr(self._client, name) and callable(getattr(self._client, name)):
+        actual_method_name = name
+        if name == "update":
+            actual_method_name = "update_resource"
+        elif name == "remove":
+            actual_method_name = "remove_resource"
+        
+        # Check if it's a client method (using the actual method name)
+        if hasattr(self._client, actual_method_name) and callable(getattr(self._client, actual_method_name)):
             # Return a bound method that will call the client method appropriately
-            return lambda *args, **kwargs: self._call_client_method(
-                name, *args, **kwargs
-            )
-
+            return lambda *args, **kwargs: self._call_client_method(name, *args, **kwargs)
+        
         # Not a client method - delegate to wrapped resource
         return getattr(self._resource, name)
 
@@ -84,11 +88,14 @@ class ResourceWrapper:
             actual_method_name = "update_resource"
         elif method_name == "remove":
             actual_method_name = "remove_resource"
-
+        
+        # Get the actual client method using the mapped name
+        client_method = getattr(self._client, actual_method_name)  
+        
         # Try different calling strategies until one works
         result = None
         last_exception = None
-
+        
         strategies = [
             # Strategy 1: Pass resource as keyword argument
             lambda: client_method(resource=self._resource, *args, **kwargs),
@@ -101,7 +108,7 @@ class ResourceWrapper:
             # Strategy 4: Call without resource
             lambda: client_method(*args, **kwargs),
         ]
-
+        
         for strategy in strategies:
             if strategy is None:
                 continue
@@ -113,12 +120,12 @@ class ResourceWrapper:
                 continue
             except Exception as e:
                 raise e
-
+        
         if result is None:
             raise TypeError(
                 f"Could not call {method_name} with provided arguments. Last error: {last_exception}"
             )
-
+        
         # Handle the result and return
         return self._handle_method_result(result, actual_method_name)
 
@@ -662,6 +669,7 @@ class ResourceClient:
         """
 
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -702,6 +710,7 @@ class ResourceClient:
             ResourceDataModels: The updated parent container resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -720,7 +729,7 @@ class ResourceClient:
         else:
             resource = resource.children[key] = child
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def remove_child(
         self,
@@ -738,6 +747,7 @@ class ResourceClient:
             ResourceDataModels: The updated parent container resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -755,7 +765,7 @@ class ResourceClient:
         else:
             resource = resource.children.pop(key)
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def set_quantity(
         self, resource: Union[str, ResourceDataModels], quantity: Union[float, int]
@@ -771,6 +781,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -784,7 +795,7 @@ class ResourceClient:
             resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         else:
             self.local_resources[resource.resource_id].quantity = quantity
-        return resource
+        return self._wrap_resource(resource)
 
     def change_quantity_by(
         self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
@@ -800,6 +811,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -814,7 +826,7 @@ class ResourceClient:
         else:
             self.local_resources[resource.resource_id].quantity += amount
             resource = self.local_resources[resource.resource_id]
-        return resource
+        return self._wrap_resource(resource)
 
     def increase_quantity(
         self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
@@ -830,6 +842,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -844,7 +857,7 @@ class ResourceClient:
         else:
             self.local_resources[resource.resource_id].quantity += abs(amount)
             resource = self.local_resources[resource.resource_id]
-        return resource
+        return self._wrap_resource(resource)
 
     def decrease_quantity(
         self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
@@ -860,6 +873,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -874,7 +888,7 @@ class ResourceClient:
         else:
             self.local_resources[resource.resource_id].quantity -= abs(amount)
             resource = self.local_resources[resource.resource_id]
-        return resource
+        return self._wrap_resource(resource)
 
     def set_capacity(
         self, resource: Union[str, ResourceDataModels], capacity: Union[float, int]
@@ -890,6 +904,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -904,7 +919,7 @@ class ResourceClient:
         else:
             self.local_resources[resource.resource_id].capacity = capacity
             resource = self.local_resources[resource.resource_id]
-        return resource
+        return self._wrap_resource(resource)
 
     def remove_capacity_limit(
         self, resource: Union[str, ResourceDataModels]
@@ -919,6 +934,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -931,7 +947,7 @@ class ResourceClient:
         else:
             self.local_resources[resource.resource_id].capacity = None
             resource = self.local_resources[resource.resource_id]
-        return resource
+        return self._wrap_resource(resource)
 
     def empty(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
         """
@@ -944,6 +960,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -961,7 +978,7 @@ class ResourceClient:
             if resource.quantity:
                 resource.quantity = 0
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def fill(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
         """
@@ -974,6 +991,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
+            resource = self._unwrap_if_wrapped(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -988,7 +1006,7 @@ class ResourceClient:
             resource = self.local_resources[resource.resource_id]
             resource.quantity = resource.capacity
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def create_template(
         self,
@@ -1301,6 +1319,8 @@ class ResourceClient:
         Returns:
             bool: True if lock was acquired, False otherwise
         """
+        if client_id:
+            self._client_id = client_id
         resource = self._unwrap_if_wrapped(resource)
         resource_id = (
             resource.resource_id if isinstance(resource, Resource) else resource
@@ -1311,14 +1331,44 @@ class ResourceClient:
                 f"{self.url}/resource/{resource_id}/lock",
                 params={
                     "lock_duration": lock_duration,
-                    "client_id": client_id,
+                    "client_id": self._client_id,
                 },
                 timeout=10,
             )
             response.raise_for_status()
-            return response.json()["success"]
-        self.logger.log_warning("Local-only mode does not support locking.")
-        return True
+            if response.status_code == 200 and response.json():
+                locked_resource_data = response.json()
+                locked_resource = Resource.discriminate(locked_resource_data)
+                locked_resource.resource_url = f"{self.url}/resource/{locked_resource.resource_id}"
+                
+                self.logger.log_info(
+                    f"Acquired lock on resource {resource_id} for client {locked_resource.locked_by}"
+                )
+                return self._wrap_resource(locked_resource)
+            else:
+                self.logger.log_warning(
+                    f"Failed to acquire lock on resource {resource_id} for client {self._client_id}"
+                )
+                return None
+        else:
+            # Local-only mode implementation
+            if resource_id not in self.local_resources:
+                self.logger.log_warning(f"Resource {resource_id} not found in local resources")
+                return None
+                
+            # Simple local locking - just mark as locked
+            local_resource = self.local_resources[resource_id]
+            if hasattr(local_resource, 'locked_by') and local_resource.locked_by:
+                if local_resource.locked_by != self._client_id:
+                    self.logger.log_warning(f"Resource {resource_id} already locked by {local_resource.locked_by}")
+                    return None
+            
+            # Set lock info
+            local_resource.locked_by = self._client_id
+            local_resource.locked_until = datetime.now() + timedelta(seconds=lock_duration)
+            
+            self.logger.log_info(f"Acquired local lock on resource {resource_id}")
+            return self._wrap_resource(local_resource)
 
     def release_lock(
         self,
@@ -1335,21 +1385,58 @@ class ResourceClient:
         Returns:
             bool: True if lock was released, False otherwise
         """
+        if client_id:
+            self._client_id = client_id
         resource = self._unwrap_if_wrapped(resource)
         resource_id = (
             resource.resource_id if isinstance(resource, Resource) else resource
         )
 
         if self.url:
-            response = requests.delete(
-                f"{self.url}/resource/{resource_id}/unlock",
-                params={"client_id": client_id} if client_id else {},
-                timeout=10,
-            )
-            response.raise_for_status()
-            return response.json()["success"]
-        self.logger.log_warning("Local-only mode does not support locking.")
-        return True
+            try:
+                response = requests.delete(
+                    f"{self.url}/resource/{resource_id}/unlock",
+                    params={"client_id": self._client_id} if self._client_id else {},
+                    timeout=10,
+                )
+                response.raise_for_status()
+                if response.status_code == 200 and response.json():
+                    unlocked_resource_data = response.json()
+                    unlocked_resource = Resource.discriminate(unlocked_resource_data)
+                    unlocked_resource.resource_url = f"{self.url}/resource/{unlocked_resource.resource_id}"
+                    
+                    self.logger.log_info(
+                        f"Released lock on resource {resource_id} for client {self._client_id}"
+                    )
+                    return self._wrap_resource(unlocked_resource)
+  
+            except requests.HTTPError as e:
+                if e.response.status_code == 403:
+                    self.logger.log_warning(f"Access denied: {e.response.json().get('detail', str(e))}")
+                    return None
+                else:
+                    self.logger.log_error(f"Error releasing lock: {e}")
+                    raise e   
+        else:
+            # Local-only mode implementation
+            if resource_id not in self.local_resources:
+                self.logger.log_warning(f"Resource {resource_id} not found in local resources")
+                return None
+                
+            local_resource = self.local_resources[resource_id]
+            
+            # Check if locked by this client
+            if hasattr(local_resource, 'locked_by') and local_resource.locked_by:
+                if self._client_id and local_resource.locked_by != self._client_id:
+                    self.logger.log_warning(f"Cannot release lock on {resource_id}: not owned by {self._client_id}")
+                    return None
+            
+            # Release lock
+            local_resource.locked_by = None
+            local_resource.locked_until = None
+            
+            self.logger.log_info(f"Released local lock on resource {resource_id}")
+            return self._wrap_resource(local_resource)
 
     def is_locked(
         self,
@@ -1377,8 +1464,28 @@ class ResourceClient:
             response.raise_for_status()
             result = response.json()
             return result["is_locked"], result["locked_by"]
-        self.logger.log_warning("Local-only mode does not support locking.")
-        return False, None
+        else:
+            # Local-only mode implementation
+            if resource_id not in self.local_resources:
+                return False, None
+                
+            local_resource = self.local_resources[resource_id]
+            
+            # Check if locked and not expired
+            if hasattr(local_resource, 'locked_by') and local_resource.locked_by:
+                if hasattr(local_resource, 'locked_until') and local_resource.locked_until:
+                    if datetime.now() < local_resource.locked_until:
+                        return True, local_resource.locked_by
+                    else:
+                        # Lock expired, clean it up
+                        local_resource.locked_by = None
+                        local_resource.locked_until = None
+                        return False, None
+                else:
+                    # Locked but no expiration time
+                    return True, local_resource.locked_by
+            
+            return False, None
 
     def lock(
         self,
@@ -1414,18 +1521,22 @@ class ResourceClient:
             try:
                 # Acquire all locks
                 for resource in resources:
+                    current_resource = resource
+                    
                     if auto_refresh:
                         # Refresh before locking to get latest state
                         if isinstance(resource, str):
-                            resource = self.get_resource(resource_id=resource)
+                            current_resource = self.get_resource(resource)
                         else:
-                            resource = self.update_resource(resource)
+                            current_resource = self.update_resource(resource)
 
-                    success = self.acquire_lock(
-                        resource, lock_duration=lock_duration, client_id=self._client_id
+                    locked_resource = self.acquire_lock(
+                        current_resource, 
+                        lock_duration=lock_duration, 
+                        client_id=self._client_id
                     )
 
-                    if not success:
+                    if locked_resource is None:
                         # Failed to acquire lock - clean up any we did get
                         for locked_res in locked_resources:
                             try:
@@ -1434,43 +1545,36 @@ class ResourceClient:
                                 self.logger.error(f"Error cleaning up lock: {e}")
 
                         resource_id = (
-                            resource.resource_id
-                            if hasattr(resource, "resource_id")
-                            else resource
+                            current_resource.resource_id
+                            if hasattr(current_resource, "resource_id")
+                            else current_resource
                         )
                         raise ValueError(
                             f"Failed to acquire lock on resource {resource_id}"
                         )
 
-                    locked_resources.append(resource)
+                    locked_resources.append(locked_resource)
 
-                # Phase 2: Wrap resources and yield
-                wrapped_resources = [self._wrap_resource(r) for r in locked_resources]
-
-                if len(wrapped_resources) == 1:
-                    yield wrapped_resources[0]
+                # Yield the locked resources
+                if len(locked_resources) == 1:
+                    yield locked_resources[0]
                 else:
-                    yield tuple(wrapped_resources)
+                    yield tuple(locked_resources)
 
             finally:
-                for resource in locked_resources:
+                for locked_resource in locked_resources:
                     try:
                         if auto_refresh:
-                            # Refresh the wrapped resource before releasing lock
-                            if hasattr(resource, "_resource"):  # It's wrapped
-                                refreshed = self.update_resource(resource._resource)
+                            # Refresh the resource before releasing lock
+                            if hasattr(locked_resource, "_resource"):  # It's wrapped
+                                refreshed = self.update_resource(locked_resource._resource)
                                 # Update the wrapped resource with fresh data
-                                for (
-                                    key,
-                                    value,
-                                ) in refreshed._resource.model_dump().items():
-                                    if hasattr(resource._resource, key):
-                                        setattr(resource._resource, key, value)
+                                locked_resource._update_wrapped_resource(refreshed._resource)
                             else:
                                 # It's not wrapped, refresh it
-                                self.update_resource(resource)
+                                self.update_resource(locked_resource)
 
-                        self.release_lock(resource, client_id=self._client_id)
+                        self.release_lock(locked_resource, client_id=self._client_id)
 
                     except Exception as e:
                         self.logger.error(f"Error releasing lock on resource: {e}")
