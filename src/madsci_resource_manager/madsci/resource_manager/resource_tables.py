@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Any, Optional
+from pydantic import field_serializer
 
 from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
@@ -181,6 +182,7 @@ class ResourceTableBase(Resource):
         default=None,
     )
 
+    
     def to_data_model(self, include_children: bool = True) -> ResourceDataModels:
         """
         Convert the table entry to a data model.
