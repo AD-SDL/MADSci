@@ -1073,6 +1073,7 @@ class ResourceClient:
         Returns:
             Optional[ResourceDataModels]: The template resource if found, None otherwise.
         """
+        
         if self.url:
             response = requests.get(f"{self.url}/templates/{template_name}", timeout=10)
             if response.status_code == 404:
