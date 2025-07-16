@@ -5,7 +5,7 @@ import time
 import traceback
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
@@ -774,6 +774,16 @@ class ResourceInterface:
                     f"Cannot set quantity of consumable '{resource.resource_name}' to {quantity} because it exceeds the capacity of {resource.capacity}."
                 )
             try:
+                # Try to get the property descriptor
+                quantity_descriptor = getattr(type(resource), 'quantity', None)
+                if quantity_descriptor and isinstance(quantity_descriptor, property) and quantity_descriptor.fset is None:
+                    raise ValueError(
+                        f"Resource '{resource.resource_name}' with type {resource.base_type} has a read-only quantity attribute."
+                    )
+            except AttributeError:
+                pass
+            
+            try:
                 resource.quantity = quantity  # * Check that the quantity attribute is not read-only (this is important, because ResourceTable doesn't validate this, whereas the ResourceDataModels do)
                 resource_row.quantity = quantity
             except AttributeError as e:
@@ -1350,7 +1360,7 @@ class ResourceInterface:
                 select(ResourceTable).where(
                     and_(
                         ResourceTable.locked_until.is_not(None),
-                        ResourceTable.locked_until <= datetime.utcnow(),
+                        ResourceTable.locked_until <=  datetime.now(timezone.utc),
                     )
                 )
             ).all()
@@ -1392,7 +1402,7 @@ class ResourceInterface:
         lock_duration: float = 300.0,  # 5 minutes default
         client_id: Optional[str] = None,
         parent_session: Optional[Session] = None,
-    ) -> bool:
+    ) -> Optional[ResourceDataModels]:
         """
         Acquire a lock on a resource.
 
@@ -1403,7 +1413,7 @@ class ResourceInterface:
             parent_session: Optional parent session
 
         Returns:
-            bool: True if lock was acquired, False if already locked
+            Optional[ResourceDataModels]: if lock was acquired, None if already locked
         """
 
         resource_id = resource if isinstance(resource, str) else resource.resource_id
@@ -1424,34 +1434,35 @@ class ResourceInterface:
                 # Check if already locked by someone else
                 if (
                     resource_row.locked_until
-                    and resource_row.locked_until > datetime.utcnow()
+                    and resource_row.locked_until >  datetime.now(timezone.utc)
                     and resource_row.locked_by != client_id
                 ):
-                    return False
+                    return None
 
                 # Acquire or renew the lock
-                resource_row.locked_until = datetime.utcnow() + timedelta(
+                resource_row.locked_until =  datetime.now(timezone.utc) + timedelta(
                     seconds=lock_duration
                 )
                 resource_row.locked_by = client_id
                 session.merge(resource_row)
                 session.commit()
+                session.refresh(resource_row)
 
                 self.logger.info(
                     f"Lock acquired on resource {resource_id} by {client_id}"
                 )
-                return True
+                return resource_row.to_data_model()
 
         except Exception as e:
             self.logger.error(f"Error acquiring lock: {e}")
-            return False
+            return None
 
     def release_lock(
         self,
         resource: Union[str, ResourceDataModels],
         client_id: Optional[str] = None,
         parent_session: Optional[Session] = None,
-    ) -> bool:
+    ) -> Optional[ResourceDataModels]:
         """
         Release a lock on a resource.
 
@@ -1461,7 +1472,7 @@ class ResourceInterface:
             parent_session: Optional parent session
 
         Returns:
-            bool: True if lock was released, False if not locked by this client
+            Optional[ResourceDataModels]: Resource data model if lock was released, None if not locked by this client
         """
         resource_id = resource if isinstance(resource, str) else resource.resource_id
 
@@ -1475,29 +1486,26 @@ class ResourceInterface:
 
                 # Check if locked by this client or lock expired
                 if (
-                    client_id
-                    and resource_row.locked_by
-                    and resource_row.locked_by != client_id
-                    and resource_row.locked_until
-                    and resource_row.locked_until > datetime.utcnow()
+                    resource_row.locked_by  # If there's a lock
+                    and client_id != resource_row.locked_by  # And client doesn't match (including None case)
                 ):
                     self.logger.warning(
                         f"Cannot release lock on {resource_id}: not owned by {client_id}"
                     )
-                    return False
+                    return None
 
                 # Release the lock
                 resource_row.locked_until = None
                 resource_row.locked_by = None
                 session.merge(resource_row)
                 session.commit()
-
+                session.refresh(resource_row)
                 self.logger.info(f"Lock released on resource {resource_id}")
-                return True
+                return resource_row.to_data_model()
 
         except Exception as e:
             self.logger.error(f"Error releasing lock: {e}")
-            return False
+            return None
 
     def is_locked(
         self,
@@ -1518,17 +1526,17 @@ class ResourceInterface:
 
         try:
             with self.get_session(parent_session) as session:
-                self._cleanup_expired_locks(session)
-
                 resource_row = session.exec(
-                    select(ResourceTable).where(
-                        ResourceTable.resource_id == resource_id
-                    )
+                    select(ResourceTable).where(ResourceTable.resource_id == resource_id)
                 ).one()
-
+                
+                self._cleanup_expired_locks(session)
+                
+                session.refresh(resource_row)
+            
                 if (
                     resource_row.locked_until
-                    and resource_row.locked_until > datetime.utcnow()
+                    and resource_row.locked_until >  datetime.now(timezone.utc)
                 ):
                     return True, resource_row.locked_by
                 return False, None

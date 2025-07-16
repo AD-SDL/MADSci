@@ -1,6 +1,7 @@
 """Fast API Client for Resources"""
 
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Optional, Union
 
@@ -25,14 +26,274 @@ from madsci.common.types.resource_types.server_types import (
     TemplateGetQuery,
     TemplateUpdateBody,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
+
+
+class ResourceWrapper:
+    """
+    A wrapper around Resource data models that adds client method convenience.
+
+    This class acts as a transparent proxy to the underlying resource while
+    adding client methods.
+
+    - Resource classes stay pure data models (no client dependencies)
+    - This wrapper adds client functionality without modifying data classes
+    - Wrapper is transparent - behaves like the wrapped resource for data access
+    """
+
+    def __init__(self, resource: "ResourceDataModels", client: "ResourceClient"):
+        """
+        Create a wrapper around a resource.
+
+        Args:
+            resource: The pure data model (Stack, Queue, Resource, etc.)
+            client: The ResourceClient instance for operations
+        """
+        object.__setattr__(self, "_resource", resource)
+        object.__setattr__(self, "_client", client)
+
+    def __getattr__(self, name: str) -> Any:
+        """
+        Handle attribute access - either delegate to resource or create method wrapper.
+        """
+        # Skip private attributes - always go to resource
+        if name.startswith("_"):
+            return getattr(self._resource, name)
+
+        # Check if it's a client method
+        if hasattr(self._client, name) and callable(getattr(self._client, name)):
+            # Return a bound method that will call the client method appropriately
+            return lambda *args, **kwargs: self._call_client_method(
+                name, *args, **kwargs
+            )
+
+        # Not a client method - delegate to wrapped resource
+        return getattr(self._resource, name)
+
+    def _call_client_method(self, method_name: str, *args, **kwargs):
+        """
+        Call a client method with the wrapped resource and handle the result.
+        """
+        client_method = getattr(self._client, method_name)
+
+        # Handle method aliases for result processing
+        actual_method_name = method_name
+        if method_name == "update":
+            actual_method_name = "update_resource"
+        elif method_name == "remove":
+            actual_method_name = "remove_resource"
+
+        # Try different calling strategies until one works
+        result = None
+        last_exception = None
+
+        strategies = [
+            # Strategy 1: Pass resource as keyword argument
+            lambda: client_method(resource=self._resource, *args, **kwargs),
+            # Strategy 2: Pass resource as first positional argument
+            lambda: client_method(self._resource, *args, **kwargs),
+            # Strategy 3: For remove, pass resource_id
+            lambda: client_method(self._resource.resource_id, *args, **kwargs)
+            if "remove" in actual_method_name
+            else None,
+            # Strategy 4: Call without resource
+            lambda: client_method(*args, **kwargs),
+        ]
+
+        for strategy in strategies:
+            if strategy is None:
+                continue
+            try:
+                result = strategy()
+                break
+            except TypeError as e:
+                last_exception = e
+                continue
+            except Exception as e:
+                raise e
+
+        if result is None:
+            raise TypeError(
+                f"Could not call {method_name} with provided arguments. Last error: {last_exception}"
+            )
+
+        # Handle the result and return
+        return self._handle_method_result(result, actual_method_name)
+
+    def _handle_method_result(self, result, method_name: str):
+        """
+        Handle the result from a client method call intelligently.
+
+        This determines whether to:
+        - Update the wrapped resource and return self
+        - Return the result directly
+        - Handle special cases like tuples
+        """
+        # Methods that should return their result directly (not update self)
+        DIRECT_RETURN_METHODS = {
+            "remove_resource",
+            "acquire_lock",
+            "release_lock",
+            "is_locked",
+            "query_history",
+            "get_template_info",
+            "delete_template",
+            "list_templates",
+            "get_templates_by_category",
+        }
+
+        if method_name in DIRECT_RETURN_METHODS:
+            return result
+
+        # Handle tuple results (like from pop)
+        if isinstance(result, tuple):
+            # Common pattern: (popped_item, updated_container)
+            wrapped_items = []
+            for item in result:
+                if isinstance(item, str):
+                    # It's just a string/ID, not a resource
+                    wrapped_items.append(item)
+                else:
+                    # It's a resource object - wrap it
+                    wrapped_items.append(self._client._wrap_resource(item))
+
+            # If the last item in tuple looks like an updated version of our resource, update self
+            if (
+                wrapped_items
+                and isinstance(wrapped_items[-1], ResourceWrapper)
+                and wrapped_items[-1]._resource.resource_id
+                == self._resource.resource_id
+            ):
+                # Update our wrapped resource
+                self._update_wrapped_resource(wrapped_items[-1]._resource)
+                # Replace the last item with self for a better API
+                wrapped_items[-1] = self
+
+            return tuple(wrapped_items)
+
+        # Handle single resource results
+        if result and hasattr(result, "model_dump"):
+            # It's a resource that should update our wrapped resource
+            actual_resource = (
+                result.unwrap if isinstance(result, ResourceWrapper) else result
+            )
+
+            # Only update if it's the same resource (same ID)
+            if actual_resource.resource_id == self._resource.resource_id:
+                self._update_wrapped_resource(actual_resource)
+                return self  # Return self for method chaining
+            # Different resource - wrap and return it
+            return self._client._wrap_resource(actual_resource)
+
+        # For everything else, just return the result
+        if result is None:
+            return self  # Enable method chaining for void methods
+
+        return result
+
+    def _update_wrapped_resource(self, updated_resource: "ResourceDataModels") -> None:
+        """
+        Update the wrapped resource with fresh data from the server.
+
+        This ensures the wrapped resource stays in sync after operations.
+        Handles read-only properties gracefully.
+        """
+        updated_data = updated_resource.model_dump()
+
+        for key, value in updated_data.items():
+            if hasattr(self._resource, key):
+                try:
+                    # Try to set the attribute
+                    setattr(self._resource, key, value)
+                except (AttributeError, TypeError) as e:
+                    # Skip read-only properties or properties that can't be set
+                    # This commonly happens with computed properties like 'quantity' on Stack
+                    if "has no setter" in str(e) or "can't set attribute" in str(e):
+                        continue
+                    # Re-raise if it's a different kind of error
+                    raise e
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """
+        Magic method called when setting an attribute.
+
+        Design:
+        - Private attributes (starting with _) go to the wrapper
+        - Public attributes go to the wrapped resource
+
+        This ensures: wrapper.resource_name = "new" updates the underlying resource
+        """
+        if name.startswith("_"):
+            # Private attributes (_resource, _client) go to the wrapper object
+            object.__setattr__(self, name, value)
+        else:
+            # Public attributes go to the wrapped resource
+            setattr(self._resource, name, value)
+
+    def __repr__(self) -> str:
+        """
+        String representation for debugging.
+
+        Shows that it's a wrapper and what it's wrapping.
+        """
+        return f"ResourceWrapper({self._resource!r})"
+
+    def __str__(self) -> str:
+        """
+        String representation for display.
+
+        Delegates to the wrapped resource so it appears the same to users.
+        """
+        return str(self._resource)
+
+    def __eq__(self, other) -> bool:
+        """
+        Equality comparison.
+
+        Two wrappers are equal if their wrapped resources are equal.
+        """
+        if isinstance(other, ResourceWrapper):
+            return self._resource == other._resource
+        # Allow comparison with unwrapped resources
+        return self._resource == other
+
+    def __hash__(self) -> int:
+        """
+        Hash function for use in sets/dicts.
+
+        Based on the wrapped resource's hash.
+        """
+        return hash(self._resource)
+
+    @property
+    def unwrap(self) -> "ResourceDataModels":
+        """
+        Get the underlying pure data model.
+
+        Useful when you need to pass the raw resource to functions
+        that expect pure data models.
+        """
+        return self._resource
+
+    # Convenience properties for common access patterns
+    @property
+    def data(self) -> "ResourceDataModels":
+        """Alias for unwrap - get the pure data model."""
+        return self._resource
+
+    @property
+    def client(self) -> "ResourceClient":
+        """Get the bound client instance."""
+        return self._client
 
 
 class ResourceClient:
     """REST client for interacting with a MADSci Resource Manager."""
 
     local_resources: dict[str, ResourceDataModels]
+    local_templates: dict[str, dict] = {}
     context: Optional[MadsciContext] = None
 
     def __init__(
@@ -66,6 +327,21 @@ class ResourceClient:
                 "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
                 warning_category=MadsciLocalOnlyWarning,
             )
+        self._client_id = new_ulid_str()
+
+    def _wrap_resource(
+        self, resource: Optional["ResourceDataModels"]
+    ) -> Optional[ResourceWrapper]:
+        """Helper method to wrap a single resource."""
+        if resource is None:
+            return None
+        return ResourceWrapper(resource, self)
+
+    def _unwrap_if_wrapped(self, resource: Any) -> Any:
+        """Helper method to unwrap a resource if it's wrapped."""
+        if isinstance(resource, ResourceWrapper):
+            return resource.unwrap
+        return resource
 
     def add_resource(self, resource: Resource) -> Resource:
         """
@@ -88,7 +364,7 @@ class ResourceClient:
             resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         else:
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def init_resource(
         self, resource_definition: ResourceDefinitions
@@ -121,7 +397,7 @@ class ResourceClient:
             )
             resource = Resource.discriminate(resource_definition)
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def add_or_update_resource(self, resource: Resource) -> Resource:
         """
@@ -133,6 +409,8 @@ class ResourceClient:
         Returns:
             Resource: The added resource as returned by the server.
         """
+        resource = self._unwrap_if_wrapped(resource)
+
         if self.url:
             response = requests.post(
                 f"{self.url}/resource/add_or_update",
@@ -144,7 +422,7 @@ class ResourceClient:
             resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         else:
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def update_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
         """
@@ -156,6 +434,8 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource as returned by the server.
         """
+        resource = self._unwrap_if_wrapped(resource)
+
         if self.url:
             response = requests.post(
                 f"{self.url}/resource/update",
@@ -167,22 +447,27 @@ class ResourceClient:
             resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         else:
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def get_resource(
         self,
-        resource_id: str,
+        resource: Optional[
+            Union[str, ResourceDataModels]
+        ] = None,  # Accept Resource object or ID
     ) -> ResourceDataModels:
         """
         Retrieve a resource from the server.
 
         Args:
-            resource_id (str): The ID of the resource to retrieve.
+            resource (Optional[Union[str, ResourceDataModels]]): The resource object or ID to retrieve.
 
         Returns:
             ResourceDataModels: The retrieved resource.
         """
         if self.url:
+            resource_id = (
+                resource if isinstance(resource, str) else resource.resource_id
+            )
             response = requests.get(
                 f"{self.url}/resource/{resource_id}",
                 timeout=10,
@@ -195,7 +480,7 @@ class ResourceClient:
                 "Local-only mode does not currently search through child resources to get children."
             )
             resource = self.local_resources.get(resource_id)
-        return resource
+        return self._wrap_resource(resource)
 
     def query_resource(
         self,
@@ -253,7 +538,7 @@ class ResourceClient:
             raise NotImplementedError(
                 "Local-only mode does not currently support querying."
             )
-        return resource
+        return self._wrap_resource(resource)
 
     def remove_resource(self, resource_id: str) -> dict[str, Any]:
         """
@@ -341,6 +626,9 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated parent resource.
         """
+        resource = self._unwrap_if_wrapped(resource)
+        child = self._unwrap_if_wrapped(child)
+
         if self.url:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
@@ -358,7 +646,7 @@ class ResourceClient:
         else:
             resource = resource.children.append(child)
             self.local_resources[resource.resource_id] = resource
-        return resource
+        return self._wrap_resource(resource)
 
     def pop(
         self, resource: Union[str, ResourceDataModels]
@@ -394,7 +682,7 @@ class ResourceClient:
             update_parent = resource
             popped_asset = update_parent.children.pop(0)
             self.local_resources[update_parent.resource_id] = update_parent
-        return popped_asset, update_parent
+        return self._wrap_resource(popped_asset), self._wrap_resource(update_parent)
 
     def set_child(
         self,
@@ -727,6 +1015,7 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The created template resource.
         """
+        resource = self._unwrap_if_wrapped(resource)
         if self.url:
             payload = TemplateCreateBody(
                 resource=resource,
@@ -754,7 +1043,7 @@ class ResourceClient:
             }
             self.local_templates[template_name] = template_data
             template = resource  # Return the original resource as template
-        return template
+        return self._wrap_resource(template)
 
     def get_template(self, template_name: str) -> Optional[ResourceDataModels]:
         """
@@ -773,10 +1062,10 @@ class ResourceClient:
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = f"{self.url}/templates/{template_name}"
-            return template
+            return self._wrap_resource(template)
         template_data = self.local_templates.get(template_name)
         if template_data:
-            return template_data["resource"]
+            return self._wrap_resource(template_data["resource"])
         return None
 
     def list_templates(
@@ -829,7 +1118,7 @@ class ResourceClient:
             if created_by and template_data["created_by"] != created_by:
                 continue
             templates.append(template_data["resource"])
-        return templates
+        return [self._wrap_resource(t) for t in templates]
 
     def get_template_info(self, template_name: str) -> Optional[dict[str, Any]]:
         """
@@ -883,14 +1172,14 @@ class ResourceClient:
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = f"{self.url}/templates/{template_name}"
-            return template
+            return self._wrap_resource(template)
         template_data = self.local_templates.get(template_name)
         if template_data:
             # Update local template data
             for key, value in updates.items():
                 if key in template_data:
                     template_data[key] = value
-            return template_data["resource"]
+            return self._wrap_resource(template_data["resource"])
         return None
 
     def delete_template(self, template_name: str) -> bool:
@@ -974,7 +1263,7 @@ class ResourceClient:
         new_resource = Resource.discriminate(resource_data)
         if add_to_database:
             self.local_resources[new_resource.resource_id] = new_resource
-        return new_resource
+        return self._wrap_resource(new_resource)
 
     def get_templates_by_category(self) -> dict[str, list[str]]:
         """
@@ -994,3 +1283,196 @@ class ResourceClient:
                 categories[base_type] = []
             categories[base_type].append(template_name)
         return categories
+
+    def acquire_lock(
+        self,
+        resource: Union[str, ResourceDataModels],
+        lock_duration: float = 300.0,
+        client_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Acquire a lock on a resource.
+
+        Args:
+            resource: Resource object or resource ID
+            lock_duration: Lock duration in seconds (default 5 minutes)
+            client_id: Client identifier (auto-generated if not provided)
+
+        Returns:
+            bool: True if lock was acquired, False otherwise
+        """
+        resource = self._unwrap_if_wrapped(resource)
+        resource_id = (
+            resource.resource_id if isinstance(resource, Resource) else resource
+        )
+
+        if self.url:
+            response = requests.post(
+                f"{self.url}/resource/{resource_id}/lock",
+                params={
+                    "lock_duration": lock_duration,
+                    "client_id": client_id,
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            return response.json()["success"]
+        self.logger.log_warning("Local-only mode does not support locking.")
+        return True
+
+    def release_lock(
+        self,
+        resource: Union[str, ResourceDataModels],
+        client_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Release a lock on a resource.
+
+        Args:
+            resource: Resource object or resource ID
+            client_id: Client identifier
+
+        Returns:
+            bool: True if lock was released, False otherwise
+        """
+        resource = self._unwrap_if_wrapped(resource)
+        resource_id = (
+            resource.resource_id if isinstance(resource, Resource) else resource
+        )
+
+        if self.url:
+            response = requests.delete(
+                f"{self.url}/resource/{resource_id}/unlock",
+                params={"client_id": client_id} if client_id else {},
+                timeout=10,
+            )
+            response.raise_for_status()
+            return response.json()["success"]
+        self.logger.log_warning("Local-only mode does not support locking.")
+        return True
+
+    def is_locked(
+        self,
+        resource: Union[str, ResourceDataModels],
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Check if a resource is currently locked.
+
+        Args:
+            resource: Resource object or resource ID
+
+        Returns:
+            tuple[bool, Optional[str]]: (is_locked, locked_by)
+        """
+        resource = self._unwrap_if_wrapped(resource)
+        resource_id = (
+            resource.resource_id if isinstance(resource, Resource) else resource
+        )
+
+        if self.url:
+            response = requests.get(
+                f"{self.url}/resource/{resource_id}/check_lock",
+                timeout=10,
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result["is_locked"], result["locked_by"]
+        self.logger.log_warning("Local-only mode does not support locking.")
+        return False, None
+
+    def lock(
+        self,
+        *resources: Union[str, ResourceDataModels],
+        lock_duration: float = 300.0,
+        auto_refresh: bool = True,
+        client_id: Optional[str] = None,
+    ):
+        """
+        Create a context manager for locking multiple resources.
+
+        Args:
+            *resources: Resources to lock (can be Resource objects or IDs)
+            lock_duration: Lock duration in seconds
+            auto_refresh: Whether to refresh resources on entry/exit
+            client_id: Client identifier (auto-generated if not provided)
+
+        Returns:
+            Context manager that yields locked resources
+
+        Usage:
+            with client.lock(stack1, child1) as (stack, child):
+                stack.push(child)
+        """
+
+        @contextmanager
+        def lock_manager():
+            # Generate client ID if not provided
+            if client_id:
+                self._client_id = client_id
+            locked_resources = []
+
+            try:
+                # Acquire all locks
+                for resource in resources:
+                    if auto_refresh:
+                        # Refresh before locking to get latest state
+                        if isinstance(resource, str):
+                            resource = self.get_resource(resource_id=resource)
+                        else:
+                            resource = self.update_resource(resource)
+
+                    success = self.acquire_lock(
+                        resource, lock_duration=lock_duration, client_id=self._client_id
+                    )
+
+                    if not success:
+                        # Failed to acquire lock - clean up any we did get
+                        for locked_res in locked_resources:
+                            try:
+                                self.release_lock(locked_res, client_id=self._client_id)
+                            except Exception as e:
+                                self.logger.error(f"Error cleaning up lock: {e}")
+
+                        resource_id = (
+                            resource.resource_id
+                            if hasattr(resource, "resource_id")
+                            else resource
+                        )
+                        raise ValueError(
+                            f"Failed to acquire lock on resource {resource_id}"
+                        )
+
+                    locked_resources.append(resource)
+
+                # Phase 2: Wrap resources and yield
+                wrapped_resources = [self._wrap_resource(r) for r in locked_resources]
+
+                if len(wrapped_resources) == 1:
+                    yield wrapped_resources[0]
+                else:
+                    yield tuple(wrapped_resources)
+
+            finally:
+                for resource in locked_resources:
+                    try:
+                        if auto_refresh:
+                            # Refresh the wrapped resource before releasing lock
+                            if hasattr(resource, "_resource"):  # It's wrapped
+                                refreshed = self.update_resource(resource._resource)
+                                # Update the wrapped resource with fresh data
+                                for (
+                                    key,
+                                    value,
+                                ) in refreshed._resource.model_dump().items():
+                                    if hasattr(resource._resource, key):
+                                        setattr(resource._resource, key, value)
+                            else:
+                                # It's not wrapped, refresh it
+                                self.update_resource(resource)
+
+                        self.release_lock(resource, client_id=self._client_id)
+
+                    except Exception as e:
+                        self.logger.error(f"Error releasing lock on resource: {e}")
+
+        return lock_manager()
