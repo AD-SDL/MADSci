@@ -113,13 +113,13 @@ try:
 except Exception as e:
     print(f"Multiple resource locking failed: {e}")
 
-print("\n=== Testing Refresh Functionality ===")
+print("\n=== Testing Update Functionality ===")
 
 # Test refresh method (should be available through wrapper)
 print("Testing resource update")
 try:
     refreshed_stack = stack.update_resource()
-    print(f"Resource refreshed successfully: {type(refreshed_stack).__name__}")
+    print(f"Resource updated successfully: {type(refreshed_stack).__name__}")
     print(f"Refreshed stack ID: {refreshed_stack.resource_id}")
 except Exception as e:
     print(f"Refresh failed: {e}")
@@ -252,37 +252,37 @@ except Exception as e:
 
 print("\n=== Testing Alternative Lock Syntax ===")
 
-# # Test alternative syntax in case the above doesn't work exactly as expected
-# print("Testing with client.lock() for individual resources")
+# Test alternative syntax in case the above doesn't work exactly as expected
+print("Testing with client.lock() for individual resources")
 
-# try:
-#     # Create another set of test resources
-#     alt_stack = Stack(
-#         resource_name="alt_lock_stack", resource_class="stack", capacity=10, ownership=None
-#     )
-#     alt_stack = client.add_resource(alt_stack)
+try:
+    # Create another set of test resources
+    alt_stack = Stack(
+        resource_name="alt_lock_stack", resource_class="stack", capacity=10, ownership=None
+    )
+    alt_stack = client.add_resource(alt_stack)
 
-#     alt_resource = Asset(resource_name="alt_lock_asset", resource_class="asset")
-#     alt_resource = client.add_resource(alt_resource)
+    alt_resource = Asset(resource_name="alt_lock_asset", resource_class="asset")
+    alt_resource = client.add_resource(alt_resource)
 
-#     # Test using separate lock calls
-#     with client.lock(alt_stack) as locked_stack:
-#         with client.lock(alt_resource) as locked_resource:
-#             print("Inside nested client.lock() context managers")
+    # Test using separate lock calls
+    with client.lock(alt_stack) as locked_stack:
+        with client.lock(alt_resource) as locked_resource:
+            print("Inside nested client.lock() context managers")
 
-#             locked_stack = locked_stack.push(locked_resource)
-#             print("Push operation completed with nested client locks")
+            locked_stack = locked_stack.push(locked_resource)
+            print("Push operation completed with nested client locks")
 
-#             # Verify the operation
-#             updated_stack = client.get_resource(alt_stack.resource_id)
-#             if updated_stack.children:
-#                 child_ids = [child.resource_id for child in updated_stack.children]
-#                 if alt_resource.resource_id in child_ids:
-#                     print("SUCCESS: Resource successfully added to stack with nested locks")
-#                 else:
-#                     print("INFO: Resource not found in immediate children list")
+            # Verify the operation
+            updated_stack = client.get_resource(alt_stack.resource_id)
+            if updated_stack.children:
+                child_ids = [child.resource_id for child in updated_stack.children]
+                if alt_resource.resource_id in child_ids:
+                    print("SUCCESS: Resource successfully added to stack with nested locks")
+                else:
+                    print("INFO: Resource not found in immediate children list")
 
-# except Exception as e:
-#     print(f"Alternative lock syntax failed: {e}")
+except Exception as e:
+    print(f"Alternative lock syntax failed: {e}")
 
-# print("\n=== All Tests Completed ===")
+print("\n=== All Tests Completed ===")
