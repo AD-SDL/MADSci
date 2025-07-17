@@ -246,22 +246,6 @@ class ResourceWrapper:
             # Public attributes go to the wrapped resource
             setattr(self._resource, name, value)
 
-    def __repr__(self) -> str:
-        """
-        String representation for debugging.
-
-        Shows that it's a wrapper and what it's wrapping.
-        """
-        return f"ResourceWrapper({self._resource!r})"
-
-    def __str__(self) -> str:
-        """
-        String representation for display.
-
-        Delegates to the wrapped resource so it appears the same to users.
-        """
-        return str(self._resource)
-
     def __eq__(self, other: Any) -> bool:
         """
         Equality comparison.
@@ -273,14 +257,6 @@ class ResourceWrapper:
         # Allow comparison with unwrapped resources
         return self._resource == other
 
-    def __hash__(self) -> int:
-        """
-        Hash function for use in sets/dicts.
-
-        Based on the wrapped resource's hash.
-        """
-        return hash(self._resource)
-
     @property
     def unwrap(self) -> "ResourceDataModels":
         """
@@ -289,12 +265,6 @@ class ResourceWrapper:
         Useful when you need to pass the raw resource to functions
         that expect pure data models.
         """
-        return self._resource
-
-    # Convenience properties for common access patterns
-    @property
-    def data(self) -> "ResourceDataModels":
-        """Alias for unwrap - get the pure data model."""
         return self._resource
 
     @property
