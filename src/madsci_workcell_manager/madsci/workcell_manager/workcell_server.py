@@ -286,11 +286,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
-        parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
 
         Parameters
         ----------
-        workflow: UploadFile
+        workflow: YAML string
         - The workflow yaml file
         parameters: Optional[Dict[str, Any]] = {}
         - Dynamic values to insert into the workflow file
