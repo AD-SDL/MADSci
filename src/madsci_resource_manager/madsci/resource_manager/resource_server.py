@@ -683,15 +683,14 @@ def create_resource_server(  # noqa: C901, PLR0915
         except Exception as e:
             logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
-        
+
         # Handle the response outside the try-except
         if locked_resource:
             return locked_resource.model_dump(mode="json")
-        else:
-            raise HTTPException(
-                status_code=409,  # Conflict - resource already locked
-                detail=f"Resource {resource_id} is already locked or lock acquisition failed"
-            )
+        raise HTTPException(
+            status_code=409,  # Conflict - resource already locked
+            detail=f"Resource {resource_id} is already locked or lock acquisition failed",
+        )
 
     @app.delete("/resource/{resource_id}/unlock")
     async def release_resource_lock(
@@ -715,16 +714,14 @@ def create_resource_server(  # noqa: C901, PLR0915
         except Exception as e:
             logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
-        
+
         if unlocked_resource:
             return unlocked_resource.model_dump(mode="json")
-        else:
-            # Return a proper error response instead of None
-            raise HTTPException(
-                status_code=403, 
-                detail=f"Cannot release lock on resource {resource_id}: not owned by client {client_id}"
-            )
-
+        # Return a proper error response instead of None
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot release lock on resource {resource_id}: not owned by client {client_id}",
+        )
 
     @app.get("/resource/{resource_id}/check_lock")
     async def check_resource_lock(resource_id: str) -> dict[str, Any]:
