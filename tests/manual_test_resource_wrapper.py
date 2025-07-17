@@ -1,9 +1,12 @@
+# flake8: noqa
+"""Manual test for ResourceWrapper functionality in MADSci client."""
+
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.resource_types import (
     Asset,
-    Stack,
-    Queue,
     Pool,
+    Queue,
+    Stack,
 )
 
 # Initialize the ResourcesClient with the database URL
@@ -59,7 +62,9 @@ print("\nTesting stack.pop() - new syntax")
 try:
     popped_asset, updated_stack = stack.pop()
     print(f"Popped asset: {popped_asset.resource_name}")
-    print(f"Updated stack children count: {len(updated_stack.children) if updated_stack.children else 0}")
+    print(
+        f"Updated stack children count: {len(updated_stack.children) if updated_stack.children else 0}"
+    )
     stack = updated_stack  # Update our reference
 except Exception as e:
     print(f"Pop operation failed: {e}")
@@ -96,8 +101,10 @@ try:
 
         # Perform operations while locked
         locked_stack = locked_stack.push(assets[2])
-        print(f"Performed push operation while locked")
-        print(f"Children count: {len(locked_stack.children) if locked_stack.children else 0}")
+        print("Performed push operation while locked")
+        print(
+            f"Children count: {len(locked_stack.children) if locked_stack.children else 0}"
+        )
 
     print("Context manager exited successfully")
 except Exception as e:
@@ -106,7 +113,10 @@ except Exception as e:
 # Test multiple resource locking
 print("\nTesting multiple resource context manager locking")
 try:
-    with client.lock(stack, assets[0], lock_duration=30.0) as (locked_stack, locked_asset):
+    with client.lock(stack, assets[0], lock_duration=30.0) as (
+        locked_stack,
+        locked_asset,
+    ):
         print(f"Locked stack type: {type(locked_stack).__name__}")
         print(f"Locked asset type: {type(locked_asset).__name__}")
         print("Multiple resource locking successful")
@@ -154,7 +164,10 @@ print("\n=== Testing Queue with New Syntax ===")
 
 # Create a queue to test queue-specific operations
 queue = Queue(
-    resource_name="test_wrapper_queue", resource_class="queue", capacity=5, ownership=None
+    resource_name="test_wrapper_queue",
+    resource_class="queue",
+    capacity=5,
+    ownership=None,
 )
 queue = client.add_resource(queue)
 print(f"Queue created: {queue.resource_name}")
@@ -178,7 +191,7 @@ pool = Pool(
     resource_name="test_wrapper_pool",
     resource_class="pool",
     capacity=100.0,
-    quantity=50.0
+    quantity=50.0,
 )
 pool = client.add_resource(pool)
 print(f"Pool created: {pool.resource_name}")
@@ -189,9 +202,9 @@ try:
     original_quantity = pool.quantity
     pool = pool.set_capacity(200)
     print(f"Set capacity successful - new capacity: {pool.capacity}")
-    
+
     pool = pool.fill()
-    
+
     print(f"Increase quantity successful - new quantity: {pool.quantity}")
 
     pool = pool.empty()
@@ -223,7 +236,7 @@ try:
         print("Inside nested lock context managers")
 
         # Perform operation while both resources are locked
-        original_parent_id = getattr(test_resource, 'parent_id', None)
+        original_parent_id = getattr(test_resource, "parent_id", None)
         print(f"Resource parent_id before push: {original_parent_id}")
 
         test_stack = test_stack.push(test_resource)
@@ -231,18 +244,24 @@ try:
 
         # Get fresh resource to check parent_id
         updated_resource = client.get_resource(test_resource.resource_id)
-        final_parent_id = getattr(updated_resource, 'parent_id', None)
+        final_parent_id = getattr(updated_resource, "parent_id", None)
         print(f"Resource parent_id after push: {final_parent_id}")
 
     print("Exited nested lock context managers")
 
     # Verify the relationship was established
-    if hasattr(updated_resource, 'parent_id') and updated_resource.parent_id == test_stack.resource_id:
+    if (
+        hasattr(updated_resource, "parent_id")
+        and updated_resource.parent_id == test_stack.resource_id
+    ):
         print("SUCCESS: Resource parent_id matches stack resource_id")
     else:
         print("VERIFICATION: Checking if resource is in stack children")
         final_stack = client.get_resource(test_stack.resource_id)
-        if final_stack.children and any(child.resource_id == test_resource.resource_id for child in final_stack.children):
+        if final_stack.children and any(
+            child.resource_id == test_resource.resource_id
+            for child in final_stack.children
+        ):
             print("SUCCESS: Resource found in stack children")
         else:
             print("INFO: Parent-child relationship verification method may vary")
@@ -258,7 +277,10 @@ print("Testing with client.lock() for individual resources")
 try:
     # Create another set of test resources
     alt_stack = Stack(
-        resource_name="alt_lock_stack", resource_class="stack", capacity=10, ownership=None
+        resource_name="alt_lock_stack",
+        resource_class="stack",
+        capacity=10,
+        ownership=None,
     )
     alt_stack = client.add_resource(alt_stack)
 
@@ -278,7 +300,9 @@ try:
             if updated_stack.children:
                 child_ids = [child.resource_id for child in updated_stack.children]
                 if alt_resource.resource_id in child_ids:
-                    print("SUCCESS: Resource successfully added to stack with nested locks")
+                    print(
+                        "SUCCESS: Resource successfully added to stack with nested locks"
+                    )
                 else:
                     print("INFO: Resource not found in immediate children list")
 
