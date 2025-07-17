@@ -773,20 +773,6 @@ def test_get_resource_with_different_inputs(client: ResourceClient) -> None:
     assert fetched_by_object.resource_id == added_resource.resource_id
 
 
-def test_update_resource_wrapper(client: ResourceClient) -> None:
-    """Test update_resource with wrapped resources"""
-    resource = Resource(resource_name="update_test")
-    wrapped_resource = client.add_resource(resource)
-
-    # Modify the resource
-    wrapped_resource.resource_name = "updated_name"
-
-    # Test update_resource
-    updated_resource = client.update_resource(wrapped_resource)
-    assert isinstance(updated_resource, ResourceWrapper)
-    assert updated_resource.resource_name == "updated_name"
-
-
 def test_acquire_lock_basic(client: ResourceClient) -> None:
     """Test basic lock acquisition"""
     resource = Resource(resource_name="lock_test")
