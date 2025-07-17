@@ -775,14 +775,18 @@ class ResourceInterface:
                 )
             try:
                 # Try to get the property descriptor
-                quantity_descriptor = getattr(type(resource), 'quantity', None)
-                if quantity_descriptor and isinstance(quantity_descriptor, property) and quantity_descriptor.fset is None:
+                quantity_descriptor = getattr(type(resource), "quantity", None)
+                if (
+                    quantity_descriptor
+                    and isinstance(quantity_descriptor, property)
+                    and quantity_descriptor.fset is None
+                ):
                     raise ValueError(
                         f"Resource '{resource.resource_name}' with type {resource.base_type} has a read-only quantity attribute."
                     )
             except AttributeError:
                 pass
-            
+
             try:
                 resource.quantity = quantity  # * Check that the quantity attribute is not read-only (this is important, because ResourceTable doesn't validate this, whereas the ResourceDataModels do)
                 resource_row.quantity = quantity
@@ -1360,7 +1364,7 @@ class ResourceInterface:
                 select(ResourceTable).where(
                     and_(
                         ResourceTable.locked_until.is_not(None),
-                        ResourceTable.locked_until <=  datetime.now(timezone.utc),
+                        ResourceTable.locked_until <= datetime.now(timezone.utc),
                     )
                 )
             ).all()
@@ -1434,13 +1438,13 @@ class ResourceInterface:
                 # Check if already locked by someone else
                 if (
                     resource_row.locked_until
-                    and resource_row.locked_until >  datetime.now(timezone.utc)
+                    and resource_row.locked_until > datetime.now(timezone.utc)
                     and resource_row.locked_by != client_id
                 ):
                     return None
 
                 # Acquire or renew the lock
-                resource_row.locked_until =  datetime.now(timezone.utc) + timedelta(
+                resource_row.locked_until = datetime.now(timezone.utc) + timedelta(
                     seconds=lock_duration
                 )
                 resource_row.locked_by = client_id
@@ -1487,7 +1491,8 @@ class ResourceInterface:
                 # Check if locked by this client or lock expired
                 if (
                     resource_row.locked_by  # If there's a lock
-                    and client_id != resource_row.locked_by  # And client doesn't match (including None case)
+                    and client_id
+                    != resource_row.locked_by  # And client doesn't match (including None case)
                 ):
                     self.logger.warning(
                         f"Cannot release lock on {resource_id}: not owned by {client_id}"
@@ -1527,16 +1532,18 @@ class ResourceInterface:
         try:
             with self.get_session(parent_session) as session:
                 resource_row = session.exec(
-                    select(ResourceTable).where(ResourceTable.resource_id == resource_id)
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource_id
+                    )
                 ).one()
-                
+
                 self._cleanup_expired_locks(session)
-                
+
                 session.refresh(resource_row)
-            
+
                 if (
                     resource_row.locked_until
-                    and resource_row.locked_until >  datetime.now(timezone.utc)
+                    and resource_row.locked_until > datetime.now(timezone.utc)
                 ):
                     return True, resource_row.locked_by
                 return False, None
