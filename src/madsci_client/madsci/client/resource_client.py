@@ -1,9 +1,10 @@
 """Fast API Client for Resources"""
 
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
@@ -43,7 +44,9 @@ class ResourceWrapper:
     - Wrapper is transparent - behaves like the wrapped resource for data access
     """
 
-    def __init__(self, resource: "ResourceDataModels", client: "ResourceClient"):
+    def __init__(
+        self, resource: "ResourceDataModels", client: "ResourceClient"
+    ) -> None:
         """
         Create a wrapper around a resource.
 
@@ -67,16 +70,20 @@ class ResourceWrapper:
             actual_method_name = "update_resource"
         elif name == "remove":
             actual_method_name = "remove_resource"
-        
+
         # Check if it's a client method (using the actual method name)
-        if hasattr(self._client, actual_method_name) and callable(getattr(self._client, actual_method_name)):
+        if hasattr(self._client, actual_method_name) and callable(
+            getattr(self._client, actual_method_name)
+        ):
             # Return a bound method that will call the client method appropriately
-            return lambda *args, **kwargs: self._call_client_method(name, *args, **kwargs)
-        
+            return lambda *args, **kwargs: self._call_client_method(
+                name, *args, **kwargs
+            )
+
         # Not a client method - delegate to wrapped resource
         return getattr(self._resource, name)
 
-    def _call_client_method(self, method_name: str, *args, **kwargs):
+    def _call_client_method(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """
         Call a client method with the wrapped resource and handle the result.
         """
@@ -88,17 +95,17 @@ class ResourceWrapper:
             actual_method_name = "update_resource"
         elif method_name == "remove":
             actual_method_name = "remove_resource"
-        
+
         # Get the actual client method using the mapped name
-        client_method = getattr(self._client, actual_method_name)  
-        
+        client_method = getattr(self._client, actual_method_name)
+
         # Try different calling strategies until one works
         result = None
         last_exception = None
-        
+
         strategies = [
-            # Strategy 1: Pass resource as keyword argument
-            lambda: client_method(resource=self._resource, *args, **kwargs),
+            # Strategy 1: Pass resource as keyword argument - fix the order
+            lambda: client_method(*args, resource=self._resource, **kwargs),
             # Strategy 2: Pass resource as first positional argument
             lambda: client_method(self._resource, *args, **kwargs),
             # Strategy 3: For remove, pass resource_id
@@ -108,7 +115,7 @@ class ResourceWrapper:
             # Strategy 4: Call without resource
             lambda: client_method(*args, **kwargs),
         ]
-        
+
         for strategy in strategies:
             if strategy is None:
                 continue
@@ -120,16 +127,16 @@ class ResourceWrapper:
                 continue
             except Exception as e:
                 raise e
-        
+
         if result is None:
             raise TypeError(
                 f"Could not call {method_name} with provided arguments. Last error: {last_exception}"
             )
-        
+
         # Handle the result and return
         return self._handle_method_result(result, actual_method_name)
 
-    def _handle_method_result(self, result, method_name: str):
+    def _handle_method_result(self, result: Any, method_name: str) -> Any:
         """
         Handle the result from a client method call intelligently.
 
@@ -139,7 +146,7 @@ class ResourceWrapper:
         - Handle special cases like tuples
         """
         # Methods that should return their result directly (not update self)
-        DIRECT_RETURN_METHODS = {
+        direct_return_methods = {
             "remove_resource",
             "acquire_lock",
             "release_lock",
@@ -151,7 +158,7 @@ class ResourceWrapper:
             "get_templates_by_category",
         }
 
-        if method_name in DIRECT_RETURN_METHODS:
+        if method_name in direct_return_methods:
             return result
 
         # Handle tuple results (like from pop)
@@ -255,7 +262,7 @@ class ResourceWrapper:
         """
         return str(self._resource)
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Any) -> bool:
         """
         Equality comparison.
 
@@ -300,7 +307,7 @@ class ResourceClient:
     """REST client for interacting with a MADSci Resource Manager."""
 
     local_resources: dict[str, ResourceDataModels]
-    local_templates: dict[str, dict] = {}
+    local_templates: ClassVar[dict[str, dict]] = {}
     context: Optional[MadsciContext] = None
 
     def __init__(
@@ -1073,7 +1080,7 @@ class ResourceClient:
         Returns:
             Optional[ResourceDataModels]: The template resource if found, None otherwise.
         """
-        
+
         if self.url:
             response = requests.get(f"{self.url}/templates/{template_name}", timeout=10)
             if response.status_code == 404:
@@ -1340,36 +1347,43 @@ class ResourceClient:
             if response.status_code == 200 and response.json():
                 locked_resource_data = response.json()
                 locked_resource = Resource.discriminate(locked_resource_data)
-                locked_resource.resource_url = f"{self.url}/resource/{locked_resource.resource_id}"
-                
+                locked_resource.resource_url = (
+                    f"{self.url}/resource/{locked_resource.resource_id}"
+                )
+
                 self.logger.log_info(
                     f"Acquired lock on resource {resource_id} for client {locked_resource.locked_by}"
                 )
                 return self._wrap_resource(locked_resource)
-            else:
+            self.logger.log_warning(
+                f"Failed to acquire lock on resource {resource_id} for client {self._client_id}"
+            )
+            return None
+        # Local-only mode implementation
+        if resource_id not in self.local_resources:
+            self.logger.log_warning(
+                f"Resource {resource_id} not found in local resources"
+            )
+            return None
+
+        # Simple local locking - just mark as locked
+        local_resource = self.local_resources[resource_id]
+        try:
+            if local_resource.locked_by and local_resource.locked_by != self._client_id:
                 self.logger.log_warning(
-                    f"Failed to acquire lock on resource {resource_id} for client {self._client_id}"
+                    f"Resource {resource_id} already locked by {local_resource.locked_by}"
                 )
                 return None
-        else:
-            # Local-only mode implementation
-            if resource_id not in self.local_resources:
-                self.logger.log_warning(f"Resource {resource_id} not found in local resources")
-                return None
-                
-            # Simple local locking - just mark as locked
-            local_resource = self.local_resources[resource_id]
-            if hasattr(local_resource, 'locked_by') and local_resource.locked_by:
-                if local_resource.locked_by != self._client_id:
-                    self.logger.log_warning(f"Resource {resource_id} already locked by {local_resource.locked_by}")
-                    return None
-            
-            # Set lock info
-            local_resource.locked_by = self._client_id
-            local_resource.locked_until = datetime.now() + timedelta(seconds=lock_duration)
-            
-            self.logger.log_info(f"Acquired local lock on resource {resource_id}")
-            return self._wrap_resource(local_resource)
+        except AttributeError:
+            # locked_by doesn't exist, so resource is not locked
+            pass
+
+        # Set lock info
+        local_resource.locked_by = self._client_id
+        local_resource.locked_until = datetime.now() + timedelta(seconds=lock_duration)
+
+        self.logger.log_info(f"Acquired local lock on resource {resource_id}")
+        return self._wrap_resource(local_resource)
 
     def release_lock(
         self,
@@ -1404,38 +1418,52 @@ class ResourceClient:
                 if response.status_code == 200 and response.json():
                     unlocked_resource_data = response.json()
                     unlocked_resource = Resource.discriminate(unlocked_resource_data)
-                    unlocked_resource.resource_url = f"{self.url}/resource/{unlocked_resource.resource_id}"
-                    
+                    unlocked_resource.resource_url = (
+                        f"{self.url}/resource/{unlocked_resource.resource_id}"
+                    )
+
                     self.logger.log_info(
                         f"Released lock on resource {resource_id} for client {self._client_id}"
                     )
                     return self._wrap_resource(unlocked_resource)
-  
+
             except requests.HTTPError as e:
                 if e.response.status_code == 403:
-                    self.logger.log_warning(f"Access denied: {e.response.json().get('detail', str(e))}")
+                    self.logger.log_warning(
+                        f"Access denied: {e.response.json().get('detail', str(e))}"
+                    )
                     return None
-                else:
-                    self.logger.log_error(f"Error releasing lock: {e}")
-                    raise e   
+                self.logger.log_error(f"Error releasing lock: {e}")
+                raise e
         else:
             # Local-only mode implementation
             if resource_id not in self.local_resources:
-                self.logger.log_warning(f"Resource {resource_id} not found in local resources")
+                self.logger.log_warning(
+                    f"Resource {resource_id} not found in local resources"
+                )
                 return None
-                
+
             local_resource = self.local_resources[resource_id]
-            
+
             # Check if locked by this client
-            if hasattr(local_resource, 'locked_by') and local_resource.locked_by:
-                if self._client_id and local_resource.locked_by != self._client_id:
-                    self.logger.log_warning(f"Cannot release lock on {resource_id}: not owned by {self._client_id}")
+            try:
+                if (
+                    local_resource.locked_by
+                    and self._client_id
+                    and local_resource.locked_by != self._client_id
+                ):
+                    self.logger.log_warning(
+                        f"Cannot release lock on {resource_id}: not owned by {self._client_id}"
+                    )
                     return None
-            
+            except AttributeError:
+                # locked_by doesn't exist, so nothing to release
+                pass
+
             # Release lock
             local_resource.locked_by = None
             local_resource.locked_until = None
-            
+
             self.logger.log_info(f"Released local lock on resource {resource_id}")
             return self._wrap_resource(local_resource)
 
@@ -1465,28 +1493,25 @@ class ResourceClient:
             response.raise_for_status()
             result = response.json()
             return result["is_locked"], result["locked_by"]
-        else:
-            # Local-only mode implementation
-            if resource_id not in self.local_resources:
-                return False, None
-                
-            local_resource = self.local_resources[resource_id]
-            
-            # Check if locked and not expired
-            if hasattr(local_resource, 'locked_by') and local_resource.locked_by:
-                if hasattr(local_resource, 'locked_until') and local_resource.locked_until:
-                    if datetime.now() < local_resource.locked_until:
-                        return True, local_resource.locked_by
-                    else:
-                        # Lock expired, clean it up
-                        local_resource.locked_by = None
-                        local_resource.locked_until = None
-                        return False, None
-                else:
-                    # Locked but no expiration time
-                    return True, local_resource.locked_by
-            
+        # Local-only mode implementation
+        if resource_id not in self.local_resources:
             return False, None
+
+        local_resource = self.local_resources[resource_id]
+
+        # Check if locked and not expired
+        if hasattr(local_resource, "locked_by") and local_resource.locked_by:
+            if hasattr(local_resource, "locked_until") and local_resource.locked_until:
+                if datetime.now() < local_resource.locked_until:
+                    return True, local_resource.locked_by
+                # Lock expired, clean it up
+                local_resource.locked_by = None
+                local_resource.locked_until = None
+                return False, None
+            # Locked but no expiration time
+            return True, local_resource.locked_by
+
+        return False, None
 
     def lock(
         self,
@@ -1494,7 +1519,9 @@ class ResourceClient:
         lock_duration: float = 300.0,
         auto_refresh: bool = True,
         client_id: Optional[str] = None,
-    ):
+    ) -> Generator[
+        Union[ResourceDataModels, tuple[ResourceDataModels, ...]], None, None
+    ]:
         """
         Create a context manager for locking multiple resources.
 
@@ -1513,71 +1540,145 @@ class ResourceClient:
         """
 
         @contextmanager
-        def lock_manager():
+        def lock_manager() -> Generator[
+            Union[ResourceDataModels, tuple[ResourceDataModels, ...]], None, None
+        ]:
+            """Inner context manager that handles the actual locking logic."""
+
             # Generate client ID if not provided
             if client_id:
                 self._client_id = client_id
             locked_resources = []
-
             try:
-                # Acquire all locks
-                for resource in resources:
-                    current_resource = resource
-                    
-                    if auto_refresh:
-                        # Refresh before locking to get latest state
-                        if isinstance(resource, str):
-                            current_resource = self.get_resource(resource)
-                        else:
-                            current_resource = self.update_resource(resource)
+                # Phase 1: Acquire all locks
+                locked_resources = self._acquire_all_locks(
+                    resources, lock_duration, auto_refresh, self._client_id
+                )
 
-                    locked_resource = self.acquire_lock(
-                        current_resource, 
-                        lock_duration=lock_duration, 
-                        client_id=self._client_id
-                    )
-
-                    if locked_resource is None:
-                        # Failed to acquire lock - clean up any we did get
-                        for locked_res in locked_resources:
-                            try:
-                                self.release_lock(locked_res, client_id=self._client_id)
-                            except Exception as e:
-                                self.logger.error(f"Error cleaning up lock: {e}")
-
-                        resource_id = (
-                            current_resource.resource_id
-                            if hasattr(current_resource, "resource_id")
-                            else current_resource
-                        )
-                        raise ValueError(
-                            f"Failed to acquire lock on resource {resource_id}"
-                        )
-
-                    locked_resources.append(locked_resource)
-
-                # Yield the locked resources
+                # Phase 2: Yield the locked resources
                 if len(locked_resources) == 1:
                     yield locked_resources[0]
                 else:
                     yield tuple(locked_resources)
 
             finally:
-                for locked_resource in locked_resources:
-                    try:
-                        if auto_refresh:
-                            # Refresh the resource before releasing lock
-                            if hasattr(locked_resource, "_resource"):  # It's wrapped
-                                refreshed = self.update_resource(locked_resource._resource)
-                                # Update the wrapped resource with fresh data
-                                locked_resource._update_wrapped_resource(refreshed._resource)
-                            else:
-                                # It's not wrapped, refresh it
-                                self.update_resource(locked_resource)
-
-                        self.release_lock(locked_resource, client_id=self._client_id)
-
-                    except Exception as e:
-                        self.logger.error(f"Error releasing lock on resource: {e}")
+                # Phase 3: Release all locks
+                self._release_all_locks(locked_resources, auto_refresh, self._client_id)
 
         return lock_manager()
+
+    def _acquire_all_locks(
+        self,
+        resources: tuple[Union[str, ResourceDataModels], ...],
+        lock_duration: float,
+        auto_refresh: bool,
+        client_id: str,
+    ) -> list[ResourceDataModels]:
+        """
+        Acquire locks on all resources.
+
+        Returns:
+            list[ResourceDataModels]: List of successfully locked resources
+
+        Raises:
+            ValueError: If any lock acquisition fails
+        """
+        locked_resources = []
+
+        for resource in resources:
+            try:
+                current_resource = self._prepare_resource_for_locking(
+                    resource, auto_refresh
+                )
+                locked_resource = self._acquire_single_lock(
+                    current_resource, lock_duration, client_id
+                )
+                locked_resources.append(locked_resource)
+
+            except Exception as e:
+                # Clean up any locks we did acquire
+                self._cleanup_failed_locks(locked_resources, client_id)
+                resource_id = getattr(resource, "resource_id", resource)
+                raise ValueError(
+                    f"Failed to acquire lock on resource {resource_id}"
+                ) from e
+
+        return locked_resources
+
+    def _prepare_resource_for_locking(
+        self, resource: Union[str, ResourceDataModels], auto_refresh: bool
+    ) -> ResourceDataModels:
+        """Prepare a resource for locking by refreshing if needed."""
+        if not auto_refresh:
+            return resource
+
+        if isinstance(resource, str):
+            return self.get_resource(resource)
+        return self.update_resource(resource)
+
+    def _acquire_single_lock(
+        self,
+        resource: ResourceDataModels,
+        lock_duration: float,
+        client_id: str,
+    ) -> ResourceDataModels:
+        """
+        Acquire a lock on a single resource.
+
+        Returns:
+            ResourceDataModels: The locked resource
+
+        Raises:
+            ValueError: If lock acquisition fails
+        """
+        locked_resource = self.acquire_lock(
+            resource, lock_duration=lock_duration, client_id=client_id
+        )
+
+        if locked_resource is None:
+            resource_id = getattr(resource, "resource_id", resource)
+            raise ValueError(f"Failed to acquire lock on resource {resource_id}")
+
+        return locked_resource
+
+    def _cleanup_failed_locks(
+        self, locked_resources: list[ResourceDataModels], client_id: str
+    ) -> None:
+        """Clean up locks that were acquired before a failure occurred."""
+        for locked_res in locked_resources:
+            try:
+                self.release_lock(locked_res, client_id=client_id)
+            except Exception as cleanup_error:
+                self.logger.error(f"Error cleaning up lock: {cleanup_error}")
+
+    def _release_all_locks(
+        self,
+        locked_resources: list[ResourceDataModels],
+        auto_refresh: bool,
+        client_id: str,
+    ) -> None:
+        """Release all acquired locks and optionally refresh resources."""
+        for locked_resource in locked_resources:
+            try:
+                if auto_refresh:
+                    self._refresh_before_release(locked_resource)
+
+                self.release_lock(locked_resource, client_id=client_id)
+
+            except Exception as e:
+                self.logger.error(f"Error releasing lock on resource: {e}")
+
+    def _refresh_before_release(self, locked_resource: ResourceDataModels) -> None:
+        """Refresh a resource before releasing its lock."""
+        try:
+            if hasattr(locked_resource, "_resource"):  # It's wrapped
+                refreshed = self.update_resource(locked_resource._resource)
+                # Update the wrapped resource with fresh data
+                locked_resource._update_wrapped_resource(refreshed._resource)
+            else:
+                # It's not wrapped, refresh it
+                self.update_resource(locked_resource)
+        except Exception as refresh_error:
+            self.logger.error(
+                f"Error refreshing resource before release: {refresh_error}"
+            )
