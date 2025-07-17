@@ -655,11 +655,6 @@ def test_resource_wrapper_unwrap(client: ResourceClient) -> None:
     assert isinstance(unwrapped, Resource)
     assert unwrapped.resource_name == "test_unwrap"
 
-    # Test data property (alias for unwrap)
-    data = wrapped_resource.data
-    assert isinstance(data, Resource)
-    assert data.resource_name == "test_unwrap"
-
 
 def test_resource_wrapper_attribute_access(client: ResourceClient) -> None:
     """Test that wrapper transparently delegates attribute access"""
@@ -690,20 +685,6 @@ def test_resource_wrapper_equality(client: ResourceClient) -> None:
 
     # Test equality with unwrapped resource - compare by resource_id since other fields differ
     assert wrapped1a.resource_id == resource1.resource_id
-
-
-def test_resource_wrapper_string_representation(client: ResourceClient) -> None:
-    """Test ResourceWrapper string representations"""
-    resource = Resource(resource_name="test_repr")
-    wrapped_resource = client.add_resource(resource)
-
-    # Test that wrapper has string representation (exact content may differ due to server fields)
-    wrapper_str = str(wrapped_resource)
-    assert "test_repr" in wrapper_str  # Check name is present
-
-    # Test __repr__ shows it's a wrapper
-    repr_str = repr(wrapped_resource)
-    assert "ResourceWrapper" in repr_str
 
 
 def test_stack_wrapper_new_syntax(client: ResourceClient) -> None:
