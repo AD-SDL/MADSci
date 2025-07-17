@@ -127,14 +127,6 @@ class ExperimentApplication:
                 if val == "n":
                     break
 
-        self.workcell_client.ownership_info.experiment_id = (
-            self.experiment.experiment_id
-        )
-        self.data_client.ownership_info.experiment_id = self.experiment.experiment_id
-        self.resource_client.ownership_info.experiment_id = (
-            self.experiment.experiment_id
-        )
-
     def end_experiment(self, status: Optional[ExperimentStatus] = None) -> None:
         """End the experiment."""
         self.experiment = self.experiment_client.end_experiment(
