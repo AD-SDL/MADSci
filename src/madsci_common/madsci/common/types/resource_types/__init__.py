@@ -34,7 +34,7 @@ from madsci.common.types.resource_types.resource_enums import (
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import (
-    AnyUrl,
+    AnyUrl,  # noqa: F401
     computed_field,
     model_validator,
 )
@@ -57,11 +57,13 @@ class Resource(ResourceDefinition, extra="allow", table=False):
         primary_key=True,
         sa_type=String,
     )
-    resource_url: Optional[str] = Field(  # Change from AnyUrl to str to fix serialization issues with new Client Context Manager
-        title="Resource URL",
-        description="The URL of the resource.",
-        nullable=True,
-        default=None,
+    resource_url: Optional[str] = (
+        Field(  # Change from AnyUrl to str to fix serialization issues with new Client Context Manager
+            title="Resource URL",
+            description="The URL of the resource.",
+            nullable=True,
+            default=None,
+        )
     )
     base_type: Literal[ResourceTypeEnum.resource] = Field(
         title="Resource Base Type",
