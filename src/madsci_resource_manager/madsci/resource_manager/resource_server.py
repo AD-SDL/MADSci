@@ -759,8 +759,6 @@ if __name__ == "__main__":
     import uvicorn
 
     resource_server_settings = ResourceManagerSettings()
-    resource_server_settings.db_url = "postgresql://rpl:rpl@localhost:5432/resources"
-
     app = create_resource_server(
         resource_server_settings=resource_server_settings,
     )
