@@ -9,9 +9,7 @@ from typing import Any, Optional
 from fastapi import UploadFile
 from madsci.client.event_client import EventClient
 from madsci.common.types.location_types import (
-    Location,
     LocationArgument,
-    LocationDefinition,
 )
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
@@ -20,7 +18,6 @@ from madsci.common.types.workflow_types import (
     WorkflowDefinition,
 )
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
-from pydantic import ValidationError
 
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:

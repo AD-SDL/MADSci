@@ -1,5 +1,7 @@
 """Unit tests for madsci.common.ownership module."""
 
+import threading
+
 from madsci.common.ownership import (
     get_current_ownership_info,
     global_ownership_info,
@@ -27,8 +29,6 @@ def test_global_ownership_across_threads() -> None:
         global_ownership_info.node_id = original_id
 
     # Run the check in a separate thread
-    import threading
-
     thread = threading.Thread(target=check_ownership)
     thread.start()
     thread.join()
