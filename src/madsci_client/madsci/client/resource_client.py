@@ -257,6 +257,14 @@ class ResourceWrapper:
         # Allow comparison with unwrapped resources
         return self._resource == other
 
+    def __hash__(self) -> int:
+        """
+        Hash method for the wrapper.
+
+        Uses the hash of the underlying resource's ID.
+        """
+        return hash(self._resource.resource_id)
+
     @property
     def unwrap(self) -> "ResourceDataModels":
         """
