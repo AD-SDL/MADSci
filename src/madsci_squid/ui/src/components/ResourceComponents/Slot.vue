@@ -54,7 +54,7 @@ resources.value.forEach((new_resource: any) => {if(new_resource.resource_id != p
 
 
 const push = (resource_id: string, push_id: string) => {
-  fetch(urls.value.resource_manager.concat('resource/').concat(resource_id).concat('/push'), {
+  fetch(urls.value.resource_server_url.concat('resource/').concat(resource_id).concat('/push'), {
     body: JSON.stringify({"child_id": push_id}),
     method: "POST",
     headers: {
@@ -64,7 +64,7 @@ const push = (resource_id: string, push_id: string) => {
 
 }
 const pop = (resource_id: string) => {
-  fetch(urls.value.resource_manager.concat('resource/').concat(resource_id).concat('/pop'), {
+  fetch(urls.value.resource_server_url.concat('resource/').concat(resource_id).concat('/pop'), {
     method: "POST",
   });
 }

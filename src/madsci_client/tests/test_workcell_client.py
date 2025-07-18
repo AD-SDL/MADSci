@@ -74,21 +74,29 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     """Fixture for WorkcellClient patched to use TestClient."""
     with patch("madsci.client.workcell_client.requests") as mock_requests:
 
+        def add_ok_property(resp: Response) -> Response:
+            if not hasattr(resp, "ok"):
+                resp.ok = resp.status_code < 400
+            return resp
+
         def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
             kwargs.pop("timeout", None)
-            return test_client.post(*args, **kwargs)
+            resp = test_client.post(*args, **kwargs)
+            return add_ok_property(resp)
 
         mock_requests.post.side_effect = post_no_timeout
 
         def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
             kwargs.pop("timeout", None)
-            return test_client.get(*args, **kwargs)
+            resp = test_client.get(*args, **kwargs)
+            return add_ok_property(resp)
 
         mock_requests.get.side_effect = get_no_timeout
 
         def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
             kwargs.pop("timeout", None)
-            return test_client.delete(*args, **kwargs)
+            resp = test_client.delete(*args, **kwargs)
+            return add_ok_property(resp)
 
         mock_requests.delete.side_effect = delete_no_timeout
 

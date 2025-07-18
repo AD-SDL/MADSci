@@ -12,6 +12,19 @@ from pydantic import Field
 from pydantic.functional_validators import field_validator
 
 
+class LocationArgument(MadsciBaseModel):
+    """Location Argument to be used by MADSCI nodes."""
+
+    location: Any
+    """Details about the Location relevant to this node"""
+    resource_id: Optional[str] = None
+    """The ID of the corresponding resource, if any"""
+    location_name: Optional[str] = None
+    """the name of the given location"""
+    reservation: Optional["LocationReservation"] = None
+    """whether existing location is reserved"""
+
+
 class LocationDefinition(MadsciBaseModel):
     """The Definition of a Location in a setup."""
 
@@ -88,16 +101,3 @@ class LocationReservation(MadsciBaseModel):
             and self.start <= datetime.now()
             and self.end >= datetime.now()
         )
-
-
-class LocationArgument(MadsciBaseModel):
-    """Location Argument to be used by MADSCI nodes."""
-
-    location: Any
-    """Details about the Location relevant to this node"""
-    resource_id: Optional[str] = None
-    """The ID of the corresponding resource, if any"""
-    location_name: Optional[str] = None
-    """the name of the given location"""
-    reservation: Optional["LocationReservation"] = None
-    """whether existing location is reserved"""
