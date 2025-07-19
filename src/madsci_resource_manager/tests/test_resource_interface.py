@@ -835,3 +835,24 @@ def test_push_pop_slot(interface: ResourceInterface) -> None:
     assert popped_resource.resource_id == resource1.resource_id
     assert len(slot.children) == 0
     assert slot.quantity == 0
+
+
+def test_recursive_parent_relationship_fails_interface(
+    interface: ResourceInterface,
+) -> None:
+    """Test that creating a recursive parent relationship via the interface raises a ValueError."""
+    # Create two resources
+    resource1 = Resource()
+    resource2 = Resource(parent_id=resource1.resource_id)
+    resource1 = interface.add_resource(resource=resource1)
+    resource2 = interface.add_resource(resource=resource2)
+
+    # Attempt to create a cycle: set resource1's parent to resource2
+    resource1.parent_id = resource2.resource_id
+    with pytest.raises(ValueError, match="Recursive parent relationship detected"):
+        interface.update_resource(resource=resource1)
+
+    # Also test direct self-parenting
+    resource1.parent_id = resource1.resource_id
+    with pytest.raises(ValueError, match="Recursive parent relationship detected"):
+        interface.update_resource(resource=resource1)

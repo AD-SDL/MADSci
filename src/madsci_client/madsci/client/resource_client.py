@@ -15,11 +15,15 @@ from madsci.common.types.resource_types import (
 )
 from madsci.common.types.resource_types.definitions import ResourceDefinitions
 from madsci.common.types.resource_types.server_types import (
+    CreateResourceFromTemplateBody,
     PushResourceBody,
     RemoveChildBody,
     ResourceGetQuery,
     ResourceHistoryGetQuery,
     SetChildBody,
+    TemplateCreateBody,
+    TemplateGetQuery,
+    TemplateUpdateBody,
 )
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
@@ -98,6 +102,9 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The initialized resource as returned by the server.
         """
+        self.logger.warning(
+            "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION! Use Template methods instead."
+        )
         if self.url:
             response = requests.post(
                 f"{self.url}/resource/init",
@@ -694,3 +701,296 @@ class ResourceClient:
             resource.quantity = resource.capacity
             self.local_resources[resource.resource_id] = resource
         return resource
+
+    def create_template(
+        self,
+        resource: ResourceDataModels,
+        template_name: str,
+        description: str = "",
+        required_overrides: Optional[list[str]] = None,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+        version: str = "1.0.0",
+    ) -> ResourceDataModels:
+        """
+        Create a new resource template from a resource.
+
+        Args:
+            resource (ResourceDataModels): The resource to use as a template.
+            template_name (str): Unique name for the template.
+            description (str): Description of what this template creates.
+            required_overrides (Optional[list[str]]): Fields that must be provided when using template.
+            tags (Optional[list[str]]): Tags for categorization.
+            created_by (Optional[str]): Creator identifier.
+            version (str): Template version.
+
+        Returns:
+            ResourceDataModels: The created template resource.
+        """
+        if self.url:
+            payload = TemplateCreateBody(
+                resource=resource,
+                template_name=template_name,
+                description=description,
+                required_overrides=required_overrides,
+                tags=tags,
+                created_by=created_by,
+                version=version,
+            ).model_dump(mode="json")
+            response = requests.post(f"{self.url}/templates", json=payload, timeout=10)
+            response.raise_for_status()
+            template = Resource.discriminate(response.json())
+            template.resource_url = f"{self.url}/templates/{template_name}"
+        else:
+            # Store template in local templates
+            template_data = {
+                "resource": resource,
+                "template_name": template_name,
+                "description": description,
+                "required_overrides": required_overrides or [],
+                "tags": tags or [],
+                "created_by": created_by,
+                "version": version,
+            }
+            self.local_templates[template_name] = template_data
+            template = resource  # Return the original resource as template
+        return template
+
+    def get_template(self, template_name: str) -> Optional[ResourceDataModels]:
+        """
+        Get a template by name.
+
+        Args:
+            template_name (str): Name of the template to retrieve.
+
+        Returns:
+            Optional[ResourceDataModels]: The template resource if found, None otherwise.
+        """
+        if self.url:
+            response = requests.get(f"{self.url}/templates/{template_name}", timeout=10)
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            template = Resource.discriminate(response.json())
+            template.resource_url = f"{self.url}/templates/{template_name}"
+            return template
+        template_data = self.local_templates.get(template_name)
+        if template_data:
+            return template_data["resource"]
+        return None
+
+    def list_templates(
+        self,
+        base_type: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+    ) -> list[ResourceDataModels]:
+        """
+        List templates with optional filtering.
+
+        Args:
+            base_type (Optional[str]): Filter by base resource type.
+            tags (Optional[list[str]]): Filter by templates that have any of these tags.
+            created_by (Optional[str]): Filter by creator.
+
+        Returns:
+            list[ResourceDataModels]: List of template resources.
+        """
+        if self.url:
+            if any([base_type, tags, created_by]):
+                # Use query endpoint for filtering
+                payload = TemplateGetQuery(
+                    base_type=base_type,
+                    tags=tags,
+                    created_by=created_by,
+                ).model_dump(mode="json")
+                response = requests.post(
+                    f"{self.url}/templates/query", json=payload, timeout=10
+                )
+            else:
+                # Use simple endpoint for no filtering
+                response = requests.get(f"{self.url}/templates", timeout=10)
+
+            response.raise_for_status()
+            templates = [
+                Resource.discriminate(template) for template in response.json()
+            ]
+            for template in templates:
+                template.resource_url = f"{self.url}/templates/{template.resource_name}"
+            return templates
+        # Filter local templates
+        templates = []
+        for template_name, template_data in self.local_templates.items():  # noqa
+            # Apply filters
+            if base_type and template_data["resource"].base_type != base_type:
+                continue
+            if tags and not any(tag in template_data["tags"] for tag in tags):
+                continue
+            if created_by and template_data["created_by"] != created_by:
+                continue
+            templates.append(template_data["resource"])
+        return templates
+
+    def get_template_info(self, template_name: str) -> Optional[dict[str, Any]]:
+        """
+        Get detailed template metadata.
+
+        Args:
+            template_name (str): Name of the template.
+
+        Returns:
+            Optional[dict[str, Any]]: Template metadata if found, None otherwise.
+        """
+        if self.url:
+            response = requests.get(
+                f"{self.url}/templates/{template_name}/info", timeout=10
+            )
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            return response.json()
+        template_data = self.local_templates.get(template_name)
+        if template_data:
+            # Return metadata without the resource object
+            return {
+                "template_name": template_data["template_name"],
+                "description": template_data["description"],
+                "required_overrides": template_data["required_overrides"],
+                "tags": template_data["tags"],
+                "created_by": template_data["created_by"],
+                "version": template_data["version"],
+            }
+        return None
+
+    def update_template(
+        self, template_name: str, updates: dict[str, Any]
+    ) -> ResourceDataModels:
+        """
+        Update an existing template.
+
+        Args:
+            template_name (str): Name of the template to update.
+            updates (dict[str, Any]): Fields to update.
+
+        Returns:
+            ResourceDataModels: The updated template resource.
+        """
+        if self.url:
+            payload = TemplateUpdateBody(updates=updates).model_dump(mode="json")
+            response = requests.put(
+                f"{self.url}/templates/{template_name}", json=payload, timeout=10
+            )
+            response.raise_for_status()
+            template = Resource.discriminate(response.json())
+            template.resource_url = f"{self.url}/templates/{template_name}"
+            return template
+        template_data = self.local_templates.get(template_name)
+        if template_data:
+            # Update local template data
+            for key, value in updates.items():
+                if key in template_data:
+                    template_data[key] = value
+            return template_data["resource"]
+        return None
+
+    def delete_template(self, template_name: str) -> bool:
+        """
+        Delete a template from the database.
+
+        Args:
+            template_name (str): Name of the template to delete.
+
+        Returns:
+            bool: True if template was deleted, False if not found.
+        """
+        if self.url:
+            response = requests.delete(
+                f"{self.url}/templates/{template_name}", timeout=10
+            )
+            if response.status_code == 404:
+                return False
+            response.raise_for_status()
+            return True
+        if template_name in self.local_templates:
+            del self.local_templates[template_name]
+            return True
+        return False
+
+    def create_resource_from_template(
+        self,
+        template_name: str,
+        resource_name: str,
+        overrides: Optional[dict[str, Any]] = None,
+        add_to_database: bool = True,
+    ) -> ResourceDataModels:
+        """
+        Create a resource from a template.
+
+        Args:
+            template_name (str): Name of the template to use.
+            resource_name (str): Name for the new resource.
+            overrides (Optional[dict[str, Any]]): Values to override template defaults.
+            add_to_database (bool): Whether to add the resource to the database.
+
+        Returns:
+            ResourceDataModels: The created resource.
+        """
+        if self.url:
+            payload = CreateResourceFromTemplateBody(
+                resource_name=resource_name,
+                overrides=overrides,
+                add_to_database=add_to_database,
+            ).model_dump(mode="json")
+            response = requests.post(
+                f"{self.url}/templates/{template_name}/create_resource",
+                json=payload,
+                timeout=10,
+            )
+            response.raise_for_status()
+            resource = Resource.discriminate(response.json())
+            resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
+            return resource
+        template_data = self.local_templates.get(template_name)
+        if not template_data:
+            raise ValueError(f"Template '{template_name}' not found")
+
+        # Check required overrides
+        overrides = overrides or {}
+        missing_required = [
+            field
+            for field in template_data["required_overrides"]
+            if field not in overrides and field != "resource_name"
+        ]
+        if missing_required:
+            raise ValueError(f"Missing required fields: {missing_required}")
+
+        # Create new resource from template
+        base_resource = template_data["resource"]
+        resource_data = base_resource.model_dump()
+        resource_data["resource_name"] = resource_name
+        resource_data.update(overrides)
+
+        # Create new resource
+        new_resource = Resource.discriminate(resource_data)
+        if add_to_database:
+            self.local_resources[new_resource.resource_id] = new_resource
+        return new_resource
+
+    def get_templates_by_category(self) -> dict[str, list[str]]:
+        """
+        Get templates organized by base_type category.
+
+        Returns:
+            dict[str, list[str]]: Dictionary mapping base_type to template names.
+        """
+        if self.url:
+            response = requests.get(f"{self.url}/templates/categories", timeout=10)
+            response.raise_for_status()
+            return response.json()
+        categories = {}
+        for template_name, template_data in self.local_templates.items():
+            base_type = template_data["resource"].base_type.value
+            if base_type not in categories:
+                categories[base_type] = []
+            categories[base_type].append(template_name)
+        return categories

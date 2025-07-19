@@ -1,6 +1,6 @@
 """Types used by the Resource Manager's Server"""
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
@@ -98,3 +98,51 @@ class RemoveChildBody(ResourceRequestBase):
 
     key: Union[str, GridIndex2D, GridIndex3D]
     """The key to identify the child resource's location in the parent container. If the parent is a grid/voxel grid, the key should be a 2D or 3D index."""
+
+
+class TemplateCreateBody(ResourceRequestBase):
+    """A request to create a template from a resource."""
+
+    resource: ResourceDataModels
+    """The resource to use as a template."""
+    template_name: str
+    """Unique name for the template."""
+    description: Optional[str] = ""
+    """Description of what this template creates."""
+    required_overrides: Optional[list[str]] = None
+    """Fields that must be provided when using template."""
+    tags: Optional[list[str]] = None
+    """Tags for categorization."""
+    created_by: Optional[str] = None
+    """Creator identifier."""
+    version: Optional[str] = "1.0.0"
+    """Template version."""
+
+
+class TemplateGetQuery(ResourceRequestBase):
+    """A request to list/filter templates."""
+
+    base_type: Optional[str] = None
+    """Filter by base resource type."""
+    tags: Optional[list[str]] = None
+    """Filter by templates that have any of these tags."""
+    created_by: Optional[str] = None
+    """Filter by creator."""
+
+
+class TemplateUpdateBody(ResourceRequestBase):
+    """A request to update a template."""
+
+    updates: dict[str, Any]
+    """Fields to update."""
+
+
+class CreateResourceFromTemplateBody(ResourceRequestBase):
+    """A request to create a resource from a template."""
+
+    resource_name: str
+    """Name for the new resource."""
+    overrides: Optional[dict[str, Any]] = None
+    """Values to override template defaults."""
+    add_to_database: Optional[bool] = True
+    """Whether to add the resource to the database."""
