@@ -92,6 +92,8 @@ services:
     command: python -m madsci.event_manager.event_server
     depends_on:
       - mongodb
+    environment:
+      - MPLCONFIGDIR=/tmp/matplotlib
 
   experiment_manager:
     <<: *madsci-service
