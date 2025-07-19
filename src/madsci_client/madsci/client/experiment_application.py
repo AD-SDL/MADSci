@@ -185,7 +185,9 @@ class ExperimentApplication(RestNode):
         self.logger.log_info(
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
-
+    def handle_exception(self, exception: Exception):
+        self.end_experiment(ExperimentStatus.FAILED)
+        
     @contextmanager
     def manage_experiment(
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
@@ -195,7 +197,7 @@ class ExperimentApplication(RestNode):
         try:
             yield
         except Exception as e:
-            self.end_experiment(ExperimentStatus.FAILED)
+            self.handle_exception(e)
             raise(e)
         else:
             self.end_experiment()
