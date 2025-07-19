@@ -208,6 +208,11 @@ class EventType(str, Enum):
     CAMPAIGN_ABORT = "campaign_abort"
     # *Action Events
     ACTION_STATUS_CHANGE = "action_status_change"
+    # *Utilization Events
+    UTILIZATION_SYSTEM_SUMMARY = "utilization_system_summary"
+    UTILIZATION_NODE_SUMMARY = "utilization_node_summary"
+    UTILIZATION_TRACKER_START = "utilization_tracker_start"
+    UTILIZATION_TRACKER_STOP = "utilization_tracker_stop"
 
     @classmethod
     def _missing_(cls, value: str) -> "EventType":
@@ -280,4 +285,179 @@ class EventManagerDefinition(ManagerDefinition):
         title="Manager Type",
         description="The type of the event manager",
         default=ManagerType.EVENT_MANAGER,
+    )
+
+
+class NodeUtilizationData(MadsciBaseModel):
+    """Utilization data for a single node."""
+
+    node_id: str = Field(
+        title="Node ID",
+        description="The unique identifier for the node.",
+    )
+    total_time: float = Field(
+        title="Total Time",
+        description="Total time tracked for this node in seconds.",
+        default=0.0,
+    )
+    busy_time: float = Field(
+        title="Busy Time",
+        description="Time the node spent in busy state in seconds.",
+        default=0.0,
+    )
+    idle_time: float = Field(
+        title="Idle Time",
+        description="Time the node spent in idle state in seconds.",
+        default=0.0,
+    )
+    error_time: float = Field(
+        title="Error Time",
+        description="Time the node spent in error state in seconds.",
+        default=0.0,
+    )
+    active_time: float = Field(
+        title="Active Time",
+        description="Time the node spent in active/available state in seconds.",
+        default=0.0,
+    )
+    inactive_time: float = Field(
+        title="Inactive Time",
+        description="Time the node spent in inactive/unavailable state in seconds.",
+        default=0.0,
+    )
+    active_state: str = Field(
+        title="Active State",
+        description="Current active state of the node (active, inactive, unknown).",
+        default="unknown",
+    )
+
+    last_state_change: Optional[datetime] = Field(
+        title="Last State Change",
+        description="Timestamp of the last state change for this node.",
+        default=None,
+    )
+    last_active_change: Optional[datetime] = Field(
+        title="Last Active State Change",
+        description="Timestamp of the last active state change for this node.",
+        default=None,
+    )
+    current_state: str = Field(
+        title="Current State",
+        description="Current state of the node (idle, busy, error, unknown).",
+        default="unknown",
+    )
+    active_actions: set[str] = Field(
+        title="Active Actions",
+        description="Set of currently active action IDs on this node.",
+        default_factory=set,
+    )
+    utilization_percentage: float = Field(
+        title="Utilization Percentage",
+        description="Calculated utilization percentage for this node.",
+        default=0.0,
+    )
+
+
+class SystemUtilizationData(MadsciBaseModel):
+    """System-wide utilization data."""
+
+    total_time: float = Field(
+        title="Total Time",
+        description="Total time tracked for the system in seconds.",
+        default=0.0,
+    )
+    active_time: float = Field(
+        title="Active Time",
+        description="Time the system spent in active state in seconds.",
+        default=0.0,
+    )
+    idle_time: float = Field(
+        title="Idle Time",
+        description="Time the system spent in idle state in seconds.",
+        default=0.0,
+    )
+    last_state_change: Optional[datetime] = Field(
+        title="Last State Change",
+        description="Timestamp of the last system state change.",
+        default=None,
+    )
+    current_state: str = Field(
+        title="Current State",
+        description="Current state of the system (idle, active).",
+        default="idle",
+    )
+    active_experiments: set[str] = Field(
+        title="Active Experiments",
+        description="Set of currently active experiment IDs.",
+        default_factory=set,
+    )
+    active_workflows: set[str] = Field(
+        title="Active Workflows",
+        description="Set of currently active workflow IDs.",
+        default_factory=set,
+    )
+    utilization_percentage: float = Field(
+        title="Utilization Percentage",
+        description="Calculated system utilization percentage.",
+        default=0.0,
+    )
+
+
+class UtilizationSummary(MadsciBaseModel):
+    """Complete utilization summary for system and all nodes."""
+
+    system_utilization: SystemUtilizationData = Field(
+        title="System Utilization",
+        description="System-wide utilization data.",
+        default_factory=SystemUtilizationData,
+    )
+    node_utilizations: dict[str, NodeUtilizationData] = Field(
+        title="Node Utilizations",
+        description="Utilization data for each tracked node.",
+        default_factory=dict,
+    )
+    reporting_interval: int = Field(
+        title="Reporting Interval",
+        description="Interval in seconds between utilization reports.",
+        default=10,
+    )
+    tracker_uptime: float = Field(
+        title="Tracker Uptime",
+        description="Total time the utilization tracker has been running in seconds.",
+        default=0.0,
+    )
+    summary_timestamp: datetime = Field(
+        title="Summary Timestamp",
+        description="Timestamp when this summary was generated.",
+        default_factory=datetime.now,
+    )
+
+
+class UtilizationTrackerSettings(MadsciBaseModel):
+    """Settings for the utilization tracker."""
+
+    enabled: bool = Field(
+        title="Enabled",
+        description="Whether utilization tracking is enabled.",
+        default=True,
+    )
+    reporting_interval: int = Field(
+        title="Reporting Interval",
+        description="Interval in seconds between utilization reports.",
+        default=10,
+    )
+    cleanup_interval: int = Field(
+        title="Cleanup Interval",
+        description="Interval in seconds for cleaning up old tracking data.",
+        default=3600,
+    )
+    max_idle_node_age: int = Field(
+        title="Max Idle Node Age",
+        description="Maximum time in seconds to keep tracking idle nodes.",
+        default=86400,  # 24 hours
+    )
+    log_level: str = Field(
+        title="Log Level",
+        description="Logging level for utilization tracker events.",
+        default="INFO",
     )
