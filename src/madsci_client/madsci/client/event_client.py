@@ -133,12 +133,14 @@ class EventClient:
                 events[key] = Event.model_validate(value)
             return dict(events)
         raise ValueError("No event server configured, cannot query events.")
-    
+
     def get_utilization_summary(self) -> Optional[UtilizationSummary]:
         """Get current utilization summary from the event server."""
         if not self.event_server:
-            raise ValueError("No event server configured, cannot get utilization summary.")
-        
+            raise ValueError(
+                "No event server configured, cannot get utilization summary."
+            )
+
         try:
             response = requests.get(
                 str(self.event_server) + "/utilization/summary",
@@ -146,22 +148,26 @@ class EventClient:
             )
             if not response.ok:
                 response.raise_for_status()
-            
+
             data = response.json()
             if "error" in data:
                 print(f"Utilization tracking error: {data['error']}")
                 return None
-            
+
             return UtilizationSummary.model_validate(data)
         except requests.RequestException as e:
             print(f"Error getting utilization summary: {e}")
             return None
 
-    def query_utilization_events(self, hours_back: int = 24, utilization_type: Optional[str] = None) -> dict[str, Event]:
+    def query_utilization_events(
+        self, hours_back: int = 24, utilization_type: Optional[str] = None
+    ) -> dict[str, Event]:
         """Query utilization events from the past N hours."""
         if not self.event_server:
-            raise ValueError("No event server configured, cannot query utilization events.")
-        
+            raise ValueError(
+                "No event server configured, cannot query utilization events."
+            )
+
         try:
             response = requests.post(
                 str(self.event_server) + "/events/query/utilization",
@@ -170,7 +176,7 @@ class EventClient:
             )
             if not response.ok:
                 response.raise_for_status()
-            
+
             events = {}
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
@@ -182,8 +188,10 @@ class EventClient:
     def get_system_utilization_graph(self, hours_back: int = 24) -> Optional[str]:
         """Get system utilization graph as base64 encoded PNG."""
         if not self.event_server:
-            raise ValueError("No event server configured, cannot get utilization graph.")
-        
+            raise ValueError(
+                "No event server configured, cannot get utilization graph."
+            )
+
         try:
             response = requests.get(
                 str(self.event_server) + "/utilization/graphs/system",
@@ -192,22 +200,26 @@ class EventClient:
             )
             if not response.ok:
                 response.raise_for_status()
-            
+
             data = response.json()
             if "error" in data:
                 print(f"Graph generation error: {data['error']}")
                 return None
-            
+
             return data.get("graph")
         except requests.RequestException as e:
             print(f"Error getting system utilization graph: {e}")
             return None
 
-    def get_node_utilization_graph(self, node_id: str, hours_back: int = 24) -> Optional[str]:
+    def get_node_utilization_graph(
+        self, node_id: str, hours_back: int = 24
+    ) -> Optional[str]:
         """Get node utilization graph as base64 encoded PNG."""
         if not self.event_server:
-            raise ValueError("No event server configured, cannot get utilization graph.")
-        
+            raise ValueError(
+                "No event server configured, cannot get utilization graph."
+            )
+
         try:
             response = requests.get(
                 str(self.event_server) + f"/utilization/graphs/node/{node_id}",
@@ -216,22 +228,26 @@ class EventClient:
             )
             if not response.ok:
                 response.raise_for_status()
-            
+
             data = response.json()
             if "error" in data:
                 print(f"Graph generation error: {data['error']}")
                 return None
-            
+
             return data.get("graph")
         except requests.RequestException as e:
             print(f"Error getting node utilization graph: {e}")
             return None
 
-    def get_node_comparison_graph(self, hours_back: int = 24, max_nodes: int = 6) -> Optional[str]:
+    def get_node_comparison_graph(
+        self, hours_back: int = 24, max_nodes: int = 6
+    ) -> Optional[str]:
         """Get multi-node comparison graph as base64 encoded PNG."""
         if not self.event_server:
-            raise ValueError("No event server configured, cannot get utilization graph.")
-        
+            raise ValueError(
+                "No event server configured, cannot get utilization graph."
+            )
+
         try:
             response = requests.get(
                 str(self.event_server) + "/utilization/graphs/comparison",
@@ -240,12 +256,12 @@ class EventClient:
             )
             if not response.ok:
                 response.raise_for_status()
-            
+
             data = response.json()
             if "error" in data:
                 print(f"Graph generation error: {data['error']}")
                 return None
-            
+
             return data.get("graph")
         except requests.RequestException as e:
             print(f"Error getting node comparison graph: {e}")
@@ -254,8 +270,10 @@ class EventClient:
     def get_utilization_heatmap(self, hours_back: int = 24) -> Optional[str]:
         """Get utilization heatmap as base64 encoded PNG."""
         if not self.event_server:
-            raise ValueError("No event server configured, cannot get utilization graph.")
-        
+            raise ValueError(
+                "No event server configured, cannot get utilization graph."
+            )
+
         try:
             response = requests.get(
                 str(self.event_server) + "/utilization/graphs/heatmap",
@@ -264,12 +282,12 @@ class EventClient:
             )
             if not response.ok:
                 response.raise_for_status()
-            
+
             data = response.json()
             if "error" in data:
                 print(f"Graph generation error: {data['error']}")
                 return None
-            
+
             return data.get("graph")
         except requests.RequestException as e:
             print(f"Error getting utilization heatmap: {e}")
@@ -278,8 +296,10 @@ class EventClient:
     def get_utilization_report(self, hours_back: int = 24) -> Optional[dict[str, Any]]:
         """Get comprehensive utilization report with statistics and graphs."""
         if not self.event_server:
-            raise ValueError("No event server configured, cannot get utilization report.")
-        
+            raise ValueError(
+                "No event server configured, cannot get utilization report."
+            )
+
         try:
             response = requests.get(
                 str(self.event_server) + "/utilization/report",
@@ -288,12 +308,12 @@ class EventClient:
             )
             if not response.ok:
                 response.raise_for_status()
-            
+
             data = response.json()
             if "error" in data:
                 print(f"Report generation error: {data['error']}")
                 return None
-            
+
             return data
         except requests.RequestException as e:
             print(f"Error getting utilization report: {e}")
@@ -303,13 +323,13 @@ class EventClient:
         """Save a base64 encoded graph to a PNG file."""
         try:
             import base64
-            
+
             # Decode base64 and save to file
             graph_data = base64.b64decode(graph_base64)
-            
-            with open(filename, 'wb') as f:
+
+            with open(filename, "wb") as f:
                 f.write(graph_data)
-            
+
             print(f"Graph saved to {filename}")
             return True
         except Exception as e:
@@ -428,7 +448,9 @@ class EventClient:
         self, event: Event, retrying: bool = False
     ) -> None:
         """Send an event to the event manager. Buffer on failure."""
-        print(f"DEBUG CLIENT: _send_event_to_event_server_task called for {event.event_type}")
+        print(
+            f"DEBUG CLIENT: _send_event_to_event_server_task called for {event.event_type}"
+        )
         try:
             self._send_event_to_event_server(event, retrying=retrying)
             print(f"DEBUG CLIENT: Successfully sent {event.event_type}")
@@ -437,8 +459,10 @@ class EventClient:
 
     def _send_event_to_event_server(self, event: Event, retrying: bool = False) -> None:
         """Send an event to the event manager. Buffer on failure."""
-        print(f"DEBUG CLIENT: _send_event_to_event_server called for {event.event_type}")
-  
+        print(
+            f"DEBUG CLIENT: _send_event_to_event_server called for {event.event_type}"
+        )
+
         try:
             response = requests.post(
                 url=f"{str(self.event_server).rstrip('/')}/event",
@@ -451,8 +475,8 @@ class EventClient:
                 print(f"DEBUG CLIENT: Response error: {response.text}")
                 response.raise_for_status()
             else:
-                print(f"DEBUG CLIENT: Event sent successfully!")
-    
+                print("DEBUG CLIENT: Event sent successfully!")
+
         except Exception as e:
             print(f"DEBUG CLIENT: Exception occurred: {e}")
             if not retrying:
@@ -494,4 +518,3 @@ class EventClient:
             event_type=event_type,
             event_data=event_data,
         )
-    
