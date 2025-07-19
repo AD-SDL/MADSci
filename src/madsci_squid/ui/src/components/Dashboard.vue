@@ -23,37 +23,43 @@
       </v-container>
     </v-window-item>
     <v-window-item :key="2" :value="2">
-      <v-container class="pa-1 ma-1 justify-center" fluid>
-      <v-card>
-        <v-card-title class="text-center">
-          <h2>Workflows</h2>
-        </v-card-title>
-        <v-card-text>
-          <h3>Active</h3>
-          <WorkflowTable :workflows="active_workflows"/>
-          <h3>Archived</h3>
-          <WorkflowTable :workflows="archived_workflows"/>
-          </v-card-text>
-        </v-card>
-      </v-container>
+      <v-container class="pa-1" fluid>
+        <v-row dense wrap justify-content="space-evenly">
+          <v-col cols="12" md="6" lg="6" xl="6">
+            <v-card>
+              <v-card-title class="text-center">
+                <h2>Workflows</h2>
+              </v-card-title>
+              <v-card-text>
+                <h3>Active</h3>
+                <WorkflowTable :workflows="active_workflows" />
+                <h3>Archived</h3>
+                <WorkflowTable :workflows="archived_workflows" />
+              </v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="12" md="6" lg="6" xl="6">
+            <CreateWorkflowPanel @view-workflows="$emit('view-workflows')" />
+          </v-col>
+          </v-row>
     </v-window-item>
     <v-window-item :key="3" :value="3">
       <v-container class="pa-1 ma-1 justify-center" fluid>
-      <v-card>
-        <v-card-title class="text-center">
-          <h2>Resources</h2>
-        </v-card-title>
-        <v-card-text>
-          <ResourcesPanel />
+        <v-card>
+          <v-card-title class="text-center">
+            <h2>Resources</h2>
+          </v-card-title>
+          <v-card-text>
+            <ResourcesPanel />
           </v-card-text>
         </v-card>
       </v-container>
     </v-window-item>
     <v-window-item :key="4" :value="4">
       <v-container class="pa-1 ma-1 justify-center" fluid>
-      <v-card>
-        <v-card-text>
-          <Experiments />
+        <v-card>
+          <v-card-text>
+            <Experiments />
           </v-card-text>
         </v-card>
       </v-container>
@@ -84,8 +90,8 @@ export default {
 .node_indicator {
   color: white;
   border-radius: 5px;
-    padding: 3px;
-  }
+  padding: 3px;
+}
 
 .wf_status_completed,
 .node_status_idle,
