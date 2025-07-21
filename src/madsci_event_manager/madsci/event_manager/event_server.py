@@ -7,6 +7,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.params import Body
 from madsci.client.event_client import EventClient
+from madsci.common.ownership import global_ownership_info
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import (
     Event,
@@ -42,7 +43,6 @@ def create_event_server(  # noqa: C901
             event_manager_definition = EventManagerDefinition()
         logger.log_info(f"Writing to event manager definition file: {def_path}")
         event_manager_definition.to_yaml(def_path)
-    from madsci.common.ownership import global_ownership_info
 
     global_ownership_info.manager_id = event_manager_definition.event_manager_id
     logger = EventClient(name=f"event_manager.{event_manager_definition.name}")

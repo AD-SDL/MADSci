@@ -68,7 +68,7 @@ class RestNode(AbstractNode):
         url = AnyUrl(getattr(self.config, "node_url", "http://127.0.0.1:2000"))
         if not testing:
             self.logger.log_debug("Running node in production mode")
-            import uvicorn
+            import uvicorn  # noqa: PLC0415
 
             self.rest_api = FastAPI(lifespan=self._lifespan)
 

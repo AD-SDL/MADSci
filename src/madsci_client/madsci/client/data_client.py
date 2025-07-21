@@ -1,5 +1,6 @@
 """Client for the MADSci Experiment Manager."""
 
+import shutil
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -137,8 +138,6 @@ class DataClient:
 
         if self.url is None:
             if self._local_datapoints[datapoint_id].data_type == "file":
-                import shutil
-
                 shutil.copyfile(
                     self._local_datapoints[datapoint_id].path, output_filepath
                 )

@@ -1,6 +1,7 @@
 """REST Server for the MADSci Data Manager"""
 
 import json
+import tempfile
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -114,7 +115,6 @@ def create_data_server(  # noqa: C901, PLR0915
                 if datapoint_obj.data_type.value == "file" and minio_client is not None:
                     # Use MinIO object storage instead of local storage
                     # First, save file temporarily to upload to MinIO
-                    import tempfile
 
                     with tempfile.NamedTemporaryFile(
                         delete=False, suffix=f"_{file.filename}"
