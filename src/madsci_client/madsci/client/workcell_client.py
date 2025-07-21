@@ -245,7 +245,7 @@ class WorkcellClient:
             finished = flag
         return wfs
 
-    def retry_workflow(self, workflow_id: str, index: int = -1) -> dict:
+    def retry_workflow(self, workflow_id: str, index: int = -1, await_completion: bool = True, raise_on_cancelled: bool = True) -> Workflow:
         """
         Retry a workflow from a specific step.
 
@@ -270,7 +270,10 @@ class WorkcellClient:
             },
             timeout=10,
         )
-        return response.json()
+        if await_completion:
+            workflow = self.await_workflow(workflow_id=workflow_id, raise_on_cancelled=raise_on_cancelled)
+            return workflow
+        return Workflow(**response.json())
 
     def resubmit_workflow(
         self,
@@ -357,10 +360,17 @@ class WorkcellClient:
                 break
             prior_status = status
             prior_index = step_index
-        if wf.status.failed and raise_on_failed:
-            raise WorkflowFailedError(
-                f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}' with result:\n {wf.steps[wf.status.current_step_index].result}."
-            )
+        if wf.status.failed:
+            decision = input("Workflow Failed. \n Options: resubmit (0), retry from step (1), end (2)")
+            if decision == "resubmit" or decision == "0":
+                self.resubmit_workflow(wf.workflow_id, await_completion=True, raise_on_failed=raise_on_failed, raise_on_cancelled=raise_on_cancelled)
+            if decision == "retry from step" or decision == "1":
+                step = int(input("Starting Step Index: "))
+                self.retry_workflow(wf.workflow_id, step, raise_on_cancelled=raise_on_cancelled)
+            else: 
+                raise WorkflowFailedError(
+                    f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
+                )
         if wf.status.cancelled and raise_on_cancelled:
             raise WorkflowFailedError(
                 f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."

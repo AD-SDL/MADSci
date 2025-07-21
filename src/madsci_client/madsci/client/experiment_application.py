@@ -1,9 +1,10 @@
 """Provides an ExperimentApplication class that manages the execution of an experiment."""
 
+import argparse
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
@@ -22,11 +23,15 @@ from madsci.common.types.experiment_types import (
 from madsci.common.types.location_types import Location
 from madsci.common.types.resource_types import Resource
 from madsci.common.utils import threaded_daemon
+from madsci.node_module.rest_node_module import RestNode
 from pydantic import AnyUrl
 from rich import print
-
-
-class ExperimentApplication:
+from typing import Callable, TypeVar
+from typing_extensions import ParamSpec
+from functools import wraps
+P = ParamSpec('P')
+R = TypeVar('R')
+class ExperimentApplication(RestNode):
     """
     An experiment application that helps manage the execution of an experiment.
 
@@ -49,14 +54,20 @@ class ExperimentApplication:
     """Client for managing data."""
     experiment_client: ExperimentClient
     """Client for managing experiments."""
+    inputs = []
+    """inputs to the main function"""
+    
 
     def __init__(
         self,
         experiment_server_url: Optional[AnyUrl] = None,
         experiment_design: Optional[Union[str, Path, ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
+        *args: Any, 
+        **kwargs: Any
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
+        super().__init__(*args, **kwargs)
         self.context = (
             MadsciContext(experiment_server_url=experiment_server_url)
             if experiment_server_url
@@ -67,6 +78,8 @@ class ExperimentApplication:
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
 
         self.experiment = experiment if experiment else self.experiment
+        self.node_info.node_url = self.experiment_design.node_config.node_url
+        self.config = self.experiment_design.node_config
 
         # * Re-initialize expeirment client in-case user provided a different server URL
         self.experiment_client = ExperimentClient(
@@ -164,7 +177,9 @@ class ExperimentApplication:
         self.logger.log_info(
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
-
+    def handle_exception(self, exception: Exception):
+        self.end_experiment(ExperimentStatus.FAILED)
+        
     @contextmanager
     def manage_experiment(
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
@@ -173,7 +188,10 @@ class ExperimentApplication:
         self.start_experiment_run(run_name=run_name, run_description=run_description)
         try:
             yield
-        finally:
+        except Exception as e:
+            self.handle_exception(e)
+            raise(e)
+        else:
             self.end_experiment()
 
     @threaded_daemon
@@ -281,7 +299,17 @@ class ExperimentApplication:
                 )
             return True
         return False
+    def run_experiment(self, kwargs):
+        pass
 
+    
+
+    def add_experiment_management(self, func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def run_experiment(*args: P.args, **kwargs: P.kwargs) -> R:
+            with self.manage_experiment():
+                return func(*args, **kwargs)
+        return run_experiment
     def evaluate_condition(self, condition: Condition) -> bool:
         """evaluate a condition"""
         if condition.condition_type == "resource_present":
@@ -310,3 +338,20 @@ class ExperimentApplication:
                 resource_child = resource.children[condition.key]
             return self.check_resource_field(resource_child, condition)
         return False
+    def start_app(self):
+        parser = argparse.ArgumentParser(
+                    prog='ExperimentApp',
+                    description='Runs an experiment application',
+                    epilog='Can run in single shot or server mode')
+        for value in self.inputs:
+            parser.add_argument("--"+value["name"], default=value["default"])
+        parser.add_argument("--server_mode", default=False)
+        arguments = parser.parse_args()
+        if arguments.server_mode:
+            
+            self._add_action(self.add_experiment_management(self.run_experiment), "run_experiment", "Run the Experiment", blocking=False)
+            self.start_node()
+        else:
+            args_dict = arguments.__dict__
+            del args_dict["server_mode"]
+            self.run_experiment(**args_dict)

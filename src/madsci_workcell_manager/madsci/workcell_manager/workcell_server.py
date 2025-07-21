@@ -51,12 +51,19 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
     logger = EventClient()
     workcell_settings = workcell_settings or WorkcellManagerSettings()
+    state_handler = WorkcellStateHandler(
+            redis_connection=redis_connection,
+            mongo_connection=mongo_connection,
+        )
     if not workcell:
         workcell_path = Path(workcell_settings.workcell_definition)
         if workcell_path.exists():
             workcell = WorkcellDefinition.from_yaml(workcell_path)
         else:
-            workcell = WorkcellDefinition()
+            try:
+                workcell = state_handler.get_workcell_definition()
+            except Exception:
+                workcell = WorkcellDefinition()
         logger.info(f"Writing to workcell definition file: {workcell_path}")
         workcell.to_yaml(workcell_path)
     global_ownership_info.workcell_id = workcell.workcell_id
@@ -68,11 +75,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
     context = context or MadsciContext()
     logger.info(context)
 
-    state_handler = WorkcellStateHandler(
-        workcell,
-        redis_connection=redis_connection,
-        mongo_connection=mongo_connection,
-    )
+       
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
@@ -142,12 +145,15 @@ def create_workcell_server(  # noqa: C901, PLR0915
         node = Node(node_url=node_url)
         state_handler.set_node(node_name, node)
         if permanent:
+            workcell = state_handler.get_workcell_definition()
             workcell.nodes[node_name] = NodeDefinition(
                 node_name=node_name,
                 node_url=node_url,
                 node_description=node_description,
             )
-            # TODO: Save the workcell definition to the YAML
+            workcell.to_yaml(workcell_path)
+            state_handler.set_workcell_definition(workcell)
+
         return state_handler.get_node(node_name)
 
     @app.post("/admin/{command}")
@@ -366,10 +372,15 @@ def create_workcell_server(  # noqa: C901, PLR0915
     @app.post("/location")
     def add_location(
         location: Location,
+        permanent: bool = True
     ) -> Location:
         """Add a location to the workcell's location list"""
         with state_handler.wc_state_lock():
             state_handler.set_location(location)
+        if permanent:
+            workcell = state_handler.get_workcell_definition()
+            workcell.locations.append(location)
+            workcell.to_yaml(workcell_path)
         return state_handler.get_location(location.location_id)
 
     @app.get("/location/{location_id}")
@@ -382,6 +393,10 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Delete a location from the workcell's location list"""
         with state_handler.wc_state_lock():
             state_handler.delete_location(location_id)
+            workcell = state_handler.get_workcell_definition()
+            workcell.locations = list(filter(lambda location: location.location_id != location_id, workcell.locations))
+            workcell.to_yaml(workcell_path)
+            state_handler.set_workcell_definition(workcell)
         return {"status": "deleted"}
 
     @app.post("/location/{location_id}/add_lookup/{node_name}")

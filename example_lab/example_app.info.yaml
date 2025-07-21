@@ -1,12 +1,8 @@
-node_name: platereader_1
-<<<<<<< HEAD
-node_id: 01JR1CGN7GXM8JN1X1GT23ZQ5M
-=======
-node_id: 01JYFEHVHFXWT4RK3WNEPTPRPG
->>>>>>> origin/experiment_app
-node_description: The plate reader for the example lab
+node_name: example_app
+node_id: 01JYPQAMTTH9BY5EGKHC5V518A
+node_description: null
 node_type: device
-module_name: platereader
+module_name: example_app
 module_version: 0.0.1
 capabilities:
   get_info: true
@@ -21,29 +17,19 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
-  - get_location
   - lock
   - reset
   - shutdown
   - unlock
 node_url: null
-actions:
-  read_plate:
-    name: read_plate
-    description: Run a command on the plate reader.
-    args: {}
-    locations: {}
-    files: {}
-    results: {}
-    blocking: false
-    asynchronous: true
+actions: {}
 config:
-  node_definition: node_definitions/platereader_1.node.yaml
+  node_definition: default.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://localhost:2002/
+  node_url: http://127.0.0.1:2000/
   uvicorn_kwargs: {}
 config_schema:
   description: Default Configuration for a MADSci Node that communicates over REST.
@@ -99,7 +85,6 @@ config_schema:
       title: Node URL
       type: string
     uvicorn_kwargs:
-      additionalProperties: true
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object

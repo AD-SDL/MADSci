@@ -175,9 +175,10 @@ class AbstractNode:
         # * Log startup info
         self.logger.log_debug(f"{self.node_definition=}")
 
-        # * Kick off the startup logic in a separate thread
-        # * This allows implementations to start servers, listeners, etc.
-        # * in parrallel
+            # * Kick off the startup logic in a separate thread
+            # * This allows implementations to start servers, listeners, etc.
+            # * in parrallel
+            
         self._startup()
 
     def status_handler(self) -> None:
