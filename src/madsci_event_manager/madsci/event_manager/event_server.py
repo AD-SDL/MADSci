@@ -13,19 +13,19 @@ from madsci.common.types.event_types import (
     EventManagerDefinition,
     EventManagerSettings,
 )
-from madsci.event_manager.utilization_tracker import UtilizationTracker
+from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer, UtilizationVisualizer
 from madsci.event_manager.notifications import EmailAlerts
 from pymongo import MongoClient
 from pymongo.synchronous.database import Database
 from contextlib import asynccontextmanager
 import datetime
+from datetime import timedelta
 
 def create_event_server(  # noqa: C901
     event_manager_definition: Optional[EventManagerDefinition] = None,
     event_manager_settings: Optional[EventManagerSettings] = None,
     db_connection: Optional[Database] = None,
     context: Optional[MadsciContext] = None,
-    enable_utilization_tracking: bool = True,
 ) -> FastAPI:
     """Creates an Event Manager's REST server with optional utilization tracking."""
 
@@ -56,24 +56,9 @@ def create_event_server(  # noqa: C901
         db_connection = db_client[event_manager_settings.collection_name]
     context = context or MadsciContext()
     logger.log_info(context)
-    # Initialize utilization tracking if enabled
-    utilization_tracker = None
-    utilization_visualizer = None
-    
-    if enable_utilization_tracking:
-        try:
-            utilization_tracker = UtilizationTracker(event_client=logger)
-            utilization_tracker.start()
-            utilization_visualizer = utilization_tracker.create_visualizer(db_connection)
-            logger.log_info("Utilization tracking and visualization enabled")
-        except Exception as e:
-            logger.log_error(f"Failed to start utilization tracking: {e}")
-            utilization_tracker = None
-            utilization_visualizer = None
 
     app = FastAPI()
     events = db_connection["events"]
-
     @app.get("/")
     @app.get("/info")
     @app.get("/definition")
@@ -84,16 +69,18 @@ def create_event_server(  # noqa: C901
     @app.post("/event")
     async def log_event(event: Event) -> Event:
         """Create a new event."""
-        events.insert_one(event.to_mongo())
-
-        # Process event for utilization tracking
-        if utilization_tracker:
-            try:
-                utilization_tracker.process_event(event)
-            except Exception as e:
-                logger.log_error(f"Error processing event for utilization tracking: {e}")
-
-        if event.alert or event.log_level >= event_manager_settings.alert_level:  # noqa: SIM102
+        try:            
+            # Test the conversion
+            mongo_data = event.to_mongo()            
+            # Test the insertion
+            result = events.insert_one(mongo_data)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e  
+        
+        if event.alert or event.log_level >= event_manager_settings.alert_level:
             if event_manager_settings.email_alerts:
                 email_alerter = EmailAlerts(
                     config=event_manager_settings.email_alerts,
@@ -101,7 +88,7 @@ def create_event_server(  # noqa: C901
                 )
                 email_alerter.send_email_alerts(event)
         return event
-
+    
     @app.get("/event/{event_id}")
     async def get_event(event_id: str) -> Event:
         """Look up an event by event_id"""
@@ -142,126 +129,470 @@ def create_event_server(  # noqa: C901
         event_list = events.find(selector).to_list()
         return {event["_id"]: event for event in event_list}
 
-    # Utilization tracking endpoints
-    @app.get("/utilization/summary")
-    async def get_utilization_summary() -> dict[str, Any]:
-        """Get current utilization summary."""
-        if utilization_tracker:
-            summary = utilization_tracker.get_utilization_summary()
-            return summary.model_dump()
-        else:
-            return {"error": "Utilization tracking not enabled"}
+    # Utilization analysis endpoints - create analyzer on-demand
+    def get_utilization_analyzer():
+        """Create utilization analyzer on-demand."""
+        try:
+            return UtilizationAnalyzer(events)
+        except Exception as e:
+            logger.log_error(f"Failed to create utilization analyzer: {e}")
+            return None
 
+    def get_utilization_visualizer():
+        """Create utilization visualizer on-demand."""
+        try:
+            return UtilizationVisualizer(events)
+        except Exception as e:
+            logger.log_error(f"Failed to create utilization visualizer: {e}")
+            return None
+
+
+    @app.get("/utilization/summary")
+    async def get_utilization_summary(
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        hours_back: Optional[int] = None
+    ) -> dict[str, Any]:
+        """
+        Get utilization summary for a time range using container-compatible analyzer.
+        
+        Parameters:
+        - start_time: ISO format start time (optional)
+        - end_time: ISO format end time (optional) 
+        - hours_back: Hours back from now (optional, for backwards compatibility)
+        
+        If no parameters provided, analyzes current system session.
+        """
+        print("GET /utilization/summary called")
+        analyzer = get_utilization_analyzer()
+        if analyzer is None:
+            return {"error": "Failed to create utilization analyzer"}
+        
+        try:
+            # Parse time parameters
+            parsed_start = None
+            parsed_end = None
+            
+            if hours_back and not start_time and not end_time:
+                # Backwards compatibility mode
+                parsed_end = datetime.datetime.now()
+                parsed_start = parsed_end - timedelta(hours=hours_back)
+                print(f"Using hours_back={hours_back}: {parsed_start} to {parsed_end}")
+            else:
+                if start_time:
+                    parsed_start = datetime.datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                if end_time:
+                    parsed_end = datetime.datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                print(f"Using explicit times: {parsed_start} to {parsed_end}")
+            
+            # Analyze utilization using container-compatible analyzer
+            print("Calling analyzer.analyze_utilization...")
+            summary = analyzer.analyze_utilization(parsed_start, parsed_end)
+            print("Analysis complete, returning summary")
+            return summary.model_dump()
+            
+        except Exception as e:
+            logger.log_error(f"Error analyzing utilization: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to analyze utilization: {str(e)}"}
+
+    @app.get("/utilization/analysis")
+    async def get_detailed_utilization_analysis(
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        include_timeline: bool = False
+    ) -> dict[str, Any]:
+        """
+        Get detailed utilization analysis with additional insights using container-compatible analyzer.
+        
+        Parameters:
+        - start_time: ISO format start time (optional)
+        - end_time: ISO format end time (optional)
+        - include_timeline: Whether to include event timeline (optional)
+        """
+        print("GET /utilization/analysis called")
+        analyzer = get_utilization_analyzer()
+        if analyzer is None:
+            return {"error": "Failed to create utilization analyzer"}
+        
+        try:
+            # Parse time parameters
+            parsed_start = None
+            parsed_end = None
+            
+            if start_time:
+                parsed_start = datetime.datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            if end_time:
+                parsed_end = datetime.datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            
+            print(f"Analyzing detailed utilization: {parsed_start} to {parsed_end}")
+            
+            # Get basic analysis
+            summary = analyzer.analyze_utilization(parsed_start, parsed_end)
+            
+            # Determine actual timeframe used
+            analysis_start, analysis_end = analyzer._determine_timeframe(parsed_start, parsed_end)
+            
+            result = {
+                "analysis_period": {
+                    "start": analysis_start.isoformat(),
+                    "end": analysis_end.isoformat(),
+                    "duration_hours": (analysis_end - analysis_start).total_seconds() / 3600
+                },
+                "summary": summary.model_dump(),
+                "insights": {
+                    "peak_utilization_node": None,
+                    "least_utilized_node": None,
+                    "total_experiments": len(summary.system_utilization.active_experiments),
+                    "total_workflows": len(summary.system_utilization.active_workflows),
+                    "nodes_analyzed": len(summary.node_utilizations)
+                }
+            }
+            
+            # Find peak and least utilized nodes
+            if summary.node_utilizations:
+                sorted_nodes = sorted(
+                    summary.node_utilizations.items(), 
+                    key=lambda x: x[1].utilization_percentage, 
+                    reverse=True
+                )
+                result["insights"]["peak_utilization_node"] = {
+                    "node_id": sorted_nodes[0][0],
+                    "utilization": sorted_nodes[0][1].utilization_percentage
+                }
+                result["insights"]["least_utilized_node"] = {
+                    "node_id": sorted_nodes[-1][0],
+                    "utilization": sorted_nodes[-1][1].utilization_percentage
+                }
+            
+            # Include event timeline if requested
+            if include_timeline:
+                print("Including timeline in analysis...")
+                # Get recent events for timeline
+                timeline_events = list(events.find(
+                    {"event_timestamp": {"$gte": analysis_start, "$lte": analysis_end}}
+                ).sort("event_timestamp", -1).limit(50))
+                
+                result["timeline"] = [
+                    {
+                        "timestamp": event["event_timestamp"].isoformat() if hasattr(event["event_timestamp"], 'isoformat') else str(event["event_timestamp"]),
+                        "event_type": event["event_type"],
+                        "node_id": analyzer._extract_node_id(event),
+                        "experiment_id": analyzer._extract_experiment_id(event),
+                        "workflow_id": analyzer._extract_workflow_id(event)
+                    }
+                    for event in timeline_events
+                ]
+            
+            print("Detailed analysis complete")
+            return result
+            
+        except Exception as e:
+            logger.log_error(f"Error in detailed utilization analysis: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to analyze utilization: {str(e)}"}
+
+    @app.get("/utilization/graphs/system")
+    async def get_system_utilization_graph(
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        hours_back: Optional[int] = None
+    ) -> dict[str, Any]:
+        """Generate system utilization graph with container-compatible visualizer."""
+        print("GET /utilization/graphs/system called")
+        visualizer = get_utilization_visualizer()
+        if visualizer is None:
+            return {"error": "Failed to create utilization visualizer"}
+        
+        try:
+            # Parse time parameters
+            parsed_start = None
+            parsed_end = None
+            
+            if hours_back and not start_time and not end_time:
+                parsed_end = datetime.datetime.now()
+                parsed_start = parsed_end - timedelta(hours=hours_back)
+            else:
+                if start_time:
+                    parsed_start = datetime.datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                if end_time:
+                    parsed_end = datetime.datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            
+            print(f"Generating system graph for: {parsed_start} to {parsed_end}")
+            
+            graph_base64 = visualizer.generate_system_utilization_graph(
+                parsed_start, parsed_end, hours_back
+            )
+            
+            return {
+                "graph": graph_base64,
+                "format": "png_base64",
+                "analysis_start": parsed_start.isoformat() if parsed_start else None,
+                "analysis_end": parsed_end.isoformat() if parsed_end else None,
+                "generated_at": datetime.datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.log_error(f"Error generating system utilization graph: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to generate graph: {str(e)}"}
+
+    @app.get("/utilization/graphs/node/{node_id}")
+    async def get_node_utilization_graph(
+        node_id: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        hours_back: Optional[int] = None
+    ) -> dict[str, Any]:
+        """Generate node utilization graph with container-compatible visualizer."""
+        print(f"GET /utilization/graphs/node/{node_id} called")
+        visualizer = get_utilization_visualizer()
+        if visualizer is None:
+            return {"error": "Failed to create utilization visualizer"}
+        
+        try:
+            # Parse time parameters
+            parsed_start = None
+            parsed_end = None
+            
+            if hours_back and not start_time and not end_time:
+                parsed_end = datetime.datetime.now()
+                parsed_start = parsed_end - timedelta(hours=hours_back)
+            else:
+                if start_time:
+                    parsed_start = datetime.datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                if end_time:
+                    parsed_end = datetime.datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            
+            print(f"Generating node graph for {node_id}: {parsed_start} to {parsed_end}")
+            
+            graph_base64 = visualizer.generate_node_utilization_graph(
+                node_id, parsed_start, parsed_end, hours_back
+            )
+            
+            return {
+                "graph": graph_base64,
+                "format": "png_base64",
+                "node_id": node_id,
+                "analysis_start": parsed_start.isoformat() if parsed_start else None,
+                "analysis_end": parsed_end.isoformat() if parsed_end else None,
+                "generated_at": datetime.datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.log_error(f"Error generating node utilization graph for {node_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to generate graph: {str(e)}"}
+
+    @app.get("/utilization/report")
+    async def get_comprehensive_utilization_report(
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        hours_back: Optional[int] = None,
+        include_graphs: bool = True
+    ) -> dict[str, Any]:
+        """Generate comprehensive utilization report using container-compatible analyzer."""
+        print("GET /utilization/report called")
+        analyzer = get_utilization_analyzer()
+        if analyzer is None:
+            return {"error": "Failed to create utilization analyzer"}
+        
+        try:
+            # Parse time parameters
+            parsed_start = None
+            parsed_end = None
+            
+            if hours_back and not start_time and not end_time:
+                parsed_end = datetime.datetime.now()
+                parsed_start = parsed_end - timedelta(hours=hours_back)
+            else:
+                if start_time:
+                    parsed_start = datetime.datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                if end_time:
+                    parsed_end = datetime.datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            
+            print(f"Generating comprehensive report: {parsed_start} to {parsed_end}")
+            
+            # Get analysis
+            summary = analyzer.analyze_utilization(parsed_start, parsed_end)
+            analysis_start, analysis_end = analyzer._determine_timeframe(parsed_start, parsed_end)
+            
+            # Build report
+            report = {
+                "analysis_period": {
+                    "start": analysis_start.isoformat(),
+                    "end": analysis_end.isoformat(),
+                    "duration_hours": (analysis_end - analysis_start).total_seconds() / 3600
+                },
+                "system_statistics": {
+                    "utilization_percentage": summary.system_utilization.utilization_percentage,
+                    "active_time_hours": summary.system_utilization.active_time / 3600,
+                    "idle_time_hours": summary.system_utilization.idle_time / 3600,
+                    "total_experiments": len(summary.system_utilization.active_experiments),
+                    "total_workflows": len(summary.system_utilization.active_workflows)
+                },
+                "node_statistics": {},
+                "summary": {
+                    "nodes_analyzed": len(summary.node_utilizations),
+                    "average_node_utilization": 0.0,
+                    "peak_node_utilization": 0.0,
+                    "generated_at": datetime.datetime.now().isoformat()
+                }
+            }
+            
+            # Calculate node statistics
+            if summary.node_utilizations:
+                utilizations = [node.utilization_percentage for node in summary.node_utilizations.values()]
+                report["summary"]["average_node_utilization"] = sum(utilizations) / len(utilizations)
+                report["summary"]["peak_node_utilization"] = max(utilizations)
+                
+                for node_id, node_util in summary.node_utilizations.items():
+                    report["node_statistics"][node_id] = {
+                        "utilization_percentage": node_util.utilization_percentage,
+                        "busy_time_hours": node_util.busy_time / 3600,
+                        "active_time_hours": getattr(node_util, 'active_time', 0) / 3600,
+                        "current_state": node_util.current_state
+                    }
+            
+            # Include graphs if requested
+            if include_graphs:
+                print("Adding graphs to report...")
+                visualizer = get_utilization_visualizer()
+                if visualizer:
+                    try:
+                        report["graphs"] = {
+                            "system_utilization": visualizer.generate_system_utilization_graph(
+                                parsed_start, parsed_end, hours_back
+                            )
+                        }
+                        
+                        # Generate node graphs for top 3 most utilized nodes
+                        if summary.node_utilizations:
+                            top_nodes = sorted(
+                                summary.node_utilizations.items(),
+                                key=lambda x: x[1].utilization_percentage,
+                                reverse=True
+                            )[:3]
+                            
+                            report["graphs"]["top_nodes"] = {}
+                            for node_id, _ in top_nodes:
+                                report["graphs"]["top_nodes"][node_id] = visualizer.generate_node_utilization_graph(
+                                    node_id, parsed_start, parsed_end, hours_back
+                                )
+                    except Exception as e:
+                        logger.log_warning(f"Failed to generate graphs for report: {e}")
+                        report["graphs"] = {"error": "Graph generation failed"}
+            
+            print("Comprehensive report complete")
+            return report
+            
+        except Exception as e:
+            logger.log_error(f"Error generating utilization report: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to generate report: {str(e)}"}
+
+    # Debug endpoint to show what events are available
+
+    @app.get("/utilization/debug/events")
+    async def debug_events(limit: int = 50) -> dict[str, Any]:
+        """FIXED debug endpoint to show what events are available in the database."""
+        try:
+            # Use the events collection directly (same as the fixed analyzer)
+            recent_events = list(events.find({}).sort("event_timestamp", -1).limit(limit))
+            
+            print(f"FIXED DEBUG: Found {len(recent_events)} events in collection")
+            
+            # Analyze event types
+            event_type_counts = {}
+            events_with_nodes = 0
+            events_with_experiments = 0
+            
+            for event in recent_events:
+                event_type = event.get("event_type", "unknown")
+                event_type_counts[event_type] = event_type_counts.get(event_type, 0) + 1
+                
+                # Check for node info (FIXED to handle your actual data structure)
+                source = event.get("source", {})
+                event_data = event.get("event_data", {})
+                
+                has_node = False
+                if isinstance(source, dict):
+                    # Check for node indicators in source
+                    node_id = (source.get("node_id") or 
+                            source.get("workcell_id") or 
+                            source.get("manager_id"))
+                    if node_id and any(indicator in str(node_id).lower() for indicator in 
+                                    ["liquidhandler", "robotarm", "platereader", "node"]):
+                        has_node = True
+                
+                if not has_node and isinstance(event_data, dict):
+                    has_node = bool(event_data.get("node_id"))
+                
+                if has_node:
+                    events_with_nodes += 1
+                
+                # Check for experiment info
+                has_experiment = False
+                if isinstance(source, dict):
+                    has_experiment = bool(source.get("experiment_id"))
+                if not has_experiment and isinstance(event_data, dict):
+                    has_experiment = bool(event_data.get("experiment_id"))
+                
+                if has_experiment:
+                    events_with_experiments += 1
+            
+            return {
+                "total_events": len(recent_events),
+                "events_with_nodes": events_with_nodes,
+                "events_with_experiments": events_with_experiments,
+                "event_type_counts": event_type_counts,
+                "sample_events": [
+                    {
+                        "timestamp": str(event.get("event_timestamp", "unknown")),
+                        "event_type": event.get("event_type", "unknown"),
+                        "has_node_info": bool(
+                            # FIXED node detection logic
+                            (event.get("source", {}).get("node_id") or 
+                            event.get("source", {}).get("workcell_id") or
+                            event.get("event_data", {}).get("node_id")) and
+                            any(indicator in str(event.get("source", {}).get("workcell_id", "")).lower() 
+                                for indicator in ["liquidhandler", "robotarm", "platereader", "node"])
+                        ),
+                        "has_experiment_info": bool(
+                            (event.get("source", {}).get("experiment_id") or
+                            event.get("event_data", {}).get("experiment_id"))
+                        ),
+                        "source_info": {
+                            "workcell_id": event.get("source", {}).get("workcell_id"),
+                            "node_id": event.get("source", {}).get("node_id"),
+                            "experiment_id": event.get("source", {}).get("experiment_id"),
+                            "manager_id": event.get("source", {}).get("manager_id")
+                        }
+                    }
+                    for event in recent_events[:10]
+                ],
+                "fix_status": "FIXED - Using corrected collection access and field mapping"
+            }
+        except Exception as e:
+            return {
+                "error": f"FIXED debug endpoint failed: {str(e)}",
+                "fix_status": "ERROR in fixed implementation"
+            }
+
+    # Legacy endpoint for backwards compatibility
     @app.post("/events/query/utilization")
     async def query_utilization_events(
         hours_back: int = 24,
         utilization_type: Optional[str] = None
     ) -> dict[str, Any]:
-        """Query utilization events from the past N hours."""
-        from datetime import timedelta
-        
-        since_time = datetime.now() - timedelta(hours=hours_back)
-        
-        selector = {
-            "event_timestamp": {"$gte": since_time},
-            "event_type": {"$in": ["utilization_system_summary", "utilization_node_summary"]}
-        }
-        
-        if utilization_type:
-            selector["event_data.utilization_type"] = utilization_type
-        
-        event_list = events.find(selector).sort("event_timestamp", 1).to_list()
-        return {event["_id"]: event for event in event_list}
-
-    # Graph generation endpoints
-    @app.get("/utilization/graphs/system")
-    async def get_system_utilization_graph(hours_back: int = 24) -> dict[str, Any]:
-        """Generate system utilization graph."""
-        if not utilization_visualizer:
-            return {"error": "Utilization visualization not enabled"}
-        
-        try:
-            graph_base64 = utilization_visualizer.generate_system_utilization_graph(hours_back)
-            return {
-                "graph": graph_base64,
-                "format": "png_base64",
-                "hours_analyzed": hours_back,
-                "generated_at": datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.log_error(f"Error generating system utilization graph: {e}")
-            return {"error": f"Failed to generate graph: {str(e)}"}
-
-    @app.get("/utilization/graphs/node/{node_id}")
-    async def get_node_utilization_graph(node_id: str, hours_back: int = 24) -> dict[str, Any]:
-        """Generate node utilization graph."""
-        if not utilization_visualizer:
-            return {"error": "Utilization visualization not enabled"}
-        
-        try:
-            graph_base64 = utilization_visualizer.generate_node_utilization_graph(node_id, hours_back)
-            return {
-                "graph": graph_base64,
-                "format": "png_base64",
-                "node_id": node_id,
-                "hours_analyzed": hours_back,
-                "generated_at": datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.log_error(f"Error generating node utilization graph for {node_id}: {e}")
-            return {"error": f"Failed to generate graph: {str(e)}"}
-
-    @app.get("/utilization/graphs/comparison")
-    async def get_multi_node_comparison_graph(hours_back: int = 24, max_nodes: int = 6) -> dict[str, Any]:
-        """Generate multi-node comparison graph."""
-        if not utilization_visualizer:
-            return {"error": "Utilization visualization not enabled"}
-        
-        try:
-            graph_base64 = utilization_visualizer.generate_multi_node_comparison_graph(hours_back, max_nodes)
-            return {
-                "graph": graph_base64,
-                "format": "png_base64",
-                "hours_analyzed": hours_back,
-                "max_nodes": max_nodes,
-                "generated_at": datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.log_error(f"Error generating node comparison graph: {e}")
-            return {"error": f"Failed to generate graph: {str(e)}"}
-
-    @app.get("/utilization/graphs/heatmap")
-    async def get_utilization_heatmap(hours_back: int = 24) -> dict[str, Any]:
-        """Generate utilization heatmap."""
-        if not utilization_visualizer:
-            return {"error": "Utilization visualization not enabled"}
-        
-        try:
-            graph_base64 = utilization_visualizer.generate_utilization_heatmap(hours_back)
-            return {
-                "graph": graph_base64,
-                "format": "png_base64",
-                "hours_analyzed": hours_back,
-                "generated_at": datetime.now().isoformat()
-            }
-        except Exception as e:
-            logger.log_error(f"Error generating utilization heatmap: {e}")
-            return {"error": f"Failed to generate graph: {str(e)}"}
-
-    @app.get("/utilization/report")
-    async def get_utilization_report(hours_back: int = 24) -> dict[str, Any]:
-        """Generate comprehensive utilization report with statistics and graphs."""
-        if not utilization_visualizer:
-            return {"error": "Utilization visualization not enabled"}
-        
-        try:
-            report = utilization_visualizer.generate_utilization_report(hours_back)
-            return report
-        except Exception as e:
-            logger.log_error(f"Error generating utilization report: {e}")
-            return {"error": f"Failed to generate report: {str(e)}"}
+        """Legacy endpoint - redirects to new analysis."""
+        return await get_utilization_summary(hours_back=hours_back)
 
     return app
+
 
 
 if __name__ == "__main__":
