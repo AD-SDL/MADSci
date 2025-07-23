@@ -132,208 +132,66 @@ class EventClient:
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
             return dict(events)
-        raise ValueError("No event server configured, cannot query events.")
+        
 
-    def get_utilization_summary(self) -> Optional[UtilizationSummary]:
-        """Get current utilization summary from the event server."""
+    def get_utilization_report(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> Optional[dict[str, Any]]:
+        """Get utilization report as JSON."""
         if not self.event_server:
-            raise ValueError(
-                "No event server configured, cannot get utilization summary."
-            )
-
-        try:
-            response = requests.get(
-                str(self.event_server) + "/utilization/summary",
-                timeout=10,
-            )
-            if not response.ok:
-                response.raise_for_status()
-
-            data = response.json()
-            if "error" in data:
-                print(f"Utilization tracking error: {data['error']}")
-                return None
-
-            return UtilizationSummary.model_validate(data)
-        except requests.RequestException as e:
-            print(f"Error getting utilization summary: {e}")
+            print("No event server configured, cannot get utilization report.")
             return None
-
-    def query_utilization_events(
-        self, hours_back: int = 24, utilization_type: Optional[str] = None
-    ) -> dict[str, Event]:
-        """Query utilization events from the past N hours."""
-        if not self.event_server:
-            raise ValueError(
-                "No event server configured, cannot query utilization events."
-            )
-
+        
         try:
-            response = requests.post(
-                str(self.event_server) + "/events/query/utilization",
-                json={"hours_back": hours_back, "utilization_type": utilization_type},
-                timeout=10,
-            )
-            if not response.ok:
-                response.raise_for_status()
-
-            events = {}
-            for key, value in response.json().items():
-                events[key] = Event.model_validate(value)
-            return events
-        except requests.RequestException as e:
-            print(f"Error querying utilization events: {e}")
-            return {}
-
-    def get_system_utilization_graph(self, hours_back: int = 24) -> Optional[str]:
-        """Get system utilization graph as base64 encoded PNG."""
-        if not self.event_server:
-            raise ValueError(
-                "No event server configured, cannot get utilization graph."
-            )
-
-        try:
-            response = requests.get(
-                str(self.event_server) + "/utilization/graphs/system",
-                params={"hours_back": hours_back},
-                timeout=30,
-            )
-            if not response.ok:
-                response.raise_for_status()
-
-            data = response.json()
-            if "error" in data:
-                print(f"Graph generation error: {data['error']}")
-                return None
-
-            return data.get("graph")
-        except requests.RequestException as e:
-            print(f"Error getting system utilization graph: {e}")
-            return None
-
-    def get_node_utilization_graph(
-        self, node_id: str, hours_back: int = 24
-    ) -> Optional[str]:
-        """Get node utilization graph as base64 encoded PNG."""
-        if not self.event_server:
-            raise ValueError(
-                "No event server configured, cannot get utilization graph."
-            )
-
-        try:
-            response = requests.get(
-                str(self.event_server) + f"/utilization/graphs/node/{node_id}",
-                params={"hours_back": hours_back},
-                timeout=30,
-            )
-            if not response.ok:
-                response.raise_for_status()
-
-            data = response.json()
-            if "error" in data:
-                print(f"Graph generation error: {data['error']}")
-                return None
-
-            return data.get("graph")
-        except requests.RequestException as e:
-            print(f"Error getting node utilization graph: {e}")
-            return None
-
-    def get_node_comparison_graph(
-        self, hours_back: int = 24, max_nodes: int = 6
-    ) -> Optional[str]:
-        """Get multi-node comparison graph as base64 encoded PNG."""
-        if not self.event_server:
-            raise ValueError(
-                "No event server configured, cannot get utilization graph."
-            )
-
-        try:
-            response = requests.get(
-                str(self.event_server) + "/utilization/graphs/comparison",
-                params={"hours_back": hours_back, "max_nodes": max_nodes},
-                timeout=30,
-            )
-            if not response.ok:
-                response.raise_for_status()
-
-            data = response.json()
-            if "error" in data:
-                print(f"Graph generation error: {data['error']}")
-                return None
-
-            return data.get("graph")
-        except requests.RequestException as e:
-            print(f"Error getting node comparison graph: {e}")
-            return None
-
-    def get_utilization_heatmap(self, hours_back: int = 24) -> Optional[str]:
-        """Get utilization heatmap as base64 encoded PNG."""
-        if not self.event_server:
-            raise ValueError(
-                "No event server configured, cannot get utilization graph."
-            )
-
-        try:
-            response = requests.get(
-                str(self.event_server) + "/utilization/graphs/heatmap",
-                params={"hours_back": hours_back},
-                timeout=30,
-            )
-            if not response.ok:
-                response.raise_for_status()
-
-            data = response.json()
-            if "error" in data:
-                print(f"Graph generation error: {data['error']}")
-                return None
-
-            return data.get("graph")
-        except requests.RequestException as e:
-            print(f"Error getting utilization heatmap: {e}")
-            return None
-
-    def get_utilization_report(self, hours_back: int = 24) -> Optional[dict[str, Any]]:
-        """Get comprehensive utilization report with statistics and graphs."""
-        if not self.event_server:
-            raise ValueError(
-                "No event server configured, cannot get utilization report."
-            )
-
-        try:
+            params = {}
+            if start_time:
+                params["start_time"] = start_time
+            if end_time:
+                params["end_time"] = end_time
+            
             response = requests.get(
                 str(self.event_server) + "/utilization/report",
-                params={"hours_back": hours_back},
+                params=params,
                 timeout=60,
             )
+            
             if not response.ok:
+                print(f"Error getting utilization report: HTTP {response.status_code}")
                 response.raise_for_status()
-
-            data = response.json()
-            if "error" in data:
-                print(f"Report generation error: {data['error']}")
-                return None
-
-            return data
+            
+            return response.json()
+            
         except requests.RequestException as e:
             print(f"Error getting utilization report: {e}")
             return None
 
-    def save_graph_to_file(self, graph_base64: str, filename: str) -> bool:
-        """Save a base64 encoded graph to a PNG file."""
+    def save_utilization_csv(
+        self,
+        filename: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> bool:
+        """Save utilization report as CSV file."""
         try:
-            import base64
-
-            # Decode base64 and save to file
-            graph_data = base64.b64decode(graph_base64)
-
-            with open(filename, "wb") as f:
-                f.write(graph_data)
-
-            print(f"Graph saved to {filename}")
-            return True
+            report = self.get_utilization_report(
+                start_time=start_time,
+                end_time=end_time,
+                format="csv"
+            )
+            
+            if report and report.get("format") == "csv":
+                with open(filename, 'w') as f:
+                    f.write(report["content"])
+                print(f"Utilization report saved to {filename}")
+                return True
+            else:
+                print("Failed to get CSV report")
+                return False
+                
         except Exception as e:
-            print(f"Error saving graph to file: {e}")
+            print(f"Error saving CSV report: {e}")
             return False
 
     def log(
