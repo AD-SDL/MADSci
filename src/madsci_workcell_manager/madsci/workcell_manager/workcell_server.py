@@ -51,19 +51,12 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
     logger = EventClient()
     workcell_settings = workcell_settings or WorkcellManagerSettings()
-    state_handler = WorkcellStateHandler(
-            redis_connection=redis_connection,
-            mongo_connection=mongo_connection,
-        )
     if not workcell:
         workcell_path = Path(workcell_settings.workcell_definition)
         if workcell_path.exists():
             workcell = WorkcellDefinition.from_yaml(workcell_path)
         else:
-            try:
-                workcell = state_handler.get_workcell_definition()
-            except Exception:
-                workcell = WorkcellDefinition()
+            workcell = WorkcellDefinition()
         logger.info(f"Writing to workcell definition file: {workcell_path}")
         workcell.to_yaml(workcell_path)
     with ownership_context(
@@ -77,7 +70,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
         context = context or MadsciContext()
         logger.info(context)
 
-       
+        state_handler = WorkcellStateHandler(
+            workcell,
+            redis_connection=redis_connection,
+            mongo_connection=mongo_connection,
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001

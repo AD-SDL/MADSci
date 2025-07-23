@@ -23,25 +23,19 @@
       </v-container>
     </v-window-item>
     <v-window-item :key="2" :value="2">
-      <v-container class="pa-1" fluid>
-        <v-row dense wrap justify-content="space-evenly">
-          <v-col cols="12" md="6" lg="6" xl="6">
-            <v-card>
-              <v-card-title class="text-center">
-                <h2>Workflows</h2>
-              </v-card-title>
-              <v-card-text>
-                <h3>Active</h3>
-                <WorkflowTable :workflows="active_workflows" />
-                <h3>Archived</h3>
-                <WorkflowTable :workflows="archived_workflows" />
-              </v-card-text>
-            </v-card>
-          </v-col>
-          <v-col cols="12" md="6" lg="6" xl="6">
-            <CreateWorkflowPanel @view-workflows="$emit('view-workflows')" />
-          </v-col>
-          </v-row>
+      <v-container class="pa-1 ma-1 justify-center" fluid>
+      <v-card>
+        <v-card-title class="text-center">
+          <h2>Workflows</h2>
+        </v-card-title>
+        <v-card-text>
+          <h3>Active</h3>
+          <WorkflowTable :workflows="active_workflows"/>
+          <h3>Archived</h3>
+          <WorkflowTable :workflows="archived_workflows"/>
+          </v-card-text>
+        </v-card>
+      </v-container>
     </v-window-item>
     <v-window-item :key="3" :value="3">
       <v-container class="pa-1 ma-1 justify-center" fluid>
@@ -73,6 +67,7 @@ import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
 import { resources, active_workflows, archived_workflows } from "@/store";
 import WorkcellPanel from './WorkcellPanel.vue';
+import CreaetWorkcellPanel from './CreateWorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
 import ResourcesPanel from './ResourcesPanel.vue';
 const tab = ref(1)
