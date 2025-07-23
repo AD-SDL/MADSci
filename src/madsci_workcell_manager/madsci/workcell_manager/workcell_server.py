@@ -145,11 +145,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         state_handler.set_node(node_name, node)
         if permanent:
             workcell = state_handler.get_workcell_definition()
-            workcell.nodes[node_name] = NodeDefinition(
-                node_name=node_name,
-                node_url=node_url,
-                node_description=node_description,
-            )
+            workcell.nodes[node_name] = node_url
             workcell.to_yaml(workcell_path)
             state_handler.set_workcell_definition(workcell)
 
