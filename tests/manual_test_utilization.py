@@ -1,173 +1,135 @@
 """
-Simple working utilization test using only existing nodes.
+Debug script to understand the difference between client API and direct MongoDB access.
 """
 
-import datetime
-import time
-from madsci.client.experiment_application import ExperimentApplication, ExperimentDesign
-from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.client.event_client import EventClient
+from madsci.common.types.event_types import EventType
+import json
 
-
-class SimpleExperimentApplication(ExperimentApplication):
-    url = "http://localhost:8002/"
-    experiment_design = ExperimentDesign(
-        experiment_name="Simple Utilization Test",
-        experiment_description="Testing utilization with existing nodes only",
-    )
-
-
-def create_liquid_handler_workflow():
-    """Create multiple liquid handler workflows."""
-    return WorkflowDefinition(
-        name="Liquid Handler Test",
-        steps=[
-            {
-                "name": "Step 1 - Initialize",
-                "description": "Initialize liquid handler",
-                "node": "liquidhandler_1",
-                "action": "run_command",
-                "args": {"command": "initialize"},
-            },
-            {
-                "name": "Step 2 - Load Tips",
-                "description": "Load pipette tips",
-                "node": "liquidhandler_1", 
-                "action": "run_command",
-                "args": {"command": "load_tips"},
-            },
-            {
-                "name": "Step 3 - Process Samples",
-                "description": "Process samples",
-                "node": "liquidhandler_1",
-                "action": "run_command", 
-                "args": {"command": "process_samples"},
-            },
-        ],
-    )
-
-
-def run_multiple_workflows_test():
-    """Run multiple workflows in sequence to test utilization."""
-    print("🧪 Running Multiple Workflow Utilization Test")
-    print("=" * 50)
+def compare_data_pathways():
+    """Compare how events look via API vs direct MongoDB access."""
     
-    client = EventClient(event_server_url="http://localhost:8001")
-    client.logger.setLevel(10)
+    print("=== COMPARING DATA PATHWAYS ===")
     
-    # Get initial state
-    print("\n📊 Initial State:")
-    initial_summary = client.get_utilization_summary()
-    print(f"   System utilization: {initial_summary.system_utilization.utilization_percentage:.1f}%")
-    print(f"   System state: {initial_summary.system_utilization.current_state}")
-    print(f"   Active experiments: {len(initial_summary.system_utilization.active_experiments)}")
-    print(f"   Tracked nodes: {len(initial_summary.node_utilizations)}")
+    # Method 1: Via Client API (what your simple script uses)
+    print("\\n1. Via Client API (/events endpoint):")
+    client = EventClient()
+    events_via_api = client.get_events(number=100)
     
-    if initial_summary.node_utilizations:
-        print("   Node states:")
-        for node_id, node_util in initial_summary.node_utilizations.items():
-            print(f"     {node_id}: {node_util.utilization_percentage:.1f}% ({node_util.current_state})")
+    workcell_via_api = None
+    for event_id, event in events_via_api.items():
+        if event.event_type == EventType.WORKCELL_START:
+            workcell_via_api = (event_id, event)
+            break
     
-    # Run multiple workflows
-    experiment_application = SimpleExperimentApplication()
-    
-    for i in range(3):
-        print(f"\n🔬 Running Workflow {i+1}/3...")
+    if workcell_via_api:
+        event_id, event = workcell_via_api
+        print(f"  Found WORKCELL_START via API: {event_id}")
+        print(f"  event.event_type: {event.event_type} (type: {type(event.event_type)})")
+        print(f"  event.event_type.value: {event.event_type.value}")
+        print(f"  isinstance(event.event_type, EventType): {isinstance(event.event_type, EventType)}")
         
-        workflow = create_liquid_handler_workflow()
+        # Show the raw model dump (how it gets serialized)
+        raw_data = event.model_dump()
+        print(f"  Raw model dump event_type: {raw_data['event_type']} (type: {type(raw_data['event_type'])})")
         
-        start_time = datetime.datetime.now()
-        
-        try:
-            with experiment_application.manage_experiment(
-                run_name=f"test_workflow_{i+1}_{start_time.strftime('%H%M%S')}",
-                run_description=f"Utilization test workflow {i+1}",
-            ):
-                experiment_application.workcell_client.start_workflow(workflow)
-                
-                # Wait for completion
-                time.sleep(10)  # Give workflow time to complete
-            
-            end_time = datetime.datetime.now()
-            duration = (end_time - start_time).total_seconds()
-            print(f"   ✅ Workflow {i+1} completed in {duration:.1f} seconds")
-            
-        except Exception as e:
-            print(f"   ❌ Workflow {i+1} failed: {e}")
-            continue
-        
-        # Check utilization after each workflow
-        summary = client.get_utilization_summary()
-        print(f"   System utilization: {summary.system_utilization.utilization_percentage:.1f}%")
-        print(f"   Active experiments: {len(summary.system_utilization.active_experiments)}")
-        
-        if summary.node_utilizations:
-            for node_id, node_util in summary.node_utilizations.items():
-                print(f"     {node_id}: {node_util.utilization_percentage:.1f}% ({node_util.current_state}) - Busy: {node_util.busy_time:.1f}s")
-        
-        # Short pause between workflows
-        if i < 2:
-            print("   ⏳ Waiting 5 seconds...")
-            time.sleep(5)
-    
-    # Final report
-    print(f"\n🎯 Final Utilization Report:")
-    print("=" * 30)
-    
-    final_summary = client.get_utilization_summary()
-    print(f"System Overview:")
-    print(f"  Utilization: {final_summary.system_utilization.utilization_percentage:.1f}%")
-    print(f"  State: {final_summary.system_utilization.current_state}")
-    print(f"  Total time tracked: {final_summary.system_utilization.total_time:.1f}s")
-    print(f"  Active time: {final_summary.system_utilization.active_time:.1f}s")
-    print(f"  Idle time: {final_summary.system_utilization.idle_time:.1f}s")
-    print(f"  Tracker uptime: {final_summary.tracker_uptime:.1f}s")
-    
-    if final_summary.node_utilizations:
-        print(f"\nNode Performance:")
-        for node_id, node_util in final_summary.node_utilizations.items():
-            print(f"  {node_id}:")
-            print(f"    Utilization: {node_util.utilization_percentage:.1f}%")
-            print(f"    State: {node_util.current_state}")
-            print(f"    Total time: {node_util.total_time:.1f}s")
-            print(f"    Busy time: {node_util.busy_time:.1f}s")
-            print(f"    Idle time: {node_util.idle_time:.1f}s")
-    
-    print(f"\n✨ Test completed! Current utilization tracking is working.")
-    print(f"📊 You can now run your report generation script to create graphs.")
-
-
-def test_current_state():
-    """Just check current utilization state."""
-    print("📊 Current Utilization State Check")
-    print("=" * 35)
-    
-    client = EventClient(event_server_url="http://localhost:8001")
-    
-    summary = client.get_utilization_summary()
-    
-    print(f"System:")
-    print(f"  Utilization: {summary.system_utilization.utilization_percentage:.1f}%")
-    print(f"  State: {summary.system_utilization.current_state}")
-    print(f"  Active experiments: {len(summary.system_utilization.active_experiments)}")
-    print(f"  Active workflows: {len(summary.system_utilization.active_workflows)}")
-    print(f"  Tracker uptime: {summary.tracker_uptime/60:.1f} minutes")
-    
-    if summary.node_utilizations:
-        print(f"\nNodes ({len(summary.node_utilizations)} tracked):")
-        for node_id, node_util in summary.node_utilizations.items():
-            print(f"  {node_id}:")
-            print(f"    Utilization: {node_util.utilization_percentage:.1f}%")
-            print(f"    State: {node_util.current_state}")
-            print(f"    Busy time: {node_util.busy_time:.1f}s")
+        # Show JSON serialization
+        json_data = event.model_dump(mode="json")
+        print(f"  JSON mode event_type: {json_data['event_type']} (type: {type(json_data['event_type'])})")
     else:
-        print("  No nodes currently tracked")
+        print("  ❌ No WORKCELL_START found via API")
+    
+    # Method 2: Simulate what the server analyzer sees (direct MongoDB access)
+    print("\\n2. How the server analyzer sees the data:")
+    
+    # The server does this kind of query:
+    print("  Server query looks for: {'event_type': {'$in': ['workcell_start', ...]}}")
+    
+    # Let's simulate what MongoDB would return by checking how events are stored
+    if workcell_via_api:
+        event_id, event = workcell_via_api
+        
+        # This is what gets stored in MongoDB (via the Event.to_mongo() method)
+        try:
+            mongo_data = event.to_mongo()
+            print(f"  MongoDB stored event_type: {mongo_data.get('event_type')} (type: {type(mongo_data.get('event_type'))})")
+        except Exception as e:
+            print(f"  Error calling to_mongo(): {e}")
+            # Fallback - show what model_dump gives us
+            mongo_data = event.model_dump(mode="json")
+            print(f"  Model dump event_type: {mongo_data.get('event_type')} (type: {type(mongo_data.get('event_type'))})")
+        
+        # Test if the query would match
+        stored_event_type = mongo_data.get('event_type')
+        query_types = ['workcell_start', 'lab_start']
+        would_match = stored_event_type in query_types
+        print(f"  Would query match? {stored_event_type} in {query_types} = {would_match}")
 
+def test_event_serialization():
+    """Test how EventType enums are serialized."""
+    
+    print("\\n=== TESTING EVENT SERIALIZATION ===")
+    
+    # Test direct enum serialization
+    enum_val = EventType.WORKCELL_START
+    print(f"Direct enum: {enum_val}")
+    print(f"Enum value: {enum_val.value}")
+    print(f"String of enum: {str(enum_val)}")
+    
+    # Test JSON serialization
+    try:
+        import json
+        json_str = json.dumps(enum_val, default=str)
+        print(f"JSON serialized: {json_str}")
+    except Exception as e:
+        print(f"JSON serialization error: {e}")
+    
+    # Test how Pydantic handles it
+    from madsci.common.types.event_types import Event
+    from datetime import datetime
+    
+    test_event = Event(
+        event_type=EventType.WORKCELL_START,
+        event_data={"test": "data"}
+    )
+    
+    print(f"\\nTest Event:")
+    print(f"  event_type: {test_event.event_type}")
+    print(f"  model_dump(): {test_event.model_dump()['event_type']}")
+    print(f"  model_dump(mode='json'): {test_event.model_dump(mode='json')['event_type']}")
+
+def check_server_event_collection():
+    """Check what the server's event collection actually contains."""
+    
+    print("\\n=== CHECKING SERVER EVENT COLLECTION ===")
+    
+    # We can't directly access the server's MongoDB from here,
+    # but we can make educated guesses based on the API response
+    
+    client = EventClient()
+    
+    # The /events endpoint processes events through this code in your server:
+    # ```python
+    # event_list = events.find({"log_level": {"$gte": level}}).sort("event_timestamp", -1).limit(number).to_list()
+    # return {event["_id"]: event for event in event_list}
+    # ```
+    
+    # This suggests that events.find() returns raw MongoDB documents
+    # Let's see what those look like by examining the API response structure
+    
+    events = client.get_events(number=5)
+    print(f"API returned {len(events)} events")
+    
+    for event_id, event in events.items():
+        print(f"\\nEvent {event_id}:")
+        print(f"  Type: {type(event)}")
+        print(f"  event_type: {event.event_type} (type: {type(event.event_type)})")
+        
+        # The key insight: The API converts raw MongoDB docs back to Event objects
+        # But the analyzer works with raw MongoDB docs directly
+        break
 
 if __name__ == "__main__":
-    import sys
- 
-    if len(sys.argv) > 1 and sys.argv[1] == "status":
-        test_current_state()
-    else:
-        run_multiple_workflows_test()
+    compare_data_pathways()
+    test_event_serialization() 
+    check_server_event_collection()
