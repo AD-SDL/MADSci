@@ -13,6 +13,7 @@ from fastapi.params import Body
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.ownership import global_ownership_info, ownership_context
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.context_types import MadsciContext
@@ -79,6 +80,21 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Start the REST server and initialize the state handler and engine"""
         global_ownership_info.workcell_id = workcell.workcell_id
         global_ownership_info.manager_id = workcell.workcell_id
+
+        # LOG WORKCELL START EVENT
+   
+        logger.log(Event(
+            event_type=EventType.WORKCELL_START,
+            event_data={
+                "workcell_name": workcell.workcell_name,
+                "workcell_id": workcell.workcell_id,
+                "description": workcell.description,
+                "nodes": dict(workcell.nodes.items()) if workcell.nodes else {},
+                "manager_type": "workcell_manager"
+            }
+        ))
+    
+
         if start_engine:
             engine = Engine(state_handler)
             engine.spin()
@@ -87,7 +103,18 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.initialize_workcell_state(
                     resource_client=ResourceClient()
                 )
-        yield
+        try:
+            yield
+        finally:
+            # LOG WORKCELL STOP EVENT
+            logger.log(Event(
+                event_type=EventType.WORKCELL_STOP,
+                event_data={
+                    "workcell_name": workcell.workcell_name,
+                    "workcell_id": workcell.workcell_id,
+                    "manager_type": "workcell_manager"
+                }
+            ))
 
     app = FastAPI(
         lifespan=lifespan,
