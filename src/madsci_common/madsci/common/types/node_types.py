@@ -79,10 +79,7 @@ class NodeConfig(
         default=2.0,
     )
     lab_server_url: Optional[str] = Field(
-        title="Lab Server URL",
-        description="Server for the Lab URL",
-        default = None
-
+        title="Lab Server URL", description="Server for the Lab URL", default=None
     )
 
 

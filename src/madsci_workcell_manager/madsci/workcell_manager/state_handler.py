@@ -57,7 +57,7 @@ class WorkcellStateHandler:
         self.archived_workflows = self.db_connection["archived_workflows"]
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
-        
+
     def initialize_workcell_state(
         self, resource_client: Optional[ResourceClient] = None
     ) -> None:

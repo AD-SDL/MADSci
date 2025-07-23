@@ -24,7 +24,7 @@ RUN yarn install
 
 COPY src/madsci_squid/ui /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
 RUN cp -a /tmp/. /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui/
-WORKDIR /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui	
+WORKDIR /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
 RUN npm run build
 RUN rm -rf node_modules
 
