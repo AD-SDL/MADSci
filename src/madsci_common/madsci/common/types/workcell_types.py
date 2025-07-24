@@ -24,7 +24,9 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
     """Definition of a MADSci Workcell."""
 
     workcell_name: str = Field(
-        title="Workcell Name", description="The name of the workcell."
+        title="Workcell Name", 
+        description="The name of the workcell.",
+        default=""
     )
     manager_type: Literal[ManagerType.WORKCELL_MANAGER] = Field(
         title="Manager Type",

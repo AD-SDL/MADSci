@@ -1,9 +1,5 @@
 node_name: robotarm_1
-<<<<<<< HEAD
 node_id: 01JYFEHVHT6CZAFYCBK47WK140
-=======
-node_id: 01JR10Q74MYD2MC3CD5S0V8XN5
->>>>>>> experiment_cleanup
 node_description: An example robot arm
 node_type: device
 module_name: robotarm

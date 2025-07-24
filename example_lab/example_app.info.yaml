@@ -30,7 +30,7 @@ config:
   status_update_interval: 2.0
   state_update_interval: 2.0
   lab_server_url: http://localhost:8000
-  node_url: http://localhost:6000/
+  node_url: http://127.0.0.1:2000/
   uvicorn_kwargs: {}
 config_schema:
   description: Default Configuration for a MADSci Node that communicates over REST.

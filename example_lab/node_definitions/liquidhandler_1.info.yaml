@@ -1,9 +1,5 @@
 node_name: liquidhandler_1
-<<<<<<< HEAD
 node_id: 01JYFEHVSV20D60Z88RVERJ75N
-=======
-node_id: 01JNH61ZEA13F3286JPMH3QM1M
->>>>>>> experiment_cleanup
 node_description: A (fake) liquidhandler for testing purposes.
 node_type: device
 module_name: liquidhandler

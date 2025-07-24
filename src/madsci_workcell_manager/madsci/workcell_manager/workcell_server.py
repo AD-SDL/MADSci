@@ -77,7 +77,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
     context = context or MadsciContext()
     logger.info(context)
 
-        state_handler = WorkcellStateHandler(
+    state_handler = WorkcellStateHandler(
             workcell,
             redis_connection=redis_connection,
             mongo_connection=mongo_connection,
