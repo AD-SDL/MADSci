@@ -37,6 +37,7 @@ from madsci.workcell_manager.workflow_utils import (
     save_workflow_files,
 )
 from pymongo.synchronous.database import Database
+from textual import work
 
 
 def create_workcell_server(  # noqa: C901, PLR0915
@@ -51,21 +52,22 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
     logger = EventClient()
     workcell_settings = workcell_settings or WorkcellManagerSettings()
-    state_handler = WorkcellStateHandler(
-            redis_connection=redis_connection,
-            mongo_connection=mongo_connection,
-        )
+
     if not workcell:
         workcell_path = Path(workcell_settings.workcell_definition)
         if workcell_path.exists():
             workcell = WorkcellDefinition.from_yaml(workcell_path)
         else:
-            try:
-                workcell = state_handler.get_workcell_definition()
-            except Exception:
-                workcell = WorkcellDefinition()
+            workcell = WorkcellDefinition()
         logger.info(f"Writing to workcell definition file: {workcell_path}")
         workcell.to_yaml(workcell_path)
+        
+    state_handler = WorkcellStateHandler(
+            workcell_definition=workcell,
+            redis_connection=redis_connection,
+            mongo_connection=mongo_connection,
+        )
+
     global_ownership_info.workcell_id = workcell.workcell_id
     global_ownership_info.manager_id = workcell.workcell_id
     logger = EventClient(

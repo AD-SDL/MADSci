@@ -5,14 +5,9 @@ description: An example workcell, consisiting of a (fake) liquid handler, a (fak
   plate reader, and a (fake) robot arm.
 nodes:
   liquidhandler_1: http://localhost:2000/
-<<<<<<< HEAD
-  robotarm_1: http://localhost:2001/
-  platereader_1: http://localhost:2002/
-=======
   platereader_1: http://localhost:2002/
   robotarm_1: http://localhost:2001/
   example_app: http://localhost:6000/
->>>>>>> origin/experiment_app
 locations:
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
@@ -35,10 +30,7 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-<<<<<<< HEAD
-=======
     resource_type: ''
->>>>>>> origin/experiment_app
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
@@ -60,8 +52,6 @@ locations:
     default_children: null
     default_child_template: null
     default_child_quantity: null
-<<<<<<< HEAD
-=======
     resource_type: ''
 config:
   host: 127.0.0.1
@@ -83,4 +73,3 @@ config:
   static_files_path: null
   get_action_result_retries: 3
 workcell_directory: ~/.madsci/workcells/Example Workcell
->>>>>>> origin/experiment_app

@@ -139,8 +139,12 @@ services:
     container_name: robotarm
     command: python example_modules/robotarm.py --node_definition node_definitions/robotarm_1.node.yaml --node_url http://localhost:2001
 
-
   platereader:
     <<: *madsci-service
     container_name: platereader
     command: python example_modules/platereader.py --node_definition node_definitions/platereader_1.node.yaml --node_url http://localhost:2002
+
+  # experiment_app:
+  #   <<: *madsci-service
+  #   container_name: experiment_app
+  #   command: python example_app.py --node_definition default.node.yaml --node_url http://localhost:6000

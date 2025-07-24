@@ -14,17 +14,6 @@ class ExampleExperimentApplication(ExperimentApplication):
     experiment_design = ExperimentDesign(
         experiment_name="Example Experiment",
         experiment_description="Example Experiment - multi-node workflow test.")
-    context = MadsciContext(
-        lab_server_url=AnyUrl("http://localhost:8000/"),
-        event_server_url=AnyUrl("http://localhost:8001/"),
-        experiment_server_url=AnyUrl("http://localhost:8002/"),
-        data_server_url=AnyUrl("http://localhost:8003/"),
-        resource_server_url=AnyUrl("http://localhost:8004/"),
-        workcell_server_url=AnyUrl("http://localhost:8005/"),
-    )
-    workcell_client = WorkcellClient(
-        workcell_server_url=str(context.workcell_server_url)
-    )
                            
 
 def main() -> None:
@@ -68,6 +57,10 @@ def main() -> None:
             run_description="Example workflow run for testing.",
     ):
         example_app.workcell_client.start_workflow(workflow_def)
+
+    # ctx = MadsciContext()
+    # print(ctx.lab_server_url)  # http://localhost:8000/
+    # print(ctx.workcell_server_url)  # http://localhost:8005/
 
     
 
