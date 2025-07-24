@@ -1,6 +1,7 @@
 """Provides an ExperimentApplication class that manages the execution of an experiment."""
 
 import argparse
+from platform import node
 import time
 import typing
 from contextlib import contextmanager
@@ -369,6 +370,19 @@ class ExperimentApplication(RestNode):
                 "Run the Experiment",
                 blocking=False,
             )
+            try:
+                node_name = self.node_info.node_name
+                node_url = str(self.node_info.node_url)
+                node_description = getattr(self.node_info, "node_description", "")
+                self.workcell_client.add_node(
+                    node_name=node_name,
+                    node_url=node_url,
+                    node_description=node_description,
+                )
+            
+                print(f"[INFO] Registered node '{node_name}' with Workcell Manager.")
+            except Exception as e:
+                print(f"[WARNING] Failed to register node with Workcell Manager: {e}")
             self.start_node()
         else:
             args_dict = arguments.__dict__

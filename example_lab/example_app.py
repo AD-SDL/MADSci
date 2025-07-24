@@ -16,7 +16,11 @@ class ExampleApp(ExperimentApplication):
         experiment_description="Example Experiment - multi-node workflow test.",
         node_config=RestNodeConfig(node_url=AnyUrl("http://localhost:6000")))
     
-
+    inputs = [
+        {"name": "test", "default": "foo"},
+        {"name": "test2", "default": "bar"},
+        {"name": "test3", "default": 42},]
+    
     def run_experiment(self, test: str, test2: str, test3: int) -> str:
         """main experiment function"""
         return "test" + test + test2 + str(test3)
@@ -56,8 +60,13 @@ def main() -> None:
             )
         ]
     )
-
+    # example_app.workcell_client.add_node(
+    #         node_name="example_app_node",
+    #         node_url="http://localhost:6000",
+    #         node_description="My experiment app node",
+    #     )
     example_app.start_app()
+    
     # with example_app.manage_experiment(
     #         run_name="Example Run: " + datetime.datetime.now().isoformat(),
     #         run_description="Example workflow run for testing.",
