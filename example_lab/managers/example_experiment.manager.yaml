@@ -1,4 +1,8 @@
 name: Example Experiment Manager
 description: An example experiment manager
 manager_type: experiment_manager
+<<<<<<< HEAD
 experiment_manager_id: 01JYF008BF83P0G245JWZV15NM
+=======
+experiment_manager_id: 01JYKZDPANTNRYXF5TQKRJS0F2
+>>>>>>> experiment_cleanup

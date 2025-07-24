@@ -1,5 +1,9 @@
 node_name: platereader_1
+<<<<<<< HEAD
 node_id: 01JYFEHVHFXWT4RK3WNEPTPRPG
+=======
+node_id: 01JR1CGN7GXM8JN1X1GT23ZQ5M
+>>>>>>> experiment_cleanup
 node_description: The plate reader for the example lab
 node_type: device
 module_name: platereader
