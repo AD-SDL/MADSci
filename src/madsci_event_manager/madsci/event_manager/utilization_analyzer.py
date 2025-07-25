@@ -48,15 +48,12 @@ class UtilizationAnalyzer:
         Generate comprehensive session-based utilization report.
         """
         try:
-            print("Generating session-based utilization report...")
             
             # Determine analysis timeframe
             analysis_start, analysis_end = self._determine_analysis_period(start_time, end_time)
-            print(f"Analysis period: {analysis_start} to {analysis_end}")
             
             # Find all system sessions in the timeframe
             sessions = self._find_system_sessions(analysis_start, analysis_end)
-            print(f"Found {len(sessions)} system sessions")
             
             # If no formal sessions found, create a default analysis session
             if not sessions:
@@ -92,7 +89,6 @@ class UtilizationAnalyzer:
                 "session_details": session_reports
             }
             
-            print(f"Report generated with {len(session_reports)} session analyses")
             return report
             
         except Exception as e:
@@ -130,7 +126,6 @@ class UtilizationAnalyzer:
                         buffered_end = latest_time + timedelta(minutes=1)
                         
                         total_span = (buffered_end - buffered_start).total_seconds() / 3600
-                        print(f"Full database analysis: {buffered_start} to {buffered_end} ({total_span:.1f} hours)")
                         return buffered_start, buffered_end
                         
             except Exception as e:
@@ -147,9 +142,7 @@ class UtilizationAnalyzer:
         """
         
         sessions = []
-        
-        print("Looking for actual system/workcell lifecycle events...")
-        print(f"DEBUG: Analysis timeframe: {start_time} to {end_time}")
+
         
         # The events are stored as ISO strings, so we need to handle both formats
         start_event_types = [
@@ -159,7 +152,6 @@ class UtilizationAnalyzer:
             "workcell_start"
         ]
         
-        print(f"DEBUG: Looking for event types: {start_event_types}")
         
         # CRITICAL FIX: Handle both datetime and string timestamp formats
         # Create queries for both possible timestamp formats
@@ -184,41 +176,32 @@ class UtilizationAnalyzer:
         
         for i, query in enumerate(queries_to_try):
             try:
-                print(f"DEBUG: Trying query {i+1}: {query}")
                 
                 events = list(self.events_collection.find(query).sort("event_timestamp", 1))
-                print(f"DEBUG: Query {i+1} found {len(events)} events")
                 
                 if events:
                     # Filter by timeframe manually if needed (for query 3)
                     if i == 2:  # No time constraint query
-                        print(f"DEBUG: Manually filtering {len(events)} events by timeframe...")
                         filtered_events = []
                         for event in events:
                             event_time = self._parse_timestamp_utc(event["event_timestamp"])
                             if event_time and start_time <= event_time <= end_time:
                                 filtered_events.append(event)
-                                print(f"DEBUG:   Event at {event_time} is within range")
-                            else:
-                                print(f"DEBUG:   Event at {event_time} is outside range")
+
                         start_events = filtered_events
                     else:
                         start_events = events
                     
-                    print(f"DEBUG: Using query {i+1}, found {len(start_events)} events in timeframe")
                     break
                     
             except Exception as e:
-                print(f"DEBUG: Query {i+1} failed: {e}")
                 continue
         
-        print(f"DEBUG: Final result: {len(start_events)} start events found")
         
         # Process each start event
         for start_event in start_events:
             start_timestamp = self._parse_timestamp_utc(start_event["event_timestamp"])
             if not start_timestamp:
-                print(f"DEBUG: Could not parse timestamp: {start_event['event_timestamp']}")
                 continue
                 
             # Extract session info
@@ -237,12 +220,6 @@ class UtilizationAnalyzer:
                 event_data.get("name") or
                 f"Workcell {session_id[-8:] if session_id else 'Unknown'}"
             )
-            
-            print(f"DEBUG: Creating session:")
-            print(f"DEBUG:   Event type: {start_event.get('event_type')}")
-            print(f"DEBUG:   Session ID: {session_id}")
-            print(f"DEBUG:   Session name: {session_name}")
-            print(f"DEBUG:   Start time: {start_timestamp}")
             
             # For now, assume session runs until end of analysis period
             # (You can add stop event detection later)
@@ -271,9 +248,7 @@ class UtilizationAnalyzer:
             sessions.append(session)
             
             duration_hours = session["duration_seconds"] / 3600
-            print(f"DEBUG: Created {session_type} session '{session_name}': {duration_hours:.2f}h")
         
-        print(f"DEBUG: Returning {len(sessions)} sessions")
         return sessions
 
     def _extract_system_session_id(self, event: Dict) -> Optional[str]:
@@ -316,7 +291,6 @@ class UtilizationAnalyzer:
             session_start = session["start_time"]
             session_end = session["end_time"] or datetime.now(timezone.utc).replace(tzinfo=None)
             
-            print(f"Analyzing {session['session_type']} session {session['session_id'][-8:]}...")
             
             # ... [existing event processing logic] ...
             session_events = self._get_session_events(session_start, session_end)
@@ -414,7 +388,6 @@ class UtilizationAnalyzer:
                 "active_time_hours": active_time_seconds / 3600
             }
         except Exception as e:
-            print(f"Error analyzing session utilization: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -455,7 +428,6 @@ class UtilizationAnalyzer:
     def _get_session_events(self, start_time: datetime, end_time: datetime) -> List[Dict]:
         """Get all events for a session timeframe - FIXED for timezone issues."""
         try:
-            print(f"Querying events from {start_time} to {end_time}")
             
             # SAME FIX: Try multiple query approaches for timestamp formats
             queries_to_try = [
@@ -471,12 +443,9 @@ class UtilizationAnalyzer:
             
             for i, query in enumerate(queries_to_try):
                 try:
-                    print(f"DEBUG: Trying session events query {i+1}")
                     
                     if i == 2:  # Get all and filter manually
-                        print(f"DEBUG: Getting all events and filtering manually...")
                         all_events = list(self.events_collection.find().sort("event_timestamp", 1))
-                        print(f"DEBUG: Retrieved {len(all_events)} total events from database")
                         
                         # Filter manually by parsing timestamps
                         for event in all_events:
@@ -484,21 +453,16 @@ class UtilizationAnalyzer:
                             if event_time and start_time <= event_time <= end_time:
                                 events.append(event)
                         
-                        print(f"DEBUG: After manual filtering: {len(events)} events in timeframe")
                     else:
                         # Direct query
                         events = list(self.events_collection.find(query).sort("event_timestamp", 1))
-                        print(f"DEBUG: Query {i+1} found {len(events)} events")
                     
                     if events:
-                        print(f"DEBUG: Using query approach {i+1}")
                         break
                         
                 except Exception as e:
-                    print(f"DEBUG: Query {i+1} failed: {e}")
                     continue
             
-            print(f"Found {len(events)} events in timeframe")
             
             # Parse all timestamps to UTC (this part was working before)
             valid_events = []
@@ -511,7 +475,6 @@ class UtilizationAnalyzer:
                     else:
                         print(f"DEBUG: Could not parse timestamp for event: {event.get('event_timestamp')}")
             
-            print(f"Found {len(valid_events)} valid events with parsed timestamps")
             
             # Show event summary
             if valid_events:
@@ -520,7 +483,6 @@ class UtilizationAnalyzer:
             return valid_events
             
         except Exception as e:
-            print(f"Error getting session events: {e}")
             import traceback
             traceback.print_exc()
             return []
@@ -542,18 +504,13 @@ class UtilizationAnalyzer:
             ]) and "log" not in event_type_str:
                 activity_events += 1
         
-        print("Event summary:")
-        for event_type, count in sorted(event_type_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
-            print(f"  {event_type}: {count}")
         
-        print(f"Activity events found: {activity_events}")
     
     def _filter_activity_events(self, events: List[Dict]) -> List[Dict]:
         """Filter events that indicate actual system activity."""
         
         relevant_events = []
         
-        print(f"Filtering {len(events)} total events...")
         
         for event in events:
             event_type = str(event.get("event_type", "")).lower()
@@ -574,15 +531,12 @@ class UtilizationAnalyzer:
             if is_activity_event:
                 relevant_events.append(event)
         
-        print(f"Filtered to {len(relevant_events)} activity events")
         
         # Show first few relevant events
         if relevant_events:
-            print(f"First few activity events:")
             for i, event in enumerate(relevant_events[:5]):
                 event_type = event.get("event_type", "unknown")
                 timestamp = event.get("event_timestamp", "unknown")
-                print(f"  {i+1}. {event_type} at {timestamp}")
         
         return relevant_events
     
@@ -601,7 +555,6 @@ class UtilizationAnalyzer:
         experiment_periods = []
         experiment_starts = {}
         
-        print(f"Calculating system utilization from {len(events)} activity events...")
         
         # Process events chronologically
         sorted_events = sorted(events, key=lambda e: self._parse_timestamp_utc(e.get("event_timestamp")) or datetime.min)
@@ -619,7 +572,6 @@ class UtilizationAnalyzer:
                 if exp_id:
                     active_experiments.add(exp_id)
                     experiment_starts[exp_id] = event_time
-                    print(f"  Experiment started: {exp_id[-8:]} at {event_time}")
             
             elif any(end_pattern in event_type for end_pattern in ["experiment_complete", "experiment_failed", "experiment_cancelled"]):
                 exp_id = self._extract_experiment_id(event)
@@ -628,14 +580,12 @@ class UtilizationAnalyzer:
                     experiment_periods.append((start_time_exp, event_time))
                     active_experiments.discard(exp_id)
                     duration = (event_time - start_time_exp).total_seconds()
-                    print(f"  Experiment completed: {exp_id[-8:]}, duration: {duration:.1f}s")
         
         # Handle ongoing experiments
         current_time = end_time
         for exp_id, start_time_exp in experiment_starts.items():
             if exp_id in active_experiments:
                 experiment_periods.append((start_time_exp, current_time))
-                print(f"  Experiment {exp_id[-8:]} still active at analysis end")
         
         # Calculate active time
         if experiment_periods:
@@ -659,10 +609,6 @@ class UtilizationAnalyzer:
         if total_timeframe > 0:
             system_util.utilization_percentage = (total_active_time / total_timeframe) * 100
         
-        print(f"System utilization calculated:")
-        print(f"  Total time: {total_timeframe/3600:.2f} hours")
-        print(f"  Active time: {total_active_time/3600:.2f} hours")
-        print(f"  Utilization: {system_util.utilization_percentage:.1f}%")
         
         return system_util
     
@@ -681,10 +627,7 @@ class UtilizationAnalyzer:
             node_id = self._extract_node_id(event)
             if node_id:
                 node_events[node_id].append(event)
-        
-        print(f"Calculating utilization for {len(node_events)} nodes:")
-        for node_id, events_for_node in node_events.items():
-            print(f"  {node_id[-8:]}: {len(events_for_node)} events")
+
         
         node_utils = {}
         
@@ -712,7 +655,6 @@ class UtilizationAnalyzer:
         busy_periods = []
         active_periods = []
         
-        print(f"Analyzing node {node_id[-8:]} with {len(events)} events...")
         
         # Sort events by time
         sorted_events = sorted(events, key=lambda e: self._parse_timestamp_utc(e.get("event_timestamp")) or datetime.min)
@@ -731,7 +673,6 @@ class UtilizationAnalyzer:
             if event_type == "node_start":
                 if current_active_start is None:
                     current_active_start = event_time
-                    print(f"    {event_time}: Node became ACTIVE")
             
             elif event_type == "node_stop":
                 if current_active_start is not None:
@@ -748,7 +689,6 @@ class UtilizationAnalyzer:
                 status = self._extract_status(event)
                 
                 if action_id:
-                    print(f"    {event_time}: Action {action_id[-8:]} -> {status}")
                     
                     # Action started
                     if status in ["running", "started", "in_progress"]:
@@ -756,7 +696,6 @@ class UtilizationAnalyzer:
                             active_actions.add(action_id)
                             if current_busy_start is None:
                                 current_busy_start = event_time
-                                print(f"      Node became BUSY")
                     
                     # Action completed
                     elif status in ["completed", "failed", "cancelled", "finished", "succeeded"]:
@@ -765,7 +704,6 @@ class UtilizationAnalyzer:
                             if not active_actions and current_busy_start is not None:
                                 busy_periods.append((current_busy_start, event_time))
                                 duration = (event_time - current_busy_start).total_seconds()
-                                print(f"      Node became IDLE (was busy {duration:.1f}s)")
                                 current_busy_start = None
         
         # Handle ongoing states
@@ -812,10 +750,7 @@ class UtilizationAnalyzer:
             node_util.utilization_percentage = (total_busy_time / total_active_time) * 100
         else:
             node_util.utilization_percentage = 0.0
-        
-        print(f"  Node {node_id[-8:]} utilization: {node_util.utilization_percentage:.1f}% " +
-            f"(active: {total_active_time/3600:.2f}h, busy: {total_busy_time/3600:.2f}h)")
-        
+                
         return node_util
     
     def _merge_time_periods(self, periods: List[Tuple[datetime, datetime]]) -> List[Tuple[datetime, datetime]]:
