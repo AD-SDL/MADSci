@@ -167,33 +167,98 @@ class EventClient:
             print(f"Error getting utilization report: {e}")
             return None
 
-    def save_utilization_csv(
+    def get_time_series_analysis(
         self,
-        filename: str,
         start_time: Optional[str] = None,
-        end_time: Optional[str] = None
-    ) -> bool:
-        """Save utilization report as CSV file."""
+        end_time: Optional[str] = None,
+        analysis_type: str = "daily",
+        user_timezone: str = "America/Chicago"
+    ) -> Optional[dict[str, Any]]:
+        """
+        Get time-series utilization analysis.
+        
+        Args:
+            start_time: ISO format start time (e.g., "2025-07-20T00:00:00Z") 
+            end_time: ISO format end time (e.g., "2025-07-23T00:00:00Z")
+            analysis_type: "hourly", "daily", "weekly", "monthly"
+            user_timezone: Timezone for day boundaries (e.g., "America/Chicago")
+        """
+        if not self.event_server:
+            print("No event server configured.")
+            return None
+        
         try:
-            report = self.get_utilization_report(
-                start_time=start_time,
-                end_time=end_time,
-                format="csv"
+            params = {
+                "analysis_type": analysis_type,
+                "user_timezone": user_timezone
+            }
+            if start_time:
+                params["start_time"] = start_time
+            if end_time:
+                params["end_time"] = end_time
+            
+            response = requests.get(
+                str(self.event_server) + "/utilization/time_series",
+                params=params,
+                timeout=120,
             )
             
-            if report and report.get("format") == "csv":
-                with open(filename, 'w') as f:
-                    f.write(report["content"])
-                print(f"Utilization report saved to {filename}")
-                return True
-            else:
-                print("Failed to get CSV report")
-                return False
-                
-        except Exception as e:
-            print(f"Error saving CSV report: {e}")
-            return False
+            if not response.ok:
+                print(f"Error: HTTP {response.status_code}")
+                response.raise_for_status()
+            
+            return response.json()
+            
+        except requests.RequestException as e:
+            print(f"Error getting time-series analysis: {e}")
+            return None
 
+    def get_utilization_summary(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        analysis_type: str = "daily",
+        user_timezone: str = "America/Chicago"
+    ) -> Optional[dict[str, Any]]:
+        """
+        Get lightweight utilization summary (faster than full analysis).
+        
+        Args:
+            start_time: ISO format start time
+            end_time: ISO format end time
+            analysis_type: "hourly", "daily", "weekly", "monthly"  
+            user_timezone: Timezone for day boundaries
+        """
+        if not self.event_server:
+            print("No event server configured.")
+            return None
+        
+        try:
+            params = {
+                "analysis_type": analysis_type,
+                "user_timezone": user_timezone
+            }
+            if start_time:
+                params["start_time"] = start_time
+            if end_time:
+                params["end_time"] = end_time
+            
+            response = requests.get(
+                str(self.event_server) + "/utilization/summary",
+                params=params,
+                timeout=30,  # Shorter timeout for summary
+            )
+            
+            if not response.ok:
+                print(f"Error: HTTP {response.status_code}")
+                response.raise_for_status()
+            
+            return response.json()
+            
+        except requests.RequestException as e:
+            print(f"Error getting utilization summary: {e}")
+            return None
+    
     def log(
         self,
         event: Union[Event, Any],
