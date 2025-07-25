@@ -78,7 +78,7 @@ class RobotArmNode(RestNode):
     ) -> ActionResult:
         """Run a command on the robot arm."""
         if not source or not target:
-            time.sleep(1)
+            time.sleep(3)
             return ActionSucceeded()
         
         if self.resource_client:
