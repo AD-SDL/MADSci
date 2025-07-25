@@ -297,13 +297,13 @@ if __name__ == "__main__":
     client = EventClient()
     events = client.get_events(number=10000)
     
-    for event_id, event in events.items():
-        print(event.event_type)
-        if event.event_type == EventType.WORKCELL_START:
-            print(f"Processing event: {event_id}")
+    # for event_id, event in events.items():
+    #     print(event.event_type)
+    #     if event.event_type == EventType.WORKCELL_START:
+    #         print(f"Processing event: {event_id}")
             
 
-    print(len(events))
+    # print(len(events))
     report = client.get_utilization_report(
 
     )
