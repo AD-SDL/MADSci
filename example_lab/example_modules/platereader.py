@@ -69,7 +69,7 @@ class PlateReaderNode(RestNode):
         self,
     ) -> ActionResult:
         """Run a command on the plate reader."""
-        time.sleep(2)
+        time.sleep(5)
         return ActionSucceeded(data={"example_data": {"example": "data"}})
 
     def get_location(self) -> AdminCommandResponse:
