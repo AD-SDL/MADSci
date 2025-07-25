@@ -17,12 +17,15 @@ from madsci.common.types.event_types import (
     EventManagerSettings,
 )
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
+from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.notifications import EmailAlerts
-from pymongo import MongoClient
+from pymongo import MongoClient, errors
 from pymongo.synchronous.database import Database
 from contextlib import asynccontextmanager
 import datetime
 from datetime import datetime, timedelta, timezone
+import traceback
+from madsci.common.ownership import global_ownership_info
 
 def create_event_server(  # noqa: C901
     event_manager_definition: Optional[EventManagerDefinition] = None,
@@ -48,7 +51,6 @@ def create_event_server(  # noqa: C901
             event_manager_definition = EventManagerDefinition()
         logger.log_info(f"Writing to event manager definition file: {def_path}")
         event_manager_definition.to_yaml(def_path)
-    from madsci.common.ownership import global_ownership_info
 
     global_ownership_info.manager_id = event_manager_definition.event_manager_id
     logger = EventClient(name=f"event_manager.{event_manager_definition.name}")
@@ -73,13 +75,14 @@ def create_event_server(  # noqa: C901
     async def log_event(event: Event) -> Event:
         """Create a new event."""
         try:            
-            # Test the conversion
             mongo_data = event.to_mongo()            
-            # Test the insertion
-            result = events.insert_one(mongo_data)
-            
+            try:
+                result = events.insert_one(mongo_data)
+            except errors.DuplicateKeyError as e:
+                logger.log_warning(f"Duplicate event ID {event.event_id} - skipping insert")
+                # Just continue - don't fail the request
+                pass            
         except Exception as e:
-            import traceback
             traceback.print_exc()
             raise e  
         
@@ -148,7 +151,6 @@ def create_event_server(  # noqa: C901
         Returns:
         - JSON report with session and utilization data
         """
-        print("GET /utilization/report called")
         
         analyzer = get_session_analyzer()
         if analyzer is None:
@@ -173,7 +175,110 @@ def create_event_server(  # noqa: C901
             import traceback
             traceback.print_exc()
             return {"error": f"Failed to generate report: {str(e)}"}
+        
+    @app.get("/utilization/time_series")
+    async def get_time_series_analysis(
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        analysis_type: str = "daily",
+        user_timezone: str = "America/Chicago"
+    ) -> dict[str, Any]:
+        """Generate time-series utilization analysis with timezone support."""
+        
+        print("GET /utilization/time_series called")
+        analyzer = get_session_analyzer()
+        if analyzer is None:
+            return {"error": "Failed to create session analyzer"}
+        
+        ts_analyzer = TimeSeriesAnalyzer(analyzer)
+        
+        try:
+            # Parse time parameters
+            parsed_start = None
+            parsed_end = None
+            
+            if start_time:
+                parsed_start = datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
+            if end_time:
+                parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
+            
+            # FIXED: Don't override analysis_type with bucket_hours for monthly
+            if analysis_type in ["monthly", "mounthly"]:
+                # Use the analysis type directly, let the analyzer handle bucketing
+                report = ts_analyzer.generate_time_series_report(
+                    parsed_start or (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)),
+                    parsed_end or datetime.now(timezone.utc).replace(tzinfo=None),
+                    None,  # Let analyzer determine bucket size
+                    analysis_type,
+                    user_timezone
+                )
+            else:
+                # Set bucket size based on analysis type
+                bucket_hours = {
+                    "hourly": 1,
+                    "daily": 24,
+                    "weekly": 168
+                }.get(analysis_type, 24)
+                
+                # Generate report with timezone support
+                report = ts_analyzer.generate_time_series_report(
+                    parsed_start or (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)),
+                    parsed_end or datetime.now(timezone.utc).replace(tzinfo=None),
+                    bucket_hours,
+                    analysis_type,
+                    user_timezone
+                )
+            
+            return report
+            
+        except Exception as e:
+            print(f"Error generating time-series report: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to generate report: {str(e)}"}
 
+    @app.get("/utilization/summary")
+    async def get_utilization_summary(
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        analysis_type: str = "daily",
+        user_timezone: str = "America/Chicago"
+    ) -> dict[str, Any]:
+        """Get utilization summary using simplified analyzer."""
+        
+        print("GET /utilization/summary called")
+        
+        analyzer = get_session_analyzer()
+        if analyzer is None:
+            return {"error": "Failed to create session analyzer"}
+        
+        ts_analyzer = TimeSeriesAnalyzer(analyzer)
+        
+        try:
+            # Parse times correctly
+            if not end_time:
+                end_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+            else:
+                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
+            
+            if not start_time:
+                start_dt = end_dt - timedelta(days=7)  # Default to 7 days ago
+            else:
+                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
+            
+            # Use the new method name
+            summary = ts_analyzer.generate_summary_report(
+                start_dt, end_dt, analysis_type, user_timezone
+            )
+            
+            return summary
+            
+        except Exception as e:
+            print(f"Error generating summary: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to generate summary: {str(e)}"}
+    
     def get_session_analyzer():
         """Create session analyzer on-demand."""
         try:
@@ -181,7 +286,6 @@ def create_event_server(  # noqa: C901
         except Exception as e:
             logger.log_error(f"Failed to create session analyzer: {e}")
             return None
-        
     return app
 
 
