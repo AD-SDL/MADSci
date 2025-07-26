@@ -237,16 +237,18 @@ def create_event_server(  # noqa: C901
             traceback.print_exc()
             return {"error": f"Failed to generate report: {str(e)}"}
 
-    @app.get("/utilization/summary")
-    async def get_utilization_summary(
+
+    @app.get("/utilization/periods")
+    async def get_utilization_periods(
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         analysis_type: str = "daily",
-        user_timezone: str = "America/Chicago"
+        user_timezone: str = "America/Chicago",
+        include_users: bool = True
     ) -> dict[str, Any]:
-        """Get utilization summary using simplified analyzer."""
+        """Get utilization periods with optional user utilization data."""
         
-        print("GET /utilization/summary called")
+        print("GET /utilization/periods called")
         
         analyzer = get_session_analyzer()
         if analyzer is None:
@@ -266,19 +268,122 @@ def create_event_server(  # noqa: C901
             else:
                 start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
             
-            # Use the new method name
-            summary = ts_analyzer.generate_summary_report(
+            # Generate system utilization periods
+            utilization = ts_analyzer.generate_summary_report(
                 start_dt, end_dt, analysis_type, user_timezone
             )
             
-            return summary
+            # Add user utilization if requested
+            if include_users:
+                user_summary = analyzer.generate_user_utilization_summary(start_dt, end_dt)
+                
+                # Insert user utilization after key_metrics
+                if "error" not in user_summary:
+                    # Create new ordered dict to maintain structure
+                    enhanced_summary = {}
+                    for key, value in utilization.items():
+                        enhanced_summary[key] = value
+                        # Add user utilization after key_metrics
+                        if key == "key_metrics":
+                            enhanced_summary["user_utilization"] = user_summary
+                    
+                    return enhanced_summary
+                else:
+                    # If user summary failed, just add error info
+                    utilization["user_utilization"] = {"error": user_summary.get("error", "Failed to generate user summary")}
+            
+            return utilization
             
         except Exception as e:
             print(f"Error generating summary: {e}")
             import traceback
             traceback.print_exc()
             return {"error": f"Failed to generate summary: {str(e)}"}
-    
+        
+    @app.get("/utilization/users")
+    async def get_user_utilization_report(
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        Generate user utilization report based on workflow authors.
+        
+        Parameters:
+        - start_time: Optional ISO format start time (e.g., "2025-07-21T10:00:00Z")
+        - end_time: Optional ISO format end time (e.g., "2025-07-23T18:00:00Z")
+        - If no times provided, analyzes ALL records in the database
+        
+        Returns:
+        - JSON report with user utilization data including:
+        * Per-user workflow counts, completion rates, runtime hours
+        * System-wide author attribution statistics
+        * Individual workflow details per user
+        """
+        
+        analyzer = get_session_analyzer()
+        if analyzer is None:
+            return {"error": "Failed to create session analyzer"}
+        
+        try:
+            # Parse time parameters
+            parsed_start = None
+            parsed_end = None
+            
+            if start_time:
+                parsed_start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            if end_time:
+                parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            
+            # Generate user utilization report
+            report = analyzer.generate_user_utilization_report(parsed_start, parsed_end)
+            return report
+            
+        except Exception as e:
+            logger.log_error(f"Error generating user utilization report: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to generate user report: {str(e)}"}
+        
+    @app.get("/utilization/users/summary")
+    async def get_user_utilization_summary(
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        Generate compact user utilization summary.
+        
+        Parameters:
+        - start_time: Optional ISO format start time
+        - end_time: Optional ISO format end time
+        
+        Returns:
+        - Compact user utilization summary with top 10 users
+        """
+        
+        analyzer = get_session_analyzer()
+        if analyzer is None:
+            return {"error": "Failed to create session analyzer"}
+        
+        try:
+            # Parse time parameters
+            parsed_start = None
+            parsed_end = None
+            
+            if start_time:
+                parsed_start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            if end_time:
+                parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            
+            # Generate compact user summary
+            summary = analyzer.generate_user_utilization_summary(parsed_start, parsed_end)
+            return summary
+            
+        except Exception as e:
+            logger.log_error(f"Error generating user utilization summary: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to generate user summary: {str(e)}"}
+        
     def get_session_analyzer():
         """Create session analyzer on-demand."""
         try:
@@ -286,9 +391,8 @@ def create_event_server(  # noqa: C901
         except Exception as e:
             logger.log_error(f"Failed to create session analyzer: {e}")
             return None
+        
     return app
-
-
 
 if __name__ == "__main__":
     event_manager_settings = EventManagerSettings()
