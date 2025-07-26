@@ -1,135 +1,296 @@
-"""
-Debug script to understand the difference between client API and direct MongoDB access.
-"""
-
 from madsci.client.event_client import EventClient
-from madsci.common.types.event_types import EventType
 import json
 
-def compare_data_pathways():
-    """Compare how events look via API vs direct MongoDB access."""
+def example_usage():
+    """Example usage of the time-series analysis."""
     
-    print("=== COMPARING DATA PATHWAYS ===")
-    
-    # Method 1: Via Client API (what your simple script uses)
-    print("\\n1. Via Client API (/events endpoint):")
     client = EventClient()
-    events_via_api = client.get_events(number=100)
     
-    workcell_via_api = None
-    for event_id, event in events_via_api.items():
-        if event.event_type == EventType.WORKCELL_START:
-            workcell_via_api = (event_id, event)
-            break
+    print("=== TIME-SERIES ANALYSIS EXAMPLES ===")
     
-    if workcell_via_api:
-        event_id, event = workcell_via_api
-        print(f"  Found WORKCELL_START via API: {event_id}")
-        print(f"  event.event_type: {event.event_type} (type: {type(event.event_type)})")
-        print(f"  event.event_type.value: {event.event_type.value}")
-        print(f"  isinstance(event.event_type, EventType): {isinstance(event.event_type, EventType)}")
+    # Example 1: Daily analysis (default - last 7 days)
+    print("\n1. Daily analysis for last week:")
+    daily_report = client.get_time_series_analysis()
+    
+    if daily_report:
+        print(f"Peak utilization: {daily_report['key_metrics']['peak_utilization']:.1f}%")
+        print(f"Average utilization: {daily_report['key_metrics']['average_utilization']:.1f}%")
+        print(f"Total experiments: {daily_report['key_metrics']['total_experiments']}")
+        print(f"Active days: {daily_report['key_metrics']['active_days']}/{daily_report['key_metrics']['total_analysis_days']}")
         
-        # Show the raw model dump (how it gets serialized)
-        raw_data = event.model_dump()
-        print(f"  Raw model dump event_type: {raw_data['event_type']} (type: {type(raw_data['event_type'])})")
-        
-        # Show JSON serialization
-        json_data = event.model_dump(mode="json")
-        print(f"  JSON mode event_type: {json_data['event_type']} (type: {type(json_data['event_type'])})")
-    else:
-        print("  ❌ No WORKCELL_START found via API")
+        # Show trend
+        trend = daily_report['trends_analysis']['utilization_trend']
+        print(f"Utilization trend: {trend['direction']} ({trend['change_percent']:+.1f}%)")
     
-    # Method 2: Simulate what the server analyzer sees (direct MongoDB access)
-    print("\\n2. How the server analyzer sees the data:")
+    # Example 2: Hourly analysis for today
+    print("\n2. Hourly analysis for today:")
+    from datetime import datetime, timezone
     
-    # The server does this kind of query:
-    print("  Server query looks for: {'event_type': {'$in': ['workcell_start', ...]}}")
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = datetime.now(timezone.utc)
     
-    # Let's simulate what MongoDB would return by checking how events are stored
-    if workcell_via_api:
-        event_id, event = workcell_via_api
-        
-        # This is what gets stored in MongoDB (via the Event.to_mongo() method)
-        try:
-            mongo_data = event.to_mongo()
-            print(f"  MongoDB stored event_type: {mongo_data.get('event_type')} (type: {type(mongo_data.get('event_type'))})")
-        except Exception as e:
-            print(f"  Error calling to_mongo(): {e}")
-            # Fallback - show what model_dump gives us
-            mongo_data = event.model_dump(mode="json")
-            print(f"  Model dump event_type: {mongo_data.get('event_type')} (type: {type(mongo_data.get('event_type'))})")
-        
-        # Test if the query would match
-        stored_event_type = mongo_data.get('event_type')
-        query_types = ['workcell_start', 'lab_start']
-        would_match = stored_event_type in query_types
-        print(f"  Would query match? {stored_event_type} in {query_types} = {would_match}")
-
-def test_event_serialization():
-    """Test how EventType enums are serialized."""
-    
-    print("\\n=== TESTING EVENT SERIALIZATION ===")
-    
-    # Test direct enum serialization
-    enum_val = EventType.WORKCELL_START
-    print(f"Direct enum: {enum_val}")
-    print(f"Enum value: {enum_val.value}")
-    print(f"String of enum: {str(enum_val)}")
-    
-    # Test JSON serialization
-    try:
-        import json
-        json_str = json.dumps(enum_val, default=str)
-        print(f"JSON serialized: {json_str}")
-    except Exception as e:
-        print(f"JSON serialization error: {e}")
-    
-    # Test how Pydantic handles it
-    from madsci.common.types.event_types import Event
-    from datetime import datetime
-    
-    test_event = Event(
-        event_type=EventType.WORKCELL_START,
-        event_data={"test": "data"}
+    hourly_report = client.get_time_series_analysis(
+        start_time=today_start.isoformat().replace('+00:00', 'Z'),
+        end_time=today_end.isoformat().replace('+00:00', 'Z'),
+        analysis_type="hourly"
     )
     
-    print(f"\\nTest Event:")
-    print(f"  event_type: {test_event.event_type}")
-    print(f"  model_dump(): {test_event.model_dump()['event_type']}")
-    print(f"  model_dump(mode='json'): {test_event.model_dump(mode='json')['event_type']}")
+    if hourly_report:
+        print(f"Today's peak utilization: {hourly_report['key_metrics']['peak_utilization']:.1f}%")
+        print(f"Experiments today: {hourly_report['key_metrics']['total_experiments']}")
+        
+        # Show busiest hours
+        busiest = hourly_report['trends_analysis']['busiest_periods']['highest_utilization']
+        if busiest:
+            print("Busiest hours today:")
+            for period in busiest[:3]:
+                hour = period['timestamp'].split('T')[1][:5]  # Extract HH:MM
+                print(f"  {hour}: {period['system_utilization']:.1f}% utilization")
+    
+    # Example 3: Weekly analysis for last month
+    print("\n3. Weekly analysis for last month:")
+    from datetime import timedelta
+    
+    month_end = datetime.now(timezone.utc)
+    month_start = month_end - timedelta(days=30)
+    
+    weekly_report = client.get_time_series_analysis(
+        start_time=month_start.isoformat().replace('+00:00', 'Z'),
+        end_time=month_end.isoformat().replace('+00:00', 'Z'),
+        analysis_type="weekly"
+    )
+    
+    if weekly_report:
+        print(f"Monthly peak utilization: {weekly_report['key_metrics']['peak_utilization']:.1f}%")
+        print(f"Total experiments this month: {weekly_report['key_metrics']['total_experiments']}")
+        
+        # Show weekly trend
+        trend = weekly_report['trends_analysis']['utilization_trend']
+        print(f"Monthly trend: {trend['direction']} ({trend['change_percent']:+.1f}%)")
+    
+    # Example 4: Save detailed report
+    print("\n4. Saving detailed report...")
+    if daily_report:
+        with open("time_series_report.json", "w") as f:
+            json.dump(daily_report, f, indent=2)
+        print("Detailed report saved to time_series_report.json")
 
-def check_server_event_collection():
-    """Check what the server's event collection actually contains."""
-    
-    print("\\n=== CHECKING SERVER EVENT COLLECTION ===")
-    
-    # We can't directly access the server's MongoDB from here,
-    # but we can make educated guesses based on the API response
+def analyze_system_performance():
+    """More advanced analysis using time-series data."""
     
     client = EventClient()
     
-    # The /events endpoint processes events through this code in your server:
-    # ```python
-    # event_list = events.find({"log_level": {"$gte": level}}).sort("event_timestamp", -1).limit(number).to_list()
-    # return {event["_id"]: event for event in event_list}
-    # ```
+    # Get weekly data for analysis
+    weekly_report = client.get_time_series_analysis(analysis_type="weekly")
     
-    # This suggests that events.find() returns raw MongoDB documents
-    # Let's see what those look like by examining the API response structure
+    if not weekly_report:
+        print("Could not get weekly report")
+        return
     
-    events = client.get_events(number=5)
-    print(f"API returned {len(events)} events")
+    print("=== SYSTEM PERFORMANCE ANALYSIS ===")
     
-    for event_id, event in events.items():
-        print(f"\\nEvent {event_id}:")
-        print(f"  Type: {type(event)}")
-        print(f"  event_type: {event.event_type} (type: {type(event.event_type)})")
+    # Overall performance
+    key_metrics = weekly_report['key_metrics']
+    print(f"\nSystem Overview:")
+    print(f"  Peak utilization: {key_metrics['peak_utilization']:.1f}%")
+    print(f"  Average utilization: {key_metrics['average_utilization']:.1f}%")
+    print(f"  Total experiments: {key_metrics['total_experiments']}")
+    print(f"  Active periods: {key_metrics['active_days']}/{key_metrics['total_analysis_days']}")
+    
+    # Node performance
+    aggregated = weekly_report['aggregated_summary']
+    node_performance = aggregated.get('node_performance', {})
+    
+    print(f"\nNode Performance:")
+    for node_id, metrics in node_performance.items():
+        print(f"  Node {node_id[-8:]}:")
+        print(f"    Average utilization: {metrics['average_utilization_percent']:.1f}%")
+        print(f"    Peak utilization: {metrics['peak_utilization_percent']:.1f}%")
+        print(f"    Total busy time: {metrics['total_busy_hours']:.2f} hours")
+    
+    # Trend analysis
+    trends = weekly_report['trends_analysis']
+    util_trend = trends['utilization_trend']
+    exp_trend = trends['experiment_trend']
+    
+    print(f"\nTrends:")
+    print(f"  Utilization: {util_trend['direction']} ({util_trend['change_percent']:+.1f}%)")
+    print(f"  Experiments: {exp_trend['direction']} ({exp_trend['change_percent']:+.1f}%)")
+    
+    # Recommendations
+    print(f"\nRecommendations:")
+    if key_metrics['average_utilization'] < 10:
+        print("  - System utilization is low. Consider consolidating workloads.")
+    elif key_metrics['average_utilization'] > 80:
+        print("  - System utilization is high. Consider adding more nodes.")
+    
+    if util_trend['direction'] == 'increasing':
+        print("  - Utilization is trending up. Monitor for capacity needs.")
+    elif util_trend['direction'] == 'decreasing':
+        print("  - Utilization is trending down. Investigate efficiency opportunities.")
+
+def test_basic_functionality():
+    """Test basic functionality step by step."""
+    
+    print("=== SIMPLE FUNCTIONALITY TEST ===")
+    
+    client = EventClient()
+    
+    # Test 4: Try lightweight summary (if implemented)
+    print("\n4. Testing lightweight summary...")
+    report = client.get_utilization_periods(analysis_type="daily")
+    with open("summary_report.json", "w") as f:
+        json.dump(report, f, indent=2)
+
+def test_timezone_awareness():
+    """Test timezone functionality."""
+    
+    print("\n=== TIMEZONE TEST ===")
+    
+    from datetime import datetime, timezone
+    import pytz
+    
+    # Test timezone conversion
+    print("\n1. Testing timezone conversion...")
+    
+    utc_now = datetime.now(timezone.utc)
+    print(f"UTC time: {utc_now.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    
+    # Convert to Chicago time
+    chicago_tz = pytz.timezone('America/Chicago')
+    chicago_time = utc_now.astimezone(chicago_tz)
+    print(f"Chicago time: {chicago_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    
+    # Test with client (if timezone support added)
+    client = EventClient()
+    
+    print("\n2. Testing timezone-aware analysis...")
+    try:
+        if hasattr(client, 'get_time_series_analysis'):
+            # Test with explicit timezone
+            ts_report = client.get_time_series_analysis(
+                analysis_type="daily",
+                user_timezone="America/Chicago"
+            )
+            
+            if ts_report and 'display_settings' in ts_report:
+                tz = ts_report['display_settings'].get('user_timezone', 'Not set')
+                print(f"✅ Timezone support working: {tz}")
+            else:
+                print("⚠️  Timezone support not fully implemented")
+        else:
+            print("⚠️  Time-series analysis not available for timezone test")
+    except Exception as e:
+        print(f"❌ Timezone test error: {e}")
+
+def quick_performance_test():
+    """Quick performance comparison."""
+    
+    print("\n=== PERFORMANCE TEST ===")
+    
+    import time
+    client = EventClient()
+    
+    # Test existing session report speed
+    print("\n1. Testing session report speed...")
+    start_time = time.time()
+    try:
+        session_report = client.get_utilization_report()
+        session_time = time.time() - start_time
+        print(f"✅ Session report: {session_time:.2f} seconds")
+    except Exception as e:
+        print(f"❌ Session report failed: {e}")
+    
+    # Test time-series analysis speed (if available)
+    print("\n2. Testing time-series analysis speed...")
+    start_time = time.time()
+    try:
+        if hasattr(client, 'get_time_series_analysis'):
+            ts_report = client.get_time_series_analysis(analysis_type="daily")
+            ts_time = time.time() - start_time
+            print(f"✅ Time-series analysis: {ts_time:.2f} seconds")
+        else:
+            print("⚠️  Time-series analysis not implemented")
+    except Exception as e:
+        print(f"❌ Time-series analysis failed: {e}")
+    
+    # Test lightweight summary speed (if available)
+    print("\n3. Testing lightweight summary speed...")
+    start_time = time.time()
+    try:
+        if hasattr(client, 'get_utilization_summary'):
+            summary = client.get_utilization_summary(analysis_type="daily")
+            summary_time = time.time() - start_time
+            print(f"✅ Lightweight summary: {summary_time:.2f} seconds")
+        else:
+            print("⚠️  Lightweight summary not implemented")
+    except Exception as e:
+        print(f"❌ Lightweight summary failed: {e}")
+
+def test_what_you_have_now():
+    """Test just what you currently have implemented."""
+    
+    print("=== TESTING CURRENT IMPLEMENTATION ===")
+    
+    client = EventClient()
+    
+    # Test your existing time-series function
+    print("\nTesting get_time_series_analysis()...")
+    try:
+        report = client.get_time_series_analysis(analysis_type="daily")
         
-        # The key insight: The API converts raw MongoDB docs back to Event objects
-        # But the analyzer works with raw MongoDB docs directly
-        break
+        if report:
+            print("✅ get_time_series_analysis() working!")
+            
+            # Extract key info
+            key_metrics = report.get('key_metrics', {})
+            peak_util = key_metrics.get('peak_utilization', 0)
+            avg_util = key_metrics.get('average_utilization', 0)
+            total_exp = key_metrics.get('total_experiments', 0)
+            active_days = key_metrics.get('active_days', 0)
+            total_days = key_metrics.get('total_analysis_days', 0)
+            
+            print(f"Peak utilization: {peak_util:.1f}%")
+            print(f"Average utilization: {avg_util:.1f}%")
+            print(f"Total experiments: {total_exp}")
+            print(f"Active days: {active_days}/{total_days}")
+            
+            # Check for timezone issues
+            if active_days < 2 and total_exp > 100:
+                print("⚠️  POTENTIAL TIMEZONE ISSUE: High experiments but low active days")
+                print("   This suggests experiments might be spanning UTC midnight")
+            
+        else:
+            print("❌ get_time_series_analysis() returned no data")
+            
+    except Exception as e:
+        print(f"❌ get_time_series_analysis() failed: {e}")
 
 if __name__ == "__main__":
-    compare_data_pathways()
-    test_event_serialization() 
-    check_server_event_collection()
+    # Run the test that matches your current setup
+    test_what_you_have_now()
+    
+    print("\n" + "="*50)
+    
+    # Run other tests
+    test_basic_functionality()
+    # test_timezone_awareness()
+    # quick_performance_test()
+    
+    # example_usage()
+    # print("\n" + "="*50 + "\n")
+    # analyze_system_performance()
+    # client = EventClient()
+    # report = client.get_utilization_report(
+
+    # )
+
+    # # Use the data
+    # if report and "error" not in report:
+    #     print(f"System utilization: {report['overall_summary']['average_system_utilization_percent']:.1f}%")
+    #     print(f"Sessions found: {report['report_metadata']['total_sessions']}")
+        
+    #     # Save to file if needed
+    #     import json
+    #     with open("report.json", "w") as f:
+    #         json.dump(report, f, indent=2)
