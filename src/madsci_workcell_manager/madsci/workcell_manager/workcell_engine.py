@@ -143,6 +143,7 @@ class Engine:
                     )
                     next_wf.status.completed = True
                     self.state_handler.set_active_workflow(next_wf)
+                    self._log_workflow_completion(next_wf, "completed")
                     sorted_ready_workflows.pop(0)
                     next_wf = None
                     continue
@@ -275,6 +276,7 @@ class Engine:
             step.end_time = datetime.now()
             wf.steps[wf.status.current_step_index] = step
             wf.status.running = False
+
             if step.status == ActionStatus.SUCCEEDED:
                 new_index = wf.status.current_step_index + 1
                 if new_index >= len(wf.steps):
@@ -304,6 +306,151 @@ class Engine:
                 wf.end_time = datetime.now()
             self.state_handler.set_active_workflow(wf)
 
+            if wf.status.completed or wf.status.failed or wf.status.cancelled:
+                self._log_workflow_completion(wf)
+
+    def _log_workflow_completion(self, workflow: Workflow) -> None:
+        """Log workflow completion event with author and utilization data."""
+        
+        try:
+            # Determine final status from workflow state
+            if workflow.status.completed:
+                final_status = "completed"
+            elif workflow.status.failed:
+                final_status = "failed"
+            elif workflow.status.cancelled:
+                final_status = "cancelled"
+            else:
+                final_status = "unknown"
+            
+            # Calculate total duration
+            duration_seconds = None
+            if workflow.start_time and workflow.end_time:
+                duration_seconds = (workflow.end_time - workflow.start_time).total_seconds()
+            
+            # Extract author from workflow metadata
+            author = self._extract_workflow_author(workflow)
+            
+            # Count step statistics
+            completed_steps = sum(1 for step in workflow.steps if step.status == ActionStatus.SUCCEEDED)
+            failed_steps = sum(1 for step in workflow.steps if step.status == ActionStatus.FAILED)
+            cancelled_steps = sum(1 for step in workflow.steps if step.status == ActionStatus.CANCELLED)
+            
+            # Log workflow completion event
+            event_data = {
+                "workflow_id": workflow.workflow_id,
+                "workflow_name": workflow.name,
+                "author": author,
+                "workcell_id": self.workcell_definition.workcell_id,
+                "workcell_name": self.workcell_definition.workcell_name,
+                "status": final_status,
+                "duration_seconds": duration_seconds,
+                "total_steps": len(workflow.steps),
+                "completed_steps": completed_steps,
+                "failed_steps": failed_steps,
+                "cancelled_steps": cancelled_steps,
+                "start_time": workflow.start_time.isoformat() if workflow.start_time else None,
+                "end_time": workflow.end_time.isoformat() if workflow.end_time else None,
+                "submitted_time": workflow.submitted_time.isoformat() if workflow.submitted_time else None
+            }
+            
+            # Add error information for failed workflows
+            if final_status in ["failed", "cancelled"] and workflow.steps:
+                # Find the step that caused the failure
+                failed_step = None
+                for step in workflow.steps:
+                    if step.status in [ActionStatus.FAILED, ActionStatus.CANCELLED]:
+                        failed_step = step
+                        break
+                
+                if failed_step and failed_step.result and failed_step.result.errors:
+                    # Get the last error message
+                    last_error = failed_step.result.errors[-1]
+                    event_data["error_message"] = last_error.message
+                    event_data["error_type"] = last_error.error_type
+                    event_data["failed_step_id"] = failed_step.step_id
+                    event_data["failed_step_name"] = failed_step.name
+                    event_data["failed_node"] = failed_step.node
+            
+            # Add workflow ownership info if available
+            if hasattr(workflow, 'ownership_info') and workflow.ownership_info:
+                ownership = workflow.ownership_info
+                if hasattr(ownership, 'experiment_id') and ownership.experiment_id:
+                    event_data["experiment_id"] = str(ownership.experiment_id)
+                if hasattr(ownership, 'user_id') and ownership.user_id:
+                    event_data["user_id"] = str(ownership.user_id)
+                if hasattr(ownership, 'campaign_id') and ownership.campaign_id:
+                    event_data["campaign_id"] = str(ownership.campaign_id)
+            
+            self.logger.log(Event(
+                event_type=EventType.WORKFLOW_COMPLETE,
+                event_data=event_data
+            ))
+            
+            self.logger.log_info(
+                f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
+                f"Status: {final_status}, Author: {author or 'Unknown'}, "
+                f"Duration: {duration_seconds:.1f}s" if duration_seconds else "Duration: Unknown"
+            )
+            
+        except Exception as e:
+            self.logger.log_error(f"Error logging workflow completion for {workflow.workflow_id}: {e}")
+
+    def _extract_workflow_author(self, workflow: Workflow) -> Optional[str]:
+        """Extract author from workflow metadata - simplified for Workflow inheriting from WorkflowDefinition."""
+        
+        author = None
+        
+        # Strategy 1: Check workflow.workflow_metadata.author (since Workflow inherits from WorkflowDefinition)
+        if hasattr(workflow, 'workflow_metadata') and workflow.workflow_metadata:
+            if hasattr(workflow.workflow_metadata, 'author'):
+                author = workflow.workflow_metadata.author
+            elif isinstance(workflow.workflow_metadata, dict) and 'author' in workflow.workflow_metadata:
+                author = workflow.workflow_metadata['author']
+        
+        # Strategy 2: Check ownership_info for user information
+        if not author and hasattr(workflow, 'ownership_info') and workflow.ownership_info:
+            ownership = workflow.ownership_info
+            if hasattr(ownership, 'user_id') and ownership.user_id:
+                author = str(ownership.user_id)
+        
+        # Strategy 3: Look for author in other workflow object attributes
+        for attr_name in ['author', 'created_by', 'submitted_by', 'user', 'owner']:
+            if not author and hasattr(workflow, attr_name):
+                attr_value = getattr(workflow, attr_name)
+                if attr_value:
+                    author = str(attr_value)
+                    break
+        
+        # DEBUG - Log what we can see if still no author found
+        if not author:
+            
+            # Check workflow_metadata details
+            if hasattr(workflow, 'workflow_metadata'):
+                metadata = workflow.workflow_metadata
+
+                if metadata:
+                    
+                    # Check if it has author attribute
+                    if hasattr(metadata, 'author'):
+                        author_value = metadata.author
+                    else:
+                        # List available attributes
+                        if hasattr(metadata, '__dict__'):
+                            attrs = list(metadata.__dict__.keys())
+                        else:
+                            attrs = [attr for attr in dir(metadata) if not attr.startswith('_')]
+
+
+        
+        # Clean up the author string
+        if author:
+            author = str(author).strip()
+            if author == "" or author.lower() in ["none", "null", "unknown"]:
+                author = None
+        
+        return author
+               
     def update_step(self, wf: Workflow, step: Step) -> None:
         """Update the step in the workflow"""
         with self.state_handler.wc_state_lock():
