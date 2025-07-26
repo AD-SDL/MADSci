@@ -1019,3 +1019,352 @@ class UtilizationAnalyzer:
         except Exception as e:
             print(f"Error generating overall summary: {e}")
             return {"error": str(e)}
+        
+    def generate_user_utilization_report(
+        self, 
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate user utilization report based on workflow authors.
+        """
+        try:
+            print("Generating user utilization report...")
+            
+            # Determine analysis timeframe
+            analysis_start, analysis_end = self._determine_analysis_period(start_time, end_time)
+            
+            # Get all workflow events in timeframe
+            workflow_events = self._get_workflow_events_for_users(analysis_start, analysis_end)
+            
+            # Process events to build user statistics
+            user_stats = self._calculate_user_statistics(workflow_events)
+            
+            # Calculate system totals for percentage calculations
+            system_totals = self._calculate_system_totals(workflow_events)
+            
+            # Generate final report
+            return {
+                "report_metadata": {
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "analysis_start": analysis_start.isoformat(),
+                    "analysis_end": analysis_end.isoformat(),
+                    "total_workflows": system_totals["total_workflows"],
+                    "total_users": len(user_stats),
+                    "workflows_with_authors": system_totals["workflows_with_authors"],
+                    "workflows_without_authors": system_totals["workflows_without_authors"]
+                },
+                
+                "system_summary": {
+                    "total_workflows": system_totals["total_workflows"],
+                    "total_runtime_hours": system_totals["total_runtime_hours"],
+                    "average_workflow_duration_hours": system_totals["average_duration_hours"],
+                    "completion_rate_percent": system_totals["completion_rate_percent"],
+                    "workflows_with_known_authors": system_totals["workflows_with_authors"],
+                    "author_attribution_rate_percent": round(
+                        (system_totals["workflows_with_authors"] / system_totals["total_workflows"] * 100) 
+                        if system_totals["total_workflows"] > 0 else 0, 2
+                    )
+                },
+                
+                "user_utilization": user_stats
+            }
+            
+        except Exception as e:
+            print(f"Error generating user utilization report: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to generate user report: {str(e)}"}
+
+    def _get_workflow_events_for_users(self, start_time: datetime, end_time: datetime) -> List[Dict]:
+        """Get workflow start and complete events for user analysis."""
+        
+        workflow_event_types = [
+            "workflow_start", "workflow_complete", 
+            "WORKFLOW_START", "WORKFLOW_COMPLETE"
+        ]
+        
+        # Use multi-strategy approach
+        queries_to_try = [
+            {
+                "event_type": {"$in": workflow_event_types},
+                "event_timestamp": {"$gte": start_time, "$lte": end_time}
+            },
+            {
+                "event_type": {"$in": workflow_event_types},
+                "event_timestamp": {"$gte": start_time.isoformat(), "$lte": end_time.isoformat()}
+            },
+            {
+                "event_type": {"$in": workflow_event_types}
+            }
+        ]
+        
+        events = []
+        
+        for i, query in enumerate(queries_to_try):
+            try:
+                if i == 2:  # Filter manually
+                    all_events = list(self.events_collection.find(query).sort("event_timestamp", 1))
+                    for event in all_events:
+                        event_time = self._parse_timestamp_utc(event.get("event_timestamp"))
+                        if event_time and start_time <= event_time <= end_time:
+                            events.append(event)
+                else:
+                    events = list(self.events_collection.find(query).sort("event_timestamp", 1))
+                
+                if events:
+                    break
+                    
+            except Exception as e:
+                continue
+        
+        # Parse timestamps
+        valid_events = []
+        for event in events:
+            event_time = self._parse_timestamp_utc(event.get("event_timestamp"))
+            if event_time:
+                event["parsed_timestamp"] = event_time
+                valid_events.append(event)
+        
+        print(f"Found {len(valid_events)} workflow events for user analysis")
+        return valid_events
+
+    def _calculate_user_statistics(self, events: List[Dict]) -> Dict[str, Dict[str, Any]]:
+        """Calculate statistics for each user/author."""
+        
+        users = {}
+        workflows = {}  # Track workflow lifecycle
+        
+        for event in events:
+            event_type = str(event.get("event_type", "")).lower()
+            event_data = event.get("event_data", {})
+            workflow_id = event_data.get("workflow_id")
+            author = event_data.get("author")
+            
+            if not workflow_id:
+                continue
+            
+            # Initialize workflow tracking
+            if workflow_id not in workflows:
+                workflows[workflow_id] = {
+                    "workflow_id": workflow_id,
+                    "workflow_name": event_data.get("workflow_name", "Unknown"),
+                    "author": author,
+                    "start_time": None,
+                    "end_time": None,
+                    "status": "unknown",
+                    "duration_seconds": None
+                }
+            
+            workflow = workflows[workflow_id]
+            
+            # Update workflow data with any new info
+            if author and not workflow["author"]:
+                workflow["author"] = author
+            
+            # Process event types
+            if "start" in event_type:
+                workflow["start_time"] = event["parsed_timestamp"]
+                workflow["status"] = "started"
+                
+            elif "complete" in event_type:
+                workflow["end_time"] = event["parsed_timestamp"]
+                workflow["status"] = event_data.get("status", "completed")
+                
+                # Use duration from event if available, otherwise calculate
+                if event_data.get("duration_seconds"):
+                    workflow["duration_seconds"] = event_data["duration_seconds"]
+                elif workflow["start_time"] and workflow["end_time"]:
+                    workflow["duration_seconds"] = (
+                        workflow["end_time"] - workflow["start_time"]
+                    ).total_seconds()
+        
+        # Aggregate statistics by user
+        for workflow in workflows.values():
+            author = workflow["author"]
+            
+            # Handle workflows without authors
+            if not author or author.strip() == "":
+                author = "Unknown Author"
+            
+            if author not in users:
+                users[author] = {
+                    "author": author,
+                    "total_workflows": 0,
+                    "completed_workflows": 0,
+                    "failed_workflows": 0,
+                    "cancelled_workflows": 0,
+                    "total_runtime_hours": 0,
+                    "average_workflow_duration_hours": 0,
+                    "shortest_workflow_hours": None,
+                    "longest_workflow_hours": None,
+                    "completion_rate_percent": 0,
+                    "workflows": []
+                }
+            
+            user = users[author]
+            user["total_workflows"] += 1
+            
+            # Status tracking
+            if workflow["status"] == "completed":
+                user["completed_workflows"] += 1
+            elif workflow["status"] == "failed":
+                user["failed_workflows"] += 1
+            elif workflow["status"] == "cancelled":
+                user["cancelled_workflows"] += 1
+            
+            # Duration tracking
+            if workflow["duration_seconds"] is not None:
+                duration_hours = workflow["duration_seconds"] / 3600
+                user["total_runtime_hours"] += duration_hours
+                
+                if user["shortest_workflow_hours"] is None or duration_hours < user["shortest_workflow_hours"]:
+                    user["shortest_workflow_hours"] = duration_hours
+                    
+                if user["longest_workflow_hours"] is None or duration_hours > user["longest_workflow_hours"]:
+                    user["longest_workflow_hours"] = duration_hours
+            
+            # Add workflow to user's list
+            user["workflows"].append({
+                "workflow_id": workflow["workflow_id"],
+                "workflow_name": workflow["workflow_name"],
+                "start_time": workflow["start_time"].isoformat() if workflow["start_time"] else None,
+                "end_time": workflow["end_time"].isoformat() if workflow["end_time"] else None,
+                "duration_hours": workflow["duration_seconds"] / 3600 if workflow["duration_seconds"] else None,
+                "status": workflow["status"]
+            })
+        
+        # Calculate averages and percentages
+        for user in users.values():
+            if user["total_workflows"] > 0:
+                user["completion_rate_percent"] = round(
+                    (user["completed_workflows"] / user["total_workflows"]) * 100, 2
+                )
+                
+                # Calculate average duration for workflows with known duration
+                workflows_with_duration = [w for w in user["workflows"] if w["duration_hours"] is not None]
+                if workflows_with_duration:
+                    user["average_workflow_duration_hours"] = round(
+                        sum(w["duration_hours"] for w in workflows_with_duration) / len(workflows_with_duration), 3
+                    )
+            
+            # Round values
+            user["total_runtime_hours"] = round(user["total_runtime_hours"], 2)
+            if user["shortest_workflow_hours"] is not None:
+                user["shortest_workflow_hours"] = round(user["shortest_workflow_hours"], 3)
+            if user["longest_workflow_hours"] is not None:
+                user["longest_workflow_hours"] = round(user["longest_workflow_hours"], 3)
+        
+        return users
+
+    def _calculate_system_totals(self, events: List[Dict]) -> Dict[str, Any]:
+        """Calculate system-wide totals for percentage calculations."""
+        
+        workflows = {}
+        
+        for event in events:
+            event_data = event.get("event_data", {})
+            workflow_id = event_data.get("workflow_id")
+            
+            if not workflow_id:
+                continue
+                
+            if workflow_id not in workflows:
+                workflows[workflow_id] = {
+                    "author": event_data.get("author"),
+                    "duration_seconds": None,
+                    "status": "unknown"
+                }
+            
+            # Update with completion data
+            event_type = str(event.get("event_type", "")).lower()
+            if "complete" in event_type:
+                workflows[workflow_id]["duration_seconds"] = event_data.get("duration_seconds")
+                workflows[workflow_id]["status"] = event_data.get("status", "completed")
+        
+        total_workflows = len(workflows)
+        workflows_with_authors = sum(1 for w in workflows.values() if w["author"] and w["author"].strip())
+        workflows_without_authors = total_workflows - workflows_with_authors
+        
+        completed_workflows = sum(1 for w in workflows.values() if w["status"] == "completed")
+        
+        # Calculate total runtime
+        total_runtime_seconds = sum(
+            w["duration_seconds"] for w in workflows.values() 
+            if w["duration_seconds"] is not None
+        )
+        total_runtime_hours = total_runtime_seconds / 3600
+        
+        # Calculate average duration
+        workflows_with_duration = [w for w in workflows.values() if w["duration_seconds"] is not None]
+        average_duration_hours = 0
+        if workflows_with_duration:
+            average_duration_hours = (
+                sum(w["duration_seconds"] for w in workflows_with_duration) / 
+                len(workflows_with_duration)
+            ) / 3600
+        
+        completion_rate_percent = 0
+        if total_workflows > 0:
+            completion_rate_percent = (completed_workflows / total_workflows) * 100
+        
+        return {
+            "total_workflows": total_workflows,
+            "workflows_with_authors": workflows_with_authors,
+            "workflows_without_authors": workflows_without_authors,
+            "total_runtime_hours": round(total_runtime_hours, 2),
+            "average_duration_hours": round(average_duration_hours, 3),
+            "completion_rate_percent": round(completion_rate_percent, 2)
+        }
+
+    def generate_user_utilization_summary(
+        self, 
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate a compact user utilization summary for inclusion in other reports.
+        """
+        try:
+            # Get full user report
+            full_report = self.generate_user_utilization_report(start_time, end_time)
+            
+            if "error" in full_report:
+                return {"error": full_report["error"]}
+            
+            # Create compact summary
+            user_utilization = full_report["user_utilization"]
+            system_summary = full_report["system_summary"]
+            
+            # Sort users by total runtime (most active first)
+            sorted_users = sorted(
+                user_utilization.values(), 
+                key=lambda x: x["total_runtime_hours"], 
+                reverse=True
+            )
+            
+            # Create compact user summaries (top 10 users)
+            top_users = []
+            for user in sorted_users[:10]:
+                top_users.append({
+                    "author": user["author"],
+                    "total_workflows": user["total_workflows"],
+                    "total_runtime_hours": user["total_runtime_hours"],
+                    "completion_rate_percent": user["completion_rate_percent"],
+                    "average_workflow_duration_hours": user["average_workflow_duration_hours"]
+                })
+            
+            return {
+                "total_users": len(user_utilization),
+                "author_attribution_rate_percent": system_summary["author_attribution_rate_percent"],
+                "top_users": top_users,
+                "system_totals": {
+                    "total_workflows": system_summary["total_workflows"],
+                    "total_runtime_hours": system_summary["total_runtime_hours"],
+                    "completion_rate_percent": system_summary["completion_rate_percent"]
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error generating user utilization summary: {e}")
+            return {"error": f"Failed to generate user summary: {str(e)}"}
