@@ -18,12 +18,10 @@ from madsci.common.types.event_types import (
     Event,
     EventClientConfig,
     EventType,
-    UtilizationSummary,
 )
 from madsci.common.utils import threaded_task
 from pydantic import BaseModel, ValidationError
-from rich import print
-
+from madsci.common.events_csv_exporter import CSVExporter
 
 class EventClient:
     """A logger and event handler for MADSci system components."""
@@ -106,7 +104,6 @@ class EventClient:
             )
             if not response.ok:
                 response.raise_for_status()
-            # print(response.json())
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
             return dict(events)
@@ -132,16 +129,31 @@ class EventClient:
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
             return dict(events)
-        
 
     def get_utilization_report(
         self,
         start_time: Optional[str] = None,
-        end_time: Optional[str] = None
-    ) -> Optional[dict[str, Any]]:
-        """Get utilization report as JSON."""
+        end_time: Optional[str] = None,
+        csv_export: bool = False,
+        save_to_file: bool = False,
+        output_path: Optional[str] = None
+    ) -> Optional[Union[dict[str, Any], str, dict[str, str]]]:
+        """
+        Get utilization report as JSON, optionally export to CSV.
+        
+        Args:
+            start_time: ISO format start time
+            end_time: ISO format end time
+            csv_export: If True, convert report to CSV format
+            save_to_file: If True, save to file (requires output_path)
+            output_path: Path to save files (used when save_to_file=True)
+            
+        Returns:
+            - If csv_export=False: JSON dict
+            - If csv_export=True and save_to_file=False: CSV string
+            - If csv_export=True and save_to_file=True: dict of saved file paths
+        """
         if not self.event_server:
-            print("No event server configured, cannot get utilization report.")
             return None
         
         try:
@@ -158,13 +170,24 @@ class EventClient:
             )
             
             if not response.ok:
-                print(f"Error getting utilization report: HTTP {response.status_code}")
                 response.raise_for_status()
             
-            return response.json()
+            report_data = response.json()
+            
+            # Handle CSV export if requested
+            if csv_export:
+                try:
+                    return CSVExporter.export_utilization_report_to_csv(
+                        report_data=report_data,
+                        output_path=output_path if save_to_file else None
+                    )
+                except Exception as e:
+                    print(f"Error exporting to CSV: {e}")
+                    return report_data
+            
+            return report_data
             
         except requests.RequestException as e:
-            print(f"Error getting utilization report: {e}")
             return None
 
     def get_time_series_analysis(
@@ -172,19 +195,29 @@ class EventClient:
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         analysis_type: str = "daily",
-        user_timezone: str = "America/Chicago"
-    ) -> Optional[dict[str, Any]]:
+        user_timezone: str = "America/Chicago",
+        csv_export: bool = False,
+        save_to_file: bool = False,
+        output_path: Optional[str] = None
+    ) -> Optional[Union[dict[str, Any], str, dict[str, str]]]:
         """
-        Get time-series utilization analysis.
+        Get time-series utilization analysis, optionally export to CSV.
         
         Args:
             start_time: ISO format start time (e.g., "2025-07-20T00:00:00Z") 
             end_time: ISO format end time (e.g., "2025-07-23T00:00:00Z")
             analysis_type: "hourly", "daily", "weekly", "monthly"
             user_timezone: Timezone for day boundaries (e.g., "America/Chicago")
+            csv_export: If True, convert report to CSV format
+            save_to_file: If True, save to file (requires output_path)
+            output_path: Path to save files (used when save_to_file=True)
+            
+        Returns:
+            - If csv_export=False: JSON dict
+            - If csv_export=True and save_to_file=False: CSV string or dict of CSV strings
+            - If csv_export=True and save_to_file=True: dict of saved file paths
         """
         if not self.event_server:
-            print("No event server configured.")
             return None
         
         try:
@@ -204,30 +237,55 @@ class EventClient:
             )
             
             if not response.ok:
-                print(f"Error: HTTP {response.status_code}")
                 response.raise_for_status()
             
-            return response.json()
+            report_data = response.json()
+            
+            # Handle CSV export if requested
+            if csv_export:
+                try:
+                    return CSVExporter.export_time_series_to_csv(
+                        report_data=report_data,
+                        output_path=output_path if save_to_file else None
+                    )
+                except Exception as e:
+                    print(f"Error exporting to CSV: {e}")
+                    return report_data
+            
+            return report_data
             
         except requests.RequestException as e:
-            print(f"Error getting time-series analysis: {e}")
             return None
 
-    def get_utilization_summary(
+    def get_utilization_periods(
         self,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         analysis_type: str = "daily",
-        user_timezone: str = "America/Chicago"
-    ) -> Optional[dict[str, Any]]:
+        user_timezone: str = "America/Chicago",
+        include_users: bool = True,
+        csv_export: bool = False,
+        save_to_file: bool = False,
+        output_path: Optional[str] = None
+    ) -> Optional[Union[dict[str, Any], str, dict[str, str]]]:
         """
-        Get lightweight utilization summary (faster than full analysis).
+        Get time-series utilization analysis with periodic breakdowns, optionally export to CSV.
         
         Args:
             start_time: ISO format start time
             end_time: ISO format end time
-            analysis_type: "hourly", "daily", "weekly", "monthly"  
-            user_timezone: Timezone for day boundaries
+            analysis_type: "hourly", "daily", "weekly", "monthly"
+            user_timezone: Timezone for day boundaries (e.g., "America/Chicago")
+            include_users: Whether to include user utilization data
+            csv_export: If True, convert report to CSV format
+            save_to_file: If True, save to file (requires output_path)
+            output_path: Path to save files (used when save_to_file=True)
+            
+        Returns:
+            - If csv_export=False: JSON dict with utilization data
+            - If csv_export=True and save_to_file=False: CSV string or dict of CSV strings
+            - If csv_export=True and save_to_file=True: dict of saved file paths
+    
         """
         if not self.event_server:
             print("No event server configured.")
@@ -236,7 +294,8 @@ class EventClient:
         try:
             params = {
                 "analysis_type": analysis_type,
-                "user_timezone": user_timezone
+                "user_timezone": user_timezone,
+                "include_users": str(include_users).lower()
             }
             if start_time:
                 params["start_time"] = start_time
@@ -244,21 +303,162 @@ class EventClient:
                 params["end_time"] = end_time
             
             response = requests.get(
-                str(self.event_server) + "/utilization/summary",
+                str(self.event_server) + "/utilization/periods",
                 params=params,
-                timeout=30,  # Shorter timeout for summary
+                timeout=30,
             )
             
             if not response.ok:
-                print(f"Error: HTTP {response.status_code}")
+                print(f"Error getting utilization periods: HTTP {response.status_code}")
                 response.raise_for_status()
             
-            return response.json()
+            report_data = response.json()
+            
+            # Handle CSV export if requested
+            if csv_export:
+                try:
+                    return CSVExporter.export_utilization_periods_to_csv(
+                        report_data=report_data,
+                        output_path=output_path if save_to_file else None
+                    )
+                except Exception as e:
+                    print(f"Error exporting to CSV: {e}")
+                    return report_data
+            
+            return report_data
             
         except requests.RequestException as e:
-            print(f"Error getting utilization summary: {e}")
+            print(f"Error getting utilization periods: {e}")
             return None
     
+    def get_user_utilization_report(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        csv_export: bool = False,
+        save_to_file: bool = False,
+        output_path: Optional[str] = None
+    ) -> Optional[Union[dict[str, Any], str]]:
+        """
+        Get detailed user utilization report from the event server, optionally export to CSV.
+        
+        Args:
+            start_time: ISO format start time (e.g., "2025-07-20T00:00:00Z") 
+            end_time: ISO format end time (e.g., "2025-07-23T00:00:00Z")
+            csv_export: If True, convert report to CSV format
+            save_to_file: If True, save to file (requires output_path)
+            output_path: Path to save files (used when save_to_file=True)
+            
+        Returns:
+            - If csv_export=False: JSON dict with detailed user utilization data
+            - If csv_export=True and save_to_file=False: CSV string
+            - If csv_export=True and save_to_file=True: path to saved file
+        """
+        if not self.event_server:
+            print("No event server configured.")
+            return None
+        
+        try:
+            params = {}
+            if start_time:
+                params["start_time"] = start_time
+            if end_time:
+                params["end_time"] = end_time
+            
+            response = requests.get(
+                str(self.event_server) + "/utilization/users",
+                params=params,
+                timeout=60,
+            )
+            
+            if not response.ok:
+                print(f"Error getting user utilization report: HTTP {response.status_code}")
+                response.raise_for_status()
+            
+            report_data = response.json()
+            
+            # Handle CSV export if requested
+            if csv_export:
+                try:
+                    return CSVExporter.export_user_utilization_to_csv(
+                        report_data=report_data,
+                        output_path=output_path if save_to_file else None,
+                        detailed=True
+                    )
+                except Exception as e:
+                    print(f"Error exporting to CSV: {e}")
+                    return report_data
+            
+            return report_data
+            
+        except requests.RequestException as e:
+            print(f"Error getting user utilization report: {e}")
+            return None
+
+    def get_user_utilization_summary(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        csv_export: bool = False,
+        save_to_file: bool = False,
+        output_path: Optional[str] = None
+    ) -> Optional[Union[dict[str, Any], str]]:
+        """
+        Get compact user utilization summary from the event server, optionally export to CSV.
+        
+        Args:
+            start_time: ISO format start time
+            end_time: ISO format end time
+            csv_export: If True, convert report to CSV format
+            save_to_file: If True, save to file (requires output_path)
+            output_path: Path to save files (used when save_to_file=True)
+            
+        Returns:
+            - If csv_export=False: JSON dict with compact user utilization summary
+            - If csv_export=True and save_to_file=False: CSV string
+            - If csv_export=True and save_to_file=True: path to saved file
+        """
+        if not self.event_server:
+            print("No event server configured.")
+            return None
+        
+        try:
+            params = {}
+            if start_time:
+                params["start_time"] = start_time
+            if end_time:
+                params["end_time"] = end_time
+            
+            response = requests.get(
+                str(self.event_server) + "/utilization/users/summary",
+                params=params,
+                timeout=30,
+            )
+            
+            if not response.ok:
+                print(f"Error getting user utilization summary: HTTP {response.status_code}")
+                response.raise_for_status()
+            
+            report_data = response.json()
+            
+            # Handle CSV export if requested
+            if csv_export:
+                try:
+                    return CSVExporter.export_user_utilization_to_csv(
+                        report_data=report_data,
+                        output_path=output_path if save_to_file else None,
+                        detailed=False
+                    )
+                except Exception as e:
+                    print(f"Error exporting to CSV: {e}")
+                    return report_data
+            
+            return report_data
+            
+        except requests.RequestException as e:
+            print(f"Error getting user utilization summary: {e}")
+            return None
+
     def log(
         self,
         event: Union[Event, Any],
@@ -267,7 +467,6 @@ class EventClient:
         warning_category: Optional[Warning] = None,
     ) -> None:
         """Log an event."""
-
         # * If we've got a string or dict, check if it's a serialized event
         if isinstance(event, str):
             with contextlib.suppress(ValidationError):
@@ -296,12 +495,9 @@ class EventClient:
         # * Log the event to the event server if configured
         # * Only log if the event is at the same level or higher than the logger
         if self.logger.getEffectiveLevel() <= event.log_level:
-            print(f"{event.event_timestamp} ({event.event_type}): {event.event_data}")
             if self.event_server:
-                print("Sending event to event server...")
                 self._send_event_to_event_server_task(event)
-            else:
-                print("DEBUG CLIENT: No event_server configured")  # ADD THIS LINE
+
 
     def log_debug(self, event: Union[Event, str]) -> None:
         """Log an event at the debug level."""
@@ -371,20 +567,13 @@ class EventClient:
         self, event: Event, retrying: bool = False
     ) -> None:
         """Send an event to the event manager. Buffer on failure."""
-        print(
-            f"DEBUG CLIENT: _send_event_to_event_server_task called for {event.event_type}"
-        )
         try:
             self._send_event_to_event_server(event, retrying=retrying)
-            print(f"DEBUG CLIENT: Successfully sent {event.event_type}")
         except Exception as e:
-            print(f"DEBUG CLIENT: Error in _send_event_to_event_server_task: {e}")
+            self.logger.error(f"Error in _send_event_to_event_server_task: {e}")
 
     def _send_event_to_event_server(self, event: Event, retrying: bool = False) -> None:
         """Send an event to the event manager. Buffer on failure."""
-        print(
-            f"DEBUG CLIENT: _send_event_to_event_server called for {event.event_type}"
-        )
 
         try:
             response = requests.post(
@@ -392,16 +581,11 @@ class EventClient:
                 json=event.model_dump(mode="json"),
                 timeout=10,
             )
-            print(f"DEBUG CLIENT: Response status: {response.status_code}")
 
             if not response.ok:
-                print(f"DEBUG CLIENT: Response error: {response.text}")
                 response.raise_for_status()
-            else:
-                print("DEBUG CLIENT: Event sent successfully!")
 
         except Exception as e:
-            print(f"DEBUG CLIENT: Exception occurred: {e}")
             if not retrying:
                 self._event_buffer.put(event)
                 self._start_retry_thread()
