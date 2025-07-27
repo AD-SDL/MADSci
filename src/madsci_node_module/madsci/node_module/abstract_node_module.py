@@ -118,7 +118,11 @@ class AbstractNode:
                 self.logger.log_warning(
                     f"Node definition file '{node_definition_path}' not found, using default node definition."
                 )
-                self.node_definition = NodeDefinition()
+                self.node_definition = NodeDefinition(
+                    module_name=self.__class__.__name__,
+                    node_name=self.__class__.__name__,
+                    module_version=self.module_version,
+                )
             else:
                 self.node_definition = NodeDefinition.from_yaml(node_definition_path)
 

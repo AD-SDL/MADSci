@@ -161,6 +161,12 @@ class ResourceTableBase(Resource):
             "server_default": text("CURRENT_TIMESTAMP"),
         },
     )
+    template_name: Optional[str] = Field(
+        title="Template Name",
+        description="Name of the template this resource was created from.",
+        nullable=True,
+        default=None,
+    )
 
     def to_data_model(self, include_children: bool = True) -> ResourceDataModels:
         """
@@ -232,6 +238,38 @@ class ResourceTable(ResourceTableBase, table=True):
         """
         return {child.key: child for child in self.children_list}
 
+    def check_no_recursive_parent(self) -> None:
+        """
+        Check for recursive parent relationships (cycles) in the parent chain.
+        Raises ValueError if a cycle is detected.
+        """
+        visited = set()
+        current = self
+        while current.parent is not None:
+            parent_id = getattr(current.parent, "resource_id", None)
+            if parent_id is None:
+                break
+            if parent_id == self.resource_id or parent_id in visited:
+                raise ValueError(
+                    f"Recursive parent relationship detected for resource_id {self.resource_id}"
+                )
+            visited.add(parent_id)
+            current = current.parent
+
+
+# Add event listener to check for recursive parent relationships before flush
+@event.listens_for(Session, "before_flush")
+def prevent_recursive_parent_relationships(
+    session: Session, _flush_context: Any, _instances: Any
+) -> None:
+    """
+    Event listener to prevent recursive parent relationships in ResourceTable before flush.
+    Raises ValueError if a cycle is detected.
+    """
+    for obj in session.new.union(session.dirty):
+        if isinstance(obj, ResourceTable):
+            obj.check_no_recursive_parent()
+
 
 class ResourceHistoryTable(ResourceTableBase, table=True):
     """The table for storing information about historical Resources."""
@@ -286,4 +324,74 @@ class ResourceHistoryTable(ResourceTableBase, table=True):
         nullable=True,
         default=None,
         sa_type=JSON,
+    )
+
+
+class ResourceTemplateTable(ResourceTableBase, table=True):
+    """The table for storing Resource Template definitions."""
+
+    __tablename__ = "resource_template"
+
+    template_name: str = Field(
+        title="Template Name",
+        description="Unique identifier and display name for the template.",
+        unique=True,
+        nullable=False,
+    )
+    description: str = Field(
+        title="Description",
+        description="Detailed description of what this template creates.",
+        nullable=False,
+    )
+    base_type: str = Field(
+        title="Base Type",
+        description="The base resource type this template creates.",
+        nullable=False,
+        sa_type=Enum(ResourceTypeEnum),
+    )
+    resource_class: str = Field(
+        title="Resource Class",
+        description="The specific resource class for this template.",
+        nullable=False,
+    )
+    default_values: dict[str, Any] = Field(
+        title="Default Values",
+        description="Default values to apply when creating resources from this template.",
+        sa_type=JSON,
+        default_factory=dict,
+    )
+    required_overrides: list[str] = Field(
+        title="Required Overrides",
+        description="List of fields that must be provided when using this template.",
+        sa_type=JSON,
+        default_factory=list,
+    )
+    tags: list[str] = Field(
+        title="Tags",
+        description="Tags for categorizing and searching templates.",
+        sa_type=JSON,
+        default_factory=list,
+    )
+    created_by: Optional[str] = Field(
+        title="Created By",
+        description="Identifier of the node/user that created this template.",
+        nullable=True,
+        default=None,
+    )
+    version: str = Field(
+        title="Template Version",
+        description="Version string for template compatibility tracking.",
+        nullable=False,
+        default="1.0.0",
+    )
+    updated_at: Optional[datetime] = Field(
+        title="Updated Datetime",
+        description="The timestamp of when the template was last updated.",
+        default=None,
+        sa_type=TIMESTAMP(timezone=True),
+        sa_column_kwargs={
+            "nullable": False,
+            "server_default": text("CURRENT_TIMESTAMP"),
+            "server_onupdate": FetchedValue(),
+        },
     )

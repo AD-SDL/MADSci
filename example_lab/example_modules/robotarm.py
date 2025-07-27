@@ -26,6 +26,8 @@ class RobotArmInterface:
 
     status_code: int = 0
     device_number: int = 0
+    config: RobotArmConfig = RobotArmConfig()
+    config_model = RobotArmConfig
 
     def __init__(
         self, device_number: int = 0, logger: Optional[EventClient] = None
