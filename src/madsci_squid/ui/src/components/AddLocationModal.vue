@@ -24,7 +24,7 @@
                           <template #append>
 
                             <v-btn @click="get_location(node_to_add)">Get Current Location</v-btn>
-                            <v-btn @click="append_location(node_to_add)">Add or Update Lookup</v-btn>
+                            <v-btn @click="append_lookup_to_location(node_to_add)">Add or Update Lookup</v-btn>
 
                           </template>
       </v-text-field>
@@ -114,7 +114,7 @@ async function get_location(node: string): Promise<any>{
 }
 
 
-function append_location(node: string) {
+function append_lookup_to_location(node: string) {
       lookups.value[node] = add_lookup_value.value
     }
 

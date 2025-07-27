@@ -12,6 +12,7 @@
     "@wdns/vuetify-drilldown-table": "^1.1.5",
     "http-server": "^14.1.1",
     "js-yaml": "^4.1.0",
+    "json-schema-to-typescript": "^15.0.4",
     "roboto-fontface": "*",
     "vue": "^3.3.0",
     "vue-json-pretty": "^2.4.0",
