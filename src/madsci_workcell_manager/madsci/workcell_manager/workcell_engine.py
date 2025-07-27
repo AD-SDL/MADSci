@@ -14,15 +14,17 @@ from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.data_manipulation import walk_and_replace
 from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.base_types import Error
-from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
+from madsci.common.types.datapoint_types import DataPoint, FileDataPoint, ValueDataPoint
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
     Workflow,
+    WorkflowParameter,
 )
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
@@ -168,6 +170,15 @@ class Engine:
             # * Prepare the step
             wf = self.state_handler.get_active_workflow(workflow_id)
             step = wf.steps[wf.status.current_step_index]
+            step.args = walk_and_replace(
+                step.args, wf.parameter_values, wf.parameters, server_side=True
+            )
+            step.files = walk_and_replace(
+                step.files, wf.parameter_values, wf.parameters, server_side=True
+            )
+            step.locations = walk_and_replace(
+                step.locations, wf.parameter_values, wf.parameters, server_side=True
+            )
             step.start_time = datetime.now()
             self.logger.log_info(
                 f"Running step {step.step_id} in workflow {workflow_id}"
@@ -268,12 +279,33 @@ class Engine:
                     break
                 retry_count += 1
 
+    def update_parameters(
+        self, wf: Workflow, datapoint: DataPoint, parameter: WorkflowParameter
+    ) -> Workflow:
+        """updates the parameters in a workflow"""
+        if datapoint.data_type == "file":
+            wf.parameter_values[parameter.name] = datapoint.path
+        elif datapoint.data_type == "value":
+            wf.parameter_values[parameter.name] = datapoint.value
+        elif datapoint.data_type == "object_storage":
+            path = "/tmp/" + str(datapoint.datapoint_id)  # noqa: S108
+            self.data_client.save_datapoint_value(datapoint.datapoint_id, path)
+            wf.parameter_values[parameter.name] = path
+        return wf
+
     def finalize_step(self, workflow_id: str, step: Step) -> None:
         """Finalize the step, updating the workflow based on the results (setting status, updating index, etc.)"""
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_active_workflow(workflow_id)
             step.end_time = datetime.now()
             wf.steps[wf.status.current_step_index] = step
+            for parameter in wf.parameters:
+                if (
+                    parameter.step_name == step.name
+                    or wf.status.current_step_index == parameter.step_index
+                ) and parameter.label in step.result.datapoints:
+                    datapoint = step.result.datapoints[parameter.label]
+                    wf = self.update_parameters(wf, datapoint, parameter)
             wf.status.running = False
             if step.status == ActionStatus.SUCCEEDED:
                 new_index = wf.status.current_step_index + 1

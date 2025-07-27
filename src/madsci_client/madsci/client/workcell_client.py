@@ -669,7 +669,7 @@ def insert_parameter_values(
         if param.name not in parameters:
             if param.default:
                 parameters[param.name] = param.default
-            else:
+            elif not (param.step is not None and param.label is not None):
                 raise ValueError(
                     "Workflow parameter: "
                     + param.name
@@ -682,10 +682,14 @@ def insert_parameter_values(
     for step in workflow.steps:
         for key, val in iter(step):
             if type(val) is str:
-                setattr(step, key, value_substitution(val, parameters))
+                setattr(
+                    step, key, value_substitution(val, parameters, workflow.parameters)
+                )
 
-        step.args = walk_and_replace(step.args, parameters)
-        step.files = walk_and_replace(step.files, parameters)
-        step.locations = walk_and_replace(step.locations, parameters)
+        step.args = walk_and_replace(step.args, parameters, workflow.parameters)
+        step.files = walk_and_replace(step.files, parameters, workflow.parameters)
+        step.locations = walk_and_replace(
+            step.locations, parameters, workflow.parameters
+        )
         steps.append(step)
     workflow.steps = steps
