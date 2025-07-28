@@ -1,54 +1,62 @@
-"""
- utilization analyzer that properly detects sessions and calculates utilization.
-"""
+"""Session-based utilization analyzer for MADSci system components."""
 
-import time
+import logging
 from datetime import datetime, timedelta, timezone
-import base64
-import matplotlib.pyplot as plt
-import io
-from pymongo.synchronous.collection import Collection
 from typing import Dict, Set, Optional, Any, List, Tuple, Union
+from collections import defaultdict
+
+from pymongo.synchronous.collection import Collection
 from madsci.common.types.event_types import (
     EventType,
     NodeUtilizationData,
     SystemUtilizationData,
 )
-from collections import defaultdict
+
+logger = logging.getLogger(__name__)
+
 
 class UtilizationAnalyzer:
-    """
-     utilization analyzer with proper session detection.
-    """
+    """Analyzes system utilization based on session detection and event processing."""
     
-    def __init__(self, events_collection):
-        """Initialize with the existing events collection."""
+    def __init__(self, events_collection: Collection):
+        """Initialize with MongoDB events collection."""
         self.events_collection = events_collection
         
-        # Try to get a count to verify it's working
+        # Verify database connection
         try:
             count = events_collection.count_documents({})
-            print(f"Total events in DB: {count}")
+            logger.info(f"Connected to events collection with {count} total events")
         except Exception as e:
-            print(f"Error counting events: {e}")
+            logger.error(f"Error connecting to events collection: {e}")
+            raise
         
-        # Cache for names to avoid repeated lookups
+        # Cache for name resolution to avoid repeated lookups
         self.name_cache = {
             "nodes": {},
             "experiments": {},
             "workcells": {}
         }
     
-    def generate_session_report(
+    def generate_session_based_report(
         self, 
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """
         Generate comprehensive session-based utilization report.
+        
+        Sessions are defined by workcell/lab start and stop events. Each session
+        represents a period when laboratory equipment was actively configured
+        and available for experiments.
+        
+        Args:
+            start_time: Analysis start time (UTC, timezone-naive)
+            end_time: Analysis end time (UTC, timezone-naive)
+            
+        Returns:
+            Dict containing session details, overall summary, and metadata
         """
         try:
-            
             # Determine analysis timeframe
             analysis_start, analysis_end = self._determine_analysis_period(start_time, end_time)
             
@@ -57,7 +65,7 @@ class UtilizationAnalyzer:
             
             # If no formal sessions found, create a default analysis session
             if not sessions:
-                print("No formal sessions found, creating default analysis session")
+                logger.info("No formal workcell sessions found, creating default analysis session")
                 sessions = [{
                     "session_type": "default_analysis",
                     "session_id": f"analysis_{int(analysis_start.timestamp())}",
@@ -92,24 +100,83 @@ class UtilizationAnalyzer:
             return report
             
         except Exception as e:
-            print(f"Error generating session report: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error generating session-based report: {e}")
             return {"error": f"Failed to generate report: {str(e)}"}
+    
+    def generate_user_utilization_report(
+        self, 
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate user utilization report based on workflow authors.
+        
+        Args:
+            start_time: Analysis start time (UTC, timezone-naive)
+            end_time: Analysis end time (UTC, timezone-naive)
+            
+        Returns:
+            Dict containing user statistics, system summary, and metadata
+        """
+        try:
+            logger.info("Generating user utilization report")
+            
+            # Determine analysis timeframe
+            analysis_start, analysis_end = self._determine_analysis_period(start_time, end_time)
+            
+            # Get all workflow events in timeframe
+            workflow_events = self._get_workflow_events_for_users(analysis_start, analysis_end)
+            
+            # Process events to build user statistics
+            user_stats = self._calculate_user_statistics(workflow_events)
+            
+            # Calculate system totals for percentage calculations
+            system_totals = self._calculate_system_totals(workflow_events)
+            
+            # Generate final report
+            return {
+                "report_metadata": {
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "analysis_start": analysis_start.isoformat(),
+                    "analysis_end": analysis_end.isoformat(),
+                    "total_workflows": system_totals["total_workflows"],
+                    "total_users": len(user_stats),
+                    "workflows_with_authors": system_totals["workflows_with_authors"],
+                    "workflows_without_authors": system_totals["workflows_without_authors"]
+                },
+                
+                "system_summary": {
+                    "total_workflows": system_totals["total_workflows"],
+                    "total_runtime_hours": system_totals["total_runtime_hours"],
+                    "average_workflow_duration_hours": system_totals["average_duration_hours"],
+                    "completion_rate_percent": system_totals["completion_rate_percent"],
+                    "workflows_with_known_authors": system_totals["workflows_with_authors"],
+                    "author_attribution_rate_percent": round(
+                        (system_totals["workflows_with_authors"] / system_totals["total_workflows"] * 100) 
+                        if system_totals["total_workflows"] > 0 else 0, 2
+                    )
+                },
+                
+                "user_utilization": user_stats
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating user utilization report: {e}")
+            return {"error": f"Failed to generate user report: {str(e)}"}
     
     def _determine_analysis_period(
         self, 
         start_time: Optional[datetime], 
         end_time: Optional[datetime]
     ) -> Tuple[datetime, datetime]:
-        """Determine the analysis period."""
+        """Determine the analysis period, defaulting to full database range if not specified."""
         
         if start_time and end_time:
             return self._ensure_utc(start_time), self._ensure_utc(end_time)
         
         # If no timeframe provided, analyze ALL records in database
         if not start_time and not end_time:
-            print("No timeframe provided - analyzing ALL database records...")
+            logger.info("No timeframe provided - analyzing full database range")
             try:
                 earliest_cursor = self.events_collection.find().sort("event_timestamp", 1).limit(1)
                 earliest_events = list(earliest_cursor)
@@ -124,27 +191,20 @@ class UtilizationAnalyzer:
                     if earliest_time and latest_time:
                         buffered_start = earliest_time - timedelta(minutes=1)
                         buffered_end = latest_time + timedelta(minutes=1)
-                        
-                        total_span = (buffered_end - buffered_start).total_seconds() / 3600
                         return buffered_start, buffered_end
                         
             except Exception as e:
-                print(f"Error finding full database range: {e}")
+                logger.error(f"Error finding full database range: {e}")
         
-        # Fallback
+        # Fallback to last 24 hours
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         return now - timedelta(days=1), now
     
 
     def _find_system_sessions(self, start_time: datetime, end_time: datetime) -> List[Dict]:
-        """
-        Find all ACTUAL system sessions - FIXED for timezone and string parsing issues.
-        """
+        """Find all system sessions based on workcell/lab start events."""
         
         sessions = []
-
-        
-        # The events are stored as ISO strings, so we need to handle both formats
         start_event_types = [
             EventType.LAB_START.value,
             EventType.WORKCELL_START.value,
@@ -152,21 +212,16 @@ class UtilizationAnalyzer:
             "workcell_start"
         ]
         
-        
-        # CRITICAL FIX: Handle both datetime and string timestamp formats
-        # Create queries for both possible timestamp formats
+        # Try multiple query strategies for timestamp format compatibility
         queries_to_try = [
-            # Query 1: Direct datetime comparison (if timestamps are datetime objects)
             {
                 "event_type": {"$in": start_event_types},
                 "event_timestamp": {"$gte": start_time, "$lte": end_time}
             },
-            # Query 2: ISO string comparison (if timestamps are stored as strings)
             {
                 "event_type": {"$in": start_event_types},
                 "event_timestamp": {"$gte": start_time.isoformat(), "$lte": end_time.isoformat()}
             },
-            # Query 3: Just find all events of these types (no time constraint)
             {
                 "event_type": {"$in": start_event_types}
             }
@@ -176,7 +231,6 @@ class UtilizationAnalyzer:
         
         for i, query in enumerate(queries_to_try):
             try:
-                
                 events = list(self.events_collection.find(query).sort("event_timestamp", 1))
                 
                 if events:
@@ -187,16 +241,16 @@ class UtilizationAnalyzer:
                             event_time = self._parse_timestamp_utc(event["event_timestamp"])
                             if event_time and start_time <= event_time <= end_time:
                                 filtered_events.append(event)
-
                         start_events = filtered_events
                     else:
                         start_events = events
-                    
                     break
-                    
+                        
             except Exception as e:
+                logger.warning(f"Query {i+1} failed: {e}")
                 continue
         
+        logger.info(f"Found {len(start_events)} session start events")
         
         # Process each start event
         for start_event in start_events:
@@ -208,7 +262,7 @@ class UtilizationAnalyzer:
             event_data = start_event.get("event_data", {})
             source = start_event.get("source", {})
             
-            session_id = (
+            workcell_id = (
                 source.get("workcell_id") or 
                 source.get("manager_id") or 
                 event_data.get("workcell_id") or
@@ -218,12 +272,24 @@ class UtilizationAnalyzer:
             session_name = (
                 event_data.get("workcell_name") or
                 event_data.get("name") or
-                f"Workcell {session_id[-8:] if session_id else 'Unknown'}"
+                f"Workcell {workcell_id[-8:] if workcell_id else 'Unknown'}"
             )
             
-            # For now, assume session runs until end of analysis period
-            # (You can add stop event detection later)
-            stop_timestamp = end_time
+            # Find when this session ends
+            stop_timestamp = self._find_session_stop_time(
+                workcell_id, start_timestamp, end_time
+            )
+            
+            # If no explicit stop found, look for next start of same workcell
+            if not stop_timestamp:
+                next_start = self._find_next_workcell_start(
+                    workcell_id, start_timestamp, start_events
+                )
+                if next_start:
+                    stop_timestamp = next_start
+                else:
+                    # Only use analysis end time as last resort
+                    stop_timestamp = end_time
             
             # Determine session type
             event_type = str(start_event["event_type"]).lower()
@@ -236,7 +302,7 @@ class UtilizationAnalyzer:
                     
             session = {
                 "session_type": session_type,
-                "session_id": session_id,
+                "session_id": workcell_id,
                 "session_name": session_name,
                 "start_time": start_timestamp,
                 "end_time": stop_timestamp,
@@ -246,53 +312,62 @@ class UtilizationAnalyzer:
             }
             
             sessions.append(session)
-            
-            duration_hours = session["duration_seconds"] / 3600
         
         return sessions
 
-    def _extract_system_session_id(self, event: Dict) -> Optional[str]:
-        """Extract system/workcell session ID from lifecycle event."""
-        source = event.get("source", {})
-        if isinstance(source, dict):
-            return source.get("manager_id") or source.get("workcell_id") or source.get("lab_id")
+    def _find_next_workcell_start(self, workcell_id: str, current_start: datetime, all_start_events: List[Dict]) -> Optional[datetime]:
+        """Find the next start event for the same workcell to use as implicit stop time."""
+        next_starts = []
         
-        event_data = event.get("event_data", {})
-        if isinstance(event_data, dict):
-            return event_data.get("manager_id") or event_data.get("workcell_id") or event_data.get("lab_id")
-        
-        return None
-    
-    def _extract_experiment_id(self, event: Dict) -> Optional[str]:
-        """Extract experiment ID from event - FIXED for nested experiment structure."""
-        
-        source = event.get("source", {})
-        if isinstance(source, dict) and source.get("experiment_id"):
-            return str(source["experiment_id"])
-        
-        event_data = event.get("event_data", {})
-        if isinstance(event_data, dict):
-            # Direct experiment_id
-            if event_data.get("experiment_id"):
-                return str(event_data["experiment_id"])
+        for event in all_start_events:
+            event_time = self._parse_timestamp_utc(event.get("event_timestamp"))
+            if not event_time or event_time <= current_start:
+                continue
+                
+            # Check if this event is for the same workcell
+            event_data = event.get("event_data", {})
+            source = event.get("source", {})
             
-            # Nested experiment object (this is what your data has)
-            if isinstance(event_data.get("experiment"), dict):
-                exp = event_data["experiment"]
-                exp_id = exp.get("experiment_id") or exp.get("_id")
-                if exp_id:
-                    return str(exp_id)
+            event_workcell_id = (
+                source.get("workcell_id") or 
+                source.get("manager_id") or 
+                event_data.get("workcell_id")
+            )
+            
+            if event_workcell_id == workcell_id:
+                next_starts.append(event_time)
+        
+        return min(next_starts) if next_starts else None
+
+    def _find_session_stop_time(self, workcell_id: str, start_after: datetime, end_time: datetime) -> Optional[datetime]:
+        """Find when a workcell stopped, if at all."""
+        try:
+            stop_events = list(self.events_collection.find({
+                "event_type": {"$in": ["workcell_stop", "lab_stop", "WORKCELL_STOP", "LAB_STOP"]},
+                "$or": [
+                    {"source.workcell_id": workcell_id},
+                    {"source.manager_id": workcell_id},
+                    {"event_data.workcell_id": workcell_id}
+                ]
+            }).sort("event_timestamp", 1))
+            
+            for stop_event in stop_events:
+                stop_time = self._parse_timestamp_utc(stop_event.get("event_timestamp"))
+                if stop_time and stop_time > start_after and stop_time <= end_time:
+                    return stop_time
+                    
+        except Exception as e:
+            logger.warning(f"Error finding stop time for workcell {workcell_id}: {e}")
         
         return None
-    
+
     def _analyze_session_utilization(self, session: Dict) -> Dict[str, Any]:
         """Analyze utilization for a single session."""
         try:
             session_start = session["start_time"]
             session_end = session["end_time"] or datetime.now(timezone.utc).replace(tzinfo=None)
             
-            
-            # ... [existing event processing logic] ...
+            # Get events and calculate utilization
             session_events = self._get_session_events(session_start, session_end)
             relevant_events = self._filter_activity_events(session_events)
             system_util = self._calculate_system_utilization(relevant_events, session_start, session_end)
@@ -301,7 +376,7 @@ class UtilizationAnalyzer:
             # Resolve names
             session_name = self._resolve_session_name(session)
             
-            # Improved experiment details with better names
+            # Build experiment details
             experiment_details = []
             for exp_id in system_util.active_experiments:
                 exp_name = self._resolve_experiment_name(exp_id)
@@ -312,7 +387,7 @@ class UtilizationAnalyzer:
                     "display_name": display_name
                 })
             
-            # Improved node utilizations with readable times
+            # Build node utilizations with readable names
             node_utilizations_with_names = {}
             for node_id, node_util in node_utils.items():
                 node_name = self._resolve_node_name(node_id)
@@ -336,7 +411,7 @@ class UtilizationAnalyzer:
                         "total_time": self._format_duration_readable(total_time_seconds)
                     },
                     
-                    # Keep raw data for analysis
+                    # Raw data for analysis
                     "raw_hours": {
                         "busy": node_util.busy_time / 3600,
                         "idle": node_util.idle_time / 3600,
@@ -352,7 +427,7 @@ class UtilizationAnalyzer:
             duration_seconds = session["duration_seconds"]
             active_time_seconds = system_util.active_time
             
-            # Compile improved session report
+            # Compile session report
             return {
                 "session_type": session["session_type"],
                 "session_id": session["session_id"],
@@ -376,7 +451,7 @@ class UtilizationAnalyzer:
                 "nodes_active": len(node_utils),
                 "node_utilizations": node_utilizations_with_names,
                 
-                # Keep raw data for compatibility and analysis
+                # Raw data for compatibility and analysis
                 "raw_hours": {
                     "duration": duration_seconds / 3600,
                     "active": active_time_seconds / 3600,
@@ -388,8 +463,7 @@ class UtilizationAnalyzer:
                 "active_time_hours": active_time_seconds / 3600
             }
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error analyzing session utilization: {e}")
             return {
                 "error": str(e),
                 "session_type": session["session_type"],
@@ -397,45 +471,14 @@ class UtilizationAnalyzer:
                 "start_time": session["start_time"].isoformat(),
                 "duration_hours": session["duration_seconds"] / 3600
             }
-        
-    def _format_duration_readable(self, seconds: float) -> dict:
-        """Convert seconds to readable format."""
-        hours = seconds / 3600
-        minutes = seconds / 60
-        
-        if seconds < 60:
-            primary_display = f"{seconds:.1f}s"
-            primary_unit = "seconds"
-            primary_value = seconds
-        elif seconds < 3600:
-            primary_display = f"{minutes:.1f}m"
-            primary_unit = "minutes" 
-            primary_value = minutes
-        else:
-            primary_display = f"{hours:.1f}h"
-            primary_unit = "hours"
-            primary_value = hours
-        
-        return {
-            "display": primary_display,
-            "seconds": seconds,
-            "minutes": minutes,
-            "hours": hours,
-            "primary_unit": primary_unit,
-            "primary_value": primary_value
-        }
     
     def _get_session_events(self, start_time: datetime, end_time: datetime) -> List[Dict]:
-        """Get all events for a session timeframe - FIXED for timezone issues."""
+        """Get all events for a session timeframe."""
         try:
-            
-            # SAME FIX: Try multiple query approaches for timestamp formats
+            # Try multiple query approaches for timestamp formats
             queries_to_try = [
-                # Query 1: Direct datetime comparison
                 {"event_timestamp": {"$gte": start_time, "$lte": end_time}},
-                # Query 2: ISO string comparison
                 {"event_timestamp": {"$gte": start_time.isoformat(), "$lte": end_time.isoformat()}},
-                # Query 3: Get all events and filter manually
                 {}
             ]
             
@@ -443,28 +486,24 @@ class UtilizationAnalyzer:
             
             for i, query in enumerate(queries_to_try):
                 try:
-                    
                     if i == 2:  # Get all and filter manually
                         all_events = list(self.events_collection.find().sort("event_timestamp", 1))
-                        
                         # Filter manually by parsing timestamps
                         for event in all_events:
                             event_time = self._parse_timestamp_utc(event.get("event_timestamp"))
                             if event_time and start_time <= event_time <= end_time:
                                 events.append(event)
-                        
                     else:
-                        # Direct query
                         events = list(self.events_collection.find(query).sort("event_timestamp", 1))
                     
                     if events:
                         break
                         
                 except Exception as e:
+                    logger.warning(f"Event query {i+1} failed: {e}")
                     continue
             
-            
-            # Parse all timestamps to UTC (this part was working before)
+            # Parse all timestamps to UTC
             valid_events = []
             for event in events:
                 if "event_timestamp" in event:
@@ -472,45 +511,18 @@ class UtilizationAnalyzer:
                     if parsed_ts:
                         event["event_timestamp"] = parsed_ts
                         valid_events.append(event)
-                    else:
-                        print(f"DEBUG: Could not parse timestamp for event: {event.get('event_timestamp')}")
             
-            
-            # Show event summary
-            if valid_events:
-                self._show_event_summary(valid_events)
-            
+            logger.debug(f"Found {len(valid_events)} events in session timeframe")
             return valid_events
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error getting session events: {e}")
             return []
-        
-    def _show_event_summary(self, events: List[Dict]):
-        """Show summary of events found."""
-        
-        event_type_counts = defaultdict(int)
-        activity_events = 0
-        
-        for event in events:
-            event_type = event.get("event_type", "unknown")
-            event_type_counts[str(event_type)] += 1
-            
-            # Count activity events
-            event_type_str = str(event_type).lower()
-            if any(activity_type in event_type_str for activity_type in [
-                "experiment", "workflow", "action", "node", "workcell", "lab"
-            ]) and "log" not in event_type_str:
-                activity_events += 1
-        
-        
     
     def _filter_activity_events(self, events: List[Dict]) -> List[Dict]:
         """Filter events that indicate actual system activity."""
         
         relevant_events = []
-        
         
         for event in events:
             event_type = str(event.get("event_type", "")).lower()
@@ -531,13 +543,7 @@ class UtilizationAnalyzer:
             if is_activity_event:
                 relevant_events.append(event)
         
-        
-        # Show first few relevant events
-        if relevant_events:
-            for i, event in enumerate(relevant_events[:5]):
-                event_type = event.get("event_type", "unknown")
-                timestamp = event.get("event_timestamp", "unknown")
-        
+        logger.debug(f"Filtered to {len(relevant_events)} activity events")
         return relevant_events
     
     def _calculate_system_utilization(
@@ -546,7 +552,7 @@ class UtilizationAnalyzer:
         start_time: datetime, 
         end_time: datetime
     ) -> SystemUtilizationData:
-        """Calculate system utilization based on actual events."""
+        """Calculate system utilization based on experiment events."""
         
         system_util = SystemUtilizationData()
         
@@ -554,7 +560,6 @@ class UtilizationAnalyzer:
         active_experiments = set()
         experiment_periods = []
         experiment_starts = {}
-        
         
         # Process events chronologically
         sorted_events = sorted(events, key=lambda e: self._parse_timestamp_utc(e.get("event_timestamp")) or datetime.min)
@@ -579,7 +584,6 @@ class UtilizationAnalyzer:
                     start_time_exp = experiment_starts[exp_id]
                     experiment_periods.append((start_time_exp, event_time))
                     active_experiments.discard(exp_id)
-                    duration = (event_time - start_time_exp).total_seconds()
         
         # Handle ongoing experiments
         current_time = end_time
@@ -609,7 +613,6 @@ class UtilizationAnalyzer:
         if total_timeframe > 0:
             system_util.utilization_percentage = (total_active_time / total_timeframe) * 100
         
-        
         return system_util
     
     def _calculate_node_utilization(
@@ -618,7 +621,7 @@ class UtilizationAnalyzer:
         start_time: datetime, 
         end_time: datetime
     ) -> Dict[str, NodeUtilizationData]:
-        """Calculate node utilization based on actual events."""
+        """Calculate node utilization based on action events."""
         
         # Group events by node
         node_events = defaultdict(list)
@@ -627,7 +630,6 @@ class UtilizationAnalyzer:
             node_id = self._extract_node_id(event)
             if node_id:
                 node_events[node_id].append(event)
-
         
         node_utils = {}
         
@@ -654,7 +656,6 @@ class UtilizationAnalyzer:
         active_actions = set()
         busy_periods = []
         active_periods = []
-        
         
         # Sort events by time
         sorted_events = sorted(events, key=lambda e: self._parse_timestamp_utc(e.get("event_timestamp")) or datetime.min)
@@ -689,7 +690,6 @@ class UtilizationAnalyzer:
                 status = self._extract_status(event)
                 
                 if action_id:
-                    
                     # Action started
                     if status in ["running", "started", "in_progress"]:
                         if action_id not in active_actions:
@@ -703,7 +703,6 @@ class UtilizationAnalyzer:
                             active_actions.remove(action_id)
                             if not active_actions and current_busy_start is not None:
                                 busy_periods.append((current_busy_start, event_time))
-                                duration = (event_time - current_busy_start).total_seconds()
                                 current_busy_start = None
         
         # Handle ongoing states
@@ -753,329 +752,6 @@ class UtilizationAnalyzer:
                 
         return node_util
     
-    def _merge_time_periods(self, periods: List[Tuple[datetime, datetime]]) -> List[Tuple[datetime, datetime]]:
-        """Merge overlapping time periods."""
-        
-        if not periods:
-            return []
-        
-        # Sort by start time
-        sorted_periods = sorted(periods, key=lambda x: x[0])
-        merged = [sorted_periods[0]]
-        
-        for current_start, current_end in sorted_periods[1:]:
-            last_start, last_end = merged[-1]
-            
-            # If current period overlaps with last, merge them
-            if current_start <= last_end:
-                merged[-1] = (last_start, max(last_end, current_end))
-            else:
-                merged.append((current_start, current_end))
-        
-        return merged
-    
-    def _extract_node_id(self, event: Dict) -> Optional[str]:
-        """Extract node ID from event."""
-        
-        # Check source first
-        source = event.get("source", {})
-        if isinstance(source, dict):
-            if source.get("node_id"):
-                return str(source["node_id"])
-            if source.get("workcell_id"):
-                return str(source["workcell_id"])
-        
-        # Check event_data
-        event_data = event.get("event_data", {})
-        if isinstance(event_data, dict):
-            node_id = (
-                event_data.get("node_id") or 
-                event_data.get("node_name") or
-                event_data.get("node")
-            )
-            if node_id:
-                return str(node_id)
-        
-        return None
-    
-    def _extract_action_id(self, event: Dict) -> Optional[str]:
-        """Extract action ID from event."""
-        
-        event_data = event.get("event_data", {})
-        if isinstance(event_data, dict):
-            for field in ["action_id", "action", "task_id", "_id", "id"]:
-                value = event_data.get(field)
-                if value:
-                    return str(value)
-        
-        return None
-    
-    def _extract_status(self, event: Dict) -> str:
-        """Extract status from event."""
-        
-        event_data = event.get("event_data", {})
-        if isinstance(event_data, dict):
-            status = event_data.get("status", "unknown")
-            return str(status)
-        
-        return "unknown"
-    
-    def _parse_timestamp_utc(self, timestamp) -> Optional[datetime]:
-        """Parse timestamp to UTC (timezone-naive)."""
-        if isinstance(timestamp, datetime):
-            if timestamp.tzinfo is not None:
-                return timestamp.astimezone(timezone.utc).replace(tzinfo=None)
-            else:
-                return timestamp
-        
-        if isinstance(timestamp, str):
-            try:
-                # Handle ISO format strings (which is what your DB has)
-                if 'T' in timestamp:
-                    if timestamp.endswith('Z'):
-                        return datetime.fromisoformat(timestamp.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
-                    elif '+' in timestamp or timestamp.count('-') > 2:
-                        return datetime.fromisoformat(timestamp).astimezone(timezone.utc).replace(tzinfo=None)
-                    else:
-                        # This handles your case: "2025-07-23T05:25:00.384778"
-                        dt = datetime.fromisoformat(timestamp)
-                        # Assume it's already UTC if no timezone info
-                        return dt
-                else:
-                    return datetime.fromisoformat(timestamp)
-            except ValueError as e:
-                print(f"DEBUG: Could not parse timestamp '{timestamp}': {e}")
-                try:
-                    return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
-                except ValueError:
-                    print(f"DEBUG: Could not parse timestamp with fallback format: {timestamp}")
-                    return None
-        
-        return None
-    
-    def _ensure_utc(self, dt: datetime) -> datetime:
-        """Ensure datetime is UTC without timezone info."""
-        if dt.tzinfo is not None:
-            return dt.astimezone(timezone.utc).replace(tzinfo=None)
-        return dt
-    
-    def _resolve_session_name(self, session: Dict) -> str:
-        """Resolve human-readable name for a session."""
-        try:
-            session_type = session["session_type"]
-            session_id = session["session_id"]
-            
-            if session_type == "default_analysis":
-                return "Complete Database Analysis"
-            
-            # Look for session name in start events
-            if session_type in ["lab", "workcell"]:
-                start_events = list(self.events_collection.find({
-                    "event_timestamp": session["start_time"],
-                    "event_type": {"$in": [f"{session_type}_start", getattr(EventType, f"{session_type.upper()}_START", None)]}
-                }).limit(1))
-                
-                if start_events:
-                    event = start_events[0]
-                    event_data = event.get("event_data", {})
-                    source = event.get("source", {})
-                    
-                    name_candidates = [
-                        event_data.get("name"),
-                        event_data.get(f"{session_type}_name"),
-                        source.get("name"),
-                    ]
-                    
-                    for name in name_candidates:
-                        if name and isinstance(name, str) and name.strip():
-                            return name.strip()
-            
-            return f"{session_type.title()} {session_id[-8:]}"
-            
-        except Exception as e:
-            print(f"Error resolving session name: {e}")
-            return f"{session.get('session_type', 'Unknown')} {session.get('session_id', '')[-8:]}"
-    
-    def _resolve_node_name(self, node_id: str) -> Optional[str]:
-        """Resolve human-readable name for a node."""
-        try:
-            # Check cache first
-            if node_id in self.name_cache["nodes"]:
-                return self.name_cache["nodes"][node_id]
-            
-            # Look for NODE_START events for this node
-            node_start_events = list(self.events_collection.find({
-                "event_type": {"$in": ["node_start", EventType.NODE_START.value]},
-                "$or": [
-                    {"event_data.node_id": node_id},
-                    {"source.node_id": node_id},
-                    {"source.workcell_id": node_id}
-                ]
-            }).limit(5))
-            
-            for event in node_start_events:
-                event_data = event.get("event_data", {})
-                if event_data.get("node_name"):
-                    name = event_data["node_name"].strip()
-                    self.name_cache["nodes"][node_id] = name
-                    return name
-            
-            # Cache null result
-            self.name_cache["nodes"][node_id] = None
-            return None
-            
-        except Exception as e:
-            print(f"Error resolving node name for {node_id}: {e}")
-            return None
-    
-    def _resolve_experiment_name(self, experiment_id: str) -> Optional[str]:
-        """Resolve human-readable name for an experiment."""
-        try:
-            if experiment_id in self.name_cache["experiments"]:
-                return self.name_cache["experiments"][experiment_id]
-            
-            exp_start_events = list(self.events_collection.find({
-                "event_type": {"$in": ["experiment_start", EventType.EXPERIMENT_START.value]},
-                "$or": [
-                    {"source.experiment_id": experiment_id},
-                    {"event_data.experiment_id": experiment_id},
-                    {"event_data.experiment._id": experiment_id},
-                    {"event_data.experiment.experiment_id": experiment_id}
-                ]
-            }).limit(5))
-            
-            for event in exp_start_events:
-                event_data = event.get("event_data", {})
-                
-                # Check nested experiment.experiment_design.experiment_name
-                name_candidates = [
-                    event_data.get("experiment_name"),
-                    event_data.get("name"),
-                    event_data.get("experiment", {}).get("name") if isinstance(event_data.get("experiment"), dict) else None,
-                    event_data.get("experiment", {}).get("experiment_design", {}).get("experiment_name") 
-                    if isinstance(event_data.get("experiment", {}).get("experiment_design"), dict) else None,
-                    event_data.get("experiment", {}).get("run_name") if isinstance(event_data.get("experiment"), dict) else None,
-                ]
-                
-                for name in name_candidates:
-                    if name and isinstance(name, str) and name.strip():
-                        clean_name = name.strip()
-                        self.name_cache["experiments"][experiment_id] = clean_name
-                        return clean_name
-            
-            self.name_cache["experiments"][experiment_id] = None
-            return None
-            
-        except Exception as e:
-            print(f"Error resolving experiment name for {experiment_id}: {e}")
-            return None
-
-    
-    def _generate_overall_summary(self, session_reports: List[Dict], start_time: datetime, end_time: datetime) -> Dict[str, Any]:
-        """Generate overall summary from session reports."""
-        
-        try:
-            total_sessions = len(session_reports)
-            total_runtime = sum(s["duration_hours"] for s in session_reports)
-            total_active_time = sum(s["active_time_hours"] for s in session_reports)
-            total_experiments = sum(s["total_experiments"] for s in session_reports)
-            
-            # Calculate average system utilization
-            valid_sessions = [s for s in session_reports if "error" not in s]
-            avg_utilization = sum(s["system_utilization_percent"] for s in valid_sessions) / len(valid_sessions) if valid_sessions else 0
-            
-            # Aggregate node data
-            node_summary = defaultdict(lambda: {
-                "total_busy_time_hours": 0,
-                "utilizations": [],
-                "sessions_active": 0
-            })
-            
-            for session in valid_sessions:
-                for node_id, node_data in session["node_utilizations"].items():
-                    node_summary[node_id]["total_busy_time_hours"] += node_data["busy_time_hours"]
-                    node_summary[node_id]["utilizations"].append(node_data["utilization_percent"])
-                    node_summary[node_id]["sessions_active"] += 1
-            
-            # Calculate average utilizations per node
-            final_node_summary = {}
-            for node_id, data in node_summary.items():
-                final_node_summary[node_id] = {
-                    "average_utilization_percent": sum(data["utilizations"]) / len(data["utilizations"]) if data["utilizations"] else 0,
-                    "total_busy_time_hours": data["total_busy_time_hours"],
-                    "sessions_active": data["sessions_active"]
-                }
-            
-            return {
-                "total_sessions": total_sessions,
-                "total_system_runtime_hours": total_runtime,
-                "total_active_time_hours": total_active_time,
-                "average_system_utilization_percent": avg_utilization,
-                "total_experiments": total_experiments,
-                "nodes_tracked": len(final_node_summary),
-                "node_summary": final_node_summary
-            }
-            
-        except Exception as e:
-            print(f"Error generating overall summary: {e}")
-            return {"error": str(e)}
-        
-    def generate_user_utilization_report(
-        self, 
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> Dict[str, Any]:
-        """
-        Generate user utilization report based on workflow authors.
-        """
-        try:
-            print("Generating user utilization report...")
-            
-            # Determine analysis timeframe
-            analysis_start, analysis_end = self._determine_analysis_period(start_time, end_time)
-            
-            # Get all workflow events in timeframe
-            workflow_events = self._get_workflow_events_for_users(analysis_start, analysis_end)
-            
-            # Process events to build user statistics
-            user_stats = self._calculate_user_statistics(workflow_events)
-            
-            # Calculate system totals for percentage calculations
-            system_totals = self._calculate_system_totals(workflow_events)
-            
-            # Generate final report
-            return {
-                "report_metadata": {
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                    "analysis_start": analysis_start.isoformat(),
-                    "analysis_end": analysis_end.isoformat(),
-                    "total_workflows": system_totals["total_workflows"],
-                    "total_users": len(user_stats),
-                    "workflows_with_authors": system_totals["workflows_with_authors"],
-                    "workflows_without_authors": system_totals["workflows_without_authors"]
-                },
-                
-                "system_summary": {
-                    "total_workflows": system_totals["total_workflows"],
-                    "total_runtime_hours": system_totals["total_runtime_hours"],
-                    "average_workflow_duration_hours": system_totals["average_duration_hours"],
-                    "completion_rate_percent": system_totals["completion_rate_percent"],
-                    "workflows_with_known_authors": system_totals["workflows_with_authors"],
-                    "author_attribution_rate_percent": round(
-                        (system_totals["workflows_with_authors"] / system_totals["total_workflows"] * 100) 
-                        if system_totals["total_workflows"] > 0 else 0, 2
-                    )
-                },
-                
-                "user_utilization": user_stats
-            }
-            
-        except Exception as e:
-            print(f"Error generating user utilization report: {e}")
-            import traceback
-            traceback.print_exc()
-            return {"error": f"Failed to generate user report: {str(e)}"}
-
     def _get_workflow_events_for_users(self, start_time: datetime, end_time: datetime) -> List[Dict]:
         """Get workflow start and complete events for user analysis."""
         
@@ -1116,6 +792,7 @@ class UtilizationAnalyzer:
                     break
                     
             except Exception as e:
+                logger.warning(f"Workflow query {i+1} failed: {e}")
                 continue
         
         # Parse timestamps
@@ -1126,7 +803,7 @@ class UtilizationAnalyzer:
                 event["parsed_timestamp"] = event_time
                 valid_events.append(event)
         
-        print(f"Found {len(valid_events)} workflow events for user analysis")
+        logger.info(f"Found {len(valid_events)} workflow events for user analysis")
         return valid_events
 
     def _calculate_user_statistics(self, events: List[Dict]) -> Dict[str, Dict[str, Any]]:
@@ -1316,55 +993,312 @@ class UtilizationAnalyzer:
             "average_duration_hours": round(average_duration_hours, 3),
             "completion_rate_percent": round(completion_rate_percent, 2)
         }
-
-    def generate_user_utilization_summary(
-        self, 
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> Dict[str, Any]:
-        """
-        Generate a compact user utilization summary for inclusion in other reports.
-        """
+    
+    def _generate_overall_summary(self, session_reports: List[Dict], start_time: datetime, end_time: datetime) -> Dict[str, Any]:
+        """Generate overall summary from session reports."""
+        
         try:
-            # Get full user report
-            full_report = self.generate_user_utilization_report(start_time, end_time)
+            total_sessions = len(session_reports)
+            total_runtime = sum(s.get("duration_hours", 0) for s in session_reports)
+            total_active_time = sum(s.get("active_time_hours", 0) for s in session_reports)
+            total_experiments = sum(s.get("total_experiments", 0) for s in session_reports)
             
-            if "error" in full_report:
-                return {"error": full_report["error"]}
+            # Calculate average system utilization
+            valid_sessions = [s for s in session_reports if "error" not in s]
+            avg_utilization = sum(s.get("system_utilization_percent", 0) for s in valid_sessions) / len(valid_sessions) if valid_sessions else 0
             
-            # Create compact summary
-            user_utilization = full_report["user_utilization"]
-            system_summary = full_report["system_summary"]
+            # Aggregate node data
+            node_summary = defaultdict(lambda: {
+                "total_busy_time_hours": 0,
+                "utilizations": [],
+                "sessions_active": 0
+            })
             
-            # Sort users by total runtime (most active first)
-            sorted_users = sorted(
-                user_utilization.values(), 
-                key=lambda x: x["total_runtime_hours"], 
-                reverse=True
-            )
+            for session in valid_sessions:
+                for node_id, node_data in session.get("node_utilizations", {}).items():
+                    node_summary[node_id]["total_busy_time_hours"] += node_data.get("busy_time_hours", 0)
+                    node_summary[node_id]["utilizations"].append(node_data.get("utilization_percent", 0))
+                    node_summary[node_id]["sessions_active"] += 1
             
-            # Create compact user summaries (top 10 users)
-            top_users = []
-            for user in sorted_users[:10]:
-                top_users.append({
-                    "author": user["author"],
-                    "total_workflows": user["total_workflows"],
-                    "total_runtime_hours": user["total_runtime_hours"],
-                    "completion_rate_percent": user["completion_rate_percent"],
-                    "average_workflow_duration_hours": user["average_workflow_duration_hours"]
-                })
+            # Calculate average utilizations per node
+            final_node_summary = {}
+            for node_id, data in node_summary.items():
+                final_node_summary[node_id] = {
+                    "average_utilization_percent": sum(data["utilizations"]) / len(data["utilizations"]) if data["utilizations"] else 0,
+                    "total_busy_time_hours": data["total_busy_time_hours"],
+                    "sessions_active": data["sessions_active"]
+                }
             
             return {
-                "total_users": len(user_utilization),
-                "author_attribution_rate_percent": system_summary["author_attribution_rate_percent"],
-                "top_users": top_users,
-                "system_totals": {
-                    "total_workflows": system_summary["total_workflows"],
-                    "total_runtime_hours": system_summary["total_runtime_hours"],
-                    "completion_rate_percent": system_summary["completion_rate_percent"]
-                }
+                "total_sessions": total_sessions,
+                "total_system_runtime_hours": total_runtime,
+                "total_active_time_hours": total_active_time,
+                "average_system_utilization_percent": avg_utilization,
+                "total_experiments": total_experiments,
+                "nodes_tracked": len(final_node_summary),
+                "node_summary": final_node_summary
             }
             
         except Exception as e:
-            print(f"Error generating user utilization summary: {e}")
-            return {"error": f"Failed to generate user summary: {str(e)}"}
+            logger.error(f"Error generating overall summary: {e}")
+            return {"error": str(e)}
+    
+    # Helper methods
+    def _merge_time_periods(self, periods: List[Tuple[datetime, datetime]]) -> List[Tuple[datetime, datetime]]:
+        """Merge overlapping time periods."""
+        if not periods:
+            return []
+        
+        # Sort by start time
+        sorted_periods = sorted(periods, key=lambda x: x[0])
+        merged = [sorted_periods[0]]
+        
+        for current_start, current_end in sorted_periods[1:]:
+            last_start, last_end = merged[-1]
+            
+            # If current period overlaps with last, merge them
+            if current_start <= last_end:
+                merged[-1] = (last_start, max(last_end, current_end))
+            else:
+                merged.append((current_start, current_end))
+        
+        return merged
+    
+    def _extract_experiment_id(self, event: Dict) -> Optional[str]:
+        """Extract experiment ID from event."""
+        source = event.get("source", {})
+        if isinstance(source, dict) and source.get("experiment_id"):
+            return str(source["experiment_id"])
+        
+        event_data = event.get("event_data", {})
+        if isinstance(event_data, dict):
+            # Direct experiment_id
+            if event_data.get("experiment_id"):
+                return str(event_data["experiment_id"])
+            
+            # Nested experiment object
+            if isinstance(event_data.get("experiment"), dict):
+                exp = event_data["experiment"]
+                exp_id = exp.get("experiment_id") or exp.get("_id")
+                if exp_id:
+                    return str(exp_id)
+        
+        return None
+    
+    def _extract_node_id(self, event: Dict) -> Optional[str]:
+        """Extract node ID from event."""
+        # Check source first
+        source = event.get("source", {})
+        if isinstance(source, dict):
+            if source.get("node_id"):
+                return str(source["node_id"])
+            if source.get("workcell_id"):
+                return str(source["workcell_id"])
+        
+        # Check event_data
+        event_data = event.get("event_data", {})
+        if isinstance(event_data, dict):
+            node_id = (
+                event_data.get("node_id") or 
+                event_data.get("node_name") or
+                event_data.get("node")
+            )
+            if node_id:
+                return str(node_id)
+        
+        return None
+    
+    def _extract_action_id(self, event: Dict) -> Optional[str]:
+        """Extract action ID from event."""
+        event_data = event.get("event_data", {})
+        if isinstance(event_data, dict):
+            for field in ["action_id", "action", "task_id", "_id", "id"]:
+                value = event_data.get(field)
+                if value:
+                    return str(value)
+        
+        return None
+    
+    def _extract_status(self, event: Dict) -> str:
+        """Extract status from event."""
+        event_data = event.get("event_data", {})
+        if isinstance(event_data, dict):
+            status = event_data.get("status", "unknown")
+            return str(status)
+        
+        return "unknown"
+    
+    def _parse_timestamp_utc(self, timestamp) -> Optional[datetime]:
+        """Parse timestamp to UTC (timezone-naive)."""
+        if isinstance(timestamp, datetime):
+            if timestamp.tzinfo is not None:
+                return timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+            else:
+                return timestamp
+        
+        if isinstance(timestamp, str):
+            try:
+                # Handle ISO format strings
+                if 'T' in timestamp:
+                    if timestamp.endswith('Z'):
+                        return datetime.fromisoformat(timestamp.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
+                    elif '+' in timestamp or timestamp.count('-') > 2:
+                        return datetime.fromisoformat(timestamp).astimezone(timezone.utc).replace(tzinfo=None)
+                    else:
+                        # Assume it's already UTC if no timezone info
+                        dt = datetime.fromisoformat(timestamp)
+                        return dt
+                else:
+                    return datetime.fromisoformat(timestamp)
+            except ValueError:
+                try:
+                    return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    logger.warning(f"Could not parse timestamp: {timestamp}")
+                    return None
+        
+        return None
+    
+    def _ensure_utc(self, dt: datetime) -> datetime:
+        """Ensure datetime is UTC without timezone info."""
+        if dt.tzinfo is not None:
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    
+    def _format_duration_readable(self, seconds: float) -> dict:
+        """Convert seconds to readable format."""
+        hours = seconds / 3600
+        minutes = seconds / 60
+        
+        if seconds < 60:
+            primary_display = f"{seconds:.1f}s"
+            primary_unit = "seconds"
+            primary_value = seconds
+        elif seconds < 3600:
+            primary_display = f"{minutes:.1f}m"
+            primary_unit = "minutes" 
+            primary_value = minutes
+        else:
+            primary_display = f"{hours:.1f}h"
+            primary_unit = "hours"
+            primary_value = hours
+        
+        return {
+            "display": primary_display,
+            "seconds": seconds,
+            "minutes": minutes,
+            "hours": hours,
+            "primary_unit": primary_unit,
+            "primary_value": primary_value
+        }
+    
+    def _resolve_session_name(self, session: Dict) -> str:
+        """Resolve human-readable name for a session."""
+        try:
+            session_type = session["session_type"]
+            session_id = session["session_id"]
+            
+            if session_type == "default_analysis":
+                return "Complete Database Analysis"
+            
+            # Look for session name in start events
+            if session_type in ["lab", "workcell"]:
+                start_events = list(self.events_collection.find({
+                    "event_timestamp": session["start_time"],
+                    "event_type": {"$in": [f"{session_type}_start", getattr(EventType, f"{session_type.upper()}_START", None)]}
+                }).limit(1))
+                
+                if start_events:
+                    event = start_events[0]
+                    event_data = event.get("event_data", {})
+                    source = event.get("source", {})
+                    
+                    name_candidates = [
+                        event_data.get("name"),
+                        event_data.get(f"{session_type}_name"),
+                        source.get("name"),
+                    ]
+                    
+                    for name in name_candidates:
+                        if name and isinstance(name, str) and name.strip():
+                            return name.strip()
+            
+            return f"{session_type.title()} {session_id[-8:]}"
+            
+        except Exception as e:
+            logger.warning(f"Error resolving session name: {e}")
+            return f"{session.get('session_type', 'Unknown')} {session.get('session_id', '')[-8:]}"
+    
+    def _resolve_node_name(self, node_id: str) -> Optional[str]:
+        """Resolve human-readable name for a node."""
+        try:
+            # Check cache first
+            if node_id in self.name_cache["nodes"]:
+                return self.name_cache["nodes"][node_id]
+            
+            # Look for NODE_START events for this node
+            node_start_events = list(self.events_collection.find({
+                "event_type": {"$in": ["node_start", EventType.NODE_START.value]},
+                "$or": [
+                    {"event_data.node_id": node_id},
+                    {"source.node_id": node_id},
+                    {"source.workcell_id": node_id}
+                ]
+            }).limit(5))
+            
+            for event in node_start_events:
+                event_data = event.get("event_data", {})
+                if event_data.get("node_name"):
+                    name = event_data["node_name"].strip()
+                    self.name_cache["nodes"][node_id] = name
+                    return name
+            
+            # Cache null result
+            self.name_cache["nodes"][node_id] = None
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error resolving node name for {node_id}: {e}")
+            return None
+    
+    def _resolve_experiment_name(self, experiment_id: str) -> Optional[str]:
+        """Resolve human-readable name for an experiment."""
+        try:
+            if experiment_id in self.name_cache["experiments"]:
+                return self.name_cache["experiments"][experiment_id]
+            
+            exp_start_events = list(self.events_collection.find({
+                "event_type": {"$in": ["experiment_start", EventType.EXPERIMENT_START.value]},
+                "$or": [
+                    {"source.experiment_id": experiment_id},
+                    {"event_data.experiment_id": experiment_id},
+                    {"event_data.experiment._id": experiment_id},
+                    {"event_data.experiment.experiment_id": experiment_id}
+                ]
+            }).limit(5))
+            
+            for event in exp_start_events:
+                event_data = event.get("event_data", {})
+                
+                # Check nested experiment.experiment_design.experiment_name
+                name_candidates = [
+                    event_data.get("experiment_name"),
+                    event_data.get("name"),
+                    event_data.get("experiment", {}).get("name") if isinstance(event_data.get("experiment"), dict) else None,
+                    event_data.get("experiment", {}).get("experiment_design", {}).get("experiment_name") 
+                    if isinstance(event_data.get("experiment", {}).get("experiment_design"), dict) else None,
+                    event_data.get("experiment", {}).get("run_name") if isinstance(event_data.get("experiment"), dict) else None,
+                ]
+                
+                for name in name_candidates:
+                    if name and isinstance(name, str) and name.strip():
+                        clean_name = name.strip()
+                        self.name_cache["experiments"][experiment_id] = clean_name
+                        return clean_name
+            
+            self.name_cache["experiments"][experiment_id] = None
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error resolving experiment name for {experiment_id}: {e}")
+            return None
