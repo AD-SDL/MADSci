@@ -135,13 +135,16 @@ def create_event_server(  # noqa: C901
         event_list = events.find(selector).to_list()
         return {event["_id"]: event for event in event_list}
     
-    @app.get("/utilization/report")
-    async def get_utilization_report(
+    @app.get("/utilization/sessions")
+    async def get_session_utilization(
         start_time: Optional[str] = None,
         end_time: Optional[str] = None
     ) -> dict[str, Any]:
         """
         Generate comprehensive session-based utilization report.
+        
+        Sessions represent workcell/lab start and stop periods. Each session
+        indicates when laboratory equipment was actively configured and available.
         
         Parameters:
         - start_time: Optional ISO format start time (e.g., "2025-07-21T10:00:00Z")  
@@ -149,10 +152,10 @@ def create_event_server(  # noqa: C901
         - If no times provided, analyzes ALL records in the database
         
         Returns:
-        - JSON report with session and utilization data
+        - JSON report with session details, overall summary, and metadata
         """
         
-        analyzer = get_session_analyzer()
+        analyzer = _get_session_analyzer()
         if analyzer is None:
             return {"error": "Failed to create session analyzer"}
         
@@ -166,77 +169,13 @@ def create_event_server(  # noqa: C901
             if end_time:
                 parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
             
-            # Let the analyzer handle all the logic (including full DB analysis)
-            report = analyzer.generate_session_report(parsed_start, parsed_end)
+            # Generate session-based report
+            report = analyzer.generate_session_based_report(parsed_start, parsed_end)
             return report
             
         except Exception as e:
-            logger.log_error(f"Error generating report: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.log_error(f"Error generating session utilization: {e}")
             return {"error": f"Failed to generate report: {str(e)}"}
-        
-    @app.get("/utilization/time_series")
-    async def get_time_series_analysis(
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        analysis_type: str = "daily",
-        user_timezone: str = "America/Chicago"
-    ) -> dict[str, Any]:
-        """Generate time-series utilization analysis with timezone support."""
-        
-        print("GET /utilization/time_series called")
-        analyzer = get_session_analyzer()
-        if analyzer is None:
-            return {"error": "Failed to create session analyzer"}
-        
-        ts_analyzer = TimeSeriesAnalyzer(analyzer)
-        
-        try:
-            # Parse time parameters
-            parsed_start = None
-            parsed_end = None
-            
-            if start_time:
-                parsed_start = datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
-            if end_time:
-                parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
-            
-            # FIXED: Don't override analysis_type with bucket_hours for monthly
-            if analysis_type in ["monthly", "mounthly"]:
-                # Use the analysis type directly, let the analyzer handle bucketing
-                report = ts_analyzer.generate_time_series_report(
-                    parsed_start or (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)),
-                    parsed_end or datetime.now(timezone.utc).replace(tzinfo=None),
-                    None,  # Let analyzer determine bucket size
-                    analysis_type,
-                    user_timezone
-                )
-            else:
-                # Set bucket size based on analysis type
-                bucket_hours = {
-                    "hourly": 1,
-                    "daily": 24,
-                    "weekly": 168
-                }.get(analysis_type, 24)
-                
-                # Generate report with timezone support
-                report = ts_analyzer.generate_time_series_report(
-                    parsed_start or (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)),
-                    parsed_end or datetime.now(timezone.utc).replace(tzinfo=None),
-                    bucket_hours,
-                    analysis_type,
-                    user_timezone
-                )
-            
-            return report
-            
-        except Exception as e:
-            print(f"Error generating time-series report: {e}")
-            import traceback
-            traceback.print_exc()
-            return {"error": f"Failed to generate report: {str(e)}"}
-
 
     @app.get("/utilization/periods")
     async def get_utilization_periods(
@@ -246,11 +185,24 @@ def create_event_server(  # noqa: C901
         user_timezone: str = "America/Chicago",
         include_users: bool = True
     ) -> dict[str, Any]:
-        """Get utilization periods with optional user utilization data."""
+        """
+        Get time-series utilization analysis with periodic breakdowns.
         
-        print("GET /utilization/periods called")
+        Analyzes system utilization over time periods with proper session attribution.
+        Optionally includes user utilization data for comprehensive analysis.
         
-        analyzer = get_session_analyzer()
+        Parameters:
+        - start_time: Optional ISO format start time
+        - end_time: Optional ISO format end time  
+        - analysis_type: Time bucket type ("hourly", "daily", "weekly", "monthly")
+        - user_timezone: Timezone for day/week boundaries (e.g., "America/Chicago")
+        - include_users: Whether to include user utilization data
+        
+        Returns:
+        - JSON report with time-series data, summaries, trends, and optional user data
+        """
+        
+        analyzer = _get_session_analyzer()
         if analyzer is None:
             return {"error": "Failed to create session analyzer"}
         
@@ -275,11 +227,43 @@ def create_event_server(  # noqa: C901
             
             # Add user utilization if requested
             if include_users:
-                user_summary = analyzer.generate_user_utilization_summary(start_dt, end_dt)
+                user_report = analyzer.generate_user_utilization_report(start_dt, end_dt)
                 
-                # Insert user utilization after key_metrics
-                if "error" not in user_summary:
-                    # Create new ordered dict to maintain structure
+                if "error" not in user_report:
+                    # Extract user summary from full report
+                    user_utilization = user_report.get("user_utilization", {})
+                    system_summary = user_report.get("system_summary", {})
+                    
+                    # Sort users by total runtime (most active first)
+                    sorted_users = sorted(
+                        user_utilization.values(), 
+                        key=lambda x: x.get("total_runtime_hours", 0), 
+                        reverse=True
+                    )
+                    
+                    # Create compact user summaries (top 10 users)
+                    top_users = []
+                    for user in sorted_users[:10]:
+                        top_users.append({
+                            "author": user.get("author"),
+                            "total_workflows": user.get("total_workflows"),
+                            "total_runtime_hours": user.get("total_runtime_hours"),
+                            "completion_rate_percent": user.get("completion_rate_percent"),
+                            "average_workflow_duration_hours": user.get("average_workflow_duration_hours")
+                        })
+                    
+                    user_summary = {
+                        "total_users": len(user_utilization),
+                        "author_attribution_rate_percent": system_summary.get("author_attribution_rate_percent", 0),
+                        "top_users": top_users,
+                        "system_totals": {
+                            "total_workflows": system_summary.get("total_workflows", 0),
+                            "total_runtime_hours": system_summary.get("total_runtime_hours", 0),
+                            "completion_rate_percent": system_summary.get("completion_rate_percent", 0)
+                        }
+                    }
+                    
+                    # Insert user utilization after key_metrics
                     enhanced_summary = {}
                     for key, value in utilization.items():
                         enhanced_summary[key] = value
@@ -290,14 +274,14 @@ def create_event_server(  # noqa: C901
                     return enhanced_summary
                 else:
                     # If user summary failed, just add error info
-                    utilization["user_utilization"] = {"error": user_summary.get("error", "Failed to generate user summary")}
+                    utilization["user_utilization"] = {
+                        "error": user_report.get("error", "Failed to generate user summary")
+                    }
             
             return utilization
             
         except Exception as e:
-            print(f"Error generating summary: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.log_error(f"Error generating utilization periods: {e}")
             return {"error": f"Failed to generate summary: {str(e)}"}
         
     @app.get("/utilization/users")
@@ -306,7 +290,10 @@ def create_event_server(  # noqa: C901
         end_time: Optional[str] = None
     ) -> dict[str, Any]:
         """
-        Generate user utilization report based on workflow authors.
+        Generate detailed user utilization report based on workflow authors.
+        
+        Analyzes workflow patterns by user/author including completion rates,
+        runtime statistics, and individual workflow details.
         
         Parameters:
         - start_time: Optional ISO format start time (e.g., "2025-07-21T10:00:00Z")
@@ -314,13 +301,13 @@ def create_event_server(  # noqa: C901
         - If no times provided, analyzes ALL records in the database
         
         Returns:
-        - JSON report with user utilization data including:
-        * Per-user workflow counts, completion rates, runtime hours
-        * System-wide author attribution statistics
-        * Individual workflow details per user
+        - JSON report with detailed user utilization data including:
+          * Per-user workflow counts, completion rates, runtime hours
+          * System-wide author attribution statistics  
+          * Individual workflow details per user
         """
         
-        analyzer = get_session_analyzer()
+        analyzer = _get_session_analyzer()
         if analyzer is None:
             return {"error": "Failed to create session analyzer"}
         
@@ -340,51 +327,9 @@ def create_event_server(  # noqa: C901
             
         except Exception as e:
             logger.log_error(f"Error generating user utilization report: {e}")
-            import traceback
-            traceback.print_exc()
             return {"error": f"Failed to generate user report: {str(e)}"}
         
-    @app.get("/utilization/users/summary")
-    async def get_user_utilization_summary(
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None
-    ) -> dict[str, Any]:
-        """
-        Generate compact user utilization summary.
-        
-        Parameters:
-        - start_time: Optional ISO format start time
-        - end_time: Optional ISO format end time
-        
-        Returns:
-        - Compact user utilization summary with top 10 users
-        """
-        
-        analyzer = get_session_analyzer()
-        if analyzer is None:
-            return {"error": "Failed to create session analyzer"}
-        
-        try:
-            # Parse time parameters
-            parsed_start = None
-            parsed_end = None
-            
-            if start_time:
-                parsed_start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-            if end_time:
-                parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
-            
-            # Generate compact user summary
-            summary = analyzer.generate_user_utilization_summary(parsed_start, parsed_end)
-            return summary
-            
-        except Exception as e:
-            logger.log_error(f"Error generating user utilization summary: {e}")
-            import traceback
-            traceback.print_exc()
-            return {"error": f"Failed to generate user summary: {str(e)}"}
-        
-    def get_session_analyzer():
+    def _get_session_analyzer():
         """Create session analyzer on-demand."""
         try:
             return UtilizationAnalyzer(events)
