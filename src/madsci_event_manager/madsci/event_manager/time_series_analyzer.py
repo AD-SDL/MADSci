@@ -40,7 +40,8 @@ class TimeSeriesAnalyzer:
         """
         
         logger.info(f"Generating {analysis_type} summary report for timezone {user_timezone}")
-        
+        self._current_analysis_type = analysis_type
+
         # Determine bucket type from analysis_type
         if analysis_type == "hourly":
             time_bucket_hours = 1
@@ -202,12 +203,22 @@ class TimeSeriesAnalyzer:
         bucket_start: datetime, 
         bucket_end: datetime
     ) -> Dict:
-        """Apply session attribution logic to convert default_analysis sessions to proper workcell sessions."""
+        """Apply session attribution logic with improved daily bucket handling."""
         
         session_details = bucket_report.get("session_details", [])
         if not session_details:
             return bucket_report
+
+        # Check if this is daily analysis 
+        analysis_type = self._current_analysis_type
         
+        if analysis_type == 'daily':
+            # For daily buckets, count experiments by actual timestamp within the day
+            return self._handle_daily_session_attribution(
+                bucket_report, bucket_start, bucket_end
+            )
+        
+        # ORIGINAL LOGIC for weekly/monthly (works fine)
         # Find default_analysis sessions with experiments
         default_sessions = []
         real_workcell_sessions = []
@@ -258,7 +269,166 @@ class TimeSeriesAnalyzer:
             )
         
         return bucket_report
-    
+
+    def _handle_daily_session_attribution(
+        self, 
+        bucket_report: Dict, 
+        bucket_start: datetime, 
+        bucket_end: datetime
+    ) -> Dict:
+        """Handle session attribution specifically for daily buckets."""
+        
+        # For daily buckets, we need to count experiments that actually occurred within this day
+        actual_experiments_in_period = self._get_experiments_in_time_period(
+            bucket_start, bucket_end
+        )
+        
+        logger.debug(f"Found {len(actual_experiments_in_period)} experiments actually occurring in period {bucket_start.date()} to {bucket_end.date()}")
+        
+        session_details = bucket_report.get("session_details", [])
+        
+        if session_details and actual_experiments_in_period:
+            # Find the best session to attribute these experiments to
+            best_session = self._find_best_session_for_period(
+                session_details, bucket_start, bucket_end
+            )
+            
+            if best_session:
+                # Update the session with actual experiment count for this period
+                best_session["total_experiments"] = len(actual_experiments_in_period)
+                best_session["experiment_details"] = [
+                    {
+                        "experiment_id": exp.get("experiment_id", ""),
+                        "experiment_name": self.analyzer._resolve_experiment_name(exp.get("experiment_id", "")),
+                        "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}"
+                    }
+                    for exp in actual_experiments_in_period
+                ]
+                
+                # Keep only this session for the daily bucket
+                bucket_report["session_details"] = [best_session]
+            else:
+                # No good session found, create a minimal session for this period
+                bucket_report["session_details"] = [{
+                    "session_type": "daily_period",
+                    "session_name": "Daily Analysis Period",
+                    "start_time": bucket_start.isoformat(),
+                    "end_time": bucket_end.isoformat(),
+                    "total_experiments": len(actual_experiments_in_period),
+                    "system_utilization_percent": 0,
+                    "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600
+                }]
+        elif not actual_experiments_in_period:
+            # No experiments in this period, set all sessions to 0 experiments
+            for session in session_details:
+                session["total_experiments"] = 0
+                session["experiment_details"] = []
+        
+        # Recalculate overall summary with correct experiment count
+        bucket_report["overall_summary"] = self._recalculate_overall_summary_for_daily(
+            bucket_report.get("session_details", []), len(actual_experiments_in_period)
+        )
+        
+        return bucket_report
+
+    def _get_experiments_in_time_period(self, start_time: datetime, end_time: datetime) -> List[Dict]:
+        """Get experiments that actually started within the given time period."""
+        
+        experiment_events = []
+        
+        # Query for experiment start events in the specific time period
+        queries_to_try = [
+            {
+                "event_type": {"$in": ["experiment_start", "EXPERIMENT_START"]},
+                "event_timestamp": {"$gte": start_time, "$lte": end_time}
+            },
+            {
+                "event_type": {"$in": ["experiment_start", "EXPERIMENT_START"]},
+                "event_timestamp": {"$gte": start_time.isoformat(), "$lte": end_time.isoformat()}
+            }
+        ]
+        
+        for query in queries_to_try:
+            try:
+                events = list(self.events_collection.find(query).sort("event_timestamp", 1))
+                if events:
+                    experiment_events = events
+                    break
+            except Exception as e:
+                logger.warning(f"Experiment query failed: {e}")
+                continue
+        
+        # Parse and validate timestamps
+        valid_experiments = []
+        for event in experiment_events:
+            event_time = self.analyzer._parse_timestamp_utc(event.get("event_timestamp"))
+            if event_time and start_time <= event_time <= end_time:
+                experiment_id = self.analyzer._extract_experiment_id(event)
+                if experiment_id:
+                    valid_experiments.append({
+                        "experiment_id": experiment_id,
+                        "event_timestamp": event_time,
+                        "event_data": event.get("event_data", {})
+                    })
+        
+        return valid_experiments
+
+    def _find_best_session_for_period(
+        self, 
+        session_details: List[Dict], 
+        period_start: datetime, 
+        period_end: datetime
+    ) -> Optional[Dict]:
+        """Find the session with the most overlap with the given period."""
+        
+        best_session = None
+        best_overlap = 0
+        
+        for session in session_details:
+            if "error" in session:
+                continue
+                
+            try:
+                session_start = datetime.fromisoformat(session["start_time"].replace('Z', '+00:00')).replace(tzinfo=None)
+                session_end_str = session.get("end_time")
+                if session_end_str:
+                    session_end = datetime.fromisoformat(session_end_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                else:
+                    session_end = period_end
+                
+                # Calculate overlap
+                overlap_start = max(period_start, session_start)
+                overlap_end = min(period_end, session_end)
+                
+                if overlap_start < overlap_end:
+                    overlap_duration = (overlap_end - overlap_start).total_seconds()
+                    if overlap_duration > best_overlap:
+                        best_overlap = overlap_duration
+                        best_session = session.copy()
+                        
+            except Exception as e:
+                logger.warning(f"Error calculating session overlap: {e}")
+                continue
+        
+        return best_session
+
+    def _recalculate_overall_summary_for_daily(
+        self, 
+        session_details: List[Dict], 
+        actual_experiment_count: int
+    ) -> Dict[str, Any]:
+        """Recalculate summary with correct experiment count for daily periods."""
+        
+        return {
+            "total_sessions": len(session_details),
+            "total_system_runtime_hours": sum(s.get("duration_hours", 0) for s in session_details),
+            "total_active_time_hours": sum(s.get("active_time_hours", 0) for s in session_details),
+            "average_system_utilization_percent": sum(s.get("system_utilization_percent", 0) for s in session_details) / len(session_details) if session_details else 0,
+            "total_experiments": actual_experiment_count,  # Use actual count, not session attribution
+            "nodes_tracked": len(set().union(*(s.get("node_utilizations", {}).keys() for s in session_details))),
+            "note": "Daily analysis uses actual experiment timestamps rather than session attribution"
+        }
+
     def _find_best_active_workcell(
         self, 
         active_workcells: Dict[str, Dict], 
