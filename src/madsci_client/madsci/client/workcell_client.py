@@ -661,23 +661,38 @@ class WorkcellClient:
         response.raise_for_status()
 
 
+def stringify_params(parameters: dict[str, Any]) -> dict[str, Any]:
+    """turns path parameters into strings for JSON"""
+    for key, value in parameters.items():
+        if isinstance(value, (Path, PurePath, WindowsPath, PosixPath)):
+            parameters[key] = str(value)
+    return parameters
+
+
 def insert_parameter_values(
     workflow: WorkflowDefinition, parameters: dict[str, Any]
 ) -> Workflow:
     """Replace the parameter strings in the workflow with the provided values"""
     for param in workflow.parameters:
+        if param.name in parameters and param.label is not None:
+            raise ValueError(
+                "Workflow parameter: "
+                + param.name
+                + "Is set up to use data from a previous step, and thus must not be provided as input"
+            )
         if param.name not in parameters:
             if param.default:
                 parameters[param.name] = param.default
-            elif not (param.step is not None and param.label is not None):
+            elif not (
+                (param.step_name is not None or param.step_index is not None)
+                and param.label is not None
+            ):
                 raise ValueError(
                     "Workflow parameter: "
                     + param.name
                     + " not provided, and no default value is defined."
                 )
-    for key, value in parameters.items():
-        if isinstance(value, (Path, PurePath, WindowsPath, PosixPath)):
-            parameters[key] = str(value)
+    parameters = stringify_params(parameters)
     steps = []
     for step in workflow.steps:
         for key, val in iter(step):

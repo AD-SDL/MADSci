@@ -5,9 +5,11 @@ Engine Class and associated helpers and data
 import concurrent
 import copy
 import importlib
+import tempfile
 import time
 import traceback
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from madsci.client.data_client import DataClient
@@ -170,15 +172,9 @@ class Engine:
             # * Prepare the step
             wf = self.state_handler.get_active_workflow(workflow_id)
             step = wf.steps[wf.status.current_step_index]
-            step.args = walk_and_replace(
-                step.args, wf.parameter_values, wf.parameters, server_side=True
-            )
-            step.files = walk_and_replace(
-                step.files, wf.parameter_values, wf.parameters, server_side=True
-            )
-            step.locations = walk_and_replace(
-                step.locations, wf.parameter_values, wf.parameters, server_side=True
-            )
+            step.args = walk_and_replace(step.args, wf.parameter_values)
+            step.files = walk_and_replace(step.files, wf.parameter_values)
+            step.locations = walk_and_replace(step.locations, wf.parameter_values)
             step.start_time = datetime.now()
             self.logger.log_info(
                 f"Running step {step.step_id} in workflow {workflow_id}"
@@ -283,14 +279,17 @@ class Engine:
         self, wf: Workflow, datapoint: DataPoint, parameter: WorkflowParameter
     ) -> Workflow:
         """updates the parameters in a workflow"""
-        if datapoint.data_type == "file":
-            wf.parameter_values[parameter.name] = datapoint.path
-        elif datapoint.data_type == "value":
+
+        if datapoint.data_type == "value":
             wf.parameter_values[parameter.name] = datapoint.value
-        elif datapoint.data_type == "object_storage":
-            path = "/tmp/" + str(datapoint.datapoint_id)  # noqa: S108
-            self.data_client.save_datapoint_value(datapoint.datapoint_id, path)
-            wf.parameter_values[parameter.name] = path
+        elif datapoint.data_type in {"object_storage", "file"}:
+            filename = Path(datapoint.path).name
+            with tempfile.NamedTemporaryFile(
+                suffix="".join(Path(filename).suffixes), delete=False
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+                self.data_client.save_datapoint_value(datapoint.datapoint_id, temp_path)
+                wf.parameter_values[parameter.name] = temp_path
         return wf
 
     def finalize_step(self, workflow_id: str, step: Step) -> None:
