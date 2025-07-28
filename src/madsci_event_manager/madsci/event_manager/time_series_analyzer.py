@@ -1,61 +1,70 @@
-"""
-Fixed Time-Series Analysis - Addresses session attribution for long-running workcells.
-"""
+"""Time-series analysis for MADSci utilization data with session attribution."""
 
+import logging
+import statistics
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
-import statistics
+
 import pytz
 
+logger = logging.getLogger(__name__)
+
+
 class TimeSeriesAnalyzer:
-    """
-    Fixed analyzer that properly handles long-running workcell sessions.
-    """
+    """Analyzes utilization data over time with proper session attribution."""
     
     def __init__(self, utilization_analyzer):
         """Initialize with existing UtilizationAnalyzer instance."""
         self.analyzer = utilization_analyzer
         self.events_collection = utilization_analyzer.events_collection
     
-    def generate_time_series_report(
+    def generate_summary_report(
         self,
         start_time: datetime,
         end_time: datetime,
-        time_bucket_hours: Optional[int] = None,
-        analysis_type: str = "daily",
+        analysis_type: str = "daily", 
         user_timezone: str = "America/Chicago"
     ) -> Dict[str, Any]:
-        """Generate comprehensive time-series analysis with timezone support."""
+        """
+        Generate summary utilization report with time-series analysis.
         
-        print(f"Generating {analysis_type} time-series analysis for timezone {user_timezone}...")
+        Args:
+            start_time: Analysis start time (UTC, timezone-naive)
+            end_time: Analysis end time (UTC, timezone-naive)
+            analysis_type: Time bucket type ("hourly", "daily", "weekly", "monthly")
+            user_timezone: Timezone for day/week boundaries
+            
+        Returns:
+            Dict containing time-series data, summaries, and trends
+        """
+        
+        logger.info(f"Generating {analysis_type} summary report for timezone {user_timezone}")
         
         # Determine bucket type from analysis_type
-        if time_bucket_hours is None:
-            if analysis_type == "hourly":
-                time_bucket_hours = 1
-            elif analysis_type == "daily":
-                time_bucket_hours = 24
-            elif analysis_type == "weekly":
-                time_bucket_hours = 168
-            elif analysis_type in ["monthly", "mounthly"]:
-                time_bucket_hours = "monthly"
-            else:
-                time_bucket_hours = 24
+        if analysis_type == "hourly":
+            time_bucket_hours = 1
+        elif analysis_type == "daily":
+            time_bucket_hours = 24
+        elif analysis_type == "weekly":
+            time_bucket_hours = 168
+        elif analysis_type in ["monthly", "mounthly"]:
+            time_bucket_hours = "monthly"
+        else:
+            time_bucket_hours = 24
         
         # Create time buckets
         time_buckets = self._create_time_buckets_user_timezone(
             start_time, end_time, time_bucket_hours, user_timezone
         )
         
-        bucket_type = "monthly" if time_bucket_hours == "monthly" else f"{time_bucket_hours}h"
-        print(f"Created {len(time_buckets)} {bucket_type} buckets aligned to {user_timezone}")
+        logger.info(f"Created {len(time_buckets)} time buckets")
         
-        # STEP 1: Find all active workcells in the entire timeframe
+        # Find all active workcells in the entire timeframe
         active_workcells = self._find_active_workcells_in_timeframe(start_time, end_time)
-        print(f"Found {len(active_workcells)} active workcells in timeframe")
+        logger.info(f"Found {len(active_workcells)} active workcells in timeframe")
         
-        # STEP 2: Generate session report for each bucket with attribution
+        # Generate session report for each bucket with attribution
         bucket_reports = []
         for i, bucket_info in enumerate(time_buckets):
             if isinstance(bucket_info, dict):
@@ -66,13 +75,11 @@ class TimeSeriesAnalyzer:
                 bucket_start, bucket_end = bucket_info
                 user_start, user_end = bucket_start, bucket_end
                 period_info = {"type": "period", "display": user_start.strftime("%Y-%m-%d")}
-                
-            print(f"Analyzing {period_info.get('type', 'period')} {i+1}/{len(time_buckets)}: {period_info.get('display', user_start.strftime('%Y-%m-%d'))}")
             
             # Generate base session report
-            bucket_report = self.analyzer.generate_session_report(bucket_start, bucket_end)
+            bucket_report = self.analyzer.generate_session_based_report(bucket_start, bucket_end)
             
-            # STEP 3: Apply session attribution for this bucket
+            # Apply session attribution for this bucket
             bucket_report = self._apply_session_attribution(
                 bucket_report, active_workcells, bucket_start, bucket_end
             )
@@ -90,28 +97,19 @@ class TimeSeriesAnalyzer:
             
             bucket_reports.append(bucket_report)
         
-        # Create both detailed and summary formats
-        detailed_report = self._create_detailed_report(bucket_reports, start_time, end_time, analysis_type, user_timezone)
-        summary_report = self._create_summary_report(bucket_reports, start_time, end_time, analysis_type, user_timezone)
-        
-        return {
-            "detailed": detailed_report,
-            "summary": summary_report
-        }
+        # Create summary report
+        return self._create_summary_report(bucket_reports, start_time, end_time, analysis_type, user_timezone)
     
     def _find_active_workcells_in_timeframe(self, start_time: datetime, end_time: datetime) -> Dict[str, Dict]:
-        """
-        Find all workcells that are active during the analysis timeframe.
-        Returns a map of workcell_id -> workcell_info.
-        """
+        """Find all workcells that are active during the analysis timeframe."""
         active_workcells = {}
         
-        # Look for workcell/lab start events before or during the timeframe
+        # Look for workcell/lab start events
         start_event_types = [
             "lab_start", "workcell_start", "LAB_START", "WORKCELL_START"
         ]
         
-        # Query for start events (using multiple strategies like in your existing code)
+        # Query for start events
         queries_to_try = [
             {"event_type": {"$in": start_event_types}},
             {"event_type": {"$regex": "start", "$options": "i"}}
@@ -125,9 +123,10 @@ class TimeSeriesAnalyzer:
                     start_events = events
                     break
             except Exception as e:
+                logger.warning(f"Start event query failed: {e}")
                 continue
         
-        print(f"Found {len(start_events)} potential start events")
+        logger.debug(f"Found {len(start_events)} potential start events")
         
         for event in start_events:
             event_time = self.analyzer._parse_timestamp_utc(event.get("event_timestamp"))
@@ -159,7 +158,6 @@ class TimeSeriesAnalyzer:
             session_type = "lab" if "lab" in event_type else "workcell"
             
             # Check if this workcell overlaps with our analysis timeframe
-            # For now, assume workcells run until a stop event or end of analysis
             workcell_end = self._find_workcell_stop_time(workcell_id, event_time) or end_time
             
             # If workcell is active during our timeframe, track it
@@ -172,8 +170,6 @@ class TimeSeriesAnalyzer:
                     "end_time": workcell_end,
                     "overlaps_timeframe": True
                 }
-                
-                print(f"Active workcell: {workcell_name} ({workcell_id[-8:]}) from {event_time} to {workcell_end}")
         
         return active_workcells
     
@@ -195,7 +191,7 @@ class TimeSeriesAnalyzer:
                 return stop_time
                 
         except Exception as e:
-            print(f"Error finding stop time for workcell {workcell_id}: {e}")
+            logger.warning(f"Error finding stop time for workcell {workcell_id}: {e}")
         
         return None
     
@@ -206,10 +202,7 @@ class TimeSeriesAnalyzer:
         bucket_start: datetime, 
         bucket_end: datetime
     ) -> Dict:
-        """
-        Apply session attribution logic to convert default_analysis sessions 
-        to proper workcell sessions when appropriate.
-        """
+        """Apply session attribution logic to convert default_analysis sessions to proper workcell sessions."""
         
         session_details = bucket_report.get("session_details", [])
         if not session_details:
@@ -221,24 +214,20 @@ class TimeSeriesAnalyzer:
         
         for session in session_details:
             session_type = session.get("session_type", "")
-            session_id = session.get("session_id", "")
             total_experiments = session.get("total_experiments", 0)
             
             if session_type == "default_analysis" and total_experiments > 0:
                 default_sessions.append(session)
-                print(f"Found default session with {total_experiments} experiments: {session_id}")
             elif session_type in ["workcell", "lab"]:
                 real_workcell_sessions.append(session)
-                print(f"Found real workcell session: {session.get('session_name', 'Unknown')} ({session_id[-8:] if session_id else 'None'})")
         
         # If we have default sessions with experiments, try to attribute them
         if default_sessions:
-            print(f"Attempting to attribute {len(default_sessions)} default sessions...")
+            logger.debug(f"Attempting to attribute {len(default_sessions)} default sessions")
             
             # Strategy 1: If there's exactly one real workcell session, merge with it
             if len(real_workcell_sessions) == 1:
                 primary_workcell = real_workcell_sessions[0]
-                print(f"Merging default sessions into primary workcell: {primary_workcell.get('session_name', 'Unknown')}")
                 
                 # Merge all default sessions into the primary workcell
                 for default_session in default_sessions:
@@ -249,28 +238,18 @@ class TimeSeriesAnalyzer:
                 
             # Strategy 2: If no real workcell sessions, find the best active workcell
             elif len(real_workcell_sessions) == 0 and active_workcells:
-                print("No real workcell sessions found, looking for best active workcell...")
-                
                 # Find the workcell most likely to be responsible
                 best_workcell = self._find_best_active_workcell(
                     active_workcells, bucket_start, bucket_end
                 )
                 
                 if best_workcell:
-                    print(f"Attributing to active workcell: {best_workcell['workcell_name']}")
-                    
                     # Create a new workcell session from the best match
                     attributed_session = self._create_attributed_workcell_session(
                         best_workcell, default_sessions, bucket_start, bucket_end
                     )
                     
                     bucket_report["session_details"] = [attributed_session]
-                else:
-                    print("No suitable active workcell found, keeping default sessions")
-            
-            # Strategy 3: Multiple real workcell sessions - keep as is for now
-            else:
-                print(f"Multiple workcell sessions ({len(real_workcell_sessions)}) found, keeping as is")
         
         # Recalculate overall summary if we modified sessions
         if len(session_details) != len(bucket_report.get("session_details", [])):
@@ -308,8 +287,6 @@ class TimeSeriesAnalyzer:
                     "overlap_percentage": overlap_percentage,
                     "overlap_duration_hours": overlap_duration / 3600
                 })
-                
-                print(f"Candidate: {workcell_info['workcell_name']} - {overlap_percentage:.1%} overlap")
         
         # Return the workcell with highest overlap
         if candidates:
@@ -395,7 +372,7 @@ class TimeSeriesAnalyzer:
             },
             "system_utilization_percent": round(weighted_utilization, 1),
             "total_experiments": total_experiments,
-            "experiment_details": [],  # Could aggregate these too if needed
+            "experiment_details": [],
             "nodes_active": len(aggregated_nodes),
             "node_utilizations": aggregated_nodes,
             "raw_hours": {
@@ -510,66 +487,6 @@ class TimeSeriesAnalyzer:
             "node_summary": final_node_summary
         }
     
-    def generate_summary_report(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        analysis_type: str = "daily", 
-        user_timezone: str = "America/Chicago"
-    ) -> Dict[str, Any]:
-        """Generate ONLY the summary report format."""
-        
-        print(f"Generating {analysis_type} summary report...")
-        
-        # Generate the time-series analysis with proper attribution
-        full_analysis = self.generate_time_series_report(
-            start_time, end_time, None, analysis_type, user_timezone
-        )
-        
-        # Return only the summary portion
-        return full_analysis["summary"]
-    
-    def _calculate_period_peak_info(self, data: Dict, analysis_type: str) -> Dict[str, Any]:
-        """Calculate peak utilization info between periods."""
-        if not data["utilizations"]:
-            return {
-                "peak_utilization": 0,
-                "peak_period": None,
-                "peak_context": "No active periods"
-            }
-        
-        max_utilization = max(data["utilizations"])
-        max_index = data["utilizations"].index(max_utilization)
-        
-        # Get the time series entry for this peak
-        if max_index < len(data["time_series"]):
-            peak_period_info = data["time_series"][max_index]
-            
-            period_type = peak_period_info.get("period_type", "period")
-            period_display = peak_period_info.get("period_display", "Unknown")
-            
-            # Create contextual message based on analysis type
-            if analysis_type == "daily":
-                peak_context = f"Peak utilization on {period_display}"
-            elif analysis_type == "weekly":
-                peak_context = f"Peak utilization during {period_display}"
-            elif analysis_type in ["monthly", "mounthly"]:
-                peak_context = f"Peak utilization in {period_display}"
-            else:
-                peak_context = f"Peak utilization in {period_display}"
-                
-            return {
-                "peak_utilization": round(max_utilization, 2),
-                "peak_period": period_display,
-                "peak_context": peak_context
-            }
-        else:
-            return {
-                "peak_utilization": round(max_utilization, 2),
-                "peak_period": "Unknown",
-                "peak_context": f"Peak utilization: {round(max_utilization, 2)}%"
-            }
-    
     def _create_summary_report(
         self, 
         bucket_reports: List[Dict],
@@ -580,7 +497,7 @@ class TimeSeriesAnalyzer:
     ) -> Dict[str, Any]:
         """Create clean summary report format with proper workcell attribution."""
         
-        print(f"Creating summary report from {len(bucket_reports)} bucket reports")
+        logger.info(f"Creating summary report from {len(bucket_reports)} bucket reports")
         
         # Aggregate data from bucket reports
         all_utilizations = []
@@ -626,7 +543,7 @@ class TimeSeriesAnalyzer:
                 session_id = session.get("session_id")
                 session_type = session.get("session_type", "")
                 
-                # FIXED: Now includes attributed sessions
+                # Includes attributed sessions
                 if session_type in ["workcell", "lab"] and session_id:
                     actual_workcell_ids.add(session_id)
                     
@@ -638,13 +555,9 @@ class TimeSeriesAnalyzer:
                     workcell_metrics[session_id]["experiments"].append(session_exp)
                     workcell_metrics[session_id]["runtime_hours"].append(session_runtime)
                     
-                    # Track if this was attributed
-                    attribution_info = session.get("attribution_info")
-                    if attribution_info:
-                        print(f"Including attributed session: {session.get('session_name', 'Unknown')} with {session_exp} experiments")
-                    
                     # Time series for workcells
                     if session_exp > 0:
+                        attribution_info = session.get("attribution_info")
                         workcell_metrics[session_id]["time_series"].append({
                             "period_number": time_bucket.get("bucket_index", 0) + 1,
                             "period_type": period_info.get("type", "period"),
@@ -656,7 +569,7 @@ class TimeSeriesAnalyzer:
                             "attributed": bool(attribution_info)
                         })
             
-            # Node metrics processing (unchanged)
+            # Node metrics processing
             node_summary = overall_summary.get("node_summary", {})
             for node_id, node_data in node_summary.items():
                 # Skip if this ID is actually a workcell
@@ -664,7 +577,7 @@ class TimeSeriesAnalyzer:
                     continue
                 
                 # Verify this is actually a node by checking if it has a node name
-                node_name = node_data.get("node_name") or self.analyzer._resolve_node_name(node_id)
+                node_name = self.analyzer._resolve_node_name(node_id)
                 if not node_name:
                     continue
                 
@@ -716,7 +629,7 @@ class TimeSeriesAnalyzer:
                 "node_name": node_name,
                 "display_name": f"{node_name} ({node_id[-8:]})" if node_name else f"Node {node_id[-8:]}",
                 "average_utilization": round(statistics.mean(data["utilizations"]) if data["utilizations"] else 0, 2),
-                **peak_info,  # Spread the peak context info
+                **peak_info,
                 "total_busy_hours": round(data["busy_hours"], 2)
             }
         
@@ -746,15 +659,12 @@ class TimeSeriesAnalyzer:
                 "workcell_name": workcell_name,
                 "display_name": display_name,
                 "average_utilization": round(statistics.mean(data["utilizations"]) if data["utilizations"] else 0, 2),
-                **peak_info,  # Spread the peak context info
+                **peak_info,
                 "total_experiments": sum(data["experiments"]),
                 "total_runtime_hours": round(sum(data["runtime_hours"]), 2),
                 "periods_tracked": len(data["time_series"]),
                 "attributed_periods": attributed_periods
             }
-            
-            if attributed_periods > 0:
-                print(f"Workcell {display_name}: {attributed_periods}/{len(data['time_series'])} periods were attributed")
         
         # Calculate trends
         trends = self._calculate_trends_from_time_series(time_series_points)
@@ -765,10 +675,7 @@ class TimeSeriesAnalyzer:
             "time_series": [point for point in time_series_points if point["utilization"] > 0]
         }, analysis_type)
         
-        print(f"Final summary: {len(node_summary_clean)} nodes, {len(workcell_summary_clean)} workcells")
-        
-        # Generate detailed experiment information
-        experiment_details = self._generate_experiment_details(start_time, end_time)
+        logger.info(f"Final summary: {len(node_summary_clean)} nodes, {len(workcell_summary_clean)} workcells")
         
         return {
             "summary_metadata": {
@@ -783,7 +690,7 @@ class TimeSeriesAnalyzer:
             
             "key_metrics": {
                 "average_utilization": round(statistics.mean(all_utilizations) if all_utilizations else 0, 2),
-                **system_peak_info,  # Add system peak context
+                **system_peak_info,
                 "total_experiments": sum(all_experiments),
                 "total_runtime_hours": round(sum(all_runtime_hours), 2),
                 "active_periods": len(all_utilizations),
@@ -806,297 +713,48 @@ class TimeSeriesAnalyzer:
                     for workcell_id, workcell_data in workcell_metrics.items()
                     if workcell_id in actual_workcell_ids and workcell_data["time_series"]
                 }
-            },
-            
-            "experiment_details": experiment_details
+            }
         }
     
-    def _resolve_workcell_name(self, workcell_id: str) -> str:
-        """Resolve human-readable name for a workcell with multiple strategies."""
-        
-        # Strategy 1: Look in events collection directly
-        try:
-            workcell_events = list(self.events_collection.find({
-                "event_type": {"$in": ["workcell_start", "lab_start"]},
-                "$or": [
-                    {"source.workcell_id": workcell_id},
-                    {"source.manager_id": workcell_id},
-                    {"event_data.workcell_id": workcell_id}
-                ]
-            }).limit(3))
-            
-            for event in workcell_events:
-                event_data = event.get("event_data", {})
-                name_candidates = [
-                    event_data.get("name"),
-                    event_data.get("workcell_name"),
-                    event_data.get("lab_name"),
-                    event_data.get("display_name")
-                ]
-                
-                for name in name_candidates:
-                    if name and isinstance(name, str) and name.strip() and not name.startswith("Workcell "):
-                        return name.strip()
-                        
-        except Exception as e:
-            print(f"Error looking up workcell name in events: {e}")
-        
-        # Strategy 2: Fallback to generated name
-        return f"Workcell {workcell_id[-8:]}"
-    
-    def _generate_experiment_details(self, start_time: datetime, end_time: datetime) -> Dict[str, Any]:
-        """Generate detailed experiment information for the analysis period."""
-        
-        print("Generating detailed experiment information...")
-        
-        try:
-            # Find all experiment events in the timeframe
-            experiment_events = self._get_experiment_events(start_time, end_time)
-            
-            # Process events to build experiment timelines
-            experiments = self._build_experiment_timelines(experiment_events)
-            
-            # Calculate summary statistics
-            experiment_summary = self._calculate_experiment_summary(experiments)
-            
+    def _calculate_period_peak_info(self, data: Dict, analysis_type: str) -> Dict[str, Any]:
+        """Calculate peak utilization info between periods."""
+        if not data["utilizations"]:
             return {
-                "summary": experiment_summary,
-                "experiments": experiments
+                "peak_utilization": 0,
+                "peak_period": None,
+                "peak_context": "No active periods"
             }
+        
+        max_utilization = max(data["utilizations"])
+        max_index = data["utilizations"].index(max_utilization)
+        
+        # Get the time series entry for this peak
+        if max_index < len(data["time_series"]):
+            peak_period_info = data["time_series"][max_index]
             
-        except Exception as e:
-            print(f"Error generating experiment details: {e}")
-            import traceback
-            traceback.print_exc()
-            return {
-                "summary": {"error": str(e)},
-                "experiments": []
-            }
-    
-    def _get_experiment_events(self, start_time: datetime, end_time: datetime) -> List[Dict]:
-        """Get all experiment-related events in the timeframe."""
-        
-        experiment_event_types = [
-            "experiment_start", "experiment_complete", "experiment_failed", 
-            "experiment_cancelled", "EXPERIMENT_START", "EXPERIMENT_COMPLETE", 
-            "EXPERIMENT_FAILED", "EXPERIMENT_CANCELLED"
-        ]
-        
-        # Use same multi-strategy approach as other event queries
-        queries_to_try = [
-            {
-                "event_type": {"$in": experiment_event_types},
-                "event_timestamp": {"$gte": start_time, "$lte": end_time}
-            },
-            {
-                "event_type": {"$in": experiment_event_types},
-                "event_timestamp": {"$gte": start_time.isoformat(), "$lte": end_time.isoformat()}
-            },
-            {
-                "event_type": {"$in": experiment_event_types}
-            }
-        ]
-        
-        events = []
-        
-        for i, query in enumerate(queries_to_try):
-            try:
-                if i == 2:  # Get all and filter manually
-                    all_events = list(self.events_collection.find(query).sort("event_timestamp", 1))
-                    
-                    for event in all_events:
-                        event_time = self.analyzer._parse_timestamp_utc(event.get("event_timestamp"))
-                        if event_time and start_time <= event_time <= end_time:
-                            events.append(event)
-                else:
-                    events = list(self.events_collection.find(query).sort("event_timestamp", 1))
-                
-                if events:
-                    break
-                    
-            except Exception as e:
-                continue
-        
-        # Parse timestamps and validate
-        valid_events = []
-        for event in events:
-            event_time = self.analyzer._parse_timestamp_utc(event.get("event_timestamp"))
-            if event_time:
-                event["parsed_timestamp"] = event_time
-                valid_events.append(event)
-        
-        print(f"Found {len(valid_events)} experiment events")
-        return valid_events
-    
-    def _build_experiment_timelines(self, events: List[Dict]) -> List[Dict]:
-        """Build experiment timelines from events."""
-        
-        experiments = {}
-        
-        for event in events:
-            experiment_id = self.analyzer._extract_experiment_id(event)
-            if not experiment_id:
-                continue
+            period_display = peak_period_info.get("period_display", "Unknown")
             
-            event_type = str(event.get("event_type", "")).lower()
-            event_time = event["parsed_timestamp"]
-            event_data = event.get("event_data", {})
-            
-            # Initialize experiment if not seen before
-            if experiment_id not in experiments:
-                experiments[experiment_id] = {
-                    "experiment_id": experiment_id,
-                    "experiment_name": None,
-                    "start_time": None,
-                    "end_time": None,
-                    "status": "unknown",
-                    "duration_seconds": None,
-                    "duration_hours": None,
-                    "duration_display": None
-                }
-            
-            exp = experiments[experiment_id]
-            
-            # Process specific event types
-            if "start" in event_type:
-                if exp["start_time"] is None or event_time < exp["start_time"]:
-                    exp["start_time"] = event_time
-                    
-                    # Extract experiment name from start event
-                    if not exp["experiment_name"]:
-                        exp["experiment_name"] = self._extract_experiment_name_from_event(event)
-                
-                exp["status"] = "running"
-                
-            elif any(end_type in event_type for end_type in ["complete", "failed", "cancelled"]):
-                if exp["end_time"] is None or event_time > exp["end_time"]:
-                    exp["end_time"] = event_time
-                
-                # Set final status
-                if "complete" in event_type:
-                    exp["status"] = "completed"
-                elif "failed" in event_type:
-                    exp["status"] = "failed"
-                elif "cancelled" in event_type:
-                    exp["status"] = "cancelled"
-        
-        # Calculate durations and clean up data
-        experiment_list = []
-        for exp_id, exp in experiments.items():
-            # Calculate duration if we have both start and end
-            if exp["start_time"] and exp["end_time"]:
-                duration_seconds = (exp["end_time"] - exp["start_time"]).total_seconds()
-                exp["duration_seconds"] = duration_seconds
-                exp["duration_hours"] = round(duration_seconds / 3600, 3)
-                exp["duration_display"] = self._format_experiment_duration(duration_seconds)
-            
-            # Convert timestamps to ISO strings for JSON serialization
-            if exp["start_time"]:
-                exp["start_time"] = exp["start_time"].isoformat()
-            if exp["end_time"]:
-                exp["end_time"] = exp["end_time"].isoformat()
-            
-            # Resolve experiment name if still None
-            if not exp["experiment_name"]:
-                exp["experiment_name"] = self.analyzer._resolve_experiment_name(exp_id)
-            
-            # Create display name
-            if exp["experiment_name"]:
-                exp["display_name"] = exp["experiment_name"]
+            # Create contextual message based on analysis type
+            if analysis_type == "daily":
+                peak_context = f"Peak utilization on {period_display}"
+            elif analysis_type == "weekly":
+                peak_context = f"Peak utilization during {period_display}"
+            elif analysis_type in ["monthly", "mounthly"]:
+                peak_context = f"Peak utilization in {period_display}"
             else:
-                exp["display_name"] = f"Experiment {exp_id[-8:]}"
-            
-            experiment_list.append(exp)
-        
-        # Sort by start time
-        experiment_list.sort(key=lambda x: x["start_time"] if x["start_time"] else "9999-12-31")
-        
-        print(f"Built timelines for {len(experiment_list)} experiments")
-        return experiment_list
-    
-    def _extract_experiment_name_from_event(self, event: Dict) -> Optional[str]:
-        """Extract experiment name from an event."""
-        
-        event_data = event.get("event_data", {})
-        
-        # Check various name fields
-        name_candidates = [
-            event_data.get("experiment_name"),
-            event_data.get("name"),
-            event_data.get("experiment", {}).get("name") if isinstance(event_data.get("experiment"), dict) else None,
-            event_data.get("experiment", {}).get("experiment_design", {}).get("experiment_name") 
-            if isinstance(event_data.get("experiment", {}).get("experiment_design"), dict) else None,
-            event_data.get("experiment", {}).get("run_name") if isinstance(event_data.get("experiment"), dict) else None,
-        ]
-        
-        for name in name_candidates:
-            if name and isinstance(name, str) and name.strip():
-                return name.strip()
-        
-        return None
-    
-    def _format_experiment_duration(self, duration_seconds: float) -> str:
-        """Format experiment duration in human-readable format."""
-        
-        if duration_seconds < 60:
-            return f"{duration_seconds:.1f} seconds"
-        elif duration_seconds < 3600:
-            minutes = duration_seconds / 60
-            return f"{minutes:.1f} minutes"
-        elif duration_seconds < 86400:
-            hours = duration_seconds / 3600
-            return f"{hours:.1f} hours"
-        else:
-            days = duration_seconds / 86400
-            hours = (duration_seconds % 86400) / 3600
-            return f"{days:.0f} days, {hours:.1f} hours"
-    
-    def _calculate_experiment_summary(self, experiments: List[Dict]) -> Dict[str, Any]:
-        """Calculate summary statistics for experiments."""
-        
-        if not experiments:
+                peak_context = f"Peak utilization in {period_display}"
+                
             return {
-                "total_experiments": 0,
-                "completed": 0,
-                "failed": 0,
-                "cancelled": 0,
-                "running": 0,
-                "unknown": 0,
-                "total_duration_hours": 0,
-                "average_duration_hours": 0,
-                "shortest_experiment_hours": 0,
-                "longest_experiment_hours": 0
+                "peak_utilization": round(max_utilization, 2),
+                "peak_period": period_display,
+                "peak_context": peak_context
             }
-        
-        # Count by status
-        status_counts = defaultdict(int)
-        durations = []
-        
-        for exp in experiments:
-            status_counts[exp["status"]] += 1
-            if exp["duration_hours"] is not None:
-                durations.append(exp["duration_hours"])
-        
-        # Calculate duration statistics
-        total_duration_hours = sum(durations)
-        avg_duration_hours = total_duration_hours / len(durations) if durations else 0
-        shortest_hours = min(durations) if durations else 0
-        longest_hours = max(durations) if durations else 0
-        
-        return {
-            "total_experiments": len(experiments),
-            "completed": status_counts["completed"],
-            "failed": status_counts["failed"],
-            "cancelled": status_counts["cancelled"],
-            "running": status_counts["running"],
-            "unknown": status_counts["unknown"],
-            "total_duration_hours": round(total_duration_hours, 2),
-            "average_duration_hours": round(avg_duration_hours, 2),
-            "shortest_experiment_hours": round(shortest_hours, 2),
-            "longest_experiment_hours": round(longest_hours, 2),
-            "experiments_with_duration": len(durations),
-            "experiments_without_duration": len(experiments) - len(durations)
-        }
+        else:
+            return {
+                "peak_utilization": round(max_utilization, 2),
+                "peak_period": "Unknown",
+                "peak_context": f"Peak utilization: {round(max_utilization, 2)}%"
+            }
     
     def _calculate_trends_from_time_series(self, time_series_points: List[Dict]) -> Dict[str, Any]:
         """Calculate trends from time series data."""
@@ -1154,7 +812,39 @@ class TimeSeriesAnalyzer:
             }
         }
     
-    # Keep essential supporting methods
+    def _resolve_workcell_name(self, workcell_id: str) -> str:
+        """Resolve human-readable name for a workcell with multiple strategies."""
+        
+        # Look in events collection directly
+        try:
+            workcell_events = list(self.events_collection.find({
+                "event_type": {"$in": ["workcell_start", "lab_start"]},
+                "$or": [
+                    {"source.workcell_id": workcell_id},
+                    {"source.manager_id": workcell_id},
+                    {"event_data.workcell_id": workcell_id}
+                ]
+            }).limit(3))
+            
+            for event in workcell_events:
+                event_data = event.get("event_data", {})
+                name_candidates = [
+                    event_data.get("name"),
+                    event_data.get("workcell_name"),
+                    event_data.get("lab_name"),
+                    event_data.get("display_name")
+                ]
+                
+                for name in name_candidates:
+                    if name and isinstance(name, str) and name.strip() and not name.startswith("Workcell "):
+                        return name.strip()
+                        
+        except Exception as e:
+            logger.warning(f"Error looking up workcell name in events: {e}")
+        
+        # Fallback to generated name
+        return f"Workcell {workcell_id[-8:]}"
+    
     def _create_time_buckets_user_timezone(self, start_time, end_time, bucket_hours, user_timezone):
         """Create time buckets aligned to user timezone."""
         tz_handler = TimezoneHandler(user_timezone)
@@ -1266,10 +956,7 @@ class TimeSeriesAnalyzer:
                 current_user_time = bucket_end_user
         
         return buckets
-    
-    def _create_detailed_report(self, bucket_reports, start_time, end_time, analysis_type, user_timezone):
-        """Create detailed report format (placeholder for now)."""
-        return {"detailed": "report"}
+
 
 class TimezoneHandler:
     """Handle timezone conversions."""
