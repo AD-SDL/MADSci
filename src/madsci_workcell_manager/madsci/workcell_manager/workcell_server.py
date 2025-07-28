@@ -51,8 +51,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
     logger = EventClient()
     workcell_settings = workcell_settings or WorkcellManagerSettings()
+    workcell_path = Path(workcell_settings.workcell_definition)
     if not workcell:
-        workcell_path = Path(workcell_settings.workcell_definition)
         if workcell_path.exists():
             workcell = WorkcellDefinition.from_yaml(workcell_path)
         else:
