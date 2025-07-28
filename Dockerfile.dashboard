@@ -14,9 +14,17 @@ ARG USER_ID=9999
 ARG GROUP_ID=9999
 ARG CONTAINER_USER=madsci
 
-COPY src/madsci_squid/ui /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
-WORKDIR /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
+
+
+COPY src/madsci_squid/ui/package.json /tmp/package.json
+WORKDIR /tmp
 RUN yarn install
+
+
+
+COPY src/madsci_squid/ui /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
+RUN cp -a /tmp/. /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui/
+WORKDIR /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
 RUN npm run build
 RUN rm -rf node_modules
 

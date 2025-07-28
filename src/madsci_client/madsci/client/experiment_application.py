@@ -2,6 +2,7 @@
 
 import argparse
 import time
+import typing
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
@@ -56,7 +57,7 @@ class ExperimentApplication(RestNode):
     """Client for managing data."""
     experiment_client: ExperimentClient
     """Client for managing experiments."""
-    inputs = []
+    inputs: typing.ClassVar = []
     """inputs to the main function"""
 
     def __init__(
@@ -187,6 +188,13 @@ class ExperimentApplication(RestNode):
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
+    def handle_exception(self, exception: Exception) -> None:
+        """Exception handler that makes experiment fail by default, can be overwritten"""
+        self.logger.log_info(
+            f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}' with exception {exception!s}"
+        )
+        self.end_experiment(ExperimentStatus.FAILED)
+
     @contextmanager
     def manage_experiment(
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
@@ -195,7 +203,10 @@ class ExperimentApplication(RestNode):
         self.start_experiment_run(run_name=run_name, run_description=run_description)
         try:
             yield
-        finally:
+        except Exception as e:
+            self.handle_exception(e)
+            raise (e)
+        else:
             self.end_experiment()
 
     @threaded_daemon
@@ -304,10 +315,12 @@ class ExperimentApplication(RestNode):
             return True
         return False
 
-    def run_experiment(self, kwargs):
-        pass
+    def run_experiment(self, kwargs: Any) -> None:
+        """The main experiment function, overwrite for each app"""
 
     def add_experiment_management(self, func: Callable[P, R]) -> Callable[P, R]:
+        """wraps the run experiment function while preserving arguments"""
+
         @wraps(func)
         def run_experiment(*args: P.args, **kwargs: P.kwargs) -> R:
             with self.manage_experiment():
@@ -344,7 +357,8 @@ class ExperimentApplication(RestNode):
             return self.check_resource_field(resource_child, condition)
         return False
 
-    def start_app(self):
+    def start_app(self) -> None:
+        """Starts the application as an node or in sungle run mode"""
         parser = argparse.ArgumentParser(
             prog="ExperimentApp",
             description="Runs an experiment application",
