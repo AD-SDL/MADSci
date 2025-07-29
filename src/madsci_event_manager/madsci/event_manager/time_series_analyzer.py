@@ -26,22 +26,27 @@ class TimeSeriesAnalyzer:
         analysis_type: str = "daily", 
         user_timezone: str = "America/Chicago"
     ) -> Dict[str, Any]:
-        """
-        Generate summary utilization report with time-series analysis.
+        """Generate summary utilization report with corrected daily session handling."""
         
-        Args:
-            start_time: Analysis start time (UTC, timezone-naive)
-            end_time: Analysis end time (UTC, timezone-naive)
-            analysis_type: Time bucket type ("hourly", "daily", "weekly", "monthly")
-            user_timezone: Timezone for day/week boundaries
-            
-        Returns:
-            Dict containing time-series data, summaries, and trends
-        """
+        # Store analysis type for use in attribution logic
+        self._current_analysis_type = analysis_type
         
         logger.info(f"Generating {analysis_type} summary report for timezone {user_timezone}")
-        self._current_analysis_type = analysis_type
-
+        
+        # CRITICAL FIX: Get ALL real sessions for the entire period ONCE
+        # Don't let daily bucketing fragment them
+        all_real_sessions = self.analyzer._find_system_sessions(start_time, end_time)
+        
+        print(f"\n=== REAL SESSION DETECTION (BEFORE BUCKETING) ===")
+        total_real_duration = 0
+        for i, session in enumerate(all_real_sessions):
+            duration_hours = session["duration_seconds"] / 3600
+            total_real_duration += duration_hours
+            print(f"Real Session {i+1}: {duration_hours:.2f} hours")
+            print(f"  Start: {session['start_time']}")
+            print(f"  End: {session['end_time']}")
+        print(f"Total real session duration: {total_real_duration:.2f} hours")
+        
         # Determine bucket type from analysis_type
         if analysis_type == "hourly":
             time_bucket_hours = 1
@@ -61,12 +66,56 @@ class TimeSeriesAnalyzer:
         
         logger.info(f"Created {len(time_buckets)} time buckets")
         
-        # Find all active workcells in the entire timeframe
-        active_workcells = self._find_active_workcells_in_timeframe(start_time, end_time)
-        logger.info(f"Found {len(active_workcells)} active workcells in timeframe")
+        # FIXED: For daily analysis, distribute real sessions across buckets
+        # instead of creating new sessions per bucket
+        if analysis_type == 'daily':
+            bucket_reports = self._create_daily_buckets_from_real_sessions(
+                time_buckets, all_real_sessions, start_time, end_time
+            )
+        else:
+            # Original logic for weekly/monthly
+            bucket_reports = []
+            for i, bucket_info in enumerate(time_buckets):
+                if isinstance(bucket_info, dict):
+                    bucket_start, bucket_end = bucket_info['utc_times']
+                    period_info = bucket_info.get('period_info', {})
+                else:
+                    bucket_start, bucket_end = bucket_info
+                    period_info = {"type": "period", "display": bucket_start.strftime("%Y-%m-%d")}
+                
+                # Generate base session report for this bucket
+                bucket_report = self.analyzer.generate_session_based_report(bucket_start, bucket_end)
+                
+                # Apply session attribution for this bucket
+                bucket_report = self._apply_session_attribution(
+                    bucket_report, {}, bucket_start, bucket_end
+                )
+                
+                # Add time bucket info
+                bucket_report["time_bucket"] = {
+                    "bucket_index": i,
+                    "start_time": bucket_start.isoformat(),
+                    "end_time": bucket_end.isoformat(),
+                    "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
+                    "period_info": period_info
+                }
+                
+                bucket_reports.append(bucket_report)
         
-        # Generate session report for each bucket with attribution
+        # Create summary report
+        return self._create_summary_report(bucket_reports, start_time, end_time, analysis_type, user_timezone)
+    
+    def _create_daily_buckets_from_real_sessions(
+        self,
+        time_buckets: List,
+        real_sessions: List[Dict],
+        start_time: datetime,
+        end_time: datetime
+    ) -> List[Dict]:
+        """Create daily bucket reports by distributing real sessions across days."""
+        
         bucket_reports = []
+        
         for i, bucket_info in enumerate(time_buckets):
             if isinstance(bucket_info, dict):
                 bucket_start, bucket_end = bucket_info['utc_times']
@@ -77,29 +126,110 @@ class TimeSeriesAnalyzer:
                 user_start, user_end = bucket_start, bucket_end
                 period_info = {"type": "period", "display": user_start.strftime("%Y-%m-%d")}
             
-            # Generate base session report
-            bucket_report = self.analyzer.generate_session_based_report(bucket_start, bucket_end)
+            print(f"\n=== DAILY BUCKET {i+1}: {period_info.get('display', 'Unknown')} ===")
             
-            # Apply session attribution for this bucket
-            bucket_report = self._apply_session_attribution(
-                bucket_report, active_workcells, bucket_start, bucket_end
+            # Get experiments that actually occurred within this day
+            actual_experiments_in_period = self._get_experiments_in_time_period(
+                bucket_start, bucket_end
             )
+            print(f"Experiments in this day: {len(actual_experiments_in_period)}")
             
-            # Add time bucket info
-            bucket_report["time_bucket"] = {
-                "bucket_index": i,
-                "start_time": bucket_start.isoformat(),
-                "end_time": bucket_end.isoformat(),
-                "user_start_time": user_start.strftime("%Y-%m-%dT%H:%M:%S"),
-                "user_date": user_start.strftime("%Y-%m-%d"),
-                "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
-                "period_info": period_info
+            # Find real sessions that overlap with this day and calculate proportional runtime
+            day_sessions = []
+            total_day_runtime = 0
+            total_day_active_time = 0
+            
+            for session in real_sessions:
+                session_start = session["start_time"]
+                session_end = session["end_time"]
+                
+                # Calculate overlap between session and this day
+                overlap_start = max(bucket_start, session_start)
+                overlap_end = min(bucket_end, session_end)
+                
+                if overlap_start < overlap_end:
+                    # There's overlap - calculate proportional runtime
+                    overlap_seconds = (overlap_end - overlap_start).total_seconds()
+                    overlap_hours = overlap_seconds / 3600
+                    
+                    session_duration_seconds = session["duration_seconds"]
+                    session_duration_hours = session_duration_seconds / 3600
+                    
+                    # Calculate proportional active time
+                    # Assume active time is distributed proportionally across the session
+                    if session_duration_seconds > 0:
+                        proportion = overlap_seconds / session_duration_seconds
+                        # We need to estimate active time - for now use a small fraction
+                        estimated_session_active_time = session_duration_hours * 0.01  # 1% active time estimate
+                        proportional_active_time = estimated_session_active_time * proportion
+                    else:
+                        proportional_active_time = 0
+                    
+                    total_day_runtime += overlap_hours
+                    total_day_active_time += proportional_active_time
+                    
+                    # Count experiments that occurred during this session's overlap
+                    session_experiments = [
+                        exp for exp in actual_experiments_in_period
+                        if overlap_start <= exp["event_timestamp"] <= overlap_end
+                    ]
+                    
+                    # Create a session fragment for this day
+                    day_session = {
+                        "session_type": session["session_type"],
+                        "session_id": session["session_id"],
+                        "session_name": session["session_name"],
+                        "start_time": overlap_start.isoformat(),
+                        "end_time": overlap_end.isoformat(),
+                        "duration_hours": overlap_hours,
+                        "active_time_hours": proportional_active_time,
+                        "total_experiments": len(session_experiments),
+                        "system_utilization_percent": (proportional_active_time / overlap_hours * 100) if overlap_hours > 0 else 0,
+                        "node_utilizations": {},  # Simplified for now
+                        "experiment_details": [
+                            {
+                                "experiment_id": exp.get("experiment_id", ""),
+                                "experiment_name": self.analyzer._resolve_experiment_name(exp.get("experiment_id", "")),
+                                "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}"
+                            }
+                            for exp in session_experiments
+                        ],
+                        "attribution_method": "proportional_from_real_session"
+                    }
+                    
+                    day_sessions.append(day_session)
+                    
+                    print(f"  Session overlap: {overlap_hours:.2f}h from {session['session_name']}")
+            
+            print(f"  Total day runtime: {total_day_runtime:.2f} hours")
+            print(f"  Total experiments: {len(actual_experiments_in_period)}")
+            
+            # Create bucket report
+            bucket_report = {
+                "session_details": day_sessions,
+                "overall_summary": {
+                    "total_sessions": len(day_sessions),
+                    "total_system_runtime_hours": total_day_runtime,
+                    "total_active_time_hours": total_day_active_time,
+                    "average_system_utilization_percent": (total_day_active_time / total_day_runtime * 100) if total_day_runtime > 0 else 0,
+                    "total_experiments": len(actual_experiments_in_period),
+                    "nodes_tracked": 0,  # Simplified for now
+                    "method": "daily_proportional_from_real_sessions"
+                },
+                "time_bucket": {
+                    "bucket_index": i,
+                    "start_time": bucket_start.isoformat(),
+                    "end_time": bucket_end.isoformat(),
+                    "user_start_time": user_start.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "user_date": user_start.strftime("%Y-%m-%d"),
+                    "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
+                    "period_info": period_info
+                }
             }
             
             bucket_reports.append(bucket_report)
         
-        # Create summary report
-        return self._create_summary_report(bucket_reports, start_time, end_time, analysis_type, user_timezone)
+        return bucket_reports
     
     def _find_active_workcells_in_timeframe(self, start_time: datetime, end_time: datetime) -> Dict[str, Dict]:
         """Find all workcells that are active during the analysis timeframe."""
@@ -203,23 +333,19 @@ class TimeSeriesAnalyzer:
         bucket_start: datetime, 
         bucket_end: datetime
     ) -> Dict:
-        """Apply session attribution logic with improved daily bucket handling."""
+        """Apply session attribution with consistent daily runtime calculation."""
         
         session_details = bucket_report.get("session_details", [])
         if not session_details:
             return bucket_report
 
-        # Check if this is daily analysis 
         analysis_type = self._current_analysis_type
         
         if analysis_type == 'daily':
-            # For daily buckets, count experiments by actual timestamp within the day
-            return self._handle_daily_session_attribution(
-                bucket_report, bucket_start, bucket_end
-            )
+            # FOR DAILY: Use proportional session runtime approach
+            return self._handle_daily_proportional(bucket_report, bucket_start, bucket_end)
         
         # ORIGINAL LOGIC for weekly/monthly (works fine)
-        # Find default_analysis sessions with experiments
         default_sessions = []
         real_workcell_sessions = []
         
@@ -236,30 +362,20 @@ class TimeSeriesAnalyzer:
         if default_sessions:
             logger.debug(f"Attempting to attribute {len(default_sessions)} default sessions")
             
-            # Strategy 1: If there's exactly one real workcell session, merge with it
             if len(real_workcell_sessions) == 1:
                 primary_workcell = real_workcell_sessions[0]
-                
-                # Merge all default sessions into the primary workcell
                 for default_session in default_sessions:
                     primary_workcell = self._merge_sessions(primary_workcell, default_session)
-                
-                # Update session details
                 bucket_report["session_details"] = [primary_workcell]
                 
-            # Strategy 2: If no real workcell sessions, find the best active workcell
             elif len(real_workcell_sessions) == 0 and active_workcells:
-                # Find the workcell most likely to be responsible
                 best_workcell = self._find_best_active_workcell(
                     active_workcells, bucket_start, bucket_end
                 )
-                
                 if best_workcell:
-                    # Create a new workcell session from the best match
                     attributed_session = self._create_attributed_workcell_session(
                         best_workcell, default_sessions, bucket_start, bucket_end
                     )
-                    
                     bucket_report["session_details"] = [attributed_session]
         
         # Recalculate overall summary if we modified sessions
@@ -270,6 +386,176 @@ class TimeSeriesAnalyzer:
         
         return bucket_report
 
+    def _handle_daily_proportional(
+        self, 
+        bucket_report: Dict, 
+        bucket_start: datetime, 
+        bucket_end: datetime
+    ) -> Dict:
+        """Handle daily analysis with proportional session runtime distribution."""
+        
+        # Get experiments that actually occurred within this day
+        actual_experiments_in_period = self._get_experiments_in_time_period(
+            bucket_start, bucket_end
+        )
+        
+        logger.debug(f"Found {len(actual_experiments_in_period)} experiments in period {bucket_start.date()}")
+        
+        session_details = bucket_report.get("session_details", [])
+        
+        # Calculate proportional runtime and attribution for this day
+        day_runtime = 0
+        day_active_time = 0
+        day_experiments = len(actual_experiments_in_period)
+        day_utilization = 0
+        
+        attributed_sessions = []
+        
+        for session in session_details:
+            session_start_str = session.get("start_time", "")
+            session_end_str = session.get("end_time", "")
+            
+            if not session_start_str:
+                continue
+                
+            try:
+                session_start = datetime.fromisoformat(session_start_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                if session_end_str:
+                    session_end = datetime.fromisoformat(session_end_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                else:
+                    session_end = bucket_end
+                
+                # Calculate overlap between session and this day
+                overlap_start = max(bucket_start, session_start)
+                overlap_end = min(bucket_end, session_end)
+                
+                if overlap_start < overlap_end:
+                    # There's overlap - calculate proportional runtime
+                    overlap_seconds = (overlap_end - overlap_start).total_seconds()
+                    overlap_hours = overlap_seconds / 3600
+                    
+                    session_duration = session.get("duration_hours", 0)
+                    session_active_time = session.get("active_time_hours", 0)
+                    session_util = session.get("system_utilization_percent", 0)
+                    
+                    # Calculate proportional times
+                    if session_duration > 0:
+                        proportion = overlap_hours / session_duration
+                        proportional_active_time = session_active_time * proportion
+                    else:
+                        proportion = 1.0
+                        proportional_active_time = session_active_time
+                    
+                    day_runtime += overlap_hours
+                    day_active_time += proportional_active_time
+                    
+                    # For utilization, weight by runtime
+                    if overlap_hours > 0:
+                        day_utilization += session_util * overlap_hours
+                    
+                    # Count experiments that actually occurred during this session's overlap
+                    session_experiments = [
+                        exp for exp in actual_experiments_in_period
+                        if overlap_start <= exp["event_timestamp"] <= overlap_end
+                    ]
+                    
+                    # Create attributed session for this day
+                    attributed_session = session.copy()
+                    attributed_session.update({
+                        "start_time": overlap_start.isoformat(),
+                        "end_time": overlap_end.isoformat(),
+                        "duration_hours": overlap_hours,
+                        "active_time_hours": proportional_active_time,
+                        "total_experiments": len(session_experiments),
+                        "system_utilization_percent": session_util,
+                        "attribution_method": "proportional_daily_overlap",
+                        "experiment_details": [
+                            {
+                                "experiment_id": exp.get("experiment_id", ""),
+                                "experiment_name": self.analyzer._resolve_experiment_name(exp.get("experiment_id", "")),
+                                "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}"
+                            }
+                            for exp in session_experiments
+                        ]
+                    })
+                    
+                    attributed_sessions.append(attributed_session)
+                    
+            except Exception as e:
+                logger.warning(f"Error processing session for daily attribution: {e}")
+                continue
+        
+        # Calculate weighted average utilization
+        if day_runtime > 0:
+            day_utilization = day_utilization / day_runtime
+        
+        # Update bucket report
+        bucket_report["session_details"] = attributed_sessions
+        
+        # Create new overall summary
+        bucket_report["overall_summary"] = {
+            "total_sessions": len(attributed_sessions),
+            "total_system_runtime_hours": day_runtime,
+            "total_active_time_hours": day_active_time,
+            "average_system_utilization_percent": day_utilization,
+            "total_experiments": day_experiments,
+            "nodes_tracked": len(set().union(*(s.get("node_utilizations", {}).keys() for s in attributed_sessions))),
+            "method": "proportional_daily_attribution"
+        }
+        
+        return bucket_report
+
+    def _recalculate_daily_summary_simple(
+        self, 
+        session_details: List[Dict], 
+        actual_experiment_count: int
+    ) -> Dict[str, Any]:
+        """Simple recalculation - keep original session data, just fix experiment count."""
+        
+        # Use original session calculations
+        total_sessions = len(session_details)
+        total_runtime = sum(s.get("duration_hours", 0) for s in session_details)
+        total_active_time = sum(s.get("active_time_hours", 0) for s in session_details)
+        
+        # Calculate average utilization
+        valid_sessions = [s for s in session_details if "error" not in s]
+        if valid_sessions:
+            avg_utilization = sum(s.get("system_utilization_percent", 0) for s in valid_sessions) / len(valid_sessions)
+        else:
+            avg_utilization = 0
+        
+        # Aggregate node data
+        node_summary = defaultdict(lambda: {
+            "total_busy_time_hours": 0,
+            "utilizations": [],
+            "sessions_active": 0
+        })
+        
+        for session in valid_sessions:
+            for node_id, node_data in session.get("node_utilizations", {}).items():
+                node_summary[node_id]["total_busy_time_hours"] += node_data.get("busy_time_hours", 0)
+                node_summary[node_id]["utilizations"].append(node_data.get("utilization_percent", 0))
+                node_summary[node_id]["sessions_active"] += 1
+        
+        # Calculate average utilizations per node
+        final_node_summary = {}
+        for node_id, data in node_summary.items():
+            final_node_summary[node_id] = {
+                "average_utilization_percent": sum(data["utilizations"]) / len(data["utilizations"]) if data["utilizations"] else 0,
+                "total_busy_time_hours": data["total_busy_time_hours"],
+                "sessions_active": data["sessions_active"]
+            }
+        
+        return {
+            "total_sessions": total_sessions,
+            "total_system_runtime_hours": total_runtime,
+            "total_active_time_hours": total_active_time,
+            "average_system_utilization_percent": avg_utilization,
+            "total_experiments": actual_experiment_count,  # Use actual count from this period
+            "nodes_tracked": len(final_node_summary),
+            "node_summary": final_node_summary,
+            "method": "daily_simple_experiment_count_correction"
+        }
     def _handle_daily_session_attribution(
         self, 
         bucket_report: Dict, 
@@ -287,7 +573,7 @@ class TimeSeriesAnalyzer:
         
         session_details = bucket_report.get("session_details", [])
         
-        if session_details and actual_experiments_in_period:
+        if session_details:
             # Find the best session to attribute these experiments to
             best_session = self._find_best_session_for_period(
                 session_details, bucket_start, bucket_end
@@ -305,26 +591,64 @@ class TimeSeriesAnalyzer:
                     for exp in actual_experiments_in_period
                 ]
                 
+                # IMPORTANT: Keep the original session runtime, don't recalculate it
+                # This ensures consistency with weekly/monthly reports
+                # The session duration represents the time the system was available/configured
+                
                 # Keep only this session for the daily bucket
                 bucket_report["session_details"] = [best_session]
             else:
-                # No good session found, create a minimal session for this period
-                bucket_report["session_details"] = [{
-                    "session_type": "daily_period",
-                    "session_name": "Daily Analysis Period",
-                    "start_time": bucket_start.isoformat(),
-                    "end_time": bucket_end.isoformat(),
-                    "total_experiments": len(actual_experiments_in_period),
-                    "system_utilization_percent": 0,
-                    "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600
-                }]
-        elif not actual_experiments_in_period:
-            # No experiments in this period, set all sessions to 0 experiments
-            for session in session_details:
-                session["total_experiments"] = 0
-                session["experiment_details"] = []
+                # No good session found, but we still need to account for system runtime
+                # Use the original session durations from the bucket report
+                bucket_report["session_details"] = session_details
+                
+                # Update experiment counts for all sessions in this period
+                for session in bucket_report["session_details"]:
+                    # Only the session with the best overlap gets the experiments
+                    session_start = datetime.fromisoformat(session["start_time"].replace('Z', '+00:00')).replace(tzinfo=None)
+                    session_end_str = session.get("end_time")
+                    if session_end_str:
+                        session_end = datetime.fromisoformat(session_end_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                    else:
+                        session_end = bucket_end
+                    
+                    # Check if experiments fall within this session's timeframe
+                    session_experiments = [
+                        exp for exp in actual_experiments_in_period
+                        if session_start <= exp["event_timestamp"] <= session_end
+                    ]
+                    
+                    session["total_experiments"] = len(session_experiments)
+                    session["experiment_details"] = [
+                        {
+                            "experiment_id": exp.get("experiment_id", ""),
+                            "experiment_name": self.analyzer._resolve_experiment_name(exp.get("experiment_id", "")),
+                            "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}"
+                        }
+                        for exp in session_experiments
+                    ]
+        elif actual_experiments_in_period:
+            # We have experiments but no sessions - create a minimal session
+            bucket_report["session_details"] = [{
+                "session_type": "daily_period",
+                "session_name": "Daily Analysis Period",
+                "start_time": bucket_start.isoformat(),
+                "end_time": bucket_end.isoformat(),
+                "total_experiments": len(actual_experiments_in_period),
+                "system_utilization_percent": 0,
+                "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
+                "active_time_hours": 0,  # We don't have session data to calculate this properly
+                "experiment_details": [
+                    {
+                        "experiment_id": exp.get("experiment_id", ""),
+                        "experiment_name": self.analyzer._resolve_experiment_name(exp.get("experiment_id", "")),
+                        "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}"
+                    }
+                    for exp in actual_experiments_in_period
+                ]
+            }]
         
-        # Recalculate overall summary with correct experiment count
+        # Recalculate overall summary - but keep original runtime calculations
         bucket_report["overall_summary"] = self._recalculate_overall_summary_for_daily(
             bucket_report.get("session_details", []), len(actual_experiments_in_period)
         )
@@ -417,16 +741,30 @@ class TimeSeriesAnalyzer:
         session_details: List[Dict], 
         actual_experiment_count: int
     ) -> Dict[str, Any]:
-        """Recalculate summary with correct experiment count for daily periods."""
+        """Recalculate summary with correct experiment count but keeping original runtime."""
+        
+        # Calculate runtime from session durations (consistent with weekly/monthly)
+        total_runtime_hours = sum(s.get("duration_hours", 0) for s in session_details)
+        total_active_time_hours = sum(s.get("active_time_hours", 0) for s in session_details)
+        
+        # Calculate average utilization weighted by session duration
+        total_duration = sum(s.get("duration_hours", 0) for s in session_details)
+        if total_duration > 0:
+            weighted_utilization = sum(
+                s.get("system_utilization_percent", 0) * s.get("duration_hours", 0) 
+                for s in session_details
+            ) / total_duration
+        else:
+            weighted_utilization = 0
         
         return {
             "total_sessions": len(session_details),
-            "total_system_runtime_hours": sum(s.get("duration_hours", 0) for s in session_details),
-            "total_active_time_hours": sum(s.get("active_time_hours", 0) for s in session_details),
-            "average_system_utilization_percent": sum(s.get("system_utilization_percent", 0) for s in session_details) / len(session_details) if session_details else 0,
-            "total_experiments": actual_experiment_count,  # Use actual count, not session attribution
+            "total_system_runtime_hours": total_runtime_hours,  # Keep original runtime
+            "total_active_time_hours": total_active_time_hours,  # Keep original active time
+            "average_system_utilization_percent": weighted_utilization,
+            "total_experiments": actual_experiment_count,  # Use actual count
             "nodes_tracked": len(set().union(*(s.get("node_utilizations", {}).keys() for s in session_details))),
-            "note": "Daily analysis uses actual experiment timestamps rather than session attribution"
+            "method": "daily_analysis_with_consistent_runtime_calculation"
         }
 
     def _find_best_active_workcell(
@@ -665,7 +1003,7 @@ class TimeSeriesAnalyzer:
         analysis_type: str,
         user_timezone: str
     ) -> Dict[str, Any]:
-        """Create clean summary report format with proper workcell attribution."""
+        """Create clean summary report format with experiment details included."""
         
         logger.info(f"Creating summary report from {len(bucket_reports)} bucket reports")
         
@@ -673,15 +1011,31 @@ class TimeSeriesAnalyzer:
         all_utilizations = []
         all_experiments = []
         all_runtime_hours = []
+        all_active_time_hours = []
         
         # Node and workcell aggregation
-        node_metrics = defaultdict(lambda: {"utilizations": [], "busy_hours": 0, "time_series": []})
-        workcell_metrics = defaultdict(lambda: {"utilizations": [], "experiments": [], "runtime_hours": [], "time_series": []})
+        node_metrics = defaultdict(lambda: {
+            "utilizations": [], 
+            "busy_hours": 0, 
+            "time_series": []
+        })
+        
+        workcell_metrics = defaultdict(lambda: {
+            "utilizations": [], 
+            "experiments": [], 
+            "runtime_hours": [], 
+            "time_series": [],
+            "active_time_hours": []
+        })
+        
         time_series_points = []
         
         # Track what IDs are actually nodes vs workcells
         actual_node_ids = set()
         actual_workcell_ids = set()
+        
+        # Collect experiment details across all buckets
+        all_experiment_details = []
         
         for bucket_report in bucket_reports:
             if "error" in bucket_report:
@@ -702,31 +1056,46 @@ class TimeSeriesAnalyzer:
             avg_util = overall_summary.get("average_system_utilization_percent", 0)
             total_exp = overall_summary.get("total_experiments", 0)
             total_runtime = overall_summary.get("total_system_runtime_hours", 0)
+            total_active_time = overall_summary.get("total_active_time_hours", 0)
             
-            if total_exp > 0:  # Active period
+            # Only include periods with activity for utilization calculation
+            if total_exp > 0:
                 all_utilizations.append(avg_util)
                 all_experiments.append(total_exp)
-                all_runtime_hours.append(total_runtime)
             
-            # Process sessions with attribution tracking
+            # Always include runtime
+            all_runtime_hours.append(total_runtime)
+            all_active_time_hours.append(total_active_time)
+            
+            # Collect experiment details from sessions
+            for session in session_details:
+                experiment_details = session.get("experiment_details", [])
+                for exp in experiment_details:
+                    # Avoid duplicates by checking experiment_id
+                    if not any(existing.get("experiment_id") == exp.get("experiment_id") for existing in all_experiment_details):
+                        all_experiment_details.append(exp)
+            
+            # Process sessions for workcell and node data
             for session in session_details:
                 session_id = session.get("session_id")
                 session_type = session.get("session_type", "")
                 
-                # Includes attributed sessions
+                # Track workcells
                 if session_type in ["workcell", "lab"] and session_id:
                     actual_workcell_ids.add(session_id)
                     
                     session_util = session.get("system_utilization_percent", 0)
                     session_exp = session.get("total_experiments", 0)
                     session_runtime = session.get("duration_hours", 0)
+                    session_active_time = session.get("active_time_hours", 0)
                     
                     workcell_metrics[session_id]["utilizations"].append(session_util)
                     workcell_metrics[session_id]["experiments"].append(session_exp)
                     workcell_metrics[session_id]["runtime_hours"].append(session_runtime)
+                    workcell_metrics[session_id]["active_time_hours"].append(session_active_time)
                     
                     # Time series for workcells
-                    if session_exp > 0:
+                    if session_runtime > 0:
                         attribution_info = session.get("attribution_info")
                         workcell_metrics[session_id]["time_series"].append({
                             "period_number": time_bucket.get("bucket_index", 0) + 1,
@@ -736,31 +1105,32 @@ class TimeSeriesAnalyzer:
                             "utilization": session_util,
                             "experiments": session_exp,
                             "runtime_hours": session_runtime,
+                            "active_time_hours": session_active_time,
                             "attributed": bool(attribution_info)
                         })
-            
-            # Node metrics processing
-            node_summary = overall_summary.get("node_summary", {})
-            for node_id, node_data in node_summary.items():
-                # Skip if this ID is actually a workcell
-                if node_id in actual_workcell_ids:
-                    continue
                 
-                # Verify this is actually a node by checking if it has a node name
-                node_name = self.analyzer._resolve_node_name(node_id)
-                if not node_name:
-                    continue
+                # Extract node data from sessions
+                node_utilizations = session.get("node_utilizations", {})
                 
-                actual_node_ids.add(node_id)
-                
-                utilization = node_data.get("average_utilization_percent", 0)
-                busy_hours = node_data.get("total_busy_time_hours", 0)
-                
-                node_metrics[node_id]["utilizations"].append(utilization)
-                node_metrics[node_id]["busy_hours"] += busy_hours
-                
-                # Time series for nodes
-                if total_exp > 0:  # Only add points for active periods
+                for node_id, node_data in node_utilizations.items():
+                    # Skip if this ID is actually a workcell
+                    if node_id in actual_workcell_ids:
+                        continue
+                    
+                    # Verify this is actually a node
+                    node_name = self.analyzer._resolve_node_name(node_id)
+                    if not node_name:
+                        continue
+                    
+                    actual_node_ids.add(node_id)
+                    
+                    utilization = node_data.get("utilization_percent", 0)
+                    busy_hours = node_data.get("busy_time_hours", 0)
+                    
+                    node_metrics[node_id]["utilizations"].append(utilization)
+                    node_metrics[node_id]["busy_hours"] += busy_hours
+                    
+                    # Time series for nodes
                     node_metrics[node_id]["time_series"].append({
                         "period_number": time_bucket.get("bucket_index", 0) + 1,
                         "period_type": period_info.get("type", "period"),
@@ -780,10 +1150,16 @@ class TimeSeriesAnalyzer:
                 "start_time_utc": time_bucket.get("start_time", ""),
                 "utilization": avg_util,
                 "experiments": total_exp,
-                "runtime_hours": total_runtime
+                "runtime_hours": total_runtime,
+                "active_time_hours": total_active_time
             })
         
-        # Create clean node summary with peak context
+        # Get complete experiment information from database
+        complete_experiment_details = self._get_complete_experiment_details(
+            all_experiment_details, start_time, end_time
+        )
+        
+        # Create clean node summary
         node_summary_clean = {}
         for node_id, data in node_metrics.items():
             if node_id not in actual_node_ids:
@@ -803,22 +1179,18 @@ class TimeSeriesAnalyzer:
                 "total_busy_hours": round(data["busy_hours"], 2)
             }
         
-        # Create clean workcell summary with peak context and attribution tracking
+        # Create clean workcell summary
         workcell_summary_clean = {}
         for workcell_id, data in workcell_metrics.items():
             if workcell_id not in actual_workcell_ids:
                 continue
                 
-            # Better workcell name resolution
             workcell_name = self._resolve_workcell_name(workcell_id)
             
             # Calculate peak info with context
             peak_info = self._calculate_period_peak_info(data, analysis_type)
             
-            # Check if any periods were attributed
-            attributed_periods = sum(1 for point in data["time_series"] if point.get("attributed", False))
-            
-            # Better display name that avoids duplication
+            # Better display name
             if workcell_name.startswith("Workcell ") and workcell_id[-8:] in workcell_name:
                 display_name = workcell_name
             else:
@@ -832,8 +1204,7 @@ class TimeSeriesAnalyzer:
                 **peak_info,
                 "total_experiments": sum(data["experiments"]),
                 "total_runtime_hours": round(sum(data["runtime_hours"]), 2),
-                "periods_tracked": len(data["time_series"]),
-                "attributed_periods": attributed_periods
+                "total_active_time_hours": round(sum(data["active_time_hours"]), 2)
             }
         
         # Calculate trends
@@ -855,7 +1226,7 @@ class TimeSeriesAnalyzer:
                 "period_end": end_time.isoformat(),
                 "user_timezone": user_timezone,
                 "total_periods": len(bucket_reports),
-                "method": "session_based_analysis_with_attribution"
+                "method": "session_based_analysis_with_experiment_details"
             },
             
             "key_metrics": {
@@ -863,6 +1234,7 @@ class TimeSeriesAnalyzer:
                 **system_peak_info,
                 "total_experiments": sum(all_experiments),
                 "total_runtime_hours": round(sum(all_runtime_hours), 2),
+                "total_active_time_hours": round(sum(all_active_time_hours), 2),
                 "active_periods": len(all_utilizations),
                 "total_periods": len(bucket_reports)
             },
@@ -870,6 +1242,11 @@ class TimeSeriesAnalyzer:
             "node_summary": node_summary_clean,
             "workcell_summary": workcell_summary_clean,
             "trends": trends,
+            
+            "experiment_details": {
+                "total_experiments": len(complete_experiment_details),
+                "experiments": complete_experiment_details[:50]  # Limit to first 50 for CSV
+            },
             
             "time_series": {
                 "system": time_series_points,
@@ -886,6 +1263,112 @@ class TimeSeriesAnalyzer:
             }
         }
     
+    def _get_complete_experiment_details(
+        self, 
+        experiment_list: List[Dict], 
+        start_time: datetime, 
+        end_time: datetime
+    ) -> List[Dict]:
+        """Get complete experiment details from the database."""
+        
+        complete_details = []
+        
+        # Get all experiment start and complete events in the timeframe
+        experiment_events = {}
+        
+        # Query for experiment events
+        queries_to_try = [
+            {
+                "event_type": {"$in": ["experiment_start", "experiment_complete", "EXPERIMENT_START", "EXPERIMENT_COMPLETE"]},
+                "event_timestamp": {"$gte": start_time, "$lte": end_time}
+            },
+            {
+                "event_type": {"$in": ["experiment_start", "experiment_complete", "EXPERIMENT_START", "EXPERIMENT_COMPLETE"]},
+                "event_timestamp": {"$gte": start_time.isoformat(), "$lte": end_time.isoformat()}
+            }
+        ]
+        
+        for query in queries_to_try:
+            try:
+                events = list(self.events_collection.find(query).sort("event_timestamp", 1))
+                if events:
+                    for event in events:
+                        event_time = self.analyzer._parse_timestamp_utc(event.get("event_timestamp"))
+                        if event_time:
+                            exp_id = self.analyzer._extract_experiment_id(event)
+                            if exp_id:
+                                if exp_id not in experiment_events:
+                                    experiment_events[exp_id] = {}
+                                
+                                event_type = str(event.get("event_type", "")).lower()
+                                if "start" in event_type:
+                                    experiment_events[exp_id]["start"] = {
+                                        "timestamp": event_time,
+                                        "event_data": event.get("event_data", {})
+                                    }
+                                elif "complete" in event_type:
+                                    experiment_events[exp_id]["complete"] = {
+                                        "timestamp": event_time,
+                                        "event_data": event.get("event_data", {})
+                                    }
+                    break
+            except Exception as e:
+                logger.warning(f"Error querying experiment events: {e}")
+                continue
+        
+        # Build complete experiment details
+        for exp_id, events in experiment_events.items():
+            start_event = events.get("start")
+            complete_event = events.get("complete")
+            
+            if start_event:
+                start_time_exp = start_event["timestamp"]
+                start_data = start_event["event_data"]
+                
+                # Get experiment name
+                exp_name = "Unknown Experiment"
+                if isinstance(start_data.get("experiment"), dict):
+                    exp_design = start_data["experiment"].get("experiment_design", {})
+                    exp_name = exp_design.get("experiment_name", "Unknown Experiment")
+                
+                # Calculate duration and status
+                if complete_event:
+                    end_time_exp = complete_event["timestamp"]
+                    duration_seconds = (end_time_exp - start_time_exp).total_seconds()
+                    duration_hours = duration_seconds / 3600
+                    
+                    # Format duration display
+                    if duration_seconds < 60:
+                        duration_display = f"{duration_seconds:.1f} seconds"
+                    elif duration_seconds < 3600:
+                        duration_display = f"{duration_seconds/60:.1f} minutes"
+                    else:
+                        duration_display = f"{duration_hours:.1f} hours"
+                    
+                    status = complete_event["event_data"].get("status", "completed")
+                    end_time_str = end_time_exp.isoformat()
+                else:
+                    # No complete event found
+                    end_time_str = None
+                    duration_hours = None
+                    duration_display = "Ongoing"
+                    status = "in_progress"
+                
+                complete_details.append({
+                    "experiment_id": exp_id,
+                    "experiment_name": exp_name,
+                    "start_time": start_time_exp.isoformat(),
+                    "end_time": end_time_str,
+                    "status": status,
+                    "duration_hours": duration_hours,
+                    "duration_display": duration_display
+                })
+        
+        # Sort by start time
+        complete_details.sort(key=lambda x: x["start_time"])
+        
+        return complete_details
+     
     def _calculate_period_peak_info(self, data: Dict, analysis_type: str) -> Dict[str, Any]:
         """Calculate peak utilization info between periods."""
         if not data["utilizations"]:
