@@ -624,7 +624,7 @@ class WorkcellClient:
         response.raise_for_status()
         return Location.model_validate(response.json())
 
-    def add_location(self, location: Location) -> Location:
+    def add_location(self, location: Location, permanent: bool = True) -> Location:
         """
         Add a location to the workcell.
 
@@ -643,6 +643,7 @@ class WorkcellClient:
             url,
             json=location.model_dump(mode="json"),
             timeout=10,
+            params={"permanent": permanent},
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
