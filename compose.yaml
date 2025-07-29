@@ -68,7 +68,7 @@ services:
       - 9000:9000
       - 9001:9001
     volumes:
-      - .madsci/minio:/home/madsci/.madsci/minio
+      - ${REPO_PATH:-.}/.madsci/minio:/home/madsci/.madsci/minio
     command: server /home/madsci/.madsci/minio --console-address ":9001"
 
   # *Managers
