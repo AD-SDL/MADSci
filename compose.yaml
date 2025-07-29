@@ -41,6 +41,9 @@ services:
     restart: unless-stopped
     ports:
       - 27017:27017
+    volumes:
+      - .madsci/minio:/home/madsci/.madsci/data/db
+
   redis:
     container_name: redis
     image: redis:7.4
