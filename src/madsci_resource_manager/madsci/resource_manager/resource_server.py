@@ -654,6 +654,94 @@ def create_resource_server(  # noqa: C901, PLR0915
             logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @app.post("/resource/{resource_id}/lock")
+    async def acquire_resource_lock(
+        resource_id: str,
+        lock_duration: float = 300.0,
+        client_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """
+        Acquire a lock on a resource.
+
+        Args:
+            resource_id (str): The ID of the resource to lock.
+            lock_duration (float): Lock duration in seconds.
+            client_id (Optional[str]): Client identifier.
+
+        Returns:
+            dict: Lock acquisition result.
+        """
+        try:
+            locked_resource = resource_interface.acquire_lock(
+                resource=resource_id,
+                lock_duration=lock_duration,
+                client_id=client_id,
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+        # Handle the response outside the try-except
+        if locked_resource:
+            return locked_resource.model_dump(mode="json")
+        raise HTTPException(
+            status_code=409,  # Conflict - resource already locked
+            detail=f"Resource {resource_id} is already locked or lock acquisition failed",
+        )
+
+    @app.delete("/resource/{resource_id}/unlock")
+    async def release_resource_lock(
+        resource_id: str, client_id: Optional[str] = None
+    ) -> Optional[dict[str, Any]]:
+        """
+        Release a lock on a resource.
+
+        Args:
+            resource_id (str): The ID of the resource to unlock.
+            client_id (Optional[str]): Client identifier.
+
+        Returns:
+            dict: Lock release result.
+        """
+        try:
+            unlocked_resource = resource_interface.release_lock(
+                resource=resource_id,
+                client_id=client_id,
+            )
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+        if unlocked_resource:
+            return unlocked_resource.model_dump(mode="json")
+        # Return a proper error response instead of None
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot release lock on resource {resource_id}: not owned by client {client_id}",
+        )
+
+    @app.get("/resource/{resource_id}/check_lock")
+    async def check_resource_lock(resource_id: str) -> dict[str, Any]:
+        """
+        Check if a resource is currently locked.
+
+        Args:
+            resource_id (str): The ID of the resource to check.
+
+        Returns:
+            dict: Lock status information.
+        """
+        try:
+            is_locked, locked_by = resource_interface.is_locked(resource=resource_id)
+            return {
+                "resource_id": resource_id,
+                "is_locked": is_locked,
+                "locked_by": locked_by,
+            }
+        except Exception as e:
+            logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

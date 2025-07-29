@@ -12,7 +12,7 @@ from madsci.common.types.resource_types import (
 )
 from pydantic.config import ConfigDict
 from pydantic.types import Decimal
-from sqlalchemy import event
+from sqlalchemy import Index, event
 from sqlalchemy.sql.schema import FetchedValue, UniqueConstraint
 from sqlalchemy.sql.sqltypes import TIMESTAMP, Numeric
 from sqlmodel import (
@@ -167,6 +167,19 @@ class ResourceTableBase(Resource):
         nullable=True,
         default=None,
     )
+    locked_until: Optional[datetime] = Field(
+        title="Locked Until",
+        description="Timestamp when the resource lock expires.",
+        nullable=True,
+        default=None,
+        sa_type=TIMESTAMP(timezone=True),
+    )
+    locked_by: Optional[str] = Field(
+        title="Locked By",
+        description="Identifier of the client/session that locked the resource.",
+        nullable=True,
+        default=None,
+    )
 
     def to_data_model(self, include_children: bool = True) -> ResourceDataModels:
         """
@@ -209,6 +222,9 @@ class ResourceTable(ResourceTableBase, table=True):
             "key",
             name="uix_parent_key",
         ),  # * Prevent Two Children with Same Key in the same Parent
+        Index(
+            "idx_resource_locks", "locked_until", "locked_by"
+        ),  # Add index for efficient lock queries
     )
 
     parent: Optional["ResourceTable"] = Relationship(
