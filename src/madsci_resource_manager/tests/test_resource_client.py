@@ -139,7 +139,7 @@ def test_query_history(client: ResourceClient) -> None:
     resource = Resource(resource_name="History Test Resource")
     client.add_resource(resource)
     client.remove_resource(resource.resource_id)
-    history = client.query_history(resource_id=resource.resource_id)
+    history = client.query_history(resource.resource_id)
     assert len(history) > 0
     assert history[0]["resource_id"] == resource.resource_id
 
