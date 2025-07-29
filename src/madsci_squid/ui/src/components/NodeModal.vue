@@ -326,7 +326,7 @@ async function send_wf(action: any) {
       formData.append("files", file.value)
     }
   })
-  fetch(urls.value.workcell_manager.concat('workflow'), {
+  fetch(urls.value.workcell_server_url.concat('workflow'), {
     method: "POST",
     body: formData
   });

@@ -6,6 +6,7 @@ from pathlib import Path, PosixPath, PurePath, WindowsPath
 from typing import Any, Optional, Union
 
 import requests
+from madsci.client.event_client import EventClient
 from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
@@ -31,6 +32,7 @@ class WorkcellClient:
         self,
         workcell_server_url: Optional[str] = None,
         working_directory: str = "./",
+        event_client: Optional[EventClient] = None,
     ) -> None:
         """
         Initialize the WorkcellClient.
@@ -47,6 +49,7 @@ class WorkcellClient:
             if workcell_server_url
             else MadsciContext()
         )
+        self.logger = event_client or EventClient()
         self.url = self.context.workcell_server_url
         if not self.url:
             raise ValueError(
@@ -72,6 +75,8 @@ class WorkcellClient:
         """
         url = f"{self.url}/workflow/{workflow_id}"
         response = requests.get(url, timeout=10)
+        if not response.ok and response.content:
+            self.logger.error(f"Error querying workflow: {response.content.decode()}")
 
         response.raise_for_status()
         return Workflow(**response.json())
@@ -137,6 +142,8 @@ class WorkcellClient:
             },
             timeout=10,
         )
+        if not response.ok and response.content:
+            self.logger.error(f"Error submitting workflow: {response.content.decode()}")
         response.raise_for_status()
         if not await_completion:
             return Workflow(**response.json())
@@ -379,7 +386,7 @@ class WorkcellClient:
                 )
             else:
                 raise WorkflowFailedError(
-                    f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
+                    f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}' with result:\n {wf.steps[wf.status.current_step_index].result}."
                 )
         if wf.status.cancelled and raise_on_cancelled:
             raise WorkflowFailedError(
