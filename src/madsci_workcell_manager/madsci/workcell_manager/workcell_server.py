@@ -5,14 +5,14 @@ import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Callable, Optional, Union
+from typing import Annotated, Any, Optional, Union
 
-from fastapi import FastAPI, Form, HTTPException, Request, Response, UploadFile
+from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
-from madsci.common.ownership import ownership_context
+from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.context_types import MadsciContext
@@ -59,50 +59,48 @@ def create_workcell_server(  # noqa: C901, PLR0915
             workcell = WorkcellDefinition()
         logger.info(f"Writing to workcell definition file: {workcell_path}")
         workcell.to_yaml(workcell_path)
-    with ownership_context(
-        workcell_id=workcell.workcell_id,
-        manager_id=workcell.workcell_id,
-    ):
-        logger = EventClient(
-            name=f"workcell.{workcell.workcell_name}",
-        )
-        logger.info(workcell)
-        context = context or MadsciContext()
-        logger.info(context)
+    global_ownership_info.workcell_id = workcell.workcell_id
+    global_ownership_info.manager_id = workcell.workcell_id
+    logger = EventClient(
+        name=f"workcell.{workcell.workcell_name}",
+    )
+    logger.info(workcell)
+    context = context or MadsciContext()
+    logger.info(context)
 
-        state_handler = WorkcellStateHandler(
-            workcell,
-            redis_connection=redis_connection,
-            mongo_connection=mongo_connection,
-        )
+    state_handler = WorkcellStateHandler(
+        workcell,
+        redis_connection=redis_connection,
+        mongo_connection=mongo_connection,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
         """Start the REST server and initialize the state handler and engine"""
-        with ownership_context(
-            workcell_id=workcell.workcell_id,
-            manager_id=workcell.workcell_id,
-        ):
-            if start_engine:
-                engine = Engine(state_handler)
-                engine.spin()
-            else:
-                with state_handler.wc_state_lock():
-                    state_handler.initialize_workcell_state(
-                        resource_client=ResourceClient()
-                    )
-            yield
+        global_ownership_info.workcell_id = workcell.workcell_id
+        global_ownership_info.manager_id = workcell.workcell_id
+        if start_engine:
+            engine = Engine(state_handler)
+            engine.spin()
+        else:
+            with state_handler.wc_state_lock():
+                state_handler.initialize_workcell_state(
+                    resource_client=ResourceClient()
+                )
+        yield
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(
+        lifespan=lifespan,
+        title=workcell.workcell_name,
+        description=workcell.description,
+    )
 
-    @app.middleware("http")
-    async def ownership_middleware(request: Request, call_next: Callable) -> Response:
-        """Middleware to set ownership context for each request."""
-        with ownership_context(
-            workcell_id=workcell.workcell_id,
-            manager_id=workcell.workcell_id,
-        ):
-            return await call_next(request)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/")
     @app.get("/info")
@@ -152,7 +150,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             # TODO: Save the workcell definition to the YAML
         return state_handler.get_node(node_name)
 
-    @app.get("/admin/{command}")
+    @app.post("/admin/{command}")
     def send_admin_command(command: str) -> list:
         """Send an admin command to all capable nodes."""
         responses = []
@@ -163,7 +161,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 responses.append(response)
         return responses
 
-    @app.get("/admin/{command}/{node}")
+    @app.post("/admin/{command}/{node}")
     def send_admin_command_to_node(command: str, node: str) -> list:
         """Send admin command to a node."""
         responses = []
@@ -288,11 +286,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
-        parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
 
         Parameters
         ----------
-        workflow: UploadFile
+        workflow: YAML string
         - The workflow yaml file
         parameters: Optional[Dict[str, Any]] = {}
         - Dynamic values to insert into the workflow file
@@ -309,46 +307,56 @@ def create_workcell_server(  # noqa: C901, PLR0915
         - a workflow run object for the requested run_id
         """
         try:
-            wf_def = WorkflowDefinition.model_validate_json(workflow)
-        except Exception as e:
-            traceback.print_exc()
-            raise HTTPException(status_code=422, detail=str(e)) from e
+            try:
+                wf_def = WorkflowDefinition.model_validate_json(workflow)
+            except Exception as e:
+                traceback.print_exc()
+                raise HTTPException(status_code=422, detail=str(e)) from e
 
-        ownership_info = (
-            OwnershipInfo.model_validate_json(ownership_info)
-            if ownership_info
-            else OwnershipInfo()
-        )
-        with ownership_context(**ownership_info.model_dump(exclude_none=True)):
-            if parameters is None or parameters == "":
-                parameters = {}
-            else:
-                parameters = json.loads(parameters)
-                if not isinstance(parameters, dict) or not all(
-                    isinstance(k, str) for k in parameters
-                ):
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Parameters must be a dictionary with string keys",
-                    )
-            workcell = state_handler.get_workcell_definition()
-            wf = create_workflow(
-                workflow_def=wf_def,
-                workcell=workcell,
-                parameters=parameters,
-                state_handler=state_handler,
+            ownership_info = (
+                OwnershipInfo.model_validate_json(ownership_info)
+                if ownership_info
+                else OwnershipInfo()
             )
-
-            if not validate_only:
-                wf = save_workflow_files(
-                    working_directory=workcell.workcell_directory,
-                    workflow=wf,
-                    files=files,
+            with ownership_context(**ownership_info.model_dump(exclude_none=True)):
+                if parameters is None or parameters == "":
+                    parameters = {}
+                else:
+                    parameters = json.loads(parameters)
+                    if not isinstance(parameters, dict) or not all(
+                        isinstance(k, str) for k in parameters
+                    ):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Parameters must be a dictionary with string keys",
+                        )
+                workcell = state_handler.get_workcell_definition()
+                wf = create_workflow(
+                    workflow_def=wf_def,
+                    workcell=workcell,
+                    parameters=parameters,
+                    state_handler=state_handler,
                 )
-                with state_handler.wc_state_lock():
-                    state_handler.set_active_workflow(wf)
-                    state_handler.enqueue_workflow(wf.workflow_id)
-            return wf
+
+                if not validate_only:
+                    wf = save_workflow_files(
+                        working_directory=workcell.workcell_directory,
+                        workflow=wf,
+                        files=files,
+                    )
+                    with state_handler.wc_state_lock():
+                        state_handler.set_active_workflow(wf)
+                        state_handler.enqueue_workflow(wf.workflow_id)
+                return wf
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.error(f"Error starting workflow: {e}")
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error starting workflow: {e}",
+            ) from e
 
     @app.get("/locations")
     def get_locations() -> dict[str, Location]:
@@ -400,14 +408,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
             location.resource_id = resource_id
             state_handler.set_location(location)
         return state_handler.get_location(location_id)
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
     return app
 

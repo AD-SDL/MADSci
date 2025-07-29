@@ -37,9 +37,10 @@ class ExperimentApplication:
     """The current experiment being run."""
     experiment_design: Optional[Union[ExperimentDesign, PathLike]] = None
     """The design of the experiment."""
-    logger = event_client = EventClient()
+    logger: EventClient
+    event_client: EventClient
     """The event logger for the experiment."""
-    context: MadsciContext = MadsciContext()
+    context: MadsciContext
     """The context for the experiment application."""
     workcell_client: WorkcellClient
     """Client for managing workcells."""
@@ -62,6 +63,7 @@ class ExperimentApplication:
             if experiment_server_url
             else MadsciContext()
         )
+        self.logger = self.event_client = EventClient()
         self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
@@ -126,14 +128,6 @@ class ExperimentApplication:
                 val = input("Check failed, retry?")
                 if val == "n":
                     break
-
-        self.workcell_client.ownership_info.experiment_id = (
-            self.experiment.experiment_id
-        )
-        self.data_client.ownership_info.experiment_id = self.experiment.experiment_id
-        self.resource_client.ownership_info.experiment_id = (
-            self.experiment.experiment_id
-        )
 
     def end_experiment(self, status: Optional[ExperimentStatus] = None) -> None:
         """End the experiment."""

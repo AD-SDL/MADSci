@@ -8,7 +8,9 @@ from typing import Any, Optional
 
 from fastapi import UploadFile
 from madsci.client.event_client import EventClient
-from madsci.common.types.location_types import Location, LocationArgument
+from madsci.common.types.location_types import (
+    LocationArgument,
+)
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -118,7 +120,7 @@ def create_workflow(
     steps = []
     for step in workflow_def.steps:
         working_step = deepcopy(step)
-        replace_locations(workcell, working_step)
+        replace_locations(workcell, working_step, state_handler)
         valid, validation_string = validate_step(
             working_step, state_handler=state_handler
         )
@@ -127,39 +129,45 @@ def create_workflow(
             raise ValueError(validation_string)
         steps.append(working_step)
 
-    wf.steps = steps
+    wf.steps = [Step.model_validate(step.model_dump()) for step in steps]
     wf.submitted_time = datetime.now()
     return wf
 
 
-def replace_locations(workcell: WorkcellDefinition, step: Step) -> None:
+def replace_locations(
+    workcell: WorkcellDefinition, step: Step, state_handler: WorkcellStateHandler
+) -> None:
     """Replaces the location names with the location objects"""
+    locations = state_handler.get_locations()
     for location_arg, location_name_or_object in step.locations.items():
+        # * No location provided, set to None
         if location_name_or_object is None:
             step.locations[location_arg] = None
-        elif isinstance(location_name_or_object, Location):
-            step.locations[location_arg] = location_name_or_object.lookup[step.node]
-        elif location_name_or_object in [
-            location.location_name for location in workcell.locations
-        ]:
-            target_loc = next(
-                (
-                    location
-                    for location in workcell.locations
-                    if location.location_name == location_name_or_object
-                ),
-                None,
-            )
-            node_location = LocationArgument(
-                location=target_loc.lookup[step.node],
-                resource_id=target_loc.resource_id,
-                location_name=target_loc.location_name,
-            )
-            step.locations[location_arg] = node_location
-        else:
+            continue
+        # * Location is a LocationArgument, use it as is
+        if isinstance(location_name_or_object, LocationArgument):
+            step.locations[location_arg] = location_name_or_object
+            continue
+
+        # * Location is a string, find the corresponding Location object from state_handler
+        target_loc = next(
+            (
+                loc
+                for loc in locations.values()
+                if loc.location_name == location_name_or_object
+            ),
+            None,
+        )
+        if target_loc is None:
             raise ValueError(
-                f"Location {location_name_or_object} not in Workcell {workcell.name}"
+                f"Location {location_name_or_object} not found in Workcell '{workcell.workcell_name}'"
             )
+        node_location = LocationArgument(
+            location=target_loc.lookup[step.node],
+            resource_id=target_loc.resource_id,
+            location_name=target_loc.location_name,
+        )
+        step.locations[location_arg] = node_location
 
 
 def save_workflow_files(

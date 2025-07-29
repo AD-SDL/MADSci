@@ -163,7 +163,9 @@ class ResourceDefinition(MadsciSQLModel, table=False, extra="allow"):
     @classmethod
     def discriminate(cls, resource: dict) -> "ResourceDefinition":
         """Discriminate the resource definition based on its base type."""
-        from madsci.common.types.resource_types import RESOURCE_TYPE_MAP
+        from madsci.common.types.resource_types import (  # noqa: PLC0415
+            RESOURCE_TYPE_MAP,
+        )
 
         if isinstance(resource, dict):
             resource_type = resource.get("base_type")
