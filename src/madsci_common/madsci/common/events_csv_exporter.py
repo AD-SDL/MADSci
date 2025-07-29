@@ -47,7 +47,6 @@ class CSVExporter:
         writer.writerow(["Total Periods", metadata.get("total_periods", "")])
         writer.writerow([])
         
-        # Key metrics
         key_metrics = report_data.get("key_metrics", {})
         writer.writerow(["Key Metrics"])
         writer.writerow(["Average Utilization (%)", key_metrics.get("average_utilization", "")])
@@ -55,8 +54,11 @@ class CSVExporter:
         writer.writerow(["Peak Period", key_metrics.get("peak_period", "")])
         writer.writerow(["Total Experiments", key_metrics.get("total_experiments", "")])
         writer.writerow(["Total Runtime (hours)", key_metrics.get("total_runtime_hours", "")])
+        writer.writerow(["Total Active Time (hours)", key_metrics.get("total_active_time_hours", "")])
         writer.writerow(["Active Periods", key_metrics.get("active_periods", "")])
+        writer.writerow(["Total Periods", key_metrics.get("total_periods", "")])
         writer.writerow([])
+
         
         # Section 2: Time Series Data
         writer.writerow(["=== TIME SERIES DATA ==="])
@@ -99,6 +101,7 @@ class CSVExporter:
                     node_data.get("total_busy_hours", "")
                 ])
             writer.writerow([])
+
         
         # Section 4: Workcell Summary
         workcell_summary = report_data.get("workcell_summary", {})
@@ -107,7 +110,7 @@ class CSVExporter:
             writer.writerow([
                 "Workcell ID", "Workcell Name", "Display Name", "Average Utilization (%)",
                 "Peak Utilization (%)", "Peak Period", "Total Experiments", 
-                "Total Runtime (hours)", "Periods Tracked", "Attributed Periods"
+                "Total Runtime (hours)", "Total Active Time (hours)"
             ])
             
             for workcell_id, workcell_data in workcell_summary.items():
@@ -120,8 +123,7 @@ class CSVExporter:
                     workcell_data.get("peak_period", ""),
                     workcell_data.get("total_experiments", ""),
                     workcell_data.get("total_runtime_hours", ""),
-                    workcell_data.get("periods_tracked", ""),
-                    workcell_data.get("attributed_periods", "")
+                    workcell_data.get("total_active_time_hours", "")
                 ])
             writer.writerow([])
         
@@ -155,7 +157,7 @@ class CSVExporter:
             ])
             
             experiments = experiment_details.get("experiments", [])
-            for exp in experiments[:20]:  # Limit to first 20 experiments
+            for exp in experiments:
                 writer.writerow([
                     exp.get("experiment_id", ""),
                     exp.get("experiment_name", ""),
@@ -166,8 +168,11 @@ class CSVExporter:
                     exp.get("duration_display", "")
                 ])
             
-            if len(experiments) > 20:
-                writer.writerow([f"... and {len(experiments) - 20} more experiments"])
+            if len(experiments) < experiment_details.get("total_experiments", 0):
+                remaining = experiment_details.get("total_experiments", 0) - len(experiments)
+                writer.writerow([f"... and {remaining} more experiments"])
+            
+            writer.writerow([])
         
         csv_content = output.getvalue()
         
