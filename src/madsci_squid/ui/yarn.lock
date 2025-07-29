@@ -1213,7 +1213,7 @@ js-yaml@^4.1.0:
     argparse "^2.0.1"
 
 local-pkg@^0.4.3:
-  version "0.4.3"
+  version "0.4.4"
   resolved "https://registry.yarnpkg.com/local-pkg/-/local-pkg-0.4.3.tgz#0ff361ab3ae7f1c19113d9bb97b98b905dbc4963"
   integrity sha512-SFppqq5p42fe2qcZQqqEOiVRXl+WCP1MdT6k7BDEW1j++sp5fIY+/fdRQitvKgB5BrBcmrs5m/L0v2FrU5MY1g==
 
