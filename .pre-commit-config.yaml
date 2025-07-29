@@ -33,4 +33,5 @@ repos:
     hooks:
      - id: pydantic-settings-export
        entry: pdm run pydantic-settings-export
+       language: system
        files: ^src/madsci_common/madsci/common/types/.*\.py$
