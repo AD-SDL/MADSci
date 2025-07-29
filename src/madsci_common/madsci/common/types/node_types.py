@@ -78,9 +78,6 @@ class NodeConfig(
         description="The interval in seconds at which the node should update its state.",
         default=2.0,
     )
-    lab_server_url: Optional[str] = Field(
-        title="Lab Server URL", description="Server for the Lab URL", default=None
-    )
 
 
 class RestNodeConfig(NodeConfig):
