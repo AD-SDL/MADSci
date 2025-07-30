@@ -51,7 +51,7 @@ class TimeSeriesAnalyzer:
             time_bucket_hours = 24
         elif analysis_type == "weekly":
             time_bucket_hours = 168
-        elif analysis_type in ["monthly", "mounthly"]:
+        elif analysis_type in "monthly":
             time_bucket_hours = "monthly"
         else:
             time_bucket_hours = 24
@@ -75,7 +75,7 @@ class TimeSeriesAnalyzer:
                 bucket_reports = self._create_daily_buckets_from_sessions(
                     time_buckets, all_sessions, start_time, end_time
                 )
-            elif analysis_type in ['monthly', 'mounthly']:
+            elif analysis_type in 'monthly':
                 # FIXED: Special handling for monthly to avoid utilization dilution
                 bucket_reports = self._create_monthly_buckets_from_sessions(
                     time_buckets, all_sessions, start_time, end_time
@@ -900,269 +900,32 @@ class TimeSeriesAnalyzer:
         """Create clean summary report format with experiment details included."""
         
         try:
-            logger.info(f"Creating summary report from {len(bucket_reports)} bucket reports")
+            logger.info(f"Creating summary report from {len(bucket_reports) if bucket_reports else 0} bucket reports")
             
-            # Validate bucket_reports
+            # Validate input
             if not bucket_reports:
                 logger.warning("No bucket reports provided to summary creation")
                 bucket_reports = []
             
-            # Aggregate data from bucket reports
-            all_utilizations = []
-            all_experiments = []
-            all_runtime_hours = []
-            all_active_time_hours = []
+            # Process all bucket reports and extract data
+            aggregated_data = self._aggregate_bucket_data(bucket_reports)
             
-            # Track active vs total periods for proper monthly utilization calculation
-            active_periods_utilizations = []  # Only periods with experiments
-            all_periods_utilizations = []     # All periods including zeros
+            # Get complete experiment details
+            complete_experiment_details = self._get_complete_experiment_details(
+                aggregated_data["all_experiment_details"], start_time, end_time
+            )
             
-            # Node and workcell aggregation
-            node_metrics = defaultdict(lambda: {
-                "utilizations": [], 
-                "busy_hours": 0, 
-                "time_series": []
-            })
-            
-            workcell_metrics = defaultdict(lambda: {
-                "utilizations": [], 
-                "experiments": [], 
-                "runtime_hours": [], 
-                "time_series": [],
-                "active_time_hours": []
-            })
-            
-            time_series_points = []
-            
-            # Track what IDs are actually nodes vs workcells
-            actual_node_ids = set()
-            actual_workcell_ids = set()
-            
-            # Collect experiment details across all buckets
-            all_experiment_details = []
-            
-            # Process bucket reports
-            for bucket_report in bucket_reports:
-                if "error" in bucket_report:
-                    logger.warning(f"Skipping bucket report with error: {bucket_report.get('error')}")
-                    continue
-                    
-                overall_summary = bucket_report.get("overall_summary", {})
-                session_details = bucket_report.get("session_details", [])
-                time_bucket = bucket_report.get("time_bucket", {})
-                
-                # Get period info for better labeling
-                period_info = time_bucket.get("period_info", {
-                    "type": "period", 
-                    "display": time_bucket.get("user_date", ""),
-                    "short": time_bucket.get("user_date", "")
-                })
-                
-                # System metrics
-                avg_util = overall_summary.get("average_system_utilization_percent", 0)
-                total_exp = overall_summary.get("total_experiments", 0)
-                total_runtime = overall_summary.get("total_system_runtime_hours", 0)
-                total_active_time = overall_summary.get("total_active_time_hours", 0)
-                
-                # Track utilizations properly for monthly calculation
-                all_periods_utilizations.append(avg_util)  # Include all periods
-                
-                # Only include periods with activity for utilization calculation
-                if total_exp > 0:
-                    active_periods_utilizations.append(avg_util)
-                    all_utilizations.append(avg_util)  # Keep old logic for compatibility
-                    all_experiments.append(total_exp)
-                
-                # Always include runtime
-                all_runtime_hours.append(total_runtime)
-                all_active_time_hours.append(total_active_time)
-                
-                # Collect experiment details from sessions - Add safety checks
-                if session_details:
-                    for session in session_details:
-                        if session and isinstance(session, dict):
-                            experiment_details = session.get("experiment_details", [])
-                            if experiment_details:
-                                for exp in experiment_details:
-                                    if exp and isinstance(exp, dict):
-                                        # Avoid duplicates by checking experiment_id
-                                        exp_id = exp.get("experiment_id")
-                                        if exp_id and not any(existing.get("experiment_id") == exp_id for existing in all_experiment_details):
-                                            all_experiment_details.append(exp)
-                
-                # Extract node data from overall_summary.node_summary for daily reports
-                node_summary_in_bucket = overall_summary.get("node_summary", {})
-                if node_summary_in_bucket:
-                    for node_id, node_data in node_summary_in_bucket.items():
-                        if node_data:  # Safety check
-                            actual_node_ids.add(node_id)
-                            
-                            utilization = node_data.get("average_utilization_percent", 0)
-                            busy_hours = node_data.get("total_busy_time_hours", 0)
-                            
-                            node_metrics[node_id]["utilizations"].append(utilization)
-                            node_metrics[node_id]["busy_hours"] += busy_hours
-                            
-                            # Time series for nodes
-                            node_metrics[node_id]["time_series"].append({
-                                "period_number": time_bucket.get("bucket_index", 0) + 1,
-                                "period_type": period_info.get("type", "period"),
-                                "period_display": period_info.get("display", ""),
-                                "date": time_bucket.get("user_date", ""),
-                                "utilization": utilization,
-                                "busy_hours": busy_hours
-                            })
-                
-                # Process sessions for workcell data - Add safety checks
-                if session_details:
-                    for session in session_details:
-                        if not session or not isinstance(session, dict):
-                            continue
-                            
-                        session_id = session.get("session_id")
-                        session_type = session.get("session_type", "")
-                        
-                        # Track workcells
-                        if session_type in ["workcell", "lab"] and session_id:
-                            actual_workcell_ids.add(session_id)
-                            
-                            session_util = session.get("system_utilization_percent", 0)
-                            session_exp = session.get("total_experiments", 0)
-                            session_runtime = session.get("duration_hours", 0)
-                            session_active_time = session.get("active_time_hours", 0)
-                            
-                            workcell_metrics[session_id]["utilizations"].append(session_util)
-                            workcell_metrics[session_id]["experiments"].append(session_exp)
-                            workcell_metrics[session_id]["runtime_hours"].append(session_runtime)
-                            workcell_metrics[session_id]["active_time_hours"].append(session_active_time)
-                            
-                            # Time series for workcells
-                            if session_runtime > 0:
-                                attribution_info = session.get("attribution_info")
-                                workcell_metrics[session_id]["time_series"].append({
-                                    "period_number": time_bucket.get("bucket_index", 0) + 1,
-                                    "period_type": period_info.get("type", "period"),
-                                    "period_display": period_info.get("display", ""),
-                                    "date": time_bucket.get("user_date", ""),
-                                    "utilization": session_util,
-                                    "experiments": session_exp,
-                                    "runtime_hours": session_runtime,
-                                    "active_time_hours": session_active_time,
-                                    "attributed": bool(attribution_info)
-                                })
-                
-                # System time series
-                time_series_points.append({
-                    "period_number": time_bucket.get("bucket_index", 0) + 1,
-                    "period_type": period_info.get("type", "period"),
-                    "period_display": period_info.get("display", ""),
-                    "date": time_bucket.get("user_date", ""),
-                    "start_time": time_bucket.get("user_start_time", ""),
-                    "start_time_utc": time_bucket.get("start_time", ""),
-                    "utilization": avg_util,
-                    "experiments": total_exp,
-                    "runtime_hours": total_runtime,
-                    "active_time_hours": total_active_time
-                })
-            
-            # Get complete experiment information from database
-            try:
-                complete_experiment_details = self._get_complete_experiment_details(
-                    all_experiment_details, start_time, end_time
-                )
-            except Exception as e:
-                logger.error(f"Error getting complete experiment details: {e}")
-                complete_experiment_details = all_experiment_details  # Use basic details as fallback
-            
-            # Create clean node summary
-            node_summary_clean = {}
-            for node_id, data in node_metrics.items():
-                if node_id not in actual_node_ids:
-                    continue
-                    
-                node_name = self.analyzer._resolve_node_name(node_id)
-                
-                # Calculate peak info with context
-                peak_info = self._calculate_period_peak_info(data, analysis_type)
-                
-                node_summary_clean[node_id] = {
-                    "node_id": node_id,
-                    "node_name": node_name,
-                    "display_name": f"{node_name} ({node_id[-8:]})" if node_name else f"Node {node_id[-8:]}",
-                    "average_utilization": round(statistics.mean(data["utilizations"]) if data["utilizations"] else 0, 2),
-                    **peak_info,
-                    "total_busy_hours": round(data["busy_hours"], 2)
-                }
-            
-            # Create clean workcell summary
-            workcell_summary_clean = {}
-            for workcell_id, data in workcell_metrics.items():
-                if workcell_id not in actual_workcell_ids:
-                    continue
-                    
-                workcell_name = self._resolve_workcell_name(workcell_id)
-                
-                # Calculate peak info with context
-                peak_info = self._calculate_period_peak_info(data, analysis_type)
-                
-                # Better display name
-                if workcell_name.startswith("Workcell ") and workcell_id[-8:] in workcell_name:
-                    display_name = workcell_name
-                else:
-                    display_name = f"{workcell_name} ({workcell_id[-8:]})"
-                
-                workcell_summary_clean[workcell_id] = {
-                    "workcell_id": workcell_id,
-                    "workcell_name": workcell_name,
-                    "display_name": display_name,
-                    "average_utilization": round(statistics.mean(data["utilizations"]) if data["utilizations"] else 0, 2),
-                    **peak_info,
-                    "total_experiments": sum(data["experiments"]),
-                    "total_runtime_hours": round(sum(data["runtime_hours"]), 2),
-                    "total_active_time_hours": round(sum(data["active_time_hours"]), 2)
-                }
+            # Create node and workcell summaries
+            node_summary_clean = self._create_node_summary(aggregated_data["node_metrics"], analysis_type)
+            workcell_summary_clean = self._create_workcell_summary(aggregated_data["workcell_metrics"], analysis_type)
             
             # Calculate trends
-            trends = self._calculate_trends_from_time_series(time_series_points)
+            trends = self._calculate_trends_from_time_series(aggregated_data["time_series_points"])
             
-            # Calculate system peak and average utilization properly for monthly reports
-            if analysis_type == "monthly":
-                # ADDITIONAL FIX: For monthly, recalculate utilization from raw runtime/active time
-                total_runtime_all = sum(all_runtime_hours)
-                total_active_all = sum(all_active_time_hours)
-                
-                if total_runtime_all > 0:
-                    corrected_monthly_utilization = (total_active_all / total_runtime_all) * 100
-                else:
-                    corrected_monthly_utilization = 0
-                
-                # Use corrected utilization for monthly
-                monthly_avg_utilization = round(corrected_monthly_utilization, 2)
-                
-                # Extract period info more safely from bucket reports
-                period_display = 'July 2025'  # Default fallback
-                if bucket_reports:
-                    for bucket_report in bucket_reports:
-                        time_bucket = bucket_report.get("time_bucket", {})
-                        period_info = time_bucket.get("period_info", {})
-                        if period_info.get("display"):
-                            period_display = period_info["display"]
-                            break
-                
-                system_peak_info = {
-                    "peak_utilization": monthly_avg_utilization,
-                    "peak_period": period_display,
-                    "peak_context": f"Peak utilization in {period_display}"
-                }
-
-            else:
-                # For daily/weekly: use existing logic
-                system_peak_info = self._calculate_period_peak_info({
-                    "utilizations": all_utilizations,
-                    "time_series": [point for point in time_series_points if point["utilization"] > 0]
-                }, analysis_type)
-                
-                monthly_avg_utilization = round(statistics.mean(all_utilizations) if all_utilizations else 0, 2)
+            # Calculate system-level metrics and peak info
+            system_metrics = self._calculate_system_metrics(
+                bucket_reports, aggregated_data, analysis_type, start_time
+            )
             
             logger.info(f"Final summary: {len(node_summary_clean)} nodes, {len(workcell_summary_clean)} workcells")
             
@@ -1174,16 +937,16 @@ class TimeSeriesAnalyzer:
                     "period_end": end_time.isoformat(),
                     "user_timezone": user_timezone,
                     "total_periods": len(bucket_reports),
-                    "method": "session_based_analysis_with_experiment_details"
+                    "method": "session_based_analysis_with_experiment_details_refactored"
                 },
                 
                 "key_metrics": {
-                    "average_utilization": monthly_avg_utilization,
-                    **system_peak_info,
-                    "total_experiments": sum(all_experiments),
-                    "total_runtime_hours": round(sum(all_runtime_hours), 2),
-                    "total_active_time_hours": round(sum(all_active_time_hours), 2),
-                    "active_periods": len(all_utilizations),
+                    "average_utilization": system_metrics["average_utilization"],
+                    **system_metrics["peak_info"],
+                    "total_experiments": sum(aggregated_data["all_experiments"]) if aggregated_data["all_experiments"] else 0,
+                    "total_runtime_hours": round(sum(aggregated_data["all_runtime_hours"]) if aggregated_data["all_runtime_hours"] else 0, 2),
+                    "total_active_time_hours": round(sum(aggregated_data["all_active_time_hours"]) if aggregated_data["all_active_time_hours"] else 0, 2),
+                    "active_periods": len(aggregated_data["all_utilizations"]),
                     "total_periods": len(bucket_reports)
                 },
                 
@@ -1192,21 +955,21 @@ class TimeSeriesAnalyzer:
                 "trends": trends,
                 
                 "experiment_details": {
-                    "total_experiments": len(complete_experiment_details),
-                    "experiments": complete_experiment_details[:50]  # Limit to first 50 for CSV
+                    "total_experiments": len(complete_experiment_details) if complete_experiment_details else 0,
+                    "experiments": (complete_experiment_details[:50] if complete_experiment_details else [])
                 },
                 
                 "time_series": {
-                    "system": time_series_points,
+                    "system": aggregated_data["time_series_points"],
                     "nodes": {
                         node_id: node_data["time_series"] 
-                        for node_id, node_data in node_metrics.items()
-                        if node_id in actual_node_ids and node_data["time_series"]
+                        for node_id, node_data in aggregated_data["node_metrics"].items()
+                        if node_id in aggregated_data["actual_node_ids"] and node_data.get("time_series")
                     },
                     "workcells": {
                         workcell_id: workcell_data["time_series"]
-                        for workcell_id, workcell_data in workcell_metrics.items()
-                        if workcell_id in actual_workcell_ids and workcell_data["time_series"]
+                        for workcell_id, workcell_data in aggregated_data["workcell_metrics"].items()
+                        if workcell_id in aggregated_data["actual_workcell_ids"] and workcell_data.get("time_series")
                     }
                 }
             }
@@ -1220,6 +983,411 @@ class TimeSeriesAnalyzer:
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                     "error_occurred": True
                 }
+            }
+
+    def _aggregate_bucket_data(self, bucket_reports: List[Dict]) -> Dict[str, Any]:
+        """Aggregate data from all bucket reports."""
+        
+        # Initialize aggregation containers
+        all_utilizations = []
+        all_experiments = []
+        all_runtime_hours = []
+        all_active_time_hours = []
+        all_periods_utilizations = []
+        active_periods_utilizations = []
+        
+        node_metrics = defaultdict(lambda: {
+            "utilizations": [], 
+            "busy_hours": 0, 
+            "time_series": []
+        })
+        
+        workcell_metrics = defaultdict(lambda: {
+            "utilizations": [], 
+            "experiments": [], 
+            "runtime_hours": [], 
+            "time_series": [],
+            "active_time_hours": []
+        })
+        
+        time_series_points = []
+        actual_node_ids = set()
+        actual_workcell_ids = set()
+        all_experiment_details = []
+        
+        # Process each bucket report
+        for bucket_report in bucket_reports:
+            if not bucket_report or not isinstance(bucket_report, dict):
+                continue
+                
+            if "error" in bucket_report:
+                logger.warning(f"Skipping bucket report with error: {bucket_report.get('error')}")
+                continue
+            
+            # Extract basic data
+            overall_summary = bucket_report.get("overall_summary", {})
+            session_details = bucket_report.get("session_details", [])
+            time_bucket = bucket_report.get("time_bucket", {})
+            
+            # Get period info for labeling
+            period_info = time_bucket.get("period_info", {
+                "type": "period", 
+                "display": time_bucket.get("user_date", ""),
+                "short": time_bucket.get("user_date", "")
+            })
+            
+            # Extract system metrics with safety checks
+            avg_util = overall_summary.get("average_system_utilization_percent", 0) or 0
+            total_exp = overall_summary.get("total_experiments", 0) or 0
+            total_runtime = overall_summary.get("total_system_runtime_hours", 0) or 0
+            total_active_time = overall_summary.get("total_active_time_hours", 0) or 0
+            
+            # Track utilizations
+            all_periods_utilizations.append(avg_util)
+            
+            if total_exp > 0:
+                active_periods_utilizations.append(avg_util)
+                all_utilizations.append(avg_util)
+                all_experiments.append(total_exp)
+            
+            all_runtime_hours.append(total_runtime)
+            all_active_time_hours.append(total_active_time)
+            
+            # Process experiment details
+            self._extract_experiment_details(session_details, all_experiment_details)
+            
+            # Process node data
+            self._process_node_data(overall_summary, time_bucket, period_info, node_metrics, actual_node_ids)
+            
+            # Process workcell data
+            self._process_workcell_data(session_details, time_bucket, period_info, workcell_metrics, actual_workcell_ids)
+            
+            # Add to system time series
+            time_series_points.append({
+                "period_number": time_bucket.get("bucket_index", 0) + 1,
+                "period_type": period_info.get("type", "period"),
+                "period_display": period_info.get("display", ""),
+                "date": time_bucket.get("user_date", ""),
+                "start_time": time_bucket.get("user_start_time", ""),
+                "start_time_utc": time_bucket.get("start_time", ""),
+                "utilization": avg_util,
+                "experiments": total_exp,
+                "runtime_hours": total_runtime,
+                "active_time_hours": total_active_time
+            })
+        
+        return {
+            "all_utilizations": all_utilizations,
+            "all_experiments": all_experiments,
+            "all_runtime_hours": all_runtime_hours,
+            "all_active_time_hours": all_active_time_hours,
+            "all_periods_utilizations": all_periods_utilizations,
+            "active_periods_utilizations": active_periods_utilizations,
+            "node_metrics": node_metrics,
+            "workcell_metrics": workcell_metrics,
+            "time_series_points": time_series_points,
+            "actual_node_ids": actual_node_ids,
+            "actual_workcell_ids": actual_workcell_ids,
+            "all_experiment_details": all_experiment_details
+        }
+
+    def _extract_experiment_details(self, session_details: List[Dict], all_experiment_details: List[Dict]):
+        """Extract experiment details from session details."""
+        
+        if not session_details:
+            return
+            
+        for session in session_details:
+            if not session or not isinstance(session, dict):
+                continue
+                
+            experiment_details = session.get("experiment_details", [])
+            if not experiment_details:
+                continue
+                
+            for exp in experiment_details:
+                if not exp or not isinstance(exp, dict):
+                    continue
+                    
+                # Avoid duplicates by checking experiment_id
+                exp_id = exp.get("experiment_id")
+                if exp_id and not any(existing.get("experiment_id") == exp_id for existing in all_experiment_details):
+                    all_experiment_details.append(exp)
+
+    def _process_node_data(self, overall_summary: Dict, time_bucket: Dict, period_info: Dict, 
+                        node_metrics: Dict, actual_node_ids: set):
+        """Process node data from bucket summary."""
+        
+        node_summary_in_bucket = overall_summary.get("node_summary", {})
+        if not node_summary_in_bucket:
+            return
+            
+        for node_id, node_data in node_summary_in_bucket.items():
+            if not node_data or not isinstance(node_data, dict):
+                continue
+                
+            actual_node_ids.add(node_id)
+            
+            utilization = node_data.get("average_utilization_percent", 0) or 0
+            busy_hours = node_data.get("total_busy_time_hours", 0) or 0
+            
+            node_metrics[node_id]["utilizations"].append(utilization)
+            node_metrics[node_id]["busy_hours"] += busy_hours
+            
+            # Add time series point for this node
+            node_metrics[node_id]["time_series"].append({
+                "period_number": time_bucket.get("bucket_index", 0) + 1,
+                "period_type": period_info.get("type", "period"),
+                "period_display": period_info.get("display", ""),
+                "date": time_bucket.get("user_date", ""),
+                "utilization": utilization,
+                "busy_hours": busy_hours
+            })
+
+    def _process_workcell_data(self, session_details: List[Dict], time_bucket: Dict, period_info: Dict,
+                            workcell_metrics: Dict, actual_workcell_ids: set):
+        """Process workcell data from session details."""
+        
+        if not session_details:
+            return
+            
+        for session in session_details:
+            if not session or not isinstance(session, dict):
+                continue
+                
+            session_id = session.get("session_id")
+            session_type = session.get("session_type", "")
+            
+            # Track workcells
+            if session_type in ["workcell", "lab"] and session_id:
+                actual_workcell_ids.add(session_id)
+                
+                session_util = session.get("system_utilization_percent", 0) or 0
+                session_exp = session.get("total_experiments", 0) or 0
+                session_runtime = session.get("duration_hours", 0) or 0
+                session_active_time = session.get("active_time_hours", 0) or 0
+                
+                workcell_metrics[session_id]["utilizations"].append(session_util)
+                workcell_metrics[session_id]["experiments"].append(session_exp)
+                workcell_metrics[session_id]["runtime_hours"].append(session_runtime)
+                workcell_metrics[session_id]["active_time_hours"].append(session_active_time)
+                
+                # Add time series if there's runtime
+                if session_runtime > 0:
+                    attribution_info = session.get("attribution_info")
+                    workcell_metrics[session_id]["time_series"].append({
+                        "period_number": time_bucket.get("bucket_index", 0) + 1,
+                        "period_type": period_info.get("type", "period"),
+                        "period_display": period_info.get("display", ""),
+                        "date": time_bucket.get("user_date", ""),
+                        "utilization": session_util,
+                        "experiments": session_exp,
+                        "runtime_hours": session_runtime,
+                        "active_time_hours": session_active_time,
+                        "attributed": bool(attribution_info)
+                    })
+
+    def _create_node_summary(self, node_metrics: Dict, analysis_type: str) -> Dict[str, Any]:
+        """Create clean node summary from aggregated metrics."""
+        
+        node_summary_clean = {}
+        
+        for node_id, data in node_metrics.items():
+            try:
+                node_name = self.analyzer._resolve_node_name(node_id)
+                
+                # Calculate peak info with context - FIXED to find actual peak
+                peak_info = self._find_actual_peak_info(data, analysis_type)
+                
+                node_summary_clean[node_id] = {
+                    "node_id": node_id,
+                    "node_name": node_name,
+                    "display_name": f"{node_name} ({node_id[-8:]})" if node_name else f"Node {node_id[-8:]}",
+                    "average_utilization": round(statistics.mean(data["utilizations"]) if data["utilizations"] else 0, 2),
+                    **peak_info,
+                    "total_busy_hours": round(data["busy_hours"], 2)
+                }
+            except Exception as e:
+                logger.error(f"Error processing node summary for {node_id}: {e}")
+                continue
+        
+        return node_summary_clean
+
+    def _create_workcell_summary(self, workcell_metrics: Dict, analysis_type: str) -> Dict[str, Any]:
+        """Create clean workcell summary from aggregated metrics."""
+        
+        workcell_summary_clean = {}
+        
+        for workcell_id, data in workcell_metrics.items():
+            try:
+                workcell_name = self._resolve_workcell_name(workcell_id)
+                
+                # Calculate peak info with context - FIXED to find actual peak
+                peak_info = self._find_actual_peak_info(data, analysis_type)
+                
+                # Better display name
+                if workcell_name.startswith("Workcell ") and workcell_id[-8:] in workcell_name:
+                    display_name = workcell_name
+                else:
+                    display_name = f"{workcell_name} ({workcell_id[-8:]})"
+                
+                workcell_summary_clean[workcell_id] = {
+                    "workcell_id": workcell_id,
+                    "workcell_name": workcell_name,
+                    "display_name": display_name,
+                    "average_utilization": round(statistics.mean(data["utilizations"]) if data["utilizations"] else 0, 2),
+                    **peak_info,
+                    "total_experiments": sum(data["experiments"]) if data["experiments"] else 0,
+                    "total_runtime_hours": round(sum(data["runtime_hours"]) if data["runtime_hours"] else 0, 2),
+                    "total_active_time_hours": round(sum(data["active_time_hours"]) if data["active_time_hours"] else 0, 2)
+                }
+            except Exception as e:
+                logger.error(f"Error processing workcell summary for {workcell_id}: {e}")
+                continue
+        
+        return workcell_summary_clean
+
+    def _calculate_system_metrics(self, bucket_reports: List[Dict], aggregated_data: Dict, 
+                                analysis_type: str, start_time: datetime) -> Dict[str, Any]:
+        """Calculate system-level metrics and peak information."""
+        
+        if analysis_type == "monthly":
+            # For monthly: recalculate utilization from raw runtime/active time
+            total_runtime_all = sum(aggregated_data["all_runtime_hours"]) if aggregated_data["all_runtime_hours"] else 0
+            total_active_all = sum(aggregated_data["all_active_time_hours"]) if aggregated_data["all_active_time_hours"] else 0
+            
+            if total_runtime_all > 0:
+                corrected_monthly_utilization = (total_active_all / total_runtime_all) * 100
+            else:
+                corrected_monthly_utilization = 0
+            
+            average_utilization = round(corrected_monthly_utilization, 2)
+            peak_info = self._find_system_peak_period(bucket_reports, analysis_type)
+            
+        else:
+            # For daily/weekly: use existing logic
+            average_utilization = round(statistics.mean(aggregated_data["all_utilizations"]) if aggregated_data["all_utilizations"] else 0, 2)
+            peak_info = self._find_system_peak_period(bucket_reports, analysis_type)
+        
+        return {
+            "average_utilization": average_utilization,
+            "peak_info": peak_info
+        }
+
+    def _find_system_peak_period(self, bucket_reports: List[Dict], analysis_type: str) -> Dict[str, Any]:
+        """Find the actual period with peak system utilization - FIXED VERSION."""
+        
+        if not bucket_reports:
+            return {
+                "peak_utilization": 0,
+                "peak_period": None,
+                "peak_context": "No peak data available"
+            }
+        
+        # Find the bucket with the highest utilization
+        max_utilization = 0
+        peak_period_display = None
+        peak_utilization_value = 0
+        
+        for bucket_report in bucket_reports:
+            if not bucket_report or not isinstance(bucket_report, dict):
+                continue
+                
+            overall_summary = bucket_report.get("overall_summary", {})
+            bucket_utilization = overall_summary.get("average_system_utilization_percent", 0)
+            
+            if bucket_utilization > max_utilization:
+                max_utilization = bucket_utilization
+                peak_utilization_value = bucket_utilization
+                
+                # Get the period display from this bucket
+                time_bucket = bucket_report.get("time_bucket", {})
+                period_info = time_bucket.get("period_info", {})
+                
+                if period_info.get("display"):
+                    peak_period_display = period_info["display"]
+                else:
+                    # Fallback to parsing start_time
+                    start_time_str = time_bucket.get("start_time", "")
+                    if start_time_str:
+                        try:
+                            bucket_date = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+                            if analysis_type == "daily":
+                                peak_period_display = bucket_date.strftime("%Y-%m-%d")
+                            elif analysis_type == "weekly":
+                                peak_period_display = f"Week of {bucket_date.strftime('%Y-%m-%d')}"
+                            elif analysis_type == "monthly":
+                                peak_period_display = bucket_date.strftime("%m/%y")
+                            else:
+                                peak_period_display = bucket_date.strftime("%Y-%m-%d")
+                        except:
+                            pass
+        
+        # Create peak info
+        if peak_period_display:
+            if analysis_type == "daily":
+                context = f"Peak utilization on {peak_period_display}"
+            elif analysis_type == "weekly":
+                context = f"Peak utilization during {peak_period_display}"
+            elif analysis_type == "monthly":
+                context = f"Peak utilization in {peak_period_display}"
+            else:
+                context = f"Peak utilization in {peak_period_display}"
+                
+            return {
+                "peak_utilization": round(peak_utilization_value, 2),
+                "peak_period": peak_period_display,
+                "peak_context": context
+            }
+        else:
+            return {
+                "peak_utilization": 0,
+                "peak_period": None,
+                "peak_context": "No peak data available"
+            }
+
+    def _find_actual_peak_info(self, data: Dict, analysis_type: str) -> Dict[str, Any]:
+        """Find actual peak info from time series data - FIXED VERSION."""
+        
+        if not data or not data.get("utilizations") or not data.get("time_series"):
+            return {
+                "peak_utilization": 0,
+                "peak_period": None,
+                "peak_context": "No peak data available"
+            }
+        
+        utilizations = data["utilizations"]
+        time_series = data["time_series"]
+        
+        # Find the index of maximum utilization
+        max_utilization = max(utilizations)
+        max_index = utilizations.index(max_utilization)
+        
+        # Get the corresponding time series entry
+        if max_index < len(time_series):
+            peak_period_info = time_series[max_index]
+            period_display = peak_period_info.get("period_display", "Unknown")
+            
+            # Create contextual message based on analysis type
+            if analysis_type == "daily":
+                peak_context = f"Peak utilization on {period_display}"
+            elif analysis_type == "weekly":
+                peak_context = f"Peak utilization during {period_display}"
+            elif analysis_type == "monthly":
+                peak_context = f"Peak utilization in {period_display}"
+            else:
+                peak_context = f"Peak utilization in {period_display}"
+                
+            return {
+                "peak_utilization": round(max_utilization, 2),
+                "peak_period": period_display,
+                "peak_context": peak_context
+            }
+        else:
+            return {
+                "peak_utilization": round(max_utilization, 2),
+                "peak_period": "Unknown",
+                "peak_context": f"Peak utilization: {round(max_utilization, 2)}%"
             }
         
     def _get_complete_experiment_details(
@@ -1328,45 +1496,6 @@ class TimeSeriesAnalyzer:
         
         return complete_details
      
-    def _calculate_period_peak_info(self, data: Dict, analysis_type: str) -> Dict[str, Any]:
-        """Calculate peak utilization info between periods."""
-        if not data["utilizations"]:
-            return {
-                "peak_utilization": 0,
-                "peak_period": None,
-                "peak_context": "No active periods"
-            }
-        
-        max_utilization = max(data["utilizations"])
-        max_index = data["utilizations"].index(max_utilization)
-        
-        # Get the time series entry for this peak
-        if max_index < len(data["time_series"]):
-            peak_period_info = data["time_series"][max_index]
-            
-            period_display = peak_period_info.get("period_display", "Unknown")
-            
-            # Create contextual message based on analysis type
-            if analysis_type == "daily":
-                peak_context = f"Peak utilization on {period_display}"
-            elif analysis_type == "weekly":
-                peak_context = f"Peak utilization during {period_display}"
-            elif analysis_type in ["monthly", "mounthly"]:
-                peak_context = f"Peak utilization in {period_display}"
-            else:
-                peak_context = f"Peak utilization in {period_display}"
-                
-            return {
-                "peak_utilization": round(max_utilization, 2),
-                "peak_period": period_display,
-                "peak_context": peak_context
-            }
-        else:
-            return {
-                "peak_utilization": round(max_utilization, 2),
-                "peak_period": "Unknown",
-                "peak_context": f"Peak utilization: {round(max_utilization, 2)}%"
-            }
     
     def _calculate_trends_from_time_series(self, time_series_points: List[Dict]) -> Dict[str, Any]:
         """Calculate trends from time series data."""
