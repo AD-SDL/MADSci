@@ -234,6 +234,11 @@ def create_event_server(  # noqa: C901
         Get time-series utilization analysis with periodic breakdowns.
         
         PARAMETERS:
+        - start_time: Optional ISO format start time (if not provided, uses database range)
+        - end_time: Optional ISO format end time (if not provided, uses database range)
+        - analysis_type: "hourly", "daily", "weekly", "monthly"
+        - user_timezone: Timezone for period boundaries (e.g., "America/Chicago")
+        - include_users: Whether to include user utilization data
         - csv_format: If True, returns CSV data instead of JSON
         - save_to_file: If True, saves CSV to server filesystem (requires output_path)
         - output_path: Server path where CSV files should be saved
@@ -246,28 +251,30 @@ def create_event_server(  # noqa: C901
         ts_analyzer = TimeSeriesAnalyzer(analyzer)
         
         try:
-            # Parse times correctly
-            if not end_time:
-                end_dt = datetime.now(timezone.utc).replace(tzinfo=None)
-            else:
-                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
+            # Parse time parameters (if provided)
+            parsed_start = None
+            parsed_end = None
             
-            if not start_time:
-                start_dt = end_dt - timedelta(days=7)  # Default to 7 days ago
-            else:
-                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
+            if start_time:
+                parsed_start = datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
             
-            # Generate system utilization periods
+            if end_time:
+                parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00')).astimezone(timezone.utc).replace(tzinfo=None)
+            
+            # Let the analyzer determine the actual analysis period based on available data
             utilization = ts_analyzer.generate_summary_report(
-                start_dt, end_dt, analysis_type, user_timezone
+                parsed_start, parsed_end, analysis_type, user_timezone
             )
             
             # Add user utilization if requested
             if include_users:
-                user_report = analyzer.generate_user_utilization_report(start_dt, end_dt)
+                # Use the same time period that was actually analyzed
+                actual_start = datetime.fromisoformat(utilization["summary_metadata"]["period_start"])
+                actual_end = datetime.fromisoformat(utilization["summary_metadata"]["period_end"])
+                
+                user_report = analyzer.generate_user_utilization_report(actual_start, actual_end)
                 
                 if "error" not in user_report:
-                    # Extract user summary from full report
                     user_utilization = user_report.get("user_utilization", {})
                     system_summary = user_report.get("system_summary", {})
                     
@@ -304,13 +311,11 @@ def create_event_server(  # noqa: C901
                     enhanced_summary = {}
                     for key, value in utilization.items():
                         enhanced_summary[key] = value
-                        # Add user utilization after key_metrics
                         if key == "key_metrics":
                             enhanced_summary["user_utilization"] = user_summary
                     
                     utilization = enhanced_summary
                 else:
-                    # If user summary failed, just add error info
                     utilization["user_utilization"] = {
                         "error": user_report.get("error", "Failed to generate user summary")
                     }
@@ -319,11 +324,9 @@ def create_event_server(  # noqa: C901
             if csv_format:
                 try:
                     if save_to_file:
-                        # Save to server filesystem
                         if not output_path:
                             return {"error": "output_path is required when save_to_file=True"}
                         
-                        # Handle the return type from CSV exporter (could be dict of files or single file)
                         result = CSVExporter.export_utilization_periods_to_csv(
                             report_data=utilization,
                             output_path=output_path
@@ -346,7 +349,6 @@ def create_event_server(  # noqa: C901
                                 "report_type": "utilization_periods"
                             }
                     else:
-                        # Return CSV for download
                         csv_content = CSVExporter.export_utilization_periods_to_csv(
                             report_data=utilization,
                             output_path=None
