@@ -30,12 +30,6 @@ class CSVExporter:
         
         if not report_data or "error" in report_data:
             # More detailed error logging
-            print(f"CSV Export Error - Report data validation failed:")
-            print(f"  report_data is None: {report_data is None}")
-            print(f"  report_data is empty: {not report_data if report_data else 'N/A'}")
-            print(f"  has 'error' key: {'error' in report_data if report_data else 'N/A'}")
-            if report_data and "error" in report_data:
-                print(f"  error content: {report_data.get('error')}")
             
             # Try to proceed with whatever data we have
             if not report_data:
