@@ -73,14 +73,14 @@ class RobotArmNode(RestNode):
     @action
     def transfer(
         self,
-        source: Annotated[LocationArgument, "The source location"]= None,
-        target: Annotated[LocationArgument, "the target location"]= None,
+        source: Annotated[LocationArgument, "The source location"] = None,
+        target: Annotated[LocationArgument, "the target location"] = None,
     ) -> ActionResult:
         """Run a command on the robot arm."""
         if not source or not target:
             time.sleep(3)
             return ActionSucceeded()
-        
+
         if self.resource_client:
             try:
                 popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
