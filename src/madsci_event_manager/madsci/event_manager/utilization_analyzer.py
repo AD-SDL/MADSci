@@ -342,19 +342,11 @@ class UtilizationAnalyzer:
             }
             
             sessions.append(session)
-            print(f"\n=== DEBUG SESSION DETECTION ===")
-            print(f"Found {len(sessions)} sessions between {start_time} and {end_time}")
             
             total_duration = 0
             for i, session in enumerate(sessions):
                 duration_hours = session["duration_seconds"] / 3600
                 total_duration += duration_hours
-                print(f"Session {i+1}: {session['session_type']} '{session['session_name']}'")
-                print(f"  Duration: {duration_hours:.2f} hours")
-                print(f"  Start: {session['start_time']}")
-                print(f"  End: {session['end_time']}")
-            
-            print(f"Total session duration: {total_duration:.2f} hours")
             
         return sessions
 

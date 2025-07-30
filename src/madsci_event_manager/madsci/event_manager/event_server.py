@@ -82,7 +82,7 @@ def create_event_server(  # noqa: C901
                 # Just continue - don't fail the request
                 pass            
         except Exception as e:
-            traceback.print_exc()
+            logger.log_error(f"Failed to log event: {e}")
             raise e  
         
         if event.alert or event.log_level >= event_manager_settings.alert_level:
