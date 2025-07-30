@@ -89,15 +89,18 @@ services:
     command: python -m madsci.squid.lab_server
     depends_on:
       - event_manager
+
   event_manager:
     <<: *madsci-service
     container_name: event_manager
-    command: python -m madsci.event_manager.event_server
+    entrypoint: ["python", "-m", "madsci.event_manager.event_server"]  # Direct command
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"    
     depends_on:
-      - mongodb
+        - mongodb
     environment:
-      - MPLCONFIGDIR=/tmp/matplotlib
+      - HOME=/home/madsci
 
+      
   experiment_manager:
     <<: *madsci-service
     container_name: experiment_manager
