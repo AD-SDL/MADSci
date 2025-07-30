@@ -208,11 +208,6 @@ class EventType(str, Enum):
     CAMPAIGN_ABORT = "campaign_abort"
     # *Action Events
     ACTION_STATUS_CHANGE = "action_status_change"
-    # *Utilization Events
-    UTILIZATION_SYSTEM_SUMMARY = "utilization_system_summary"
-    UTILIZATION_NODE_SUMMARY = "utilization_node_summary"
-    UTILIZATION_TRACKER_START = "utilization_tracker_start"
-    UTILIZATION_TRACKER_STOP = "utilization_tracker_stop"
 
     @classmethod
     def _missing_(cls, value: str) -> "EventType":
@@ -357,7 +352,6 @@ class NodeUtilizationData(MadsciBaseModel):
         default=0.0,
     )
 
-
 class SystemUtilizationData(MadsciBaseModel):
     """System-wide utilization data."""
 
@@ -402,62 +396,3 @@ class SystemUtilizationData(MadsciBaseModel):
         default=0.0,
     )
 
-
-class UtilizationSummary(MadsciBaseModel):
-    """Complete utilization summary for system and all nodes."""
-
-    system_utilization: SystemUtilizationData = Field(
-        title="System Utilization",
-        description="System-wide utilization data.",
-        default_factory=SystemUtilizationData,
-    )
-    node_utilizations: dict[str, NodeUtilizationData] = Field(
-        title="Node Utilizations",
-        description="Utilization data for each tracked node.",
-        default_factory=dict,
-    )
-    reporting_interval: int = Field(
-        title="Reporting Interval",
-        description="Interval in seconds between utilization reports.",
-        default=10,
-    )
-    tracker_uptime: float = Field(
-        title="Tracker Uptime",
-        description="Total time the utilization tracker has been running in seconds.",
-        default=0.0,
-    )
-    summary_timestamp: datetime = Field(
-        title="Summary Timestamp",
-        description="Timestamp when this summary was generated.",
-        default_factory=datetime.now,
-    )
-
-
-class UtilizationTrackerSettings(MadsciBaseModel):
-    """Settings for the utilization tracker."""
-
-    enabled: bool = Field(
-        title="Enabled",
-        description="Whether utilization tracking is enabled.",
-        default=True,
-    )
-    reporting_interval: int = Field(
-        title="Reporting Interval",
-        description="Interval in seconds between utilization reports.",
-        default=10,
-    )
-    cleanup_interval: int = Field(
-        title="Cleanup Interval",
-        description="Interval in seconds for cleaning up old tracking data.",
-        default=3600,
-    )
-    max_idle_node_age: int = Field(
-        title="Max Idle Node Age",
-        description="Maximum time in seconds to keep tracking idle nodes.",
-        default=86400,  # 24 hours
-    )
-    log_level: str = Field(
-        title="Log Level",
-        description="Logging level for utilization tracker events.",
-        default="INFO",
-    )
