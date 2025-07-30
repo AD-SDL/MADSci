@@ -178,6 +178,13 @@ class UtilizationAnalyzer:
         if not start_time and not end_time:
             logger.info("No timeframe provided - analyzing full database range")
             try:
+                # Get total count first to check if we have any data
+                total_count = self.events_collection.count_documents({})
+                if total_count == 0:
+                    logger.warning("No events found in database, using default 24-hour period")
+                    now = datetime.now(timezone.utc).replace(tzinfo=None)
+                    return now - timedelta(days=1), now
+                
                 earliest_cursor = self.events_collection.find().sort("event_timestamp", 1).limit(1)
                 earliest_events = list(earliest_cursor)
                 
@@ -189,17 +196,40 @@ class UtilizationAnalyzer:
                     latest_time = self._parse_timestamp_utc(latest_events[0]["event_timestamp"])
                     
                     if earliest_time and latest_time:
+                        # Add small buffer to ensure we capture all data
                         buffered_start = earliest_time - timedelta(minutes=1)
                         buffered_end = latest_time + timedelta(minutes=1)
-                        return buffered_start, buffered_end
                         
+                        logger.info(f"Found database range: {buffered_start} to {buffered_end}")
+                        return buffered_start, buffered_end
+                    else:
+                        logger.warning("Could not parse timestamps from database events")
+                else:
+                    logger.warning("No events returned from database queries")
+                            
             except Exception as e:
                 logger.error(f"Error finding full database range: {e}")
         
+        # Handle case where only one time is provided
+        if start_time and not end_time:
+            start_utc = self._ensure_utc(start_time)
+            # Default to 24 hours from start time
+            end_utc = start_utc + timedelta(days=1)
+            logger.info(f"Only start_time provided, using 24-hour period: {start_utc} to {end_utc}")
+            return start_utc, end_utc
+        
+        if end_time and not start_time:
+            end_utc = self._ensure_utc(end_time)
+            # Default to 24 hours before end time
+            start_utc = end_utc - timedelta(days=1)
+            logger.info(f"Only end_time provided, using 24-hour period: {start_utc} to {end_utc}")
+            return start_utc, end_utc
+        
         # Fallback to last 24 hours
+        logger.warning("Falling back to last 24 hours as default analysis period")
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         return now - timedelta(days=1), now
-    
+        
 
     def _find_system_sessions(self, start_time: datetime, end_time: datetime) -> List[Dict]:
         """Find all system sessions based on workcell/lab start events."""
@@ -403,7 +433,16 @@ class UtilizationAnalyzer:
             # Build node utilizations with readable names
             node_utilizations_with_names = {}
             for node_id, node_util in node_utils.items():
+                if self._is_workcell_id(node_id):
+                    logger.info(f"Filtering out workcell {node_id} from session node summary")
+                    continue
+
                 node_name = self._resolve_node_name(node_id)
+                if not node_name:
+                    if self._is_workcell_id(node_id):
+                        logger.info(f"Confirmed {node_id} is a workcell, excluding from session node summary")
+                        continue
+
                 display_name = f"{node_name} ({node_id[-8:]})" if node_name else f"Node {node_id[-8:]}"
                 
                 busy_time_seconds = node_util.busy_time
@@ -628,6 +667,35 @@ class UtilizationAnalyzer:
         
         return system_util
     
+    def _is_workcell_id(self, entity_id: str) -> bool:
+        """Check if an ID belongs to a workcell by looking for workcell-specific events."""
+        
+        if not entity_id:
+            return False
+        
+        try:
+            # Check if this ID has workcell start/stop events or appears as workcell source
+            workcell_events = list(self.events_collection.find({
+                "$or": [
+                    {
+                        "event_type": {"$in": ["workcell_start", "workcell_stop", "lab_start", "lab_stop"]},
+                        "$or": [
+                            {"source.workcell_id": entity_id},
+                            {"source.manager_id": entity_id},
+                            {"event_data.workcell_id": entity_id}
+                        ]
+                    },
+                    {"source.workcell_id": entity_id},
+                    {"source.manager_id": entity_id}
+                ]
+            }).limit(1))
+            
+            return len(workcell_events) > 0
+            
+        except Exception as e:
+            logger.warning(f"Error checking if {entity_id} is workcell: {e}")
+            return False
+        
     def _calculate_node_utilization(
         self, 
         events: List[Dict], 
@@ -642,8 +710,12 @@ class UtilizationAnalyzer:
         for event in events:
             node_id = self._extract_node_id(event)
             if node_id:
-                node_events[node_id].append(event)
-        
+                if self._is_workcell_id(node_id):
+                    logger.debug(f"Skipping workcell {node_id} from node utilization calculation")
+                    continue
+                    
+                node_events[node_id].append(event)        
+
         node_utils = {}
         
         for node_id, events_for_node in node_events.items():
@@ -1029,6 +1101,14 @@ class UtilizationAnalyzer:
             
             for session in valid_sessions:
                 for node_id, node_data in session.get("node_utilizations", {}).items():
+                    if self._is_workcell_id(node_id):
+                        logger.debug(f"Skipping workcell {node_id} from overall node summary")
+                        continue
+                    
+                    # Safety check for node_data
+                    if not node_data or not isinstance(node_data, dict):
+                        continue
+                        
                     node_summary[node_id]["total_busy_time_hours"] += node_data.get("busy_time_hours", 0)
                     node_summary[node_id]["utilizations"].append(node_data.get("utilization_percent", 0))
                     node_summary[node_id]["sessions_active"] += 1
