@@ -26,29 +26,54 @@ class CSVExporter:
             If output_path is None: CSV string
             If output_path is provided: path to saved file
         """
-
         if not report_data or "error" in report_data:
-            # More detailed error logging
-
-            # Try to proceed with whatever data we have
-            if not report_data:
-                raise ValueError("Report data is None or empty")
-
-            # If there's an error but still some data, try to export what we can
-            if "error" in report_data and len(report_data) == 1:
-                raise ValueError(
-                    f"Report contains only error: {report_data.get('error')}"
-                )
-
-        # Continue with export even if there are some errors but other data exists
+            CSVExporter._validate_report_data(report_data)
 
         output = io.StringIO()
         writer = csv.writer(output)
 
-        # Section 1: Metadata and Key Metrics
+        # Write all sections
+        CSVExporter._write_header_section(writer)
+        CSVExporter._write_metadata_section(writer, report_data)
+        CSVExporter._write_key_metrics_section(writer, report_data)
+        CSVExporter._write_time_series_section(writer, report_data)
+        CSVExporter._write_node_summary_section(writer, report_data)
+        CSVExporter._write_workcell_summary_section(writer, report_data)
+        CSVExporter._write_user_utilization_section(writer, report_data)
+        CSVExporter._write_experiment_details_section(writer, report_data)
+
+        csv_content = output.getvalue()
+
+        # Save to file if output_path provided
+        if output_path:
+            metadata = report_data.get("summary_metadata", {})
+            return CSVExporter._save_single_csv_file(
+                csv_content,
+                output_path,
+                "utilization_periods",
+                metadata.get("analysis_type", "daily"),
+            )
+
+        return csv_content
+
+    @staticmethod
+    def _validate_report_data(report_data: Dict[str, Any]) -> None:
+        """Validate report data and raise appropriate errors."""
+        if not report_data:
+            raise ValueError("Report data is None or empty")
+
+        if "error" in report_data and len(report_data) == 1:
+            raise ValueError(f"Report contains only error: {report_data.get('error')}")
+
+    @staticmethod
+    def _write_header_section(writer: Any) -> None:
+        """Write the header section."""
         writer.writerow(["=== UTILIZATION PERIODS REPORT ==="])
         writer.writerow([])
 
+    @staticmethod
+    def _write_metadata_section(writer: Any, report_data: Dict[str, Any]) -> None:
+        """Write the metadata section."""
         metadata = report_data.get("summary_metadata", {})
         writer.writerow(["Metadata"])
         writer.writerow(["Analysis Type", metadata.get("analysis_type", "")])
@@ -59,6 +84,9 @@ class CSVExporter:
         writer.writerow(["Total Periods", metadata.get("total_periods", "")])
         writer.writerow([])
 
+    @staticmethod
+    def _write_key_metrics_section(writer: Any, report_data: Dict[str, Any]) -> None:
+        """Write the key metrics section."""
         key_metrics = report_data.get("key_metrics", {})
         writer.writerow(["Key Metrics"])
         writer.writerow(
@@ -82,7 +110,9 @@ class CSVExporter:
         writer.writerow(["Total Periods", key_metrics.get("total_periods", "")])
         writer.writerow([])
 
-        # Section 2: Time Series Data
+    @staticmethod
+    def _write_time_series_section(writer: Any, report_data: Dict[str, Any]) -> None:
+        """Write the time series data section."""
         writer.writerow(["=== TIME SERIES DATA ==="])
         writer.writerow(
             [
@@ -113,7 +143,9 @@ class CSVExporter:
             )
         writer.writerow([])
 
-        # Section 3: Node Summary - FIXED to always include for daily reports
+    @staticmethod
+    def _write_node_summary_section(writer: Any, report_data: Dict[str, Any]) -> None:
+        """Write the node summary section."""
         node_summary = report_data.get("node_summary", {})
         writer.writerow(["=== NODE SUMMARY ==="])
 
@@ -143,146 +175,164 @@ class CSVExporter:
                     ]
                 )
         else:
-            # Show message when no node data is available
-            analysis_type = metadata.get("analysis_type", "")
-            if analysis_type == "daily":
-                writer.writerow(
-                    ["No node activity detected during this daily analysis period"]
-                )
-            else:
-                writer.writerow(["No node data available for this time period"])
+            CSVExporter._write_no_node_data_message(writer, report_data)
 
         writer.writerow([])
 
-        # Section 4: Workcell Summary
+    @staticmethod
+    def _write_no_node_data_message(writer: Any, report_data: Dict[str, Any]) -> None:
+        """Write message when no node data is available."""
+        metadata = report_data.get("summary_metadata", {})
+        analysis_type = metadata.get("analysis_type", "")
+
+        if analysis_type == "daily":
+            writer.writerow(
+                ["No node activity detected during this daily analysis period"]
+            )
+        else:
+            writer.writerow(["No node data available for this time period"])
+
+    @staticmethod
+    def _write_workcell_summary_section(
+        writer: Any, report_data: Dict[str, Any]
+    ) -> None:
+        """Write the workcell summary section."""
         workcell_summary = report_data.get("workcell_summary", {})
-        if workcell_summary:
-            writer.writerow(["=== WORKCELL SUMMARY ==="])
+        if not workcell_summary:
+            return
+
+        writer.writerow(["=== WORKCELL SUMMARY ==="])
+        writer.writerow(
+            [
+                "Workcell ID",
+                "Workcell Name",
+                "Display Name",
+                "Average Utilization (%)",
+                "Peak Utilization (%)",
+                "Peak Period",
+                "Total Experiments",
+                "Total Runtime (hours)",
+                "Total Active Time (hours)",
+            ]
+        )
+
+        for workcell_id, workcell_data in workcell_summary.items():
             writer.writerow(
                 [
-                    "Workcell ID",
-                    "Workcell Name",
-                    "Display Name",
-                    "Average Utilization (%)",
-                    "Peak Utilization (%)",
-                    "Peak Period",
-                    "Total Experiments",
-                    "Total Runtime (hours)",
-                    "Total Active Time (hours)",
+                    workcell_data.get("workcell_id", workcell_id),
+                    workcell_data.get("workcell_name", ""),
+                    workcell_data.get("display_name", f"Workcell {workcell_id[-8:]}"),
+                    workcell_data.get("average_utilization", ""),
+                    workcell_data.get("peak_utilization", ""),
+                    workcell_data.get("peak_period", ""),
+                    workcell_data.get("total_experiments", ""),
+                    workcell_data.get("total_runtime_hours", ""),
+                    workcell_data.get("total_active_time_hours", ""),
                 ]
             )
+        writer.writerow([])
 
-            for workcell_id, workcell_data in workcell_summary.items():
-                writer.writerow(
-                    [
-                        workcell_data.get("workcell_id", workcell_id),
-                        workcell_data.get("workcell_name", ""),
-                        workcell_data.get(
-                            "display_name", f"Workcell {workcell_id[-8:]}"
-                        ),
-                        workcell_data.get("average_utilization", ""),
-                        workcell_data.get("peak_utilization", ""),
-                        workcell_data.get("peak_period", ""),
-                        workcell_data.get("total_experiments", ""),
-                        workcell_data.get("total_runtime_hours", ""),
-                        workcell_data.get("total_active_time_hours", ""),
-                    ]
-                )
-            writer.writerow([])
-
-        # Section 5: User Utilization (if included)
+    @staticmethod
+    def _write_user_utilization_section(
+        writer: Any, report_data: Dict[str, Any]
+    ) -> None:
+        """Write the user utilization section."""
         user_utilization = report_data.get("user_utilization", {})
-        if user_utilization:
-            writer.writerow(["=== USER UTILIZATION ==="])
+        if not user_utilization:
+            return
+
+        writer.writerow(["=== USER UTILIZATION ==="])
+        writer.writerow(
+            [
+                "Author",
+                "Total Workflows",
+                "Total Runtime (hours)",
+                "Completion Rate (%)",
+                "Average Workflow Duration (hours)",
+            ]
+        )
+
+        if "top_users" in user_utilization:
+            CSVExporter._write_top_users_data(writer, user_utilization)
+        else:
+            CSVExporter._write_direct_user_data(writer, user_utilization)
+
+        writer.writerow([])
+
+    @staticmethod
+    def _write_top_users_data(writer: Any, user_utilization: Dict[str, Any]) -> None:
+        """Write top users data format."""
+        top_users = user_utilization.get("top_users", [])
+        for user in top_users:
             writer.writerow(
                 [
-                    "Author",
-                    "Total Workflows",
-                    "Total Runtime (hours)",
-                    "Completion Rate (%)",
-                    "Average Workflow Duration (hours)",
+                    user.get("author", ""),
+                    user.get("total_workflows", ""),
+                    user.get("total_runtime_hours", ""),
+                    user.get("completion_rate_percent", ""),
+                    user.get("average_workflow_duration_hours", ""),
                 ]
             )
 
-            # Handle both formats: top_users list or direct user data
-            if "top_users" in user_utilization:
-                top_users = user_utilization.get("top_users", [])
-                for user in top_users:
-                    writer.writerow(
-                        [
-                            user.get("author", ""),
-                            user.get("total_workflows", ""),
-                            user.get("total_runtime_hours", ""),
-                            user.get("completion_rate_percent", ""),
-                            user.get("average_workflow_duration_hours", ""),
-                        ]
-                    )
-            else:
-                # Direct user utilization data
-                for user_data in user_utilization.values():
-                    if isinstance(user_data, dict):
-                        writer.writerow(
-                            [
-                                user_data.get("author", ""),
-                                user_data.get("total_workflows", ""),
-                                user_data.get("total_runtime_hours", ""),
-                                user_data.get("completion_rate_percent", ""),
-                                user_data.get("average_workflow_duration_hours", ""),
-                            ]
-                        )
-            writer.writerow([])
-
-        # Section 6: Experiment Details (if available)
-        experiment_details = report_data.get("experiment_details", {})
-        if experiment_details and experiment_details.get("experiments"):
-            writer.writerow(["=== EXPERIMENT DETAILS ==="])
-            writer.writerow(
-                [
-                    "Experiment ID",
-                    "Experiment Name",
-                    "Start Time",
-                    "End Time",
-                    "Status",
-                    "Duration (hours)",
-                    "Duration Display",
-                ]
-            )
-
-            experiments = experiment_details.get("experiments", [])
-            for exp in experiments:
+    @staticmethod
+    def _write_direct_user_data(writer: Any, user_utilization: Dict[str, Any]) -> None:
+        """Write direct user utilization data format."""
+        for user_data in user_utilization.values():
+            if isinstance(user_data, dict):
                 writer.writerow(
                     [
-                        exp.get("experiment_id", ""),
-                        exp.get("experiment_name", "Unknown Experiment"),
-                        exp.get("start_time", ""),
-                        exp.get("end_time", ""),
-                        exp.get("status", ""),
-                        exp.get("duration_hours", ""),
-                        exp.get("duration_display", ""),
+                        user_data.get("author", ""),
+                        user_data.get("total_workflows", ""),
+                        user_data.get("total_runtime_hours", ""),
+                        user_data.get("completion_rate_percent", ""),
+                        user_data.get("average_workflow_duration_hours", ""),
                     ]
                 )
 
-            total_experiments = experiment_details.get(
-                "total_experiments", len(experiments)
+    @staticmethod
+    def _write_experiment_details_section(
+        writer: Any, report_data: Dict[str, Any]
+    ) -> None:
+        """Write the experiment details section."""
+        experiment_details = report_data.get("experiment_details", {})
+        if not experiment_details or not experiment_details.get("experiments"):
+            return
+
+        writer.writerow(["=== EXPERIMENT DETAILS ==="])
+        writer.writerow(
+            [
+                "Experiment ID",
+                "Experiment Name",
+                "Start Time",
+                "End Time",
+                "Status",
+                "Duration (hours)",
+                "Duration Display",
+            ]
+        )
+
+        experiments = experiment_details.get("experiments", [])
+        for exp in experiments:
+            writer.writerow(
+                [
+                    exp.get("experiment_id", ""),
+                    exp.get("experiment_name", "Unknown Experiment"),
+                    exp.get("start_time", ""),
+                    exp.get("end_time", ""),
+                    exp.get("status", ""),
+                    exp.get("duration_hours", ""),
+                    exp.get("duration_display", ""),
+                ]
             )
-            if len(experiments) < total_experiments:
-                remaining = total_experiments - len(experiments)
-                writer.writerow([f"... and {remaining} more experiments"])
 
-            writer.writerow([])
+        total_experiments = experiment_details.get(
+            "total_experiments", len(experiments)
+        )
+        if len(experiments) < total_experiments:
+            remaining = total_experiments - len(experiments)
+            writer.writerow([f"... and {remaining} more experiments"])
 
-        csv_content = output.getvalue()
-
-        # Save to file if output_path provided
-        if output_path:
-            return CSVExporter._save_single_csv_file(
-                csv_content,
-                output_path,
-                "utilization_periods",
-                metadata.get("analysis_type", "daily"),
-            )
-
-        return csv_content
+        writer.writerow([])
 
     @staticmethod
     def export_user_utilization_to_csv(
@@ -600,8 +650,147 @@ class CSVExporter:
         filename = f"madsci_{report_type}_{analysis_type}_{date_str}.csv"
         file_path = base_path / filename
 
-        with open(file_path, "w", newline="", encoding="utf-8") as f:
+        with file_path.open("w", newline="", encoding="utf-8") as f:
             f.write(csv_content)
 
-        print(f"Saved {report_type} CSV to: {file_path}")
+        print(f"Saved {report_type} CSV to: {file_path}")  # noqa: T201
         return str(file_path)
+
+    @staticmethod
+    def handle_api_csv_export(
+        utilization: Dict[str, Any], save_to_file: bool, output_path: Optional[str]
+    ) -> Dict[str, Any]:
+        """
+        Handle CSV export logic for API endpoints (utilization periods).
+
+        Args:
+            utilization: The utilization report data
+            save_to_file: Whether to save to server filesystem
+            output_path: Server path to save files (required if save_to_file=True)
+
+        Returns:
+            Dict with CSV content or save results
+        """
+        try:
+            if save_to_file:
+                if not output_path:
+                    return {"error": "output_path is required when save_to_file=True"}
+
+                result = CSVExporter.export_utilization_periods_to_csv(
+                    report_data=utilization, output_path=output_path
+                )
+
+                if isinstance(result, dict):
+                    return {
+                        "success": True,
+                        "message": "CSV files saved successfully",
+                        "files_saved": result,
+                        "csv_format": True,
+                        "saved_to_server": True,
+                        "report_type": "utilization_periods",
+                    }
+
+                return {
+                    "success": True,
+                    "message": "CSV file saved successfully",
+                    "file_path": result,
+                    "csv_format": True,
+                    "saved_to_server": True,
+                    "report_type": "utilization_periods",
+                }
+
+            # Return CSV content for server to handle
+            csv_content = CSVExporter.export_utilization_periods_to_csv(
+                report_data=utilization, output_path=None
+            )
+
+            return {"success": True, "csv_content": csv_content, "is_download": True}
+
+        except Exception as e:
+            return {"error": f"CSV generation failed: {e!s}"}
+
+    @staticmethod
+    def handle_user_csv_export(
+        report: Dict[str, Any], save_to_file: bool, output_path: Optional[str]
+    ) -> Dict[str, Any]:
+        """
+        Handle CSV export logic for user utilization endpoints.
+
+        Args:
+            report: The user utilization report data
+            save_to_file: Whether to save to server filesystem
+            output_path: Server path to save files (required if save_to_file=True)
+
+        Returns:
+            Dict with CSV content or save results
+        """
+        try:
+            if save_to_file:
+                if not output_path:
+                    return {"error": "output_path is required when save_to_file=True"}
+
+                file_path = CSVExporter.export_user_utilization_to_csv(
+                    report_data=report, output_path=output_path, detailed=True
+                )
+
+                return {
+                    "success": True,
+                    "message": "CSV file saved successfully",
+                    "file_path": file_path,
+                    "csv_format": True,
+                    "saved_to_server": True,
+                    "report_type": "user_utilization",
+                }
+
+            # Return CSV content for server to handle
+            csv_content = CSVExporter.export_user_utilization_to_csv(
+                report_data=report, output_path=None, detailed=True
+            )
+
+            return {"success": True, "csv_content": csv_content, "is_download": True}
+
+        except Exception as e:
+            return {"error": f"CSV generation failed: {e!s}"}
+
+    @staticmethod
+    def handle_session_csv_export(
+        report: Dict[str, Any], save_to_file: bool, output_path: Optional[str]
+    ) -> Dict[str, Any]:
+        """
+        Handle CSV export logic for session utilization endpoints.
+
+        Args:
+            report: The session utilization report data
+            save_to_file: Whether to save to server filesystem
+            output_path: Server path to save files (required if save_to_file=True)
+
+        Returns:
+            Dict with CSV content or save results
+        """
+        try:
+            if save_to_file:
+                if not output_path:
+                    return {"error": "output_path is required when save_to_file=True"}
+
+                file_path = CSVExporter.export_utilization_report_to_csv(
+                    report_data=report, output_path=output_path
+                )
+
+                return {
+                    "success": True,
+                    "message": "CSV file saved successfully",
+                    "file_path": file_path,
+                    "csv_format": True,
+                    "saved_to_server": True,
+                    "report_type": "session_utilization",
+                }
+
+            # Return CSV content for server to handle
+            csv_content = CSVExporter.export_utilization_report_to_csv(
+                report_data=report, output_path=None
+            )
+
+            return {"success": True, "csv_content": csv_content, "is_download": True}
+
+        except Exception as e:
+            return {"error": f"CSV generation failed: {e!s}"}
