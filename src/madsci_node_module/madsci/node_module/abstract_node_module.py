@@ -26,7 +26,7 @@ from madsci.client.resource_client import ResourceClient
 from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
-from madsci.common.ownership import ownership_context
+from madsci.common.ownership import global_ownership_info
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionRequest,
@@ -125,42 +125,41 @@ class AbstractNode:
                 )
             else:
                 self.node_definition = NodeDefinition.from_yaml(node_definition_path)
+        global_ownership_info.node_id = self.node_definition.node_id
+        self._configure_clients()
 
-        with ownership_context(node_id=self.node_definition.node_id):
-            self._configure_clients()
-
-            # * Check Node Version
-            if (
-                Version.parse(self.module_version).compare(
-                    self.node_definition.module_version
-                )
-                < 0
-            ):
-                self.logger.log_warning(
-                    "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
-                )
-
-            # * Synthesize the node info
-            self.node_info = NodeInfo.from_node_def_and_config(
-                self.node_definition, self.config
+        # * Check Node Version
+        if (
+            Version.parse(self.module_version).compare(
+                self.node_definition.module_version
+            )
+            < 0
+        ):
+            self.logger.log_warning(
+                "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
             )
 
-            # * Combine the node definition and classes's capabilities
-            self._populate_capabilities()
+        # * Synthesize the node info
+        self.node_info = NodeInfo.from_node_def_and_config(
+            self.node_definition, self.config
+        )
 
-            # * Add the action decorators to the node (and node info)
-            for action_callable in self.__class__.__dict__.values():
-                if hasattr(action_callable, "__is_madsci_action__"):
-                    self._add_action(
-                        func=action_callable,
-                        action_name=action_callable.__madsci_action_name__,
-                        description=action_callable.__madsci_action_description__,
-                        blocking=action_callable.__madsci_action_blocking__,
-                    )
+        # * Combine the node definition and classes's capabilities
+        self._populate_capabilities()
 
-            # * Save the node info and update definition, if possible
-            if self.config.update_node_files:
-                self._update_node_info_and_definition()
+        # * Add the action decorators to the node (and node info)
+        for action_callable in self.__class__.__dict__.values():
+            if hasattr(action_callable, "__is_madsci_action__"):
+                self._add_action(
+                    func=action_callable,
+                    action_name=action_callable.__madsci_action_name__,
+                    description=action_callable.__madsci_action_description__,
+                    blocking=action_callable.__madsci_action_blocking__,
+                )
+
+        # * Save the node info and update definition, if possible
+        if self.config.update_node_files:
+            self._update_node_info_and_definition()
 
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
@@ -169,18 +168,17 @@ class AbstractNode:
     def start_node(self) -> None:
         """Called once to start the node."""
 
-        with ownership_context(node_id=self.node_definition.node_id):
-            # * Update EventClient with logging parameters
-            self._configure_clients()
+        global_ownership_info.node_id = self.node_definition.node_id
+        # * Update EventClient with logging parameters
+        self._configure_clients()
 
-            # * Log startup info
-            self.logger.log_debug(f"{self.node_definition=}")
+        # * Log startup info
+        self.logger.log_debug(f"{self.node_definition=}")
 
-            # * Kick off the startup logic in a separate thread
-            # * This allows implementations to start servers, listeners, etc.
-            # * in parrallel
-
-            self._startup()
+        # * Kick off the startup logic in a separate thread
+        # * This allows implementations to start servers, listeners, etc.
+        # * in parrallel
+        self._startup()
 
     def status_handler(self) -> None:
         """Called periodically to update the node status. Should set `self.node_status`"""

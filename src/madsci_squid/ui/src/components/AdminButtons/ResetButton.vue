@@ -22,7 +22,7 @@
 </template>
 
 <script lang="ts" setup>
-    import { main_url } from "@/store";
+    import { urls } from "@/store";
 import { ref, watchEffect } from 'vue';
 
     const props = defineProps<{
@@ -37,11 +37,11 @@ import { ref, watchEffect } from 'vue';
     // Format reset url
     watchEffect(() => {
         if (props.module) {
-            reset_url.value = main_url.value.concat('/admin/reset/'.concat(props.module))
+            reset_url.value = urls.value.workcell_server_url.concat('admin/reset/'.concat(props.module))
             hoverText.value = "Reset Module"
         }
         else {
-            reset_url.value = main_url.value.concat('/admin/reset')
+            reset_url.value = urls.value.workcell_server_url.concat('admin/reset')
             hoverText.value = "Reset Workcell"
         }
     })

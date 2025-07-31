@@ -14,7 +14,7 @@ def walk_and_replace(
     for key, val in input_dict.items():
         if type(val) is str:
             updated_dict[key] = value_substitution(val, input_parameters)
-        elif type(input_dict[key]) is dict:
+        elif type(val) is dict:
             updated_dict[key] = walk_and_replace(val, input_parameters)
         if type(key) is str:
             new_key = value_substitution(key, input_parameters)

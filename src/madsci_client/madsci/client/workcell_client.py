@@ -6,6 +6,7 @@ from pathlib import Path, PosixPath, PurePath, WindowsPath
 from typing import Any, Optional, Union
 
 import requests
+from madsci.client.event_client import EventClient
 from madsci.common.data_manipulation import value_substitution, walk_and_replace
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
@@ -31,6 +32,7 @@ class WorkcellClient:
         self,
         workcell_server_url: Optional[str] = None,
         working_directory: str = "./",
+        event_client: Optional[EventClient] = None,
     ) -> None:
         """
         Initialize the WorkcellClient.
@@ -47,6 +49,7 @@ class WorkcellClient:
             if workcell_server_url
             else MadsciContext()
         )
+        self.logger = event_client or EventClient()
         self.url = self.context.workcell_server_url
         if not self.url:
             raise ValueError(
@@ -72,6 +75,8 @@ class WorkcellClient:
         """
         url = f"{self.url}/workflow/{workflow_id}"
         response = requests.get(url, timeout=10)
+        if not response.ok and response.content:
+            self.logger.error(f"Error querying workflow: {response.content.decode()}")
 
         response.raise_for_status()
         return Workflow(**response.json())
@@ -82,6 +87,7 @@ class WorkcellClient:
         parameters: Optional[dict[str, Any]] = None,
         validate_only: bool = False,
         await_completion: bool = True,
+        prompt_on_error: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
     ) -> Workflow:
@@ -98,6 +104,8 @@ class WorkcellClient:
             If True, only validate the workflow without submitting, by default False.
         await_completion : bool, optional
             If True, wait for the workflow to complete, by default True.
+        prompt_on_error : bool, optional
+            If True, prompt the user for what action to take on workflow errors, by default True.
         raise_on_failed : bool, optional
             If True, raise an exception if the workflow fails, by default True.
         raise_on_cancelled : bool, optional
@@ -137,11 +145,14 @@ class WorkcellClient:
             },
             timeout=10,
         )
+        if not response.ok and response.content:
+            self.logger.error(f"Error submitting workflow: {response.content.decode()}")
         response.raise_for_status()
         if not await_completion:
             return Workflow(**response.json())
         return self.await_workflow(
             response.json()["workflow_id"],
+            prompt_on_error=prompt_on_error,
             raise_on_cancelled=raise_on_cancelled,
             raise_on_failed=raise_on_failed,
         )
@@ -245,6 +256,8 @@ class WorkcellClient:
         index: int = -1,
         await_completion: bool = True,
         raise_on_cancelled: bool = True,
+        raise_on_failed: bool = True,
+        prompt_on_error: bool = True,
     ) -> Workflow:
         """
         Retry a workflow from a specific step.
@@ -255,6 +268,14 @@ class WorkcellClient:
             The ID of the workflow to retry.
         index : int, optional
             The step index to retry from, by default -1 (retry the entire workflow).
+        await_completion : bool, optional
+            If True, wait for the workflow to complete, by default True.
+        raise_on_cancelled : bool, optional
+            If True, raise an exception if the workflow is cancelled, by default True.
+        raise_on_failed : bool, optional
+            If True, raise an exception if the workflow fails, by default True.
+        prompt_on_error : bool, optional
+            If True, prompt the user for what action to take on workflow errors, by default True.
 
         Returns
         -------
@@ -272,7 +293,10 @@ class WorkcellClient:
         )
         if await_completion:
             return self.await_workflow(
-                workflow_id=workflow_id, raise_on_cancelled=raise_on_cancelled
+                workflow_id=workflow_id,
+                raise_on_cancelled=raise_on_cancelled,
+                raise_on_failed=raise_on_failed,
+                prompt_on_error=prompt_on_error,
             )
 
         return Workflow(**response.json())
@@ -283,6 +307,7 @@ class WorkcellClient:
         await_completion: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
+        prompt_on_error: bool = True,
     ) -> Workflow:
         """
         Resubmit a workflow as a new workflow with a new ID.
@@ -297,6 +322,8 @@ class WorkcellClient:
             If True, raise an exception if the workflow fails, by default True.
         raise_on_cancelled : bool, optional
             If True, raise an exception if the workflow is cancelled, by default True.
+        prompt_on_error : bool, optional
+            If True, prompt the user for what action to take on workflow errors, by default True.
 
         Returns
         -------
@@ -311,12 +338,89 @@ class WorkcellClient:
                 new_wf.workflow_id,
                 raise_on_failed=raise_on_failed,
                 raise_on_cancelled=raise_on_cancelled,
+                prompt_on_error=prompt_on_error,
             )
         return new_wf
+
+    def _handle_workflow_error(
+        self,
+        wf: Workflow,
+        prompt_on_error: bool,
+        raise_on_failed: bool,
+        raise_on_cancelled: bool,
+    ) -> Workflow:
+        """
+        Handle errors in a workflow by prompting the user for action or raising exceptions.
+        Parameters
+        ----------
+        wf : Workflow
+            The workflow object to check for errors.
+        prompt_on_error : bool
+            If True, prompt the user for action on workflow errors.
+        raise_on_failed : bool
+            If True, raise an exception if the workflow fails.
+        raise_on_cancelled : bool
+            If True, raise an exception if the workflow is cancelled.
+        Returns
+        -------
+        Workflow
+            The workflow object after handling errors.
+        """
+        if prompt_on_error:
+            while True:
+                decision = input(
+                    f"""Workflow {"Failed" if wf.status.failed else "Cancelled"}.
+Options:
+
+- Resubmit the workflow, from the beginning (resubmit, r)
+- Retry from a specific step (Enter the step index, e.g., 1; 0 for the first step; -1 for the current step)
+- {"R" if raise_on_failed else "Do not r"}aise an exception and continue (c, enter to continue)
+"""
+                ).strip()
+                if decision in {"resubmit", "r"}:
+                    wf = self.resubmit_workflow(
+                        wf.workflow_id,
+                        await_completion=True,
+                        raise_on_failed=raise_on_failed,
+                        raise_on_cancelled=raise_on_cancelled,
+                        prompt_on_error=prompt_on_error,
+                    )
+                    break
+                try:
+                    step = int(decision)
+                    if step in range(-1, len(wf.steps)):
+                        if step == -1:
+                            step = wf.status.current_step_index
+                        self.logger.info(
+                            f"Retrying workflow {wf.workflow_id} from step {step}: '{wf.steps[step]}'."
+                        )
+                        wf = self.retry_workflow(
+                            wf.workflow_id,
+                            step,
+                            raise_on_cancelled=raise_on_cancelled,
+                            await_completion=True,
+                            raise_on_failed=raise_on_failed,
+                        )
+                        break
+                except ValueError:
+                    pass
+                if decision in {"c", "", None}:
+                    break
+                print("Invalid input. Please try again.")
+        if wf.status.failed and raise_on_failed:
+            raise WorkflowFailedError(
+                f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}' with result:\n {wf.steps[wf.status.current_step_index].result}."
+            )
+        if wf.status.cancelled and raise_on_cancelled:
+            raise WorkflowFailedError(
+                f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
+            )
+        return wf
 
     def await_workflow(
         self,
         workflow_id: str,
+        prompt_on_error: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
     ) -> Workflow:
@@ -327,6 +431,8 @@ class WorkcellClient:
         ----------
         workflow_id : str
             The ID of the workflow to wait for.
+        prompt_on_error : bool, optional
+            If True, prompt the user for action on workflow errors, by default True.
         raise_on_failed : bool, optional
             If True, raise an exception if the workflow fails, by default True.
         raise_on_cancelled : bool, optional
@@ -362,29 +468,9 @@ class WorkcellClient:
                 break
             prior_status = status
             prior_index = step_index
-        if wf.status.failed:
-            decision = input(
-                "Workflow Failed. \n Options: resubmit (0), retry from step (1), end (2)"
-            )
-            if decision in {"resubmit", "0"}:
-                self.resubmit_workflow(
-                    wf.workflow_id,
-                    await_completion=True,
-                    raise_on_failed=raise_on_failed,
-                    raise_on_cancelled=raise_on_cancelled,
-                )
-            if decision in {"retry from step", "1"}:
-                step = int(input("Starting Step Index: "))
-                self.retry_workflow(
-                    wf.workflow_id, step, raise_on_cancelled=raise_on_cancelled
-                )
-            else:
-                raise WorkflowFailedError(
-                    f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
-                )
-        if wf.status.cancelled and raise_on_cancelled:
-            raise WorkflowFailedError(
-                f"Workflow {wf.name} ({wf.workflow_id}) was cancelled on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}'."
+        if wf.status.failed or wf.status.cancelled:
+            return self._handle_workflow_error(
+                wf, prompt_on_error, raise_on_failed, raise_on_cancelled
             )
         return wf
 
@@ -618,7 +704,7 @@ class WorkcellClient:
         response.raise_for_status()
         return Location.model_validate(response.json())
 
-    def add_location(self, location: Location) -> Location:
+    def add_location(self, location: Location, permanent: bool = True) -> Location:
         """
         Add a location to the workcell.
 
@@ -637,6 +723,7 @@ class WorkcellClient:
             url,
             json=location.model_dump(mode="json"),
             timeout=10,
+            params={"permanent": permanent},
         )
         response.raise_for_status()
         return Location.model_validate(response.json())

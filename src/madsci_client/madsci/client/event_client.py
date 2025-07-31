@@ -6,6 +6,7 @@ import json
 import logging
 import queue
 import time
+import traceback
 import warnings
 from collections import OrderedDict
 from pathlib import Path
@@ -150,8 +151,6 @@ class EventClient:
             with contextlib.suppress(ValidationError):
                 event = Event.model_validate(event)
         if isinstance(event, Exception):
-            import traceback
-
             event = Event(
                 event_type=EventType.LOG_ERROR,
                 event_data=traceback.format_exc(),
