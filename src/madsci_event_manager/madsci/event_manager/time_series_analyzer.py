@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import pytz
+from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -14,10 +15,152 @@ logger = logging.getLogger(__name__)
 class TimeSeriesAnalyzer:
     """Analyzes utilization data over time with proper session attribution."""
 
-    def __init__(self, utilization_analyzer):
+    def __init__(self, utilization_analyzer: UtilizationAnalyzer) -> None:
         """Initialize with existing UtilizationAnalyzer instance."""
         self.analyzer = utilization_analyzer
         self.events_collection = utilization_analyzer.events_collection
+
+    def generate_utilization_report_with_times(
+        self,
+        start_time: Optional[str],
+        end_time: Optional[str],
+        analysis_type: str,
+        user_timezone: str,
+    ) -> Dict[str, Any]:
+        """Generate utilization report from string time parameters."""
+
+        try:
+            # Parse time parameters (if provided)
+            parsed_start = None
+            parsed_end = None
+
+            if start_time:
+                parsed_start = (
+                    datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    .astimezone(timezone.utc)
+                    .replace(tzinfo=None)
+                )
+
+            if end_time:
+                parsed_end = (
+                    datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+                    .astimezone(timezone.utc)
+                    .replace(tzinfo=None)
+                )
+
+            # Generate summary report
+            return self.generate_summary_report(
+                parsed_start, parsed_end, analysis_type, user_timezone
+            )
+
+        except Exception as e:
+            return {"error": f"Failed to generate utilization report: {e!s}"}
+
+    def add_user_utilization_to_report(
+        self, utilization: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Add user utilization data to the report."""
+
+        try:
+            # Use the same time period that was actually analyzed
+            actual_start = datetime.fromisoformat(
+                utilization["summary_metadata"]["period_start"]
+            )
+            actual_end = datetime.fromisoformat(
+                utilization["summary_metadata"]["period_end"]
+            )
+
+            user_report = self.analyzer.generate_user_utilization_report(
+                actual_start, actual_end
+            )
+
+            if "error" not in user_report:
+                user_summary = self.create_user_summary_from_report(user_report)
+
+                # Insert user utilization after key_metrics
+                enhanced_summary = {}
+                for key, value in utilization.items():
+                    enhanced_summary[key] = value
+                    if key == "key_metrics":
+                        enhanced_summary["user_utilization"] = user_summary
+
+                return enhanced_summary
+            utilization["user_utilization"] = {
+                "error": user_report.get("error", "Failed to generate user summary")
+            }
+            return utilization
+
+        except Exception as e:
+            utilization["user_utilization"] = {
+                "error": f"Failed to add user data: {e!s}"
+            }
+            return utilization
+
+    def create_user_summary_from_report(
+        self, user_report: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Create user summary from user report."""
+
+        user_utilization = user_report.get("user_utilization", {})
+        system_summary = user_report.get("system_summary", {})
+
+        # Sort users by total runtime (most active first)
+        sorted_users = sorted(
+            user_utilization.values(),
+            key=lambda x: x.get("total_runtime_hours", 0),
+            reverse=True,
+        )
+
+        # Create compact user summaries (top 10 users)
+        top_users = [
+            {
+                "author": user.get("author"),
+                "total_workflows": user.get("total_workflows"),
+                "total_runtime_hours": user.get("total_runtime_hours"),
+                "completion_rate_percent": user.get("completion_rate_percent"),
+                "average_workflow_duration_hours": user.get(
+                    "average_workflow_duration_hours"
+                ),
+            }
+            for user in sorted_users[:10]
+        ]
+
+        return {
+            "total_users": len(user_utilization),
+            "author_attribution_rate_percent": system_summary.get(
+                "author_attribution_rate_percent", 0
+            ),
+            "top_users": top_users,
+            "system_totals": {
+                "total_workflows": system_summary.get("total_workflows", 0),
+                "total_runtime_hours": system_summary.get("total_runtime_hours", 0),
+                "completion_rate_percent": system_summary.get(
+                    "completion_rate_percent", 0
+                ),
+            },
+        }
+
+    def parse_time_parameters(
+        self, start_time: Optional[str], end_time: Optional[str]
+    ) -> Tuple[Optional[datetime], Optional[datetime]]:
+        """Parse time parameters for utilization reports."""
+        parsed_start = None
+        parsed_end = None
+
+        if start_time:
+            parsed_start = (
+                datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+        if end_time:
+            parsed_end = (
+                datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+
+        return parsed_start, parsed_end
 
     def generate_summary_report(
         self,
@@ -26,14 +169,70 @@ class TimeSeriesAnalyzer:
         analysis_type: str = "daily",
         user_timezone: str = "America/Chicago",
     ) -> Dict[str, Any]:
-        """Generate summary utilization report with FIXED error handling."""
+        """Generate summary utilization report with error handling."""
 
         # Store analysis type for use in attribution logic
         self._current_analysis_type = analysis_type
-
         logger.info(
             f"Generating {analysis_type} summary report for timezone {user_timezone}"
         )
+
+        # Validate and determine analysis period
+        analysis_result = self._validate_and_determine_analysis_period(
+            start_time, end_time
+        )
+
+        if "error" in analysis_result:
+            return analysis_result
+
+        analysis_start, analysis_end = analysis_result["period"]
+
+        # Get sessions and create time buckets
+        setup_result = self._setup_analysis_components(
+            analysis_start, analysis_end, analysis_type, user_timezone
+        )
+
+        if "error" in setup_result:
+            return self._create_error_response(
+                setup_result["error"], analysis_type, analysis_start, analysis_end
+            )
+
+        # Create bucket reports
+        bucket_reports = self._create_all_bucket_reports(
+            setup_result["time_buckets"],
+            setup_result["sessions"],
+            analysis_start,
+            analysis_end,
+            analysis_type,
+        )
+
+        if "error" in bucket_reports:
+            return self._create_error_response(
+                bucket_reports["error"], analysis_type, analysis_start, analysis_end
+            )
+
+        # Generate final summary report
+        try:
+            return self._create_summary_report(
+                bucket_reports["reports"],
+                analysis_start,
+                analysis_end,
+                analysis_type,
+                user_timezone,
+            )
+        except Exception as e:
+            logger.error(f"Error creating summary report: {e}")
+            return self._create_error_response(
+                f"Failed to generate summary: {e!s}",
+                analysis_type,
+                analysis_start,
+                analysis_end,
+            )
+
+    def _validate_and_determine_analysis_period(
+        self, start_time: datetime, end_time: datetime
+    ) -> Dict[str, Any]:
+        """Validate inputs and determine analysis period."""
 
         try:
             # Determine analysis timeframe with better error handling
@@ -43,48 +242,39 @@ class TimeSeriesAnalyzer:
 
             # Validate the returned times
             if not analysis_start or not analysis_end:
-                logger.error("Failed to determine valid analysis period")
                 return {
                     "error": "Could not determine analysis time period",
-                    "summary_metadata": {
-                        "analysis_type": analysis_type,
-                        "generated_at": datetime.now(timezone.utc).isoformat(),
-                        "error_occurred": True,
-                        "error_details": "Analysis period determination failed",
-                    },
+                    "details": "Analysis period determination failed",
                 }
 
             if analysis_start >= analysis_end:
-                logger.error(
-                    f"Invalid analysis period: start ({analysis_start}) >= end ({analysis_end})"
-                )
                 return {
                     "error": "Invalid analysis time period: start time must be before end time",
-                    "summary_metadata": {
-                        "analysis_type": analysis_type,
-                        "generated_at": datetime.now(timezone.utc).isoformat(),
-                        "error_occurred": True,
-                        "error_details": f"Start time {analysis_start} >= end time {analysis_end}",
-                    },
+                    "details": f"Start time {analysis_start} >= end time {analysis_end}",
                 }
 
             logger.info(
                 f"Analysis period determined: {analysis_start} to {analysis_end}"
             )
+            return {"period": (analysis_start, analysis_end)}
 
         except Exception as e:
             logger.error(f"Exception in analysis period determination: {e}")
             return {
                 "error": f"Failed to determine analysis period: {e!s}",
-                "summary_metadata": {
-                    "analysis_type": analysis_type,
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                    "error_occurred": True,
-                    "error_details": str(e),
-                },
+                "details": str(e),
             }
 
-        # Get ALL sessions for the entire period ONCE - with safety check
+    def _setup_analysis_components(
+        self,
+        analysis_start: datetime,
+        analysis_end: datetime,
+        analysis_type: str,
+        user_timezone: str,
+    ) -> Dict[str, Any]:
+        """Setup sessions and time buckets for analysis."""
+
+        # Get sessions
         try:
             all_sessions = self.analyzer._find_system_sessions(
                 analysis_start, analysis_end
@@ -96,19 +286,9 @@ class TimeSeriesAnalyzer:
             logger.error(f"Error finding sessions: {e}")
             all_sessions = []
 
-        # Determine bucket type from analysis_type
-        if analysis_type == "hourly":
-            time_bucket_hours = 1
-        elif analysis_type == "daily":
-            time_bucket_hours = 24
-        elif analysis_type == "weekly":
-            time_bucket_hours = 168
-        elif analysis_type == "monthly":
-            time_bucket_hours = "monthly"
-        else:
-            time_bucket_hours = 24
+        # Determine bucket type and create time buckets
+        time_bucket_hours = self._get_time_bucket_hours(analysis_type)
 
-        # Create time buckets with safety check
         try:
             time_buckets = self._create_time_buckets_user_timezone(
                 analysis_start, analysis_end, time_bucket_hours, user_timezone
@@ -116,123 +296,138 @@ class TimeSeriesAnalyzer:
             if time_buckets is None:
                 time_buckets = []
             logger.info(f"Created {len(time_buckets)} time buckets")
-        except Exception as e:
-            logger.error(f"Error creating time buckets: {e}")
+
             return {
-                "error": f"Failed to create time buckets: {e!s}",
-                "summary_metadata": {
-                    "analysis_type": analysis_type,
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                    "period_start": analysis_start.isoformat()
-                    if analysis_start
-                    else None,
-                    "period_end": analysis_end.isoformat() if analysis_end else None,
-                    "error_occurred": True,
-                    "error_details": str(e),
-                },
+                "sessions": all_sessions,
+                "time_buckets": time_buckets,
             }
 
-        # FIXED: For daily analysis, distribute sessions across buckets
-        bucket_reports = []
+        except Exception as e:
+            logger.error(f"Error creating time buckets: {e}")
+            return {"error": f"Failed to create time buckets: {e!s}"}
+
+    def _get_time_bucket_hours(self, analysis_type: str) -> Union[int, str]:
+        """Get time bucket hours based on analysis type."""
+
+        bucket_mapping = {
+            "hourly": 1,
+            "daily": 24,
+            "weekly": 168,
+            "monthly": "monthly",
+        }
+
+        return bucket_mapping.get(analysis_type, 24)  # Default to daily
+
+    def _create_all_bucket_reports(
+        self,
+        time_buckets: List,
+        all_sessions: List[Dict],
+        analysis_start: datetime,
+        analysis_end: datetime,
+        analysis_type: str,
+    ) -> Dict[str, Any]:
+        """Create bucket reports for all time buckets based on analysis type."""
+
         try:
             if analysis_type == "daily":
                 bucket_reports = self._create_daily_buckets_from_sessions(
                     time_buckets, all_sessions, analysis_start, analysis_end
                 )
             elif analysis_type == "monthly":
-                # FIXED: Special handling for monthly to avoid utilization dilution
                 bucket_reports = self._create_monthly_buckets_from_sessions(
                     time_buckets, all_sessions, analysis_start, analysis_end
                 )
             elif analysis_type == "weekly":
-                # Weekly logic
-                bucket_reports = []
-                for i, bucket_info in enumerate(time_buckets):
-                    if isinstance(bucket_info, dict):
-                        bucket_start, bucket_end = bucket_info["utc_times"]
-                        period_info = bucket_info.get("period_info", {})
-                    else:
-                        bucket_start, bucket_end = bucket_info
-                        period_info = {
-                            "type": "period",
-                            "display": bucket_start.strftime("%Y-%m-%d"),
-                        }
-
-                    bucket_report = self._generate_weekly_bucket_report(
-                        bucket_start, bucket_end, all_sessions, i, period_info
-                    )
-                    bucket_reports.append(bucket_report)
+                bucket_reports = self._create_weekly_bucket_reports(
+                    time_buckets, all_sessions
+                )
             else:
-                # Fallback for other analysis types
-                bucket_reports = []
-                for i, bucket_info in enumerate(time_buckets):
-                    if isinstance(bucket_info, dict):
-                        bucket_start, bucket_end = bucket_info["utc_times"]
-                        period_info = bucket_info.get("period_info", {})
-                    else:
-                        bucket_start, bucket_end = bucket_info
-                        period_info = {
-                            "type": "period",
-                            "display": bucket_start.strftime("%Y-%m-%d"),
-                        }
+                # Fallback for other analysis types (hourly, etc.)
+                bucket_reports = self._create_fallback_bucket_reports(time_buckets)
 
-                    # Generate base session report for this bucket
-                    bucket_report = self.analyzer.generate_session_based_report(
-                        bucket_start, bucket_end
-                    )
-
-                    # Add time bucket info
-                    bucket_report["time_bucket"] = {
-                        "bucket_index": i,
-                        "start_time": bucket_start.isoformat(),
-                        "end_time": bucket_end.isoformat(),
-                        "duration_hours": (bucket_end - bucket_start).total_seconds()
-                        / 3600,
-                        "period_info": period_info,
-                    }
-
-                    bucket_reports.append(bucket_report)
+            return {"reports": bucket_reports}
 
         except Exception as e:
             logger.error(f"Error creating bucket reports: {e}")
-            return {
-                "error": f"Failed to create bucket reports: {e!s}",
-                "summary_metadata": {
-                    "analysis_type": analysis_type,
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                    "period_start": analysis_start.isoformat()
-                    if analysis_start
-                    else None,
-                    "period_end": analysis_end.isoformat() if analysis_end else None,
-                    "error_occurred": True,
-                    "error_details": str(e),
-                },
+            return {"error": f"Failed to create bucket reports: {e!s}"}
+
+    def _create_weekly_bucket_reports(
+        self, time_buckets: List, all_sessions: List[Dict]
+    ) -> List[Dict]:
+        """Create weekly bucket reports."""
+
+        bucket_reports = []
+        for i, bucket_info in enumerate(time_buckets):
+            if isinstance(bucket_info, dict):
+                bucket_start, bucket_end = bucket_info["utc_times"]
+                period_info = bucket_info.get("period_info", {})
+            else:
+                bucket_start, bucket_end = bucket_info
+                period_info = {
+                    "type": "period",
+                    "display": bucket_start.strftime("%Y-%m-%d"),
+                }
+
+            bucket_report = self._generate_weekly_bucket_report(
+                bucket_start, bucket_end, all_sessions, i, period_info
+            )
+            bucket_reports.append(bucket_report)
+
+        return bucket_reports
+
+    def _create_fallback_bucket_reports(self, time_buckets: List) -> List[Dict]:
+        """Create fallback bucket reports for other analysis types."""
+
+        bucket_reports = []
+        for i, bucket_info in enumerate(time_buckets):
+            if isinstance(bucket_info, dict):
+                bucket_start, bucket_end = bucket_info["utc_times"]
+                period_info = bucket_info.get("period_info", {})
+            else:
+                bucket_start, bucket_end = bucket_info
+                period_info = {
+                    "type": "period",
+                    "display": bucket_start.strftime("%Y-%m-%d"),
+                }
+
+            # Generate base session report for this bucket
+            bucket_report = self.analyzer.generate_session_based_report(
+                bucket_start, bucket_end
+            )
+
+            # Add time bucket info
+            bucket_report["time_bucket"] = {
+                "bucket_index": i,
+                "start_time": bucket_start.isoformat(),
+                "end_time": bucket_end.isoformat(),
+                "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
+                "period_info": period_info,
             }
 
-        # Create summary report with safety check
-        try:
-            return self._create_summary_report(
-                bucket_reports,
-                analysis_start,
-                analysis_end,
-                analysis_type,
-                user_timezone,
-            )
-        except Exception as e:
-            logger.error(f"Error creating summary report: {e}")
-            return {
-                "error": f"Failed to generate summary: {e!s}",
-                "summary_metadata": {
-                    "analysis_type": analysis_type,
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                    "period_start": analysis_start.isoformat()
-                    if analysis_start
-                    else None,
-                    "period_end": analysis_end.isoformat() if analysis_end else None,
-                    "error_occurred": True,
-                    "error_details": str(e),
-                },
-            }
+            bucket_reports.append(bucket_report)
+
+        return bucket_reports
+
+    def _create_error_response(
+        self,
+        error_message: str,
+        analysis_type: str,
+        analysis_start: Optional[datetime] = None,
+        analysis_end: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        """Create standardized error response."""
+
+        return {
+            "error": error_message,
+            "summary_metadata": {
+                "analysis_type": analysis_type,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "period_start": analysis_start.isoformat() if analysis_start else None,
+                "period_end": analysis_end.isoformat() if analysis_end else None,
+                "error_occurred": True,
+                "error_details": error_message,
+            },
+        }
 
     def _generate_weekly_bucket_report(
         self,
@@ -245,254 +440,302 @@ class TimeSeriesAnalyzer:
         """Generate bucket report for weekly analysis with proper runtime calculation."""
 
         try:
-            # Get experiments that actually occurred within this week
-            actual_experiments_in_period = self._get_experiments_in_time_period(
-                bucket_start, bucket_end
+            # Get experiments and ensure we have valid session list
+            experiments = self._get_experiments_safely(
+                bucket_start, bucket_end, bucket_index
             )
-
-            # Ensure we have a valid list
-            if not actual_experiments_in_period:
-                actual_experiments_in_period = []
-
-            # Find sessions that overlap with this week and calculate proper runtime
-            week_runtime = 0
-            week_active_time = 0
-            week_experiments = len(actual_experiments_in_period)
-            week_utilization = 0
-            week_sessions = []
-
-            # Track all nodes that were active during this week
-            week_node_utilizations = {}
-
-            # Ensure all_sessions is valid
             if not all_sessions:
                 all_sessions = []
 
-            for session in all_sessions:
-                if not session or not isinstance(session, dict):
-                    continue
+            # Process all sessions for this week
+            week_data = self._process_all_sessions_for_week(
+                all_sessions, bucket_start, bucket_end, experiments
+            )
 
-                session_start = session.get("start_time")
-                session_end = session.get("end_time")
-
-                if not session_start or not session_end:
-                    continue
-
-                # Calculate overlap between session and this week
-                overlap_start = max(bucket_start, session_start)
-                overlap_end = min(bucket_end, session_end)
-
-                if overlap_start < overlap_end:
-                    # There's overlap - calculate actual runtime for this week
-                    overlap_seconds = (overlap_end - overlap_start).total_seconds()
-                    overlap_hours = overlap_seconds / 3600
-
-                    # For weekly analysis: ONLY count actual overlapping runtime, not full week
-                    week_runtime += overlap_hours
-
-                    # Calculate proportional active time based on original session utilization
-                    session_duration_seconds = session.get("duration_seconds", 0)
-                    if session_duration_seconds > 0:
-                        try:
-                            # Get the session utilization percentage from a generated session report
-                            session_report = self.analyzer._analyze_session_utilization(
-                                session
-                            )
-                            if session_report and isinstance(session_report, dict):
-                                session_util = session_report.get(
-                                    "system_utilization_percent", 0
-                                )
-
-                                # Calculate active time based on overlap and utilization
-                                week_active_time += overlap_hours * (session_util / 100)
-
-                                # Weight utilization by runtime
-                                week_utilization += session_util * overlap_hours
-
-                                # Include node utilizations from this session
-                                session_nodes = session_report.get(
-                                    "node_utilizations", {}
-                                )
-                                if session_nodes and isinstance(session_nodes, dict):
-                                    for node_id, node_data in session_nodes.items():
-                                        if not node_data or not isinstance(
-                                            node_data, dict
-                                        ):
-                                            continue
-
-                                        if node_id not in week_node_utilizations:
-                                            week_node_utilizations[node_id] = {
-                                                "utilizations": [],
-                                                "busy_hours": 0,
-                                                "node_info": node_data,
-                                            }
-
-                                        # Add proportional busy time for this week
-                                        proportion = overlap_hours / (
-                                            session_duration_seconds / 3600
-                                        )
-                                        proportional_busy_time = (
-                                            node_data.get("busy_time_hours", 0)
-                                            * proportion
-                                        )
-                                        week_node_utilizations[node_id][
-                                            "busy_hours"
-                                        ] += proportional_busy_time
-                                        week_node_utilizations[node_id][
-                                            "utilizations"
-                                        ].append(
-                                            node_data.get("utilization_percent", 0)
-                                        )
-                            else:
-                                session_util = 0
-                        except Exception as e:
-                            logger.error(
-                                f"Error analyzing session for weekly report: {e}"
-                            )
-                            session_util = 0
-                            session_report = {}
-                    else:
-                        session_util = 0
-                        session_report = {}
-
-                    # Count experiments that occurred during this session's overlap
-                    session_experiments = []
-                    if actual_experiments_in_period:
-                        session_experiments = [
-                            exp
-                            for exp in actual_experiments_in_period
-                            if (
-                                exp
-                                and isinstance(exp, dict)
-                                and exp.get("event_timestamp")
-                                and overlap_start
-                                <= exp["event_timestamp"]
-                                <= overlap_end
-                            )
-                        ]
-
-                    # Create a session fragment for this week
-                    week_session = {
-                        "session_type": session.get("session_type", "unknown"),
-                        "session_id": session.get("session_id", "unknown"),
-                        "session_name": session.get("session_name", "Unknown Session"),
-                        "start_time": overlap_start.isoformat(),
-                        "end_time": overlap_end.isoformat(),
-                        "duration_hours": overlap_hours,
-                        "active_time_hours": overlap_hours * (session_util / 100),
-                        "total_experiments": len(session_experiments),
-                        "system_utilization_percent": session_util,
-                        "node_utilizations": session_report.get(
-                            "node_utilizations", {}
-                        ),
-                        "experiment_details": [
-                            {
-                                "experiment_id": exp.get("experiment_id", ""),
-                                "experiment_name": self.analyzer._resolve_experiment_name(
-                                    exp.get("experiment_id", "")
-                                ),
-                                "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}",
-                            }
-                            for exp in session_experiments
-                            if exp and exp.get("experiment_id")
-                        ],
-                        "attribution_method": "weekly_session_overlap",
-                    }
-
-                    week_sessions.append(week_session)
-
-            # Calculate weighted average utilization
-            if week_runtime > 0:
-                week_utilization = week_utilization / week_runtime
-
-            # Process node utilizations for the week summary
-            final_node_utilizations = {}
-            for node_id, node_info in week_node_utilizations.items():
-                if not node_info or not isinstance(node_info, dict):
-                    continue
-
-                utilizations = node_info.get("utilizations", [])
-                avg_utilization = statistics.mean(utilizations) if utilizations else 0
-
-                base_info = node_info.get("node_info", {})
-                if not isinstance(base_info, dict):
-                    base_info = {}
-
-                final_node_utilizations[node_id] = {
-                    "node_id": node_id,
-                    "node_name": base_info.get("node_name", ""),
-                    "display_name": base_info.get(
-                        "display_name", f"Node {node_id[-8:]}"
-                    ),
-                    "utilization_percent": round(avg_utilization, 1),
-                    "busy_time_hours": round(node_info.get("busy_hours", 0), 3),
-                    "timing": base_info.get("timing", {}),
-                    "raw_hours": {
-                        "busy": node_info.get("busy_hours", 0),
-                        "idle": 0,  # Simplified for weekly summary
-                        "total": week_runtime,
-                    },
-                }
-
-            # Create bucket report
-            bucket_report = {
-                "session_details": week_sessions,
-                "overall_summary": {
-                    "total_sessions": len(week_sessions),
-                    "total_system_runtime_hours": week_runtime,
-                    "total_active_time_hours": week_active_time,
-                    "average_system_utilization_percent": week_utilization,
-                    "total_experiments": week_experiments,
-                    "nodes_tracked": len(final_node_utilizations),
-                    "node_summary": {
-                        node_id: {
-                            "average_utilization_percent": node_data[
-                                "utilization_percent"
-                            ],
-                            "total_busy_time_hours": node_data["busy_time_hours"],
-                            "sessions_active": 1,
-                        }
-                        for node_id, node_data in final_node_utilizations.items()
-                    },
-                    "method": "weekly_proper_runtime_calculation",
-                },
-                "time_bucket": {
-                    "bucket_index": bucket_index,
-                    "start_time": bucket_start.isoformat(),
-                    "end_time": bucket_end.isoformat(),
-                    "duration_hours": (bucket_end - bucket_start).total_seconds()
-                    / 3600,
-                    "period_info": period_info,
-                },
-            }
-
-            return bucket_report
+            # Build and return final weekly report
+            return self._build_final_weekly_report(
+                week_data, bucket_start, bucket_end, bucket_index, period_info
+            )
 
         except Exception as e:
             logger.error(f"Error in weekly bucket report generation: {e}")
-            # Return a minimal valid report
-            return {
-                "session_details": [],
-                "overall_summary": {
-                    "total_sessions": 0,
-                    "total_system_runtime_hours": 0,
-                    "total_active_time_hours": 0,
-                    "average_system_utilization_percent": 0,
-                    "total_experiments": 0,
-                    "nodes_tracked": 0,
-                    "node_summary": {},
-                    "method": "weekly_error_fallback",
+            return self._create_error_weekly_bucket_report(
+                bucket_start, bucket_end, bucket_index, period_info, str(e)
+            )
+
+    def _process_all_sessions_for_week(
+        self,
+        all_sessions: List[Dict],
+        bucket_start: datetime,
+        bucket_end: datetime,
+        experiments: List[Dict],
+    ) -> Dict[str, Any]:
+        """Process all sessions and accumulate data for the weekly bucket."""
+
+        week_sessions = []
+        week_runtime = 0
+        week_active_time = 0
+        week_utilization = 0
+        week_node_utilizations = {}
+
+        for session in all_sessions:
+            if not session or not isinstance(session, dict):
+                continue
+
+            session_result = self._process_weekly_session_overlap_and_analysis(
+                session, bucket_start, bucket_end, experiments
+            )
+
+            if session_result:
+                week_sessions.append(session_result["fragment"])
+                week_runtime += session_result["runtime_hours"]
+                week_active_time += session_result["active_hours"]
+                week_utilization += session_result["weighted_utilization"]
+
+                # Accumulate node utilizations
+                self._accumulate_node_data_for_weekly(
+                    week_node_utilizations,
+                    session_result["node_data"],
+                    session_result["proportion"],
+                )
+
+        # Calculate weighted average utilization
+        if week_runtime > 0:
+            week_utilization = week_utilization / week_runtime
+
+        return {
+            "sessions": week_sessions,
+            "runtime": week_runtime,
+            "active_time": week_active_time,
+            "utilization": week_utilization,
+            "experiments_count": len(experiments),
+            "node_utilizations": week_node_utilizations,
+        }
+
+    def _process_weekly_session_overlap_and_analysis(
+        self,
+        session: Dict,
+        bucket_start: datetime,
+        bucket_end: datetime,
+        experiments: List[Dict],
+    ) -> Optional[Dict[str, Any]]:
+        """Process session overlap with weekly bucket and perform analysis."""
+
+        session_start = session.get("start_time")
+        session_end = session.get("end_time")
+
+        if not session_start or not session_end:
+            return None
+
+        # Calculate overlap
+        overlap_start = max(bucket_start, session_start)
+        overlap_end = min(bucket_end, session_end)
+
+        if overlap_start >= overlap_end:
+            return None  # No overlap
+
+        overlap_hours = (overlap_end - overlap_start).total_seconds() / 3600
+        session_duration_seconds = session.get("duration_seconds", 0)
+
+        # Get session analysis and calculate metrics
+        session_report, session_util = self._get_weekly_session_analysis(session)
+
+        # Calculate proportional active time and weighted utilization
+        active_time_hours = overlap_hours * (session_util / 100)
+        weighted_utilization = session_util * overlap_hours
+
+        # Filter experiments to overlap
+        session_experiments = [
+            exp
+            for exp in experiments
+            if (
+                exp
+                and isinstance(exp, dict)
+                and exp.get("event_timestamp")
+                and overlap_start <= exp["event_timestamp"] <= overlap_end
+            )
+        ]
+
+        # Create session fragment
+        session_fragment = {
+            "session_type": session.get("session_type", "unknown"),
+            "session_id": session.get("session_id", "unknown"),
+            "session_name": session.get("session_name", "Unknown Session"),
+            "start_time": overlap_start.isoformat(),
+            "end_time": overlap_end.isoformat(),
+            "duration_hours": overlap_hours,
+            "active_time_hours": active_time_hours,
+            "total_experiments": len(session_experiments),
+            "system_utilization_percent": session_util,
+            "node_utilizations": session_report.get("node_utilizations", {}),
+            "experiment_details": [
+                {
+                    "experiment_id": exp.get("experiment_id", ""),
+                    "experiment_name": self.analyzer._resolve_experiment_name(
+                        exp.get("experiment_id", "")
+                    ),
+                    "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}",
+                }
+                for exp in session_experiments
+                if exp and exp.get("experiment_id")
+            ],
+            "attribution_method": "weekly_session_overlap",
+        }
+
+        # Calculate proportion for node utilization
+        proportion = (
+            overlap_hours / (session_duration_seconds / 3600)
+            if session_duration_seconds > 0
+            else 0
+        )
+
+        return {
+            "fragment": session_fragment,
+            "runtime_hours": overlap_hours,
+            "active_hours": active_time_hours,
+            "weighted_utilization": weighted_utilization,
+            "node_data": session_report.get("node_utilizations", {}),
+            "proportion": proportion,
+        }
+
+    def _get_weekly_session_analysis(
+        self, session: Dict
+    ) -> Tuple[Dict[str, Any], float]:
+        """Get session analysis for weekly processing with error handling."""
+
+        if session.get("duration_seconds", 0) > 0:
+            try:
+                session_report = self.analyzer._analyze_session_utilization(session)
+                if session_report and isinstance(session_report, dict):
+                    session_util = session_report.get("system_utilization_percent", 0)
+                    return session_report, session_util
+            except Exception as e:
+                logger.error(f"Error analyzing session for weekly report: {e}")
+
+        return {}, 0
+
+    def _accumulate_node_data_for_weekly(
+        self, week_node_utilizations: Dict, session_nodes: Dict, proportion: float
+    ) -> None:
+        """Accumulate node utilization data for weekly analysis."""
+
+        if not session_nodes or not isinstance(session_nodes, dict):
+            return
+
+        for node_id, node_data in session_nodes.items():
+            if not node_data or not isinstance(node_data, dict):
+                continue
+
+            if node_id not in week_node_utilizations:
+                week_node_utilizations[node_id] = {
+                    "utilizations": [],
+                    "busy_hours": 0,
+                    "node_info": node_data,
+                }
+
+            # Add proportional busy time for this week
+            proportional_busy_time = node_data.get("busy_time_hours", 0) * proportion
+            week_node_utilizations[node_id]["busy_hours"] += proportional_busy_time
+            week_node_utilizations[node_id]["utilizations"].append(
+                node_data.get("utilization_percent", 0)
+            )
+
+    def _build_final_weekly_report(
+        self,
+        week_data: Dict,
+        bucket_start: datetime,
+        bucket_end: datetime,
+        bucket_index: int,
+        period_info: Dict,
+    ) -> Dict[str, Any]:
+        """Build the final weekly bucket report."""
+
+        # Process final node utilizations
+        final_node_utilizations = {}
+        for node_id, node_info in week_data["node_utilizations"].items():
+            if not node_info or not isinstance(node_info, dict):
+                continue
+
+            utilizations = node_info.get("utilizations", [])
+            avg_utilization = statistics.mean(utilizations) if utilizations else 0
+
+            base_info = node_info.get("node_info", {})
+            if not isinstance(base_info, dict):
+                base_info = {}
+
+            final_node_utilizations[node_id] = {
+                "node_id": node_id,
+                "node_name": base_info.get("node_name", ""),
+                "display_name": base_info.get("display_name", f"Node {node_id[-8:]}"),
+                "utilization_percent": round(avg_utilization, 1),
+                "busy_time_hours": round(node_info.get("busy_hours", 0), 3),
+                "timing": base_info.get("timing", {}),
+                "raw_hours": {
+                    "busy": node_info.get("busy_hours", 0),
+                    "idle": 0,  # Simplified for weekly summary
+                    "total": week_data["runtime"],
                 },
-                "time_bucket": {
-                    "bucket_index": bucket_index,
-                    "start_time": bucket_start.isoformat(),
-                    "end_time": bucket_end.isoformat(),
-                    "duration_hours": (bucket_end - bucket_start).total_seconds()
-                    / 3600,
-                    "period_info": period_info,
-                },
-                "error": f"Weekly bucket generation failed: {e!s}",
             }
+
+        return {
+            "session_details": week_data["sessions"],
+            "overall_summary": {
+                "total_sessions": len(week_data["sessions"]),
+                "total_system_runtime_hours": week_data["runtime"],
+                "total_active_time_hours": week_data["active_time"],
+                "average_system_utilization_percent": week_data["utilization"],
+                "total_experiments": week_data["experiments_count"],
+                "nodes_tracked": len(final_node_utilizations),
+                "node_summary": {
+                    node_id: {
+                        "average_utilization_percent": node_data["utilization_percent"],
+                        "total_busy_time_hours": node_data["busy_time_hours"],
+                        "sessions_active": 1,
+                    }
+                    for node_id, node_data in final_node_utilizations.items()
+                },
+                "method": "weekly_proper_runtime_calculation",
+            },
+            "time_bucket": {
+                "bucket_index": bucket_index,
+                "start_time": bucket_start.isoformat(),
+                "end_time": bucket_end.isoformat(),
+                "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
+                "period_info": period_info,
+            },
+        }
+
+    def _create_error_weekly_bucket_report(
+        self,
+        bucket_start: datetime,
+        bucket_end: datetime,
+        bucket_index: int,
+        period_info: Dict,
+        error_message: str,
+    ) -> Dict[str, Any]:
+        """Create a minimal error bucket report for weekly analysis."""
+
+        return {
+            "session_details": [],
+            "overall_summary": {
+                "total_sessions": 0,
+                "total_system_runtime_hours": 0,
+                "total_active_time_hours": 0,
+                "average_system_utilization_percent": 0,
+                "total_experiments": 0,
+                "nodes_tracked": 0,
+                "node_summary": {},
+                "method": "weekly_error_fallback",
+            },
+            "time_bucket": {
+                "bucket_index": bucket_index,
+                "start_time": bucket_start.isoformat(),
+                "end_time": bucket_end.isoformat(),
+                "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
+                "period_info": period_info,
+            },
+            "error": f"Weekly bucket generation failed: {error_message}",
+        }
 
     def _create_daily_buckets_from_sessions(
         self,
@@ -503,9 +746,7 @@ class TimeSeriesAnalyzer:
     ) -> List[Dict]:
         """Create daily bucket reports with FIXED session attribution and node summary."""
 
-        bucket_reports = []
-
-        # Safety checks
+        # Validate inputs and filter sessions
         if not time_buckets:
             logger.warning("No time buckets provided for daily analysis")
             return []
@@ -514,366 +755,355 @@ class TimeSeriesAnalyzer:
             logger.warning("No sessions provided for daily analysis")
             sessions = []
 
-        # ADDED: Filter sessions to only include those that overlap with analysis period
-        filtered_sessions = []
-        for session in sessions:
-            if not session or not isinstance(session, dict):
-                continue
+        filtered_sessions = self._filter_sessions_to_analysis_period(
+            sessions, start_time, end_time
+        )
 
-            session_start = session.get("start_time")
-            session_end = session.get("end_time")
-
-            if not session_start or not session_end:
-                continue
-
-            # Check if session overlaps with analysis period
-            if session_end >= start_time and session_start <= end_time:
-                filtered_sessions.append(session)
-
+        # Process each time bucket
+        bucket_reports = []
         for i, bucket_info in enumerate(time_buckets):
-            try:
-                if isinstance(bucket_info, dict):
-                    bucket_start, bucket_end = bucket_info["utc_times"]
-                    user_start, user_end = bucket_info["user_times"]
-                    period_info = bucket_info.get("period_info", {})
-                else:
-                    bucket_start, bucket_end = bucket_info
-                    user_start, user_end = bucket_start, bucket_end
-                    period_info = {
-                        "type": "period",
-                        "display": user_start.strftime("%Y-%m-%d"),
-                    }
-
-                # ADDED: Validate bucket times are within analysis period
-                if bucket_start < start_time or bucket_end > end_time:
-                    logger.warning(
-                        f"Daily bucket {i} extends outside analysis period, clipping to bounds"
-                    )
-                    bucket_start = max(bucket_start, start_time)
-                    bucket_end = min(bucket_end, end_time)
-
-                # Safety checks for bucket times
-                if not bucket_start or not bucket_end or bucket_start >= bucket_end:
-                    logger.warning(f"Invalid bucket times for daily bucket {i}")
-                    continue
-
-                # Get experiments that actually occurred within this day
-                try:
-                    actual_experiments_in_period = self._get_experiments_in_time_period(
-                        bucket_start, bucket_end
-                    )
-                    if actual_experiments_in_period is None:
-                        actual_experiments_in_period = []
-                except Exception as e:
-                    logger.error(f"Error getting experiments for daily bucket {i}: {e}")
-                    actual_experiments_in_period = []
-
-                # Find sessions that overlap with this day and calculate proportional data
-                day_sessions = []
-                total_day_runtime = 0
-                total_day_active_time = 0
-                day_experiments = (
-                    len(actual_experiments_in_period)
-                    if actual_experiments_in_period
-                    else 0
-                )
-
-                # Track nodes across all sessions for this day
-                day_node_utilizations = {}
-
-                # CHANGED: Use filtered_sessions instead of sessions
-                for session in filtered_sessions:
-                    try:
-                        session_start = session.get("start_time")
-                        session_end = session.get("end_time")
-
-                        if not session_start or not session_end:
-                            continue
-
-                        # Calculate overlap between session and this day
-                        overlap_start = max(bucket_start, session_start)
-                        overlap_end = min(bucket_end, session_end)
-
-                        if overlap_start < overlap_end:
-                            # There's overlap - calculate proportional runtime
-                            overlap_seconds = (
-                                overlap_end - overlap_start
-                            ).total_seconds()
-                            overlap_hours = overlap_seconds / 3600
-
-                            # CRITICAL FIX: Get the actual session analysis with proper utilization
-                            try:
-                                session_report = (
-                                    self.analyzer._analyze_session_utilization(session)
-                                )
-                                if not session_report or not isinstance(
-                                    session_report, dict
-                                ):
-                                    session_report = {}
-
-                                session_util = (
-                                    session_report.get("system_utilization_percent", 0)
-                                    or 0
-                                )
-                                session_active_time = (
-                                    session_report.get("active_time_hours", 0) or 0
-                                )
-                                session_duration = (
-                                    session_report.get("duration_hours", 0) or 0
-                                )
-
-                            except Exception as e:
-                                logger.error(
-                                    f"Error analyzing session for daily bucket: {e}"
-                                )
-                                session_util = 0
-                                session_active_time = 0
-                                session_duration = 0
-                                session_report = {}
-
-                            # Calculate proportional active time for this day
-                            if session_duration > 0:
-                                proportion = overlap_hours / session_duration
-                                proportional_active_time = (
-                                    session_active_time * proportion
-                                )
-                            else:
-                                proportional_active_time = overlap_hours * (
-                                    session_util / 100
-                                )
-
-                            total_day_runtime += overlap_hours
-                            total_day_active_time += proportional_active_time
-
-                            # CRITICAL FIX: Include node utilizations from the session
-                            session_nodes = session_report.get("node_utilizations", {})
-                            if session_nodes and isinstance(session_nodes, dict):
-                                for node_id, node_data in session_nodes.items():
-                                    if not node_data or not isinstance(node_data, dict):
-                                        continue
-
-                                    if node_id not in day_node_utilizations:
-                                        day_node_utilizations[node_id] = {
-                                            "utilizations": [],
-                                            "busy_hours": 0,
-                                            "node_info": node_data,
-                                        }
-
-                                    # Add proportional busy time for this day
-                                    try:
-                                        if session_duration > 0:
-                                            proportion = (
-                                                overlap_hours / session_duration
-                                            )
-                                            node_busy_hours = (
-                                                node_data.get("busy_time_hours", 0) or 0
-                                            )
-                                            proportional_busy_time = (
-                                                node_busy_hours * proportion
-                                            )
-                                        else:
-                                            proportional_busy_time = 0
-
-                                        day_node_utilizations[node_id][
-                                            "busy_hours"
-                                        ] += proportional_busy_time
-
-                                        node_util_percent = (
-                                            node_data.get("utilization_percent", 0) or 0
-                                        )
-                                        day_node_utilizations[node_id][
-                                            "utilizations"
-                                        ].append(node_util_percent)
-
-                                    except Exception as e:
-                                        logger.error(
-                                            f"Error processing node {node_id} for daily bucket: {e}"
-                                        )
-                                        continue
-
-                            # Count experiments that occurred during this session's overlap
-                            session_experiments = []
-                            if actual_experiments_in_period:
-                                try:
-                                    session_experiments = [
-                                        exp
-                                        for exp in actual_experiments_in_period
-                                        if (
-                                            exp
-                                            and isinstance(exp, dict)
-                                            and exp.get("event_timestamp")
-                                            and overlap_start
-                                            <= exp["event_timestamp"]
-                                            <= overlap_end
-                                        )
-                                    ]
-                                except Exception as e:
-                                    logger.error(
-                                        f"Error filtering session experiments: {e}"
-                                    )
-                                    session_experiments = []
-
-                            # Create a session fragment for this day
-                            day_session = {
-                                "session_type": session.get("session_type", "unknown"),
-                                "session_id": session.get("session_id", "unknown"),
-                                "session_name": session.get(
-                                    "session_name", "Unknown Session"
-                                ),
-                                "start_time": overlap_start.isoformat(),
-                                "end_time": overlap_end.isoformat(),
-                                "duration_hours": overlap_hours,
-                                "active_time_hours": proportional_active_time,
-                                "total_experiments": len(session_experiments)
-                                if session_experiments
-                                else 0,
-                                "system_utilization_percent": session_util,
-                                "node_utilizations": session_nodes
-                                if session_nodes
-                                else {},
-                                "experiment_details": [
-                                    {
-                                        "experiment_id": exp.get("experiment_id", ""),
-                                        "experiment_name": self.analyzer._resolve_experiment_name(
-                                            exp.get("experiment_id", "")
-                                        ),
-                                        "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}",
-                                    }
-                                    for exp in (
-                                        session_experiments
-                                        if session_experiments
-                                        else []
-                                    )
-                                    if exp and exp.get("experiment_id")
-                                ],
-                                "attribution_method": "daily_proportional_from_session_with_bounds_check",
-                            }
-
-                            day_sessions.append(day_session)
-
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing session for daily bucket {i}: {e}"
-                        )
-                        continue
-
-                # Process final node utilizations for this day
-                final_node_utilizations = {}
-                for node_id, node_info in day_node_utilizations.items():
-                    try:
-                        if not node_info or not isinstance(node_info, dict):
-                            continue
-
-                        utilizations = node_info.get("utilizations", [])
-                        if utilizations:
-                            avg_utilization = statistics.mean(utilizations)
-                        else:
-                            avg_utilization = 0
-
-                        base_info = node_info.get("node_info", {})
-                        if not isinstance(base_info, dict):
-                            base_info = {}
-
-                        busy_hours = node_info.get("busy_hours", 0) or 0
-
-                        final_node_utilizations[node_id] = {
-                            "node_id": node_id,
-                            "node_name": base_info.get("node_name"),
-                            "display_name": base_info.get("display_name"),
-                            "utilization_percent": round(avg_utilization, 1),
-                            "busy_time_hours": round(busy_hours, 3),
-                            "timing": base_info.get("timing", {}),
-                            "raw_hours": {
-                                "busy": busy_hours,
-                                "idle": max(0, total_day_runtime - busy_hours),
-                                "total": total_day_runtime,
-                            },
-                        }
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing final node utilization for {node_id}: {e}"
-                        )
-                        continue
-
-                # Calculate day utilization properly
-                day_utilization = (
-                    (total_day_active_time / total_day_runtime * 100)
-                    if total_day_runtime > 0
-                    else 0
-                )
-
-                bucket_report = {
-                    "session_details": day_sessions,
-                    "overall_summary": {
-                        "total_sessions": len(day_sessions),
-                        "total_system_runtime_hours": total_day_runtime,
-                        "total_active_time_hours": total_day_active_time,
-                        "average_system_utilization_percent": day_utilization,
-                        "total_experiments": day_experiments,
-                        "nodes_tracked": len(final_node_utilizations),
-                        "node_summary": {
-                            node_id: {
-                                "average_utilization_percent": node_data[
-                                    "utilization_percent"
-                                ],
-                                "total_busy_time_hours": node_data["busy_time_hours"],
-                                "sessions_active": 1,
-                            }
-                            for node_id, node_data in final_node_utilizations.items()
-                        },
-                        "method": "daily_with_bounds_validation_and_comprehensive_error_handling",
-                    },
-                    "time_bucket": {
-                        "bucket_index": i,
-                        "start_time": bucket_start.isoformat(),
-                        "end_time": bucket_end.isoformat(),
-                        "user_start_time": user_start.strftime("%Y-%m-%dT%H:%M:%S")
-                        if user_start
-                        else "",
-                        "user_date": user_start.strftime("%Y-%m-%d")
-                        if user_start
-                        else "",
-                        "duration_hours": (bucket_end - bucket_start).total_seconds()
-                        / 3600,
-                        "period_info": period_info,
-                    },
-                }
-
-                bucket_reports.append(bucket_report)
-
-            except Exception as e:
-                logger.error(f"Error processing daily bucket {i}: {e}")
-                # Create minimal bucket report to avoid breaking the entire analysis
-                bucket_report = {
-                    "session_details": [],
-                    "overall_summary": {
-                        "total_sessions": 0,
-                        "total_system_runtime_hours": 0,
-                        "total_active_time_hours": 0,
-                        "average_system_utilization_percent": 0,
-                        "total_experiments": 0,
-                        "nodes_tracked": 0,
-                        "node_summary": {},
-                        "method": "daily_error_fallback",
-                    },
-                    "time_bucket": {
-                        "bucket_index": i,
-                        "start_time": "",
-                        "end_time": "",
-                        "user_start_time": "",
-                        "user_date": "",
-                        "duration_hours": 0,
-                        "period_info": {
-                            "type": "day",
-                            "display": "Error",
-                            "short": "Error",
-                        },
-                    },
-                    "error": f"Daily bucket processing failed: {e!s}",
-                }
-                bucket_reports.append(bucket_report)
+            bucket_report = self._process_single_daily_bucket(
+                i, bucket_info, filtered_sessions, start_time, end_time
+            )
+            bucket_reports.append(bucket_report)
 
         return bucket_reports
+
+    def _process_single_daily_bucket(
+        self,
+        bucket_index: int,
+        bucket_info: Any,
+        filtered_sessions: List[Dict],
+        start_time: datetime,
+        end_time: datetime,
+    ) -> Dict[str, Any]:
+        """Process a single daily bucket with comprehensive error handling."""
+
+        try:
+            # Extract and validate bucket data
+            bucket_data = self._extract_and_validate_daily_bucket_data(
+                bucket_info, bucket_index, start_time, end_time
+            )
+
+            if not bucket_data:
+                return self._create_error_daily_bucket_report(
+                    bucket_index, "Invalid bucket data"
+                )
+
+            bucket_start, bucket_end = bucket_data["times"]
+
+            # Get experiments and process sessions for this day
+            experiments = self._get_experiments_safely(
+                bucket_start, bucket_end, bucket_index
+            )
+            day_data = self._process_all_sessions_for_day(
+                filtered_sessions, bucket_start, bucket_end, experiments, bucket_index
+            )
+
+            # Create and return final report
+            return self._build_final_daily_report(
+                day_data, bucket_data, bucket_start, bucket_end, bucket_index
+            )
+
+        except Exception as e:
+            logger.error(f"Error processing daily bucket {bucket_index}: {e}")
+            return self._create_error_daily_bucket_report(bucket_index, str(e))
+
+    def _extract_and_validate_daily_bucket_data(
+        self,
+        bucket_info: Any,
+        bucket_index: int,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> Optional[Dict[str, Any]]:
+        """Extract daily bucket data and validate/adjust times."""
+
+        # Extract bucket information
+        if isinstance(bucket_info, dict):
+            bucket_start, bucket_end = bucket_info["utc_times"]
+            user_start, _ = bucket_info["user_times"]
+            period_info = bucket_info.get("period_info", {})
+        else:
+            bucket_start, bucket_end = bucket_info
+            user_start, _ = bucket_start, bucket_end
+            period_info = {"type": "period", "display": user_start.strftime("%Y-%m-%d")}
+
+        # Validate and adjust bucket times
+        if bucket_start < start_time or bucket_end > end_time:
+            logger.warning(
+                f"Daily bucket {bucket_index} extends outside analysis period, clipping to bounds"
+            )
+            bucket_start = max(bucket_start, start_time)
+            bucket_end = min(bucket_end, end_time)
+
+        if not bucket_start or not bucket_end or bucket_start >= bucket_end:
+            logger.warning(f"Invalid bucket times for daily bucket {bucket_index}")
+            return None
+
+        return {
+            "times": (bucket_start, bucket_end),
+            "user_start": user_start,
+            "period_info": period_info,
+        }
+
+    def _process_all_sessions_for_day(
+        self,
+        filtered_sessions: List[Dict],
+        bucket_start: datetime,
+        bucket_end: datetime,
+        experiments: List[Dict],
+        bucket_index: int,
+    ) -> Dict[str, Any]:
+        """Process all sessions and accumulate data for the daily bucket."""
+
+        day_sessions = []
+        total_day_runtime = 0
+        total_day_active_time = 0
+        day_node_utilizations = {}
+
+        for session in filtered_sessions:
+            try:
+                session_result = self._process_daily_session_overlap_and_analysis(
+                    session, bucket_start, bucket_end, experiments
+                )
+
+                if session_result:
+                    day_sessions.append(session_result["fragment"])
+                    total_day_runtime += session_result["runtime_hours"]
+                    total_day_active_time += session_result["active_hours"]
+
+                    # Accumulate node utilizations
+                    self._accumulate_node_data(
+                        day_node_utilizations, session_result["node_data"]
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"Error processing session for daily bucket {bucket_index}: {e}"
+                )
+                continue
+
+        return {
+            "sessions": day_sessions,
+            "total_runtime": total_day_runtime,
+            "total_active_time": total_day_active_time,
+            "experiments_count": len(experiments),
+            "node_utilizations": day_node_utilizations,
+        }
+
+    def _process_daily_session_overlap_and_analysis(
+        self,
+        session: Dict,
+        bucket_start: datetime,
+        bucket_end: datetime,
+        experiments: List[Dict],
+    ) -> Optional[Dict[str, Any]]:
+        """Process session overlap with daily bucket and perform analysis."""
+
+        session_start = session.get("start_time")
+        session_end = session.get("end_time")
+
+        if not session_start or not session_end:
+            return None
+
+        # Calculate overlap
+        overlap_start = max(bucket_start, session_start)
+        overlap_end = min(bucket_end, session_end)
+
+        if overlap_start >= overlap_end:
+            return None  # No overlap
+
+        overlap_hours = (overlap_end - overlap_start).total_seconds() / 3600
+
+        # Get session analysis with error handling
+        try:
+            session_report = self.analyzer._analyze_session_utilization(session)
+            if not isinstance(session_report, dict):
+                session_report = {}
+        except Exception as e:
+            logger.error(f"Error analyzing session for daily bucket: {e}")
+            session_report = {}
+
+        # Extract session metrics with safety checks
+        session_util = session_report.get("system_utilization_percent", 0) or 0
+        session_active_time = session_report.get("active_time_hours", 0) or 0
+        session_duration = session_report.get("duration_hours", 0) or 0
+
+        # Calculate proportional active time for this day
+        if session_duration > 0:
+            proportion = overlap_hours / session_duration
+            proportional_active_time = session_active_time * proportion
+        else:
+            proportional_active_time = overlap_hours * (session_util / 100)
+
+        # Filter experiments to overlap and create session fragment
+        session_experiments = []
+        if experiments:
+            try:
+                session_experiments = [
+                    exp
+                    for exp in experiments
+                    if (
+                        exp
+                        and isinstance(exp, dict)
+                        and exp.get("event_timestamp")
+                        and overlap_start <= exp["event_timestamp"] <= overlap_end
+                    )
+                ]
+            except Exception as e:
+                logger.error(f"Error filtering session experiments: {e}")
+
+        session_fragment = {
+            "session_type": session.get("session_type", "unknown"),
+            "session_id": session.get("session_id", "unknown"),
+            "session_name": session.get("session_name", "Unknown Session"),
+            "start_time": overlap_start.isoformat(),
+            "end_time": overlap_end.isoformat(),
+            "duration_hours": overlap_hours,
+            "active_time_hours": proportional_active_time,
+            "total_experiments": len(session_experiments),
+            "system_utilization_percent": session_util,
+            "node_utilizations": session_report.get("node_utilizations", {}),
+            "experiment_details": [
+                {
+                    "experiment_id": exp.get("experiment_id", ""),
+                    "experiment_name": self.analyzer._resolve_experiment_name(
+                        exp.get("experiment_id", "")
+                    ),
+                    "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}",
+                }
+                for exp in session_experiments
+                if exp and exp.get("experiment_id")
+            ],
+            "attribution_method": "daily_proportional_from_session_with_bounds_check",
+        }
+
+        return {
+            "fragment": session_fragment,
+            "runtime_hours": overlap_hours,
+            "active_hours": proportional_active_time,
+            "node_data": session_report.get("node_utilizations", {}),
+        }
+
+    def _build_final_daily_report(
+        self,
+        day_data: Dict,
+        bucket_data: Dict,
+        bucket_start: datetime,
+        bucket_end: datetime,
+        bucket_index: int,
+    ) -> Dict[str, Any]:
+        """Build the final daily bucket report."""
+
+        # Process final node utilizations
+        final_node_utilizations = {}
+        for node_id, node_info in day_data["node_utilizations"].items():
+            try:
+                if not node_info or not isinstance(node_info, dict):
+                    continue
+
+                utilizations = node_info.get("utilizations", [])
+                avg_utilization = statistics.mean(utilizations) if utilizations else 0
+
+                base_info = node_info.get("node_info", {})
+                busy_hours = node_info.get("busy_hours", 0) or 0
+
+                final_node_utilizations[node_id] = {
+                    "node_id": node_id,
+                    "node_name": base_info.get("node_name")
+                    if isinstance(base_info, dict)
+                    else None,
+                    "display_name": base_info.get("display_name")
+                    if isinstance(base_info, dict)
+                    else None,
+                    "utilization_percent": round(avg_utilization, 1),
+                    "busy_time_hours": round(busy_hours, 3),
+                    "timing": base_info.get("timing", {})
+                    if isinstance(base_info, dict)
+                    else {},
+                    "raw_hours": {
+                        "busy": busy_hours,
+                        "idle": max(0, day_data["total_runtime"] - busy_hours),
+                        "total": day_data["total_runtime"],
+                    },
+                }
+            except Exception as e:
+                logger.error(
+                    f"Error processing final node utilization for {node_id}: {e}"
+                )
+                continue
+
+        # Calculate day utilization
+        day_utilization = (
+            (day_data["total_active_time"] / day_data["total_runtime"] * 100)
+            if day_data["total_runtime"] > 0
+            else 0
+        )
+
+        return {
+            "session_details": day_data["sessions"],
+            "overall_summary": {
+                "total_sessions": len(day_data["sessions"]),
+                "total_system_runtime_hours": day_data["total_runtime"],
+                "total_active_time_hours": day_data["total_active_time"],
+                "average_system_utilization_percent": day_utilization,
+                "total_experiments": day_data["experiments_count"],
+                "nodes_tracked": len(final_node_utilizations),
+                "node_summary": {
+                    node_id: {
+                        "average_utilization_percent": node_data["utilization_percent"],
+                        "total_busy_time_hours": node_data["busy_time_hours"],
+                        "sessions_active": 1,
+                    }
+                    for node_id, node_data in final_node_utilizations.items()
+                },
+                "method": "daily_with_bounds_validation_and_comprehensive_error_handling",
+            },
+            "time_bucket": {
+                "bucket_index": bucket_index,
+                "start_time": bucket_start.isoformat(),
+                "end_time": bucket_end.isoformat(),
+                "user_start_time": bucket_data["user_start"].strftime(
+                    "%Y-%m-%dT%H:%M:%S"
+                )
+                if bucket_data["user_start"]
+                else "",
+                "user_date": bucket_data["user_start"].strftime("%Y-%m-%d")
+                if bucket_data["user_start"]
+                else "",
+                "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
+                "period_info": bucket_data["period_info"],
+            },
+        }
+
+    def _create_error_daily_bucket_report(
+        self, bucket_index: int, error_message: str
+    ) -> Dict[str, Any]:
+        """Create a minimal error bucket report for daily analysis."""
+
+        return {
+            "session_details": [],
+            "overall_summary": {
+                "total_sessions": 0,
+                "total_system_runtime_hours": 0,
+                "total_active_time_hours": 0,
+                "average_system_utilization_percent": 0,
+                "total_experiments": 0,
+                "nodes_tracked": 0,
+                "node_summary": {},
+                "method": "daily_error_fallback",
+            },
+            "time_bucket": {
+                "bucket_index": bucket_index,
+                "start_time": "",
+                "end_time": "",
+                "user_start_time": "",
+                "user_date": "",
+                "duration_hours": 0,
+                "period_info": {"type": "day", "display": "Error", "short": "Error"},
+            },
+            "error": f"Daily bucket processing failed: {error_message}",
+        }
 
     def _create_monthly_buckets_from_sessions(
         self,
@@ -884,9 +1114,7 @@ class TimeSeriesAnalyzer:
     ) -> List[Dict]:
         """Create monthly bucket reports with FIXED session attribution and comprehensive error handling."""
 
-        bucket_reports = []
-
-        # Safety check for inputs
+        # Validate inputs and filter sessions
         if not time_buckets:
             logger.warning("No time buckets provided for monthly analysis")
             return []
@@ -895,8 +1123,26 @@ class TimeSeriesAnalyzer:
             logger.warning("No sessions provided for monthly analysis")
             sessions = []
 
-        filtered_sessions = []
+        filtered_sessions = self._filter_sessions_to_analysis_period(
+            sessions, start_time, end_time
+        )
 
+        # Process each time bucket
+        bucket_reports = []
+        for i, bucket_info in enumerate(time_buckets):
+            bucket_report = self._process_single_monthly_bucket(
+                i, bucket_info, filtered_sessions, start_time, end_time
+            )
+            bucket_reports.append(bucket_report)
+
+        return bucket_reports
+
+    def _filter_sessions_to_analysis_period(
+        self, sessions: List[Dict], start_time: datetime, end_time: datetime
+    ) -> List[Dict]:
+        """Filter sessions to only include those overlapping with analysis period."""
+
+        filtered_sessions = []
         for session in sessions:
             if not session or not isinstance(session, dict):
                 continue
@@ -911,359 +1157,371 @@ class TimeSeriesAnalyzer:
             if session_end >= start_time and session_start <= end_time:
                 filtered_sessions.append(session)
 
-        for i, bucket_info in enumerate(time_buckets):
+        return filtered_sessions
+
+    def _process_single_monthly_bucket(
+        self,
+        bucket_index: int,
+        bucket_info: Any,
+        filtered_sessions: List[Dict],
+        start_time: datetime,
+        end_time: datetime,
+    ) -> Dict[str, Any]:
+        """Process a single monthly bucket with comprehensive error handling."""
+
+        try:
+            # Extract and validate bucket data
+            bucket_data = self._extract_and_validate_bucket_data(
+                bucket_info, bucket_index, start_time, end_time
+            )
+
+            if not bucket_data:
+                return self._create_error_bucket_report(
+                    bucket_index, "Invalid bucket data"
+                )
+
+            bucket_start, bucket_end = bucket_data["times"]
+
+            # Get experiments and process sessions for this month
+            experiments = self._get_experiments_safely(
+                bucket_start, bucket_end, bucket_index
+            )
+            month_data = self._process_all_sessions_for_month(
+                filtered_sessions, bucket_start, bucket_end, experiments, bucket_index
+            )
+
+            # Create and return final report
+            return self._build_final_monthly_report(
+                month_data, bucket_data, bucket_start, bucket_end, bucket_index
+            )
+
+        except Exception as e:
+            logger.error(f"Error processing bucket {bucket_index}: {e}")
+            return self._create_error_bucket_report(bucket_index, str(e))
+
+    def _extract_and_validate_bucket_data(
+        self,
+        bucket_info: Any,
+        bucket_index: int,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> Optional[Dict[str, Any]]:
+        """Extract bucket data and validate/adjust times."""
+
+        # Extract bucket information
+        if isinstance(bucket_info, dict):
+            bucket_start, bucket_end = bucket_info["utc_times"]
+            user_start, _ = bucket_info["user_times"]
+            period_info = bucket_info.get("period_info", {})
+        else:
+            bucket_start, bucket_end = bucket_info
+            user_start, _ = bucket_start, bucket_end
+            period_info = {"type": "period", "display": user_start.strftime("%Y-%m")}
+
+        # Validate and adjust bucket times
+        if bucket_start < start_time or bucket_end > end_time:
+            logger.warning(
+                f"Bucket {bucket_index} extends outside analysis period, clipping to bounds"
+            )
+            bucket_start = max(bucket_start, start_time)
+            bucket_end = min(bucket_end, end_time)
+
+        if not bucket_start or not bucket_end or bucket_start >= bucket_end:
+            logger.warning(f"Invalid bucket times for bucket {bucket_index}")
+            return None
+
+        return {
+            "times": (bucket_start, bucket_end),
+            "user_start": user_start,
+            "period_info": period_info,
+        }
+
+    def _get_experiments_safely(
+        self, bucket_start: datetime, bucket_end: datetime, bucket_index: int
+    ) -> List[Dict]:
+        """Get experiments for bucket with error handling."""
+
+        try:
+            experiments = self._get_experiments_in_time_period(bucket_start, bucket_end)
+            return experiments if experiments is not None else []
+        except Exception as e:
+            logger.error(f"Error getting experiments for bucket {bucket_index}: {e}")
+            return []
+
+    def _process_all_sessions_for_month(
+        self,
+        filtered_sessions: List[Dict],
+        bucket_start: datetime,
+        bucket_end: datetime,
+        experiments: List[Dict],
+        bucket_index: int,
+    ) -> Dict[str, Any]:
+        """Process all sessions and accumulate data for the monthly bucket."""
+
+        month_sessions = []
+        total_month_runtime = 0
+        total_month_active_time = 0
+        month_node_utilizations = {}
+
+        for session in filtered_sessions:
             try:
-                if isinstance(bucket_info, dict):
-                    bucket_start, bucket_end = bucket_info["utc_times"]
-                    user_start, user_end = bucket_info["user_times"]
-                    period_info = bucket_info.get("period_info", {})
-                else:
-                    bucket_start, bucket_end = bucket_info
-                    user_start, user_end = bucket_start, bucket_end
-                    period_info = {
-                        "type": "period",
-                        "display": user_start.strftime("%Y-%m"),
-                    }
-
-                # ADDED: Validate bucket times are within analysis period
-                if bucket_start < start_time or bucket_end > end_time:
-                    logger.warning(
-                        f"Bucket {i} extends outside analysis period, clipping to bounds"
-                    )
-                    bucket_start = max(bucket_start, start_time)
-                    bucket_end = min(bucket_end, end_time)
-
-                # Safety checks for bucket times
-                if not bucket_start or not bucket_end or bucket_start >= bucket_end:
-                    logger.warning(f"Invalid bucket times for bucket {i}")
-                    continue
-
-                # Get experiments that actually occurred within this month with safety check
-                try:
-                    actual_experiments_in_period = self._get_experiments_in_time_period(
-                        bucket_start, bucket_end
-                    )
-                    if actual_experiments_in_period is None:
-                        actual_experiments_in_period = []
-                except Exception as e:
-                    logger.error(f"Error getting experiments for bucket {i}: {e}")
-                    actual_experiments_in_period = []
-
-                # Find real sessions that overlap with this month and calculate proportional data
-                month_sessions = []
-                total_month_runtime = 0
-                total_month_active_time = 0
-                month_experiments = (
-                    len(actual_experiments_in_period)
-                    if actual_experiments_in_period
-                    else 0
+                session_result = self._process_session_overlap_and_analysis(
+                    session, bucket_start, bucket_end, experiments
                 )
 
-                # Track nodes across all sessions for this month
-                month_node_utilizations = {}
+                if session_result:
+                    month_sessions.append(session_result["fragment"])
+                    total_month_runtime += session_result["runtime_hours"]
+                    total_month_active_time += session_result["active_hours"]
 
-                # CHANGED: Use filtered_sessions instead of sessions
-                for session in filtered_sessions:
-                    try:
-                        session_start = session.get("start_time")
-                        session_end = session.get("end_time")
-
-                        # Calculate overlap between session and this month
-                        overlap_start = max(bucket_start, session_start)
-                        overlap_end = min(bucket_end, session_end)
-
-                        if overlap_start < overlap_end:
-                            # There's overlap - calculate proportional runtime
-                            overlap_seconds = (
-                                overlap_end - overlap_start
-                            ).total_seconds()
-                            overlap_hours = overlap_seconds / 3600
-
-                            # CRITICAL FIX: Get the actual session analysis with proper utilization
-                            try:
-                                session_report = (
-                                    self.analyzer._analyze_session_utilization(session)
-                                )
-                                if not session_report or not isinstance(
-                                    session_report, dict
-                                ):
-                                    session_report = {}
-
-                                session_util = session_report.get(
-                                    "system_utilization_percent", 0
-                                )
-                                session_active_time = session_report.get(
-                                    "active_time_hours", 0
-                                )
-                                session_duration = session_report.get(
-                                    "duration_hours", 0
-                                )
-
-                                # Safety check for session values
-                                if session_util is None:
-                                    session_util = 0
-                                if session_active_time is None:
-                                    session_active_time = 0
-                                if session_duration is None:
-                                    session_duration = 0
-
-                            except Exception as e:
-                                logger.error(
-                                    f"Error analyzing session for month bucket: {e}"
-                                )
-                                session_util = 0
-                                session_active_time = 0
-                                session_duration = 0
-                                session_report = {}
-
-                            # Calculate proportional active time for this month
-                            if session_duration > 0:
-                                proportion = overlap_hours / session_duration
-                                proportional_active_time = (
-                                    session_active_time * proportion
-                                )
-                            else:
-                                proportional_active_time = overlap_hours * (
-                                    session_util / 100
-                                )
-
-                            total_month_runtime += overlap_hours
-                            total_month_active_time += proportional_active_time
-
-                            # CRITICAL FIX: Include node utilizations from the session with safety checks
-                            session_nodes = session_report.get("node_utilizations", {})
-                            if session_nodes and isinstance(session_nodes, dict):
-                                for node_id, node_data in session_nodes.items():
-                                    if not node_data or not isinstance(node_data, dict):
-                                        continue
-
-                                    if node_id not in month_node_utilizations:
-                                        month_node_utilizations[node_id] = {
-                                            "utilizations": [],
-                                            "busy_hours": 0,
-                                            "node_info": node_data,
-                                        }
-
-                                    # Add proportional busy time for this month
-                                    try:
-                                        if session_duration > 0:
-                                            proportion = (
-                                                overlap_hours / session_duration
-                                            )
-                                            node_busy_hours = node_data.get(
-                                                "busy_time_hours", 0
-                                            )
-                                            if node_busy_hours is None:
-                                                node_busy_hours = 0
-                                            proportional_busy_time = (
-                                                node_busy_hours * proportion
-                                            )
-                                        else:
-                                            proportional_busy_time = 0
-
-                                        month_node_utilizations[node_id][
-                                            "busy_hours"
-                                        ] += proportional_busy_time
-
-                                        node_util_percent = node_data.get(
-                                            "utilization_percent", 0
-                                        )
-                                        if node_util_percent is None:
-                                            node_util_percent = 0
-                                        month_node_utilizations[node_id][
-                                            "utilizations"
-                                        ].append(node_util_percent)
-
-                                    except Exception as e:
-                                        logger.error(
-                                            f"Error processing node {node_id} for month bucket: {e}"
-                                        )
-                                        continue
-
-                            # Count experiments that occurred during this session's overlap
-                            session_experiments = []
-                            if actual_experiments_in_period:
-                                try:
-                                    session_experiments = [
-                                        exp
-                                        for exp in actual_experiments_in_period
-                                        if (
-                                            exp
-                                            and isinstance(exp, dict)
-                                            and exp.get("event_timestamp")
-                                            and overlap_start
-                                            <= exp["event_timestamp"]
-                                            <= overlap_end
-                                        )
-                                    ]
-                                except Exception as e:
-                                    logger.error(
-                                        f"Error filtering session experiments: {e}"
-                                    )
-                                    session_experiments = []
-
-                            # Create a session fragment for this month
-                            month_session = {
-                                "session_type": session.get("session_type", "unknown"),
-                                "session_id": session.get("session_id", "unknown"),
-                                "session_name": session.get(
-                                    "session_name", "Unknown Session"
-                                ),
-                                "start_time": overlap_start.isoformat(),
-                                "end_time": overlap_end.isoformat(),
-                                "duration_hours": overlap_hours,
-                                "active_time_hours": proportional_active_time,
-                                "total_experiments": len(session_experiments)
-                                if session_experiments
-                                else 0,
-                                "system_utilization_percent": session_util,
-                                "node_utilizations": session_nodes
-                                if session_nodes
-                                else {},
-                                "experiment_details": [
-                                    {
-                                        "experiment_id": exp.get("experiment_id", ""),
-                                        "experiment_name": self.analyzer._resolve_experiment_name(
-                                            exp.get("experiment_id", "")
-                                        ),
-                                        "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}",
-                                    }
-                                    for exp in (
-                                        session_experiments
-                                        if session_experiments
-                                        else []
-                                    )
-                                    if exp and exp.get("experiment_id")
-                                ],
-                                "attribution_method": "monthly_proportional_from_real_session_fixed_with_bounds_check",
-                            }
-
-                            month_sessions.append(month_session)
-
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing session for month bucket {i}: {e}"
-                        )
-                        continue
-
-                # Process final node utilizations for this month with safety checks
-                final_node_utilizations = {}
-                for node_id, node_info in month_node_utilizations.items():
-                    try:
-                        if not node_info or not isinstance(node_info, dict):
-                            continue
-
-                        utilizations = node_info.get("utilizations", [])
-                        if utilizations:
-                            avg_utilization = statistics.mean(utilizations)
-                        else:
-                            avg_utilization = 0
-
-                        base_info = node_info.get("node_info", {})
-                        if not isinstance(base_info, dict):
-                            base_info = {}
-
-                        busy_hours = node_info.get("busy_hours", 0)
-                        if busy_hours is None:
-                            busy_hours = 0
-
-                        final_node_utilizations[node_id] = {
-                            "node_id": node_id,
-                            "node_name": base_info.get("node_name"),
-                            "display_name": base_info.get("display_name"),
-                            "utilization_percent": round(avg_utilization, 1),
-                            "busy_time_hours": round(busy_hours, 3),
-                            "timing": base_info.get("timing", {}),
-                            "raw_hours": {
-                                "busy": busy_hours,
-                                "idle": max(0, total_month_runtime - busy_hours),
-                                "total": total_month_runtime,
-                            },
-                        }
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing final node utilization for {node_id}: {e}"
-                        )
-                        continue
-
-                # Calculate month utilization properly (same as daily logic)
-                month_utilization = (
-                    (total_month_active_time / total_month_runtime * 100)
-                    if total_month_runtime > 0
-                    else 0
-                )
-
-                # Create bucket report with FIXED node summary
-                bucket_report = {
-                    "session_details": month_sessions,
-                    "overall_summary": {
-                        "total_sessions": len(month_sessions),
-                        "total_system_runtime_hours": total_month_runtime,
-                        "total_active_time_hours": total_month_active_time,
-                        "average_system_utilization_percent": month_utilization,
-                        "total_experiments": month_experiments,
-                        "nodes_tracked": len(final_node_utilizations),
-                        "node_summary": {
-                            node_id: {
-                                "average_utilization_percent": node_data[
-                                    "utilization_percent"
-                                ],
-                                "total_busy_time_hours": node_data["busy_time_hours"],
-                                "sessions_active": 1,
-                            }
-                            for node_id, node_data in final_node_utilizations.items()
-                        },
-                        "method": "monthly_fixed_with_bounds_validation",
-                    },
-                    "time_bucket": {
-                        "bucket_index": i,
-                        "start_time": bucket_start.isoformat(),
-                        "end_time": bucket_end.isoformat(),
-                        "user_start_time": user_start.strftime("%Y-%m-%dT%H:%M:%S")
-                        if user_start
-                        else "",
-                        "user_date": user_start.strftime("%Y-%m") if user_start else "",
-                        "duration_hours": (bucket_end - bucket_start).total_seconds()
-                        / 3600,
-                        "period_info": period_info,
-                    },
-                }
-
-                bucket_reports.append(bucket_report)
+                    # Accumulate node utilizations
+                    self._accumulate_node_data(
+                        month_node_utilizations, session_result["node_data"]
+                    )
 
             except Exception as e:
-                logger.error(f"Error processing bucket {i}: {e}")
-                # Create minimal bucket report to avoid breaking the entire analysis
-                bucket_report = {
-                    "session_details": [],
-                    "overall_summary": {
-                        "total_sessions": 0,
-                        "total_system_runtime_hours": 0,
-                        "total_active_time_hours": 0,
-                        "average_system_utilization_percent": 0,
-                        "total_experiments": 0,
-                        "nodes_tracked": 0,
-                        "node_summary": {},
-                        "method": "monthly_error_fallback",
-                    },
-                    "time_bucket": {
-                        "bucket_index": i,
-                        "start_time": "",
-                        "end_time": "",
-                        "user_start_time": "",
-                        "user_date": "",
-                        "duration_hours": 0,
-                        "period_info": {
-                            "type": "month",
-                            "display": "Error",
-                            "short": "Error",
-                        },
-                    },
-                    "error": f"Bucket processing failed: {e!s}",
-                }
-                bucket_reports.append(bucket_report)
+                logger.error(
+                    f"Error processing session for month bucket {bucket_index}: {e}"
+                )
+                continue
 
-        return bucket_reports
+        return {
+            "sessions": month_sessions,
+            "total_runtime": total_month_runtime,
+            "total_active_time": total_month_active_time,
+            "experiments_count": len(experiments),
+            "node_utilizations": month_node_utilizations,
+        }
+
+    def _process_session_overlap_and_analysis(
+        self,
+        session: Dict,
+        bucket_start: datetime,
+        bucket_end: datetime,
+        experiments: List[Dict],
+    ) -> Optional[Dict[str, Any]]:
+        """Process session overlap with bucket and perform analysis."""
+
+        session_start = session.get("start_time")
+        session_end = session.get("end_time")
+
+        # Calculate overlap
+        overlap_start = max(bucket_start, session_start)
+        overlap_end = min(bucket_end, session_end)
+
+        if overlap_start >= overlap_end:
+            return None  # No overlap
+
+        overlap_hours = (overlap_end - overlap_start).total_seconds() / 3600
+
+        # Get session analysis with error handling
+        try:
+            session_report = self.analyzer._analyze_session_utilization(session)
+            if not isinstance(session_report, dict):
+                session_report = {}
+        except Exception as e:
+            logger.error(f"Error analyzing session: {e}")
+            session_report = {}
+
+        # Extract session metrics with safety checks
+        session_util = session_report.get("system_utilization_percent", 0) or 0
+        session_active_time = session_report.get("active_time_hours", 0) or 0
+        session_duration = session_report.get("duration_hours", 0) or 0
+
+        # Calculate proportional active time
+        if session_duration > 0:
+            proportion = overlap_hours / session_duration
+            proportional_active_time = session_active_time * proportion
+        else:
+            proportional_active_time = overlap_hours * (session_util / 100)
+
+        # Filter experiments to overlap and create session fragment
+        session_experiments = [
+            exp
+            for exp in experiments
+            if (
+                exp
+                and isinstance(exp, dict)
+                and exp.get("event_timestamp")
+                and overlap_start <= exp["event_timestamp"] <= overlap_end
+            )
+        ]
+
+        session_fragment = {
+            "session_type": session.get("session_type", "unknown"),
+            "session_id": session.get("session_id", "unknown"),
+            "session_name": session.get("session_name", "Unknown Session"),
+            "start_time": overlap_start.isoformat(),
+            "end_time": overlap_end.isoformat(),
+            "duration_hours": overlap_hours,
+            "active_time_hours": proportional_active_time,
+            "total_experiments": len(session_experiments),
+            "system_utilization_percent": session_util,
+            "experiment_details": [
+                {
+                    "experiment_id": exp.get("experiment_id", ""),
+                    "experiment_name": self.analyzer._resolve_experiment_name(
+                        exp.get("experiment_id", "")
+                    ),
+                    "display_name": f"Experiment {exp.get('experiment_id', '')[-8:]}",
+                }
+                for exp in session_experiments
+                if exp and exp.get("experiment_id")
+            ],
+            "attribution_method": "monthly_proportional_from_real_session_fixed_with_bounds_check",
+        }
+
+        return {
+            "fragment": session_fragment,
+            "runtime_hours": overlap_hours,
+            "active_hours": proportional_active_time,
+            "node_data": session_report.get("node_utilizations", {}),
+        }
+
+    def _accumulate_node_data(
+        self, month_node_utilizations: Dict, session_nodes: Dict
+    ) -> None:
+        """Accumulate node utilization data from session."""
+
+        if not session_nodes or not isinstance(session_nodes, dict):
+            return
+
+        for node_id, node_data in session_nodes.items():
+            if not node_data or not isinstance(node_data, dict):
+                continue
+
+            if node_id not in month_node_utilizations:
+                month_node_utilizations[node_id] = {
+                    "utilizations": [],
+                    "busy_hours": 0,
+                    "node_info": node_data,
+                }
+
+            node_util_percent = node_data.get("utilization_percent", 0) or 0
+            node_busy_hours = node_data.get("busy_time_hours", 0) or 0
+
+            month_node_utilizations[node_id]["utilizations"].append(node_util_percent)
+            month_node_utilizations[node_id]["busy_hours"] += node_busy_hours
+
+    def _build_final_monthly_report(
+        self,
+        month_data: Dict,
+        bucket_data: Dict,
+        bucket_start: datetime,
+        bucket_end: datetime,
+        bucket_index: int,
+    ) -> Dict[str, Any]:
+        """Build the final monthly bucket report."""
+
+        # Process final node utilizations
+        final_node_utilizations = {}
+        for node_id, node_info in month_data["node_utilizations"].items():
+            try:
+                if not node_info or not isinstance(node_info, dict):
+                    continue
+
+                utilizations = node_info.get("utilizations", [])
+                avg_utilization = statistics.mean(utilizations) if utilizations else 0
+
+                base_info = node_info.get("node_info", {})
+                busy_hours = node_info.get("busy_hours", 0) or 0
+
+                final_node_utilizations[node_id] = {
+                    "node_id": node_id,
+                    "node_name": base_info.get("node_name")
+                    if isinstance(base_info, dict)
+                    else None,
+                    "display_name": base_info.get("display_name")
+                    if isinstance(base_info, dict)
+                    else None,
+                    "utilization_percent": round(avg_utilization, 1),
+                    "busy_time_hours": round(busy_hours, 3),
+                    "timing": base_info.get("timing", {})
+                    if isinstance(base_info, dict)
+                    else {},
+                    "raw_hours": {
+                        "busy": busy_hours,
+                        "idle": max(0, month_data["total_runtime"] - busy_hours),
+                        "total": month_data["total_runtime"],
+                    },
+                }
+            except Exception as e:
+                logger.error(
+                    f"Error processing final node utilization for {node_id}: {e}"
+                )
+                continue
+
+        # Calculate month utilization
+        month_utilization = (
+            (month_data["total_active_time"] / month_data["total_runtime"] * 100)
+            if month_data["total_runtime"] > 0
+            else 0
+        )
+
+        return {
+            "session_details": month_data["sessions"],
+            "overall_summary": {
+                "total_sessions": len(month_data["sessions"]),
+                "total_system_runtime_hours": month_data["total_runtime"],
+                "total_active_time_hours": month_data["total_active_time"],
+                "average_system_utilization_percent": month_utilization,
+                "total_experiments": month_data["experiments_count"],
+                "nodes_tracked": len(final_node_utilizations),
+                "node_summary": {
+                    node_id: {
+                        "average_utilization_percent": node_data["utilization_percent"],
+                        "total_busy_time_hours": node_data["busy_time_hours"],
+                        "sessions_active": 1,
+                    }
+                    for node_id, node_data in final_node_utilizations.items()
+                },
+                "method": "monthly_fixed_with_bounds_validation",
+            },
+            "time_bucket": {
+                "bucket_index": bucket_index,
+                "start_time": bucket_start.isoformat(),
+                "end_time": bucket_end.isoformat(),
+                "user_start_time": bucket_data["user_start"].strftime(
+                    "%Y-%m-%dT%H:%M:%S"
+                )
+                if bucket_data["user_start"]
+                else "",
+                "user_date": bucket_data["user_start"].strftime("%Y-%m")
+                if bucket_data["user_start"]
+                else "",
+                "duration_hours": (bucket_end - bucket_start).total_seconds() / 3600,
+                "period_info": bucket_data["period_info"],
+            },
+        }
+
+    def _create_error_bucket_report(
+        self, bucket_index: int, error_message: str
+    ) -> Dict[str, Any]:
+        """Create a minimal error bucket report."""
+
+        return {
+            "session_details": [],
+            "overall_summary": {
+                "total_sessions": 0,
+                "total_system_runtime_hours": 0,
+                "total_active_time_hours": 0,
+                "average_system_utilization_percent": 0,
+                "total_experiments": 0,
+                "nodes_tracked": 0,
+                "node_summary": {},
+                "method": "monthly_error_fallback",
+            },
+            "time_bucket": {
+                "bucket_index": bucket_index,
+                "start_time": "",
+                "end_time": "",
+                "user_start_time": "",
+                "user_date": "",
+                "duration_hours": 0,
+                "period_info": {"type": "month", "display": "Error", "short": "Error"},
+            },
+            "error": f"Bucket processing failed: {error_message}",
+        }
 
     def _get_experiments_in_time_period(
         self, start_time: datetime, end_time: datetime

@@ -306,3 +306,6 @@ test_experiment/
 
 #node modules
 **/node_modules
+
+#Repors folder
+.reports/

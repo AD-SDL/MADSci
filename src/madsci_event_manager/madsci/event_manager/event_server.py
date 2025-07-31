@@ -1,9 +1,9 @@
 """REST Server for the MADSci Event Manager"""
 
 import datetime
-from datetime import datetime, timezone
+from datetime import datetime  # noqa: F811
 from pathlib import Path
-from typing import Any, Optional
+from typing import Annotated, Any, Dict, Optional, Tuple, Union
 
 import uvicorn
 from fastapi import FastAPI, Query
@@ -25,7 +25,7 @@ from pymongo import MongoClient, errors
 from pymongo.synchronous.database import Database
 
 
-def create_event_server(  # noqa: C901
+def create_event_server(  # noqa: C901, PLR0915
     event_manager_definition: Optional[EventManagerDefinition] = None,
     event_manager_settings: Optional[EventManagerSettings] = None,
     db_connection: Optional[Database] = None,
@@ -76,7 +76,7 @@ def create_event_server(  # noqa: C901
         try:
             mongo_data = event.to_mongo()
             try:
-                result = events.insert_one(mongo_data)
+                events.insert_one(mongo_data)
             except errors.DuplicateKeyError:
                 logger.log_warning(
                     f"Duplicate event ID {event.event_id} - skipping insert"
@@ -86,13 +86,14 @@ def create_event_server(  # noqa: C901
             logger.log_error(f"Failed to log event: {e}")
             raise e
 
-        if event.alert or event.log_level >= event_manager_settings.alert_level:
-            if event_manager_settings.email_alerts:
-                email_alerter = EmailAlerts(
-                    config=event_manager_settings.email_alerts,
-                    logger=logger,
-                )
-                email_alerter.send_email_alerts(event)
+        if (
+            event.alert or event.log_level >= event_manager_settings.alert_level
+        ) and event_manager_settings.email_alerts:
+            email_alerter = EmailAlerts(
+                config=event_manager_settings.email_alerts,
+                logger=logger,
+            )
+            email_alerter.send_email_alerts(event)
         return event
 
     @app.get("/event/{event_id}")
@@ -139,12 +140,16 @@ def create_event_server(  # noqa: C901
     async def get_session_utilization(
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        csv_format: bool = Query(False, description="Return data in CSV format"),
-        save_to_file: bool = Query(False, description="Save CSV to server filesystem"),
-        output_path: Optional[str] = Query(
-            None, description="Server path to save CSV files"
-        ),
-    ):
+        csv_format: Annotated[
+            bool, Query(description="Return data in CSV format")
+        ] = False,
+        save_to_file: Annotated[
+            bool, Query(description="Save CSV to server filesystem")
+        ] = False,
+        output_path: Annotated[
+            Optional[str], Query(description="Server path to save CSV files")
+        ] = None,
+    ) -> Union[Dict[str, Any], Response]:
         """
         Generate comprehensive session-based utilization report.
 
@@ -164,54 +169,15 @@ def create_event_server(  # noqa: C901
             return {"error": "Failed to create session analyzer"}
 
         try:
-            # Parse time parameters
-            parsed_start = None
-            parsed_end = None
-
-            if start_time:
-                parsed_start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            if end_time:
-                parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
-
-            # Generate session-based report
+            # Parse time parameters and generate session-based report
+            parsed_start, parsed_end = _parse_session_time_parameters(
+                start_time, end_time
+            )
             report = analyzer.generate_session_based_report(parsed_start, parsed_end)
 
             # Handle CSV export if requested
             if csv_format:
-                try:
-                    if save_to_file:
-                        # Save to server filesystem
-                        if not output_path:
-                            return {
-                                "error": "output_path is required when save_to_file=True"
-                            }
-
-                        file_path = CSVExporter.export_utilization_report_to_csv(
-                            report_data=report, output_path=output_path
-                        )
-
-                        return {
-                            "message": "CSV file saved successfully",
-                            "file_path": file_path,
-                            "csv_format": True,
-                            "saved_to_server": True,
-                            "report_type": "session_utilization",
-                        }
-                    # Return CSV for download
-                    csv_content = CSVExporter.export_utilization_report_to_csv(
-                        report_data=report, output_path=None
-                    )
-
-                    return Response(
-                        content=csv_content,
-                        media_type="text/csv",
-                        headers={
-                            "Content-Disposition": "attachment; filename=session_utilization_report.csv"
-                        },
-                    )
-                except Exception as e:
-                    logger.log_error(f"Error generating CSV: {e}")
-                    return {"error": f"CSV generation failed: {e!s}"}
+                return _handle_session_csv_export(report, save_to_file, output_path)
 
             # Default JSON response
             return report
@@ -220,6 +186,45 @@ def create_event_server(  # noqa: C901
             logger.log_error(f"Error generating session utilization: {e}")
             return {"error": f"Failed to generate report: {e!s}"}
 
+    def _parse_session_time_parameters(
+        start_time: Optional[str], end_time: Optional[str]
+    ) -> Tuple[Optional[datetime], Optional[datetime]]:
+        """Parse time parameters for session utilization reports."""
+        parsed_start = None
+        parsed_end = None
+
+        if start_time:
+            parsed_start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        if end_time:
+            parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+
+        return parsed_start, parsed_end
+
+    def _handle_session_csv_export(
+        report: Dict[str, Any], save_to_file: bool, output_path: Optional[str]
+    ) -> Union[Dict[str, Any], Response]:
+        """Handle CSV export logic for session utilization endpoint."""
+        csv_result = CSVExporter.handle_session_csv_export(
+            report, save_to_file, output_path
+        )
+
+        # Return error if CSV processing failed
+        if "error" in csv_result:
+            return csv_result
+
+        # Return Response object for download or JSON for file save
+        if csv_result.get("is_download"):
+            return Response(
+                content=csv_result["csv_content"],
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": "attachment; filename=session_utilization_report.csv"
+                },
+            )
+
+        # File save results as JSON
+        return csv_result
+
     @app.get("/utilization/periods", response_model=None)
     async def get_utilization_periods(
         start_time: Optional[str] = None,
@@ -227,173 +232,46 @@ def create_event_server(  # noqa: C901
         analysis_type: str = "daily",
         user_timezone: str = "America/Chicago",
         include_users: bool = True,
-        csv_format: bool = Query(False, description="Return data in CSV format"),
-        save_to_file: bool = Query(False, description="Save CSV to server filesystem"),
-        output_path: Optional[str] = Query(
-            None, description="Server path to save CSV files"
-        ),
-    ):
-        """
-        Get time-series utilization analysis with periodic breakdowns.
+        csv_format: Annotated[
+            bool, Query(description="Return data in CSV format")
+        ] = False,
+        save_to_file: Annotated[
+            bool, Query(description="Save CSV to server filesystem")
+        ] = False,
+        output_path: Annotated[
+            Optional[str], Query(description="Server path to save CSV files")
+        ] = None,
+    ) -> Union[Dict[str, Any], Response]:
+        """Get time-series utilization analysis with periodic breakdowns."""
 
-        PARAMETERS:
-        - start_time: Optional ISO format start time (if not provided, uses database range)
-        - end_time: Optional ISO format end time (if not provided, uses database range)
-        - analysis_type: "hourly", "daily", "weekly", "monthly"
-        - user_timezone: Timezone for period boundaries (e.g., "America/Chicago")
-        - include_users: Whether to include user utilization data
-        - csv_format: If True, returns CSV data instead of JSON
-        - save_to_file: If True, saves CSV to server filesystem (requires output_path)
-        - output_path: Server path where CSV files should be saved
-        """
-
+        # Setup analyzer
         analyzer = _get_session_analyzer()
         if analyzer is None:
             return {"error": "Failed to create session analyzer"}
 
-        ts_analyzer = TimeSeriesAnalyzer(analyzer)
-
         try:
-            # Parse time parameters (if provided)
-            parsed_start = None
-            parsed_end = None
+            ts_analyzer = TimeSeriesAnalyzer(analyzer)
 
-            if start_time:
-                parsed_start = (
-                    datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                    .astimezone(timezone.utc)
-                    .replace(tzinfo=None)
-                )
-
-            if end_time:
-                parsed_end = (
-                    datetime.fromisoformat(end_time.replace("Z", "+00:00"))
-                    .astimezone(timezone.utc)
-                    .replace(tzinfo=None)
-                )
-
-            # Let the analyzer determine the actual analysis period based on available data
-            utilization = ts_analyzer.generate_summary_report(
-                parsed_start, parsed_end, analysis_type, user_timezone
+            # Generate utilization report
+            utilization = ts_analyzer.generate_utilization_report_with_times(
+                start_time, end_time, analysis_type, user_timezone
             )
 
-            # Add user utilization if requested
+            # Early return for errors
+            if "error" in utilization:
+                return utilization
+
+            # Add user data if requested
             if include_users:
-                # Use the same time period that was actually analyzed
-                actual_start = datetime.fromisoformat(
-                    utilization["summary_metadata"]["period_start"]
-                )
-                actual_end = datetime.fromisoformat(
-                    utilization["summary_metadata"]["period_end"]
-                )
-
-                user_report = analyzer.generate_user_utilization_report(
-                    actual_start, actual_end
-                )
-
-                if "error" not in user_report:
-                    user_utilization = user_report.get("user_utilization", {})
-                    system_summary = user_report.get("system_summary", {})
-
-                    # Sort users by total runtime (most active first)
-                    sorted_users = sorted(
-                        user_utilization.values(),
-                        key=lambda x: x.get("total_runtime_hours", 0),
-                        reverse=True,
-                    )
-
-                    # Create compact user summaries (top 10 users)
-                    top_users = []
-                    for user in sorted_users[:10]:
-                        top_users.append(
-                            {
-                                "author": user.get("author"),
-                                "total_workflows": user.get("total_workflows"),
-                                "total_runtime_hours": user.get("total_runtime_hours"),
-                                "completion_rate_percent": user.get(
-                                    "completion_rate_percent"
-                                ),
-                                "average_workflow_duration_hours": user.get(
-                                    "average_workflow_duration_hours"
-                                ),
-                            }
-                        )
-
-                    user_summary = {
-                        "total_users": len(user_utilization),
-                        "author_attribution_rate_percent": system_summary.get(
-                            "author_attribution_rate_percent", 0
-                        ),
-                        "top_users": top_users,
-                        "system_totals": {
-                            "total_workflows": system_summary.get("total_workflows", 0),
-                            "total_runtime_hours": system_summary.get(
-                                "total_runtime_hours", 0
-                            ),
-                            "completion_rate_percent": system_summary.get(
-                                "completion_rate_percent", 0
-                            ),
-                        },
-                    }
-
-                    # Insert user utilization after key_metrics
-                    enhanced_summary = {}
-                    for key, value in utilization.items():
-                        enhanced_summary[key] = value
-                        if key == "key_metrics":
-                            enhanced_summary["user_utilization"] = user_summary
-
-                    utilization = enhanced_summary
-                else:
-                    utilization["user_utilization"] = {
-                        "error": user_report.get(
-                            "error", "Failed to generate user summary"
-                        )
-                    }
+                utilization = ts_analyzer.add_user_utilization_to_report(utilization)
 
             # Handle CSV export if requested
             if csv_format:
-                try:
-                    if save_to_file:
-                        if not output_path:
-                            return {
-                                "error": "output_path is required when save_to_file=True"
-                            }
+                return CSVExporter._handle_csv_export_for_periods(
+                    utilization, save_to_file, output_path
+                )
 
-                        result = CSVExporter.export_utilization_periods_to_csv(
-                            report_data=utilization, output_path=output_path
-                        )
-
-                        if isinstance(result, dict):
-                            return {
-                                "message": "CSV files saved successfully",
-                                "files_saved": result,
-                                "csv_format": True,
-                                "saved_to_server": True,
-                                "report_type": "utilization_periods",
-                            }
-                        return {
-                            "message": "CSV file saved successfully",
-                            "file_path": result,
-                            "csv_format": True,
-                            "saved_to_server": True,
-                            "report_type": "utilization_periods",
-                        }
-                    csv_content = CSVExporter.export_utilization_periods_to_csv(
-                        report_data=utilization, output_path=None
-                    )
-
-                    return Response(
-                        content=csv_content,
-                        media_type="text/csv",
-                        headers={
-                            "Content-Disposition": f"attachment; filename=utilization_periods_{analysis_type}_report.csv"
-                        },
-                    )
-                except Exception as e:
-                    logger.log_error(f"Error generating CSV: {e}")
-                    return {"error": f"CSV generation failed: {e!s}"}
-
+            # Default JSON response
             return utilization
 
         except Exception as e:
@@ -404,16 +282,20 @@ def create_event_server(  # noqa: C901
     async def get_user_utilization_report(
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        csv_format: bool = Query(False, description="Return data in CSV format"),
-        save_to_file: bool = Query(False, description="Save CSV to server filesystem"),
-        output_path: Optional[str] = Query(
-            None, description="Server path to save CSV files"
-        ),
-    ):
+        csv_format: Annotated[
+            bool, Query(description="Return data in CSV format")
+        ] = False,
+        save_to_file: Annotated[
+            bool, Query(description="Save CSV to server filesystem")
+        ] = False,
+        output_path: Annotated[
+            Optional[str], Query(description="Server path to save CSV files")
+        ] = None,
+    ) -> Union[Dict[str, Any], Response]:
         """
         Generate detailed user utilization report based on workflow authors.
 
-        NEW PARAMETERS:
+        Parameters:
         - csv_format: If True, returns CSV data instead of JSON
         - save_to_file: If True, saves CSV to server filesystem (requires output_path)
         - output_path: Server path where CSV files should be saved
@@ -424,54 +306,36 @@ def create_event_server(  # noqa: C901
             return {"error": "Failed to create session analyzer"}
 
         try:
-            # Parse time parameters
-            parsed_start = None
-            parsed_end = None
+            ts_analyzer = TimeSeriesAnalyzer(analyzer)
 
-            if start_time:
-                parsed_start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            if end_time:
-                parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
-
-            # Generate user utilization report
+            # Parse time parameters and generate report
+            parsed_start, parsed_end = ts_analyzer.parse_time_parameters(
+                start_time, end_time
+            )
             report = analyzer.generate_user_utilization_report(parsed_start, parsed_end)
 
             # Handle CSV export if requested
             if csv_format:
-                try:
-                    if save_to_file:
-                        # Save to server filesystem
-                        if not output_path:
-                            return {
-                                "error": "output_path is required when save_to_file=True"
-                            }
+                csv_result = CSVExporter.handle_user_csv_export(
+                    report, save_to_file, output_path
+                )
 
-                        file_path = CSVExporter.export_user_utilization_to_csv(
-                            report_data=report, output_path=output_path, detailed=True
-                        )
+                # Return error if CSV processing failed
+                if "error" in csv_result:
+                    return csv_result
 
-                        return {
-                            "message": "CSV file saved successfully",
-                            "file_path": file_path,
-                            "csv_format": True,
-                            "saved_to_server": True,
-                            "report_type": "user_utilization",
-                        }
-                    # Return CSV for download
-                    csv_content = CSVExporter.export_user_utilization_to_csv(
-                        report_data=report, output_path=None, detailed=True
-                    )
-
+                # Return Response object for download or JSON for file save
+                if csv_result.get("is_download"):
                     return Response(
-                        content=csv_content,
+                        content=csv_result["csv_content"],
                         media_type="text/csv",
                         headers={
                             "Content-Disposition": "attachment; filename=user_utilization_report.csv"
                         },
                     )
-                except Exception as e:
-                    logger.log_error(f"Error generating CSV: {e}")
-                    return {"error": f"CSV generation failed: {e!s}"}
+
+                # File save results as JSON
+                return csv_result
 
             return report
 
@@ -479,7 +343,7 @@ def create_event_server(  # noqa: C901
             logger.log_error(f"Error generating user utilization report: {e}")
             return {"error": f"Failed to generate user report: {e!s}"}
 
-    def _get_session_analyzer():
+    def _get_session_analyzer() -> Optional[UtilizationAnalyzer]:
         """Create session analyzer on-demand."""
         try:
             return UtilizationAnalyzer(events)
