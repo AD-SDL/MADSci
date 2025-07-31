@@ -13,10 +13,10 @@ from fastapi.params import Body
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.ownership import global_ownership_info, ownership_context
-from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import (
@@ -82,17 +82,18 @@ def create_workcell_server(  # noqa: C901, PLR0915
         global_ownership_info.manager_id = workcell.workcell_id
 
         # LOG WORKCELL START EVENT
-        logger.log(Event(
-            event_type=EventType.WORKCELL_START,
-            event_data={
-                "workcell_name": workcell.workcell_name,
-                "workcell_id": workcell.workcell_id,
-                "description": workcell.description,
-                "nodes": dict(workcell.nodes.items()) if workcell.nodes else {},
-                "manager_type": "workcell_manager"
-            }
-        ))
-    
+        logger.log(
+            Event(
+                event_type=EventType.WORKCELL_START,
+                event_data={
+                    "workcell_name": workcell.workcell_name,
+                    "workcell_id": workcell.workcell_id,
+                    "description": workcell.description,
+                    "nodes": dict(workcell.nodes.items()) if workcell.nodes else {},
+                    "manager_type": "workcell_manager",
+                },
+            )
+        )
 
         if start_engine:
             engine = Engine(state_handler)
@@ -106,14 +107,16 @@ def create_workcell_server(  # noqa: C901, PLR0915
             yield
         finally:
             # LOG WORKCELL STOP EVENT
-            logger.log(Event(
-                event_type=EventType.WORKCELL_STOP,
-                event_data={
-                    "workcell_name": workcell.workcell_name,
-                    "workcell_id": workcell.workcell_id,
-                    "manager_type": "workcell_manager"
-                }
-            ))
+            logger.log(
+                Event(
+                    event_type=EventType.WORKCELL_STOP,
+                    event_data={
+                        "workcell_name": workcell.workcell_name,
+                        "workcell_id": workcell.workcell_id,
+                        "manager_type": "workcell_manager",
+                    },
+                )
+            )
 
     app = FastAPI(
         lifespan=lifespan,
@@ -336,8 +339,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
             try:
                 wf_def = WorkflowDefinition.model_validate_json(workflow)
                 author = None
-                if hasattr(wf_def, 'workflow_metadata') and wf_def.workflow_metadata:
-                    author = getattr(wf_def.workflow_metadata, 'author', None)                
+                if hasattr(wf_def, "workflow_metadata") and wf_def.workflow_metadata:
+                    author = getattr(wf_def.workflow_metadata, "author", None)
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
@@ -368,34 +371,36 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 )
 
                 if not validate_only:
-
                     wf = save_workflow_files(
                         working_directory=workcell.workcell_directory,
                         workflow=wf,
                         files=files,
                     )
-                    # if author:
-                    #     wf.workflow_metadata.author = author
+
                     with state_handler.wc_state_lock():
                         state_handler.set_active_workflow(wf)
                         state_handler.enqueue_workflow(wf.workflow_id)
 
                     # ===== WORKFLOW_START EVENT LOGGING =====
-                    logger.log(Event(
-                        event_type=EventType.WORKFLOW_START,
-                        event_data={
-                            "workflow_id": wf.workflow_id,
-                            "workflow_name": wf_def.name,
-                            "author": author,
-                            "workcell_id": workcell.workcell_id,
-                            "workcell_name": workcell.workcell_name,
-                            "step_count": len(wf.steps),
-                            "workflow_metadata": wf_def.workflow_metadata.model_dump() if wf_def.workflow_metadata else {},
-                            "parameters": parameters
-                        }
-                    ))
+                    logger.log(
+                        Event(
+                            event_type=EventType.WORKFLOW_START,
+                            event_data={
+                                "workflow_id": wf.workflow_id,
+                                "workflow_name": wf_def.name,
+                                "author": author,
+                                "workcell_id": workcell.workcell_id,
+                                "workcell_name": workcell.workcell_name,
+                                "step_count": len(wf.steps),
+                                "workflow_metadata": wf_def.workflow_metadata.model_dump()
+                                if wf_def.workflow_metadata
+                                else {},
+                                "parameters": parameters,
+                            },
+                        )
+                    )
                 return wf
-            
+
         except HTTPException as e:
             raise e
         except Exception as e:

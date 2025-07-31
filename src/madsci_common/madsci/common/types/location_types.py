@@ -24,6 +24,7 @@ class LocationArgument(MadsciBaseModel):
     reservation: Optional["LocationReservation"] = None
     """whether existing location is reserved"""
 
+
 class LocationDefinition(MadsciBaseModel):
     """The Definition of a Location in a setup."""
 
@@ -100,5 +101,3 @@ class LocationReservation(MadsciBaseModel):
             and self.start <= datetime.now()
             and self.end >= datetime.now()
         )
-
-

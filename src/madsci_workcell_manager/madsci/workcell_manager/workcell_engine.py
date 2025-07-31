@@ -8,7 +8,7 @@ import importlib
 import time
 import traceback
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
@@ -311,146 +311,210 @@ class Engine:
 
     def _log_workflow_completion(self, workflow: Workflow) -> None:
         """Log workflow completion event with author and utilization data."""
-        
         try:
-            # Determine final status from workflow state
-            if workflow.status.completed:
-                final_status = "completed"
-            elif workflow.status.failed:
-                final_status = "failed"
-            elif workflow.status.cancelled:
-                final_status = "cancelled"
-            else:
-                final_status = "unknown"
-            
-            # Calculate total duration
-            duration_seconds = None
-            if workflow.start_time and workflow.end_time:
-                duration_seconds = (workflow.end_time - workflow.start_time).total_seconds()
-            
-            # Extract author from workflow metadata
-            author = self._extract_workflow_author(workflow)
-            
-            # Count step statistics
-            completed_steps = sum(1 for step in workflow.steps if step.status == ActionStatus.SUCCEEDED)
-            failed_steps = sum(1 for step in workflow.steps if step.status == ActionStatus.FAILED)
-            cancelled_steps = sum(1 for step in workflow.steps if step.status == ActionStatus.CANCELLED)
-            
-            # Log workflow completion event
-            event_data = {
-                "workflow_id": workflow.workflow_id,
-                "workflow_name": workflow.name,
-                "author": author,
-                "workcell_id": self.workcell_definition.workcell_id,
-                "workcell_name": self.workcell_definition.workcell_name,
-                "status": final_status,
-                "duration_seconds": duration_seconds,
-                "total_steps": len(workflow.steps),
-                "completed_steps": completed_steps,
-                "failed_steps": failed_steps,
-                "cancelled_steps": cancelled_steps,
-                "start_time": workflow.start_time.isoformat() if workflow.start_time else None,
-                "end_time": workflow.end_time.isoformat() if workflow.end_time else None,
-                "submitted_time": workflow.submitted_time.isoformat() if workflow.submitted_time else None
-            }
-            
-            # Add error information for failed workflows
-            if final_status in ["failed", "cancelled"] and workflow.steps:
-                # Find the step that caused the failure
-                failed_step = None
-                for step in workflow.steps:
-                    if step.status in [ActionStatus.FAILED, ActionStatus.CANCELLED]:
-                        failed_step = step
-                        break
-                
-                if failed_step and failed_step.result and failed_step.result.errors:
-                    # Get the last error message
-                    last_error = failed_step.result.errors[-1]
-                    event_data["error_message"] = last_error.message
-                    event_data["error_type"] = last_error.error_type
-                    event_data["failed_step_id"] = failed_step.step_id
-                    event_data["failed_step_name"] = failed_step.name
-                    event_data["failed_node"] = failed_step.node
-            
-            # Add workflow ownership info if available
-            if hasattr(workflow, 'ownership_info') and workflow.ownership_info:
-                ownership = workflow.ownership_info
-                if hasattr(ownership, 'experiment_id') and ownership.experiment_id:
-                    event_data["experiment_id"] = str(ownership.experiment_id)
-                if hasattr(ownership, 'user_id') and ownership.user_id:
-                    event_data["user_id"] = str(ownership.user_id)
-                if hasattr(ownership, 'campaign_id') and ownership.campaign_id:
-                    event_data["campaign_id"] = str(ownership.campaign_id)
-            
-            self.logger.log(Event(
-                event_type=EventType.WORKFLOW_COMPLETE,
-                event_data=event_data
-            ))
-            
-            self.logger.log_info(
-                f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {final_status}, Author: {author or 'Unknown'}, "
-                f"Duration: {duration_seconds:.1f}s" if duration_seconds else "Duration: Unknown"
-            )
-            
-        except Exception as e:
-            self.logger.log_error(f"Error logging workflow completion for {workflow.workflow_id}: {e}")
+            event_data = self._build_workflow_event_data(workflow)
+            self._add_error_information(workflow, event_data)
+            self._add_ownership_information(workflow, event_data)
 
-    def _extract_workflow_author(self, workflow: Workflow) -> Optional[str]:
+            self._log_completion_event(workflow, event_data)
+
+        except Exception as e:
+            self.logger.log_error(
+                f"Error logging workflow completion for {workflow.workflow_id}: {e}"
+            )
+
+    def _build_workflow_event_data(self, workflow: Workflow) -> dict:
+        """Build the basic event data for workflow completion."""
+        final_status = self._determine_final_status(workflow)
+        duration_seconds = self._calculate_duration(workflow)
+        author = self._extract_workflow_author(workflow)
+        step_stats = self._calculate_step_statistics(workflow)
+
+        return {
+            "workflow_id": workflow.workflow_id,
+            "workflow_name": workflow.name,
+            "author": author,
+            "workcell_id": self.workcell_definition.workcell_id,
+            "workcell_name": self.workcell_definition.workcell_name,
+            "status": final_status,
+            "duration_seconds": duration_seconds,
+            "total_steps": len(workflow.steps),
+            **step_stats,
+            "start_time": workflow.start_time.isoformat()
+            if workflow.start_time
+            else None,
+            "end_time": workflow.end_time.isoformat() if workflow.end_time else None,
+            "submitted_time": workflow.submitted_time.isoformat()
+            if workflow.submitted_time
+            else None,
+        }
+
+    def _determine_final_status(self, workflow: Workflow) -> str:
+        """Determine the final status of the workflow."""
+        if workflow.status.completed:
+            return "completed"
+        if workflow.status.failed:
+            return "failed"
+        if workflow.status.cancelled:
+            return "cancelled"
+        return "unknown"
+
+    def _calculate_duration(self, workflow: Workflow) -> Optional[float]:
+        """Calculate workflow duration in seconds."""
+        if workflow.start_time and workflow.end_time:
+            return (workflow.end_time - workflow.start_time).total_seconds()
+        return None
+
+    def _calculate_step_statistics(self, workflow: Workflow) -> dict:
+        """Calculate statistics about workflow steps."""
+        return {
+            "completed_steps": sum(
+                1 for step in workflow.steps if step.status == ActionStatus.SUCCEEDED
+            ),
+            "failed_steps": sum(
+                1 for step in workflow.steps if step.status == ActionStatus.FAILED
+            ),
+            "cancelled_steps": sum(
+                1 for step in workflow.steps if step.status == ActionStatus.CANCELLED
+            ),
+        }
+
+    def _add_error_information(self, workflow: Workflow, event_data: dict) -> None:
+        """Add error information for failed workflows."""
+        if event_data["status"] not in ["failed", "cancelled"] or not workflow.steps:
+            return
+
+        failed_step = self._find_failed_step(workflow)
+        if not failed_step:
+            return
+
+        error_info = self._extract_error_information(failed_step)
+        if error_info:
+            event_data.update(error_info)
+
+    def _find_failed_step(self, workflow: Workflow) -> Optional[Any]:
+        """Find the step that caused the workflow failure."""
+        for step in workflow.steps:
+            if step.status in [ActionStatus.FAILED, ActionStatus.CANCELLED]:
+                return step
+        return None
+
+    def _extract_error_information(self, failed_step: Any) -> Optional[dict]:
+        """Extract error information from a failed step."""
+        if not (failed_step.result and failed_step.result.errors):
+            return None
+
+        last_error = failed_step.result.errors[-1]
+        return {
+            "error_message": last_error.message,
+            "error_type": last_error.error_type,
+            "failed_step_id": failed_step.step_id,
+            "failed_step_name": failed_step.name,
+            "failed_node": failed_step.node,
+        }
+
+    def _add_ownership_information(self, workflow: Workflow, event_data: dict) -> None:
+        """Add ownership information to event data."""
+        if not (hasattr(workflow, "ownership_info") and workflow.ownership_info):
+            return
+
+        ownership = workflow.ownership_info
+        ownership_fields = {
+            "experiment_id": "experiment_id",
+            "user_id": "user_id",
+            "campaign_id": "campaign_id",
+        }
+
+        for attr_name, event_key in ownership_fields.items():
+            if hasattr(ownership, attr_name):
+                value = getattr(ownership, attr_name)
+                if value:
+                    event_data[event_key] = str(value)
+
+    def _log_completion_event(self, workflow: Workflow, event_data: dict) -> None:
+        """Log the completion event and info message."""
+        self.logger.log(
+            Event(event_type=EventType.WORKFLOW_COMPLETE, event_data=event_data)
+        )
+
+        duration_text = (
+            f"Duration: {event_data['duration_seconds']:.1f}s"
+            if event_data["duration_seconds"]
+            else "Duration: Unknown"
+        )
+
+        self.logger.log_info(
+            f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
+            f"Status: {event_data['status']}, Author: {event_data['author'] or 'Unknown'}, "
+            f"{duration_text}"
+        )
+
+    def extract_workflow_author(self, workflow: Workflow) -> Optional[str]:
         """Extract author from workflow metadata - simplified for Workflow inheriting from WorkflowDefinition."""
-        
-        author = None
-        
-        # Strategy 1: Check workflow.workflow_metadata.author (since Workflow inherits from WorkflowDefinition)
-        if hasattr(workflow, 'workflow_metadata') and workflow.workflow_metadata:
-            if hasattr(workflow.workflow_metadata, 'author'):
-                author = workflow.workflow_metadata.author
-            elif isinstance(workflow.workflow_metadata, dict) and 'author' in workflow.workflow_metadata:
-                author = workflow.workflow_metadata['author']
-        
-        # Strategy 2: Check ownership_info for user information
-        if not author and hasattr(workflow, 'ownership_info') and workflow.ownership_info:
-            ownership = workflow.ownership_info
-            if hasattr(ownership, 'user_id') and ownership.user_id:
-                author = str(ownership.user_id)
-        
-        # Strategy 3: Look for author in other workflow object attributes
-        for attr_name in ['author', 'created_by', 'submitted_by', 'user', 'owner']:
-            if not author and hasattr(workflow, attr_name):
+
+        # Try different strategies in order of preference
+        author = (
+            self._extract_from_workflow_metadata(workflow)
+            or self._extract_from_ownership_info(workflow)
+            or self._extract_from_workflow_attributes(workflow)
+        )
+
+        return self._clean_author_string(author)
+
+    def _extract_from_workflow_metadata(self, workflow: Workflow) -> Optional[str]:
+        """Extract author from workflow metadata."""
+        if not (hasattr(workflow, "workflow_metadata") and workflow.workflow_metadata):
+            return None
+
+        metadata = workflow.workflow_metadata
+
+        # Check if metadata has author attribute
+        if hasattr(metadata, "author"):
+            return metadata.author
+
+        # Check if metadata is dict with author key
+        if isinstance(metadata, dict) and "author" in metadata:
+            return metadata["author"]
+
+        return None
+
+    def _extract_from_ownership_info(self, workflow: Workflow) -> Optional[str]:
+        """Extract author from ownership info."""
+        if not (hasattr(workflow, "ownership_info") and workflow.ownership_info):
+            return None
+
+        ownership = workflow.ownership_info
+        if hasattr(ownership, "user_id") and ownership.user_id:
+            return str(ownership.user_id)
+
+        return None
+
+    def _extract_from_workflow_attributes(self, workflow: Workflow) -> Optional[str]:
+        """Extract author from various workflow attributes."""
+        author_attributes = ["author", "created_by", "submitted_by", "user", "owner"]
+
+        for attr_name in author_attributes:
+            if hasattr(workflow, attr_name):
                 attr_value = getattr(workflow, attr_name)
                 if attr_value:
-                    author = str(attr_value)
-                    break
-        
-        # DEBUG - Log what we can see if still no author found
+                    return str(attr_value)
+
+        return None
+
+    def _clean_author_string(self, author: Optional[str]) -> Optional[str]:
+        """Clean and validate author string."""
         if not author:
-            
-            # Check workflow_metadata details
-            if hasattr(workflow, 'workflow_metadata'):
-                metadata = workflow.workflow_metadata
+            return None
 
-                if metadata:
-                    
-                    # Check if it has author attribute
-                    if hasattr(metadata, 'author'):
-                        author_value = metadata.author
-                    else:
-                        # List available attributes
-                        if hasattr(metadata, '__dict__'):
-                            attrs = list(metadata.__dict__.keys())
-                        else:
-                            attrs = [attr for attr in dir(metadata) if not attr.startswith('_')]
+        cleaned_author = str(author).strip()
 
+        # Check for invalid values
+        invalid_values = {"", "none", "null", "unknown"}
+        if cleaned_author.lower() in invalid_values:
+            return None
 
-        
-        # Clean up the author string
-        if author:
-            author = str(author).strip()
-            if author == "" or author.lower() in ["none", "null", "unknown"]:
-                author = None
-        
-        return author
-               
+        return cleaned_author
+
     def update_step(self, wf: Workflow, step: Step) -> None:
         """Update the step in the workflow"""
         with self.state_handler.wc_state_lock():

@@ -352,6 +352,7 @@ class NodeUtilizationData(MadsciBaseModel):
         default=0.0,
     )
 
+
 class SystemUtilizationData(MadsciBaseModel):
     """System-wide utilization data."""
 
@@ -395,4 +396,3 @@ class SystemUtilizationData(MadsciBaseModel):
         description="Calculated system utilization percentage.",
         default=0.0,
     )
-

@@ -97,7 +97,7 @@ def create_experiment_server(  # noqa: C901, PLR0915
             experiment_design=experiment_request.experiment_design,
         )
         experiment.started_at = datetime.datetime.now()
-        
+
         experiments.insert_one(experiment.to_mongo())
         logger.log(
             event=Event(
