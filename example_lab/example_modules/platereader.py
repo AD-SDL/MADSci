@@ -76,10 +76,12 @@ class PlateReaderNode(RestNode):
         self,
     ) -> ActionResult:
         """Run a command on the plate reader."""
-        with Path("./test.txt").open() as f:
-            f.write("test")
 
-        return ActionSucceeded(files={"example_file": "./test.txt"})
+        with (Path.home() / "test.txt").open("w") as f:
+            self.logger.log_info(f.write("test"))
+        path = str(Path.home() / "test.txt")
+
+        return ActionSucceeded(files={"example_file": path})
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the plate reader"""

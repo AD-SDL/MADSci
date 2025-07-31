@@ -366,6 +366,7 @@ class Engine:
     ) -> ActionResult:
         """create and save datapoints for data returned from step"""
         labeled_data = {}
+        datapoints = response.datapoints
         ownership_info = copy.deepcopy(wf.ownership_info)
         ownership_info.step_id = step.step_id
         ownership_info.node_id = self.state_handler.get_node(step.node).info.node_id
@@ -383,6 +384,7 @@ class Engine:
                 )
                 self.data_client.submit_datapoint(datapoint)
                 labeled_data[label] = datapoint.datapoint_id
+                datapoints[label] = datapoint
         if response.files:
             for file_key in response.files:
                 if step.data_labels is not None and file_key in step.data_labels:
@@ -403,7 +405,9 @@ class Engine:
                 )
 
                 labeled_data[label] = datapoint.datapoint_id
+                datapoints[label] = datapoint
         response.data = labeled_data
+        response.datapoints = datapoints
         return response
 
     def update_active_nodes(self, state_manager: WorkcellStateHandler) -> None:
