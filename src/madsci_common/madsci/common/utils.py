@@ -1,8 +1,15 @@
 """Utilities for the MADSci project."""
 
+import functools
 import json
+import random
+import re
 import sys
+import threading
+import time
 import typing
+import warnings
+from argparse import ArgumentTypeError
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, Optional, Union, get_args, get_origin
@@ -35,8 +42,6 @@ def to_snake_case(name: str) -> str:
 
     Handles conversion from camelCase and PascalCase to snake_case.
     """
-    import re
-
     name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
     name = re.sub("([a-z0-9])([A-Z])", r"\1_\2", name)
     return name.lower().replace(" ", "_").replace("__", "_")
@@ -141,8 +146,6 @@ def prompt_for_input(
 
 def new_name_str(prefix: str = "") -> str:
     """Generate a new random name string, optionally with a prefix. Make a random combination of an adjective and a noun. Names are not guaranteed to be unique."""
-    import random
-
     adjectives = [
         "happy",
         "clever",
@@ -228,8 +231,6 @@ def new_name_str(prefix: str = "") -> str:
 
 def string_to_bool(string: str) -> bool:
     """Convert a string to a boolean value."""
-    from argparse import ArgumentTypeError
-
     if string.lower() in ("true", "t", "1", "yes", "y"):
         return True
     if string.lower() in ("false", "f", "0", "no", "n"):
@@ -381,9 +382,6 @@ def relative_path(source: Path, target: Path, walk_up: bool = True) -> Path:
 def threaded_task(func: callable) -> callable:
     """Mark a function as a threaded task, to be run without awaiting. Returns the thread object, so you _can_ await if needed."""
 
-    import functools
-    import threading
-
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> threading.Thread:
         thread = threading.Thread(target=func, args=args, kwargs=kwargs)
@@ -395,9 +393,6 @@ def threaded_task(func: callable) -> callable:
 
 def threaded_daemon(func: callable) -> callable:
     """Mark a function as a threaded daemon, to be run without awaiting. Returns the thread object, so you _can_ await if needed, and stops when the calling thread terminates."""
-
-    import functools
-    import threading
 
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> threading.Thread:
@@ -432,8 +427,6 @@ def pretty_type_repr(type_hint: Any) -> str:
             type_name += "]"
         return type_name
     except Exception:
-        import warnings
-
         warnings.warn(
             f"Failed to get pretty type representation for {type_hint}. Returning raw type.",
             stacklevel=2,
@@ -446,7 +439,6 @@ def repeat_on_interval(
     interval: float, func: callable, *args: Any, **kwargs: Any
 ) -> None:
     """Repeat a function on an interval."""
-    import time
 
     while True:
         func(*args, **kwargs)

@@ -1,5 +1,6 @@
 """Fast API Client for Resources"""
 
+import inspect
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -65,16 +66,8 @@ class ResourceWrapper:
         if name.startswith("_"):
             return getattr(self._resource, name)
 
-        actual_method_name = name
-        if name == "update":
-            actual_method_name = "update_resource"
-        elif name == "remove":
-            actual_method_name = "remove_resource"
-
         # Check if it's a client method (using the actual method name)
-        if hasattr(self._client, actual_method_name) and callable(
-            getattr(self._client, actual_method_name)
-        ):
+        if hasattr(self._client, name) and callable(getattr(self._client, name)):
             # Return a bound method that will call the client method appropriately
             return lambda *args, **kwargs: self._call_client_method(
                 name, *args, **kwargs
@@ -89,52 +82,22 @@ class ResourceWrapper:
         """
         client_method = getattr(self._client, method_name)
 
-        # Handle method aliases for result processing
-        actual_method_name = method_name
-        if method_name == "update":
-            actual_method_name = "update_resource"
-        elif method_name == "remove":
-            actual_method_name = "remove_resource"
-
-        # Get the actual client method using the mapped name
-        client_method = getattr(self._client, actual_method_name)
-
-        # Try different calling strategies until one works
-        result = None
-        last_exception = None
-
-        strategies = [
-            # Strategy 1: Pass resource as keyword argument - fix the order
-            lambda: client_method(*args, resource=self._resource, **kwargs),
-            # Strategy 2: Pass resource as first positional argument
-            lambda: client_method(self._resource, *args, **kwargs),
-            # Strategy 3: For remove, pass resource_id
-            lambda: client_method(self._resource.resource_id, *args, **kwargs)
-            if "remove" in actual_method_name
-            else None,
-            # Strategy 4: Call without resource
-            lambda: client_method(*args, **kwargs),
-        ]
-
-        for strategy in strategies:
-            if strategy is None:
-                continue
-            try:
-                result = strategy()
-                break
-            except TypeError as e:
-                last_exception = e
-                continue
-            except Exception as e:
-                raise e
-
-        if result is None:
-            raise TypeError(
-                f"Could not call {method_name} with provided arguments. Last error: {last_exception}"
-            )
-
-        # Handle the result and return
-        return self._handle_method_result(result, actual_method_name)
+        # * Inspect the method signature to determine how to call it
+        sig = inspect.signature(client_method)
+        parameters = sig.parameters
+        has_resource_arg = any(
+            param.name == "resource"
+            and param.kind
+            in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+            for param in parameters.values()
+        )
+        if has_resource_arg and "resource" not in kwargs:
+            result = client_method(self._resource, *args, **kwargs)
+        else:
+            # If the method does not require a resource argument, we can try calling it directly
+            # with the provided args and kwargs.
+            result = client_method(*args, **kwargs)
+        return self._handle_method_result(result, method_name)
 
     def _handle_method_result(self, result: Any, method_name: str) -> Any:
         """
@@ -147,7 +110,6 @@ class ResourceWrapper:
         """
         # Methods that should return their result directly (not update self)
         direct_return_methods = {
-            "remove_resource",
             "acquire_lock",
             "release_lock",
             "is_locked",
@@ -161,34 +123,14 @@ class ResourceWrapper:
         if method_name in direct_return_methods:
             return result
 
-        # Handle tuple results (like from pop)
+        # Handle tuple results (like from pop) by recursively handling each item
         if isinstance(result, tuple):
-            # Common pattern: (popped_item, updated_container)
-            wrapped_items = []
-            for item in result:
-                if isinstance(item, str):
-                    # It's just a string/ID, not a resource
-                    wrapped_items.append(item)
-                else:
-                    # It's a resource object - wrap it
-                    wrapped_items.append(self._client._wrap_resource(item))
-
-            # If the last item in tuple looks like an updated version of our resource, update self
-            if (
-                wrapped_items
-                and isinstance(wrapped_items[-1], ResourceWrapper)
-                and wrapped_items[-1]._resource.resource_id
-                == self._resource.resource_id
-            ):
-                # Update our wrapped resource
-                self._update_wrapped_resource(wrapped_items[-1]._resource)
-                # Replace the last item with self for a better API
-                wrapped_items[-1] = self
-
-            return tuple(wrapped_items)
+            return tuple(
+                self._handle_method_result(item, method_name) for item in result
+            )
 
         # Handle single resource results
-        if result and hasattr(result, "model_dump"):
+        if result and hasattr(result, "resource_id"):
             # It's a resource that should update our wrapped resource
             actual_resource = (
                 result.unwrap if isinstance(result, ResourceWrapper) else result
@@ -196,38 +138,14 @@ class ResourceWrapper:
 
             # Only update if it's the same resource (same ID)
             if actual_resource.resource_id == self._resource.resource_id:
-                self._update_wrapped_resource(actual_resource)
+                self._resource = actual_resource
                 return self  # Return self for method chaining
             # Different resource - wrap and return it
             return self._client._wrap_resource(actual_resource)
 
-        # For everything else, just return the result
-        if result is None:
-            return self  # Enable method chaining for void methods
-
-        return result
-
-    def _update_wrapped_resource(self, updated_resource: "ResourceDataModels") -> None:
-        """
-        Update the wrapped resource with fresh data from the server.
-
-        This ensures the wrapped resource stays in sync after operations.
-        Handles read-only properties gracefully.
-        """
-        updated_data = updated_resource.model_dump()
-
-        for key, value in updated_data.items():
-            if hasattr(self._resource, key):
-                try:
-                    # Try to set the attribute
-                    setattr(self._resource, key, value)
-                except (AttributeError, TypeError) as e:
-                    # Skip read-only properties or properties that can't be set
-                    # This commonly happens with computed properties like 'quantity' on Stack
-                    if "has no setter" in str(e) or "can't set attribute" in str(e):
-                        continue
-                    # Re-raise if it's a different kind of error
-                    raise e
+        return (
+            result if result is not None else self
+        )  # * Enable method chaining for void methods
 
     def __setattr__(self, name: str, value: Any) -> None:
         """
@@ -256,6 +174,14 @@ class ResourceWrapper:
             return self._resource == other._resource
         # Allow comparison with unwrapped resources
         return self._resource == other
+
+    def __hash__(self) -> int:
+        """
+        Hash method for the wrapper.
+
+        Uses the hash of the underlying resource's ID.
+        """
+        return hash(self._resource.resource_id)
 
     @property
     def unwrap(self) -> "ResourceDataModels":
@@ -321,7 +247,7 @@ class ResourceClient:
             return None
         return ResourceWrapper(resource, self)
 
-    def _unwrap_if_wrapped(self, resource: Any) -> Any:
+    def _unwrap(self, resource: Any) -> Any:
         """Helper method to unwrap a resource if it's wrapped."""
         if isinstance(resource, ResourceWrapper):
             return resource.unwrap
@@ -393,7 +319,7 @@ class ResourceClient:
         Returns:
             Resource: The added resource as returned by the server.
         """
-        resource = self._unwrap_if_wrapped(resource)
+        resource = self._unwrap(resource)
 
         if self.url:
             response = requests.post(
@@ -418,7 +344,7 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated resource as returned by the server.
         """
-        resource = self._unwrap_if_wrapped(resource)
+        resource = self._unwrap(resource)
 
         if self.url:
             response = requests.post(
@@ -432,6 +358,8 @@ class ResourceClient:
         else:
             self.local_resources[resource.resource_id] = resource
         return self._wrap_resource(resource)
+
+    update = update_resource
 
     def get_resource(
         self,
@@ -448,10 +376,8 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The retrieved resource.
         """
+        resource_id = resource if isinstance(resource, str) else resource.resource_id
         if self.url:
-            resource_id = (
-                resource if isinstance(resource, str) else resource.resource_id
-            )
             response = requests.get(
                 f"{self.url}/resource/{resource_id}",
                 timeout=10,
@@ -468,7 +394,7 @@ class ResourceClient:
 
     def query_resource(
         self,
-        resource_id: Optional[str] = None,
+        resource: Optional[Union[str, ResourceDataModels]] = None,
         resource_name: Optional[str] = None,
         parent_id: Optional[str] = None,
         resource_class: Optional[str] = None,
@@ -480,7 +406,7 @@ class ResourceClient:
         Query for one or more resources matching specific properties.
 
         Args:
-            resource_id (str): The ID of the resource to retrieve.
+            resource (str, Resource): The (ID of) the resource to retrieve.
             resource_name (str): The name of the resource to retrieve.
             parent_id (str): The ID of the parent resource.
             resource_class (str): The class of the resource.
@@ -492,6 +418,11 @@ class ResourceClient:
             Resource: The retrieved resource.
         """
         if self.url:
+            resource_id = (
+                resource
+                if (isinstance(resource, str) or resource is None)
+                else resource.resource_id
+            )
             payload = ResourceGetQuery(
                 resource_id=resource_id,
                 resource_name=resource_name,
@@ -510,9 +441,9 @@ class ResourceClient:
                 resources = [
                     Resource.discriminate(resource) for resource in response_json
                 ]
-                for resource in resources:
-                    resource.resource_url = self.url
-                return resources
+                for r in resources:
+                    r.resource_url = self.url
+                return [self._wrap_resource(r) for r in resources]
             resource = Resource.discriminate(response.json())
             resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         else:
@@ -524,23 +455,29 @@ class ResourceClient:
             )
         return self._wrap_resource(resource)
 
-    def remove_resource(self, resource_id: str) -> dict[str, Any]:
+    def remove_resource(
+        self, resource: Union[str, ResourceDataModels]
+    ) -> ResourceDataModels:
         """
         Remove a resource by moving it to the history table with `removed=True`.
         """
+        if isinstance(resource, Resource):
+            resource = resource.resource_id
         if self.url:
-            response = requests.delete(f"{self.url}/resource/{resource_id}", timeout=10)
+            response = requests.delete(f"{self.url}/resource/{resource}", timeout=10)
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
             resource.resource_url = f"{self.url}/resource/{resource.resource_id}"
         else:
-            resource = self.local_resources.pop(resource_id)
+            resource = self.local_resources.pop(resource)
             resource.removed = True
-        return resource
+        return self._wrap_resource(resource)
+
+    remove = remove_resource
 
     def query_history(
         self,
-        resource_id: Optional[str] = None,
+        resource: Optional[Union[str, ResourceDataModels]] = None,
         version: Optional[int] = None,
         change_type: Optional[str] = None,
         removed: Optional[bool] = None,
@@ -552,6 +489,9 @@ class ResourceClient:
         Retrieve the history of a resource with flexible filters.
         """
         if self.url:
+            resource_id = (
+                resource if isinstance(resource, str) else resource.resource_id
+            )
             query = ResourceHistoryGetQuery(
                 resource_id=resource_id,
                 version=version,
@@ -575,10 +515,13 @@ class ResourceClient:
 
         return response.json()
 
-    def restore_deleted_resource(self, resource_id: str) -> dict[str, Any]:
+    def restore_deleted_resource(
+        self, resource: Union[str, ResourceDataModels]
+    ) -> ResourceDataModels:
         """
         Restore a deleted resource from the history table.
         """
+        resource_id = resource if isinstance(resource, str) else resource.resource_id
         if self.url:
             response = requests.post(
                 f"{self.url}/history/{resource_id}/restore", timeout=10
@@ -593,7 +536,7 @@ class ResourceClient:
             raise NotImplementedError(
                 "Local-only mode does not currently support restoring resources."
             )
-        return resource
+        return self._wrap_resource(resource)
 
     def push(
         self,
@@ -610,8 +553,8 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The updated parent resource.
         """
-        resource = self._unwrap_if_wrapped(resource)
-        child = self._unwrap_if_wrapped(child)
+        resource = self._unwrap(resource)
+        child = self._unwrap(child)
 
         if self.url:
             resource_id = (
@@ -646,7 +589,7 @@ class ResourceClient:
         """
 
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -687,7 +630,7 @@ class ResourceClient:
             ResourceDataModels: The updated parent container resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -724,7 +667,7 @@ class ResourceClient:
             ResourceDataModels: The updated parent container resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -758,7 +701,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -788,7 +731,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -819,7 +762,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -850,7 +793,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -881,7 +824,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -911,7 +854,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -937,7 +880,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -968,7 +911,7 @@ class ResourceClient:
             ResourceDataModels: The updated resource.
         """
         if self.url:
-            resource = self._unwrap_if_wrapped(resource)
+            resource = self._unwrap(resource)
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
@@ -1010,7 +953,7 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The created template resource.
         """
-        resource = self._unwrap_if_wrapped(resource)
+        resource = self._unwrap(resource)
         if self.url:
             payload = TemplateCreateBody(
                 resource=resource,
@@ -1299,7 +1242,7 @@ class ResourceClient:
         """
         if client_id:
             self._client_id = client_id
-        resource = self._unwrap_if_wrapped(resource)
+        resource = self._unwrap(resource)
         resource_id = (
             resource.resource_id if isinstance(resource, Resource) else resource
         )
@@ -1372,7 +1315,7 @@ class ResourceClient:
         """
         if client_id:
             self._client_id = client_id
-        resource = self._unwrap_if_wrapped(resource)
+        resource = self._unwrap(resource)
         resource_id = (
             resource.resource_id if isinstance(resource, Resource) else resource
         )
@@ -1450,7 +1393,7 @@ class ResourceClient:
         Returns:
             tuple[bool, Optional[str]]: (is_locked, locked_by)
         """
-        resource = self._unwrap_if_wrapped(resource)
+        resource = self._unwrap(resource)
         resource_id = (
             resource.resource_id if isinstance(resource, Resource) else resource
         )
