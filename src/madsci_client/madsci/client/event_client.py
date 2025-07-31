@@ -131,6 +131,8 @@ class EventClient:
                 events[key] = Event.model_validate(value)
             return dict(events)
 
+        return dict(events)
+
     def get_session_utilization(
         self,
         start_time: Optional[str] = None,
@@ -186,7 +188,7 @@ class EventClient:
                         output_path=output_path if save_to_file else None,
                     )
                 except Exception as e:
-                    print(f"Error exporting to CSV: {e}")
+                    self.logger.error(f"Error exporting to CSV: {e}")
                     return report_data
 
             return report_data
@@ -225,7 +227,7 @@ class EventClient:
 
         """
         if not self.event_server:
-            print("No event server configured.")
+            self.logger.warning("No event server configured.")
             return None
 
         try:
@@ -244,9 +246,10 @@ class EventClient:
                 params=params,
                 timeout=30,
             )
-
             if not response.ok:
-                print(f"Error getting utilization periods: HTTP {response.status_code}")
+                self.logger.error(
+                    f"Error getting utilization periods: HTTP {response.status_code}"
+                )
                 response.raise_for_status()
 
             report_data = response.json()
@@ -259,13 +262,13 @@ class EventClient:
                         output_path=output_path if save_to_file else None,
                     )
                 except Exception as e:
-                    print(f"Error exporting to CSV: {e}")
+                    self.logger.error(f"Error exporting to CSV: {e}")
                     return report_data
 
             return report_data
 
         except requests.RequestException as e:
-            print(f"Error getting utilization periods: {e}")
+            self.logger.error(f"Error getting utilization periods: {e}")
             return None
 
     def get_user_utilization_report(
@@ -292,7 +295,7 @@ class EventClient:
             - If csv_export=True and save_to_file=True: path to saved file
         """
         if not self.event_server:
-            print("No event server configured.")
+            self.logger.warning("No event server configured.")
             return None
 
         try:
@@ -309,7 +312,7 @@ class EventClient:
             )
 
             if not response.ok:
-                print(
+                self.logger.error(
                     f"Error getting user utilization report: HTTP {response.status_code}"
                 )
                 response.raise_for_status()
@@ -325,13 +328,13 @@ class EventClient:
                         detailed=True,
                     )
                 except Exception as e:
-                    print(f"Error exporting to CSV: {e}")
+                    self.logger.error(f"Error exporting to CSV: {e}")
                     return report_data
 
             return report_data
 
         except requests.RequestException as e:
-            print(f"Error getting user utilization report: {e}")
+            self.logger.error(f"Error getting user utilization report: {e}")
             return None
 
     def log(
@@ -369,9 +372,8 @@ class EventClient:
         self.logger.log(event.log_level, event.model_dump_json())
         # * Log the event to the event server if configured
         # * Only log if the event is at the same level or higher than the logger
-        if self.logger.getEffectiveLevel() <= event.log_level:
-            if self.event_server:
-                self._send_event_to_event_server_task(event)
+        if self.logger.getEffectiveLevel() <= event.log_level and self.event_server:
+            self._send_event_to_event_server_task(event)
 
     def log_debug(self, event: Union[Event, str]) -> None:
         """Log an event at the debug level."""
