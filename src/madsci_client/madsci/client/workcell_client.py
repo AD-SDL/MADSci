@@ -168,13 +168,14 @@ class WorkcellClient:
         for step in workflow.steps:
             if step.files:
                 for file, path in step.files.items():
-                    unique_filename = f"{new_ulid_str()}_{file}"
-                    files[unique_filename] = path
-                    if not Path(files[unique_filename]).is_absolute():
-                        files[unique_filename] = (
-                            self.working_directory / files[unique_filename]
-                        )
-                    step.files[file] = Path(files[unique_filename]).name
+                    if "$" not in path:
+                        unique_filename = f"{new_ulid_str()}_{file}"
+                        files[unique_filename] = path
+                        if not Path(files[unique_filename]).is_absolute():
+                            files[unique_filename] = (
+                                self.working_directory / files[unique_filename]
+                            )
+                        step.files[file] = Path(files[unique_filename]).name
         return files
 
     def submit_workflow_sequence(
@@ -724,14 +725,10 @@ def insert_parameter_values(
     for step in workflow.steps:
         for key, val in iter(step):
             if type(val) is str:
-                setattr(
-                    step, key, value_substitution(val, parameters, workflow.parameters)
-                )
+                setattr(step, key, value_substitution(val, parameters))
 
-        step.args = walk_and_replace(step.args, parameters, workflow.parameters)
-        step.files = walk_and_replace(step.files, parameters, workflow.parameters)
-        step.locations = walk_and_replace(
-            step.locations, parameters, workflow.parameters
-        )
+        step.args = walk_and_replace(step.args, parameters)
+        step.files = walk_and_replace(step.files, parameters)
+        step.locations = walk_and_replace(step.locations, parameters)
         steps.append(step)
     workflow.steps = steps

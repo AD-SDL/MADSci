@@ -96,11 +96,11 @@ class WorkflowParameter(MadsciBaseModel):
     """the name of the parameter"""
     default: Optional[Any] = None
     """ the default value of the parameter"""
-    step_name: Optional[str]
+    step_name: Optional[str] = None
     """name of which step to pull the parameter from"""
-    step_index: Optional[str]
+    step_index: Optional[str] = None
     """index of which step to pull the parameter from"""
-    label: Optional[str]
+    label: Optional[str] = None
     """which data_label in the step to """
 
 

@@ -1,5 +1,5 @@
 node_name: example_app
-node_id: 01JYPQAMTTH9BY5EGKHC5V518A
+node_id: 01K1FNZT7S4YW3QXH8BBY56CQ1
 node_description: null
 node_type: device
 module_name: example_app
@@ -29,6 +29,7 @@ config:
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
+  lab_server_url: http://localhost:8000
   node_url: http://127.0.0.1:2000/
   uvicorn_kwargs: {}
 config_schema:
@@ -76,6 +77,13 @@ config_schema:
       default: 2.0
       description: The interval in seconds at which the node should update its state.
       title: State Update Interval
+    lab_server_url:
+      anyOf:
+      - type: string
+      - type: 'null'
+      default: null
+      description: Server for the Lab URL
+      title: Lab Server URL
     node_url:
       default: http://127.0.0.1:2000/
       description: The URL used to communicate with the node. This is the base URL

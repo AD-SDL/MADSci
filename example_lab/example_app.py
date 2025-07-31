@@ -14,9 +14,13 @@ class ExampleApp(ExperimentApplication):
         node_config=RestNodeConfig(node_url=AnyUrl("http://localhost:6000")),
     )
 
-    def run_experiment(self, test: str, test2: str, test3: int) -> str:
+    def run_experiment(self) -> str:
         """main experiment function"""
-        return "test" + test + test2 + str(test3)
+
+        self.workcell_client.submit_workflow(
+            "./workflows/test_feedforward_data.workflow.yaml"
+        )
+        return "test"
 
 
 if __name__ == "__main__":

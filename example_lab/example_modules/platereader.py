@@ -1,5 +1,6 @@
 """A fake plate reader module for testing."""
 
+from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
@@ -69,6 +70,16 @@ class PlateReaderNode(RestNode):
         """Run a command on the plate reader."""
 
         return ActionSucceeded(data={"example_data": {"example": "data"}})
+
+    @action
+    def create_plate_file(
+        self,
+    ) -> ActionResult:
+        """Run a command on the plate reader."""
+        with Path("./test.txt").open() as f:
+            f.write("test")
+
+        return ActionSucceeded(files={"example_file": "./test.txt"})
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the plate reader"""
