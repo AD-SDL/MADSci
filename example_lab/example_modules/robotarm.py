@@ -41,6 +41,7 @@ class RobotArmInterface:
         self.logger.log(
             f"Running command {command} on device number {self.device_number}."
         )
+        time.sleep(2)  # Simulate command execution
 
 
 class RobotArmNode(RestNode):
@@ -72,10 +73,13 @@ class RobotArmNode(RestNode):
     @action
     def transfer(
         self,
-        source: Annotated[LocationArgument, "The source location"],
-        target: Annotated[LocationArgument, "the target location"],
+        source: Annotated[LocationArgument, "The source location"] = None,
+        target: Annotated[LocationArgument, "the target location"] = None,
     ) -> ActionResult:
         """Run a command on the robot arm."""
+        if not source or not target:
+            time.sleep(3)
+            return ActionSucceeded()
 
         if self.resource_client:
             try:

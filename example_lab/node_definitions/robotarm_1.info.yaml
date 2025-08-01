@@ -33,13 +33,13 @@ actions:
         name: source
         description: The source location
         argument_type: location
-        required: true
+        required: false
         default: null
       target:
         name: target
         description: the target location
         argument_type: location
-        required: true
+        required: false
         default: null
     files: {}
     results: {}
