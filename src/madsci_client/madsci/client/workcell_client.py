@@ -176,10 +176,13 @@ class WorkcellClient:
             A dictionary mapping unique file names to their paths.
         """
         files = {}
+        test_parameters = {}
+        for parameter in workflow.parameters:
+            test_parameters[parameter.name] = "test"
         for step in workflow.steps:
             if step.files:
                 for file, path in step.files.items():
-                    if "$" not in path:
+                    if value_substitution(str(path), test_parameters) == str(path):
                         unique_filename = f"{new_ulid_str()}_{file}"
                         files[unique_filename] = path
                         if not Path(files[unique_filename]).is_absolute():

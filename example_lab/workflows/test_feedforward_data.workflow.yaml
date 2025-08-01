@@ -18,4 +18,4 @@ steps:
     node: liquidhandler_1
     action: run_protocol
     files:
-      protocol: $test_file
+      protocol: "./test.txt"
