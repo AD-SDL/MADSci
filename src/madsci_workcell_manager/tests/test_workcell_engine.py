@@ -174,7 +174,7 @@ def test_run_single_step_with_update_parameters(
         assert updated_workflow.status.completed is True
         assert updated_workflow.end_time is not None
         assert updated_workflow.status.active is False
-
+        assert updated_workflow.parameter_values["test_param"] == "test_value"
 
 def test_run_single_step_of_workflow_with_multiple_steps(
     engine: Engine, state_handler: WorkcellStateHandler

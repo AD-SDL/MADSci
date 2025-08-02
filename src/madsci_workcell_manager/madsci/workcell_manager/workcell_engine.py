@@ -213,7 +213,6 @@ class Engine:
             self.monitor_action_progress(
                 wf, step, node, client, response, request, action_id
             )
-
             # * Finalize the step
             self.finalize_step(workflow_id, step)
             self.logger.log_info(
@@ -280,7 +279,7 @@ class Engine:
     ) -> Workflow:
         """updates the parameters in a workflow"""
 
-        if datapoint.data_type == "value":
+        if datapoint.data_type == "data_value":
             wf.parameter_values[parameter.name] = datapoint.value
         elif datapoint.data_type in {"object_storage", "file"}:
             filename = Path(datapoint.path).name
@@ -305,6 +304,7 @@ class Engine:
                 ) and parameter.label in step.result.datapoints:
                     datapoint = step.result.datapoints[parameter.label]
                     wf = self.update_parameters(wf, datapoint, parameter)
+                    print(wf.parameter_values)
             wf.status.running = False
             if step.status == ActionStatus.SUCCEEDED:
                 new_index = wf.status.current_step_index + 1
