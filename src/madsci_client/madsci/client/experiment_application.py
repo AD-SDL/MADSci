@@ -23,6 +23,7 @@ from madsci.common.types.experiment_types import (
     ExperimentStatus,
 )
 from madsci.common.types.location_types import Location
+from madsci.common.types.node_types import NodeDefinition
 from madsci.common.types.resource_types import Resource
 from madsci.common.utils import threaded_daemon
 from madsci.node_module.rest_node_module import RestNode
@@ -60,17 +61,24 @@ class ExperimentApplication(RestNode):
     """Client for managing experiments."""
     inputs: typing.ClassVar = []
     """inputs to the main function"""
+    node_definition = NodeDefinition(
+        node_name="experiment_app", module_name="experiment_app"
+    )
 
     def __init__(
         self,
         experiment_server_url: Optional[AnyUrl] = None,
         experiment_design: Optional[Union[str, Path, ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
+        node_definition: NodeDefinition = node_definition,
         *args: Any,
         **kwargs: Any,
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
+        kwargs["node_definition"] = node_definition
+        self.node_definition = node_definition
         super().__init__(*args, **kwargs)
+
         self.context = (
             MadsciContext(experiment_server_url=experiment_server_url)
             if experiment_server_url

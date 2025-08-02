@@ -6,7 +6,8 @@ from typing import Any
 
 
 def walk_and_replace(
-    input_dict: dict[str, Any], input_parameters: dict[str, Any]
+    input_dict: dict[str, Any],
+    input_parameters: dict[str, Any],
 ) -> dict[str, Any]:
     """Recursively walk the input dictionary and replace all parameters"""
     updated_dict = copy.deepcopy(input_dict)
@@ -23,11 +24,15 @@ def walk_and_replace(
     return updated_dict
 
 
-def value_substitution(input_string: str, input_parameters: dict[str, Any]) -> str:
+def value_substitution(
+    input_string: str,
+    input_parameters: dict[str, Any],
+) -> str:
     """Perform $-string and ${}-string substitution on input string, returns string with substituted values"""
     # * Check if the entire string is a simple parameter reference
     if type(input_string) is str and re.match(r"^\$[A-z0-9_\-]*$", input_string):
-        if input_string.strip("$") in input_parameters:
+        stripped_string = input_string.strip("$")
+        if stripped_string in input_parameters:
             input_string = input_parameters[input_string.strip("$")]
     else:
         # * Replace all parameter references contained in the string

@@ -167,7 +167,9 @@ class DataClient:
             f"{self.url}datapoints", params={number: number}, timeout=10
         )
         response.raise_for_status()
-        return [DataPoint.discriminate(datapoint) for datapoint in response.json()]
+        return [
+            DataPoint.discriminate(datapoint) for datapoint in response.json().values()
+        ]
 
     def query_datapoints(self, selector: Any) -> dict[str, DataPoint]:
         """Query datapoints based on a selector."""
