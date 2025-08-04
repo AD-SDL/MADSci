@@ -306,7 +306,7 @@ class Engine:
                 wf.end_time = datetime.now()
             self.state_handler.set_active_workflow(wf)
 
-            if wf.status.completed or wf.status.failed or wf.status.cancelled:
+            if wf.status.terminal:
                 self._log_workflow_completion(wf)
 
     def _log_workflow_completion(self, workflow: Workflow) -> None:
@@ -449,7 +449,7 @@ class Engine:
             f"{duration_text}"
         )
 
-    def extract_workflow_author(self, workflow: Workflow) -> Optional[str]:
+    def _extract_workflow_author(self, workflow: Workflow) -> Optional[str]:
         """Extract author from workflow metadata - simplified for Workflow inheriting from WorkflowDefinition."""
 
         # Try different strategies in order of preference
