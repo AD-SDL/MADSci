@@ -2,7 +2,7 @@
 
 import json
 import time
-from pathlib import Path, PosixPath, PurePath, WindowsPath
+from pathlib import Path, PurePath
 from typing import Any, Optional, Union
 
 import requests
@@ -779,24 +779,18 @@ Options:
         response.raise_for_status()
 
 
-def stringify_params(parameters: dict[str, Any]) -> dict[str, Any]:
-    """turns path parameters into strings for JSON"""
-    for key, value in parameters.items():
-        if isinstance(value, (Path, PurePath, WindowsPath, PosixPath)):
-            parameters[key] = str(value)
-    return parameters
-
-
 def insert_parameter_values(
     workflow: WorkflowDefinition, parameters: dict[str, Any]
 ) -> Workflow:
     """Replace the parameter strings in the workflow with the provided values"""
     for param in workflow.parameters:
-        if param.name in parameters and param.label is not None:
+        if param.name in parameters and (
+            param.label is not None
+            or param.step_name is not None
+            or param.step_index is not None
+        ):
             raise ValueError(
-                "Workflow parameter: "
-                + param.name
-                + "Is set up to use data from a previous step, and thus must not be provided as input"
+                f"{param} looks like it's configured to use data from a previous step, but you provided a value during workflow submission. Either remove the value or change the parameter configuration."
             )
         if param.name not in parameters:
             if param.default:
@@ -806,11 +800,12 @@ def insert_parameter_values(
                 and param.label is not None
             ):
                 raise ValueError(
-                    "Workflow parameter: "
-                    + param.name
-                    + " not provided, and no default value is defined."
+                    f"Workflow parameter {param.name} is required, but no value was provided and no default is set."
                 )
-    parameters = stringify_params(parameters)
+    parameters = {
+        key: (str(value) if isinstance(value, PurePath) else value)
+        for key, value in parameters.items()
+    }
     steps = []
     for step in workflow.steps:
         for key, val in iter(step):
