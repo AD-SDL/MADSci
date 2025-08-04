@@ -8,11 +8,14 @@ client = EventClient()
 
 # Test 1: Basic utilization periods CSV export
 saved_files = client.get_utilization_periods(
-    analysis_type="daily", csv_export=True, save_to_file=True, output_path="./.reports"
-)
+    analysis_type="daily", csv_export=True, save_to_file=False
+)  # , output_path="./.reports")
+print(saved_files)
 saved_files = client.get_utilization_periods(
     analysis_type="weekly", csv_export=True, save_to_file=True, output_path="./.reports"
 )
+print(saved_files)
+
 saved_files = client.get_utilization_periods(
     analysis_type="monthly",
     csv_export=True,

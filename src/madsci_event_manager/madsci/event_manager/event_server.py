@@ -10,7 +10,6 @@ from fastapi import FastAPI, Query
 from fastapi.params import Body
 from fastapi.responses import Response
 from madsci.client.event_client import EventClient
-from madsci.common.events_csv_exporter import CSVExporter
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import (
@@ -18,6 +17,7 @@ from madsci.common.types.event_types import (
     EventManagerDefinition,
     EventManagerSettings,
 )
+from madsci.event_manager.events_csv_exporter import CSVExporter
 from madsci.event_manager.notifications import EmailAlerts
 from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
@@ -177,7 +177,26 @@ def create_event_server(  # noqa: C901, PLR0915
 
             # Handle CSV export if requested
             if csv_format:
-                return _handle_session_csv_export(report, save_to_file, output_path)
+                csv_result = CSVExporter.handle_session_csv_export(
+                    report, save_to_file, output_path
+                )
+
+                # Return error if CSV processing failed
+                if "error" in csv_result:
+                    return csv_result
+
+                # Return Response object for download or JSON for file save
+                if csv_result.get("is_download"):
+                    return Response(
+                        content=csv_result["csv_content"],
+                        media_type="text/csv",
+                        headers={
+                            "Content-Disposition": "attachment; filename=session_utilization_report.csv"
+                        },
+                    )
+
+                # File save results as JSON
+                return csv_result
 
             # Default JSON response
             return report
@@ -185,45 +204,6 @@ def create_event_server(  # noqa: C901, PLR0915
         except Exception as e:
             logger.log_error(f"Error generating session utilization: {e}")
             return {"error": f"Failed to generate report: {e!s}"}
-
-    def _parse_session_time_parameters(
-        start_time: Optional[str], end_time: Optional[str]
-    ) -> Tuple[Optional[datetime], Optional[datetime]]:
-        """Parse time parameters for session utilization reports."""
-        parsed_start = None
-        parsed_end = None
-
-        if start_time:
-            parsed_start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-        if end_time:
-            parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
-
-        return parsed_start, parsed_end
-
-    def _handle_session_csv_export(
-        report: Dict[str, Any], save_to_file: bool, output_path: Optional[str]
-    ) -> Union[Dict[str, Any], Response]:
-        """Handle CSV export logic for session utilization endpoint."""
-        csv_result = CSVExporter.handle_session_csv_export(
-            report, save_to_file, output_path
-        )
-
-        # Return error if CSV processing failed
-        if "error" in csv_result:
-            return csv_result
-
-        # Return Response object for download or JSON for file save
-        if csv_result.get("is_download"):
-            return Response(
-                content=csv_result["csv_content"],
-                media_type="text/csv",
-                headers={
-                    "Content-Disposition": "attachment; filename=session_utilization_report.csv"
-                },
-            )
-
-        # File save results as JSON
-        return csv_result
 
     @app.get("/utilization/periods", response_model=None)
     async def get_utilization_periods(
@@ -247,7 +227,7 @@ def create_event_server(  # noqa: C901, PLR0915
         # Setup analyzer
         analyzer = _get_session_analyzer()
         if analyzer is None:
-            return {"error": "Failed to create session analyzer"}
+            raise ValueError("Failed to create session analyzer")
 
         try:
             ts_analyzer = TimeSeriesAnalyzer(analyzer)
@@ -267,9 +247,26 @@ def create_event_server(  # noqa: C901, PLR0915
 
             # Handle CSV export if requested
             if csv_format:
-                return CSVExporter._handle_csv_export_for_periods(
+                csv_result = CSVExporter.handle_api_csv_export(
                     utilization, save_to_file, output_path
                 )
+
+                # Return error if CSV processing failed
+                if "error" in csv_result:
+                    return csv_result
+
+                # Return Response object for download or JSON for file save
+                if csv_result.get("is_download"):
+                    return Response(
+                        content=csv_result["csv_content"],
+                        media_type="text/csv",
+                        headers={
+                            "Content-Disposition": "attachment; filename=utilization_periods_report.csv"
+                        },
+                    )
+
+                # File save results as JSON
+                return csv_result
 
             # Default JSON response
             return utilization
@@ -350,6 +347,20 @@ def create_event_server(  # noqa: C901, PLR0915
         except Exception as e:
             logger.log_error(f"Failed to create session analyzer: {e}")
             return None
+
+    def _parse_session_time_parameters(
+        start_time: Optional[str], end_time: Optional[str]
+    ) -> Tuple[Optional[datetime], Optional[datetime]]:
+        """Parse time parameters for session utilization reports."""
+        parsed_start = None
+        parsed_end = None
+
+        if start_time:
+            parsed_start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        if end_time:
+            parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+
+        return parsed_start, parsed_end
 
     return app
 
