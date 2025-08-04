@@ -131,8 +131,8 @@ class EventClient:
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
             return dict(events)
-
-        return dict(events)
+        self.logger.warning("No event server configured. Cannot query events.")
+        return {}
 
     def get_session_utilization(
         self,

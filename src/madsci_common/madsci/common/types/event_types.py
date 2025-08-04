@@ -28,6 +28,14 @@ class EventLogLevel(int, Enum):
     ERROR = logging.ERROR
     CRITICAL = logging.CRITICAL
 
+    @classmethod
+    def _missing_(cls, value: Union[str, int]) -> "EventLogLevel":
+        """Handle case-insensitive matching for log levels."""
+        if isinstance(value, str):
+            value = value.upper()
+            value = value.replace("EVENTLOGLEVEL.", "")
+        return cls[value]
+
 
 class EventManagerSettings(
     MadsciBaseSettings,

@@ -173,8 +173,6 @@ class Workflow(WorkflowDefinition):
     """Time the workflow started running"""
     end_time: Optional[datetime] = None
     """Time the workflow finished running"""
-    duration: Optional[timedelta] = None
-    """Duration of the workflow's run"""
     step_definitions: list[StepDefinition] = Field(default_factory=list)
     """The original step definitions for the workflow"""
 
@@ -212,5 +210,13 @@ class Workflow(WorkflowDefinition):
         if not ids:
             raise KeyError(f"Label {label} not found in workflow run {self.run_id}")
         return ids
+
+    @computed_field
+    @property
+    def duration(self) -> Optional[timedelta]:
+        """Calculate the duration of the workflow run"""
+        if self.start_time and self.end_time:
+            return self.end_time - self.start_time
+        return None
 
     is_ulid = field_validator("workflow_id")(ulid_validator)

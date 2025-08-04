@@ -15,6 +15,7 @@ from madsci.common.ownership import global_ownership_info
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import (
     Event,
+    EventLogLevel,
     EventManagerDefinition,
     EventManagerSettings,
 )
@@ -102,28 +103,13 @@ def create_event_server(  # noqa: C901, PLR0915
         return events.find_one({"_id": event_id})
 
     @app.get("/events")
-    async def get_events(number: int = 100, level: int = 0) -> dict[str, Event]:
+    async def get_events(
+        number: int = 100, level: Union[int, EventLogLevel] = 0
+    ) -> dict[str, Event]:
         """Get the latest events"""
-        if isinstance(level, str):
-            # Try to convert EventLogLevel string to integer
-            if "EventLogLevel." in level:
-                level_name = level.split(".")[-1]
-                level_map = {
-                    "DEBUG": 10,
-                    "INFO": 20,
-                    "WARNING": 30,
-                    "ERROR": 40,
-                    "CRITICAL": 50,
-                }
-                level = level_map.get(level_name, 0)
-            else:
-                try:
-                    level = int(level)
-                except ValueError:
-                    level = 0
 
         event_list = (
-            events.find({"log_level": {"$gte": level}})
+            events.find({"log_level": {"$gte": int(level)}})
             .sort("event_timestamp", -1)
             .limit(number)
             .to_list()
