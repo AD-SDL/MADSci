@@ -29,7 +29,7 @@ from madsci.common.utils import threaded_daemon
 from madsci.node_module.rest_node_module import RestNode
 from pydantic import AnyUrl
 from rich import print
-from typing_extensions import ParamSpec
+from typing_extensions import ParamSpec  # type: ignore
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -93,7 +93,7 @@ class ExperimentApplication(RestNode):
         self.node_info.node_url = self.experiment_design.node_config.node_url
         self.config = self.experiment_design.node_config
 
-        # * Re-initialize expeirment client in-case user provided a different server URL
+        # * Re-initialize experiment client in-case user provided a different server URL
         self.experiment_client = ExperimentClient(
             experiment_server_url=self.context.experiment_server_url
         )
@@ -360,7 +360,7 @@ class ExperimentApplication(RestNode):
         return False
 
     def start_app(self) -> None:
-        """Starts the application as an node or in sungle run mode"""
+        """Starts the application, either as a node or in single run mode"""
         parser = argparse.ArgumentParser(
             prog="ExperimentApp",
             description="Runs an experiment application",
