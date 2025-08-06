@@ -42,7 +42,7 @@ services:
     ports:
       - 27017:27017
     volumes:
-      - .madsci/minio:/home/madsci/.madsci/data/db
+      - .madsci/mongodb:/data/db
 
   redis:
     container_name: redis
