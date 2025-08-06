@@ -66,3 +66,16 @@ def value_substitution(
                 )
                 input_string = working_string
     return input_string
+
+
+def check_for_parameters(
+    input_string: str,
+    parameter_names: list[str],
+) -> bool:
+    """Check if the input string contains any of the parameter names"""
+    for param in parameter_names:
+        if re.search(r"\$" + re.escape(param) + r"\b", input_string):
+            return True
+        if re.search(r"\$\{" + re.escape(param) + r"\}", input_string):
+            return True
+    return False

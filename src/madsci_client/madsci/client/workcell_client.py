@@ -7,7 +7,11 @@ from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
-from madsci.common.data_manipulation import value_substitution, walk_and_replace
+from madsci.common.data_manipulation import (
+    check_for_parameters,
+    value_substitution,
+    walk_and_replace,
+)
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.base_types import PathLike
@@ -176,13 +180,10 @@ class WorkcellClient:
             A dictionary mapping unique file names to their paths.
         """
         files = {}
-        test_parameters = {}
-        for parameter in workflow.parameters:
-            test_parameters[parameter.name] = "test"
         for step in workflow.steps:
             if step.files:
                 for file, path in step.files.items():
-                    if value_substitution(str(path), test_parameters) == str(path):
+                    if not check_for_parameters(str(path), workflow.parameters.keys()):
                         unique_filename = f"{new_ulid_str()}_{file}"
                         files[unique_filename] = path
                         if not Path(files[unique_filename]).is_absolute():
