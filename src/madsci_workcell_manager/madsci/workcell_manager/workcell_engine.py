@@ -330,7 +330,7 @@ class Engine:
         workflow.workflow_metadata.workcell_name = (
             self.workcell_definition.workcell_name
         )
-        return workflow.model_dump()
+        return workflow.model_dump(mode="json")
 
     def _add_error_information(self, workflow: Workflow, event_data: dict) -> None:
         """Add error information for failed workflows."""

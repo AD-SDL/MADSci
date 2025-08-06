@@ -85,7 +85,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         logger.log(
             Event(
                 event_type=EventType.WORKCELL_START,
-                event_data=workcell.model_dump(),
+                event_data=workcell.model_dump(mode="json"),
             )
         )
 
@@ -104,7 +104,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             logger.log(
                 Event(
                     event_type=EventType.WORKCELL_STOP,
-                    event_data=workcell.model_dump(),
+                    event_data=workcell.model_dump(mode="json"),
                 )
             )
 
@@ -386,7 +386,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     logger.log(
                         Event(
                             event_type=EventType.WORKFLOW_START,
-                            event_data=wf.model_dump(),
+                            event_data=wf.model_dump(mode="json"),
                         )
                     )
                 return wf
