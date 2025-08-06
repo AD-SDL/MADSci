@@ -372,7 +372,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     # Store the actual parameter values used
                     wf.parameter_values = parameters
 
-                    # ===== WORKFLOW_START EVENT LOGGING =====
                     logger.log(
                         Event(
                             event_type=EventType.WORKFLOW_START,
