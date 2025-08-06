@@ -143,6 +143,7 @@ class Engine:
                     )
                     next_wf.status.completed = True
                     self.state_handler.set_active_workflow(next_wf)
+                    self._log_workflow_completion(next_wf, "completed")
                     sorted_ready_workflows.pop(0)
                     next_wf = None
                     continue
@@ -275,6 +276,7 @@ class Engine:
             step.end_time = datetime.now()
             wf.steps[wf.status.current_step_index] = step
             wf.status.running = False
+
             if step.status == ActionStatus.SUCCEEDED:
                 new_index = wf.status.current_step_index + 1
                 if new_index >= len(wf.steps):
@@ -303,6 +305,33 @@ class Engine:
                 wf.status.failed = True
                 wf.end_time = datetime.now()
             self.state_handler.set_active_workflow(wf)
+
+            if wf.status.terminal:
+                try:
+                    event_data = wf.model_dump(mode="json")
+                    self._log_completion_event(wf, event_data)
+                except Exception as e:
+                    self.logger.log_error(
+                        f"Error logging workflow completion for {wf.workflow_id}: {e}"
+                    )
+
+    def _log_completion_event(self, workflow: Workflow, event_data: dict) -> None:
+        """Log the completion event and info message."""
+        self.logger.log(
+            Event(event_type=EventType.WORKFLOW_COMPLETE, event_data=event_data)
+        )
+
+        duration_text = (
+            f"Duration: {event_data['duration_seconds']:.1f}s"
+            if event_data["duration_seconds"]
+            else "Duration: Unknown"
+        )
+
+        self.logger.log_info(
+            f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
+            f"Status: {event_data['status']}, Author: {event_data['author'] or 'Unknown'}, "
+            f"{duration_text}"
+        )
 
     def update_step(self, wf: Workflow, step: Step) -> None:
         """Update the step in the workflow"""

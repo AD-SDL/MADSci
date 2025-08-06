@@ -1,5 +1,6 @@
 """A fake plate reader module for testing."""
 
+import time
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
@@ -37,6 +38,7 @@ class PlateReaderInterface:
         self.logger.log(
             f"Running command {command} on device number {self.device_number}."
         )
+        time.sleep(2)  # Simulate command execution
 
 
 class PlateReaderNode(RestNode):
@@ -67,7 +69,7 @@ class PlateReaderNode(RestNode):
         self,
     ) -> ActionResult:
         """Run a command on the plate reader."""
-
+        time.sleep(5)
         return ActionSucceeded(data={"example_data": {"example": "data"}})
 
     def get_location(self) -> AdminCommandResponse:
