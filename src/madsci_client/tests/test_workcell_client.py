@@ -195,7 +195,7 @@ def test_get_location(client: WorkcellClient) -> None:
 def test_add_location(client: WorkcellClient) -> None:
     """Test adding a location."""
     location = Location(location_name="test_location2")
-    added_location = client.add_location(location)
+    added_location = client.add_location(location, permanent=False)
     assert added_location.location_id == location.location_id
     assert added_location.location_name == location.location_name
 
@@ -203,7 +203,7 @@ def test_add_location(client: WorkcellClient) -> None:
 def test_attach_resource_to_location(client: WorkcellClient) -> None:
     """Test attaching a resource to a location."""
     location = Location(location_name="test_location3")
-    client.add_location(location)
+    client.add_location(location, permanent=False)
     mock_resource_id = new_ulid_str()
     updated_location = client.attach_resource_to_location(
         location.location_id, mock_resource_id

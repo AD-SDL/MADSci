@@ -39,21 +39,21 @@
     </v-window-item>
     <v-window-item :key="3" :value="3">
       <v-container class="pa-1 ma-1 justify-center" fluid>
-      <v-card>
-        <v-card-title class="text-center">
-          <h2>Resources</h2>
-        </v-card-title>
-        <v-card-text>
-          <ResourcesPanel />
+        <v-card>
+          <v-card-title class="text-center">
+            <h2>Resources</h2>
+          </v-card-title>
+          <v-card-text>
+            <ResourcesPanel />
           </v-card-text>
         </v-card>
       </v-container>
     </v-window-item>
     <v-window-item :key="4" :value="4">
       <v-container class="pa-1 ma-1 justify-center" fluid>
-      <v-card>
-        <v-card-text>
-          <Experiments />
+        <v-card>
+          <v-card-text>
+            <Experiments />
           </v-card-text>
         </v-card>
       </v-container>
@@ -67,6 +67,7 @@ import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
 import { resources, active_workflows, archived_workflows } from "@/store";
 import WorkcellPanel from './WorkcellPanel.vue';
+import CreaetWorkcellPanel from './CreateWorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
 import ResourcesPanel from './ResourcesPanel.vue';
 const tab = ref(1)
@@ -84,8 +85,8 @@ export default {
 .node_indicator {
   color: white;
   border-radius: 5px;
-    padding: 3px;
-  }
+  padding: 3px;
+}
 
 .wf_status_completed,
 .node_status_idle,
