@@ -16,6 +16,7 @@ from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
@@ -80,6 +81,15 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """Start the REST server and initialize the state handler and engine"""
         global_ownership_info.workcell_id = workcell.workcell_id
         global_ownership_info.manager_id = workcell.workcell_id
+
+        # LOG WORKCELL START EVENT
+        logger.log(
+            Event(
+                event_type=EventType.WORKCELL_START,
+                event_data=workcell.model_dump(mode="json"),
+            )
+        )
+
         if start_engine:
             engine = Engine(state_handler)
             engine.spin()
@@ -88,7 +98,16 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 state_handler.initialize_workcell_state(
                     resource_client=ResourceClient()
                 )
-        yield
+        try:
+            yield
+        finally:
+            # LOG WORKCELL STOP EVENT
+            logger.log(
+                Event(
+                    event_type=EventType.WORKCELL_STOP,
+                    event_data=workcell.model_dump(mode="json"),
+                )
+            )
 
     app = FastAPI(
         lifespan=lifespan,
@@ -308,6 +327,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         try:
             try:
                 wf_def = WorkflowDefinition.model_validate_json(workflow)
+
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
@@ -343,10 +363,24 @@ def create_workcell_server(  # noqa: C901, PLR0915
                         workflow=wf,
                         files=files,
                     )
+
                     with state_handler.wc_state_lock():
                         state_handler.set_active_workflow(wf)
                         state_handler.enqueue_workflow(wf.workflow_id)
+
+                    # ===== WORKFLOW_START EVENT LOGGING =====
+
+                    # Store the actual parameter values used
+                    wf.parameter_values = parameters
+
+                    logger.log(
+                        Event(
+                            event_type=EventType.WORKFLOW_START,
+                            event_data=wf.model_dump(mode="json"),
+                        )
+                    )
                 return wf
+
         except HTTPException as e:
             raise e
         except Exception as e:

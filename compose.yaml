@@ -41,6 +41,9 @@ services:
     restart: unless-stopped
     ports:
       - 27017:27017
+    volumes:
+      - .madsci/mongodb:/data/db
+
   redis:
     container_name: redis
     image: redis:7.4
@@ -86,12 +89,13 @@ services:
     command: python -m madsci.squid.lab_server
     depends_on:
       - event_manager
+
   event_manager:
     <<: *madsci-service
     container_name: event_manager
     command: python -m madsci.event_manager.event_server
     depends_on:
-      - mongodb
+        - mongodb
 
   experiment_manager:
     <<: *madsci-service

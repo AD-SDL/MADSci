@@ -147,6 +147,7 @@ class Engine:
                     )
                     next_wf.status.completed = True
                     self.state_handler.set_active_workflow(next_wf)
+                    self._log_workflow_completion(next_wf, "completed")
                     sorted_ready_workflows.pop(0)
                     next_wf = None
                     continue
@@ -305,6 +306,7 @@ class Engine:
                     datapoint = step.result.datapoints[parameter.label]
                     wf = self.update_parameters(wf, datapoint, parameter)
             wf.status.running = False
+
             if step.status == ActionStatus.SUCCEEDED:
                 new_index = wf.status.current_step_index + 1
                 if new_index >= len(wf.steps):
@@ -333,6 +335,33 @@ class Engine:
                 wf.status.failed = True
                 wf.end_time = datetime.now()
             self.state_handler.set_active_workflow(wf)
+
+            if wf.status.terminal:
+                self._log_completion_event(wf)
+
+    def _log_completion_event(self, workflow: Workflow) -> None:
+        """Log the completion event and info message."""
+        try:
+            event_data = workflow.model_dump(mode="json")
+            self.logger.log(
+                Event(event_type=EventType.WORKFLOW_COMPLETE, event_data=event_data)
+            )
+
+            duration_text = (
+                f"Duration: {event_data['duration_seconds']:.1f}s"
+                if event_data["duration_seconds"]
+                else "Duration: Unknown"
+            )
+
+            self.logger.log_info(
+                f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
+                f"Status: {event_data['status']}, Author: {event_data['author'] or 'Unknown'}, "
+                f"{duration_text}"
+            )
+        except Exception as e:
+            self.logger.log_error(
+                f"Error logging workflow completion event for workflow {workflow.workflow_id}: {e!s}\n{traceback.format_exc()}"
+            )
 
     def update_step(self, wf: Workflow, step: Step) -> None:
         """Update the step in the workflow"""

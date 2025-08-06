@@ -108,7 +108,7 @@ def create_workflow(
         a completely initialized workflow run
     """
     validate_node_names(workflow_def, workcell)
-    wf_dict = workflow_def.model_dump()
+    wf_dict = workflow_def.model_dump(mode="json")
     wf_dict.update(
         {
             "label": workflow_def.name,
