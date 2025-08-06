@@ -85,13 +85,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         logger.log(
             Event(
                 event_type=EventType.WORKCELL_START,
-                event_data={
-                    "workcell_name": workcell.workcell_name,
-                    "workcell_id": workcell.workcell_id,
-                    "description": workcell.description,
-                    "nodes": dict(workcell.nodes.items()) if workcell.nodes else {},
-                    "manager_type": "workcell_manager",
-                },
+                event_data=workcell.model_dump(),
             )
         )
 
@@ -110,11 +104,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             logger.log(
                 Event(
                     event_type=EventType.WORKCELL_STOP,
-                    event_data={
-                        "workcell_name": workcell.workcell_name,
-                        "workcell_id": workcell.workcell_id,
-                        "manager_type": "workcell_manager",
-                    },
+                    event_data=workcell.model_dump(),
                 )
             )
 
@@ -339,8 +329,9 @@ def create_workcell_server(  # noqa: C901, PLR0915
             try:
                 wf_def = WorkflowDefinition.model_validate_json(workflow)
                 author = None
-                if hasattr(wf_def, "workflow_metadata") and wf_def.workflow_metadata:
-                    author = getattr(wf_def.workflow_metadata, "author", None)
+                if wf_def.workflow_metadata and wf_def.workflow_metadata.author:
+                    author = wf_def.workflow_metadata.author
+
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
@@ -382,21 +373,20 @@ def create_workcell_server(  # noqa: C901, PLR0915
                         state_handler.enqueue_workflow(wf.workflow_id)
 
                     # ===== WORKFLOW_START EVENT LOGGING =====
+                    if author:
+                        wf.workflow_metadata.author = author
+                    wf.workflow_metadata.workcell_id = workcell.workcell_id
+                    wf.workflow_metadata.workcell_name = workcell.workcell_name
+                    wf.workflow_metadata.step_count = len(wf.steps)
+
+                    # Store the actual parameter values used
+                    wf.parameter_values = parameters
+
+                    # ===== WORKFLOW_START EVENT LOGGING =====
                     logger.log(
                         Event(
                             event_type=EventType.WORKFLOW_START,
-                            event_data={
-                                "workflow_id": wf.workflow_id,
-                                "workflow_name": wf_def.name,
-                                "author": author,
-                                "workcell_id": workcell.workcell_id,
-                                "workcell_name": workcell.workcell_name,
-                                "step_count": len(wf.steps),
-                                "workflow_metadata": wf_def.workflow_metadata.model_dump()
-                                if wf_def.workflow_metadata
-                                else {},
-                                "parameters": parameters,
-                            },
+                            event_data=wf.model_dump(),
                         )
                     )
                 return wf
