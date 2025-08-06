@@ -8,7 +8,7 @@ import importlib
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
@@ -307,82 +307,13 @@ class Engine:
             self.state_handler.set_active_workflow(wf)
 
             if wf.status.terminal:
-                self._log_workflow_completion(wf)
-
-    def _log_workflow_completion(self, workflow: Workflow) -> None:
-        """Log workflow completion event with author and utilization data."""
-        try:
-            event_data = self._build_workflow_event_data(workflow)
-            self._add_error_information(workflow, event_data)
-            self._add_ownership_information(workflow, event_data)
-
-            self._log_completion_event(workflow, event_data)
-
-        except Exception as e:
-            self.logger.log_error(
-                f"Error logging workflow completion for {workflow.workflow_id}: {e}"
-            )
-
-    def _build_workflow_event_data(self, workflow: Workflow) -> dict:
-        """Build the basic event data for workflow completion."""
-        # Add workcell execution context
-        workflow.workflow_metadata.workcell_id = self.workcell_definition.workcell_id
-        workflow.workflow_metadata.workcell_name = (
-            self.workcell_definition.workcell_name
-        )
-        return workflow.model_dump(mode="json")
-
-    def _add_error_information(self, workflow: Workflow, event_data: dict) -> None:
-        """Add error information for failed workflows."""
-        if event_data["status"] not in ["failed", "cancelled"] or not workflow.steps:
-            return
-
-        failed_step = self._find_failed_step(workflow)
-        if not failed_step:
-            return
-
-        error_info = self._extract_error_information(failed_step)
-        if error_info:
-            event_data.update(error_info)
-
-    def _find_failed_step(self, workflow: Workflow) -> Optional[Any]:
-        """Find the step that caused the workflow failure."""
-        for step in workflow.steps:
-            if step.status in [ActionStatus.FAILED, ActionStatus.CANCELLED]:
-                return step
-        return None
-
-    def _extract_error_information(self, failed_step: Any) -> Optional[dict]:
-        """Extract error information from a failed step."""
-        if not (failed_step.result and failed_step.result.errors):
-            return None
-
-        last_error = failed_step.result.errors[-1]
-        return {
-            "error_message": last_error.message,
-            "error_type": last_error.error_type,
-            "failed_step_id": failed_step.step_id,
-            "failed_step_name": failed_step.name,
-            "failed_node": failed_step.node,
-        }
-
-    def _add_ownership_information(self, workflow: Workflow, event_data: dict) -> None:
-        """Add ownership information to event data."""
-        if not (hasattr(workflow, "ownership_info") and workflow.ownership_info):
-            return
-
-        ownership = workflow.ownership_info
-        ownership_fields = {
-            "experiment_id": "experiment_id",
-            "user_id": "user_id",
-            "campaign_id": "campaign_id",
-        }
-
-        for attr_name, event_key in ownership_fields.items():
-            if hasattr(ownership, attr_name):
-                value = getattr(ownership, attr_name)
-                if value:
-                    event_data[event_key] = str(value)
+                try:
+                    event_data = wf.model_dump(mode="json")
+                    self._log_completion_event(wf, event_data)
+                except Exception as e:
+                    self.logger.log_error(
+                        f"Error logging workflow completion for {wf.workflow_id}: {e}"
+                    )
 
     def _log_completion_event(self, workflow: Workflow, event_data: dict) -> None:
         """Log the completion event and info message."""
