@@ -328,9 +328,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
         try:
             try:
                 wf_def = WorkflowDefinition.model_validate_json(workflow)
-                author = None
-                if wf_def.workflow_metadata and wf_def.workflow_metadata.author:
-                    author = wf_def.workflow_metadata.author
 
             except Exception as e:
                 traceback.print_exc()
@@ -373,11 +370,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
                         state_handler.enqueue_workflow(wf.workflow_id)
 
                     # ===== WORKFLOW_START EVENT LOGGING =====
-                    if author:
-                        wf.workflow_metadata.author = author
-                    wf.workflow_metadata.workcell_id = workcell.workcell_id
-                    wf.workflow_metadata.workcell_name = workcell.workcell_name
-                    wf.workflow_metadata.step_count = len(wf.steps)
 
                     # Store the actual parameter values used
                     wf.parameter_values = parameters
