@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.step_types import Step, StepDefinition
@@ -220,3 +221,40 @@ class Workflow(WorkflowDefinition):
         return None
 
     is_ulid = field_validator("workflow_id")(ulid_validator)
+
+    @computed_field
+    @property
+    def duration_seconds(self) -> Optional[float]:
+        """Calculate the duration of the workflow in seconds."""
+        if self.duration:
+            return self.duration.total_seconds()
+        return None
+
+    @computed_field
+    @property
+    def completed_steps(self) -> int:
+        """Count of completed steps."""
+        return sum(1 for step in self.steps if step.status == ActionStatus.SUCCEEDED)
+
+    @computed_field
+    @property
+    def failed_steps(self) -> int:
+        """Count of failed steps."""
+        return sum(1 for step in self.steps if step.status == ActionStatus.FAILED)
+
+    @computed_field
+    @property
+    def skipped_steps(self) -> int:
+        """Count of skipped steps."""
+        return sum(1 for step in self.steps if step.status == ActionStatus.CANCELLED)
+
+    @computed_field
+    @property
+    def step_statistics(self) -> dict[str, int]:
+        """Complete step statistics."""
+        return {
+            "completed_steps": self.completed_steps,
+            "failed_steps": self.failed_steps,
+            "skipped_steps": self.skipped_steps,
+            "total_steps": len(self.steps),
+        }
