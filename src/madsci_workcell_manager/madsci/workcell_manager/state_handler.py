@@ -35,7 +35,7 @@ class WorkcellStateHandler:
 
     def __init__(
         self,
-        workcell_definition: WorkcellDefinition,
+        workcell_definition: Optional[WorkcellDefinition] = None,
         workcell_settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
