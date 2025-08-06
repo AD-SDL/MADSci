@@ -1223,10 +1223,34 @@ class UtilizationAnalyzer:
         """Get existing workflow or create new one."""
         if workflow_id not in workflows:
             event_data = event.get("event_data", {})
+
+            # Safely extract workflow name
+            workflow_name = "Unknown"
+            if event_data.get("name") and isinstance(event_data["name"], str):
+                workflow_name = event_data["name"]
+            elif event_data.get("workflow_name") and isinstance(
+                event_data["workflow_name"], str
+            ):
+                workflow_name = event_data["workflow_name"]
+
+            # Safely extract author
+            author = None
+            workflow_metadata = event_data.get("workflow_metadata")
+            if isinstance(workflow_metadata, dict):
+                author_value = workflow_metadata.get("author")
+                if author_value and isinstance(author_value, str):
+                    author = author_value.strip() or None
+
+            # Fallback to direct author field for backward compatibility
+            if not author:
+                author_value = event_data.get("author")
+                if author_value and isinstance(author_value, str):
+                    author = author_value.strip() or None
+
             workflows[workflow_id] = {
-                "workflow_id": workflow_id,
-                "workflow_name": event_data.get("workflow_name", "Unknown"),
-                "author": event_data.get("author"),
+                "workflow_id": str(workflow_id),
+                "workflow_name": str(workflow_name),
+                "author": author,
                 "start_time": None,
                 "end_time": None,
                 "status": "unknown",
@@ -1240,11 +1264,26 @@ class UtilizationAnalyzer:
         """Update workflow data based on event."""
         event_type = str(event.get("event_type", "")).lower()
         event_data = event.get("event_data", {})
-        author = event_data.get("author")
 
-        # Update author if not already set
-        if author and not workflow["author"]:
-            workflow["author"] = author
+        # Extract author from multiple locations if not already set
+        if not workflow.get("author"):
+            author = None
+
+            # Try new structure (workflow_metadata.author)
+            workflow_metadata = event_data.get("workflow_metadata")
+            if isinstance(workflow_metadata, dict):
+                author_value = workflow_metadata.get("author")
+                if author_value and isinstance(author_value, str):
+                    author = author_value.strip() or None
+
+            # Fallback to old structure (direct author field)
+            if not author:
+                author_value = event_data.get("author")
+                if author_value and isinstance(author_value, str):
+                    author = author_value.strip() or None
+
+            if author:
+                workflow["author"] = author
 
         # Process different event types
         if "start" in event_type:
@@ -1252,19 +1291,75 @@ class UtilizationAnalyzer:
             workflow["status"] = "started"
         elif "complete" in event_type:
             workflow["end_time"] = event["parsed_timestamp"]
-            workflow["status"] = event_data.get("status", "completed")
+
+            # Extract status from the new workflow structure
+            status = self._extract_workflow_completion_status(event_data)
+            workflow["status"] = status
+
             self._set_workflow_duration(workflow, event_data)
+
+    def _extract_workflow_completion_status(self, event_data: Dict) -> str:
+        """Extract the completion status from workflow event data."""
+
+        # Try to get status from the nested status object (new structure)
+        status_obj = event_data.get("status")
+
+        if isinstance(status_obj, dict):
+            # Check completion states in order of preference
+            status_checks = ["completed", "failed", "cancelled", "running"]
+
+            # First check direct boolean flags
+            for status in status_checks:
+                if status_obj.get(status):
+                    return status
+
+            # Fallback to description parsing
+            description = status_obj.get("description", "").lower()
+            for status in status_checks:
+                if status in description:
+                    return status
+
+        # Fallback to direct status field (old structure)
+        direct_status = event_data.get("status")
+        if isinstance(direct_status, str):
+            return direct_status
+
+        # Default fallback for completion events
+        return "completed"
 
     def _set_workflow_duration(
         self, workflow: Dict[str, Any], event_data: Dict
     ) -> None:
         """Set workflow duration from event data or calculate it."""
-        if event_data.get("duration_seconds"):
-            workflow["duration_seconds"] = event_data["duration_seconds"]
-        elif workflow["start_time"] and workflow["end_time"]:
+
+        # Primary: Get duration_seconds from the new computed field
+        duration_seconds = event_data.get("duration_seconds")
+        if duration_seconds is not None:
+            workflow["duration_seconds"] = float(duration_seconds)
+            return
+
+        # Fallback: manual calculation using start/end times from workflow
+        if workflow.get("start_time") and workflow.get("end_time"):
             workflow["duration_seconds"] = (
                 workflow["end_time"] - workflow["start_time"]
             ).total_seconds()
+            return
+
+        # Final fallback: try from event_data start/end times
+        if event_data.get("start_time") and event_data.get("end_time"):
+            try:
+                start_time = self._parse_timestamp_utc(event_data["start_time"])
+                end_time = self._parse_timestamp_utc(event_data["end_time"])
+                if start_time and end_time:
+                    workflow["duration_seconds"] = (
+                        end_time - start_time
+                    ).total_seconds()
+                    return
+            except Exception as err:
+                self.logger.warning(f"Error parsing timestamps: {err}")
+
+        # If no duration found, set to None
+        workflow["duration_seconds"] = None
 
     def _aggregate_user_statistics(
         self, workflows: Dict[str, Dict[str, Any]]
@@ -1283,9 +1378,12 @@ class UtilizationAnalyzer:
 
     def _normalize_author(self, author: str) -> str:
         """Normalize author name, handling empty/None values."""
-        if not author or author.strip() == "":
+        if not author:
             return "Unknown Author"
-        return author
+        if not isinstance(author, str):
+            return "Unknown Author"
+        cleaned = author.strip()
+        return cleaned if cleaned else "Unknown Author"
 
     def _get_or_create_user(
         self, users: Dict[str, Dict], author: str
@@ -1360,8 +1458,10 @@ class UtilizationAnalyzer:
     def _create_workflow_summary(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
         """Create a summary of workflow for user's workflow list."""
         return {
-            "workflow_id": workflow["workflow_id"],
-            "workflow_name": workflow["workflow_name"],
+            "workflow_id": str(workflow["workflow_id"]),
+            "workflow_name": str(workflow["workflow_name"])
+            if workflow["workflow_name"]
+            else "Unknown",
             "start_time": (
                 workflow["start_time"].isoformat() if workflow["start_time"] else None
             ),
@@ -1369,11 +1469,11 @@ class UtilizationAnalyzer:
                 workflow["end_time"].isoformat() if workflow["end_time"] else None
             ),
             "duration_hours": (
-                workflow["duration_seconds"] / 3600
-                if workflow["duration_seconds"]
+                float(workflow["duration_seconds"]) / 3600
+                if workflow["duration_seconds"] is not None
                 else None
             ),
-            "status": workflow["status"],
+            "status": str(workflow["status"]) if workflow["status"] else "unknown",
         }
 
     def _finalize_user_statistics(self, users: Dict[str, Dict[str, Any]]) -> None:
