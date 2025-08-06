@@ -93,13 +93,9 @@ services:
   event_manager:
     <<: *madsci-service
     container_name: event_manager
-    entrypoint: ["python", "-m", "madsci.event_manager.event_server"]  # Direct command
-    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    command: python -m madsci.event_manager.event_server
     depends_on:
         - mongodb
-    environment:
-      - HOME=/home/madsci
-
 
   experiment_manager:
     <<: *madsci-service
