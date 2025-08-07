@@ -1,8 +1,8 @@
 name: Mix Colors Workflow
 
 metadata:
-  author: Tobias Ginsburg, Rafael Vescovi
-  info: New Plate workflow for the RPL Color Picker
+  author: Tobias Ginsburg
+  info: Workflow to test feedforward data handling
   version: 0.1
 
 parameters:
