@@ -94,15 +94,15 @@ class WorkflowParameter(MadsciBaseModel):
     """container for a workflow parameter"""
 
     name: str
-    """the name of the parameter"""
+    """The name of the parameter"""
     default: Optional[Any] = None
-    """ the default value of the parameter"""
+    """The default value of a parameter, if not provided, the parameter must be provided when the workflow is run"""
     step_name: Optional[str] = None
-    """name of which step to pull the parameter from"""
+    """Name of a step in the workflow; this will use the value of a datapoint from the step with the matching name as the value for this parameter"""
     step_index: Optional[str] = None
-    """index of which step to pull the parameter from"""
+    """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
     label: Optional[str] = None
-    """which data_label in the step to """
+    """This will use the value of a datapoint from a previous step with the matching label."""
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
