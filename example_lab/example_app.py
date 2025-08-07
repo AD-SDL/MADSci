@@ -1,8 +1,11 @@
 """An Example Application"""
 
-from madsci.client.experiment_application import ExperimentApplication
+from madsci.client.experiment_application import (
+    ExperimentApplication,
+    ExperimentApplicationConfig,
+)
 from madsci.common.types.experiment_types import ExperimentDesign
-from madsci.common.types.node_types import NodeDefinition, RestNodeConfig
+from madsci.common.types.node_types import NodeDefinition
 from pydantic import AnyUrl
 
 
@@ -11,8 +14,8 @@ class ExampleApp(ExperimentApplication):
 
     experiment_design = ExperimentDesign(
         experiment_name="Example_App",
-        node_config=RestNodeConfig(node_url=AnyUrl("http://localhost:6000")),
     )
+    config = ExperimentApplicationConfig(node_url=AnyUrl("http://localhost:6000"))
 
     def run_experiment(self) -> str:
         """main experiment function"""
