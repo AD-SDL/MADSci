@@ -123,7 +123,7 @@ class WorkflowDefinition(MadsciBaseModel):
     """Name of the workflow"""
     workflow_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
-    parameters: Optional[list[WorkflowParameter]] = Field(default_factory=list)
+    parameters: list[WorkflowParameter] = Field(default_factory=list)
     """Inputs to the workflow"""
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
