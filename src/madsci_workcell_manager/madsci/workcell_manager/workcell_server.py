@@ -57,7 +57,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         if workcell_path.exists():
             workcell = WorkcellDefinition.from_yaml(workcell_path)
         else:
-            workcell = WorkcellDefinition()
+            name = str(workcell_path.name).split(".")[0]
+            workcell = WorkcellDefinition(workcell_name=name)
         logger.info(f"Writing to workcell definition file: {workcell_path}")
         workcell.to_yaml(workcell_path)
     global_ownership_info.workcell_id = workcell.workcell_id
@@ -366,11 +367,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     with state_handler.wc_state_lock():
                         state_handler.set_active_workflow(wf)
                         state_handler.enqueue_workflow(wf.workflow_id)
-
-                    # ===== WORKFLOW_START EVENT LOGGING =====
-
-                    # Store the actual parameter values used
-                    wf.parameter_values = parameters
 
                     logger.log(
                         Event(
