@@ -43,8 +43,6 @@ class WorkcellStateHandler:
         """
         Initialize a StateManager for a given workcell.
         """
-        if workcell_definition is None:
-            workcell_definition = self.get_workcell_definition()
         self.workcell_settings = workcell_settings or WorkcellManagerSettings()
         self._workcell_id = workcell_definition.workcell_id
         self._redis_host = self.workcell_settings.redis_host

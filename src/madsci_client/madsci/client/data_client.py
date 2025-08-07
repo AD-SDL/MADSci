@@ -1,5 +1,6 @@
 """Client for the MADSci Experiment Manager."""
 
+import shutil
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -137,8 +138,6 @@ class DataClient:
 
         if self.url is None:
             if self._local_datapoints[datapoint_id].data_type == "file":
-                import shutil
-
                 shutil.copyfile(
                     self._local_datapoints[datapoint_id].path, output_filepath
                 )
@@ -168,7 +167,9 @@ class DataClient:
             f"{self.url}datapoints", params={number: number}, timeout=10
         )
         response.raise_for_status()
-        return [DataPoint.discriminate(datapoint) for datapoint in response.json()]
+        return [
+            DataPoint.discriminate(datapoint) for datapoint in response.json().values()
+        ]
 
     def query_datapoints(self, selector: Any) -> dict[str, DataPoint]:
         """Query datapoints based on a selector."""

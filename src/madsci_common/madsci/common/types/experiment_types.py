@@ -90,11 +90,11 @@ class ExperimentDesign(MadsciBaseModel):
         description="Information about the users, campaigns, etc. that this design is owned by.",
         default_factory=get_current_ownership_info,
     )
-    
+
     node_config: Optional[RestNodeConfig] = Field(
         title="Node Config",
         description="Information for starting the experiment in server mode",
-        default_factory=RestNodeConfig
+        default_factory=RestNodeConfig,
     )
 
     def new_experiment(
@@ -197,7 +197,13 @@ class Experiment(MadsciBaseModel):
             run_name=run_name,
             run_description=run_description,
             experiment_design=experiment_design,
-            ownership_info=experiment_design.ownership_info.model_copy(),
+            ownership_info=OwnershipInfo(
+                **(
+                    experiment_design.ownership_info.model_dump(exclude_none=True)
+                    if experiment_design.ownership_info
+                    else get_current_ownership_info().model_dump(exclude_none=True)
+                )
+            ),
         )
 
 

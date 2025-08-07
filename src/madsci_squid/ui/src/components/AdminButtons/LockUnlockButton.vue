@@ -22,7 +22,7 @@
   </template>
 
 <script lang="ts" setup>
-import { main_url, workcell_state } from "@/store";
+import { urls, workcell_state } from "@/store";
 import { ref, watchEffect } from 'vue';
 
 const props = defineProps<{
@@ -37,13 +37,13 @@ const hoverText = ref('')
 // Format pause and resume urls
 watchEffect(() => {
     if (props.module) {
-        lock_url.value = main_url.value.concat('/admin/lock/'.concat(props.module))
-        unlock_url.value = main_url.value.concat('/admin/unlock/'.concat(props.module))
+        lock_url.value = urls.value.workcell_server_url.concat('admin/lock/'.concat(props.module))
+        unlock_url.value = urls.value.workcell_server_url.concat('admin/unlock/'.concat(props.module))
         hoverText.value = "Module"
     }
     else {
-        lock_url.value = main_url.value.concat('/admin/lock')
-        unlock_url.value = main_url.value.concat('/admin/unlock')
+        lock_url.value = urls.value.workcell_server_url.concat('admin/lock')
+        unlock_url.value = urls.value.workcell_server_url.concat('admin/unlock')
         hoverText.value = "Workcell"
     }
 })

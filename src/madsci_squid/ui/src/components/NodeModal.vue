@@ -86,7 +86,7 @@
                       <td>{{ item.required }}</td>
                       <td>{{ item.default }}</td>
                       <td>{{ item.description }}</td>
-                      <td><v-text-field @update:focused="set_text(action)" height="20px" v-model="item.value"
+                      <td><v-text-field @vue:updated="set_text(action)" height="20px" v-model="item.value"
                           dense>
                         </v-text-field></td>
                     </tr>
@@ -116,7 +116,7 @@
                       <td>{{ item.required }}</td>
                       <td>{{ item.description }}</td>
                       <td>
-                        <v-text-field v-model=item.value list="locations" id="locations_id" name="locations_name" />
+                        <v-text-field @vue:updated="set_text(action)" v-model=item.value list="locations" id="locations_id" name="locations_name" />
                         <datalist id="locations">
                         <option v-for="option in locations.map(function(location: any){return location.location_name;})" :value="option">{{option}}</option>
                         </datalist>
@@ -326,7 +326,7 @@ async function send_wf(action: any) {
       formData.append("files", file.value)
     }
   })
-  fetch(urls.value.workcell_manager.concat('workflow'), {
+  fetch(urls.value.workcell_server_url.concat('workflow'), {
     method: "POST",
     body: formData
   });
