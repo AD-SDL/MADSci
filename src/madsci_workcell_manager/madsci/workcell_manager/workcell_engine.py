@@ -33,7 +33,10 @@ from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_utils import (
     find_node_client,
 )
-from madsci.workcell_manager.workflow_utils import cancel_active_workflows
+from madsci.workcell_manager.workflow_utils import (
+    cancel_active_workflows,
+    prepare_workcell_step,
+)
 
 
 class Engine:
@@ -60,7 +63,6 @@ class Engine:
         )
         self.data_client = DataClient()
         self.resource_client = ResourceClient()
-        self.logger.log_debug(self.data_client.url)
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state(
                 self.resource_client,
@@ -176,6 +178,11 @@ class Engine:
             step.args = walk_and_replace(step.args, wf.parameter_values)
             step.files = walk_and_replace(step.files, wf.parameter_values)
             step.locations = walk_and_replace(step.locations, wf.parameter_values)
+            step = prepare_workcell_step(
+                step=step,
+                workcell=self.workcell_definition,
+                state_handler=self.state_handler,
+            )
             step.start_time = datetime.now()
             self.logger.log_info(
                 f"Running step {step.step_id} in workflow {workflow_id}"
@@ -220,10 +227,16 @@ class Engine:
                 f"Completed step {step.step_id} in workflow {workflow_id}"
             )
             self.logger.log_debug(self.state_handler.get_workflow(workflow_id))
-        except Exception:
+        except Exception as e:
             self.logger.log_error(
                 f"Running step in workflow {workflow_id} triggered unhandled exception: {traceback.format_exc()}"
             )
+            step.result = ActionResult(
+                status=ActionStatus.FAILED,
+                errors=Error.from_exception(e),
+            )
+            wf = self.update_step(wf, step)
+            self.finalize_step(workflow_id, step)
 
     def monitor_action_progress(
         self,

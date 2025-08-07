@@ -11,6 +11,7 @@ from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field, field_validator
+from pydantic.functional_validators import model_validator
 
 
 class WorkflowStatus(MadsciBaseModel):
@@ -103,6 +104,13 @@ class WorkflowParameter(MadsciBaseModel):
     """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
     label: Optional[str] = None
     """This will use the value of a datapoint from a previous step with the matching label."""
+
+    @model_validator(mode="after")
+    def validate_feedforward_parameters(self) -> "WorkflowParameter":
+        """Assert that at most one of step_name, step_index, and label are set."""
+        if self.step_name and self.step_index:
+            raise ValueError("Cannot set both step_name and step_index for a parameter")
+        return self
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
