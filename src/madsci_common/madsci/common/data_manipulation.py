@@ -79,3 +79,23 @@ def check_for_parameters(
         if re.search(r"\$\{" + re.escape(param) + r"\}", input_string):
             return True
     return False
+
+
+def get_all_parameter_names(
+    input_string: str,
+) -> list[str]:
+    """Get all parameter names from the input string"""
+    param_names = []
+    for match in re.findall(r"((?<!\$)\$(?!\$)[A-z0-9_\-\{]*)(\})", input_string):
+        if match[0][1] == "{":
+            # * Matches the form ${parameter}
+            param_name = match[0].strip("$")
+            param_name = param_name.strip("{")
+            param_names.append(param_name)
+    for match in re.findall(
+        r"((?<!\$)\$(?!\$)[A-z0-9_\-]*)(?![A-z0-9_\-])", input_string
+    ):
+        # * Matches the form $parameter
+        param_name = match.strip("$")
+        param_names.append(param_name)
+    return list(set(param_names))

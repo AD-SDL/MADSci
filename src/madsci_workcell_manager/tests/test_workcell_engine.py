@@ -19,8 +19,8 @@ from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
-    WorkflowParameter,
     WorkflowStatus,
+    WorkflowValueParameter,
 )
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
@@ -148,7 +148,7 @@ def test_run_single_step_with_update_parameters(
     workflow = Workflow(
         name="Test Workflow",
         parameters=[
-            WorkflowParameter(
+            WorkflowValueParameter(
                 name="test_param", step_name="Test Step 1", label="test_label"
             )
         ],

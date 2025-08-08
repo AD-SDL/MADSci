@@ -2,16 +2,11 @@
 
 import json
 import time
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
-from madsci.common.data_manipulation import (
-    check_for_parameters,
-    value_substitution,
-    walk_and_replace,
-)
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.base_types import PathLike
@@ -23,7 +18,6 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.utils import new_ulid_str
 from rich import print
 
 
@@ -85,6 +79,41 @@ class WorkcellClient:
         response.raise_for_status()
         return Workflow(**response.json())
 
+    def upload_workflow(
+        self,
+        workflow: Union[PathLike, WorkflowDefinition],
+        workflow_id: Optional[str] = None,
+    ) -> str:
+        """
+        Upload a workflow definition to the Workcell Manager.
+
+        Parameters
+        ----------
+        workflow : Union[PathLike, WorkflowDefinition]
+            Either a WorkflowDefinition or a path to a YAML file of one.
+
+        Returns
+        -------
+        str
+            The ID of the uploaded workflow.
+        """
+        if isinstance(workflow, (Path, str)):
+            workflow = WorkflowDefinition.from_yaml(workflow)
+        else:
+            workflow = WorkflowDefinition.model_validate(workflow)
+
+        url = self.url + "/workflow/upload"
+        response = requests.post(
+            url,
+            data={
+                "workflow": workflow.model_dump_json(),
+                "ownership_info": get_current_ownership_info().model_dump_json(),
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def submit_workflow(
         self,
         workflow: Union[PathLike, WorkflowDefinition],
@@ -124,10 +153,9 @@ class WorkcellClient:
             workflow = WorkflowDefinition.from_yaml(workflow)
         else:
             workflow = WorkflowDefinition.model_validate(workflow)
-        insert_parameter_values(
-            workflow=workflow, parameters=parameters if parameters else {}
+        files = self._extract_files_from_workflow(
+            workflow=workflow, parameters=parameters
         )
-        files = self._extract_files_from_workflow(workflow)
         url = self.url + "/workflow"
         response = requests.post(
             url,
@@ -179,19 +207,7 @@ class WorkcellClient:
         dict[str, Path]
             A dictionary mapping unique file names to their paths.
         """
-        files = {}
-        for step in workflow.steps:
-            if step.files:
-                for file, path in step.files.items():
-                    if not check_for_parameters(str(path), workflow.parameters.keys()):
-                        unique_filename = f"{new_ulid_str()}_{file}"
-                        files[unique_filename] = path
-                        if not Path(files[unique_filename]).is_absolute():
-                            files[unique_filename] = (
-                                self.working_directory / files[unique_filename]
-                            )
-                        step.files[file] = Path(files[unique_filename]).name
-        return files
+        # TODO
 
     def submit_workflow_sequence(
         self, workflows: list[str], parameters: list[dict[str, Any]]
@@ -778,43 +794,3 @@ Options:
         url = f"{self.url}/location/{location_id}"
         response = requests.delete(url, timeout=10)
         response.raise_for_status()
-
-
-def insert_parameter_values(
-    workflow: WorkflowDefinition, parameters: dict[str, Any]
-) -> Workflow:
-    """Replace the parameter strings in the workflow with the provided values"""
-    for param in workflow.parameters:
-        if param.name in parameters and (
-            param.label is not None
-            or param.step_name is not None
-            or param.step_index is not None
-        ):
-            raise ValueError(
-                f"{param} looks like it's configured to use data from a previous step, but you provided a value during workflow submission. Either remove the value or change the parameter configuration."
-            )
-        if param.name not in parameters:
-            if param.default:
-                parameters[param.name] = param.default
-            elif not (
-                (param.step_name is not None or param.step_index is not None)
-                and param.label is not None
-            ):
-                raise ValueError(
-                    f"Workflow parameter {param.name} is required, but no value was provided and no default is set."
-                )
-    parameters = {
-        key: (str(value) if isinstance(value, PurePath) else value)
-        for key, value in parameters.items()
-    }
-    steps = []
-    for step in workflow.steps:
-        for key, val in iter(step):
-            if type(val) is str:
-                setattr(step, key, value_substitution(val, parameters))
-
-        step.args = walk_and_replace(step.args, parameters)
-        step.files = walk_and_replace(step.files, parameters)
-        step.locations = walk_and_replace(step.locations, parameters)
-        steps.append(step)
-    workflow.steps = steps

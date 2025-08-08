@@ -295,6 +295,34 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 )
         return state_handler.get_active_workflow(workflow_id)
 
+    @app.post("/workflow/new")
+    async def new_workflow_definition(
+        workflow: WorkflowDefinition,
+        ownership_info: Optional[OwnershipInfo] = None,
+    ) -> str:
+        """Upload a new workflow definition, saving it to the workcell for later use."""
+        try:
+            ownership_info = (
+                OwnershipInfo.model_validate_json(ownership_info)
+                if ownership_info
+                else OwnershipInfo()
+            )
+            with ownership_context(**ownership_info.model_dump(exclude_none=True)):
+                workcell = state_handler.get_workcell_definition()
+                workcell.add_workflow_definition(workflow)
+                workcell.to_yaml(workcell_path)
+                state_handler.set_workcell_definition(workcell)
+            return "Workflow definition added successfully."
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.error(f"Error adding workflow definition: {e}")
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error adding workflow definition: {e}",
+            ) from e
+
     @app.post("/workflow")
     async def start_workflow(
         workflow: Annotated[str, Form()],

@@ -1,17 +1,23 @@
 """Types for MADSci Worfklow running."""
 
 from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from enum import Enum
+from typing import Any, Literal, Optional, Union
 
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel
+from madsci.common.types.base_types import MadsciBaseModel, PathLike
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
-from pydantic import Field, computed_field, field_validator
-from pydantic.functional_validators import model_validator
+from pydantic import (
+    Field,
+    PositiveInt,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 
 class WorkflowStatus(MadsciBaseModel):
@@ -91,25 +97,64 @@ class WorkflowStatus(MadsciBaseModel):
         return "Unknown"
 
 
-class WorkflowParameter(MadsciBaseModel):
-    """container for a workflow parameter"""
+class WorkflowParameterType(str, Enum):
+    """Enum for the type of workflow parameter"""
+
+    VALUE = "value"
+    """A simple value parameter"""
+    FILE = "file"
+    """A file parameter, which is a parameter whose value is a file path"""
+    DATA = "data"
+    """A data flow parameter, which is a parameter that is used to pass data between steps"""
+
+
+class WorkflowValueParameter(MadsciBaseModel):
+    """Container for a workflow parameter"""
 
     name: str
     """The name of the parameter"""
+    type: Literal[WorkflowParameterType.VALUE] = Field(
+        default=WorkflowParameterType.VALUE
+    )
+    """The type of the parameter, which is always 'value'. This will be assumed if not provided."""
     default: Optional[Any] = None
-    """The default value of a parameter, if not provided, the parameter must be provided when the workflow is run"""
-    step_name: Optional[str] = None
-    """Name of a step in the workflow; this will use the value of a datapoint from the step with the matching name as the value for this parameter"""
-    step_index: Optional[str] = None
-    """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
-    label: Optional[str] = None
-    """This will use the value of a datapoint from a previous step with the matching label."""
+    """The default value of a parameter; if not provided, the parameter must be provided when the workflow is run"""
+
+
+class WorkflowFileParameter(MadsciBaseModel):
+    """Container for a file parameter, which is a parameter whose value is a file path"""
+
+    name: str
+    """The name of the parameter"""
+    type: Literal[WorkflowParameterType.FILE]
+    """The type of the parameter, which is always 'file'. This must be provided to indicate that this is a file parameter."""
+    default: Optional[PathLike] = None
+    """The default value of the parameter; if not provided, the parameter must be provided when the workflow is run"""
+
+
+class WorkflowDataParameter(MadsciBaseModel):
+    """Container for a data flow parameter, which is a parameter that is used to pass data between steps in a workflow"""
+
+    name: str
+    """The name of the parameter"""
+    type: Literal[WorkflowParameterType.DATA] = Field(
+        default=WorkflowParameterType.DATA
+    )
+    """The type of the parameter, which is always 'data'. This will be assumed if not provided."""
+    label: str
+    """The label of the data point used for this parameter"""
+    step_identifier: Optional[Union[PositiveInt, str]] = None
+    """Name or index of the step that produces this data point"""
+    datapoint_id: Optional[str] = None
+    """ID of the data point, if known. This is used to reference the data point"""
 
     @model_validator(mode="after")
-    def validate_feedforward_parameters(self) -> "WorkflowParameter":
-        """Assert that at most one of step_name, step_index, and label are set."""
-        if self.step_name and self.step_index:
-            raise ValueError("Cannot set both step_name and step_index for a parameter")
+    def validate_step_identifier(self) -> "WorkflowDataParameter":
+        """Validate that the step identifier is either a positive integer or a string"""
+        if not (self.step_identifier is None) ^ (self.datapoint_id is None):
+            raise ValueError(
+                "WorkflowDataParameter {self.name} must have one of a step_identifier or a datapoint_id"
+            )
         return self
 
 
@@ -131,14 +176,16 @@ class WorkflowDefinition(MadsciBaseModel):
     """Name of the workflow"""
     workflow_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
-    parameters: list[WorkflowParameter] = Field(default_factory=list)
-    """Inputs to the workflow"""
+    parameters: list[
+        Union[WorkflowValueParameter, WorkflowFileParameter, WorkflowDataParameter]
+    ] = Field(default_factory=list)
+    """A list of parameterized inputs to the workflow"""
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
 
     @field_validator("steps", mode="after")
     @classmethod
-    def ensure_data_label_uniqueness(cls, v: Any) -> Any:
+    def ensure_data_label_uniqueness(cls, v: list[StepDefinition]) -> Any:
         """Ensure that the names of the arguments and files are unique"""
         labels = []
         for step in v:
@@ -148,6 +195,56 @@ class WorkflowDefinition(MadsciBaseModel):
                         raise ValueError("Data labels must be unique across workflow")
                     labels.append(step.data_labels[key])
         return v
+
+    @model_validator(mode="after")
+    def validate_dataflow_parameters(self) -> "WorkflowDefinition":
+        """Validate that all parameters are provided"""
+        for param in self.parameters:
+            if isinstance(param, WorkflowDataParameter) and (
+                (
+                    isinstance(param.step_identifier, int)
+                    and param.step_identifier >= len(self.steps)
+                )
+                or (
+                    isinstance(param.step_identifier, str)
+                    and not any(
+                        step.name == param.step_identifier for step in self.steps
+                    )
+                )
+            ):
+                raise ValueError(
+                    f"WorkflowDataParameter {param.name} must be a positive integer less than the number of steps in the workflow, or a valid step name"
+                )
+        return self
+
+
+class WorkflowSubmission(WorkflowDefinition):
+    """Container for a workflow being submitted to run on the workcell"""
+
+    parameter_values: dict[str, Any] = Field(default_factory=dict)
+    """Parameter values used in this workflow run"""
+
+    @model_validator(mode="after")
+    def validate_workflow_parameters(self) -> "WorkflowSubmission":
+        """Validate that all parameters are provided and valid"""
+        for param in self.parameters:
+            if (
+                isinstance(param, WorkflowValueParameter)
+                and param.default is None
+                and param.name not in self.parameter_values
+            ):
+                raise ValueError(
+                    f"Workflow Parameter {param.name} must be provided when running the workflow"
+                )
+            if (
+                isinstance(param, WorkflowFileParameter)
+                and param.default is None
+                and param.name not in self.parameter_values
+            ):
+                raise ValueError(
+                    f"Workflow File parameter {param.name} must be provided when running the workflow"
+                )
+        return self
 
 
 class SchedulerMetadata(MadsciBaseModel):
@@ -190,6 +287,28 @@ class Workflow(WorkflowDefinition):
     """Time the workflow finished running"""
     step_definitions: list[StepDefinition] = Field(default_factory=list)
     """The original step definitions for the workflow"""
+
+    @model_validator(mode="after")
+    def validate_workflow_parameters(self) -> "Workflow":
+        """Validate that all parameters are provided"""
+        for param in self.parameters:
+            if (
+                isinstance(param, WorkflowValueParameter)
+                and param.default is None
+                and param.name not in self.parameter_values
+            ):
+                raise ValueError(
+                    f"Parameter {param.name} must be provided when running the workflow"
+                )
+            if (
+                isinstance(param, WorkflowFileParameter)
+                and param.default is None
+                and param.name not in self.parameter_values
+            ):
+                raise ValueError(
+                    f"File parameter {param.name} must be provided when running the workflow"
+                )
+        return self
 
     def get_step_by_name(self, name: str) -> Step:
         """Return the step object by its name"""

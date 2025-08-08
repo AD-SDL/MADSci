@@ -26,7 +26,7 @@ from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
     Workflow,
-    WorkflowParameter,
+    WorkflowValueParameter,
 )
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
@@ -289,7 +289,7 @@ class Engine:
                 retry_count += 1
 
     def update_parameters(
-        self, wf: Workflow, datapoint: DataPoint, parameter: WorkflowParameter
+        self, wf: Workflow, datapoint: DataPoint, parameter: WorkflowValueParameter
     ) -> Workflow:
         """updates the parameters in a workflow"""
 
