@@ -186,7 +186,7 @@ class Engine:
             node = self.state_handler.get_node(step.node)
             client = find_node_client(node.node_url)
             wf = self.update_step(wf, step)
-
+            self.add_pending_action(step)
             # * Send the action request
             response = None
 
@@ -208,7 +208,7 @@ class Engine:
                     response = request.unknown(errors=[Error.from_exception(e)])
                 else:
                     response.errors.append(Error.from_exception(e))
-
+            self.remove_pending_action(step)
             response = self.handle_response(wf, step, response)
             action_id = response.action_id
 
@@ -344,6 +344,20 @@ class Engine:
             self.state_handler.set_active_workflow(wf)
         return wf
 
+    def add_pending_action(self, step: Step) -> None:
+        """Update the step in the workflow"""
+        with self.state_handler.wc_state_lock():
+            node = self.state_handler.get_node(step.node)
+            node.action_pending_count = len(node.status.running_actions)
+            self.state_handler.set_node(step.node, node)
+
+    def remove_pending_action(self, step: Step) -> None:
+        """Update the step in the workflow"""
+        with self.state_handler.wc_state_lock():
+            node = self.state_handler.get_node(step.node)
+            node.action_pending_count = None
+            self.state_handler.set_node(step.node, node)
+
     def handle_response(
         self, wf: Workflow, step: Step, response: ActionResult
     ) -> Optional[ActionResult]:
@@ -429,6 +443,11 @@ class Engine:
             node.status = client.get_status()
             node.info = client.get_info()
             node.state = client.get_state()
+            if (
+                node.action_pending_count is not None
+                and len(node.status.running_actions) > node.action_pending_count
+            ):
+                node.action_pending_count = None
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
         except Exception as e:
