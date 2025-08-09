@@ -248,10 +248,10 @@ class Node(MadsciBaseModel, arbitrary_types_allowed=True):
         title="Node State",
         description="Detailed nodes specific state information",
     )
-    action_pending_count: Optional[int] = Field(
+    action_pending_id: Optional[str] = Field(
         default=None,
-        title="Action Pending Count",
-        description="How many actions were running on the node the last time an action was sent",
+        title="Action Pending ID",
+        description="ID of the action pending on the node from this workcell",
     )
 
     reservation: Optional["NodeReservation"] = Field(
