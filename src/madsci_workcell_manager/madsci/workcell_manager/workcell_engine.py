@@ -316,6 +316,7 @@ class Engine:
                 if (
                     parameter.step_name == step.name
                     or wf.status.current_step_index == parameter.step_index
+                    or (parameter.step_name is None and parameter.step_index is None)
                 ) and parameter.label in step.result.datapoints:
                     datapoint = step.result.datapoints[parameter.label]
                     wf = self.update_parameters(wf, datapoint, parameter)
