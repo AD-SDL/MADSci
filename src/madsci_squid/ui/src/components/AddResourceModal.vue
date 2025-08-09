@@ -84,7 +84,7 @@ function submitResource() {
       resource[field.label] = field.value
     });
     resource["base_type"] = base_type.value
-    fetch(urls.value.resource_manager.concat('resource/add'), {
+    fetch(urls.value.resource_server_url.concat('resource/add'), {
     method: "POST",
     headers: {
     'Content-Type': 'application/json'

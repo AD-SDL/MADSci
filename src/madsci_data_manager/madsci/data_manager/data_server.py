@@ -1,13 +1,14 @@
 """REST Server for the MADSci Data Manager"""
 
 import json
+import tempfile
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Callable, Optional
+from typing import Annotated, Any, Optional
 
 import uvicorn
-from fastapi import FastAPI, Form, Request, Response, UploadFile
+from fastapi import FastAPI, Form, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
@@ -17,7 +18,7 @@ from madsci.common.object_storage_helpers import (
     create_minio_client,
     upload_file_to_object_storage,
 )
-from madsci.common.ownership import ownership_context
+from madsci.common.ownership import global_ownership_info
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
@@ -51,34 +52,23 @@ def create_data_server(  # noqa: C901, PLR0915
             data_manager_definition = DataManagerDefinition()
         logger.log_info(f"Writing to data manager definition file: {def_path}")
         data_manager_definition.to_yaml(def_path)
+    global_ownership_info.manager_id = data_manager_definition.data_manager_id
+    logger = EventClient(
+        name=f"data_manager.{data_manager_definition.name}",
+    )
+    logger.log_info(data_manager_definition)
+    context = context or MadsciContext()
+    logger.log_info(context)
 
-    with ownership_context(manager_id=data_manager_definition.data_manager_id):
-        logger = EventClient(
-            name=f"data_manager.{data_manager_definition.name}",
-        )
-        logger.log_info(data_manager_definition)
-        context = context or MadsciContext()
-        logger.log_info(context)
+    if db_client is None:
+        db_client = MongoClient(data_manager_settings.db_url)
 
-        if db_client is None:
-            db_client = MongoClient(data_manager_settings.db_url)
+    # Initialize MinIO client if configuration is provided
+    minio_client = create_minio_client(object_storage_settings=object_storage_settings)
 
-        # Initialize MinIO client if configuration is provided
-        minio_client = create_minio_client(
-            object_storage_settings=object_storage_settings
-        )
-
-        app = FastAPI()
-        datapoints_db = db_client["madsci_data"]
-        datapoints = datapoints_db["datapoints"]
-
-        # Middleware to set ownership context for each request
-        @app.middleware("http")
-        async def ownership_middleware(
-            request: Request, call_next: Callable
-        ) -> Response:
-            with ownership_context(manager_id=data_manager_definition.data_manager_id):
-                return await call_next(request)
+    app = FastAPI()
+    datapoints_db = db_client["madsci_data"]
+    datapoints = datapoints_db["datapoints"]
 
     @app.get("/")
     @app.get("/info")
@@ -125,7 +115,6 @@ def create_data_server(  # noqa: C901, PLR0915
                 if datapoint_obj.data_type.value == "file" and minio_client is not None:
                     # Use MinIO object storage instead of local storage
                     # First, save file temporarily to upload to MinIO
-                    import tempfile
 
                     with tempfile.NamedTemporaryFile(
                         delete=False, suffix=f"_{file.filename}"
@@ -232,7 +221,7 @@ def create_data_server(  # noqa: C901, PLR0915
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

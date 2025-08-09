@@ -4,12 +4,14 @@ from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field, field_validator
+from pydantic.functional_validators import model_validator
 
 
 class WorkflowStatus(MadsciBaseModel):
@@ -93,15 +95,22 @@ class WorkflowParameter(MadsciBaseModel):
     """container for a workflow parameter"""
 
     name: str
-    """the name of the parameter"""
+    """The name of the parameter"""
     default: Optional[Any] = None
-    """ the default value of the parameter"""
-    step_name: Optional[str]
-    """name of which step to pull the parameter from"""
-    step_index: Optional[str]
-    """index of which step to pull the parameter from"""
-    label: Optional[str]
-    """which data_label in the step to """
+    """The default value of a parameter, if not provided, the parameter must be provided when the workflow is run"""
+    step_name: Optional[str] = None
+    """Name of a step in the workflow; this will use the value of a datapoint from the step with the matching name as the value for this parameter"""
+    step_index: Optional[str] = None
+    """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
+    label: Optional[str] = None
+    """This will use the value of a datapoint from a previous step with the matching label."""
+
+    @model_validator(mode="after")
+    def validate_feedforward_parameters(self) -> "WorkflowParameter":
+        """Assert that at most one of step_name, step_index, and label are set."""
+        if self.step_name and self.step_index:
+            raise ValueError("Cannot set both step_name and step_index for a parameter")
+        return self
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
@@ -122,7 +131,7 @@ class WorkflowDefinition(MadsciBaseModel):
     """Name of the workflow"""
     workflow_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
-    parameters: Optional[list[WorkflowParameter]] = Field(default_factory=list)
+    parameters: list[WorkflowParameter] = Field(default_factory=list)
     """Inputs to the workflow"""
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
@@ -179,8 +188,6 @@ class Workflow(WorkflowDefinition):
     """Time the workflow started running"""
     end_time: Optional[datetime] = None
     """Time the workflow finished running"""
-    duration: Optional[timedelta] = None
-    """Duration of the workflow's run"""
     step_definitions: list[StepDefinition] = Field(default_factory=list)
     """The original step definitions for the workflow"""
 
@@ -219,4 +226,49 @@ class Workflow(WorkflowDefinition):
             raise KeyError(f"Label {label} not found in workflow run {self.run_id}")
         return ids
 
+    @computed_field
+    @property
+    def duration(self) -> Optional[timedelta]:
+        """Calculate the duration of the workflow run"""
+        if self.start_time and self.end_time:
+            return self.end_time - self.start_time
+        return None
+
     is_ulid = field_validator("workflow_id")(ulid_validator)
+
+    @computed_field
+    @property
+    def duration_seconds(self) -> Optional[float]:
+        """Calculate the duration of the workflow in seconds."""
+        if self.duration:
+            return self.duration.total_seconds()
+        return None
+
+    @computed_field
+    @property
+    def completed_steps(self) -> int:
+        """Count of completed steps."""
+        return sum(1 for step in self.steps if step.status == ActionStatus.SUCCEEDED)
+
+    @computed_field
+    @property
+    def failed_steps(self) -> int:
+        """Count of failed steps."""
+        return sum(1 for step in self.steps if step.status == ActionStatus.FAILED)
+
+    @computed_field
+    @property
+    def skipped_steps(self) -> int:
+        """Count of skipped steps."""
+        return sum(1 for step in self.steps if step.status == ActionStatus.CANCELLED)
+
+    @computed_field
+    @property
+    def step_statistics(self) -> dict[str, int]:
+        """Complete step statistics."""
+        return {
+            "completed_steps": self.completed_steps,
+            "failed_steps": self.failed_steps,
+            "skipped_steps": self.skipped_steps,
+            "total_steps": len(self.steps),
+        }

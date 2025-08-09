@@ -1,0 +1,21 @@
+name: Mix Colors Workflow
+
+metadata:
+  author: Tobias Ginsburg
+  info: Workflow to test feedforward data handling
+  version: 0.1
+
+parameters:
+  - name: test_file
+    step_name: Generate File
+    label: example_file
+
+steps:
+  - name: Generate File
+    node: platereader_1
+    action: create_plate_file
+  - name: Read File
+    node: liquidhandler_1
+    action: run_protocol
+    files:
+      protocol: "./test.txt"

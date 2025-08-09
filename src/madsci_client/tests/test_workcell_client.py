@@ -74,21 +74,29 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     """Fixture for WorkcellClient patched to use TestClient."""
     with patch("madsci.client.workcell_client.requests") as mock_requests:
 
+        def add_ok_property(resp: Response) -> Response:
+            if not hasattr(resp, "ok"):
+                resp.ok = resp.status_code < 400
+            return resp
+
         def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
             kwargs.pop("timeout", None)
-            return test_client.post(*args, **kwargs)
+            resp = test_client.post(*args, **kwargs)
+            return add_ok_property(resp)
 
         mock_requests.post.side_effect = post_no_timeout
 
         def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
             kwargs.pop("timeout", None)
-            return test_client.get(*args, **kwargs)
+            resp = test_client.get(*args, **kwargs)
+            return add_ok_property(resp)
 
         mock_requests.get.side_effect = get_no_timeout
 
         def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
             kwargs.pop("timeout", None)
-            return test_client.delete(*args, **kwargs)
+            resp = test_client.delete(*args, **kwargs)
+            return add_ok_property(resp)
 
         mock_requests.delete.side_effect = delete_no_timeout
 
@@ -187,7 +195,7 @@ def test_get_location(client: WorkcellClient) -> None:
 def test_add_location(client: WorkcellClient) -> None:
     """Test adding a location."""
     location = Location(location_name="test_location2")
-    added_location = client.add_location(location)
+    added_location = client.add_location(location, permanent=False)
     assert added_location.location_id == location.location_id
     assert added_location.location_name == location.location_name
 
@@ -195,7 +203,7 @@ def test_add_location(client: WorkcellClient) -> None:
 def test_attach_resource_to_location(client: WorkcellClient) -> None:
     """Test attaching a resource to a location."""
     location = Location(location_name="test_location3")
-    client.add_location(location)
+    client.add_location(location, permanent=False)
     mock_resource_id = new_ulid_str()
     updated_location = client.attach_resource_to_location(
         location.location_id, mock_resource_id

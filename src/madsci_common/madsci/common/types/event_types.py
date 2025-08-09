@@ -28,6 +28,14 @@ class EventLogLevel(int, Enum):
     ERROR = logging.ERROR
     CRITICAL = logging.CRITICAL
 
+    @classmethod
+    def _missing_(cls, value: Union[str, int]) -> "EventLogLevel":
+        """Handle case-insensitive matching for log levels."""
+        if isinstance(value, str):
+            value = value.upper()
+            value = value.replace("EVENTLOGLEVEL.", "")
+        return cls[value]
+
 
 class EventManagerSettings(
     MadsciBaseSettings,
@@ -280,4 +288,119 @@ class EventManagerDefinition(ManagerDefinition):
         title="Manager Type",
         description="The type of the event manager",
         default=ManagerType.EVENT_MANAGER,
+    )
+
+
+class NodeUtilizationData(MadsciBaseModel):
+    """Utilization data for a single node."""
+
+    node_id: str = Field(
+        title="Node ID",
+        description="The unique identifier for the node.",
+    )
+    total_time: float = Field(
+        title="Total Time",
+        description="Total time tracked for this node in seconds.",
+        default=0.0,
+    )
+    busy_time: float = Field(
+        title="Busy Time",
+        description="Time the node spent in busy state in seconds.",
+        default=0.0,
+    )
+    idle_time: float = Field(
+        title="Idle Time",
+        description="Time the node spent in idle state in seconds.",
+        default=0.0,
+    )
+    error_time: float = Field(
+        title="Error Time",
+        description="Time the node spent in error state in seconds.",
+        default=0.0,
+    )
+    active_time: float = Field(
+        title="Active Time",
+        description="Time the node spent in active/available state in seconds.",
+        default=0.0,
+    )
+    inactive_time: float = Field(
+        title="Inactive Time",
+        description="Time the node spent in inactive/unavailable state in seconds.",
+        default=0.0,
+    )
+    active_state: str = Field(
+        title="Active State",
+        description="Current active state of the node (active, inactive, unknown).",
+        default="unknown",
+    )
+
+    last_state_change: Optional[datetime] = Field(
+        title="Last State Change",
+        description="Timestamp of the last state change for this node.",
+        default=None,
+    )
+    last_active_change: Optional[datetime] = Field(
+        title="Last Active State Change",
+        description="Timestamp of the last active state change for this node.",
+        default=None,
+    )
+    current_state: str = Field(
+        title="Current State",
+        description="Current state of the node (idle, busy, error, unknown).",
+        default="unknown",
+    )
+    active_actions: set[str] = Field(
+        title="Active Actions",
+        description="Set of currently active action IDs on this node.",
+        default_factory=set,
+    )
+    utilization_percentage: float = Field(
+        title="Utilization Percentage",
+        description="Calculated utilization percentage for this node.",
+        default=0.0,
+    )
+
+
+class SystemUtilizationData(MadsciBaseModel):
+    """System-wide utilization data."""
+
+    total_time: float = Field(
+        title="Total Time",
+        description="Total time tracked for the system in seconds.",
+        default=0.0,
+    )
+    active_time: float = Field(
+        title="Active Time",
+        description="Time the system spent in active state in seconds.",
+        default=0.0,
+    )
+    idle_time: float = Field(
+        title="Idle Time",
+        description="Time the system spent in idle state in seconds.",
+        default=0.0,
+    )
+    last_state_change: Optional[datetime] = Field(
+        title="Last State Change",
+        description="Timestamp of the last system state change.",
+        default=None,
+    )
+    current_state: str = Field(
+        title="Current State",
+        description="Current state of the system (idle, active).",
+        default="idle",
+    )
+    active_experiments: set[str] = Field(
+        title="Active Experiments",
+        description="Set of currently active experiment IDs.",
+        default_factory=set,
+    )
+    active_workflows: set[str] = Field(
+        title="Active Workflows",
+        description="Set of currently active workflow IDs.",
+        default_factory=set,
+    )
+    utilization_percentage: float = Field(
+        title="Utilization Percentage",
+        description="Calculated system utilization percentage.",
+        default=0.0,
     )
