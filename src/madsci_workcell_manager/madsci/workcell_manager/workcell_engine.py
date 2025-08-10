@@ -213,7 +213,8 @@ class Engine:
                     response = request.unknown(errors=[Error.from_exception(e)])
                 else:
                     response.errors.append(Error.from_exception(e))
-            self.remove_pending_action(step)
+            finally:
+                self.remove_pending_action(step)
             response = self.handle_response(wf, step, response)
             action_id = response.action_id
 
@@ -390,14 +391,14 @@ class Engine:
         """Update the step in the workflow"""
         with self.state_handler.wc_state_lock():
             node = self.state_handler.get_node(step.node)
-            node.action_pending_id = action_id
+            node.pending_action_id = action_id
             self.state_handler.set_node(step.node, node)
 
     def remove_pending_action(self, step: Step) -> None:
         """Update the step in the workflow"""
         with self.state_handler.wc_state_lock():
             node = self.state_handler.get_node(step.node)
-            node.action_pending_id = None
+            node.pending_action_id = None
             self.state_handler.set_node(step.node, node)
 
     def handle_response(
@@ -489,8 +490,8 @@ class Engine:
             node.status = client.get_status()
             node.info = client.get_info()
             node.state = client.get_state()
-            if node.action_pending_id in node.status.running_actions:
-                node.action_pending_id = None
+            if node.pending_action_id in node.status.running_actions:
+                node.pending_action_id = None
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
         except Exception as e:
