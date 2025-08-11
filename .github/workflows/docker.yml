@@ -102,15 +102,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Extract the first tag from the newline-delimited list
-      - name: Process image metadata
+      - name: Parse tag
         run: |
           echo "TAG=$(echo '${{ needs.build_and_publish_madsci.outputs.image_tags }}' | head -n1)" >> $GITHUB_ENV &&
-          echo "IMAGE_NAME=${{ env.IMAGE_NAME }}" >> $GITHUB_ENV
 
       # Pull the base image built in the previous job using the first tag
       - name: Pull base image for dashboard
         run: |
-          docker pull "${{env.REGISTRY}}/${IMAGE_NAME,,}:${TAG}"
+          docker pull ${TAG}
 
       - name: Extract Docker metadata
         id: meta
