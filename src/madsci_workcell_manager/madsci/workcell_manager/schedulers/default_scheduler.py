@@ -115,6 +115,12 @@ class Scheduler(AbstractScheduler):
             metadata.reasons.append(
                 f"Node {step.node} not ready: {node.status.description}"
             )
+        if node.pending_action_id is not None:
+            metadata.ready_to_run = False
+            metadata.reasons.append(
+                f"Node {step.node} has a pending action that needs to be resolved"
+            )
+
         if node.reservation is not None and node.reservation.check(wf.ownership_info):
             metadata.ready_to_run = False
             metadata.reasons.append(
