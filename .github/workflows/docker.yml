@@ -106,7 +106,7 @@ jobs:
         id: parse_tag
         run: |
           echo "TAG=$(echo '${{ needs.build_and_publish_madsci.outputs.image_tags }}' | head -n1)" >> $GITHUB_ENV &&
-          echo "TAG=${TAG}" >> $GITHUB_OUTPUT
+          echo "TAG=$(echo '${{ needs.build_and_publish_madsci.outputs.image_tags }}' | head -n1)" >> "$GITHUB_OUTPUT"
 
       # Pull the base image built in the previous job using the first tag
       - name: Pull base image for dashboard
