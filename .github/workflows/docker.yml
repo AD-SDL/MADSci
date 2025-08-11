@@ -133,5 +133,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build_and_publish_madsci.outputs.image_tag }}
+          cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: BASE_IMAGE=${TAG}

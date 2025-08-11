@@ -1,4 +1,5 @@
-FROM ghcr.io/ad-sdl/madsci
+ARG BASE_IMAGE=ghcr.io/ad-sdl/madsci:latest
+FROM ${BASE_IMAGE}
 LABEL org.opencontainers.image.source=https://github.com/AD-SDL/MADSci/
 LABEL org.opencontainers.image.description="The Modular Autonomous Discovery for Science (MADSci) toolkit's docker image which includes a compiled version of the Dashboard."
 LABEL org.opencontainers.image.licenses=MIT
