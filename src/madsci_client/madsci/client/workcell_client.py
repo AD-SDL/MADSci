@@ -2,12 +2,16 @@
 
 import json
 import time
-from pathlib import Path, PosixPath, PurePath, WindowsPath
+from pathlib import Path, PurePath
 from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
-from madsci.common.data_manipulation import value_substitution, walk_and_replace
+from madsci.common.data_manipulation import (
+    check_for_parameters,
+    value_substitution,
+    walk_and_replace,
+)
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.base_types import PathLike
@@ -179,13 +183,14 @@ class WorkcellClient:
         for step in workflow.steps:
             if step.files:
                 for file, path in step.files.items():
-                    unique_filename = f"{new_ulid_str()}_{file}"
-                    files[unique_filename] = path
-                    if not Path(files[unique_filename]).is_absolute():
-                        files[unique_filename] = (
-                            self.working_directory / files[unique_filename]
-                        )
-                    step.files[file] = Path(files[unique_filename]).name
+                    if not check_for_parameters(str(path), workflow.parameters.keys()):
+                        unique_filename = f"{new_ulid_str()}_{file}"
+                        files[unique_filename] = path
+                        if not Path(files[unique_filename]).is_absolute():
+                            files[unique_filename] = (
+                                self.working_directory / files[unique_filename]
+                            )
+                        step.files[file] = Path(files[unique_filename]).name
         return files
 
     def submit_workflow_sequence(
@@ -780,18 +785,28 @@ def insert_parameter_values(
 ) -> Workflow:
     """Replace the parameter strings in the workflow with the provided values"""
     for param in workflow.parameters:
+        if param.name in parameters and (
+            param.label is not None
+            or param.step_name is not None
+            or param.step_index is not None
+        ):
+            raise ValueError(
+                f"{param} looks like it's configured to use data from a previous step, but you provided a value during workflow submission. Either remove the value or change the parameter configuration."
+            )
         if param.name not in parameters:
             if param.default:
                 parameters[param.name] = param.default
-            else:
+            elif not (
+                (param.step_name is not None or param.step_index is not None)
+                and param.label is not None
+            ):
                 raise ValueError(
-                    "Workflow parameter: "
-                    + param.name
-                    + " not provided, and no default value is defined."
+                    f"Workflow parameter {param.name} is required, but no value was provided and no default is set."
                 )
-    for key, value in parameters.items():
-        if isinstance(value, (Path, PurePath, WindowsPath, PosixPath)):
-            parameters[key] = str(value)
+    parameters = {
+        key: (str(value) if isinstance(value, PurePath) else value)
+        for key, value in parameters.items()
+    }
     steps = []
     for step in workflow.steps:
         for key, val in iter(step):

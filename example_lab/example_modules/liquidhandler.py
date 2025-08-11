@@ -1,5 +1,6 @@
 """A fake liquid handler module for testing."""
 
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -36,6 +37,7 @@ class LiquidHandlerInterface:
         self.logger.log(
             f"Running command {command} on device number {self.device_number}."
         )
+        time.sleep(2)  # Simulate command execution
 
 
 class LiquidHandlerNode(RestNode):

@@ -99,6 +99,8 @@ ignore = [
     "COM812", # Don't fight over trailing commas
     "PLR0913", # Allow for a reasonable number of arguments
     "PLR2004", # Magic value used in comparison
+    "UP006", # Ignoring errors for typing types such as Dict or List
+    "UP035", # Ignoring errors for typing types such as Dict or List
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.

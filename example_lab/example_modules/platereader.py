@@ -1,5 +1,7 @@
 """A fake plate reader module for testing."""
 
+import time
+from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
@@ -37,6 +39,7 @@ class PlateReaderInterface:
         self.logger.log(
             f"Running command {command} on device number {self.device_number}."
         )
+        time.sleep(2)  # Simulate command execution
 
 
 class PlateReaderNode(RestNode):
@@ -67,8 +70,20 @@ class PlateReaderNode(RestNode):
         self,
     ) -> ActionResult:
         """Run a command on the plate reader."""
-
+        time.sleep(5)
         return ActionSucceeded(data={"example_data": {"example": "data"}})
+
+    @action
+    def create_plate_file(
+        self,
+    ) -> ActionResult:
+        """Run a command on the plate reader."""
+
+        with (Path.home() / "test.txt").open("w") as f:
+            self.logger.log_info(f.write("test"))
+        path = str(Path.home() / "test.txt")
+
+        return ActionSucceeded(files={"example_file": path})
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the plate reader"""

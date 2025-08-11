@@ -58,6 +58,7 @@ from madsci.common.utils import (
     pretty_type_repr,
     repeat_on_interval,
     threaded_daemon,
+    to_snake_case,
 )
 from pydantic import ValidationError
 from semver import Version
@@ -118,10 +119,10 @@ class AbstractNode:
                 self.logger.log_warning(
                     f"Node definition file '{node_definition_path}' not found, using default node definition."
                 )
+                module_name = to_snake_case(self.__class__.__name__)
+                node_name = str(Path(node_definition_path).stem)
                 self.node_definition = NodeDefinition(
-                    module_name=self.__class__.__name__,
-                    node_name=self.__class__.__name__,
-                    module_version=self.module_version,
+                    node_name=node_name, module_name=module_name
                 )
             else:
                 self.node_definition = NodeDefinition.from_yaml(node_definition_path)

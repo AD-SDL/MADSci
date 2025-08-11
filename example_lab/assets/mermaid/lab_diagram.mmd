@@ -1,0 +1,38 @@
+---
+config:
+  layout: dagre
+---
+flowchart TD
+    A["Lab Manager"] -- "<span style=padding-left: 8px; padding-right: 8px; text-align: center;>REST API</span> " --- n1["Event Manager"]
+    A -- "<span style=padding-left:>REST API</span>" --- n2["Data Manager"] & B("Workcell Manager") & n3["Experiment Manager"]
+    B -- "<span style=padding-left:>Node Protocol (REST)</span>" --- n5["Arm Node <br>"] & n7["Platereader Node"]
+    B -- Node Protocol (REST) --- n6["Liquidhandler Node"]
+    n5 -- Robotic Arm Driver/API --- n8["Robotic Arm"]
+    n6 -- Liquidhandler Driver/API --- n9["Liquidhandler"]
+    n7 -- Platereader Driver API --- n10["Platereader"]
+    A -- REST API --> n11["Resource Manager"]
+     n1:::Sky
+     n2:::Sky
+     B:::Sky
+     n3:::Sky
+     n5:::Aqua
+     n7:::Aqua
+     n6:::Aqua
+     n8:::Peach
+     n9:::Peach
+     n10:::Peach
+     n11:::Sky
+    classDef Sky stroke-width:1px, stroke-dasharray:none, stroke:#374D7C, fill:#E2EBFF, color:#374D7C
+    classDef Aqua stroke-width:1px, stroke-dasharray:none, stroke:#46EDC8, fill:#DEFFF8, color:#378E7A
+    classDef Peach stroke-width:1px, stroke-dasharray:none, stroke:#FBB35A, fill:#FFEFDB, color:#8F632D
+    linkStyle 0 stroke:#2962FF,fill:none
+    linkStyle 1 stroke:#2962FF,fill:none
+    linkStyle 2 stroke:#2962FF,fill:none
+    linkStyle 3 stroke:#2962FF,fill:none
+    linkStyle 4 stroke:#00C853,fill:none
+    linkStyle 5 stroke:#00C853,fill:none
+    linkStyle 6 stroke:#00C853,fill:none
+    linkStyle 7 stroke:#FF6D00,fill:none
+    linkStyle 8 stroke:#FF6D00,fill:none
+    linkStyle 9 stroke:#FF6D00,fill:none
+    linkStyle 10 stroke:#2962FF,fill:none

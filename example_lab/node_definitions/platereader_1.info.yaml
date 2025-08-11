@@ -1,5 +1,5 @@
 node_name: platereader_1
-node_id: 01JR1CGN7GXM8JN1X1GT23ZQ5M
+node_id: 01JYFEHVHFXWT4RK3WNEPTPRPG
 node_description: The plate reader for the example lab
 node_type: device
 module_name: platereader
@@ -33,8 +33,17 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+  create_plate_file:
+    name: create_plate_file
+    description: Run a command on the plate reader.
+    args: {}
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
 config:
-  node_definition: node_definitions/platereader_1.node.yaml
+  node_definition: ../node_definitions/platereader_1.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
@@ -95,7 +104,6 @@ config_schema:
       title: Node URL
       type: string
     uvicorn_kwargs:
-      additionalProperties: true
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
