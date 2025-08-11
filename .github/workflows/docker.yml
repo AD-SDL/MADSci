@@ -104,7 +104,7 @@ jobs:
       # Extract the first tag from the newline-delimited list
       - name: Parse tag
         run: |
-          echo "TAG=$(echo '${{ needs.build_and_publish_madsci.outputs.image_tags }}' | head -n1)" >> $GITHUB_ENV &&
+          echo "TAG=$(echo '${{ needs.build_and_publish_madsci.outputs.image_tags }}' | head -n1)" >> $GITHUB_ENV
 
       # Pull the base image built in the previous job using the first tag
       - name: Pull base image for dashboard
