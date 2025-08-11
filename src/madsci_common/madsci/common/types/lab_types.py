@@ -31,7 +31,7 @@ class LabManagerSettings(
         alias="lab_server_url",  # * Don't double prefix
     )
     dashboard_files_path: Optional[PathLike] = Field(
-        default=Path("~") / "MADSci" / "src" / "madsci_squid" / "ui" / "dist",
+        default=Path("~") / "MADSci" / "ui" / "dist",
         title="Dashboard Static Files Path",
         description="Path to the static files for the dashboard. Set to None to disable the dashboard.",
     )
