@@ -73,7 +73,7 @@ jobs:
           cache-to: type=gha,mode=max
 
     outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
+      image_tag: ${{ steps.meta.outputs.tags[0] }}
       image_tags: ${{ steps.meta.outputs.tags }}
 
   build_and_publish_madsci_dashboard:
