@@ -110,7 +110,10 @@ jobs:
       # Pull the base image built in the previous job using the first tag
       - name: Pull base image for dashboard
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.set_base_image_tag.outputs.tag }}
+          reg="${{ env.REGISTRY }}"
+          img="${{ env.IMAGE_NAME }}"
+          tag="${{ steps.set_base_image_tag.outputs.tag }}"
+          docker pull "${reg,,}/${img,,}:${tag}"
 
       - name: Extract Docker metadata
         id: meta
