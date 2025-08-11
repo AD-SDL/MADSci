@@ -73,7 +73,6 @@ jobs:
           cache-to: type=gha,mode=max
 
     outputs:
-      image_tag: ${{ steps.meta.outputs.tags[0] }}
       image_tags: ${{ steps.meta.outputs.tags }}
 
   build_and_publish_madsci_dashboard:
@@ -102,11 +101,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Pull the base image built in the previous job using the same tag
+      # Extract the first tag from the newline-delimited list
+      - name: Set base image tag
+        id: set_base_image_tag
+        run: |
+          echo "tag=$(echo '${{ needs.build_and_publish_madsci.outputs.image_tags }}' | head -n1)" >> $GITHUB_OUTPUT
+
+      # Pull the base image built in the previous job using the first tag
       - name: Pull base image for dashboard
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build_and_publish_madsci.outputs.image_tag }} || \
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build_and_publish_madsci.outputs.image_tag }} || true
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.set_base_image_tag.outputs.tag }}
 
       - name: Extract Docker metadata
         id: meta

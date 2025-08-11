@@ -1,0 +1,16 @@
+---
+config:
+  theme: redux
+  layout: elk
+---
+flowchart LR
+    n3["Action Requests (name, arguments, files, etc)"] --> n1["Node"]
+    n1 --> n4["Action Results (status, data, files, errors)"] & n5["State (joint positions, sensor values, etc)"] & n6["Node Status (busy, ready, errored, etc)"] & n8["Logs and Events"]
+    n7["Admin Commands (pause, resume, cancel, etc)"] --> n1
+    n3@{ shape: text}
+    n1@{ shape: rounded}
+    n4@{ shape: text}
+    n5@{ shape: text}
+    n6@{ shape: text}
+    n8@{ shape: text}
+    n7@{ shape: text}
