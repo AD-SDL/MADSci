@@ -68,11 +68,17 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-/// <reference path="../store.d.ts" />
-import { active_workflows, archived_workflows,  experiments } from "@/store";
 import { VDataTable } from 'vuetify/components';
+
+/// <reference path="../store.d.ts" />
+import {
+  active_workflows,
+  archived_workflows,
+  experiments,
+} from '@/store';
 import { Experiment } from '@/types/experiment_types';
-import {Workflow} from '@/workflow_types'
+import { Workflow } from '@/types/workflow_types';
+
 const sortBy: VDataTable['sortBy'] = [{ key: 'started_at', order: 'desc' }];
 
 const arg_headers = [

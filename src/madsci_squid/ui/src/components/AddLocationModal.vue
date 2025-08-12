@@ -14,7 +14,7 @@
           {{ key }} : {{ value}}
         </div>
         <div>
-        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state.nodes)"
+        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state?.nodes ?? {})"
                           dense>
 
 
@@ -72,8 +72,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { urls  } from "@/store";
-import { workcell_state  } from "../store";
+
+import { urls } from '@/store';
+
+import { workcell_state } from '../store';
 
 const new_name = ref()
 const base_type = ref()

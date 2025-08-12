@@ -153,11 +153,13 @@ class ObjectStorageDataPoint(DataPoint):
     )
     path: PathLike
     """Path to the file"""
-    bucket_name: str = Field(
-        default=None, description="Name of the bucket containing the object"
+    bucket_name: Optional[str] = Field(
+        default=None, 
+        description="Name of the bucket containing the object"
     )
-    object_name: str = Field(
-        default=None, description="Path/key of the object within the bucket"
+    object_name: Optional[str] = Field(
+        default=None, 
+        description="Path/key of the object within the bucket"
     )
     content_type: Optional[str] = Field(
         None, description="MIME type of the stored object"
