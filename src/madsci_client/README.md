@@ -15,14 +15,17 @@ As MADSci is designed to support multiple communications protocols, we provide a
 
 ### REST Client
 
-The RestNodeClient class allows you to communicate with and control any server implementing the MADSci Node standard (see [MADSci Node Module](../madsci_node_module/README.md)). See a basic example below, or the `node_notebook.ipynb` in the [MADSci Examples](https://github.com/ad-sdl/MADSci_Examples).
+Communicate with MADSci Nodes via REST API:
 
 ```python
 from madsci.client.node.rest_node_client import RestNodeClient
 
 client = RestNodeClient(url="http://example:2000")
-client.get_status()
+status = client.get_status()
+result = client.execute_action("my_action", {"param": "value"})
 ```
+
+**Examples**: See [example_lab/notebooks/node_notebook.ipynb](../../example_lab/notebooks/node_notebook.ipynb) for detailed usage.
 
 ## Event Client
 

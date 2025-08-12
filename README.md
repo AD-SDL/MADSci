@@ -36,16 +36,58 @@ MADSci is made up of a number of different modular components, each of which can
 - [Data Manager](./src/madsci_data_manager/README.md): handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis)
 - [Squid Lab Manager](./src/madsci_squid/README.md): a central lab configuration manager and dashboard provider for MADSci-powered labs.
 
-## Python
+## Installation
 
-We provide python packages via the [Python Package Index](https://pypi.org/search/?q=madsci) for each of the MADSci system components. See the individual components for information about how to install and use their corresponding python package.
+### Python Packages
 
-## Docker
+All MADSci components are available via [PyPI](https://pypi.org/search/?q=madsci). Install individual components as needed:
 
-We provide docker images to make containerizing and orchestrating your labs as easy and robust as possible. Currently, we provide:
+```bash
+# Core components
+pip install madsci.common          # Shared types and utilities
+pip install madsci.client          # Client libraries
 
-- [ghcr.io/ad-sdl/madsci](https://github.com/orgs/AD-SDL/packages/container/package/madsci): base docker image with the full set of MADSci python packages installed and available. You can use this image as a base for your own Manager, Experiment Application, or Node docker containers.
-- [ghcr.io/ad-sdl/madsci_dashboard](https://github.com/orgs/AD-SDL/packages/container/package/madsci_dashboard): extends the base image to add the web-based dashboard's prebuilt static files. Should be used for running your Squid Lab Manager if you want to host the MADSci Dashboard.
+# Manager services
+pip install madsci.event_manager    # Event logging and querying
+pip install madsci.workcell_manager # Workflow coordination
+pip install madsci.resource_manager # Resource tracking
+pip install madsci.data_manager     # Data capture and storage
+pip install madsci.experiment_manager # Experiment management
+
+# Lab infrastructure
+pip install madsci.squid           # Lab manager with dashboard
+pip install madsci.node_module      # Node development framework
+```
+
+### Docker Images
+
+We provide pre-built Docker images for easy deployment:
+
+- **[ghcr.io/ad-sdl/madsci](https://github.com/orgs/AD-SDL/packages/container/package/madsci)**: Base image with all MADSci packages. Use as foundation for custom services.
+- **[ghcr.io/ad-sdl/madsci_dashboard](https://github.com/orgs/AD-SDL/packages/container/package/madsci_dashboard)**: Extends base image with web dashboard for lab management.
+
+### Quick Start
+
+Try MADSci with our complete example lab:
+
+```bash
+git clone https://github.com/AD-SDL/MADSci.git
+cd MADSci
+docker compose up  # Starts all services with example configuration
+```
+
+Access the dashboard at `http://localhost:8000` to monitor your virtual lab.
+
+## Configuration
+
+MADSci uses environment variables for configuration with hierarchical precedence. Key patterns:
+
+- **Service URLs**: Each manager defaults to `localhost` with specific ports (Event: 8001, Experiment: 8002, etc.)
+- **Database connections**: MongoDB/PostgreSQL on localhost by default
+- **File storage**: Defaults to `~/.madsci/` subdirectories
+- **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`)
+
+See [Configuration.md](./Configuration.md) for comprehensive options and [example_lab/](./example_lab/) for working configurations.
 
 ## Roadmap
 
@@ -54,38 +96,117 @@ We're working on bringing the following additional components to MADSci:
 - **Auth Manager**: For handling authentication and user and group management for an autonomous lab.
 - **Transfer Manager**: For coordinating resource movement in a lab.
 
-## Getting Started with MADSci
+## Getting Started
 
-To get started with MADSci, we recommend checking out our [MADSci Examples Repository](https://github.com/AD-SDL/MADSci_Examples). There you'll find Jupyter Notebooks walking through the core concepts and how to leverage MADSci to build your autonomous laboratory and experiments.
+### Learning Resources
+
+1. **[Example Lab](./example_lab/)**: Complete working lab with virtual instruments (robot arm, liquid handler, plate reader)
+2. **[Example Notebooks](./example_lab/notebooks)**: Jupyter notebooks covering core concepts and implementation patterns, included in the example lab
+3. **Configuration examples**: See [example_lab/managers/](./example_lab/managers/) for manager configurations
+
+### Common Usage Patterns
+
+**Starting a basic lab:**
+```bash
+# Use our example lab as a starting point
+cp -r example_lab my_lab
+cd my_lab
+# Modify configurations in managers/ directory
+docker compose up
+```
+
+**Creating custom nodes:**
+```python
+# See example_lab/example_modules/ for reference implementations
+from madsci.node_module import AbstractNodeModule
+
+class MyInstrument(AbstractNodeModule):
+    def my_action(self, param1: str) -> dict:
+        # Your instrument control logic
+        return {"result": "success"}
+```
+
+**Submitting workflows:**
+```python
+# See example_lab/workflows/ for workflow definitions
+from madsci.client.workcell_client import WorkcellClient
+
+client = WorkcellClient("http://localhost:8005")
+result = client.submit_workflow("path/to/workflow.yaml")
+```
 
 ## Developer Guide
 
-### Environment Setup
+### Prerequisites
 
-Some notes for setting up a development environment for the MADSci core packages:
+- **Python 3.9+**: Required for all MADSci components
+- **[PDM](https://pdm-project.org/)**: For dependency management and virtual environments
+- **[Docker](https://docs.docker.com/engine/install/)**: Required for services and integration tests
+  - Alternatives: [Rancher Desktop](https://rancherdesktop.io/), [Podman](https://podman.io/)
+- **[just](https://github.com/casey/just)**: Task runner for development commands
+- **Node.js/npm**: Only needed for dashboard development
 
-- [Clone the Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository)
-    - If you want to contribute back, or have your own version of the code, consider [Forking the Repository](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) first
-- [Install Python](https://www.python.org/downloads/)
-    - We use [PDM](https://pdm-project.org/latest/) to make installing the `madsci` python packages and managing dependencies easier
-    - Alternatively, we recommend using [Virtual Environments](https://realpython.com/python-virtual-environments-a-primer/)
-- To build and/or use the MADSci docker containers, install [Docker](https://docs.docker.com/engine/install/)
-    - You only need the Docker Container Engine, which can be installed standalone on Linux; on Mac or Windows, you'll need to install Docker Desktop or an alternative
-    - If your organization doesn't allow Docker Desktop, or if you simply prefer an open source alternative, we recommend [Rancher Desktop](https://rancherdesktop.io/) or [Podman](https://podman.io/)
-- We use the [just](https://github.com/casey/just) command runner for developer helper commands
-    - To see all available commands, run `just list` or look at the [justfile](./.justfile) (useful even if you don't want to use just)
-- If you want to make changes to the Squid Dashboard, [install npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
-    - Optionally, install [yarn](https://yarnpkg.com/getting-started/install) for faster package installation
-- We use [pre-commit](https://pre-commit.com/) to run automated linting, formatting, and other checks for code quality and consistency
+### Quick Setup
 
-If you use an IDE like Visual Studio Code and want a quick way to bootstrap your environment, consider taking advantage of the included [Dev Container](./.devcontainer).
-See [Visual Studio Code Dev Container Documentation](https://code.visualstudio.com/docs/devcontainers/create-dev-container) or the [Development Container Documentation](https://containers.dev/) for more information on how to get started with Dev Containers in your IDE of choice.
+```bash
+# Clone and initialize
+git clone https://github.com/AD-SDL/MADSci.git
+cd MADSci
+just init  # Installs all dependencies and sets up pre-commit hooks
 
+# See all available commands
+just list
 
-### Running Automated Tests
+# Start example lab for testing
+just up
+```
 
-1. Install the python packages locally using PDM or pip (see above)
-1. Ensure you've activated any relevant virtual environments
-1. Run `pytest` in the root directory of the repository
-    1. To run only the tests for a specific component, such as the workcell manager, change directories into the relevant subdirectory in `src/`, or use `pytest -k EXPRESSION` to filter the tests by test name/parent class
-1. Note that many of the pytests depend on docker to start mock database containers (see above for installation notes)
+### Development Commands
+
+```bash
+# Testing
+pytest                    # Run all tests
+just test                 # Alternative test runner
+pytest -k workcell        # Run specific component tests
+
+# Code Quality
+just checks               # Run all pre-commit checks (ruff, formatting, etc.)
+ruff check               # Manual linting
+ruff format              # Manual formatting
+
+# Services
+just build               # Build Docker images
+just up                  # Start example lab
+just down               # Stop services
+
+# Dashboard Development
+cd ui/
+npm run dev             # Start Vue dev server
+npm run build           # Build for production
+```
+
+### Development Patterns
+
+**Manager Implementation:**
+Each manager service follows this structure:
+- Settings class inheriting from `MadsciBaseSettings`
+- FastAPI server with REST endpoints
+- Client class for programmatic interaction
+- Database models (SQLModel/Pydantic)
+
+**Testing:**
+- Integration tests use Docker containers via pytest-mock-resources
+- Component tests are in each package's `tests/` directory
+- Use `pytest -k EXPRESSION` to filter tests
+
+**Configuration:**
+- Environment variables with hierarchical precedence
+- Each manager has unique prefix (e.g., `WORKCELL_`, `EVENT_`)
+- See [Configuration.md](./Configuration.md) for full details
+
+### Dev Container Support
+
+For VS Code users, use the included [.devcontainer](./.devcontainer) for instant setup:
+- Automatic dependency installation
+- Pre-configured development environment
+- Docker services ready to run

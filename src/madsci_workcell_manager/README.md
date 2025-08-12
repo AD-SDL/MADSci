@@ -6,83 +6,75 @@ The MADSci Workcell Manager handles the operation of a **Workcell**, a collectio
 
 ## Installation
 
-The MADSci workcell manager is available via [the Python Package Index](https://pypi.org/project/madsci.workcell_manager/), and can be installed via:
+See the main [README](../../README.md#installation) for installation options. This package is available as:
+- PyPI: `pip install madsci.workcell_manager`
+- Docker: Included in `ghcr.io/ad-sdl/madsci`
+- **Example configuration**: See [example_lab/managers/example_workcell.yaml](../../example_lab/managers/example_workcell.yaml)
 
-```bash
-pip install madsci.workcell_manager
-```
-
-This python package is also included as part of the [madsci Docker image](https://github.com/orgs/AD-SDL/packages/container/package/madsci). You can see an example docker setup in [this example compose file](./workcell_manager.compose.yaml).
-
-Note that you will also need a MongoDB database and a Redis database (both included in the example compose file)
+**Dependencies**: MongoDB and Redis (see [example docker-compose](./workcell_manager.compose.yaml) or [example_lab](../../example_lab/))
 
 ## Usage
 
-### Workcell Manager
+### Quick Start
 
-To create and run a new MADSci Workcell Manager, do the following in your MADSci lab directory:
+Use the [example_lab](../../example_lab/) as a starting point:
 
-- If you're not using docker compose, provision and configure a MongoDB instance.
-- If you're using docker compose, define your workcell manager, redis, and mongodb services based on the [example compose file](./workcell_manager.compose.yaml).
+```bash
+# Start with working example
+docker compose up  # From repo root
+# Workcell Manager available at http://localhost:8005/docs
 
+# Or run standalone
+python -m madsci.workcell_manager.workcell_server
+```
+
+### Workcell Setup
+
+For custom deployments:
 
 ```bash
 # Create a Workcell Definition
 madsci workcell create
-# Start the databases and Workcell Server
-docker compose up
-# OR
-python -m madsci.workcell_manager.workcell_server
 ```
 
-You should see a REST server started on the configured host and port. Navigate in your browser to the URL you configured (default: `http://localhost:8005/`) to see if it's working.
-
-You can see up-to-date documentation on the endpoints provided by your workcell manager, and try them out, via the OpenAPI docs served by your manager at the server's `/docs` page.
+See [example_workcell.yaml](../../example_lab/managers/example_workcell.yaml) for configuration options.
 
 ### Workcell Client
 
-You can use MADSci's `WorkcellClient` in your python code to submit workflows, query their status and progress, manage a workflow's lifecycle, get information about and update the workcell state, and more.
+Use `WorkcellClient` to submit workflows and manage workcell operations:
 
 ```python
 from madsci.client.workcell_client import WorkcellClient
+
+workcell_client = WorkcellClient("http://localhost:8005")
+
+# Submit workflow from file (recommended)
+result = workcell_client.submit_workflow(
+    workflow="path/to/workflow.yaml",
+    parameters={"test_param": 10}
+)
+
+# Or create workflow programmatically
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.types.step_types import StepDefinition
 
-workcell_client = WorkcellClient(
-  workcell_server_url="http://localhost:8005"
-)
 wf_def = WorkflowDefinition(
-  name="Test Workflow",
-  parameters=[
-    {"name": "test_param", "default": 0}
-  ],
-  steps=[
-    StepDefinition(
-      name="Test Step 0",
-      node="liquidhandler_1", # Must exist in workcell nodes
-      action="test_action",
-      args={
-        "test_arg": "${test_param}" # This parameter will be substituted at submission time
-      },
-      files={
-        "test_file_arg": "path/to/file/argument"
-      },
-      locations={
-        "test_location": "liquidhandler_deck_1" # Must exist in workcell locations
-      }
-    )
-  ]
+    name="Test Workflow",
+    parameters=[{"name": "test_param", "default": 0}],
+    steps=[StepDefinition(
+        name="Test Step",
+        node="liquidhandler_1",  # Must exist in workcell
+        action="test_action",
+        args={"test_arg": "${test_param}"}
+    )]
 )
+result = workcell_client.submit_workflow(workflow=wf_def)
 
-result = workcell_client.submit_workflow(workflow=wf_def, parameters={"test_param": 10})
-# Alternatively, specify the workflow as a path
-result = workcell_client.submit_workflow(workflow="path/to/test.workflow.yaml")
-
-# You can also not await the workflow results, and query later
-result = workcell_client.submit_workflow(workflow=wf_def, await_completion=False)
-time.sleep(10)
+# Query workflow status
 result = workcell_client.query_workflow(result.workflow_id)
 ```
+
+**Example workflows**: See [example_lab/workflows/](../../example_lab/workflows/) for complete workflow definitions.
 
 ## Defining a Workcell
 
