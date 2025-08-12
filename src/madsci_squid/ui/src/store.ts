@@ -1,10 +1,15 @@
+import {
+  ref,
+  watchEffect,
+} from 'vue';
 
-import { Console } from 'console';
-import { ref, watchEffect } from 'vue';
-import { WorkcellState } from './types/workcell_types';
-import {Event} from './types/event_types'
-import {Experiment} from './types/experiment_types'
-import { NodeStatus } from './types/workcell_types';
+import { Event } from './types/event_types';
+import { Experiment } from './types/experiment_types';
+import {
+  NodeStatus,
+  WorkcellState,
+} from './types/workcell_types';
+import { Workflow } from './types/workflow_types';
 
 const main_url = ref<string>("")
 const state_url = ref<string>("")
@@ -110,4 +115,22 @@ function get_status(status: NodeStatus): string {
     }
 }
 
-export { campaigns, campaigns_url, events, experiment_keys, experiment_objects, experiments, experiments_url, get_status, main_url, state_url, workcell_info, workcell_info_url, workcell_state, active_workflows, archived_workflows, urls, resources };
+export {
+  active_workflows,
+  archived_workflows,
+  campaigns,
+  campaigns_url,
+  events,
+  experiment_keys,
+  experiment_objects,
+  experiments,
+  experiments_url,
+  get_status,
+  main_url,
+  resources,
+  state_url,
+  urls,
+  workcell_info,
+  workcell_info_url,
+  workcell_state,
+};

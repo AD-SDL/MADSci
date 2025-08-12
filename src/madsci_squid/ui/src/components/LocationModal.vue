@@ -12,7 +12,7 @@
         </div>
         <v-btn v-if="!add_lookup_toggle" @click="add_lookup_toggle = !add_lookup_toggle">Add or Replace Lookup</v-btn>
       <div v-if="add_lookup_toggle" >
-        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state.nodes)"
+        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state?.nodes ?? {})"
                           dense>
 
 
@@ -53,12 +53,18 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
+import {
+  resources,
+  urls,
+  workcell_state,
+} from '../store';
+import { Location } from '../types/workcell_types';
+import Resource from './ResourceComponents/Resource.vue';
+import Slot from './ResourceComponents/Slot.vue';
+import Stack from './ResourceComponents/Stack.vue';
+
 const flowdef = ref(false)
-import { urls, resources, workcell_state } from '../store';
-import Stack from "./ResourceComponents/Stack.vue";
-import Slot from "./ResourceComponents/Slot.vue";
-import Resource from "./ResourceComponents/Resource.vue";
-import { Location }  from "../types/workcell_types"
+
 interface LocationModalProps {
       location_name: string;
       location: Location;

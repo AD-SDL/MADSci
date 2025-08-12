@@ -1,5 +1,5 @@
 <template>
- <LocationModal :modal_title="modal_title" :modal_text="modal_text" v-model="modal" />
+ <LocationModal :location="modal_text" :location_name="modal_title" v-model="modal" />
  <AddLocationModal v-model="add_modal" />
   <v-card class="pa-1 ma-1" col="3" title="Locations">
     <v-card-text>

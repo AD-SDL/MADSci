@@ -97,7 +97,7 @@ const openExperimentDetails = (item: Experiment) => {
 };
 
 
-function filter_workflows(active_workflows: Workflow, archived_workflows: Workflow, experiment_id: string)  {
+function filter_workflows(active_workflows: Record<string, Workflow>, archived_workflows: Record<string, Workflow>, experiment_id: string)  {
   var active_workflow_list = Object.values(active_workflows).filter( (workflow: Workflow) => workflow.ownership_info && workflow.ownership_info.experiment_id && workflow.ownership_info.experiment_id == experiment_id)
   var archived_workflow_list = Object.values(archived_workflows).filter( (workflow: Workflow) => workflow.ownership_info && workflow.ownership_info.experiment_id && workflow.ownership_info.experiment_id == experiment_id)
 
