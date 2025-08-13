@@ -13,6 +13,7 @@ Central lab configuration manager and web dashboard provider for MADSci-powered 
 ## Installation
 
 See the main [README](../../README.md#installation) for installation options. This package is available as:
+
 - PyPI: `pip install madsci.squid`
 - Docker: Use `ghcr.io/ad-sdl/madsci_dashboard` for complete setup with UI
 - **Example configuration**: See [example_lab/example_lab.lab.yaml](../../example_lab/example_lab.lab.yaml)
@@ -113,34 +114,6 @@ LAB_DEFINITION=lab.yaml
 EVENT_SERVER_URL=http://localhost:8001
 WORKCELL_SERVER_URL=http://localhost:8005
 # ... etc for other services
-```
-
-### Docker Deployment
-
-**With Dashboard:**
-```yaml
-# compose.yaml
-services:
-  lab_manager:
-    image: ghcr.io/ad-sdl/madsci_dashboard:latest
-    ports:
-      - "8000:8000"
-    environment:
-      - LAB_DEFINITION=lab.yaml
-    volumes:
-      - ./lab.yaml:/home/madsci/lab/lab.yaml
-```
-
-**API Only:**
-```yaml
-services:
-  lab_manager:
-    image: ghcr.io/ad-sdl/madsci:latest
-    ports:
-      - "8000:8000"
-    environment:
-      - LAB_DASHBOARD_FILES_PATH=None
-    command: python -m madsci.squid.lab_server
 ```
 
 ## API Endpoints

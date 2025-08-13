@@ -109,8 +109,8 @@ module_version: 1.0.0
 # Run directly
 python my_instrument_node.py
 
-# Or with configuration
-python my_instrument_node.py --config my_instrument.node.yaml
+# Or with a pre-defined node
+python my_instrument_node.py --node_definition my_instrument.node.yaml
 
 # Node will be available at http://localhost:2000/docs
 ```
@@ -195,17 +195,15 @@ class IntegratedNode(RestNode):
     @action
     def process_sample(self, sample_id: str) -> ActionResult:
         # Get sample info from Resource Manager
-        if hasattr(self, 'resource_client'):
-            sample = self.resource_client.get_resource(sample_id)
+        sample = self.resource_client.get_resource(sample_id)
 
         # Process sample
         result = self.device.process(sample)
 
         # Store results in Data Manager
-        if hasattr(self, 'data_client'):
-            self.data_client.submit_datapoint(
-                ValueDataPoint(label="processing_result", value=result)
-            )
+        self.data_client.submit_datapoint(
+            ValueDataPoint(label="processing_result", value=result)
+        )
 
         # Log event
         self.logger.log(f"Processed sample {sample_id}")

@@ -2,6 +2,14 @@
 
 Provides a collection of clients for interacting with the different components of a MADSci interface.
 
+## Installation
+
+See the main [README](../../README.md#installation) for installation options. This package is available as:
+
+- PyPI: `pip install madsci.client`
+- Docker: Included in `ghcr.io/ad-sdl/madsci`
+- **Dependency**: Required by most other MADSci packages
+
 ## Node Clients
 
 Node clients allow you to interface with MADSci Nodes to:

@@ -1,6 +1,6 @@
 # MADSci Common
 
-Shared types, utilities, validators, and base classes used across the MADSci toolkit.
+Shared types, utilities, validators, base classes and other common code used across the MADSci toolkit.
 
 ## Installation
 

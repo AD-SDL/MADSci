@@ -13,6 +13,7 @@ Manages experimental runs and campaigns across a MADSci-powered lab, providing e
 ## Installation
 
 See the main [README](../../README.md#installation) for installation options. This package is available as:
+
 - PyPI: `pip install madsci.experiment_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
 - **Example configuration**: See [example_lab/managers/example_experiment.manager.yaml](../../example_lab/managers/example_experiment.manager.yaml)

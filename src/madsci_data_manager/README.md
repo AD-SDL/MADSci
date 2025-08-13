@@ -15,6 +15,7 @@ Handles capturing, storing, and querying data generated during experiments - bot
 ## Installation
 
 See the main [README](../../README.md#installation) for installation options. This package is available as:
+
 - PyPI: `pip install madsci.data_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
 - **Example configuration**: See [example_lab/managers/example_data.manager.yaml](../../example_lab/managers/example_data.manager.yaml)

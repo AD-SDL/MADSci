@@ -15,11 +15,12 @@ Handles distributed logging and events throughout a MADSci-powered Lab.
 ## Installation
 
 See the main [README](../../README.md#installation) for installation options. This package is available as:
+
 - PyPI: `pip install madsci.event_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
 - **Example configuration**: See [example_lab/managers/example_event.manager.yaml](../../example_lab/managers/example_event.manager.yaml)
 
-**Dependencies**: MongoDB database (see [example docker-compose](./event_manager.compose.yaml) or [example_lab](../../example_lab/))
+**Dependencies**: MongoDB database (see the [example_lab](../../example_lab/))
 
 ## Usage
 
@@ -79,4 +80,4 @@ event_client.alert(event) # Will force firing any configured alert notifiers on 
 
 The Event Manager provides some native alerting functionality. A default alert level can be set in the event manager definition's `alert_level`, which will determine the minimum log level at which to send an alert. Calls directly to the `EventClient.alert` method will send alerts regardless of the `alert_level`.
 
-You can configure Email Alerts by setting up an `EmailAlertConfig` (`madsci.common.types.event_types.EmailAlertConfig`) in the `email_alerts` field of your `EventManagerDefinition`.
+You can configure Email Alerts by setting up an `EmailAlertsConfig` (`madsci.common.types.event_types.EmailAlertsConfig`) in the `email_alerts` field of your `EventManagerSettings`.
