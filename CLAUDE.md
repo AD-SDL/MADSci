@@ -39,6 +39,9 @@ just init                    # Initialize project and install all dependencies
 ```bash
 pytest                       # Run all tests
 just test                    # Alternative way to run tests
+just coverage                # Run tests with coverage report
+just coverage-html           # Generate HTML coverage report
+just coverage-xml            # Generate XML coverage report (for CI)
 ```
 
 ### Code Quality

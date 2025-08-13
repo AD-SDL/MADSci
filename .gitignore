@@ -309,3 +309,6 @@ test_experiment/
 
 # Reports folder
 .reports/
+htmlcov/
+coverage.xml
+.coverage

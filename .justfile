@@ -59,6 +59,18 @@ tests: test
 # Run automated tests
 pytest: test
 
+# Run tests with coverage report
+coverage:
+  @pytest --cov --cov-report=term-missing
+
+# Run tests with HTML coverage report
+coverage-html:
+  @pytest --cov --cov-report=html
+
+# Run tests with XML coverage report (for CI)
+coverage-xml:
+  @pytest --cov --cov-report=xml
+
 # Build docker images
 dcb: env
   @docker compose build

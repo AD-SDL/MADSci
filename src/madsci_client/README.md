@@ -19,10 +19,15 @@ Communicate with MADSci Nodes via REST API:
 
 ```python
 from madsci.client.node.rest_node_client import RestNodeClient
+from madsci.common.types.action_types import ActionRequest
 
 client = RestNodeClient(url="http://example:2000")
+action_request = ActionRequest(
+    action_name="my_action",
+    args={"param": "value"},
+)
 status = client.get_status()
-result = client.execute_action("my_action", {"param": "value"})
+result = client.send_action(action_request)
 ```
 
 **Examples**: See [example_lab/notebooks/node_notebook.ipynb](../../example_lab/notebooks/node_notebook.ipynb) for detailed usage.

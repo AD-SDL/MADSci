@@ -8,6 +8,7 @@ requires-python = ">=3.9.1"
 [dependency-groups]
 dev = [
     "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
     "pytest-mock-resources[docker,mongo]>=2.12.2",
     "ipykernel>=6.29.5",
     "pre-commit>=4.3.0",
