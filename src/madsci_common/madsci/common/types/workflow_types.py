@@ -110,6 +110,11 @@ class WorkflowParameter(MadsciBaseModel):
         """Assert that at most one of step_name, step_index, and label are set."""
         if self.step_name and self.step_index:
             raise ValueError("Cannot set both step_name and step_index for a parameter")
+        if (self.step_name or self.step_index) and not self.label:
+            raise ValueError(
+                "Must include the data label to be used for this parameter"
+            )
+
         return self
 
 

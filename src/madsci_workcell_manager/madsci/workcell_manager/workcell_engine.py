@@ -202,6 +202,7 @@ class Engine:
                 files=step.files,
             )
             action_id = request.action_id
+            self.add_pending_action(step, action_id)
             try:
                 response = client.send_action(request, await_result=False)
             except Exception as e:
@@ -212,7 +213,8 @@ class Engine:
                     response = request.unknown(errors=[Error.from_exception(e)])
                 else:
                     response.errors.append(Error.from_exception(e))
-
+            finally:
+                self.remove_pending_action(step)
             response = self.handle_response(wf, step, response)
             action_id = response.action_id
 
@@ -315,6 +317,7 @@ class Engine:
                 if (
                     parameter.step_name == step.name
                     or wf.status.current_step_index == parameter.step_index
+                    or (parameter.step_name is None and parameter.step_index is None)
                 ) and parameter.label in step.result.datapoints:
                     datapoint = step.result.datapoints[parameter.label]
                     wf = self.update_parameters(wf, datapoint, parameter)
@@ -383,6 +386,20 @@ class Engine:
             wf.steps[wf.status.current_step_index] = step
             self.state_handler.set_active_workflow(wf)
         return wf
+
+    def add_pending_action(self, step: Step, action_id: str) -> None:
+        """Update the step in the workflow"""
+        with self.state_handler.wc_state_lock():
+            node = self.state_handler.get_node(step.node)
+            node.pending_action_id = action_id
+            self.state_handler.set_node(step.node, node)
+
+    def remove_pending_action(self, step: Step) -> None:
+        """Update the step in the workflow"""
+        with self.state_handler.wc_state_lock():
+            node = self.state_handler.get_node(step.node)
+            node.pending_action_id = None
+            self.state_handler.set_node(step.node, node)
 
     def handle_response(
         self, wf: Workflow, step: Step, response: ActionResult
@@ -473,6 +490,8 @@ class Engine:
             node.status = client.get_status()
             node.info = client.get_info()
             node.state = client.get_state()
+            if node.pending_action_id in node.status.running_actions:
+                node.pending_action_id = None
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
         except Exception as e:

@@ -1,0 +1,15 @@
+stateDiagram
+  [*] --> Still:New Action Request recieved by Node Server
+  Still --> Moving:Problem with Node Status
+  Still --> s2:Problem with the Action Request
+  Still --> s3:Valid Action Request
+  s3 --> s2:Problem while running the Action
+  s3 --> s4:Action was completed without errors
+  s2 --> [*]
+  s4 --> [*]
+  Moving --> [*]
+  Still:not_started
+  Moving:not_ready
+  s2:failed
+  s3:running
+  s4:succeeded

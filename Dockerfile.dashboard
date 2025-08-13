@@ -1,30 +1,25 @@
-FROM ghcr.io/ad-sdl/madsci:latest
+ARG BASE_IMAGE=ghcr.io/ad-sdl/madsci:latest
+FROM ${BASE_IMAGE}
 LABEL org.opencontainers.image.source=https://github.com/AD-SDL/MADSci/
 LABEL org.opencontainers.image.description="The Modular Autonomous Discovery for Science (MADSci) toolkit's docker image which includes a compiled version of the Dashboard."
 LABEL org.opencontainers.image.licenses=MIT
-
-RUN apt-get update && \
-	apt-get install -y npm && \
-	rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
-
-RUN npm install -g yarn
 
 # User configuration
 ARG USER_ID=9999
 ARG GROUP_ID=9999
 ARG CONTAINER_USER=madsci
 
-
-
-COPY src/madsci_squid/ui/package.json /tmp/package.json
-WORKDIR /tmp
+# * Install node dependencies
+RUN mkdir -p /tmp/node_dependencies
+COPY ui/package.json /tmp/node_dependencies/package.json
+COPY ui/yarn.lock /tmp/node_dependencies/yarn.lock
+WORKDIR /tmp/node_dependencies
 RUN yarn install
 
-
-
-COPY src/madsci_squid/ui /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
-RUN cp -a /tmp/. /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui/
-WORKDIR /home/${CONTAINER_USER}/MADSci/src/madsci_squid/ui
+# * Copy in UI files and build
+COPY ui/ /home/${CONTAINER_USER}/MADSci/ui/
+RUN ln -s /tmp/node_dependencies/node_modules /home/${CONTAINER_USER}/MADSci/ui/node_modules && cp -f /tmp/node_dependencies/yarn.lock /home/${CONTAINER_USER}/MADSci/ui/yarn.lock
+WORKDIR /home/${CONTAINER_USER}/MADSci/ui
 RUN npm run build
 RUN rm -rf node_modules
 
