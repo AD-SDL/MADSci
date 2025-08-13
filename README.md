@@ -1,5 +1,11 @@
 # The Modular Autonomous Discovery for Science (MADSci) Framework
 
+<!-- GitHub Actions Status Badges -->
+[![Docker](https://github.com/AD-SDL/MADSci/actions/workflows/docker.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/docker.yml)
+[![Pre-Commit](https://github.com/AD-SDL/MADSci/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pre-commit.yml)
+[![PyPI](https://github.com/AD-SDL/MADSci/actions/workflows/pypi.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pypi.yml)
+[![Pytests](https://github.com/AD-SDL/MADSci/actions/workflows/pytests.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pytests.yml)
+
 <img src="./assets/drawio/madsci_control_flow.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
 _Experiment Control Flow Using MADSci_

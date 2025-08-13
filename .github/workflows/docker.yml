@@ -1,4 +1,4 @@
-name: Docker Image Build and Publish
+name: Docker Image
 
 on:
   push: # * Run for every push
