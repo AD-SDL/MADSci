@@ -51,7 +51,7 @@ dev = [
 ]
 
 [tool.coverage.run]
-source = "src"
+source = ["src"]
 omit = [
     "*/tests/*",
     "*/test_*",
