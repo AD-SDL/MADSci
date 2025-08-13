@@ -1,0 +1,1 @@
+"""MADSci Transfer Manager."""
