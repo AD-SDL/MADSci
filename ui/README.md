@@ -14,30 +14,30 @@ Vue 3 + Vuetify web dashboard for monitoring and controlling MADSci-powered labo
 ## Development Setup
 
 ### Prerequisites
-- Node.js 16+ and npm
+- Node.js 16+ and yarn
 - MADSci lab services running (for API integration)
 
 ### Quick Start
 
 ```bash
 # Install dependencies
-npm install
+yarn install
 
 # Start development server
-npm run dev
+yarn dev
 # Dashboard available at http://localhost:3000
 
 # Build for production
-npm run build
+yarn build
 # Output in ./dist/ directory
 ```
 
 ### Development Commands
 
 ```bash
-npm run dev        # Start Vite dev server with hot reload
-npm run build      # Build for production
-npm run preview    # Preview production build locally
+yarn dev        # Start Vite dev server with hot reload
+yarn build      # Build for production
+yarn preview    # Preview production build locally
 ```
 
 ## Architecture
@@ -194,7 +194,7 @@ const config = {
 
 ### Production Build
 ```bash
-npm run build
+yarn build
 # Outputs to ./dist/
 
 # Serve via Lab Manager
