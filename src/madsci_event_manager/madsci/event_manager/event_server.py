@@ -5,8 +5,10 @@ from datetime import datetime  # noqa: F811
 from pathlib import Path
 from typing import Annotated, Any, Dict, Optional, Tuple, Union
 
+import pymongo
 import uvicorn
 from fastapi import FastAPI, Query
+from fastapi.exceptions import HTTPException
 from fastapi.params import Body
 from fastapi.responses import Response
 from madsci.client.event_client import EventClient
@@ -100,7 +102,13 @@ def create_event_server(  # noqa: C901, PLR0915
     @app.get("/event/{event_id}")
     async def get_event(event_id: str) -> Event:
         """Look up an event by event_id"""
-        return events.find_one({"_id": event_id})
+        event = events.find_one({"_id": event_id})
+        if not event:
+            logger.log_error(f"Event with ID {event_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Event with ID {event_id} not found"
+            )
+        return event
 
     @app.get("/events")
     async def get_events(
@@ -110,11 +118,11 @@ def create_event_server(  # noqa: C901, PLR0915
 
         event_list = (
             events.find({"log_level": {"$gte": int(level)}})
-            .sort("event_timestamp", -1)
+            .sort("event_timestamp", pymongo.DESCENDING)
             .limit(number)
             .to_list()
         )
-        return {event["_id"]: event for event in event_list}
+        return {str(event["_id"]): Event.model_validate(event) for event in event_list}
 
     @app.post("/events/query")
     async def query_events(selector: Any = Body()) -> dict[str, Event]:  # noqa: B008
