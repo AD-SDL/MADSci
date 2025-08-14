@@ -183,7 +183,9 @@ class WorkcellClient:
         for step in workflow.steps:
             if step.files:
                 for file, path in step.files.items():
-                    if not check_for_parameters(str(path), workflow.parameters.keys()):
+                    if not check_for_parameters(
+                        str(path), [param.name for param in workflow.parameters]
+                    ):
                         unique_filename = f"{new_ulid_str()}_{file}"
                         files[unique_filename] = path
                         if not Path(files[unique_filename]).is_absolute():
