@@ -89,7 +89,8 @@ class WorkflowStatus(MadsciBaseModel):
         if self.active:
             return f"Queued on step {self.current_step_index}"
         return "Unknown"
-    
+
+
 class WorkflowParameter(MadsciBaseModel):
     """container for a workflow parameter"""
 
@@ -104,15 +105,22 @@ class WorkflowParameter(MadsciBaseModel):
     def validate_value_parameters(self) -> "WorkflowParameter":
         """Assert that at most one of step_name, step_index, and label are set."""
         if self.parameter_type is not None and self.default is not None:
-            if not type(self.default).__name__ == self.parameter_type or ("Union" in self.parameter_type and type(self.default).__name__ not in str(self.parameter_type)):
+            if not type(self.default).__name__ == self.parameter_type or (
+                "Union" in self.parameter_type
+                and type(self.default).__name__ not in str(self.parameter_type)
+            ):
                 return ValueError("Default value is of the wrong type")
         return self
+
+
 class InputFile(MadsciBaseModel):
     """Input files for the workflow"""
+
     name: str
     """The name of the input file"""
     description: Optional[str] = None
     """A description of the input file"""
+
 
 class FeedForwardValue(MadsciBaseModel):
     """container for a workflow parameter"""
@@ -135,9 +143,6 @@ class FeedForwardValue(MadsciBaseModel):
             raise ValueError("Cannot set both step_name and step_index for a parameter")
 
         return self
-    
-
-
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
@@ -185,6 +190,7 @@ class WorkflowDefinition(MadsciBaseModel):
                         raise ValueError("Data labels must be unique across workflow")
                     labels.append(step.data_labels[key])
         return v
+
     @model_validator(mode="after")
     def ensure_input_label_uniqueness(self) -> Any:
         """Ensure that the names of the arguments and files are unique"""
@@ -203,8 +209,6 @@ class WorkflowDefinition(MadsciBaseModel):
                 raise error
             labels.append(input_file.name)
         return self
-    
-    
 
 
 class SchedulerMetadata(MadsciBaseModel):

@@ -49,7 +49,9 @@ class LiquidHandlerNode(RestNode):
 
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
-        self.liquid_handler = LiquidHandlerInterface(logger=self.logger, device_number = self.config.device_number)
+        self.liquid_handler = LiquidHandlerInterface(
+            logger=self.logger, device_number=self.config.device_number
+        )
         self.logger.log("Liquid handler initialized!")
 
     def shutdown_handler(self) -> None:

@@ -11,13 +11,11 @@ from madsci.common.utils import new_ulid_str
 from pydantic import Field
 
 
-
 class StepParameters(MadsciBaseModel):
     """The set of values to be parameterized in the step"""
+
     name: Optional[str] = Field(
-        title="Step Name",
-        description="The name of the step.",
-        default=None
+        title="Step Name", description="The name of the step.", default=None
     )
     description: Optional[str] = Field(
         title="Step Description",
@@ -28,7 +26,9 @@ class StepParameters(MadsciBaseModel):
         title="Step Action",
         description="The action to perform in the step.",
     )
-    node: Optional[str] = Field(title="Node Name", description="Name of the node to run on")
+    node: Optional[str] = Field(
+        title="Node Name", description="Name of the node to run on"
+    )
     args: dict[str, Any] = Field(
         title="Step Arguments",
         description="Arguments for the step action.",
@@ -39,6 +39,7 @@ class StepParameters(MadsciBaseModel):
         description="Locations to be used in the step. Key is the name of the argument, value is the name of the location, or a Location object.",
         default_factory=dict,
     )
+
 
 class StepDefinition(MadsciBaseModel):
     """A definition of a step in a workflow."""

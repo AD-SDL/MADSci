@@ -8,7 +8,6 @@ from typing import Any, Optional, Union
 import requests
 from madsci.client.event_client import EventClient
 from madsci.common.data_manipulation import (
-    check_for_parameters,
     value_substitution,
     walk_and_replace,
 )
@@ -119,18 +118,21 @@ class WorkcellClient:
             workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
         else:
             workflow_definition = WorkflowDefinition.model_validate(workflow_definition)
-        workflow_definition.definition_metadata.ownership_info = get_current_ownership_info()
+        workflow_definition.definition_metadata.ownership_info = (
+            get_current_ownership_info()
+        )
         url = self.url + "/workflow_definition"
         response = requests.post(
             url,
             data={
                 "workflow_defintion": workflow_definition.model_dump_json(),
             },
-            
             timeout=10,
         )
         if not response.ok and response.content:
-            self.logger.error(f"Error submitting workflow definition: {response.content.decode()}")
+            self.logger.error(
+                f"Error submitting workflow definition: {response.content.decode()}"
+            )
         response.raise_for_status()
         return str(response.content)
 
@@ -171,18 +173,22 @@ class WorkcellClient:
         """
         try:
             ULID.from_str(workflow_definition)
-        except ValueError as e:
+        except ValueError:
             if isinstance(workflow_definition, (Path, str)):
                 workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
             else:
-                workflow_definition = WorkflowDefinition.model_validate(workflow_definition)
-            workflow_definition_id = self.submit_workflow_definition(workflow_definition)
+                workflow_definition = WorkflowDefinition.model_validate(
+                    workflow_definition
+                )
+            workflow_definition_id = self.submit_workflow_definition(
+                workflow_definition
+            )
         files = self.make_unique_paths(input_files)
         url = self.url + "/workflow"
         response = requests.post(
             url,
             data={
-                "workflow_definition": workflow_definition_id, 
+                "workflow_definition": workflow_definition_id,
                 "parameters": json.dumps(parameters) if parameters else None,
                 "ownership_info": get_current_ownership_info().model_dump_json(),
             },
@@ -210,12 +216,9 @@ class WorkcellClient:
             raise_on_failed=raise_on_failed,
         )
 
-
     submit_workflow = start_workflow
 
-    def make_unique_paths(
-        self, files: dict[str, PathLike]
-    ) -> dict[str, Path]:
+    def make_unique_paths(self, files: dict[str, PathLike]) -> dict[str, Path]:
         """
         Extract file paths from a workflow definition.
 
@@ -234,9 +237,7 @@ class WorkcellClient:
             unique_filename = f"{new_ulid_str()}_{file}"
             files[unique_filename] = path
             if not Path(files[unique_filename]).is_absolute():
-                files[unique_filename] = (
-                    self.working_directory / files[unique_filename]
-                )
+                files[unique_filename] = self.working_directory / files[unique_filename]
         return files
 
     def submit_workflow_sequence(

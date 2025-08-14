@@ -234,12 +234,12 @@ class WorkcellStateHandler:
         self.set_workcell_definition(
             func(self.get_workcell_definition(), *args, **kwargs)
         )
+
     # Workflow Definition Method
     def save_workflow_definition(self, workflow_definition: WorkflowDefinition) -> None:
         """move a workflow from redis to mongo"""
         self.workflow_definitions.insert_one(workflow_definition.to_mongo())
         return workflow_definition.workflow_definition_id
-
 
     def delete_workflow_definition(self, workflow_definition_id: str) -> None:
         """
@@ -258,8 +258,11 @@ class WorkcellStateHandler:
         workflow_definitions = {}
         for workflow in workflow_definition_list:
             valid_workflow_definition = WorkflowDefinition.model_validate(workflow)
-            workflow_definitions[valid_workflow_definition.workflow_definition_id] = valid_workflow_definition
+            workflow_definitions[valid_workflow_definition.workflow_definition_id] = (
+                valid_workflow_definition
+            )
         return workflow_definitions
+
     # *Workflow Methods
 
     def get_workflow(self, workflow_id: str) -> Workflow:
@@ -362,10 +365,6 @@ class WorkcellStateHandler:
     def delete_archived_workflow(self, workflow_id: str) -> None:
         """delete an archived workflow"""
         self.archived_workflows.delete_one({"workflow_id": workflow_id})
-
-
-
-
 
     def update_active_workflow(
         self, workflow_id: str, func: Callable[..., Any], *args: Any, **kwargs: Any

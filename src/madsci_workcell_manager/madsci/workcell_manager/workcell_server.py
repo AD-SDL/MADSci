@@ -294,11 +294,9 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     detail="Workflow is not in a terminal state, cannot retry",
                 )
         return state_handler.get_active_workflow(workflow_id)
-    
+
     @app.post("/workflow_definition")
-    async def submit_workflow_definition(
-        workflow_definition:str
-    ) -> Workflow:
+    async def submit_workflow_definition(workflow_definition: str) -> Workflow:
         """
         Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
 
@@ -331,7 +329,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 workflow_def=wf_def,
             )
 
-                
             return definition_id
         except HTTPException as e:
             raise e
@@ -342,7 +339,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 status_code=500,
                 detail=f"Error saving workflow definition: {e}",
             ) from e
-
 
     @app.post("/workflow")
     async def start_workflow(
@@ -419,8 +415,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     Event(
                         event_type=EventType.WORKFLOW_START,
                         event_data=wf.model_dump(mode="json"),
-                        )
                     )
+                )
                 return wf
 
         except HTTPException as e:
