@@ -4,10 +4,9 @@
 
 | Name                                                                                    |    Stmts |     Miss |   Cover |   Missing |
 |---------------------------------------------------------------------------------------- | -------: | -------: | ------: | --------: |
-| src/madsci\_client/madsci/client/\_\_init\_\_.py                                        |        8 |        0 |    100% |           |
+| src/madsci\_client/madsci/client/\_\_init\_\_.py                                        |       15 |        5 |     67% | 13, 18-22 |
 | src/madsci\_client/madsci/client/data\_client.py                                        |      128 |       31 |     76% |63, 77-85, 95-96, 105-115, 162-170, 177, 220-221, 240-241, 301, 318, 334-341 |
 | src/madsci\_client/madsci/client/event\_client.py                                       |      259 |      143 |     45% |61, 90-91, 97-117, 121-134, 165-207, 235-269, 294-333, 348-349, 369, 406, 411-417, 420-432, 439-442, 447-463, 482, 486-490 |
-| src/madsci\_client/madsci/client/experiment\_application.py                             |      211 |      145 |     31% |52, 54, 67, 69, 72, 74, 76, 78, 80, 82, 84, 86, 97-118, 127-132, 139-143, 150-168, 172-176, 182-185, 191-194, 200-204, 210-213, 220-227, 245-271, 275-284, 288-298, 302-313, 317-333, 341-346, 350-375, 379-388 |
 | src/madsci\_client/madsci/client/experiment\_client.py                                  |       58 |       40 |     31% |28-35, 41-46, 50-57, 66-77, 83-90, 94-100, 104-109, 113-119, 123-128, 132-137 |
 | src/madsci\_client/madsci/client/node/\_\_init\_\_.py                                   |        4 |        0 |    100% |           |
 | src/madsci\_client/madsci/client/node/abstract\_node\_client.py                         |       29 |        4 |     86% |26, 29, 95-96 |
@@ -67,7 +66,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py              |      254 |       65 |     74% |57-63, 94-95, 148-149, 160, 164-167, 176-179, 185-191, 220, 235, 249, 267-270, 292, 331-333, 344-348, 379-384, 400-402, 413-424, 433-437, 455-459 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py               |        9 |        7 |     22% |      8-14 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py               |      100 |       39 |     61% |28-29, 38, 45-46, 52-56, 61-62, 68-73, 122, 138, 149-175, 188-202, 233-236, 242-243 |
-|                                                                               **TOTAL** | **8857** | **3806** | **57%** |           |
+|                                                                               **TOTAL** | **8653** | **3666** | **58%** |           |
 
 
 ## Setup coverage badge
