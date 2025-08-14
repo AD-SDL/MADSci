@@ -1,6 +1,6 @@
 {
   "name": "squid_dashboard",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_OPTIONS='--no-warnings' vite",
