@@ -294,13 +294,61 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     detail="Workflow is not in a terminal state, cannot retry",
                 )
         return state_handler.get_active_workflow(workflow_id)
+    
+    @app.post("/workflow_definition")
+    async def submit_workflow_definition(
+        workflow_definition:str
+    ) -> Workflow:
+        """
+        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+
+        Parameters
+        ----------
+        workflow: YAML string
+        - The workflow yaml file
+        parameters: Optional[Dict[str, Any]] = {}
+        - Dynamic values to insert into the workflow file
+        ownership_info: Optional[OwnershipInfo]
+        - Information about the experiments, users, etc. that own this workflow
+        simulate: bool
+        - whether to use real robots or not
+        validate_only: bool
+        - whether to validate the workflow without queueing it
+
+        Returns
+        -------
+        response: Workflow
+        - a workflow run object for the requested run_id
+        """
+        try:
+            try:
+                wf_def = WorkflowDefinition.model_validate_json(workflow_definition)
+
+            except Exception as e:
+                traceback.print_exc()
+                raise HTTPException(status_code=422, detail=str(e)) from e
+            definition_id = state_handler.save_workflow_definition(
+                workflow_def=wf_def,
+            )
+
+                
+            return definition_id
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.error(f"Error saving workflow definition: {e}")
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error saving workflow definition: {e}",
+            ) from e
+
 
     @app.post("/workflow")
     async def start_workflow(
         workflow: Annotated[str, Form()],
         ownership_info: Annotated[Optional[str], Form()] = None,
         parameters: Annotated[Optional[str], Form()] = None,
-        validate_only: Annotated[Optional[bool], Form()] = False,
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
@@ -357,21 +405,20 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     state_handler=state_handler,
                 )
 
-                if not validate_only:
-                    wf = save_workflow_files(
-                        working_directory=workcell.workcell_directory,
-                        workflow=wf,
-                        files=files,
-                    )
+                wf = save_workflow_files(
+                    working_directory=workcell.workcell_directory,
+                    workflow=wf,
+                    files=files,
+                )
 
-                    with state_handler.wc_state_lock():
-                        state_handler.set_active_workflow(wf)
-                        state_handler.enqueue_workflow(wf.workflow_id)
+                with state_handler.wc_state_lock():
+                    state_handler.set_active_workflow(wf)
+                    state_handler.enqueue_workflow(wf.workflow_id)
 
-                    logger.log(
-                        Event(
-                            event_type=EventType.WORKFLOW_START,
-                            event_data=wf.model_dump(mode="json"),
+                logger.log(
+                    Event(
+                        event_type=EventType.WORKFLOW_START,
+                        event_data=wf.model_dump(mode="json"),
                         )
                     )
                 return wf

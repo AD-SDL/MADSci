@@ -89,8 +89,7 @@ class WorkflowStatus(MadsciBaseModel):
         if self.active:
             return f"Queued on step {self.current_step_index}"
         return "Unknown"
-
-
+    
 class WorkflowParameter(MadsciBaseModel):
     """container for a workflow parameter"""
 
@@ -98,24 +97,47 @@ class WorkflowParameter(MadsciBaseModel):
     """The name of the parameter"""
     default: Optional[Any] = None
     """The default value of a parameter, if not provided, the parameter must be provided when the workflow is run"""
+    parameter_type: Optional[str] = None
+    """The python type of the parameter value"""
+
+    @model_validator(mode="after")
+    def validate_value_parameters(self) -> "WorkflowParameter":
+        """Assert that at most one of step_name, step_index, and label are set."""
+        if self.parameter_type is not None and self.default is not None:
+            if not type(self.default).__name__ == self.parameter_type or ("Union" in self.parameter_type and type(self.default).__name__ not in str(self.parameter_type)):
+                return ValueError("Default value is of the wrong type")
+        return self
+class InputFile(MadsciBaseModel):
+    """Input files for the workflow"""
+    name: str
+    """The name of the input file"""
+    description: Optional[str] = None
+    """A description of the input file"""
+
+class FeedForwardValue(MadsciBaseModel):
+    """container for a workflow parameter"""
+
+    name: str
+    """The name of the parameter"""
     step_name: Optional[str] = None
     """Name of a step in the workflow; this will use the value of a datapoint from the step with the matching name as the value for this parameter"""
     step_index: Optional[str] = None
     """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
-    label: Optional[str] = None
+    value_type: Optional[str] = None
+    """The python type of the parameter value"""
+    label: str
     """This will use the value of a datapoint from a previous step with the matching label."""
 
     @model_validator(mode="after")
-    def validate_feedforward_parameters(self) -> "WorkflowParameter":
+    def validate_feedforward_parameters(self) -> "FeedForwardValue":
         """Assert that at most one of step_name, step_index, and label are set."""
         if self.step_name and self.step_index:
             raise ValueError("Cannot set both step_name and step_index for a parameter")
-        if (self.step_name or self.step_index) and not self.label:
-            raise ValueError(
-                "Must include the data label to be used for this parameter"
-            )
 
         return self
+    
+
+
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
@@ -127,6 +149,8 @@ class WorkflowMetadata(MadsciBaseModel, extra="allow"):
     """Description of the object"""
     version: Union[float, str] = ""
     """Version of the object"""
+    ownership_info: Optional[OwnershipInfo] = None
+    """OwnershipInfo of the workflow defintion"""
 
 
 class WorkflowDefinition(MadsciBaseModel):
@@ -134,17 +158,25 @@ class WorkflowDefinition(MadsciBaseModel):
 
     name: str
     """Name of the workflow"""
-    workflow_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
+    workflow_definition_id: str = Field(default_factory=new_ulid_str)
+    """ID of the workflow definition"""
+    definition_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
     parameters: list[WorkflowParameter] = Field(default_factory=list)
-    """Inputs to the workflow"""
+    """Raw value inputs to the workflow"""
+    feed_forward_values: list[FeedForwardValue] = Field(default_factory=list)
+    """Parameters based on datapoints generated during execution of the workflow"""
+
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
+
+    input_files: list[InputFile] = Field(default_factory=list)
+    """required file inputs to the workflow"""
 
     @field_validator("steps", mode="after")
     @classmethod
     def ensure_data_label_uniqueness(cls, v: Any) -> Any:
-        """Ensure that the names of the arguments and files are unique"""
+        """Ensure that the names of the data labels are unique"""
         labels = []
         for step in v:
             if step.data_labels:
@@ -153,6 +185,26 @@ class WorkflowDefinition(MadsciBaseModel):
                         raise ValueError("Data labels must be unique across workflow")
                     labels.append(step.data_labels[key])
         return v
+    @model_validator(mode="after")
+    def ensure_input_label_uniqueness(self) -> Any:
+        """Ensure that the names of the arguments and files are unique"""
+        labels = []
+        error = ValueError("Input Value Names must be unique across workflow")
+        for parameter in self.parameters:
+            if parameter.name in labels:
+                raise error
+            labels.append(parameter.name)
+        for ffv in self.feed_forward_values:
+            if ffv.name in labels:
+                raise error
+            labels.append(ffv.name)
+        for input_file in self.input_files:
+            if input_file.name in labels:
+                raise error
+            labels.append(input_file.name)
+        return self
+    
+    
 
 
 class SchedulerMetadata(MadsciBaseModel):

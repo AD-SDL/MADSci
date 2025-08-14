@@ -25,6 +25,7 @@ from madsci.common.types.workflow_types import (
 )
 from madsci.common.utils import new_ulid_str
 from rich import print
+from ulid import ULID
 
 
 class WorkcellClient:
@@ -85,15 +86,9 @@ class WorkcellClient:
         response.raise_for_status()
         return Workflow(**response.json())
 
-    def submit_workflow(
+    def submit_workflow_definition(
         self,
-        workflow: Union[PathLike, WorkflowDefinition],
-        parameters: Optional[dict[str, Any]] = None,
-        validate_only: bool = False,
-        await_completion: bool = True,
-        prompt_on_error: bool = True,
-        raise_on_failed: bool = True,
-        raise_on_cancelled: bool = True,
+        workflow_definition: Union[PathLike, WorkflowDefinition],
     ) -> Workflow:
         """
         Submit a workflow to the Workcell Manager.
@@ -120,21 +115,75 @@ class WorkcellClient:
         Workflow
             The submitted workflow object.
         """
-        if isinstance(workflow, (Path, str)):
-            workflow = WorkflowDefinition.from_yaml(workflow)
+        if isinstance(workflow_definition, (Path, str)):
+            workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
         else:
-            workflow = WorkflowDefinition.model_validate(workflow)
-        insert_parameter_values(
-            workflow=workflow, parameters=parameters if parameters else {}
+            workflow_definition = WorkflowDefinition.model_validate(workflow_definition)
+        workflow_definition.definition_metadata.ownership_info = get_current_ownership_info()
+        url = self.url + "/workflow_definition"
+        response = requests.post(
+            url,
+            data={
+                "workflow_defintion": workflow_definition.model_dump_json(),
+            },
+            
+            timeout=10,
         )
-        files = self._extract_files_from_workflow(workflow)
+        if not response.ok and response.content:
+            self.logger.error(f"Error submitting workflow definition: {response.content.decode()}")
+        response.raise_for_status()
+        return str(response.content)
+
+    def start_workflow(
+        self,
+        workflow_definition: Union[PathLike, WorkflowDefinition],
+        parameters: Optional[dict[str, Any]] = None,
+        input_files: Optional[dict[str, PathLike]] = None,
+        await_completion: bool = True,
+        prompt_on_error: bool = True,
+        raise_on_failed: bool = True,
+        raise_on_cancelled: bool = True,
+    ) -> Workflow:
+        """
+        Submit a workflow to the Workcell Manager.
+
+        Parameters
+        ----------
+        workflow_definition: Optional[Union[PathLike, WorkflowDefinition]],
+            Either a workflow definition ID, WorkflowDefinition or a path to a YAML file of one.
+        parameters: Optional[dict[str, Any]] = None,
+            Parameters to be inserted into the workflow.
+        validate_only : bool, optional
+            If True, only validate the workflow without submitting, by default False.
+        await_completion : bool, optional
+            If True, wait for the workflow to complete, by default True.
+        prompt_on_error : bool, optional
+            If True, prompt the user for what action to take on workflow errors, by default True.
+        raise_on_failed : bool, optional
+            If True, raise an exception if the workflow fails, by default True.
+        raise_on_cancelled : bool, optional
+            If True, raise an exception if the workflow is cancelled, by default True.
+
+        Returns
+        -------
+        Workflow
+            The submitted workflow object.
+        """
+        try:
+            ULID.from_str(workflow_definition)
+        except ValueError as e:
+            if isinstance(workflow_definition, (Path, str)):
+                workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
+            else:
+                workflow_definition = WorkflowDefinition.model_validate(workflow_definition)
+            workflow_definition_id = self.submit_workflow_definition(workflow_definition)
+        files = self.make_unique_paths(input_files)
         url = self.url + "/workflow"
         response = requests.post(
             url,
             data={
-                "workflow": workflow.model_dump_json(),
+                "workflow_definition": workflow_definition_id, 
                 "parameters": json.dumps(parameters) if parameters else None,
-                "validate_only": validate_only,
                 "ownership_info": get_current_ownership_info().model_dump_json(),
             },
             files={
@@ -161,10 +210,11 @@ class WorkcellClient:
             raise_on_failed=raise_on_failed,
         )
 
-    start_workflow = submit_workflow
 
-    def _extract_files_from_workflow(
-        self, workflow: WorkflowDefinition
+    submit_workflow = start_workflow
+
+    def make_unique_paths(
+        self, files: dict[str, PathLike]
     ) -> dict[str, Path]:
         """
         Extract file paths from a workflow definition.
@@ -180,17 +230,13 @@ class WorkcellClient:
             A dictionary mapping unique file names to their paths.
         """
         files = {}
-        for step in workflow.steps:
-            if step.files:
-                for file, path in step.files.items():
-                    if not check_for_parameters(str(path), workflow.parameters.keys()):
-                        unique_filename = f"{new_ulid_str()}_{file}"
-                        files[unique_filename] = path
-                        if not Path(files[unique_filename]).is_absolute():
-                            files[unique_filename] = (
-                                self.working_directory / files[unique_filename]
-                            )
-                        step.files[file] = Path(files[unique_filename]).name
+        for file, path in files.items():
+            unique_filename = f"{new_ulid_str()}_{file}"
+            files[unique_filename] = path
+            if not Path(files[unique_filename]).is_absolute():
+                files[unique_filename] = (
+                    self.working_directory / files[unique_filename]
+                )
         return files
 
     def submit_workflow_sequence(
