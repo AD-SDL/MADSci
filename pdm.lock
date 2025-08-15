@@ -1623,7 +1623,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-application"
-version = "0.4.5"
+version = "0.4.6"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_experiment_application"
