@@ -94,7 +94,7 @@ class RestNodeClient(AbstractNodeClient):
         else:
             self.logger.log_info("Processing JSON response")
             response = ActionResult.model_validate(rest_response.json())
-        self.logger.log_critical(response)
+        self.logger.log_info(response)
         if await_result and not response.status.is_terminal:
             response = self.await_action_result(response.action_id, timeout=timeout)
         return response
