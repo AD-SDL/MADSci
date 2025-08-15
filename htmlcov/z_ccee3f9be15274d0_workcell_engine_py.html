@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py: 71%</title>
+    <title>Coverage for src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py: 70%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
     <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
     <script src="coverage_html_cb_6fb7b396.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py</b>:
-            <span class="pc_cov">71%</span>
+            <span class="pc_cov">70%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">298 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">212<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">86<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">210<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">88<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_ccee3f9be15274d0_workcell_server_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.0">coverage.py v7.10.0</a>,
-            created at 2025-08-14 18:27 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.3">coverage.py v7.10.3</a>,
+            created at 2025-08-15 17:54 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -200,7 +200,7 @@
     <p class="mis show_mis"><span class="n"><a id="t118" href="#t118">118</a></span><span class="t">            <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t119" href="#t119">119</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_error</span><span class="op">(</span><span class="nam">e</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t120" href="#t120">120</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_warning</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t121" href="#t121">121</a></span><span class="t">                    <span class="fst">f"</span><span class="fst">Error in engine loop, waiting </span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">workcell_settings</span><span class="op">.</span><span class="nam">node_update_interval</span><span class="op">}</span><span class="fst"> seconds before trying again.</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t121" href="#t121">121</a></span><span class="t">                    <span class="fst">f"</span><span class="fst">Error in engine loop, waiting </span><span class="op">{</span><span class="num">10</span> <span class="op">*</span> <span class="nam">self</span><span class="op">.</span><span class="nam">workcell_settings</span><span class="op">.</span><span class="nam">node_update_interval</span><span class="op">}</span><span class="fst"> seconds before trying again.</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t122" href="#t122">122</a></span><span class="t">                <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t123" href="#t123">123</a></span><span class="t">                <span class="key">with</span> <span class="nam">self</span><span class="op">.</span><span class="nam">state_handler</span><span class="op">.</span><span class="nam">wc_state_lock</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t124" href="#t124">124</a></span><span class="t">                    <span class="nam">workcell_status</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">state_handler</span><span class="op">.</span><span class="nam">get_workcell_status</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -453,13 +453,13 @@
     <p class="pln"><span class="n"><a id="t371" href="#t371">371</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t372" href="#t372">372</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_info</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t373" href="#t373">373</a></span><span class="t">                <span class="fst">f"</span><span class="fst">Logged workflow completion: </span><span class="op">{</span><span class="nam">workflow</span><span class="op">.</span><span class="nam">name</span><span class="op">}</span><span class="fst"> (</span><span class="op">{</span><span class="nam">workflow</span><span class="op">.</span><span class="nam">workflow_id</span><span class="op">[</span><span class="op">-</span><span class="num">8</span><span class="op">:</span><span class="op">]</span><span class="op">}</span><span class="fst">) - </span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t374" href="#t374">374</a></span><span class="t">                <span class="fst">f"</span><span class="fst">Status: </span><span class="op">{</span><span class="nam">event_data</span><span class="op">[</span><span class="str">'status'</span><span class="op">]</span><span class="op">}</span><span class="fst">, Author: </span><span class="op">{</span><span class="nam">event_data</span><span class="op">[</span><span class="str">'author'</span><span class="op">]</span> <span class="key">or</span> <span class="str">'Unknown'</span><span class="op">}</span><span class="fst">, </span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t374" href="#t374">374</a></span><span class="t">                <span class="fst">f"</span><span class="fst">Status: </span><span class="op">{</span><span class="nam">event_data</span><span class="op">[</span><span class="str">'status'</span><span class="op">]</span><span class="op">}</span><span class="fst">, Author: </span><span class="op">{</span><span class="nam">event_data</span><span class="op">[</span><span class="str">'workflow_metadata'</span><span class="op">]</span><span class="op">[</span><span class="str">'author'</span><span class="op">]</span> <span class="key">or</span> <span class="str">'Unknown'</span><span class="op">}</span><span class="fst">, </span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t375" href="#t375">375</a></span><span class="t">                <span class="fst">f"</span><span class="op">{</span><span class="nam">duration_text</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t376" href="#t376">376</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t377" href="#t377">377</a></span><span class="t">        <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t378" href="#t378">378</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_error</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t379" href="#t379">379</a></span><span class="t">                <span class="fst">f"</span><span class="fst">Error logging workflow completion event for workflow </span><span class="op">{</span><span class="nam">workflow</span><span class="op">.</span><span class="nam">workflow_id</span><span class="op">}</span><span class="fst">: </span><span class="op">{</span><span class="nam">e</span><span class="op">!</span><span class="nam">s</span><span class="op">}</span><span class="fst">\n</span><span class="op">{</span><span class="nam">traceback</span><span class="op">.</span><span class="nam">format_exc</span><span class="op">(</span><span class="op">)</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t380" href="#t380">380</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t377" href="#t377">377</a></span><span class="t">        <span class="key">except</span> <span class="nam">Exception</span> <span class="key">as</span> <span class="nam">e</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t378" href="#t378">378</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_error</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t379" href="#t379">379</a></span><span class="t">                <span class="fst">f"</span><span class="fst">Error logging workflow completion event for workflow </span><span class="op">{</span><span class="nam">workflow</span><span class="op">.</span><span class="nam">workflow_id</span><span class="op">}</span><span class="fst">: </span><span class="op">{</span><span class="nam">e</span><span class="op">!</span><span class="nam">s</span><span class="op">}</span><span class="fst">\n</span><span class="op">{</span><span class="nam">traceback</span><span class="op">.</span><span class="nam">format_exc</span><span class="op">(</span><span class="op">)</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t380" href="#t380">380</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t381" href="#t381">381</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t382" href="#t382">382</a></span><span class="t">    <span class="key">def</span> <span class="nam">update_step</span><span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">wf</span><span class="op">:</span> <span class="nam">Workflow</span><span class="op">,</span> <span class="nam">step</span><span class="op">:</span> <span class="nam">Step</span><span class="op">)</span> <span class="op">-></span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t383" href="#t383">383</a></span><span class="t">        <span class="str">"""Update the step in the workflow"""</span>&nbsp;</span><span class="r"></span></p>
@@ -599,8 +599,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_ccee3f9be15274d0_workcell_server_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.0">coverage.py v7.10.0</a>,
-            created at 2025-08-14 18:27 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.3">coverage.py v7.10.3</a>,
+            created at 2025-08-15 17:54 +0000
         </p>
     </div>
 </footer>
