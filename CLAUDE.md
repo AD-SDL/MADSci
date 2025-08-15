@@ -15,6 +15,7 @@ The system follows a microservices architecture with the following main componen
 - **madsci_client**: Client libraries for interacting with MADSci services
 - **madsci_squid**: Central lab configuration manager and dashboard provider (Lab Manager)
 - **madsci_node_module**: Framework for creating laboratory instrument nodes
+- **madsci_experiment_application**: Provides a class for managing automated and autonomous experiments using MADSci-powered labs.
 
 ### Manager Services
 - **madsci_event_manager**: Distributed event logging and querying (Port 8001)
@@ -96,6 +97,12 @@ Each manager service follows this pattern:
 - Uses Pydantic v2 for data validation and serialization
 - SQLModel for database ORM with PostgreSQL
 - Enum types for status and state management
+
+### ID Generation
+- **ULID (Universally Unique Lexicographically Sortable Identifier)** is used for all IDs throughout MADSci
+- ULIDs provide better performance than UUIDs while maintaining uniqueness and sortability
+- When generating new IDs, use `new_ulid_str()` from `madsci.common.utils`
+- Example usage: `resource_id = new_ulid_str()`
 
 ### Node Development
 Laboratory instruments implement the Node interface:
