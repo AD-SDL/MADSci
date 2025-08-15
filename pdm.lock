@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:30b66b2958dcdf574e82a62900dbe0fafaef767df33a01ce6c6f5a69511773f5"
+content_hash = "sha256:7d33adf2ef95d196e55511b1140be0cc7ebfefcd62fa6c5558591fc6c7d9632e"
 
 [[metadata.targets]]
 requires_python = ">=3.9.1"
@@ -1619,6 +1619,23 @@ dependencies = [
     "madsci-common",
     "matplotlib>=3.5.0",
     "pandas",
+]
+
+[[package]]
+name = "madsci-experiment-application"
+version = "0.4.5"
+requires_python = ">=3.9.1"
+editable = true
+path = "./src/madsci_experiment_application"
+summary = "The Modular Autonomous Discovery for Science (MADSci) Experiment Application framework."
+groups = ["dev"]
+dependencies = [
+    "madsci-client",
+    "madsci-common",
+    "madsci-node-module",
+    "pydantic>=2.0.0",
+    "rich>=10.0.0",
+    "typing-extensions>=4.0.0",
 ]
 
 [[package]]

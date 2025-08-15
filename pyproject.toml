@@ -48,6 +48,7 @@ dev = [
     "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
     "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
     "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
+    "-e madsci.experiment_application @ file:///${PROJECT_ROOT}/src/madsci_experiment_application",
 ]
 
 [tool.coverage.run]

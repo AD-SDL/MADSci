@@ -106,7 +106,7 @@ Individual executions of an experiment design:
 The `ExperimentApplication` class provides scaffolding for custom experiment logic:
 
 ```python
-from madsci.client.experiment_application import ExperimentApplication
+from madsci.experiment_application import ExperimentApplication
 
 class MyExperiment(ExperimentApplication):
     def run_experiment(self, experiment_id: str) -> dict:
