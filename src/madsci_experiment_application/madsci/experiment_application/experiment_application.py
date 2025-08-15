@@ -294,7 +294,7 @@ class ExperimentApplication(RestNode):
         if condition.operator == "is_greater_than_or_equal_to":
             return getattr(resource, condition.field) >= condition.target_value
         if condition.operator == "is_less_than_or_equal_to":
-            return getattr(resource, condition.field) < condition.target_value
+            return getattr(resource, condition.field) <= condition.target_value
         return False
 
     def get_location_from_condition(self, condition: Condition) -> Location:
@@ -318,7 +318,7 @@ class ExperimentApplication(RestNode):
             if len(resource.children) > int(condition.key):
                 if condition.resource_class:
                     return (
-                        resource.children[condition.key].resource_class
+                        resource.children[int(condition.key)].resource_class
                         == condition.resource_class
                     )
                 return True
@@ -332,8 +332,9 @@ class ExperimentApplication(RestNode):
             return True
         return False
 
-    def run_experiment(self, kwargs: Any) -> None:
+    def run_experiment(self, *args: Any, **kwargs: Any) -> Any:  # noqa: ARG002
         """The main experiment function, overwrite for each app"""
+        return None
 
     def add_experiment_management(self, func: Callable[P, R]) -> Callable[P, R]:
         """wraps the run experiment function while preserving arguments"""
@@ -385,4 +386,4 @@ class ExperimentApplication(RestNode):
             )
             self.start_node()
         else:
-            self.run_experiment(*self.config.args, **self.config.run_kwargs)
+            self.run_experiment(*self.config.run_args, **self.config.run_kwargs)
