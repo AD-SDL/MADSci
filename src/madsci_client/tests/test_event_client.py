@@ -290,7 +290,7 @@ class TestEventClientEventRetrieval:
         result = client.get_event(sample_event.event_id)
 
         mock_get.assert_called_once_with(
-            f"http://localhost:8001//event/{sample_event.event_id}",
+            f"http://localhost:8001/event/{sample_event.event_id}",
             timeout=10,
         )
         assert isinstance(result, Event)
@@ -353,7 +353,7 @@ class TestEventClientEventRetrieval:
         result = client.get_events(number=50, level=logging.INFO)
 
         mock_get.assert_called_once_with(
-            "http://localhost:8001//events",
+            "http://localhost:8001/events",
             timeout=10,
             params={"number": 50, "level": logging.INFO},
         )
@@ -452,7 +452,7 @@ class TestEventClientQueryEvents:
         result = client.query_events(selector)
 
         mock_post.assert_called_once_with(
-            "http://localhost:8001//events/query",
+            "http://localhost:8001/events/query",
             timeout=10,
             params={"selector": selector},
         )
@@ -513,7 +513,7 @@ class TestEventClientUtilizationMethods:
         )
 
         mock_get.assert_called_once_with(
-            "http://localhost:8001//utilization/periods",
+            "http://localhost:8001/utilization/periods",
             params={
                 "analysis_type": "daily",
                 "user_timezone": "America/Chicago",
@@ -554,7 +554,7 @@ class TestEventClientUtilizationMethods:
                 "output_path": output_path,
             }
             mock_get.assert_called_once_with(
-                "http://localhost:8001//utilization/sessions",
+                "http://localhost:8001/utilization/sessions",
                 params=expected_params,
                 timeout=60,
             )
@@ -625,7 +625,7 @@ class TestEventClientUtilizationMethods:
                 "output_path": output_path,
             }
             mock_get.assert_called_once_with(
-                "http://localhost:8001//utilization/sessions",
+                "http://localhost:8001/utilization/sessions",
                 params=expected_params,
                 timeout=60,
             )
@@ -659,7 +659,7 @@ class TestEventClientUtilizationMethods:
         )
 
         mock_get.assert_called_once_with(
-            "http://localhost:8001//utilization/users",
+            "http://localhost:8001/utilization/users",
             params={
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time": "2025-01-02T00:00:00Z",
