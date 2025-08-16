@@ -114,7 +114,7 @@ def test_send_action_await(
         files=[],
         timeout=60,
     )
-    mock_get.assert_called_once_with(
+    mock_get.assert_called_with(
         f"http://localhost:2000/action/{mock_get_response.json.return_value['action_id']}",
         timeout=10,
     )

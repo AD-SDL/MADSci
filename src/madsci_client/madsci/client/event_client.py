@@ -45,7 +45,9 @@ class EventClient:
         """
         if kwargs:
             self.config = (
-                EventClientConfig(**kwargs) if not config else config.__init__(**kwargs)
+                EventClientConfig(**kwargs)
+                if not config
+                else config.model_copy(update=kwargs)
             )
         else:
             self.config = config or EventClientConfig()
@@ -95,7 +97,7 @@ class EventClient:
         """Get a specific event by ID."""
         if self.event_server:
             response = requests.get(
-                str(self.event_server) + f"/event/{event_id}",
+                str(self.event_server) + f"event/{event_id}",
                 timeout=10,
             )
             if not response.ok:
@@ -111,7 +113,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = requests.get(
-                str(self.event_server) + "/events",
+                str(self.event_server) + "events",
                 timeout=10,
                 params={"number": number, "level": level},
             )
@@ -133,7 +135,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = requests.post(
-                str(self.event_server) + "/events/query",
+                str(self.event_server) + "events/query",
                 timeout=10,
                 params={"selector": selector},
             )
@@ -274,7 +276,7 @@ class EventClient:
                     params["output_path"] = output_path
 
             response = requests.get(
-                str(self.event_server) + "/utilization/periods",
+                str(self.event_server) + "utilization/periods",
                 params=params,
                 timeout=30,
             )
@@ -339,7 +341,7 @@ class EventClient:
                     params["output_path"] = output_path
 
             response = requests.get(
-                str(self.event_server) + "/utilization/sessions",
+                str(self.event_server) + "utilization/sessions",
                 params=params,
                 timeout=60,
             )
@@ -399,7 +401,7 @@ class EventClient:
                     params["output_path"] = output_path
 
             response = requests.get(
-                str(self.event_server) + "/utilization/users",
+                str(self.event_server) + "utilization/users",
                 params=params,
                 timeout=60,
             )
@@ -461,7 +463,7 @@ class EventClient:
 
         try:
             response = requests.post(
-                url=f"{str(self.event_server).rstrip('/')}/event",
+                url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),
                 timeout=10,
             )
