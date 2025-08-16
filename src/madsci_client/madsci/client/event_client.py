@@ -45,7 +45,9 @@ class EventClient:
         """
         if kwargs:
             self.config = (
-                EventClientConfig(**kwargs) if not config else config.__init__(**kwargs)
+                EventClientConfig(**kwargs)
+                if not config
+                else config.model_copy(update=kwargs)
             )
         else:
             self.config = config or EventClientConfig()
