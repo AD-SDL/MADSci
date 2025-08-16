@@ -377,7 +377,7 @@ class TestEventClientEventRetrieval:
         result = client.get_events()
 
         mock_get.assert_called_once_with(
-            "http://localhost:8001//events",
+            "http://localhost:8001/events",
             timeout=10,
             params={"number": 100, "level": 10},  # DEBUG level
         )
@@ -588,7 +588,7 @@ class TestEventClientUtilizationMethods:
         )
 
         mock_get.assert_called_once_with(
-            "http://localhost:8001//utilization/sessions",
+            "http://localhost:8001/utilization/sessions",
             params={
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time": "2025-01-02T00:00:00Z",
