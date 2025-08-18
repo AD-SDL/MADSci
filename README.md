@@ -6,8 +6,8 @@
 |---------------------------------------------------------------------------------------------- | -------: | -------: | ------: | --------: |
 | src/madsci\_client/madsci/client/\_\_init\_\_.py                                              |        7 |        0 |    100% |           |
 | src/madsci\_client/madsci/client/data\_client.py                                              |      128 |       31 |     76% |63, 77-85, 95-96, 105-115, 162-170, 177, 220-221, 240-241, 301, 318, 334-341 |
-| src/madsci\_client/madsci/client/event\_client.py                                             |      268 |      152 |     43% |62, 89-90, 96-105, 109-129, 133-146, 161-162, 185, 216, 222, 255-297, 325-359, 384-423, 426-432, 435-447, 454-457, 462-478, 492, 497, 501-505 |
-| src/madsci\_client/madsci/client/experiment\_client.py                                        |       58 |       40 |     31% |28-35, 41-46, 50-57, 66-77, 83-90, 94-100, 104-109, 113-119, 123-128, 132-137 |
+| src/madsci\_client/madsci/client/event\_client.py                                             |      268 |       30 |     89% |64, 91-92, 273-276, 284-287, 292, 350, 398-401, 410-413, 418, 443, 448-449, 458-459, 472, 499, 503-507 |
+| src/madsci\_client/madsci/client/experiment\_client.py                                        |       58 |        0 |    100% |           |
 | src/madsci\_client/madsci/client/node/\_\_init\_\_.py                                         |        4 |        0 |    100% |           |
 | src/madsci\_client/madsci/client/node/abstract\_node\_client.py                               |       29 |        4 |     86% |26, 29, 95-96 |
 | src/madsci\_client/madsci/client/node/rest\_node\_client.py                                   |      115 |       34 |     70% |33, 85, 88-90, 92-93, 120, 131, 133, 136-140, 194, 206-229 |
@@ -37,7 +37,7 @@
 | src/madsci\_common/madsci/common/types/step\_types.py                                         |       29 |        2 |     93% |    82, 84 |
 | src/madsci\_common/madsci/common/types/workcell\_types.py                                     |       69 |        7 |     90% |116, 118, 120, 123-126 |
 | src/madsci\_common/madsci/common/types/workflow\_types.py                                     |      205 |       62 |     70% |21, 23, 25, 27, 29, 31, 33, 91, 98, 100, 102, 104, 106, 112, 114, 125, 127, 136, 138, 140, 142, 153, 162, 164, 173, 175, 177, 179, 181, 183, 185, 187, 189, 191, 193, 195, 197, 201-204, 208-211, 215-220, 224-232, 239, 249 |
-| src/madsci\_common/madsci/common/utils.py                                                     |      193 |      125 |     35% |25, 31, 69-80, 87-97, 102-110, 120-144, 228, 234-238, 251-281, 297-340, 359-379, 387-389, 413-414, 422-427, 429-434, 443, 455 |
+| src/madsci\_common/madsci/common/utils.py                                                     |      193 |      122 |     37% |25, 31, 69-80, 87-97, 102-110, 120-144, 228, 234-238, 251-281, 297-340, 359-379, 413-414, 422-427, 429-434, 443, 455 |
 | src/madsci\_common/madsci/common/validators.py                                                |       27 |       12 |     56% |14-15, 25-26, 31-35, 48-54 |
 | src/madsci\_common/madsci/common/warnings.py                                                  |        4 |        2 |     50% |       4-7 |
 | src/madsci\_data\_manager/madsci/data\_manager/data\_server.py                                |      111 |       15 |     86% |46-54, 64, 89, 150, 179, 186, 233-239 |
@@ -68,7 +68,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                    |      254 |       65 |     74% |57-63, 94-95, 148-149, 160, 164-167, 176-179, 185-191, 220, 235, 249, 267-270, 292, 331-333, 344-348, 379-384, 400-402, 413-424, 433-437, 455-459 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                     |        9 |        7 |     22% |      8-14 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                     |      100 |       39 |     61% |28-29, 38, 45-46, 52-56, 61-62, 68-73, 122, 138, 149-175, 188-202, 233-236, 242-243 |
-|                                                                                     **TOTAL** | **8879** | **3682** | **59%** |           |
+|                                                                                     **TOTAL** | **8879** | **3517** | **60%** |           |
 
 
 ## Setup coverage badge
