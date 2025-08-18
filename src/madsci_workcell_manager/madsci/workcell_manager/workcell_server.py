@@ -368,11 +368,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
                         state_handler.set_active_workflow(wf)
                         state_handler.enqueue_workflow(wf.workflow_id)
 
-                    # ===== WORKFLOW_START EVENT LOGGING =====
-
-                    # Store the actual parameter values used
-                    wf.parameter_values = parameters
-
                     logger.log(
                         Event(
                             event_type=EventType.WORKFLOW_START,

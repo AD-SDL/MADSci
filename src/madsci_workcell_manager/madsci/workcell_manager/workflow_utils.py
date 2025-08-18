@@ -119,19 +119,24 @@ def create_workflow(
     wf.step_definitions = workflow_def.steps
     steps = []
     for step in workflow_def.steps:
-        working_step = deepcopy(step)
-        replace_locations(workcell, working_step, state_handler)
-        valid, validation_string = validate_step(
-            working_step, state_handler=state_handler
-        )
-        EventClient().log_info(validation_string)
-        if not valid:
-            raise ValueError(validation_string)
-        steps.append(working_step)
+        steps.append(prepare_workcell_step(workcell, state_handler, step))
 
     wf.steps = [Step.model_validate(step.model_dump()) for step in steps]
     wf.submitted_time = datetime.now()
     return wf
+
+
+def prepare_workcell_step(
+    workcell: WorkcellDefinition, state_handler: WorkcellStateHandler, step: Step
+) -> Step:
+    """Prepares a step for execution by replacing locations and validating it"""
+    working_step = deepcopy(step)
+    replace_locations(workcell, working_step, state_handler)
+    valid, validation_string = validate_step(working_step, state_handler=state_handler)
+    EventClient().log_info(validation_string)
+    if not valid:
+        raise ValueError(validation_string)
+    return working_step
 
 
 def replace_locations(

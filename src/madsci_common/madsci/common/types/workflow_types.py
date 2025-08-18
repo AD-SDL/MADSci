@@ -11,6 +11,7 @@ from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field, field_validator
+from pydantic.functional_validators import model_validator
 
 
 class WorkflowStatus(MadsciBaseModel):
@@ -94,15 +95,27 @@ class WorkflowParameter(MadsciBaseModel):
     """container for a workflow parameter"""
 
     name: str
-    """the name of the parameter"""
+    """The name of the parameter"""
     default: Optional[Any] = None
-    """ the default value of the parameter"""
+    """The default value of a parameter, if not provided, the parameter must be provided when the workflow is run"""
     step_name: Optional[str] = None
-    """name of which step to pull the parameter from"""
+    """Name of a step in the workflow; this will use the value of a datapoint from the step with the matching name as the value for this parameter"""
     step_index: Optional[str] = None
-    """index of which step to pull the parameter from"""
+    """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
     label: Optional[str] = None
-    """which data_label in the step to """
+    """This will use the value of a datapoint from a previous step with the matching label."""
+
+    @model_validator(mode="after")
+    def validate_feedforward_parameters(self) -> "WorkflowParameter":
+        """Assert that at most one of step_name, step_index, and label are set."""
+        if self.step_name and self.step_index:
+            raise ValueError("Cannot set both step_name and step_index for a parameter")
+        if (self.step_name or self.step_index) and not self.label:
+            raise ValueError(
+                "Must include the data label to be used for this parameter"
+            )
+
+        return self
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
@@ -123,7 +136,7 @@ class WorkflowDefinition(MadsciBaseModel):
     """Name of the workflow"""
     workflow_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
-    parameters: Optional[list[WorkflowParameter]] = Field(default_factory=list)
+    parameters: list[WorkflowParameter] = Field(default_factory=list)
     """Inputs to the workflow"""
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""

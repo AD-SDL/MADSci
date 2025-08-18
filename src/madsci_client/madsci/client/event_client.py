@@ -22,6 +22,7 @@ from madsci.common.types.event_types import (
 )
 from madsci.common.utils import threaded_task
 from pydantic import BaseModel, ValidationError
+from rich.logging import RichHandler
 
 
 class EventClient:
@@ -44,7 +45,9 @@ class EventClient:
         """
         if kwargs:
             self.config = (
-                EventClientConfig(**kwargs) if not config else config.__init__(**kwargs)
+                EventClientConfig(**kwargs)
+                if not config
+                else config.model_copy(update=kwargs)
             )
         else:
             self.config = config or EventClientConfig()
@@ -66,12 +69,10 @@ class EventClient:
         self.logfile = self.log_dir / f"{self.name}.log"
         self.logger.setLevel(self.config.log_level)
         for handler in self.logger.handlers:
-            if isinstance(handler, logging.FileHandler) and handler.baseFilename == str(
-                self.logfile
-            ):
-                self.logger.removeHandler(handler)
+            self.logger.removeHandler(handler)
         file_handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
         self.logger.addHandler(file_handler)
+        self.logger.addHandler(RichHandler(rich_tracebacks=True, show_path=False))
         self.event_server = (
             self.config.event_server_url or MadsciContext().event_server_url
         )
@@ -92,6 +93,19 @@ class EventClient:
                 events[event.event_id] = event
         return events
 
+    def get_event(self, event_id: str) -> Optional[Event]:
+        """Get a specific event by ID."""
+        if self.event_server:
+            response = requests.get(
+                str(self.event_server) + f"event/{event_id}",
+                timeout=10,
+            )
+            if not response.ok:
+                response.raise_for_status()
+            return Event.model_validate(response.json())
+        events = self.get_log()
+        return events.get(event_id, None)
+
     def get_events(self, number: int = 100, level: int = -1) -> dict[str, Event]:
         """Query the event server for a certain number of recent events. If no event server is configured, query the log file instead."""
         if level == -1:
@@ -99,7 +113,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = requests.get(
-                str(self.event_server) + "/events",
+                str(self.event_server) + "events",
                 timeout=10,
                 params={"number": number, "level": level},
             )
@@ -121,7 +135,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = requests.post(
-                str(self.event_server) + "/events/query",
+                str(self.event_server) + "events/query",
                 timeout=10,
                 params={"selector": selector},
             )
@@ -132,6 +146,84 @@ class EventClient:
             return dict(events)
         self.logger.warning("No event server configured. Cannot query events.")
         return {}
+
+    def log(
+        self,
+        event: Union[Event, Any],
+        level: Optional[int] = None,
+        alert: Optional[bool] = None,
+        warning_category: Optional[Warning] = None,
+    ) -> None:
+        """Log an event."""
+        # * If we've got a string or dict, check if it's a serialized event
+        if isinstance(event, str):
+            with contextlib.suppress(ValidationError):
+                event = Event.model_validate_json(event)
+        if isinstance(event, dict):
+            with contextlib.suppress(ValidationError):
+                event = Event.model_validate(event)
+        if isinstance(event, Exception):
+            event = Event(
+                event_type=EventType.LOG_ERROR,
+                event_data=traceback.format_exc(),
+                log_level=logging.ERROR,
+            )
+        if not isinstance(event, Event):
+            event = self._new_event_for_log(event, level)
+        event.log_level = level if level is not None else event.log_level
+        event.alert = alert if alert is not None else event.alert
+        if warning_category and self.logger.getEffectiveLevel() <= logging.WARNING:
+            # * Warn via the warnings module
+            warnings.warn(
+                event.event_data,
+                category=warning_category,
+                stacklevel=3,
+            )
+        else:
+            self.logger.log(level=event.log_level, msg=event.model_dump_json())
+        # * Log the event to the event server if configured
+        # * Only log if the event is at the same level or higher than the logger
+        if self.logger.getEffectiveLevel() <= event.log_level and self.event_server:
+            self._send_event_to_event_server_task(event)
+
+    def log_debug(self, event: Union[Event, str]) -> None:
+        """Log an event at the debug level."""
+        self.log(event, logging.DEBUG)
+
+    debug = log_debug
+
+    def log_info(self, event: Union[Event, str]) -> None:
+        """Log an event at the info level."""
+        self.log(event, logging.INFO)
+
+    info = log_info
+
+    def log_warning(
+        self, event: Union[Event, str], warning_category: Warning = UserWarning
+    ) -> None:
+        """Log an event at the warning level."""
+        self.log(event, logging.WARNING, warning_category=warning_category)
+
+    warning = log_warning
+    warn = log_warning
+
+    def log_error(self, event: Union[Event, str]) -> None:
+        """Log an event at the error level."""
+        self.log(event=event, level=logging.ERROR)
+
+    error = log_error
+
+    def log_critical(self, event: Union[Event, str]) -> None:
+        """Log an event at the critical level."""
+        self.log(event, logging.CRITICAL)
+
+    critical = log_critical
+
+    def log_alert(self, event: Union[Event, str]) -> None:
+        """Log an event at the alert level."""
+        self.log(event, alert=True)
+
+    alert = log_alert
 
     def get_utilization_periods(
         self,
@@ -184,7 +276,7 @@ class EventClient:
                     params["output_path"] = output_path
 
             response = requests.get(
-                str(self.event_server) + "/utilization/periods",
+                str(self.event_server) + "utilization/periods",
                 params=params,
                 timeout=30,
             )
@@ -249,7 +341,7 @@ class EventClient:
                     params["output_path"] = output_path
 
             response = requests.get(
-                str(self.event_server) + "/utilization/sessions",
+                str(self.event_server) + "utilization/sessions",
                 params=params,
                 timeout=60,
             )
@@ -309,7 +401,7 @@ class EventClient:
                     params["output_path"] = output_path
 
             response = requests.get(
-                str(self.event_server) + "/utilization/users",
+                str(self.event_server) + "utilization/users",
                 params=params,
                 timeout=60,
             )
@@ -331,81 +423,6 @@ class EventClient:
         except requests.RequestException as e:
             self.logger.error(f"Error getting user utilization report: {e}")
             return None
-
-    def log(
-        self,
-        event: Union[Event, Any],
-        level: Optional[int] = None,
-        alert: Optional[bool] = None,
-        warning_category: Optional[Warning] = None,
-    ) -> None:
-        """Log an event."""
-        # * If we've got a string or dict, check if it's a serialized event
-        if isinstance(event, str):
-            with contextlib.suppress(ValidationError):
-                event = Event.model_validate_json(event)
-        if isinstance(event, dict):
-            with contextlib.suppress(ValidationError):
-                event = Event.model_validate(event)
-        if isinstance(event, Exception):
-            event = Event(
-                event_type=EventType.LOG_ERROR,
-                event_data=traceback.format_exc(),
-            )
-        if not isinstance(event, Event):
-            event = self._new_event_for_log(event, level)
-        event.log_level = level if level else event.log_level
-        event.alert = alert if alert is not None else event.alert
-        if warning_category:
-            warnings.warn(
-                event.model_dump_json(),
-                category=warning_category,
-                stacklevel=3,
-            )
-        self.logger.log(event.log_level, event.model_dump_json())
-        # * Log the event to the event server if configured
-        # * Only log if the event is at the same level or higher than the logger
-        if self.logger.getEffectiveLevel() <= event.log_level and self.event_server:
-            self._send_event_to_event_server_task(event)
-
-    def log_debug(self, event: Union[Event, str]) -> None:
-        """Log an event at the debug level."""
-        self.log(event, logging.DEBUG)
-
-    debug = log_debug
-
-    def log_info(self, event: Union[Event, str]) -> None:
-        """Log an event at the info level."""
-        self.log(event, logging.INFO)
-
-    info = log_info
-
-    def log_warning(
-        self, event: Union[Event, str], warning_category: Warning = UserWarning
-    ) -> None:
-        """Log an event at the warning level."""
-        self.log(event, logging.WARNING, warning_category=warning_category)
-
-    warning = log_warning
-    warn = log_warning
-
-    def log_error(self, event: Union[Event, str]) -> None:
-        """Log an event at the error level."""
-        self.log(event, logging.ERROR)
-
-    error = log_error
-
-    def log_critical(self, event: Union[Event, str]) -> None:
-        """Log an event at the critical level."""
-        self.log(event, logging.CRITICAL)
-
-    critical = log_critical
-
-    def log_alert(self, event: Union[Event, str]) -> None:
-        """Log an event at the alert level."""
-        self.log(event, alert=True)
-
-    alert = log_alert
 
     def _start_retry_thread(self) -> None:
         with self._buffer_lock:
@@ -446,7 +463,7 @@ class EventClient:
 
         try:
             response = requests.post(
-                url=f"{str(self.event_server).rstrip('/')}/event",
+                url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),
                 timeout=10,
             )

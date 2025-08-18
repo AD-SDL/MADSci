@@ -33,7 +33,10 @@ from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_utils import (
     find_node_client,
 )
-from madsci.workcell_manager.workflow_utils import cancel_active_workflows
+from madsci.workcell_manager.workflow_utils import (
+    cancel_active_workflows,
+    prepare_workcell_step,
+)
 
 
 class Engine:
@@ -60,7 +63,6 @@ class Engine:
         )
         self.data_client = DataClient()
         self.resource_client = ResourceClient()
-        self.logger.log_debug(self.data_client.url)
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state(
                 self.resource_client,
@@ -116,7 +118,7 @@ class Engine:
             except Exception as e:
                 self.logger.log_error(e)
                 self.logger.log_warning(
-                    f"Error in engine loop, waiting {self.workcell_settings.node_update_interval} seconds before trying again."
+                    f"Error in engine loop, waiting {10 * self.workcell_settings.node_update_interval} seconds before trying again."
                 )
                 with self.state_handler.wc_state_lock():
                     workcell_status = self.state_handler.get_workcell_status()
@@ -176,6 +178,11 @@ class Engine:
             step.args = walk_and_replace(step.args, wf.parameter_values)
             step.files = walk_and_replace(step.files, wf.parameter_values)
             step.locations = walk_and_replace(step.locations, wf.parameter_values)
+            step = prepare_workcell_step(
+                step=step,
+                workcell=self.workcell_definition,
+                state_handler=self.state_handler,
+            )
             step.start_time = datetime.now()
             self.logger.log_info(
                 f"Running step {step.step_id} in workflow {workflow_id}"
@@ -195,6 +202,7 @@ class Engine:
                 files=step.files,
             )
             action_id = request.action_id
+            self.add_pending_action(step, action_id)
             try:
                 response = client.send_action(request, await_result=False)
             except Exception as e:
@@ -205,7 +213,8 @@ class Engine:
                     response = request.unknown(errors=[Error.from_exception(e)])
                 else:
                     response.errors.append(Error.from_exception(e))
-
+            finally:
+                self.remove_pending_action(step)
             response = self.handle_response(wf, step, response)
             action_id = response.action_id
 
@@ -220,10 +229,16 @@ class Engine:
                 f"Completed step {step.step_id} in workflow {workflow_id}"
             )
             self.logger.log_debug(self.state_handler.get_workflow(workflow_id))
-        except Exception:
+        except Exception as e:
             self.logger.log_error(
                 f"Running step in workflow {workflow_id} triggered unhandled exception: {traceback.format_exc()}"
             )
+            step.result = ActionResult(
+                status=ActionStatus.FAILED,
+                errors=Error.from_exception(e),
+            )
+            wf = self.update_step(wf, step)
+            self.finalize_step(workflow_id, step)
 
     def monitor_action_progress(
         self,
@@ -302,6 +317,7 @@ class Engine:
                 if (
                     parameter.step_name == step.name
                     or wf.status.current_step_index == parameter.step_index
+                    or (parameter.step_name is None and parameter.step_index is None)
                 ) and parameter.label in step.result.datapoints:
                     datapoint = step.result.datapoints[parameter.label]
                     wf = self.update_parameters(wf, datapoint, parameter)
@@ -355,7 +371,7 @@ class Engine:
 
             self.logger.log_info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {event_data['status']}, Author: {event_data['author'] or 'Unknown'}, "
+                f"Status: {event_data['status']}, Author: {event_data['workflow_metadata']['author'] or 'Unknown'}, "
                 f"{duration_text}"
             )
         except Exception as e:
@@ -370,6 +386,20 @@ class Engine:
             wf.steps[wf.status.current_step_index] = step
             self.state_handler.set_active_workflow(wf)
         return wf
+
+    def add_pending_action(self, step: Step, action_id: str) -> None:
+        """Update the step in the workflow"""
+        with self.state_handler.wc_state_lock():
+            node = self.state_handler.get_node(step.node)
+            node.pending_action_id = action_id
+            self.state_handler.set_node(step.node, node)
+
+    def remove_pending_action(self, step: Step) -> None:
+        """Update the step in the workflow"""
+        with self.state_handler.wc_state_lock():
+            node = self.state_handler.get_node(step.node)
+            node.pending_action_id = None
+            self.state_handler.set_node(step.node, node)
 
     def handle_response(
         self, wf: Workflow, step: Step, response: ActionResult
@@ -460,6 +490,8 @@ class Engine:
             node.status = client.get_status()
             node.info = client.get_info()
             node.state = client.get_state()
+            if node.pending_action_id in node.status.running_actions:
+                node.pending_action_id = None
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
         except Exception as e:

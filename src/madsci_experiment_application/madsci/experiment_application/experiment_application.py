@@ -1,8 +1,6 @@
 """Provides an ExperimentApplication class that manages the execution of an experiment."""
 
-import argparse
 import time
-import typing
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
@@ -23,16 +21,39 @@ from madsci.common.types.experiment_types import (
     ExperimentStatus,
 )
 from madsci.common.types.location_types import Location
-from madsci.common.types.node_types import NodeDefinition
+from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types import Resource
 from madsci.common.utils import threaded_daemon
 from madsci.node_module.rest_node_module import RestNode
-from pydantic import AnyUrl
+from pydantic import AnyUrl, Field
 from rich import print
 from typing_extensions import ParamSpec  # type: ignore
 
 P = ParamSpec("P")
 R = TypeVar("R")
+
+
+class ExperimentApplicationConfig(
+    RestNodeConfig,
+    env_file=(".env", "experiment.env"),
+    toml_file=("settings.toml", "experiment.settings.toml"),
+    yaml_file=("settings.yaml", "experiment.settings.yaml"),
+    json_file=("settings.json", "experiment.settings.json"),
+    env_prefix="EXPERIMENT_",
+):
+    """
+    Configuration for the ExperimentApplication.
+
+    This class is used to define the configuration for the ExperimentApplication node.
+    It can be extended to add custom configurations.
+    """
+
+    server_mode: bool = False
+    """Whether the application should start a REST Server acting as a MADSci node or not."""
+    run_args: list[Any] = Field(default_factory=list)
+    """Arguments to pass to the run_experiment function when not running in server mode."""
+    run_kwargs: dict[str, Any] = Field(default_factory=dict)
+    """Keyword arguments to pass to the run_experiment function when not running in server mode."""
 
 
 class ExperimentApplication(RestNode):
@@ -59,24 +80,20 @@ class ExperimentApplication(RestNode):
     """Client for managing data."""
     experiment_client: ExperimentClient
     """Client for managing experiments."""
-    inputs: typing.ClassVar = []
-    """inputs to the main function"""
-    node_definition = NodeDefinition(
-        node_name="experiment_app", module_name="experiment_app"
-    )
+    config: ExperimentApplicationConfig = ExperimentApplicationConfig()
+    """Configuration for the ExperimentApplication."""
+    config_model = ExperimentApplicationConfig
+    """The Pydantic model for the configuration of the ExperimentApplication."""
 
     def __init__(
         self,
         experiment_server_url: Optional[AnyUrl] = None,
         experiment_design: Optional[Union[str, Path, ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
-        node_definition: NodeDefinition = node_definition,
         *args: Any,
         **kwargs: Any,
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
-        kwargs["node_definition"] = node_definition
-        self.node_definition = node_definition
         super().__init__(*args, **kwargs)
 
         self.context = (
@@ -90,8 +107,6 @@ class ExperimentApplication(RestNode):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
 
         self.experiment = experiment if experiment else self.experiment
-        self.node_info.node_url = self.experiment_design.node_config.node_url
-        self.config = self.experiment_design.node_config
 
         # * Re-initialize experiment client in-case user provided a different server URL
         self.experiment_client = ExperimentClient(
@@ -279,7 +294,7 @@ class ExperimentApplication(RestNode):
         if condition.operator == "is_greater_than_or_equal_to":
             return getattr(resource, condition.field) >= condition.target_value
         if condition.operator == "is_less_than_or_equal_to":
-            return getattr(resource, condition.field) < condition.target_value
+            return getattr(resource, condition.field) <= condition.target_value
         return False
 
     def get_location_from_condition(self, condition: Condition) -> Location:
@@ -303,7 +318,7 @@ class ExperimentApplication(RestNode):
             if len(resource.children) > int(condition.key):
                 if condition.resource_class:
                     return (
-                        resource.children[condition.key].resource_class
+                        resource.children[int(condition.key)].resource_class
                         == condition.resource_class
                     )
                 return True
@@ -317,8 +332,9 @@ class ExperimentApplication(RestNode):
             return True
         return False
 
-    def run_experiment(self, kwargs: Any) -> None:
+    def run_experiment(self, *args: Any, **kwargs: Any) -> Any:  # noqa: ARG002
         """The main experiment function, overwrite for each app"""
+        return None
 
     def add_experiment_management(self, func: Callable[P, R]) -> Callable[P, R]:
         """wraps the run experiment function while preserving arguments"""
@@ -361,16 +377,7 @@ class ExperimentApplication(RestNode):
 
     def start_app(self) -> None:
         """Starts the application, either as a node or in single run mode"""
-        parser = argparse.ArgumentParser(
-            prog="ExperimentApp",
-            description="Runs an experiment application",
-            epilog="Can run in single shot or server mode",
-        )
-        for value in self.inputs:
-            parser.add_argument("--" + value["name"], default=value["default"])
-        parser.add_argument("--server_mode", default=False)
-        arguments = parser.parse_args()
-        if arguments.server_mode:
+        if self.config.server_mode:
             self._add_action(
                 self.add_experiment_management(self.run_experiment),
                 "run_experiment",
@@ -379,6 +386,4 @@ class ExperimentApplication(RestNode):
             )
             self.start_node()
         else:
-            args_dict = arguments.__dict__
-            del args_dict["server_mode"]
-            self.run_experiment(**args_dict)
+            self.run_experiment(*self.config.run_args, **self.config.run_kwargs)

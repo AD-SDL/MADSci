@@ -141,8 +141,8 @@ Settings for the MADSci Lab.
 
 **Environment Prefix**: `LAB_`
 
-| Name                                 | Type                             | Default                               | Description                                                                       | Example                               |
-|--------------------------------------|----------------------------------|---------------------------------------|-----------------------------------------------------------------------------------|---------------------------------------|
-| `LAB_SERVER_URL` \| `LAB_SERVER_URL` | `AnyUrl`                         | `"http://localhost:8000/"`            | The URL of the lab manager.                                                       | `"http://localhost:8000/"`            |
-| `LAB_DASHBOARD_FILES_PATH`           | `string` \| `Path` \| `NoneType` | `"~/MADSci/src/madsci_squid/ui/dist"` | Path to the static files for the dashboard. Set to None to disable the dashboard. | `"~/MADSci/src/madsci_squid/ui/dist"` |
-| `LAB_DEFINITION` \| `LAB_DEFINITION` | `string` \| `Path`               | `"lab.manager.yaml"`                  | Path to the lab definition file to use.                                           | `"lab.manager.yaml"`                  |
+| Name                                 | Type                             | Default                    | Description                                                                       | Example                    |
+|--------------------------------------|----------------------------------|----------------------------|-----------------------------------------------------------------------------------|----------------------------|
+| `LAB_SERVER_URL` \| `LAB_SERVER_URL` | `AnyUrl`                         | `"http://localhost:8000/"` | The URL of the lab manager.                                                       | `"http://localhost:8000/"` |
+| `LAB_DASHBOARD_FILES_PATH`           | `string` \| `Path` \| `NoneType` | `"~/MADSci/ui/dist"`       | Path to the static files for the dashboard. Set to None to disable the dashboard. | `"~/MADSci/ui/dist"`       |
+| `LAB_DEFINITION` \| `LAB_DEFINITION` | `string` \| `Path`               | `"lab.manager.yaml"`       | Path to the lab definition file to use.                                           | `"lab.manager.yaml"`       |

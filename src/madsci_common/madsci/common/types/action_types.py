@@ -296,6 +296,7 @@ class ActionDefinition(MadsciBaseModel):
     description: str = Field(
         title="Action Description",
         description="A description of the action.",
+        default="",
     )
 
     @field_validator("description", mode="before")

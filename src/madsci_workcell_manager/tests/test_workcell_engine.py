@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from madsci.common.types.action_types import (
+    ActionDefinition,
     ActionFailed,
     ActionResult,
     ActionStatus,
@@ -35,6 +36,20 @@ def pmr_redis_config() -> RedisConfig:
 
 
 redis_server = create_redis_fixture()
+
+test_node = Node(
+    node_url="http://node-url",
+    info=NodeInfo(
+        node_name="Test Node",
+        module_name="test_module",
+        capabilities=NodeCapabilities(get_action_result=True),
+        actions={
+            "test_action": ActionDefinition(
+                name="test_action",
+            )
+        },
+    ),
+)
 
 
 @pytest.fixture
@@ -100,14 +115,7 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellStateHandler) ->
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
-        node=Node(
-            node_url="http://node-url",
-            info=NodeInfo(
-                node_name="Test Node",
-                module_name="test_module",
-                capabilities=NodeCapabilities(get_action_result=True),
-            ),
-        ),
+        node=test_node,
     )
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"
@@ -150,14 +158,7 @@ def test_run_single_step_with_update_parameters(
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
-        node=Node(
-            node_url="http://node-url",
-            info=NodeInfo(
-                node_name="Test Node",
-                module_name="test_module",
-                capabilities=NodeCapabilities(get_action_result=True),
-            ),
-        ),
+        node=test_node,
     )
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"
@@ -191,14 +192,7 @@ def test_run_single_step_of_workflow_with_multiple_steps(
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
-        node=Node(
-            node_url="http://node-url",
-            info=NodeInfo(
-                node_name="Test Node",
-                module_name="test_module",
-                capabilities=NodeCapabilities(get_action_result=True),
-            ),
-        ),
+        node=test_node,
     )
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"
@@ -281,14 +275,7 @@ def test_handle_data_and_files_with_data(
     )
     state_handler.set_node(
         node_name="node1",
-        node=Node(
-            node_url="http://node-url",
-            info=NodeInfo(
-                node_name="Test Node",
-                module_name="test_module",
-                capabilities=NodeCapabilities(get_action_result=True),
-            ),
-        ),
+        node=test_node,
     )
     action_result = ActionSucceeded(data={"key1": 42})
 
@@ -320,14 +307,7 @@ def test_handle_data_and_files_with_files(
     )
     state_handler.set_node(
         node_name="node1",
-        node=Node(
-            node_url="http://node-url",
-            info=NodeInfo(
-                node_name="Test Node",
-                module_name="test_module",
-                capabilities=NodeCapabilities(get_action_result=True),
-            ),
-        ),
+        node=test_node,
     )
     action_result = ActionSucceeded(files={"file1": "/path/to/file"})
 
@@ -343,47 +323,6 @@ def test_handle_data_and_files_with_files(
         assert submitted_datapoint.label == "label1"
         assert submitted_datapoint.path == "/path/to/file"
 
-    def test_handle_data_and_files_with_files(
-        engine: Engine, state_handler: WorkcellStateHandler
-    ) -> None:
-        """Test handle_data_and_files with file points."""
-        step = Step(
-            name="Test Step",
-            action="test_action",
-            node="node1",
-            args={},
-            data_labels={"file1": "label1"},
-        )
-        workflow = Workflow(
-            name="Test Workflow",
-            steps=[step],
-            status=WorkflowStatus(running=True),
-        )
-        state_handler.set_node(
-            node_name="node1",
-            node=Node(
-                node_url="http://node-url",
-                info=NodeInfo(
-                    node_name="Test Node",
-                    module_name="test_module",
-                    capabilities=NodeCapabilities(get_action_result=True),
-                ),
-            ),
-        )
-        action_result = ActionSucceeded(files={"file1": "/path/to/file"})
-
-        with (
-            patch.object(engine.data_client, "submit_datapoint") as mock_submit,
-            patch("pathlib.Path.exists", return_value=True),
-        ):
-            updated_result = engine.handle_data_and_files(step, workflow, action_result)
-            assert "label1" in updated_result.data
-            mock_submit.assert_called_once()
-            submitted_datapoint = mock_submit.call_args[0][0]
-            assert isinstance(submitted_datapoint, FileDataPoint)
-            assert submitted_datapoint.label == "label1"
-            assert submitted_datapoint.path == "/path/to/file"
-
 
 def test_run_step_send_action_exception_then_get_action_result_success(
     engine: Engine, state_handler: WorkcellStateHandler
@@ -398,14 +337,7 @@ def test_run_step_send_action_exception_then_get_action_result_success(
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
-        node=Node(
-            node_url="http://node-url",
-            info=NodeInfo(
-                node_name="Test Node",
-                module_name="test_module",
-                capabilities=NodeCapabilities(get_action_result=True),
-            ),
-        ),
+        node=test_node,
     )
 
     with patch(
@@ -443,14 +375,7 @@ def test_run_step_send_action_and_get_action_result_fail(
     state_handler.set_active_workflow(workflow)
     state_handler.set_node(
         node_name="node1",
-        node=Node(
-            node_url="http://node-url",
-            info=NodeInfo(
-                node_name="Test Node",
-                module_name="test_module",
-                capabilities=NodeCapabilities(get_action_result=True),
-            ),
-        ),
+        node=test_node,
     )
 
     with patch(
