@@ -39,6 +39,7 @@ MADSci is made up of a number of different modular components, each of which can
 - [Event Manager](./src/madsci_event_manager/README.md): handles distributed event logging and querying across a distributed lab.
 - [Workcell Manager](./src/madsci_workcell_manager/README.md): handles coordinating and scheduling a collection of interoperating instruments, robots, and resources using Workflows.
 - [Experiment Manager](./src/madsci_experiment_manager/README.md): manages experimental runs and campaigns across a MADSci-powered lab.
+- [Experiment Application](./src/madsci_experiment_application/README.md): extensible python class for running autonomous experiments.
 - [Resource Manager](./src/madsci_resource_manager/README.md): For tracking labware, assets, samples, and consumables in an automated or autonomous lab.
 - [Data Manager](./src/madsci_data_manager/README.md): handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis)
 - [Squid Lab Manager](./src/madsci_squid/README.md): a central lab configuration manager and dashboard provider for MADSci-powered labs.
@@ -53,6 +54,7 @@ All MADSci components are available via [PyPI](https://pypi.org/search/?q=madsci
 # Core components
 pip install madsci.common          # Shared types and utilities
 pip install madsci.client          # Client libraries
+pip install madsci.experiment_application # Experiment Logic
 
 # Manager services
 pip install madsci.event_manager    # Event logging and querying
