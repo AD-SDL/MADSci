@@ -1,0 +1,35 @@
+[project]
+name = "madsci.experiment_application"
+version = "0.4.6"
+description = "The Modular Autonomous Discovery for Science (MADSci) Experiment Application framework."
+authors = [
+    {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
+    {name = "Ryan D. Lewis", email = "ryan.lewis@anl.gov"},
+    {name = "Casey Stone", email = "cstone@anl.gov"},
+    {name = "Doga Ozgulbas", email = "dozgulbas@anl.gov"},
+]
+requires-python = ">=3.9.1"
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = [
+  "madsci.common",
+  "madsci.client",
+  "madsci.node_module",
+  "rich>=10.0.0",
+  "pydantic>=2.0.0",
+  "typing-extensions>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AD-SDL/MADSci"
+
+######################
+# Build Info + Tools #
+######################
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.build]
+includes = ["madsci/"]

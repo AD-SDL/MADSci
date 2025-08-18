@@ -1,29 +1,17 @@
 [project]
 name = "madsci"
-version = "0.4.4"
+version = "0.4.6"
 dependencies = []
 readme="README.md"
 requires-python = ">=3.9.1"
 
-[tool.pdm.dev-dependencies]
-dev = [
-    "-e madsci.common @ file:///${PROJECT_ROOT}/src/madsci_common",
-    "-e madsci.squid @ file:///${PROJECT_ROOT}/src/madsci_squid",
-    "-e madsci.client @ file:///${PROJECT_ROOT}/src/madsci_client",
-    "-e madsci.node_module @ file:///${PROJECT_ROOT}/src/madsci_node_module",
-    "-e madsci.resource_manager @ file:///${PROJECT_ROOT}/src/madsci_resource_manager",
-    "-e madsci.event_manager @ file:///${PROJECT_ROOT}/src/madsci_event_manager",
-    "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
-    "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
-    "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
-]
-
 [dependency-groups]
 dev = [
     "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
     "pytest-mock-resources[docker,mongo]>=2.12.2",
     "ipykernel>=6.29.5",
-    "pre-commit>=4",
+    "pre-commit>=4.3.0",
     "pydantic-settings-export>=1.0.2",
 ]
 
@@ -48,3 +36,43 @@ paths = ["Configuration.md"]
 # Generate .env example
 [[tool.pydantic_settings_export.generators.dotenv]]
 paths = [".env.example"]
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "-e madsci.common @ file:///${PROJECT_ROOT}/src/madsci_common",
+    "-e madsci.squid @ file:///${PROJECT_ROOT}/src/madsci_squid",
+    "-e madsci.client @ file:///${PROJECT_ROOT}/src/madsci_client",
+    "-e madsci.node_module @ file:///${PROJECT_ROOT}/src/madsci_node_module",
+    "-e madsci.resource_manager @ file:///${PROJECT_ROOT}/src/madsci_resource_manager",
+    "-e madsci.event_manager @ file:///${PROJECT_ROOT}/src/madsci_event_manager",
+    "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
+    "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
+    "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
+    "-e madsci.experiment_application @ file:///${PROJECT_ROOT}/src/madsci_experiment_application",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/.*",
+    "*/venv/*",
+    "*/.venv/*"
+]
+relative_files = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == '__main__':"
+]
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"

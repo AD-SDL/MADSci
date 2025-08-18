@@ -1,7 +1,7 @@
 
 [project]
 name = "madsci.node_module"
-version = "0.4.4"
+version = "0.4.6"
 description = "The Modular Autonomous Discovery for Science (MADSci) Node Module Helper Classes."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},

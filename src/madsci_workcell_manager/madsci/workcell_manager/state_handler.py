@@ -280,17 +280,22 @@ class WorkcellStateHandler:
     def get_workflow(self, workflow_id: str) -> Workflow:
         """Get an experiment by ID."""
         if workflow_id in self._active_workflows:
-            return Workflow.model_validate(self._active_workflows[workflow_id])
+            workflow = self.get_active_workflow(workflow_id)
+            if workflow:
+                return workflow
         workflow = self.archived_workflows.find_one({"workflow_id": workflow_id})
         if not workflow:
             raise HTTPException(status_code=404, detail="Workflow not found")
         return Workflow.model_validate(workflow)
 
-    def get_active_workflow(self, workflow_id: Union[str, str]) -> Workflow:
+    def get_active_workflow(self, workflow_id: Union[str, str]) -> Optional[Workflow]:
         """
-        Returns a workflow by ID
+        Returns a workflow by ID, if it exists in the active workflows.
         """
-        return Workflow.model_validate(self._active_workflows[str(workflow_id)])
+        try:
+            return Workflow.model_validate(self._active_workflows[str(workflow_id)])
+        except KeyError:
+            return None
 
     def get_active_workflows(self) -> dict[str, Workflow]:
         """
@@ -322,16 +327,20 @@ class WorkcellStateHandler:
         """
         Returns the workflow queue
         """
-        return [self.get_active_workflow(wf_id) for wf_id in self._workflow_queue]
+        return [
+            self.get_active_workflow(wf_id)
+            for wf_id in self._workflow_queue
+            if self.get_active_workflow(wf_id) is not None
+        ]
 
     def update_workflow_queue(self) -> None:
         """
         Sets the workflow queue based on the current state of the workflows
         """
-        for id in self._workflow_queue:
-            wf = self.get_active_workflow(id)
-            if not wf.status.active:
-                self._workflow_queue.remove(wf.workflow_id)
+        for wf_id in self._workflow_queue:
+            wf = self.get_active_workflow(wf_id)
+            if wf is None or not wf.status.active:
+                self._workflow_queue.remove(wf_id)
         self.mark_state_changed()
 
     def enqueue_workflow(self, workflow_id: str) -> None:
@@ -353,7 +362,7 @@ class WorkcellStateHandler:
             self.mark_state_changed()
 
     def archive_workflow(self, workflow_id: str) -> None:
-        """move a workflow from redis to mongo"""
+        """Move a workflow from redis to mongo"""
         try:
             workflow = self.get_active_workflow(workflow_id)
         except Exception:
@@ -362,7 +371,7 @@ class WorkcellStateHandler:
         self.delete_active_workflow(workflow_id)
 
     def archive_terminal_workflows(self) -> None:
-        """move all completed workflows from redis to mongo"""
+        """Move all completed workflows from redis to mongo"""
         for workflow_id, workflow in self._active_workflows.items():
             if Workflow.model_validate(workflow).status.terminal:
                 self.archive_workflow(workflow_id)
