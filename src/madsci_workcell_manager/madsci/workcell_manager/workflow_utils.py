@@ -167,6 +167,10 @@ def replace_locations(
             raise ValueError(
                 f"Location {location_name_or_object} not found in Workcell '{workcell.workcell_name}'"
             )
+        if step.node not in target_loc.lookup:
+            raise ValueError(
+                f"Location {location_name_or_object} does not contain lookup info for node  '{step.node}'"
+            )
         node_location = LocationArgument(
             location=target_loc.lookup[step.node],
             resource_id=target_loc.resource_id,

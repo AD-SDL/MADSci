@@ -1,0 +1,7 @@
+node_name: default.node
+node_id: 01K2X2Q95MA3CBG3BKT9H5E5BC
+node_description: null
+node_type: device
+module_name: liquid_handler_node
+module_version: 0.0.1
+capabilities: null

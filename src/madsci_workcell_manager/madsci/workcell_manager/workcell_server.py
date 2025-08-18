@@ -36,8 +36,10 @@ from madsci.workcell_manager.workflow_utils import (
     copy_workflow_files,
     create_workflow,
     save_workflow_files,
+    validate_workflow_definition,
 )
 from pymongo.synchronous.database import Database
+from ulid import ULID
 
 
 def create_workcell_server(  # noqa: C901, PLR0915
@@ -325,11 +327,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
-            definition_id = state_handler.save_workflow_definition(
+            wc_def = state_handler.get_workcell_definition()
+            validate_workflow_definition(wf_def, wc_def)
+            return state_handler.save_workflow_definition(
                 workflow_def=wf_def,
             )
-
-            return definition_id
         except HTTPException as e:
             raise e
         except Exception as e:
@@ -342,7 +344,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
 
     @app.post("/workflow")
     async def start_workflow(
-        workflow: Annotated[str, Form()],
+        workflow_id: Annotated[str, Form()],
         ownership_info: Annotated[Optional[str], Form()] = None,
         parameters: Annotated[Optional[str], Form()] = None,
         files: list[UploadFile] = [],
@@ -370,7 +372,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """
         try:
             try:
-                wf_def = WorkflowDefinition.model_validate_json(workflow)
+                workflow_id = ULID.from_str(workflow_id)
+                wf_def = state_handler.get_workflow_definition(str(workflow_id))
 
             except Exception as e:
                 traceback.print_exc()
