@@ -37,6 +37,7 @@ from madsci.workcell_manager.workflow_utils import (
     cancel_active_workflows,
     prepare_workcell_step,
 )
+from madsci.client.transfer_client import TransferManagerClient
 
 
 class Engine:
@@ -183,6 +184,35 @@ class Engine:
                 workcell=self.workcell_definition,
                 state_handler=self.state_handler,
             )
+            # *** NEW: Handle transfer steps by expanding them ***
+            if step.action == "transfer":
+                self.logger.log_info(f"Handling transfer step: {step.name}")
+                try:
+                    transfer_client = TransferManagerClient()
+                    concrete_steps = transfer_client.handle_transfer_step(step)
+                    
+                    self.logger.log_info(f"Transfer step expanded to {len(concrete_steps)} concrete steps")
+                    
+                    # Insert the concrete steps into the workflow
+                    with self.state_handler.wc_state_lock():
+                        current_wf = self.state_handler.get_active_workflow(workflow_id)
+                        current_index = current_wf.status.current_step_index
+                        
+                        # Replace the transfer step with concrete steps
+                        current_wf.steps[current_index:current_index+1] = concrete_steps
+                        
+                        # Update workflow in state
+                        self.state_handler.set_active_workflow(current_wf)
+                        
+                        self.logger.log_info(f"Workflow {workflow_id} updated with {len(concrete_steps)} concrete transfer steps")
+                    
+                    # Return early - the concrete steps will be processed in subsequent iterations
+                    return
+                    
+                except Exception as e:
+                    self.logger.log_error(f"Failed to expand transfer step: {e}")
+                    # Fall through to execute the original step as-is
+            
             step.start_time = datetime.now()
             self.logger.log_info(
                 f"Running step {step.step_id} in workflow {workflow_id}"
