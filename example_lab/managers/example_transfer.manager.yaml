@@ -1,0 +1,6 @@
+transfer_manager_name: Default Transfer Manager
+manager_type: transfer_manager
+transfer_manager_id: 01JK7069DXAKAMWE0PDX6EY1PC
+description: MADSci Transfer Manager for intelligent multi-hop transfer planning
+robot_definitions_path: robot_definitions.yaml
+location_constraints_path: location_constraints.yaml

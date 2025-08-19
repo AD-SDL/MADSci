@@ -1,0 +1,6 @@
+transfer_manager_name: transfer
+manager_type: transfer_manager
+transfer_manager_id: 01K2ZWNYXZSS45HQ8Y775M949H
+description: null
+robot_definitions_path: robot_definitions.yaml
+location_constraints_path: location_constraints.yaml
