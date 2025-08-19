@@ -1,0 +1,47 @@
+platecrane:
+  robot_name: platecrane
+  default_step_template:
+    name: "Transfer via {robot_name}"
+    node: platecrane
+    action: transfer
+    args:
+      plate_type: "flat_bottom_96well"
+    locations:
+      source: "{source}"
+      target: "{target}"
+  default_args:
+    plate_type: "flat_bottom_96well"
+
+sciclops:
+  robot_name: sciclops
+  default_step_template:
+    name: "Get plate via {robot_name}"
+    node: sciclops
+    action: get_plate
+    locations:
+      source: "{source}"
+      target: "{target}"
+  default_args: {}
+
+pf400:
+  robot_name: pf400
+  default_step_template:
+    name: "Transfer via {robot_name}"
+    node: pf400
+    action: transfer
+    locations:
+      source: "{source}"
+      target: "{target}"
+  default_args: {}
+
+robotarm_1:
+  robot_name: robotarm_1
+  default_step_template:
+    name: "Transfer via {robot_name}"
+    node: robotarm_1
+    action: transfer
+    locations:
+      source: "{source}"
+      target: "{target}"
+  default_args:
+    grip_force: 10.0
