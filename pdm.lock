@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:42758c3f94e31bb47cd4961b3fee81fdcdbd2a2a0fda40185372f45def87bff0"
+content_hash = "sha256:48353b77255b79c974758635445d17a1995a2b26b06e6d2881455107b79b6116"
 
 [[metadata.targets]]
 requires_python = ">=3.9.1"
@@ -1474,6 +1474,20 @@ groups = ["dev"]
 dependencies = [
     "madsci-client",
     "madsci-common",
+]
+
+[[package]]
+name = "madsci-transfer-manager"
+version = "0.4.4"
+requires_python = ">=3.9.1"
+editable = true
+path = "./src/madsci_transfer_manager"
+summary = "The Modular Autonomous Discovery for Science (MADSci) Transfer Manager."
+groups = ["dev"]
+dependencies = [
+    "madsci-client",
+    "madsci-common",
+    "psycopg2-binary",
 ]
 
 [[package]]
