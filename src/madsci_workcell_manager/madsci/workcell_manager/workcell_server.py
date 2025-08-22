@@ -163,7 +163,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         if permanent:
             workcell = state_handler.get_workcell_definition()
             workcell.nodes[node_name] = node_url
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
             state_handler.set_workcell_definition(workcell)
 
         return state_handler.get_node(node_name)
@@ -399,7 +400,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         if permanent:
             workcell = state_handler.get_workcell_definition()
             workcell.locations.append(location)
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
         return state_handler.get_location(location.location_id)
 
     @app.get("/location/{location_id}")
@@ -419,7 +421,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     workcell.locations,
                 )
             )
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
             state_handler.set_workcell_definition(workcell)
         return {"status": "deleted"}
 

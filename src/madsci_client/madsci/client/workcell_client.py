@@ -1,5 +1,6 @@
 """Client for performing workcell actions"""
 
+import copy
 import json
 import time
 from pathlib import Path, PurePath
@@ -123,6 +124,7 @@ class WorkcellClient:
         if isinstance(workflow, (Path, str)):
             workflow = WorkflowDefinition.from_yaml(workflow)
         else:
+            workflow = copy.deepcopy(workflow)
             workflow = WorkflowDefinition.model_validate(workflow)
         insert_parameter_values(
             workflow=workflow, parameters=parameters if parameters else {}
@@ -244,7 +246,7 @@ class WorkcellClient:
             response = self.submit_workflow(
                 workflows[i], parameters[i], await_completion=False
             )
-            id_list.append(response.json()["workflow_id"])
+            id_list.append(response.workflow_id)
         finished = False
         while not finished:
             flag = True
@@ -297,6 +299,7 @@ class WorkcellClient:
             },
             timeout=10,
         )
+        response.raise_for_status()
         if await_completion:
             return self.await_workflow(
                 workflow_id=workflow_id,
@@ -305,7 +308,7 @@ class WorkcellClient:
                 prompt_on_error=prompt_on_error,
             )
 
-        return Workflow(**response.json())
+        return Workflow.model_validate(response.json())
 
     def resubmit_workflow(
         self,
@@ -338,7 +341,8 @@ class WorkcellClient:
         """
         url = f"{self.url}/workflow/{workflow_id}/resubmit"
         response = requests.get(url, timeout=10)
-        new_wf = Workflow(**response.json())
+        response.raise_for_status()
+        new_wf = Workflow.model_validate(response.json())
         if await_completion:
             return self.await_workflow(
                 new_wf.workflow_id,
