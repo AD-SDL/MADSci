@@ -84,6 +84,21 @@ class WorkcellClient:
 
         response.raise_for_status()
         return Workflow(**response.json())
+    
+    def get_workflow_definition(
+            self,
+            workflow_definition_id: str
+    ) -> WorkflowDefinition:
+        """
+        get the workflow definition
+        """
+        url = f"{self.url}/workflow_definition/{workflow_definition_id}"
+        response = requests.get(url, timeout=10)
+        if not response.ok and response.content:
+            self.logger.error(f"Error querying workflow: {response.content.decode()}")
+
+        response.raise_for_status()
+        return WorkflowDefinition(**response.json())
 
     def submit_workflow_definition(
         self,
@@ -124,9 +139,7 @@ class WorkcellClient:
         url = self.url + "/workflow_definition"
         response = requests.post(
             url,
-            data={
-                "workflow_defintion": workflow_definition.model_dump_json(),
-            },
+            json=workflow_definition.model_dump(mode='json'),
             timeout=10,
         )
         if not response.ok and response.content:
@@ -134,12 +147,12 @@ class WorkcellClient:
                 f"Error submitting workflow definition: {response.content.decode()}"
             )
         response.raise_for_status()
-        return str(response.content)
+        return str(response.json())
 
     def start_workflow(
         self,
         workflow_definition: Union[PathLike, WorkflowDefinition],
-        parameters: Optional[dict[str, Any]] = None,
+        input_values: Optional[dict[str, Any]] = None,
         input_files: Optional[dict[str, PathLike]] = None,
         await_completion: bool = True,
         prompt_on_error: bool = True,
@@ -183,24 +196,29 @@ class WorkcellClient:
             workflow_definition_id = self.submit_workflow_definition(
                 workflow_definition
             )
-        files = self.make_unique_paths(input_files)
+        workflow_definition = self.get_workflow_definition(workflow_definition_id)
+        files = {}
+        if input_files:
+            files = self.make_paths_absolute(input_files)
+
         url = self.url + "/workflow"
         response = requests.post(
             url,
             data={
-                "workflow_definition": workflow_definition_id,
-                "parameters": json.dumps(parameters) if parameters else None,
+                "workflow_definition_id": workflow_definition_id,
+                "input_values": json.dumps(input_values) if input_values else None,
                 "ownership_info": get_current_ownership_info().model_dump_json(),
+                "input_file_paths":  json.dumps(input_files) if input_files else None
             },
             files={
                 (
                     "files",
                     (
-                        str(Path(path).name),
+                        str(file),
                         Path.open(Path(path).expanduser(), "rb"),
                     ),
                 )
-                for _, path in files.items()
+                for file, path in files.items()
             },
             timeout=10,
         )
@@ -218,7 +236,7 @@ class WorkcellClient:
 
     submit_workflow = start_workflow
 
-    def make_unique_paths(self, files: dict[str, PathLike]) -> dict[str, Path]:
+    def make_paths_absolute(self, files: dict[str, PathLike]) -> dict[str, Path]:
         """
         Extract file paths from a workflow definition.
 
@@ -232,12 +250,12 @@ class WorkcellClient:
         dict[str, Path]
             A dictionary mapping unique file names to their paths.
         """
-        files = {}
+        
         for file, path in files.items():
-            unique_filename = f"{new_ulid_str()}_{file}"
-            files[unique_filename] = path
-            if not Path(files[unique_filename]).is_absolute():
-                files[unique_filename] = self.working_directory / files[unique_filename]
+            if not Path(path).is_absolute():
+                files[file] = str(self.working_directory / path)
+            else:
+                files[file] = str(path)
         return files
 
     def submit_workflow_sequence(

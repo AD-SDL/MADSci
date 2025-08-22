@@ -6,8 +6,9 @@ metadata:
   version: 0.1
 
 parameters:
-  - name: example_parameter
-    default: 0
+  input_values:
+    - name: example_parameter
+      default: 0
 steps:
   - name: Run Liquid Handeler Protocol
     node: liquidhandler_1

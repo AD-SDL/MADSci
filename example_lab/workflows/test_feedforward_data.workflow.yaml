@@ -6,10 +6,18 @@ metadata:
   version: 0.1
 
 parameters:
-  - name: test_file
-    step_name: Generate File
-    label: example_file
-
+  feed_forward_values:
+    - name: test_file
+      step_name: Generate File
+      label: example_file
+  input_files:
+    - input_file_key: test_file_2
+  input_values:
+    - input_key: test_node_1
+      default: liquidhandler_1
+    - input_key: run_command_1
+      default: run_command
+    - input_key: test_command_1 
 steps:
   - name: Generate File
     node: platereader_1
@@ -18,4 +26,15 @@ steps:
     node: liquidhandler_1
     action: run_protocol
     files:
-      protocol: "./test.txt"
+      protocol: test_file
+  - name: Read File 2
+    node: liquidhandler_1
+    action: run_protocol
+    files:
+      protocol: test_file_2
+  - name: Run Command 1
+    parameters:
+      node: test_node_1
+      action: run_command_1
+      args:
+        command: test_command_1

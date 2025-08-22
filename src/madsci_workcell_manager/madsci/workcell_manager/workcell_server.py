@@ -10,6 +10,7 @@ from typing import Annotated, Any, Optional, Union
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
+from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.ownership import global_ownership_info, ownership_context
@@ -36,7 +37,7 @@ from madsci.workcell_manager.workflow_utils import (
     copy_workflow_files,
     create_workflow,
     save_workflow_files,
-    validate_workflow_definition,
+    #validate_workflow_definition,
 )
 from pymongo.synchronous.database import Database
 from ulid import ULID
@@ -78,6 +79,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         mongo_connection=mongo_connection,
     )
 
+    data_client = DataClient(context.data_server_url)
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
         """Start the REST server and initialize the state handler and engine"""
@@ -93,7 +95,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         )
 
         if start_engine:
-            engine = Engine(state_handler)
+            engine = Engine(state_handler, data_client)
             engine.spin()
         else:
             with state_handler.wc_state_lock():
@@ -298,39 +300,31 @@ def create_workcell_server(  # noqa: C901, PLR0915
         return state_handler.get_active_workflow(workflow_id)
 
     @app.post("/workflow_definition")
-    async def submit_workflow_definition(workflow_definition: str) -> Workflow:
+    async def submit_workflow_definition(workflow_definition: WorkflowDefinition) -> str:
         """
         Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
 
         Parameters
         ----------
-        workflow: YAML string
-        - The workflow yaml file
-        parameters: Optional[Dict[str, Any]] = {}
-        - Dynamic values to insert into the workflow file
-        ownership_info: Optional[OwnershipInfo]
-        - Information about the experiments, users, etc. that own this workflow
-        simulate: bool
-        - whether to use real robots or not
-        validate_only: bool
-        - whether to validate the workflow without queueing it
+        workflow_definition: YAML string
+        - The workflow_definition yaml file
+        
 
         Returns
         -------
-        response: Workflow
-        - a workflow run object for the requested run_id
+        response: Workflow Definition ID
+        - the workflow definition ID
         """
         try:
             try:
-                wf_def = WorkflowDefinition.model_validate_json(workflow_definition)
+                wf_def = WorkflowDefinition.model_validate(workflow_definition)
 
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
-            wc_def = state_handler.get_workcell_definition()
-            validate_workflow_definition(wf_def, wc_def)
+           #TODO: Validation
             return state_handler.save_workflow_definition(
-                workflow_def=wf_def,
+                workflow_definition=wf_def,
             )
         except HTTPException as e:
             raise e
@@ -341,12 +335,33 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 status_code=500,
                 detail=f"Error saving workflow definition: {e}",
             ) from e
+    @app.get("/workflow_definition/{workflow_definition_id}")
+    async def get_workflow_definition(workflow_definition_id: str) -> WorkflowDefinition:
+        """
+        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+
+        Parameters
+        ----------
+        Workflow Definition ID: str
+        - the workflow definition ID
+
+        Returns
+        -------
+        response: WorkflowDefinition
+        - a workflow run object for the requested run_id
+        """
+        try:
+            return state_handler.get_workflow_definition(workflow_definition_id)
+        except Exception as e:
+                traceback.print_exc()
+                raise HTTPException(status_code=404, detail=str(e)) from e
 
     @app.post("/workflow")
     async def start_workflow(
-        workflow_id: Annotated[str, Form()],
+        workflow_definition_id: Annotated[str, Form()],
         ownership_info: Annotated[Optional[str], Form()] = None,
-        parameters: Annotated[Optional[str], Form()] = None,
+        input_values: Annotated[Optional[str], Form()] = None,
+        input_file_paths: Annotated[Optional[str], Form()] = None,
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
@@ -372,7 +387,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """
         try:
             try:
-                workflow_id = ULID.from_str(workflow_id)
+                workflow_id = ULID.from_str(workflow_definition_id)
                 wf_def = state_handler.get_workflow_definition(str(workflow_id))
 
             except Exception as e:
@@ -385,29 +400,43 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 else OwnershipInfo()
             )
             with ownership_context(**ownership_info.model_dump(exclude_none=True)):
-                if parameters is None or parameters == "":
-                    parameters = {}
+                if input_values is None or input_values == "":
+                    input_values = {}
                 else:
-                    parameters = json.loads(parameters)
-                    if not isinstance(parameters, dict) or not all(
-                        isinstance(k, str) for k in parameters
+                    input_values = json.loads(input_values)
+                    if not isinstance(input_values, dict) or not all(
+                        isinstance(k, str) for k in input_values
                     ):
                         raise HTTPException(
                             status_code=400,
                             detail="Parameters must be a dictionary with string keys",
                         )
+                if input_file_paths is None or input_file_paths == "":
+                    input_file_paths = {}
+                else:
+                    input_file_paths = json.loads(input_file_paths)
+                    if not isinstance(input_file_paths, dict) or not all(
+                        isinstance(k, str) for k in input_file_paths
+                    ):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Input File Paths must be a dictionary with string keys",
+                        )
                 workcell = state_handler.get_workcell_definition()
                 wf = create_workflow(
                     workflow_def=wf_def,
                     workcell=workcell,
-                    parameters=parameters,
-                    state_handler=state_handler,
+                    input_values=input_values,
+                    input_file_paths = input_file_paths,
+                    data_client=data_client,
+                    state_handler=state_handler
                 )
 
                 wf = save_workflow_files(
-                    working_directory=workcell.workcell_directory,
                     workflow=wf,
                     files=files,
+                    data_client=data_client
+
                 )
 
                 with state_handler.wc_state_lock():

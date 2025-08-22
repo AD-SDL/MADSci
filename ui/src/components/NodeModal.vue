@@ -124,13 +124,13 @@
                     </tr>
                   </template>
                 </v-data-table>
-                <h5 v-if="action.results.length > 0">Results</h5>
-                <v-data-table v-if="action.results.length > 0" :headers="result_headers" :items="action.results" hover
+                <h5 v-if="Object.keys(action.results).length > 0">Results</h5>
+                <v-data-table v-if="Object.keys(action.results).length > 0" :headers="result_headers" :items="Object.values(action.results)" hover
                   items-per-page="-1" no-data-text="No Results" density="compact">
                   <template v-slot:item="{ item }: { item: any }">
                     <tr>
-                      <td>{{ item.label }}</td>
-                      <td>{{ item.type }}</td>
+                      <td>{{ item.result_label }}</td>
+                      <td>{{ item.result_type }}</td>
                       <td>{{ item.description }}</td>
                     </tr>
                   </template>

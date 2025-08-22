@@ -119,7 +119,7 @@ def get_named_input(main_string: str, plural: str) -> list[str]:
     result_list = []
     data = regex.search(plural + r"=(\{(?:[^{}]|(?1))*\})", main_string)
     singular = plural[:-1] if plural[-1] == "s" else plural
-    if data:
+    if data is not None:
         data = data.group(0)[len(plural) + 2 : -1]
         data = split_top_level(data)
         if len(data) > 0:

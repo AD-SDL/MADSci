@@ -636,7 +636,10 @@ class AbstractNode:
         if set_node_errored:
             self.node_status.errored = True
         madsci_error = Error.from_exception(e)
+
         self.node_status.errors.append(madsci_error)
+        if len(self.node_status.errors) > 100:
+            self.node_status.errors = self.node_status.errors[1:]
         self.logger.log_error(
             Event(event_type=EventType.NODE_ERROR, event_data=madsci_error)
         )

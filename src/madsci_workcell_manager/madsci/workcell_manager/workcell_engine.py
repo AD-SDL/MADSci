@@ -24,10 +24,9 @@ from madsci.common.types.datapoint_types import DataPoint, FileDataPoint, ValueD
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import Node, NodeStatus
 from madsci.common.types.step_types import Step
-from madsci.common.types.workflow_types import (
-    Workflow,
-    WorkflowParameter,
-)
+from madsci.common.types.workflow_types import Workflow
+
+from madsci.common.types.parameter_types import FeedForwardValue
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_utils import (
@@ -35,7 +34,7 @@ from madsci.workcell_manager.workcell_utils import (
 )
 from madsci.workcell_manager.workflow_utils import (
     cancel_active_workflows,
-    prepare_workcell_step,
+    prepare_workflow_step,
 )
 
 
@@ -48,6 +47,7 @@ class Engine:
     def __init__(
         self,
         state_handler: WorkcellStateHandler,
+        data_client: DataClient
     ) -> None:
         """Initialize the scheduler."""
         self.state_handler = state_handler
@@ -61,7 +61,7 @@ class Engine:
         self.scheduler = scheduler_module.Scheduler(
             self.workcell_definition, self.state_handler
         )
-        self.data_client = DataClient()
+        self.data_client = data_client
         self.resource_client = ResourceClient()
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state(
@@ -175,13 +175,12 @@ class Engine:
             # * Prepare the step
             wf = self.state_handler.get_active_workflow(workflow_id)
             step = wf.steps[wf.status.current_step_index]
-            step.args = walk_and_replace(step.args, wf.parameter_values)
-            step.files = walk_and_replace(step.files, wf.parameter_values)
-            step.locations = walk_and_replace(step.locations, wf.parameter_values)
-            step = prepare_workcell_step(
+            step = prepare_workflow_step(
                 step=step,
                 workcell=self.workcell_definition,
                 state_handler=self.state_handler,
+                workflow=wf,
+                data_client=self.data_client
             )
             step.start_time = datetime.now()
             self.logger.log_info(
@@ -291,20 +290,14 @@ class Engine:
                 retry_count += 1
 
     def update_parameters(
-        self, wf: Workflow, datapoint: DataPoint, parameter: WorkflowParameter
+        self, wf: Workflow, datapoint: DataPoint, parameter: FeedForwardValue
     ) -> Workflow:
         """updates the parameters in a workflow"""
 
         if datapoint.data_type == "data_value":
             wf.parameter_values[parameter.name] = datapoint.value
         elif datapoint.data_type in {"object_storage", "file"}:
-            filename = Path(datapoint.path).name
-            with tempfile.NamedTemporaryFile(
-                suffix="".join(Path(filename).suffixes), delete=False
-            ) as temp_file:
-                temp_path = Path(temp_file.name)
-                self.data_client.save_datapoint_value(datapoint.datapoint_id, temp_path)
-                wf.parameter_values[parameter.name] = temp_path
+            wf.input_file_ids[parameter.name] = datapoint.datapoint_id
         return wf
 
     def finalize_step(self, workflow_id: str, step: Step) -> None:
@@ -313,14 +306,14 @@ class Engine:
             wf = self.state_handler.get_active_workflow(workflow_id)
             step.end_time = datetime.now()
             wf.steps[wf.status.current_step_index] = step
-            for parameter in wf.parameters:
+            for value in wf.parameters.feed_forward_values:
                 if (
-                    parameter.step_name == step.name
-                    or wf.status.current_step_index == parameter.step_index
-                    or (parameter.step_name is None and parameter.step_index is None)
-                ) and parameter.label in step.result.datapoints:
-                    datapoint = step.result.datapoints[parameter.label]
-                    wf = self.update_parameters(wf, datapoint, parameter)
+                    value.step_name == step.name
+                    or wf.status.current_step_index == value.step_index
+                    or (value.step_name is None and value.step_index is None)
+                ) and value.label in step.result.datapoints:
+                    datapoint = step.result.datapoints[value.label]
+                    wf = self.update_parameters(wf, datapoint, value)
             wf.status.running = False
 
             if step.status == ActionStatus.SUCCEEDED:

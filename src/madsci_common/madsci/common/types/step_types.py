@@ -7,6 +7,7 @@ from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.base_types import MadsciBaseModel, PathLike
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.location_types import LocationArgument
+from madsci.common.types.parameter_types import InputFile
 from madsci.common.utils import new_ulid_str
 from pydantic import Field
 
@@ -22,7 +23,7 @@ class StepParameters(MadsciBaseModel):
         description="A description of the step.",
         default=None,
     )
-    action: str = Field(
+    action: Optional[str] = Field(
         title="Step Action",
         description="The action to perform in the step.",
     )
@@ -53,19 +54,20 @@ class StepDefinition(MadsciBaseModel):
         description="A description of the step.",
         default=None,
     )
-    action: str = Field(
+    action: Optional[str] = Field(
         title="Step Action",
         description="The action to perform in the step.",
+        default=None
     )
-    node: str = Field(title="Node Name", description="Name of the node to run on")
+    node: Optional[str] = Field(title="Node Name", description="Name of the node to run on", default=None)
     args: dict[str, Any] = Field(
         title="Step Arguments",
         description="Arguments for the step action.",
         default_factory=dict,
     )
-    files: dict[str, Optional[PathLike]] = Field(
+    files: dict[str, Union[InputFile, str]] = Field(
         title="Step File Arguments",
-        description="Files to be used in the step. Key is the name of the file argument, value is the path to the file.",
+        description="Files to be used in the step. Key is the name of the file argument, value is either the name of the input file or a newly defined input file",
         default_factory=dict,
     )
     locations: dict[str, Optional[Union[str, LocationArgument]]] = Field(

@@ -8,6 +8,7 @@ from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.step_types import Step, StepDefinition
+from madsci.common.types.parameter_types import InputFile, WorkflowInputValue, FeedForwardValue
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field, field_validator
@@ -91,58 +92,18 @@ class WorkflowStatus(MadsciBaseModel):
         return "Unknown"
 
 
-class WorkflowParameter(MadsciBaseModel):
-    """container for a workflow parameter"""
 
-    name: str
-    """The name of the parameter"""
-    default: Optional[Any] = None
-    """The default value of a parameter, if not provided, the parameter must be provided when the workflow is run"""
-    parameter_type: Optional[str] = None
-    """The python type of the parameter value"""
+class WorkflowParameters(MadsciBaseModel):
+    """container for all of the workflow parameters"""
+    input_values: list[WorkflowInputValue] = Field(default_factory=list)
+    """JSON serializable value inputs to the workflow"""
+    
+    feed_forward_values: list[FeedForwardValue] = Field(default_factory=list)
+    """Parameters based on datapoints generated during execution of the workflow"""
 
-    @model_validator(mode="after")
-    def validate_value_parameters(self) -> "WorkflowParameter":
-        """Assert that at most one of step_name, step_index, and label are set."""
-        if self.parameter_type is not None and self.default is not None:
-            if not type(self.default).__name__ == self.parameter_type or (
-                "Union" in self.parameter_type
-                and type(self.default).__name__ not in str(self.parameter_type)
-            ):
-                return ValueError("Default value is of the wrong type")
-        return self
+    input_files: list[InputFile] = Field(default_factory=list)
+    """required file inputs to the workflow"""
 
-
-class InputFile(MadsciBaseModel):
-    """Input files for the workflow"""
-
-    name: str
-    """The name of the input file"""
-    description: Optional[str] = None
-    """A description of the input file"""
-
-
-class FeedForwardValue(MadsciBaseModel):
-    """container for a workflow parameter"""
-
-    name: str
-    """The name of the parameter"""
-    step_name: Optional[str] = None
-    """Name of a step in the workflow; this will use the value of a datapoint from the step with the matching name as the value for this parameter"""
-    step_index: Optional[str] = None
-    """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
-    value_type: Optional[str] = None
-    """The python type of the parameter value"""
-    label: str
-    """This will use the value of a datapoint from a previous step with the matching label."""
-
-    @model_validator(mode="after")
-    def validate_feedforward_parameters(self) -> "FeedForwardValue":
-        """Assert that at most one of step_name, step_index, and label are set."""
-        if self.step_name and self.step_index:
-            raise ValueError("Cannot set both step_name and step_index for a parameter")
-
-        return self
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
@@ -167,16 +128,11 @@ class WorkflowDefinition(MadsciBaseModel):
     """ID of the workflow definition"""
     definition_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
-    parameters: list[WorkflowParameter] = Field(default_factory=list)
-    """Raw value inputs to the workflow"""
-    feed_forward_values: list[FeedForwardValue] = Field(default_factory=list)
-    """Parameters based on datapoints generated during execution of the workflow"""
-
+    parameters: WorkflowParameters = Field(default_factory=WorkflowParameters)
+    """the parameterized inputs to the workflow"""
+    
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
-
-    input_files: list[InputFile] = Field(default_factory=list)
-    """required file inputs to the workflow"""
 
     @field_validator("steps", mode="after")
     @classmethod
@@ -195,19 +151,36 @@ class WorkflowDefinition(MadsciBaseModel):
     def ensure_input_label_uniqueness(self) -> Any:
         """Ensure that the names of the arguments and files are unique"""
         labels = []
-        error = ValueError("Input Value Names must be unique across workflow")
-        for parameter in self.parameters:
-            if parameter.name in labels:
+        error = ValueError("Input value keys must be unique across workflow definition")
+        inline_inputs = []
+        # for step in self.steps:
+        #     if step.files:
+        #         for file in step.files.values():
+        #             if type(file) == InputFile:
+        #                 inline_inputs.append(file)
+        #             elif type(file) == str:
+        #                 valid = False
+        #                 for input_file in self.parameters.input_files:
+        #                     if input_file.input_file_key == file:
+        #                         valid = True
+        #                 for ffv in self.parameters.feed_forward_values:
+        #                     if ffv.name == file:
+        #                         valid = True    
+        #                 if not valid:
+        #                     raise ValueError("Input Files referenced by key inline must be defined at the top of the workflow")
+        self.parameters.input_files = self.parameters.input_files + inline_inputs
+        for input_value in self.parameters.input_values:
+            if input_value.input_key in labels:
                 raise error
-            labels.append(parameter.name)
-        for ffv in self.feed_forward_values:
+            labels.append(input_value.input_key)
+        for ffv in self.parameters.feed_forward_values:
             if ffv.name in labels:
                 raise error
             labels.append(ffv.name)
-        for input_file in self.input_files:
-            if input_file.name in labels:
+        for input_file in self.parameters.input_files:
+            if input_file.input_file_key in labels:
                 raise error
-            labels.append(input_file.name)
+            labels.append(input_file.input_file_key)
         return self
 
 
@@ -235,6 +208,10 @@ class Workflow(WorkflowDefinition):
     """Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory=dict)
     """parameter values used in this workflow"""
+    input_file_paths: dict[str, str] = Field(default_factory=dict)
+    """The paths to the original input files on the experiment computer, used for records purposes"""
+    input_file_ids: dict[str, str] = Field(default_factory=dict)
+    """The datapoint ids of the input files """
     ownership_info: OwnershipInfo = Field(default_factory=get_current_ownership_info)
     """Ownership information for the workflow run"""
     status: WorkflowStatus = Field(default_factory=WorkflowStatus)
