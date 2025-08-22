@@ -2,6 +2,14 @@
 
 Provides a collection of clients for interacting with the different components of a MADSci interface.
 
+## Installation
+
+See the main [README](../../README.md#installation) for installation options. This package is available as:
+
+- PyPI: `pip install madsci.client`
+- Docker: Included in `ghcr.io/ad-sdl/madsci`
+- **Dependency**: Required by most other MADSci packages
+
 ## Node Clients
 
 Node clients allow you to interface with MADSci Nodes to:
@@ -15,14 +23,22 @@ As MADSci is designed to support multiple communications protocols, we provide a
 
 ### REST Client
 
-The RestNodeClient class allows you to communicate with and control any server implementing the MADSci Node standard (see [MADSci Node Module](../madsci_node_module/README.md)). See a basic example below, or the `node_notebook.ipynb` in the [MADSci Examples](https://github.com/ad-sdl/MADSci_Examples).
+Communicate with MADSci Nodes via REST API:
 
 ```python
 from madsci.client.node.rest_node_client import RestNodeClient
+from madsci.common.types.action_types import ActionRequest
 
 client = RestNodeClient(url="http://example:2000")
-client.get_status()
+action_request = ActionRequest(
+    action_name="my_action",
+    args={"param": "value"},
+)
+status = client.get_status()
+result = client.send_action(action_request)
 ```
+
+**Examples**: See [example_lab/notebooks/node_notebook.ipynb](../../example_lab/notebooks/node_notebook.ipynb) for detailed usage.
 
 ## Event Client
 

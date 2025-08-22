@@ -1,11 +1,11 @@
 """An Example Application"""
 
-from madsci.client.experiment_application import (
+from madsci.common.types.experiment_types import ExperimentDesign
+from madsci.common.types.node_types import NodeDefinition
+from madsci.experiment_application import (
     ExperimentApplication,
     ExperimentApplicationConfig,
 )
-from madsci.common.types.experiment_types import ExperimentDesign
-from madsci.common.types.node_types import NodeDefinition
 from pydantic import AnyUrl
 
 

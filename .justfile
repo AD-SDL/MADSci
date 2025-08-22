@@ -22,7 +22,7 @@ venv:
 
 # Run the pre-commit checks
 checks:
-  @pre-commit run --all-files || { echo "Checking fixes\n" ; pre-commit run --all-files; }
+  @pre-commit run --all-files || { echo "" && echo "Some checks failed! Running one more time to see if any automatic fixes worked:" && echo "" ; pre-commit run --all-files; }
 # Run the pre-commit checks
 check: checks
 
@@ -58,6 +58,18 @@ test:
 tests: test
 # Run automated tests
 pytest: test
+
+# Run tests with coverage report
+coverage:
+  @pytest --cov --cov-report=term-missing
+
+# Run tests with HTML coverage report
+coverage-html:
+  @pytest --cov --cov-report=html
+
+# Run tests with XML coverage report (for CI)
+coverage-xml:
+  @pytest --cov --cov-report=xml
 
 # Build docker images
 dcb: env
