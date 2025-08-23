@@ -10,6 +10,7 @@ declare module 'vue' {
     AddLocationModal: typeof import('./src/components/AddLocationModal.vue')['default']
     AddResourceModal: typeof import('./src/components/AddResourceModal.vue')['default']
     CancelButton: typeof import('./src/components/AdminButtons/CancelButton.vue')['default']
+    Consumable: typeof import('./src/components/ResourceComponents/Consumable.vue')['default']
     Dashboard: typeof import('./src/components/Dashboard.vue')['default']
     Event: typeof import('./src/components/Event.vue')['default']
     Experiments: typeof import('./src/components/Experiments.vue')['default']
