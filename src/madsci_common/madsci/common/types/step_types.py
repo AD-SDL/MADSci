@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 from madsci.common.types.action_types import ActionResult, ActionStatus
-from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.parameter_types import InputFile
@@ -57,9 +57,11 @@ class StepDefinition(MadsciBaseModel):
     action: Optional[str] = Field(
         title="Step Action",
         description="The action to perform in the step.",
-        default=None
+        default=None,
     )
-    node: Optional[str] = Field(title="Node Name", description="Name of the node to run on", default=None)
+    node: Optional[str] = Field(
+        title="Node Name", description="Name of the node to run on", default=None
+    )
     args: dict[str, Any] = Field(
         title="Step Arguments",
         description="Arguments for the step action.",
@@ -104,6 +106,12 @@ class Step(StepDefinition):
         title="Step Status",
         description="The status of the step.",
         default=ActionStatus.NOT_STARTED,
+    )
+
+    file_paths: dict[str, Union[InputFile, str]] = Field(
+        title="Step File Paths",
+        description="File paths to be used in the step. path is a temp path on the workcell manager",
+        default_factory=dict,
     )
     result: Optional[ActionResult] = Field(
         title="Latest Step Result",

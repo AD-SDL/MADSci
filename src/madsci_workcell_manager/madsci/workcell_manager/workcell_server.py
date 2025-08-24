@@ -37,7 +37,7 @@ from madsci.workcell_manager.workflow_utils import (
     copy_workflow_files,
     create_workflow,
     save_workflow_files,
-    #validate_workflow_definition,
+    # validate_workflow_definition,
 )
 from pymongo.synchronous.database import Database
 from ulid import ULID
@@ -80,6 +80,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
     )
 
     data_client = DataClient(context.data_server_url)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
         """Start the REST server and initialize the state handler and engine"""
@@ -300,7 +301,9 @@ def create_workcell_server(  # noqa: C901, PLR0915
         return state_handler.get_active_workflow(workflow_id)
 
     @app.post("/workflow_definition")
-    async def submit_workflow_definition(workflow_definition: WorkflowDefinition) -> str:
+    async def submit_workflow_definition(
+        workflow_definition: WorkflowDefinition,
+    ) -> str:
         """
         Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
 
@@ -308,7 +311,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         ----------
         workflow_definition: YAML string
         - The workflow_definition yaml file
-        
+
 
         Returns
         -------
@@ -322,7 +325,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
-           #TODO: Validation
+            # TODO: Validation
             return state_handler.save_workflow_definition(
                 workflow_definition=wf_def,
             )
@@ -335,8 +338,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 status_code=500,
                 detail=f"Error saving workflow definition: {e}",
             ) from e
+
     @app.get("/workflow_definition/{workflow_definition_id}")
-    async def get_workflow_definition(workflow_definition_id: str) -> WorkflowDefinition:
+    async def get_workflow_definition(
+        workflow_definition_id: str,
+    ) -> WorkflowDefinition:
         """
         Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
 
@@ -353,8 +359,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         try:
             return state_handler.get_workflow_definition(workflow_definition_id)
         except Exception as e:
-                traceback.print_exc()
-                raise HTTPException(status_code=404, detail=str(e)) from e
+            traceback.print_exc()
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     @app.post("/workflow")
     async def start_workflow(
@@ -427,16 +433,13 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     workflow_def=wf_def,
                     workcell=workcell,
                     input_values=input_values,
-                    input_file_paths = input_file_paths,
+                    input_file_paths=input_file_paths,
                     data_client=data_client,
-                    state_handler=state_handler
+                    state_handler=state_handler,
                 )
 
                 wf = save_workflow_files(
-                    workflow=wf,
-                    files=files,
-                    data_client=data_client
-
+                    workflow=wf, files=files, data_client=data_client
                 )
 
                 with state_handler.wc_state_lock():

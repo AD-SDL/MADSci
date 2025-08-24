@@ -7,8 +7,12 @@ from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
+from madsci.common.types.parameter_types import (
+    FeedForwardValue,
+    InputFile,
+    WorkflowInputValue,
+)
 from madsci.common.types.step_types import Step, StepDefinition
-from madsci.common.types.parameter_types import InputFile, WorkflowInputValue, FeedForwardValue
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field, field_validator
@@ -92,18 +96,17 @@ class WorkflowStatus(MadsciBaseModel):
         return "Unknown"
 
 
-
 class WorkflowParameters(MadsciBaseModel):
     """container for all of the workflow parameters"""
+
     input_values: list[WorkflowInputValue] = Field(default_factory=list)
     """JSON serializable value inputs to the workflow"""
-    
+
     feed_forward_values: list[FeedForwardValue] = Field(default_factory=list)
     """Parameters based on datapoints generated during execution of the workflow"""
 
     input_files: list[InputFile] = Field(default_factory=list)
     """required file inputs to the workflow"""
-
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
@@ -130,7 +133,7 @@ class WorkflowDefinition(MadsciBaseModel):
     """Information about the flow"""
     parameters: WorkflowParameters = Field(default_factory=WorkflowParameters)
     """the parameterized inputs to the workflow"""
-    
+
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
 
@@ -153,21 +156,21 @@ class WorkflowDefinition(MadsciBaseModel):
         labels = []
         error = ValueError("Input value keys must be unique across workflow definition")
         inline_inputs = []
-        # for step in self.steps:
-        #     if step.files:
-        #         for file in step.files.values():
-        #             if type(file) == InputFile:
-        #                 inline_inputs.append(file)
-        #             elif type(file) == str:
-        #                 valid = False
-        #                 for input_file in self.parameters.input_files:
-        #                     if input_file.input_file_key == file:
-        #                         valid = True
-        #                 for ffv in self.parameters.feed_forward_values:
-        #                     if ffv.name == file:
-        #                         valid = True    
-        #                 if not valid:
-        #                     raise ValueError("Input Files referenced by key inline must be defined at the top of the workflow")
+        for step in self.steps:
+            if step.files:
+                for file in step.files.values():
+                    if type(file) == InputFile:
+                        inline_inputs.append(file)
+                    elif type(file) == str:
+                        valid = False
+                        for input_file in self.parameters.input_files:
+                            if input_file.input_file_key == file:
+                                valid = True
+                        for ffv in self.parameters.feed_forward_values:
+                            if ffv.name == file:
+                                valid = True
+                        if not valid:
+                            raise ValueError("Input Files referenced by key inline must be defined at the top of the workflow")
         self.parameters.input_files = self.parameters.input_files + inline_inputs
         for input_value in self.parameters.input_values:
             if input_value.input_key in labels:

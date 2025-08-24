@@ -21,7 +21,9 @@ class ExampleApp(ExperimentApplication):
         """main experiment function"""
 
         self.workcell_client.submit_workflow(
-            "./workflows/test_feedforward_data.workflow.yaml", input_values={"test_command_1": "test"}, input_files={"test_file_2": "./test.txt"}
+            "./workflows/test_feedforward_data.workflow.yaml",
+            input_values={"test_command_1": "test"},
+            input_files={"test_file_2": "./test.txt"},
         )
         return "test"
 

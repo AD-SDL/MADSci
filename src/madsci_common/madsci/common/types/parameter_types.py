@@ -1,13 +1,10 @@
 """Types for MADSci Worfklow parameters."""
 
-from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from enum import Enum
+from typing import Any, Optional
 
 from madsci.common.types.base_types import MadsciBaseModel
 from pydantic.functional_validators import model_validator
-from enum import Enum
-
-
 
 
 class WorkflowInputValue(MadsciBaseModel):
@@ -42,12 +39,14 @@ class InputFile(MadsciBaseModel):
     description: Optional[str] = None
     """A description of the input file"""
 
+
 class FeedForwardValueType(str, Enum):
     """The type of a MADSci node."""
 
     VALUE = "value"
     FILE = "file"
     OBJECT = "object"
+
 
 class FeedForwardValue(MadsciBaseModel):
     """container for a workflow parameter"""

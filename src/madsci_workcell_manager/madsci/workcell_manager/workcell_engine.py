@@ -5,28 +5,24 @@ Engine Class and associated helpers and data
 import concurrent
 import copy
 import importlib
-import tempfile
 import time
 import traceback
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
-from madsci.common.data_manipulation import walk_and_replace
 from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import DataPoint, FileDataPoint, ValueDataPoint
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import Node, NodeStatus
+from madsci.common.types.parameter_types import FeedForwardValue
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import Workflow
-
-from madsci.common.types.parameter_types import FeedForwardValue
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_utils import (
@@ -45,9 +41,7 @@ class Engine:
     """
 
     def __init__(
-        self,
-        state_handler: WorkcellStateHandler,
-        data_client: DataClient
+        self, state_handler: WorkcellStateHandler, data_client: DataClient
     ) -> None:
         """Initialize the scheduler."""
         self.state_handler = state_handler
@@ -180,7 +174,7 @@ class Engine:
                 workcell=self.workcell_definition,
                 state_handler=self.state_handler,
                 workflow=wf,
-                data_client=self.data_client
+                data_client=self.data_client,
             )
             step.start_time = datetime.now()
             self.logger.log_info(
@@ -198,7 +192,7 @@ class Engine:
             request = ActionRequest(
                 action_name=step.action,
                 args=args,
-                files=step.files,
+                files=step.file_paths,
             )
             action_id = request.action_id
             self.add_pending_action(step, action_id)

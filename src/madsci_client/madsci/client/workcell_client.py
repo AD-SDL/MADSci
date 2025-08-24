@@ -22,7 +22,6 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.utils import new_ulid_str
 from rich import print
 from ulid import ULID
 
@@ -84,10 +83,9 @@ class WorkcellClient:
 
         response.raise_for_status()
         return Workflow(**response.json())
-    
+
     def get_workflow_definition(
-            self,
-            workflow_definition_id: str
+        self, workflow_definition_id: str
     ) -> WorkflowDefinition:
         """
         get the workflow definition
@@ -139,7 +137,7 @@ class WorkcellClient:
         url = self.url + "/workflow_definition"
         response = requests.post(
             url,
-            json=workflow_definition.model_dump(mode='json'),
+            json=workflow_definition.model_dump(mode="json"),
             timeout=10,
         )
         if not response.ok and response.content:
@@ -208,7 +206,7 @@ class WorkcellClient:
                 "workflow_definition_id": workflow_definition_id,
                 "input_values": json.dumps(input_values) if input_values else None,
                 "ownership_info": get_current_ownership_info().model_dump_json(),
-                "input_file_paths":  json.dumps(input_files) if input_files else None
+                "input_file_paths": json.dumps(input_files) if input_files else None,
             },
             files={
                 (
@@ -250,7 +248,7 @@ class WorkcellClient:
         dict[str, Path]
             A dictionary mapping unique file names to their paths.
         """
-        
+
         for file, path in files.items():
             if not Path(path).is_absolute():
                 files[file] = str(self.working_directory / path)

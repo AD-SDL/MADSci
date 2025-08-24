@@ -1,14 +1,16 @@
 """Utility function for the workcell manager."""
 
 import shutil
+import tempfile
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
-import tempfile
 
 from fastapi import UploadFile
+from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
+from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.location_types import (
     LocationArgument,
 )
@@ -20,8 +22,7 @@ from madsci.common.types.workflow_types import (
     WorkflowDefinition,
 )
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
-from madsci.client.data_client import DataClient
-from madsci.common.types.datapoint_types import FileDataPoint
+
 
 def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
     """
@@ -45,7 +46,11 @@ def validate_step(step: Step, state_handler: WorkcellStateHandler) -> tuple[bool
         elif step.action in info.actions:
             action = info.actions[step.action]
             for action_arg in action.args.values():
-                if action_arg.name not in step.args and action_arg.name not in step.parameters.args and action_arg.required:
+                if (
+                    action_arg.name not in step.args
+                    and action_arg.name not in step.parameters.args
+                    and action_arg.required
+                ):
                     return (
                         False,
                         f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing arg '{action_arg.name}'",
@@ -87,7 +92,7 @@ def create_workflow(
     state_handler: WorkcellStateHandler,
     data_client: DataClient,
     input_values: Optional[dict[str, Any]] = None,
-    input_file_paths: Optional[dict[str, str]] = None
+    input_file_paths: Optional[dict[str, str]] = None,
 ) -> Workflow:
     """Pulls the workcell and builds a list of dictionary steps to be executed
 
@@ -118,7 +123,7 @@ def create_workflow(
         {
             "label": workflow_def.name,
             "parameter_values": input_values,
-            "input_file_paths": input_file_paths
+            "input_file_paths": input_file_paths,
         }
     )
     wf = Workflow(**wf_dict)
@@ -129,11 +134,16 @@ def create_workflow(
     wf.step_definitions = workflow_def.steps
     steps = []
     for step in workflow_def.steps:
-        steps.append(prepare_workflow_step(workcell, state_handler, step, wf, data_client, running=False))
+        steps.append(
+            prepare_workflow_step(
+                workcell, state_handler, step, wf, data_client, running=False
+            )
+        )
 
     wf.steps = [Step.model_validate(step.model_dump()) for step in steps]
     wf.submitted_time = datetime.now()
     return wf
+
 
 def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
     step_dict = step.model_dump()
@@ -152,9 +162,13 @@ def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
     return step
 
 
-
 def prepare_workflow_step(
-    workcell: WorkcellDefinition, state_handler: WorkcellStateHandler, step: Step, workflow: Workflow, data_client: DataClient, running: bool = True
+    workcell: WorkcellDefinition,
+    state_handler: WorkcellStateHandler,
+    step: Step,
+    workflow: Workflow,
+    data_client: DataClient,
+    running: bool = True,
 ) -> Step:
     """Prepares a step for execution by replacing locations and validating it"""
     parameter_values = workflow.parameter_values
@@ -170,7 +184,10 @@ def prepare_workflow_step(
         raise ValueError(validation_string)
     return working_step
 
-def prepare_workflow_files(step: Step, workflow: Workflow, data_client: DataClient) -> Step:
+
+def prepare_workflow_files(
+    step: Step, workflow: Workflow, data_client: DataClient
+) -> Step:
     input_file_ids = workflow.input_file_ids
     for file, definition in step.files.items():
         suffixes = []
@@ -181,13 +198,16 @@ def prepare_workflow_files(step: Step, workflow: Workflow, data_client: DataClie
         elif type(definition) == InputFile:
             datapoint_id = input_file_ids[definition.input_file_key]
             if definition.input_file_key in workflow.input_file_paths:
-                suffixes = Path(workflow.input_file_paths[definition.input_file_key]).suffixes
-        
+                suffixes = Path(
+                    workflow.input_file_paths[definition.input_file_key]
+                ).suffixes
+
         with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
             data_client.save_datapoint_value(datapoint_id, f.name)
-            step.files[file] = f.name
+            step.file_paths[file] = f.name
     return step
-            
+
+
 def replace_locations(
     workcell: WorkcellDefinition, step: Step, state_handler: WorkcellStateHandler
 ) -> None:
@@ -231,22 +251,25 @@ def save_workflow_files(
     and updates the step files to point to the new location"""
     input_file_paths = workflow.input_file_paths
     input_files = {}
-    
+
     for file in files:
         input_files[file.filename] = file.file
     input_file_ids = {}
     for file in workflow.parameters.input_files:
         if file.input_file_key not in input_files:
             raise ValueError(f"Missing file: {file.input_file_key}")
-        else:
-            path = Path(input_file_paths[file.input_file_key])
-            suffixes = path.suffixes
-            with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
-                f.write(input_files[file.input_file_key].read())
-                datapoint = FileDataPoint(label=file.input_file_key, ownership_info=workflow.ownership_info, path=Path(f.name))
-                datapoint_id = data_client.submit_datapoint(datapoint).datapoint_id
-                input_file_ids[file.input_file_key] = datapoint_id
-    workflow.input_file_ids = input_file_ids       
+        path = Path(input_file_paths[file.input_file_key])
+        suffixes = path.suffixes
+        with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
+            f.write(input_files[file.input_file_key].read())
+            datapoint = FileDataPoint(
+                label=file.input_file_key,
+                ownership_info=workflow.ownership_info,
+                path=Path(f.name),
+            )
+            datapoint_id = data_client.submit_datapoint(datapoint).datapoint_id
+            input_file_ids[file.input_file_key] = datapoint_id
+    workflow.input_file_ids = input_file_ids
     return workflow
 
 

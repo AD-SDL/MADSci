@@ -17,7 +17,7 @@ parameters:
       default: liquidhandler_1
     - input_key: run_command_1
       default: run_command
-    - input_key: test_command_1 
+    - input_key: test_command_1
 steps:
   - name: Generate File
     node: platereader_1
