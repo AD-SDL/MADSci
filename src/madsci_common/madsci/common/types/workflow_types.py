@@ -170,7 +170,9 @@ class WorkflowDefinition(MadsciBaseModel):
                             if ffv.name == file:
                                 valid = True
                         if not valid:
-                            raise ValueError("Input Files referenced by key inline must be defined at the top of the workflow")
+                            raise ValueError(
+                                "Input Files referenced by key inline must be defined at the top of the workflow"
+                            )
         self.parameters.input_files = self.parameters.input_files + inline_inputs
         for input_value in self.parameters.input_values:
             if input_value.input_key in labels:

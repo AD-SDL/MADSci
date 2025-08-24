@@ -36,6 +36,7 @@ class WorkcellClient:
         workcell_server_url: Optional[str] = None,
         working_directory: str = "./",
         event_client: Optional[EventClient] = None,
+        retry: bool = False,
     ) -> None:
         """
         Initialize the WorkcellClient.
@@ -52,6 +53,7 @@ class WorkcellClient:
             if workcell_server_url
             else MadsciContext()
         )
+        self.retry = retry
         self.logger = event_client or EventClient()
         self.url = self.context.workcell_server_url
         if not self.url:
@@ -62,7 +64,9 @@ class WorkcellClient:
         if str(self.url).endswith("/"):
             self.url = str(self.url)[:-1]
 
-    def query_workflow(self, workflow_id: str) -> Optional[Workflow]:
+    def query_workflow(
+        self, workflow_id: str, retry: Optional[bool] = None
+    ) -> Optional[Workflow]:
         """
         Check the status of a workflow using its ID.
 
@@ -76,8 +80,21 @@ class WorkcellClient:
         Optional[Workflow]
             The workflow object if found, otherwise None.
         """
+        if retry is None:
+            retry = self.retry
         url = f"{self.url}/workflow/{workflow_id}"
-        response = requests.get(url, timeout=10)
+        if not retry:
+            response = requests.get(url, timeout=10)
+        else:
+            response = None
+            timeout = 10
+            while response is None:
+                try:
+                    response = requests.get(url, timeout=timeout)
+                except requests.exceptions.Timeout:
+                    self.logger.error("Request Timed Out, Retrying")
+                    timeout *= 2
+
         if not response.ok and response.content:
             self.logger.error(f"Error querying workflow: {response.content.decode()}")
 
@@ -85,13 +102,25 @@ class WorkcellClient:
         return Workflow(**response.json())
 
     def get_workflow_definition(
-        self, workflow_definition_id: str
+        self, workflow_definition_id: str, retry: Optional[bool] = None
     ) -> WorkflowDefinition:
         """
         get the workflow definition
         """
         url = f"{self.url}/workflow_definition/{workflow_definition_id}"
-        response = requests.get(url, timeout=10)
+        if retry is None:
+            retry = self.retry
+        if not retry:
+            response = requests.get(url, timeout=10)
+        else:
+            response = None
+            timeout = 10
+            while response is None:
+                try:
+                    response = requests.get(url, timeout=timeout)
+                except requests.exceptions.Timeout:
+                    self.logger.error("Request Timed Out, Retrying")
+                    timeout *= 2
         if not response.ok and response.content:
             self.logger.error(f"Error querying workflow: {response.content.decode()}")
 
@@ -101,6 +130,7 @@ class WorkcellClient:
     def submit_workflow_definition(
         self,
         workflow_definition: Union[PathLike, WorkflowDefinition],
+        retry: Optional[bool] = None,
     ) -> Workflow:
         """
         Submit a workflow to the Workcell Manager.
@@ -127,6 +157,8 @@ class WorkcellClient:
         Workflow
             The submitted workflow object.
         """
+        if retry is None:
+            retry = self.retry
         if isinstance(workflow_definition, (Path, str)):
             workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
         else:
@@ -135,11 +167,27 @@ class WorkcellClient:
             get_current_ownership_info()
         )
         url = self.url + "/workflow_definition"
-        response = requests.post(
-            url,
-            json=workflow_definition.model_dump(mode="json"),
-            timeout=10,
-        )
+
+        if not retry:
+            response = requests.post(
+                url,
+                json=workflow_definition.model_dump(mode="json"),
+                timeout=10,
+            )
+        else:
+            response = None
+            timeout = 10
+            while response is None:
+                try:
+                    response = requests.post(
+                        url,
+                        json=workflow_definition.model_dump(mode="json"),
+                        timeout=timeout,
+                    )
+                except requests.exceptions.Timeout:
+                    self.logger.error("Request Timed Out, Retrying")
+                    timeout *= 2
+
         if not response.ok and response.content:
             self.logger.error(
                 f"Error submitting workflow definition: {response.content.decode()}"
@@ -156,6 +204,7 @@ class WorkcellClient:
         prompt_on_error: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
+        retry: Optional[bool] = None,
     ) -> Workflow:
         """
         Submit a workflow to the Workcell Manager.
@@ -182,6 +231,8 @@ class WorkcellClient:
         Workflow
             The submitted workflow object.
         """
+        if retry is None:
+            retry = self.retry
         try:
             ULID.from_str(workflow_definition)
         except ValueError:
@@ -200,26 +251,36 @@ class WorkcellClient:
             files = self.make_paths_absolute(input_files)
 
         url = self.url + "/workflow"
-        response = requests.post(
-            url,
-            data={
-                "workflow_definition_id": workflow_definition_id,
-                "input_values": json.dumps(input_values) if input_values else None,
-                "ownership_info": get_current_ownership_info().model_dump_json(),
-                "input_file_paths": json.dumps(input_files) if input_files else None,
-            },
-            files={
+        data = {
+            "workflow_definition_id": workflow_definition_id,
+            "input_values": json.dumps(input_values) if input_values else None,
+            "ownership_info": get_current_ownership_info().model_dump_json(),
+            "input_file_paths": json.dumps(input_files) if input_files else None,
+        }
+        files = {
+            (
+                "files",
                 (
-                    "files",
-                    (
-                        str(file),
-                        Path.open(Path(path).expanduser(), "rb"),
-                    ),
-                )
-                for file, path in files.items()
-            },
-            timeout=10,
-        )
+                    str(file),
+                    Path.open(Path(path).expanduser(), "rb"),
+                ),
+            )
+            for file, path in files.items()
+        }
+        if not retry:
+            response = requests.post(url, data=data, files=files, timeout=10)
+        else:
+            response = None
+            timeout = 10
+            while response is None:
+                try:
+                    response = requests.post(
+                        url, data=data, files=files, timeout=timeout
+                    )
+                except requests.exceptions.Timeout:
+                    self.logger.error("Request Timed Out, Retrying")
+                    timeout *= 2
+
         if not response.ok and response.content:
             self.logger.error(f"Error submitting workflow: {response.content.decode()}")
         response.raise_for_status()
