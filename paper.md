@@ -93,16 +93,17 @@ Optionally, the output from previous steps can be used as parameter values for l
 
 ### Event Management and Logging
 
-- Local and distributed logging
-- JSON based event data
+We implement an Event Manager, which allows nodes and other managers to log JSON-based events to a central event tracking and storage system.
+Our EventClient implementation also supports logging to local terminal output and log files, based on Python's native logging library, providing users with familiar syntax and usage patterns, as well as the ability to easily convert existing python logging to use the Event Manager.
+The Event Manager is backed by MongoDB, a document-based database, and supports advanced querying using Mongo's query selectors.
 
 ### Resource Management
 
-- Distributed Resource Tracking
-- Custom Resource Definitions/Templates
-- Consumables vs. Assets
-- Containers + different container types
-- Resource History
+Most autonomous laboratories involve various consumables, labware, and other trackable assets.
+Often, these physical resources are collected into different containters.
+We provide a Resource Manager to support flexible and distributed definition, templating, validation, instantiation, tracking, and lifecycle management of these resources.
+Backed by PostgreSQL, our implementation supports a wide range of different types of assets, containers, and consumables, as well as nested resources inside of containers. It's designed to be flexible, allowing users to define the properties of specific resources, while also providing a rich library of verbs for interacting with these resources in a standardized fashion.
+Finally, we provide automated history and resource locking functionality to help ensure data provenance and robustness.
 
 ### Experiment Management
 
