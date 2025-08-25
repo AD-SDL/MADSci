@@ -41,32 +41,29 @@ bibliography: paper.bib
 # Summary
 
 The Modular Autonomous Discovery for Science (MADSci) toolkit is a modular, open source software framework for enabling laboratory automation, high-throughput experimentation, and self driving labs.
-It allows laboratory operators to define an autonomous laboratory as a collection of Nodes, each controlling individual instruments, robots, or other devices.
-These nodes—when combined with Managers that provide lab-wide functionality and coordination—form flexible, modular autonomous laboratories.
+It allows laboratory operators to define autonomous workcells as collections of Nodes, each controlling individual instruments, robots, or other devices.
+These nodes—when combined with Managers that provide general lab functionality and coordination—form flexible, modular autonomous laboratories.
 Lab users can then create and run experimental campaigns using simple python applications and YAML workflow definitions.
-This design allows a separation of expertise and concerns between device integrators, automated/autonomous lab operators, and domain scientists running experiments on them.
+This design allows a separation of expertise and concerns between device integrators, automated/autonomous lab operators, and domain and data scientists running automated, autonomous, and high-throughput experiments using them.
 
 # Statement of Need
 
-The existing software ecosystem for lab automation and autonomous discovery is highly fragmented and inconsistent. Many existing solutions are proprietary, expensive, or closed source (Chemspeed Autosuite and Arksuite [citation], Retisoft Genera [citation], Cellario [citation]); or are targeted at specific experimental domains, problems, or setups (AlabOS, ChemOS, BlueSky, Polybot).
-MADSci aims to provide a flexible, domain-agnostic, modular, set of open source tools for handling the complexity of autonomous experimental setups and self driving labs.
-It supports integrating arbitrary equipment, devices, sensors, and robots as "nodes", and provides "managers" for handling common functionality such as workflow orchestration and scheduling, resource management and inventory tracking, experimental campaigns, events and logging, and data collection.
-MADSci is implemented as a collection of modular RESTful OpenAPI servers, with python clients provided to easily interface with any part of the system, backed by standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open source python libraries (FastAPI, Pydantic, SQLModel).
+The existing software ecosystem for lab automation and autonomous discovery is highly fragmented and inconsistent. Many existing solutions are proprietary, expensive, or closed source (Chemspeed Autosuite and Arksuite [citation], Retisoft Genera [citation], Cellario [citation]); or are targeted at specific experimental domains, problems, or setups (AlabOS [citation], ChemOS [citation], BlueSky [citation], Polybot [citation]).
+MADSci aims to provide a flexible, domain-agnostic, and modular set of open source tools for handling the complexity of autonomous experimental setups and self driving labs.
+To achieve this, it supports integrating arbitrary equipment, devices, sensors, and robots as "nodes", and provides "managers" for handling common functionality such as workflow orchestration and scheduling, resource management and inventory tracking, experimental campaigns, events and logging, and data collection.
+In order to be adaptable and flexible to the wide diversity of needs and challenges in lab autonomy, MADSci is implemented based on a microservices architecture, as a collection of RESTful OpenAPI servers, with python clients provided to easily interface with any part of the system, backed by standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open source python libraries (FastAPI, Pydantic, SQLModel).
 
 ## Software Architecture and Features
 
-Briefly describe software architecture
-Modular, composable, distributed microservice-based architecture with a focus on separation of concerns for different system components.
-Managers provide broad cross-lab functionality, Nodes handle device-specific actions and state management.
-Implemented with Python, RESTful/OpenAPI, and Docker. Heavy usage of Pydantic/JSON Schema for validation.
+Below we describe the modular, composable, distributed microservice-based architecture of MADSci, which focuses on enabling separation of concerns for different system components.
 
 ![MADSci Architecture Diagram.\label{fig:madsci_architecture}](assets/drawio/madsci_architecture.drawio.svg)
 
 ### Nodes
 
-MADSci enables modular integration of lab equipment, devices, robots, sensors, or any other components necessary for the operation of an automated or self driving lab via MADSci Nodes.
+MADSci enables modular integration of lab equipment, devices, robots, sensors, or any other components necessary for the operation of an automated or self driving lab via the MADSci Nodes API.
 
-Any software which implements a set of common endpoints, summarized below, can be used as a MADSci Node; in addition, we provide a `RestNode` Python class which can be extended to easily integrate a new device.
+Any software which implements a subset of common endpoints, summarized below, can be used as a MADSci Node; in addition, we provide a `RestNode` Python class which can be extended to easily integrate a new device.
 
 - `/action`: allows `POST` requests to invoke specific functionality of the controlled device or service
 - `/status`: get information about the current status of the node, such as whether it is currently busy, idle, or in an error state.
@@ -74,12 +71,25 @@ Any software which implements a set of common endpoints, summarized below, can b
 - `/admin`: supports receiving administrative commands, such as cancelling, pausing, or resuming a current action, or safety stopping the device
 - `/info`: allows the node to publish structured metadata about the controlled device or service and its capabilities
 
-### Workcell Management
+While we provide and support a RESTful implementation of the MADSci Node API standard, we also have implemented an `AbstractNode` and `AbstractNodeClient` with the intention of enabling and eventually supporting additional implementations.
 
-- Orchestrate multiple nodes
-- Modular scheduler
-- Workflows
-- Parameters, locations, feed-forward data
+### Workcell and Workflow Management
+
+The MADSci Workcell Manager handles the operation of a **Workcell**--a collection of **Nodes**, **Locations**, and **Resources** that are scheduled together--to perform **Workflows**. A self-driving lab may consist of one or more Workcells, with each Workcell able to execute workflows semi-independently.
+
+At the core of the workcell manager is the scheduler, which determines which steps in one or more workflows to run next based on the current state of the workcell's constituent nodes, locations, and resources.
+This scheduler is a modular component of the workcell manager that is designed to be swapped out by the lab operator to meet the specific requirements of their lab.
+We include a straightforward opportunistic first-in-first-out scheduler as a default.
+
+Workflows can be defined using a straightforward YAML syntax, or as Pydantic-based Python data models.
+In either case, a workflow consists of a linear sequence of steps to be run on individual nodes.
+A Step Definition includes the node to run on, the specific action to take, and any required or optional arguments for that action.
+In addition to standard JSON-serializable arguments, workflow steps can also include Location or File arguments.
+Location arguments have their value provided by the Workcell at runtime, and the WorkcellManager will substitute a representation of that
+
+Finally, Workflows are parameterizable, allowing users to specify the node, action, or arguments for certain steps at submission time.
+This enables reusable template workflows.
+Optionally, the output from previous steps can be used as parameter values for later steps, allowing simple intra-workflow data flow.
 
 ### Event Management and Logging
 
@@ -104,34 +114,6 @@ Any software which implements a set of common endpoints, summarized below, can b
 - JSON data, file storage (filesystem and S3 bucket support)
 
 ---
-
-Briefly go through the various components/capabilities of the software
-Managers
-Automated/Autonomous Laboratory functionality and capabilities are provided by different independent Managers (RESTful Servers + databases/other dependencies)
-Different Managers can be composed to provide the functionality required for operating a given facility
-REST API and python clients available for all managers
-Nodes
-Provide standardized control interfaces individual robots/instruments/devices
-Currently supports RESTful Node Server implementations
-Allows sending actions, managing lifecycle, tracking status, and administrating devices
-Workcells
-Collection of co-scheduled Nodes and other resources that work in tandem to conduct scientific workflows
-Controlled by a Workcell Manager
-Make use of Nodes (charged with controlling individual devices/system components), Locations, and Resources
-Experiments
-Supports tracking and managing Experiment Runs and Campaigns
-Experiment Applications implemented as python scripts to control and monitor system
-Resources
-Supports tracking any labware, consumables, or other physical resources across the system
-Full history of all changes to the resources is maintained
-
-
-Figures can be included like this:
-![Caption for example figure.\label{fig:example}](figure.png)
-and referenced from text using \autoref{fig:example}.
-
-Figure sizes can be customized by adding an optional second parameter:
-![Caption for example figure.](figure.png){ width=20% }
 
 # Acknowledgements
 
