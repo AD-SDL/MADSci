@@ -150,30 +150,44 @@ class WorkflowDefinition(MadsciBaseModel):
                     labels.append(step.data_labels[key])
         return v
 
-    @model_validator(mode="after")
-    def ensure_input_label_uniqueness(self) -> Any:
+    def move_inline_files(self) -> None:
         """Ensure that the names of the arguments and files are unique"""
-        labels = []
-        error = ValueError("Input value keys must be unique across workflow definition")
+
         inline_inputs = []
         for step in self.steps:
             if step.files:
                 for file in step.files.values():
-                    if type(file) == InputFile:
+                    if type(file) is InputFile:
                         inline_inputs.append(file)
-                    elif type(file) == str:
-                        valid = False
-                        for input_file in self.parameters.input_files:
-                            if input_file.input_file_key == file:
-                                valid = True
-                        for ffv in self.parameters.feed_forward_values:
-                            if ffv.name == file:
-                                valid = True
-                        if not valid:
-                            raise ValueError(
-                                "Input Files referenced by key inline must be defined at the top of the workflow"
-                            )
+                    elif type(file) is str and not (
+                        len(
+                            [
+                                input_file
+                                for input_file in self.parameters.input_files
+                                if file.input_file_key == file
+                            ]
+                        )
+                        > 0
+                        or len(
+                            [
+                                ffv
+                                for ffv in self.parameters.feed_forward_values
+                                if ffv.name == file
+                            ]
+                        )
+                        > 0
+                    ):
+                        raise ValueError(
+                            "Input Files referenced by key inline must be defined at the top of the workflow"
+                        )
         self.parameters.input_files = self.parameters.input_files + inline_inputs
+
+    @model_validator(mode="after")
+    def ensure_input_label_uniqueness(self) -> Any:
+        """ensure that all parameter labels are unique"""
+        self.move_inline_files()
+        labels = []
+        error = ValueError("Input value keys must be unique across workflow definition")
         for input_value in self.parameters.input_values:
             if input_value.input_key in labels:
                 raise error

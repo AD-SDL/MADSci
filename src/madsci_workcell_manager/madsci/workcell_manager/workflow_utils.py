@@ -128,9 +128,11 @@ def create_workflow(
     )
     wf = Workflow(**wf_dict)
     for parameter in wf.parameters.input_values:
-        if parameter.input_key not in wf.parameter_values:
-            if parameter.default is not None:
-                wf.parameter_values[parameter.input_key] = parameter.default
+        if (
+            parameter.input_key not in wf.parameter_values
+            and parameter.default is not None
+        ):
+            wf.parameter_values[parameter.input_key] = parameter.default
     wf.step_definitions = workflow_def.steps
     steps = []
     for step in workflow_def.steps:
@@ -146,11 +148,11 @@ def create_workflow(
 
 
 def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
+    """Replace parameter values in a provided step"""
     step_dict = step.model_dump()
     for key, parameter_name in step.parameters.model_dump().items():
-        if type(parameter_name) == str:
-            if parameter_name in parameter_values:
-                step_dict[key] = parameter_values[parameter_name]
+        if type(parameter_name) is str and parameter_name in parameter_values:
+            step_dict[key] = parameter_values[parameter_name]
     step = Step.model_validate(step_dict)
 
     for key, parameter_name in step.parameters.args.items():
@@ -188,14 +190,15 @@ def prepare_workflow_step(
 def prepare_workflow_files(
     step: Step, workflow: Workflow, data_client: DataClient
 ) -> Step:
+    """Get workflow files ready to upload"""
     input_file_ids = workflow.input_file_ids
     for file, definition in step.files.items():
         suffixes = []
-        if type(definition) == str:
+        if type(definition) is str:
             datapoint_id = input_file_ids[definition]
             if definition in workflow.input_file_paths:
                 suffixes = Path(workflow.input_file_paths[definition]).suffixes
-        elif type(definition) == InputFile:
+        elif type(definition) is InputFile:
             datapoint_id = input_file_ids[definition.input_file_key]
             if definition.input_file_key in workflow.input_file_paths:
                 suffixes = Path(

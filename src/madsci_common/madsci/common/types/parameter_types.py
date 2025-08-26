@@ -22,12 +22,16 @@ class WorkflowInputValue(MadsciBaseModel):
     @model_validator(mode="after")
     def validate_value_parameters(self) -> "WorkflowInputValue":
         """Assert that at most one of step_name, step_index, and label are set."""
-        if self.parameter_type is not None and self.default is not None:
-            if not type(self.default).__name__ == self.parameter_type or (
+        if (
+            self.parameter_type is not None
+            and self.default is not None
+            and type(self.default).__name__ != self.parameter_type
+            and not (
                 "Union" in self.parameter_type
-                and type(self.default).__name__ not in str(self.parameter_type)
-            ):
-                return ValueError("Default value is of the wrong type")
+                and type(self.default).__name__ in str(self.parameter_type)
+            )
+        ):
+            return ValueError("Default value is of the wrong type")
         return self
 
 
