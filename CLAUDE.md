@@ -115,6 +115,7 @@ Laboratory instruments implement the Node interface:
 - Uses pytest with docker containers for integration tests
 - Mock resources for database testing
 - Component tests are located in each package's `tests/` directory
+- **IMPORTANT**: Use `pytest` directly instead of `python -m pytest` for running tests
 
 ## File Structure Conventions
 
