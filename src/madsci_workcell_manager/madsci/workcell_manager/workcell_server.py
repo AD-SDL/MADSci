@@ -455,6 +455,7 @@ if __name__ == "__main__":
     import uvicorn
 
     workcell_settings = WorkcellManagerSettings()
+    print(workcell_settings)
     app = create_workcell_server(workcell_settings=workcell_settings)
     uvicorn.run(
         app,

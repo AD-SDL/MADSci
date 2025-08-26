@@ -189,24 +189,46 @@ class Engine:
                 self.logger.log_info(f"Handling transfer step: {step.name}")
                 try:
                     transfer_client = TransferManagerClient()
-                    concrete_steps = transfer_client.handle_transfer_step(step)
+                    resolved_steps = transfer_client.handle_transfer_step(step)
                     
-                    self.logger.log_info(f"Transfer step expanded to {len(concrete_steps)} concrete steps")
+                    self.logger.log_info(f"Transfer step expanded to {len(resolved_steps)} resolved steps")
                     
-                    # Insert the concrete steps into the workflow
+                    # Execute each resolved step sequentially
                     with self.state_handler.wc_state_lock():
                         current_wf = self.state_handler.get_active_workflow(workflow_id)
                         current_index = current_wf.status.current_step_index
                         
-                        # Replace the transfer step with concrete steps
-                        current_wf.steps[current_index:current_index+1] = concrete_steps
+                        # Replace the transfer step with resolved steps
+                        current_wf.steps[current_index:current_index+1] = resolved_steps
                         
                         # Update workflow in state
                         self.state_handler.set_active_workflow(current_wf)
                         
-                        self.logger.log_info(f"Workflow {workflow_id} updated with {len(concrete_steps)} concrete transfer steps")
+                        self.logger.log_info(f"Workflow {workflow_id} updated with {len(resolved_steps)} resolved transfer steps")
                     
-                    # Return early - the concrete steps will be processed in subsequent iterations
+                    # Execute all resolved steps sequentially
+                    for step_index in range(len(resolved_steps)):
+                        with self.state_handler.wc_state_lock():
+                            current_wf = self.state_handler.get_active_workflow(workflow_id)
+                            current_step = current_wf.steps[current_wf.status.current_step_index + step_index]
+                            
+                        self.logger.log_info(f"Executing resolved transfer step {step_index + 1}/{len(resolved_steps)}: {current_step.name}")
+                        
+                        # Execute this resolved step using the same logic as regular steps
+                        success = self._execute_resolved_step(workflow_id, current_step, current_wf.status.current_step_index + step_index)
+                        
+                        if not success:
+                            self.logger.log_error(f"Resolved transfer step {step_index + 1} failed, stopping transfer execution")
+                            return
+                    
+                    # After all resolved steps are executed, advance the workflow index
+                    with self.state_handler.wc_state_lock():
+                        current_wf = self.state_handler.get_active_workflow(workflow_id)
+                        current_wf.status.current_step_index += len(resolved_steps)
+                        current_wf.status.running = False
+                        self.state_handler.set_active_workflow(current_wf)
+                    
+                    self.logger.log_info(f"All {len(resolved_steps)} resolved transfer steps completed successfully")
                     return
                     
                 except Exception as e:
@@ -269,7 +291,112 @@ class Engine:
             )
             wf = self.update_step(wf, step)
             self.finalize_step(workflow_id, step)
+            
+    def _execute_resolved_step(self, workflow_id: str, step: Step, step_index: int) -> bool:
+            """
+            Execute a single resolved step and return success status.
+            
+            Args:
+                workflow_id: The workflow ID
+                step: The step to execute
+                step_index: The index of this step in the workflow
+                
+            Returns:
+                bool: True if step succeeded, False if it failed
+            """
+            try:
+                # Prepare the step (same logic as regular step execution)
+                wf = self.state_handler.get_active_workflow(workflow_id)
+                step.args = walk_and_replace(step.args, wf.parameter_values)
+                step.files = walk_and_replace(step.files, wf.parameter_values)
+                step.locations = walk_and_replace(step.locations, wf.parameter_values)
+                step = prepare_workcell_step(
+                    step=step,
+                    workcell=self.workcell_definition,
+                    state_handler=self.state_handler,
+                )
+                
+                step.start_time = datetime.now()
+                self.logger.log_info(f"Executing resolved step {step.step_id} in workflow {workflow_id}")
+                
+                node = self.state_handler.get_node(step.node)
+                client = find_node_client(node.node_url)
+                
+                # Update the step in workflow at the correct index
+                with self.state_handler.wc_state_lock():
+                    current_wf = self.state_handler.get_active_workflow(workflow_id)
+                    current_wf.steps[step_index] = step
+                    self.state_handler.set_active_workflow(current_wf)
 
+                # Send the action request
+                response = None
+                args = {**step.args, **step.locations}
+                request = ActionRequest(
+                    action_name=step.action,
+                    args=args,
+                    files=step.files,
+                )
+                action_id = request.action_id
+                self.add_pending_action(step, action_id)
+                
+                try:
+                    response = client.send_action(request, await_result=False)
+                except Exception as e:
+                    self.logger.log_error(f"Sending Action Request {action_id} for resolved step {step.step_id} triggered exception: {e}")
+                    if response is None:
+                        response = request.unknown(errors=[Error.from_exception(e)])
+                    else:
+                        response.errors.append(Error.from_exception(e))
+                finally:
+                    self.remove_pending_action(step)
+                    
+                response = self.handle_response(wf, step, response)
+                action_id = response.action_id
+
+                # Monitor action progress
+                self.monitor_action_progress(wf, step, node, client, response, request, action_id)
+                
+                # Finalize the step
+                step.end_time = datetime.now()
+                
+                # Update the workflow with completed step
+                with self.state_handler.wc_state_lock():
+                    current_wf = self.state_handler.get_active_workflow(workflow_id)
+                    current_wf.steps[step_index] = step
+                    
+                    # Update parameters from step results
+                    for parameter in current_wf.parameters:
+                        if (
+                            parameter.step_name == step.name
+                            or step_index == parameter.step_index
+                            or (parameter.step_name is None and parameter.step_index is None)
+                        ) and parameter.label in step.result.datapoints:
+                            datapoint = step.result.datapoints[parameter.label]
+                            current_wf = self.update_parameters(current_wf, datapoint, parameter)
+                    
+                    self.state_handler.set_active_workflow(current_wf)
+
+                self.logger.log_info(f"Completed resolved step {step.step_id} in workflow {workflow_id}")
+                
+                # Return True if step succeeded
+                return step.status == ActionStatus.SUCCEEDED
+                
+            except Exception as e:
+                self.logger.log_error(f"Executing resolved step in workflow {workflow_id} triggered unhandled exception: {traceback.format_exc()}")
+                step.result = ActionResult(
+                    status=ActionStatus.FAILED,
+                    errors=Error.from_exception(e),
+                )
+                step.end_time = datetime.now()
+                
+                # Update workflow with failed step
+                with self.state_handler.wc_state_lock():
+                    current_wf = self.state_handler.get_active_workflow(workflow_id)
+                    current_wf.steps[step_index] = step
+                    self.state_handler.set_active_workflow(current_wf)
+                
+                return False
+        
     def monitor_action_progress(
         self,
         wf: Workflow,
