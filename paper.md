@@ -110,9 +110,15 @@ Finally, we provide automated history and resource locking functionality to help
 - Campaigns, Experiment Designs, Experiment Runs
 - `ExperimentApplication`
 
+MADSci's Experiment Manager allows users to define experimental campaigns, start experiment runs associated with those campaiagns, and associate other MADSci objects (workflows, resources, datapoints, etc) related to that experimental run.
+It supports Experiment Designs, which allow users to specify properties and conditions of experiments.
+Finally, MADSci includes an `ExperimentApplication` class, which provides a foundation for defining autonomous experimental applications, including all the neccessary clients to interact with a MADSci powered lab and helper functions for common autonomous experimental needs.
+
 ### Data Management
 
-- JSON data, file storage (filesystem and S3 bucket support)
+MADSci's Data Manager provides support for creating, storing, and querying data generated during autonomous experimentation from any component of the autonomous laboratory.
+It currently allows for storing and querying JSON-serializable data directly in MongoDB, storing file-based data either on a filesystem or in S3-compatible object storage.
+When working with large data where unneccesary data transfer is undesirable, the `DataClient` implementation optionally supports direct upload to object storage, preventing unneccessary extra transfer steps.
 
 ---
 
