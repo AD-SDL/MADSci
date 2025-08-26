@@ -1,8 +1,8 @@
 """An Example Application"""
 
-from madsci.client.experiment_application import ExperimentApplication
 from madsci.common.types.experiment_types import ExperimentDesign
 from madsci.common.types.node_types import NodeDefinition
+from madsci.experiment_application import ExperimentApplication
 
 
 def run_calculation(input: int) -> int:

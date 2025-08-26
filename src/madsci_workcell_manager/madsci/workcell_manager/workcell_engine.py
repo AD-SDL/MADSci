@@ -119,7 +119,7 @@ class Engine:
             except Exception as e:
                 self.logger.log_error(e)
                 self.logger.log_warning(
-                    f"Error in engine loop, waiting {self.workcell_settings.node_update_interval} seconds before trying again."
+                    f"Error in engine loop, waiting {10 * self.workcell_settings.node_update_interval} seconds before trying again."
                 )
                 with self.state_handler.wc_state_lock():
                     workcell_status = self.state_handler.get_workcell_status()
@@ -401,7 +401,7 @@ class Engine:
 
             self.logger.log_info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {event_data['status']}, Author: {event_data['author'] or 'Unknown'}, "
+                f"Status: {event_data['status']}, Author: {event_data['workflow_metadata']['author'] or 'Unknown'}, "
                 f"{duration_text}"
             )
         except Exception as e:

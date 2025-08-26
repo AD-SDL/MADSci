@@ -1,7 +1,7 @@
 [project]
-name = "madsci.resource_manager"
+name = "madsci.experiment_application"
 version = "0.4.7"
-description = "The Modular Autonomous Discovery for Science (MADSci) Resource Manager."
+description = "The Modular Autonomous Discovery for Science (MADSci) Experiment Application framework."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
     {name = "Ryan D. Lewis", email = "ryan.lewis@anl.gov"},
@@ -14,12 +14,14 @@ license = {text = "MIT"}
 dependencies = [
   "madsci.common",
   "madsci.client",
-  "psycopg2-binary"
+  "madsci.node_module",
+  "rich>=10.0.0",
+  "pydantic>=2.0.0",
+  "typing-extensions>=4.0.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"
-
 
 ######################
 # Build Info + Tools #
