@@ -119,7 +119,6 @@ Settings for the MADSci Experiment Manager.
 
 | Name                                                               | Type               | Default                       | Description                                            | Example                       |
 |--------------------------------------------------------------------|--------------------|-------------------------------|--------------------------------------------------------|-------------------------------|
-| `EXPERIMENT_SERVER_URL` \| `EXPERIMENT_SERVER_URL`                 | `AnyUrl`           | `"http://localhost:8002"`     | The URL of the experiment manager server.              | `"http://localhost:8002"`     |
 | `EXPERIMENT_MANAGER_DEFINITION` \| `EXPERIMENT_MANAGER_DEFINITION` | `string` \| `Path` | `"experiment.manager.yaml"`   | Path to the experiment manager definition file to use. | `"experiment.manager.yaml"`   |
 | `EXPERIMENTS_DB_URL`                                               | `string`           | `"mongodb://localhost:27017"` | The URL of the database for the experiment manager.    | `"mongodb://localhost:27017"` |
 

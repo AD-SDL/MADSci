@@ -48,7 +48,7 @@ def test_object_storage(file_path: str) -> None:
 
     # Initialize DataClient
     client = DataClient(
-        url=None,  # Local mode
+        data_server_url=None,  # Local mode
         object_storage_settings=minio_config,
     )
 

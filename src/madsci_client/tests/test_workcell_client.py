@@ -685,13 +685,13 @@ def test_handle_workflow_error_no_raise(
 def test_workcell_client_init_with_url() -> None:
     """Test WorkcellClient initialization with URL."""
     client = WorkcellClient(workcell_server_url="http://test.com")
-    assert client.url == "http://test.com"
+    assert str(client.workcell_server_url) == "http://test.com/"
 
 
 def test_workcell_client_init_with_trailing_slash() -> None:
     """Test WorkcellClient initialization with trailing slash removal."""
     client = WorkcellClient(workcell_server_url="http://test.com/")
-    assert client.url == "http://test.com"
+    assert str(client.workcell_server_url) == "http://test.com/"
 
 
 def test_workcell_client_init_with_working_directory() -> None:
@@ -705,7 +705,9 @@ def test_workcell_client_init_with_working_directory() -> None:
 
 def test_workcell_client_init_no_url() -> None:
     """Test WorkcellClient initialization without URL raises error."""
-    with patch("madsci.client.workcell_client.MadsciContext") as mock_context:
+    with patch(
+        "madsci.client.workcell_client.get_current_madsci_context"
+    ) as mock_context:
         mock_context.return_value.workcell_server_url = None
 
         with pytest.raises(ValueError, match="Workcell server URL is not provided"):
@@ -814,7 +816,7 @@ def test_client_logger_property(client: WorkcellClient) -> None:
 
 def test_client_url_property(client: WorkcellClient) -> None:
     """Test that client has correct URL property."""
-    assert client.url == "http://testserver"
+    assert str(client.workcell_server_url) == "http://testserver/"
 
 
 def test_workflow_sequence_empty_lists(client: WorkcellClient) -> None:

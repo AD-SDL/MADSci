@@ -14,7 +14,6 @@ from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -70,8 +69,6 @@ class ExperimentApplication(RestNode):
     logger: EventClient
     event_client: EventClient
     """The event logger for the experiment."""
-    context: MadsciContext
-    """The context for the experiment application."""
     workcell_client: WorkcellClient
     """Client for managing workcells."""
     resource_client: ResourceClient
@@ -87,7 +84,7 @@ class ExperimentApplication(RestNode):
 
     def __init__(
         self,
-        experiment_server_url: Optional[AnyUrl] = None,
+        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
         experiment_design: Optional[Union[str, Path, ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
         *args: Any,
@@ -96,11 +93,6 @@ class ExperimentApplication(RestNode):
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
         super().__init__(*args, **kwargs)
 
-        self.context = (
-            MadsciContext(experiment_server_url=experiment_server_url)
-            if experiment_server_url
-            else MadsciContext()
-        )
         self.logger = self.event_client = EventClient()
         self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
@@ -110,7 +102,7 @@ class ExperimentApplication(RestNode):
 
         # * Re-initialize experiment client in-case user provided a different server URL
         self.experiment_client = ExperimentClient(
-            experiment_server_url=self.context.experiment_server_url
+            experiment_server_url=experiment_server_url
         )
         self.workcell_client = WorkcellClient()
         self.data_client = DataClient()
@@ -120,7 +112,7 @@ class ExperimentApplication(RestNode):
     @classmethod
     def start_new(
         cls,
-        experiment_server_url: Optional[AnyUrl] = None,
+        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
         experiment_design: Optional[ExperimentDesign] = None,
     ) -> "ExperimentApplication":
         """Create a new experiment application with a new experiment."""
@@ -133,7 +125,9 @@ class ExperimentApplication(RestNode):
 
     @classmethod
     def continue_experiment(
-        cls, experiment: Experiment, experiment_server_url: Optional[AnyUrl] = None
+        cls,
+        experiment: Experiment,
+        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
     ) -> "ExperimentApplication":
         """Create a new experiment application with an existing experiment."""
         self = cls(experiment_server_url=experiment_server_url, experiment=experiment)
