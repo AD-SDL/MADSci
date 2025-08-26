@@ -75,7 +75,9 @@ class TestEventClientInit:
             mock_config.return_value.log_level = EventLogLevel.INFO
             mock_config.return_value.event_server_url = None
 
-            with patch("madsci.client.event_client.MadsciContext") as mock_context:
+            with patch(
+                "madsci.client.event_client.get_current_madsci_context"
+            ) as mock_context:
                 mock_context.return_value.event_server_url = None
 
                 client = EventClient()

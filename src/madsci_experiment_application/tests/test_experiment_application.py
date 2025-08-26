@@ -194,7 +194,6 @@ class TestExperimentApplicationInit:
             assert app.experiment is None
             assert app.experiment_design is not None
             assert app.experiment_design.experiment_name == "Test_Experiment"
-            assert app.context is not None
             assert app.logger is not None
             assert app.event_client is not None
 
@@ -217,7 +216,7 @@ class TestExperimentApplicationInit:
                 experiment_server_url=server_url,
             )
 
-            assert app.context.experiment_server_url == server_url
+            assert app.experiment_client.experiment_server_url == server_url
 
     def test_init_with_experiment_design_dict(
         self, node_definition: NodeDefinition, experiment_design: ExperimentDesign
@@ -868,14 +867,6 @@ class TestExperimentManagement:
 class TestClassMethods:
     """Test ExperimentApplication class methods."""
 
-    @patch.multiple(
-        "madsci.experiment_application.experiment_application",
-        EventClient=Mock,
-        ExperimentClient=Mock,
-        WorkcellClient=Mock,
-        ResourceClient=Mock,
-        DataClient=Mock,
-    )
     def test_start_new(self, experiment_design: ExperimentDesign) -> None:
         """Test start_new class method."""
         server_url = AnyUrl("http://localhost:8002")
@@ -903,41 +894,53 @@ class TestClassMethods:
             },
             field_value=10,
         )
+
         with (
             patch(
-                "madsci.experiment_application.experiment_application.ExperimentClient",
-                return_value=mock_experiment_client,
-            ),
+                "madsci.experiment_application.experiment_application.EventClient"
+            ) as mock_event_client_class,
+            patch(
+                "madsci.experiment_application.experiment_application.ExperimentClient"
+            ) as mock_experiment_client_class,
             patch(
                 "madsci.experiment_application.experiment_application.WorkcellClient"
-            ) as mock_workcell_client,
+            ) as mock_workcell_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.ResourceClient",
-                return_value=Mock(get_resource=Mock(return_value=mock_resource)),
-            ),
+                "madsci.experiment_application.experiment_application.ResourceClient"
+            ) as mock_resource_client_class,
+            patch(
+                "madsci.experiment_application.experiment_application.DataClient"
+            ) as mock_data_client_class,
             patch("builtins.input", return_value="n"),
             patch("builtins.print"),
         ):
-            mock_workcell_client.return_value.get_locations.return_value = [
+            # Set up client class mocks to return configured instances
+            mock_experiment_client_class.return_value = mock_experiment_client
+            mock_workcell_client_class.return_value = Mock()
+            mock_workcell_client_class.return_value.get_locations.return_value = [
                 mock_location
             ]
+            mock_resource_client_class.return_value = Mock()
+            mock_resource_client_class.return_value.get_resource.return_value = (
+                mock_resource
+            )
+            mock_event_client_class.return_value = Mock()
+            mock_data_client_class.return_value = Mock()
+
             app = TestExperimentApplication.start_new(
                 experiment_server_url=server_url,
                 experiment_design=experiment_design,
             )
 
+        # Verify the experiment client was instantiated with the correct URL
+        mock_experiment_client_class.assert_called_once_with(
+            experiment_server_url=server_url
+        )
+
+        # Verify the experiment was started and the app has the right state
         assert app.experiment == mock_experiment
-        assert app.context.experiment_server_url == server_url
         mock_experiment_client.start_experiment.assert_called_once()
 
-    @patch.multiple(
-        "madsci.experiment_application.experiment_application",
-        EventClient=Mock,
-        ExperimentClient=Mock,
-        WorkcellClient=Mock,
-        ResourceClient=Mock,
-        DataClient=Mock,
-    )
     def test_continue_experiment(self, mock_experiment: Experiment) -> None:
         """Test continue_experiment class method."""
         server_url = AnyUrl("http://localhost:8002")
@@ -945,17 +948,42 @@ class TestClassMethods:
         # Mock the experiment client
         mock_experiment_client = Mock()
 
-        with patch(
-            "madsci.experiment_application.experiment_application.ExperimentClient",
-            return_value=mock_experiment_client,
+        with (
+            patch(
+                "madsci.experiment_application.experiment_application.EventClient"
+            ) as mock_event_client_class,
+            patch(
+                "madsci.experiment_application.experiment_application.ExperimentClient"
+            ) as mock_experiment_client_class,
+            patch(
+                "madsci.experiment_application.experiment_application.WorkcellClient"
+            ) as mock_workcell_client_class,
+            patch(
+                "madsci.experiment_application.experiment_application.ResourceClient"
+            ) as mock_resource_client_class,
+            patch(
+                "madsci.experiment_application.experiment_application.DataClient"
+            ) as mock_data_client_class,
         ):
+            # Set up client class mocks to return configured instances
+            mock_experiment_client_class.return_value = mock_experiment_client
+            mock_workcell_client_class.return_value = Mock()
+            mock_resource_client_class.return_value = Mock()
+            mock_event_client_class.return_value = Mock()
+            mock_data_client_class.return_value = Mock()
+
             app = TestExperimentApplication.continue_experiment(
                 experiment=mock_experiment,
                 experiment_server_url=server_url,
             )
 
+        # Verify the experiment client was instantiated with the correct URL
+        mock_experiment_client_class.assert_called_once_with(
+            experiment_server_url=server_url
+        )
+
+        # Verify the experiment was continued and the app has the right state
         assert app.experiment == mock_experiment
-        assert app.context.experiment_server_url == server_url
         mock_experiment_client.continue_experiment.assert_called_once_with(
             experiment_id=mock_experiment.experiment_id
         )

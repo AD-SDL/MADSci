@@ -3,7 +3,7 @@
 from typing import Optional, Union
 
 import requests
-from madsci.common.types.context_types import MadsciContext
+from madsci.common.context import get_current_madsci_context
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentalCampaign,
@@ -24,13 +24,17 @@ class ExperimentClient:
         self,
         experiment_server_url: Optional[Union[str, AnyUrl]] = None,
     ) -> "ExperimentClient":
-        """Create a new Experiment Client."""
-        self.context = (
-            MadsciContext(experiment_server_url=experiment_server_url)
+        """
+        Create a new Experiment Client.
+
+        Args:
+            experiment_server_url: The URL of the experiment server. If not provided, will use the URL from the current MADSci context.
+        """
+        self.experiment_server_url = (
+            AnyUrl(experiment_server_url)
             if experiment_server_url
-            else MadsciContext()
+            else get_current_madsci_context().experiment_server_url
         )
-        self.experiment_server_url = self.context.experiment_server_url
         if not self.experiment_server_url:
             raise ValueError(
                 "No experiment server URL provided, please specify a URL or set the context."
