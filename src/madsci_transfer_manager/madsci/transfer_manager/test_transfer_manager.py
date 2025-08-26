@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple test script for Transfer Manager."""
+"""Simple test script for Transfer Manager with unified config."""
 
 from pathlib import Path
 from madsci.common.types.step_types import Step
@@ -13,10 +13,9 @@ def get_config_path(filename):
 
 
 def create_test_config():
-    """Create a config with paths relative to this script."""
+    """Create a config with path to the unified config file."""
     return TransferManagerConfig(
-        robot_definitions_path=get_config_path("robot_definitions.yaml"),
-        location_constraints_path=get_config_path("location_constraints.yaml")
+        config_file_path=get_config_path("transfer_config.yaml")
     )
 
 
@@ -38,14 +37,14 @@ def test_basic_functionality():
 
     config = create_test_config()
     manager = TransferManager(config)
-    print("✓ Transfer Manager initialized successfully")
+    print("Transfer Manager initialized successfully")
 
     robots = manager.get_available_robots()
     locations = manager.get_available_locations()
 
-    print(f"✓ Available robots: {robots}")
-    print(f"✓ Available locations: {locations}")
-    print(f"✓ Total locations in graph: {len(manager.transfer_graph.locations)}")
+    print(f"Available robots: {robots}")
+    print(f"Available locations: {locations}")
+    print(f"Total locations in graph: {len(manager.transfer_graph.locations)}")
 
 
 def test_direct_transfers():
@@ -68,7 +67,7 @@ def test_direct_transfers():
     )
 
     result = manager.expand_transfer_step(step)
-    print(f"✓ Generated {len(result)} steps:")
+    print(f"Generated {len(result)} steps:")
     for i, s in enumerate(result, 1):
         print_step_details(s, i)
 
@@ -83,7 +82,7 @@ def test_direct_transfers():
     )
 
     result = manager.expand_transfer_step(step)
-    print(f"✓ Generated {len(result)} steps:")
+    print(f"Generated {len(result)} steps:")
     for i, s in enumerate(result, 1):
         print_step_details(s, i)
 
@@ -110,7 +109,7 @@ def test_multi_hop_transfer():
     print("About to call expand_transfer_step...")
     try:
         result = manager.expand_transfer_step(step)
-        print(f"✓ SUCCESS: Generated {len(result)} steps")
+        print(f"SUCCESS: Generated {len(result)} steps")
         for i, s in enumerate(result, 1):
             print_step_details(s, i)
     except Exception as e:
@@ -122,7 +121,7 @@ def test_multi_hop_transfer():
 def main():
     print("=== MADSci Transfer Manager Simple Test ===")
     print(f"Running from: {Path(__file__).parent}")
-    print(f"Config files: {get_config_path('test_robot_definitions.yaml')}")
+    print(f"Config file: {get_config_path('transfer_config.yaml')}")
     
     try:
         test_basic_functionality()
@@ -130,7 +129,7 @@ def main():
         test_multi_hop_transfer()
         
         print("\n" + "="*60)
-        print("  🎉 All Tests Completed Successfully! 🎉")
+        print("  All Tests Completed Successfully!")
         print("="*60)
         
     except Exception as e:
