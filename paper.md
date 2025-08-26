@@ -42,14 +42,15 @@ bibliography: paper.bib
 
 The Modular Autonomous Discovery for Science (MADSci) toolkit is a modular, open source software framework for enabling laboratory automation, high-throughput experimentation, and self driving labs.
 It allows laboratory operators to define autonomous workcells as collections of Nodes, each controlling individual instruments, robots, or other devices.
-These nodes—when combined with Managers that provide general lab functionality and coordination—form flexible, modular autonomous laboratories.
+These nodes, when combined with Managers that provide general lab functionality and coordination, form flexible, modular autonomous laboratories.
 Lab users can then create and run experimental campaigns using simple python applications and YAML workflow definitions.
 This design allows a separation of expertise and concerns between device integrators, automated/autonomous lab operators, and domain and data scientists running automated, autonomous, and high-throughput experiments using them.
+MADSci and its predecesor have enabled autonomous science in domains including Biology, Chemistry, materials science, and quantum science. 
 
 # Statement of Need
 
-The existing software ecosystem for lab automation and autonomous discovery is highly fragmented and inconsistent. Many existing solutions are proprietary, expensive, or closed source (Chemspeed Autosuite and Arksuite [citation], Retisoft Genera [citation], Cellario [citation]); or are targeted at specific experimental domains, problems, or setups (AlabOS [citation], ChemOS [citation], BlueSky [citation], Polybot [citation]).
-MADSci aims to provide a flexible, domain-agnostic, and modular set of open source tools for handling the complexity of autonomous experimental setups and self driving labs.
+The existing software ecosystem for lab automation and autonomous discovery is highly fragmented and inconsistent. Many existing solutions are proprietary, expensive, or closed source (Chemspeed Autosuite and Arksuite [citation], Retisoft Genera [citation], Cellario [citation]); or are targeted at specific experimental domains, problems, or setups (AlabOS [citation], ChemOS [citation], BlueSky [citation], Polybot [citation]). 
+MADSci aims to provide a flexible, domain-agnostic, and modular set of open source tools for handling the complexity of autonomous experimental setups and self driving labs
 To achieve this, it supports integrating arbitrary equipment, devices, sensors, and robots as "nodes", and provides "managers" for handling common functionality such as workflow orchestration and scheduling, resource management and inventory tracking, experimental campaigns, events and logging, and data collection.
 In order to be adaptable and flexible to the wide diversity of needs and challenges in lab autonomy, MADSci is implemented based on a microservices architecture, as a collection of RESTful OpenAPI servers, with python clients provided to easily interface with any part of the system, backed by standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open source python libraries (FastAPI, Pydantic, SQLModel).
 
@@ -57,11 +58,13 @@ In order to be adaptable and flexible to the wide diversity of needs and challen
 
 Below we describe the modular, composable, distributed microservice-based architecture of MADSci, which focuses on enabling separation of concerns for different system components.
 
+<!-- if there's something in the figure we don't mention, it should not be included in the figure -->
 ![MADSci Architecture Diagram.\label{fig:madsci_architecture}](assets/drawio/madsci_architecture.drawio.svg)
+Figure 1: Schematic architecture diagram for MADSci
 
 ### Nodes
 
-MADSci enables modular integration of lab equipment, devices, robots, sensors, or any other components necessary for the operation of an automated or self driving lab via the MADSci Nodes API.
+MADSci enables modular integration of lab equipment, devices, robots, sensors, or any other components necessary for the operation of an automated or self driving lab via the MADSci Nodes API (see Fig. 1).
 
 Any software which implements a subset of common endpoints, summarized below, can be used as a MADSci Node; in addition, we provide a `RestNode` Python class which can be extended to easily integrate a new device.
 
@@ -71,7 +74,7 @@ Any software which implements a subset of common endpoints, summarized below, ca
 - `/admin`: supports receiving administrative commands, such as cancelling, pausing, or resuming a current action, or safety stopping the device
 - `/info`: allows the node to publish structured metadata about the controlled device or service and its capabilities
 
-While we provide and support a RESTful implementation of the MADSci Node API standard, we also have implemented an `AbstractNode` and `AbstractNodeClient` with the intention of enabling and eventually supporting additional implementations.
+While we provide and support a RESTful implementation of the MADSci Node API standard, we also have implemented an `AbstractNode` and `AbstractNodeClient` with the intention of enabling and eventually supporting additional implementations. The MADSci node approach is compatible with the commonly used SiLA2 device communication standard.
 
 ### Workcell and Workflow Management
 
@@ -84,12 +87,12 @@ We include a straightforward opportunistic first-in-first-out scheduler as a def
 Workflows can be defined using a straightforward YAML syntax, or as Pydantic-based Python data models.
 In either case, a workflow consists of a linear sequence of steps to be run on individual nodes.
 A Step Definition includes the node to run on, the specific action to take, and any required or optional arguments for that action.
-In addition to standard JSON-serializable arguments, workflow steps can also include Location or File arguments.
-Location arguments have their value provided by the Workcell at runtime, and the WorkcellManager will substitute a representation of that
+In addition to standard JSON-serializable arguments, workflow steps can include Location or File arguments.
+The value of location arguments are provided by the Workcell at runtime, and the WorkcellManager substitutes an appropriate representation.
 
 Finally, Workflows are parameterizable, allowing users to specify the node, action, or arguments for certain steps at submission time.
 This enables reusable template workflows.
-Optionally, the output from previous steps can be used as parameter values for later steps, allowing simple intra-workflow data flow.
+Optionally, the output from previous steps can inform parameter values for later steps, allowing simple intra-workflow data flow.
 
 ### Event Management and Logging
 
@@ -110,15 +113,15 @@ Finally, we provide automated history and resource locking functionality to help
 - Campaigns, Experiment Designs, Experiment Runs
 - `ExperimentApplication`
 
-MADSci's Experiment Manager allows users to define experimental campaigns, start experiment runs associated with those campaiagns, and associate other MADSci objects (workflows, resources, datapoints, etc) related to that experimental run.
-It supports Experiment Designs, which allow users to specify properties and conditions of experiments.
-Finally, MADSci includes an `ExperimentApplication` class, which provides a foundation for defining autonomous experimental applications, including all the neccessary clients to interact with a MADSci powered lab and helper functions for common autonomous experimental needs.
+MADSci's Experiment Manager allows users to define experimental campaigns, start experiment runs associated with those campaiagns, and link MADSci objects (workflows, resources, datapoints, etc) with experimental runs.
+The Experiment Manager supports Experiment Designs, which allow users to specify properties and conditions of experiments.
+Finally, MADSci includes an `ExperimentApplication` class, which provides a foundation for defining autonomous experimental applications, including all of the neccessary clients to interact with a MADSci powered lab and helper functions for common autonomous experimental needs.
 
 ### Data Management
 
-MADSci's Data Manager provides support for creating, storing, and querying data generated during autonomous experimentation from any component of the autonomous laboratory.
-It currently allows for storing and querying JSON-serializable data directly in MongoDB, storing file-based data either on a filesystem or in S3-compatible object storage.
-When working with large data where unneccesary data transfer is undesirable, the `DataClient` implementation optionally supports direct upload to object storage, preventing unneccessary extra transfer steps.
+MADSci's Data Manager supports the creation, storage, and querying of data generated during autonomous experimentation from any component of the autonomous laboratory.
+The Data Manager currently supports the storage and querying of JSON-serializable data directly in MongoDB, storing file-based data either on a filesystem or in S3-compatible object storage.
+When working with large data where unneccesary data transfer is undesirable, the `DataClient` implementation optionally supports direct upload to object storage.
 
 ---
 
