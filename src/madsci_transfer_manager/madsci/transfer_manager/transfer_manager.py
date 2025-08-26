@@ -1,4 +1,4 @@
-"""Transfer Manager Implementation """
+"""Transfer Manager Implementation with Unified Configuration"""
 
 import yaml
 from pathlib import Path
@@ -10,15 +10,25 @@ from madsci.transfer_manager.transfer_graph import TransferGraph
 
 
 class TransferManagerConfig(BaseModel):
-    """Configuration for transfer manager."""
-    robot_definitions_path: Path
-    location_constraints_path: Path
+    """Configuration for Transfer Manager with unified config file."""
+    
+    config_file_path: Path
+    
+    def __init__(self, config_file_path: Path = None, **data):
+        if config_file_path is None:
+            config_file_path = Path("transfer_config.yaml")
+        super().__init__(config_file_path=config_file_path, **data)
+    
+    def load_config(self) -> Dict[str, Any]:
+        """Load the unified configuration file."""
+        with open(self.config_file_path, 'r') as f:
+            return yaml.safe_load(f)
 
 
 class TransferManager:
     """Main Transfer Manager with graph pathfinding."""
     
-    def __init__(self, config: TransferManagerConfig):
+    def __init__(self, config):
         self.config = config
         self.robot_definitions: Dict[str, Dict] = {}
         self.location_constraints: Dict[str, Dict] = {}
@@ -31,15 +41,22 @@ class TransferManager:
         print("Transfer Manager initialized successfully!")
     
     def _load_configuration(self):
-        """Load configuration from YAML files."""
-        # Load robot definitions
-        with open(self.config.robot_definitions_path, 'r') as f:
-            self.robot_definitions = yaml.safe_load(f)
-        print(f"Loaded {len(self.robot_definitions)} robot definitions: {list(self.robot_definitions.keys())}")
+        """Load configuration from unified YAML file."""
+        # Handle both new unified config and legacy separate configs
+        if hasattr(self.config, 'load_config'):
+            # New unified config
+            config_data = self.config.load_config()
+            self.robot_definitions = config_data.get('robots', {})
+            self.location_constraints = config_data.get('locations', {})
+        else:
+            # Legacy separate files (backwards compatibility)
+            with open(self.config.robot_definitions_path, 'r') as f:
+                self.robot_definitions = yaml.safe_load(f)
+            
+            with open(self.config.location_constraints_path, 'r') as f:
+                self.location_constraints = yaml.safe_load(f)
         
-        # Load location constraints  
-        with open(self.config.location_constraints_path, 'r') as f:
-            self.location_constraints = yaml.safe_load(f)
+        print(f"Loaded {len(self.robot_definitions)} robot definitions: {list(self.robot_definitions.keys())}")
         print(f"Loaded {len(self.location_constraints)} location constraints: {list(self.location_constraints.keys())}")
     
     def _build_transfer_graph(self):
@@ -107,9 +124,13 @@ class TransferManager:
             print("Not a transfer step - returning as-is")
             return [step]
         
-        # Extract source and target
-        source = step.locations.get("source", "")
-        target = step.locations.get("target", "")
+        # Extract source and target - handle LocationArgument objects
+        source_raw = step.locations.get("source", "")
+        target_raw = step.locations.get("target", "")
+        
+        # Convert LocationArgument objects to location names
+        source = self._extract_location_name(source_raw)
+        target = self._extract_location_name(target_raw)
         
         print(f"Source: '{source}', Target: '{target}'")
         
@@ -126,7 +147,8 @@ class TransferManager:
                     target=target,
                     robot_name=step.node,
                     robot_definition=self.robot_definitions[step.node],
-                    user_parameters=step.args or {}
+                    user_parameters=step.args or {},
+                    original_locations=step.locations  # Pass original LocationArgument objects
                 )
                 return [concrete_step]
             else:
@@ -157,7 +179,8 @@ class TransferManager:
                 target=hop["target"],
                 robot_name=robot_name,
                 robot_definition=self.robot_definitions[robot_name],
-                user_parameters=step.args or {}
+                user_parameters=step.args or {},
+                original_locations=step.locations  # Pass original LocationArgument objects
             )
             concrete_step.name = f"Transfer {i+1}: {hop['source']} -> {hop['target']} via {robot_name}"
             concrete_steps.append(concrete_step)
@@ -181,7 +204,8 @@ class TransferManager:
         target: str,
         robot_name: str,
         robot_definition: Dict,
-        user_parameters: Dict
+        user_parameters: Dict,
+        original_locations: Dict = None
     ) -> Step:
         """Build a concrete transfer step with merged parameters."""
         print(f"Building step for {source} -> {target} via {robot_name}")
@@ -209,6 +233,27 @@ class TransferManager:
         if 'args' not in step_template:
             step_template['args'] = {}
         step_template['args'].update(merged_args)
+        
+        # Handle locations - use original LocationArgument objects if available
+        if original_locations:
+            # For multi-hop transfers, we need to map the source/target names back to LocationArgument objects
+            step_locations = {}
+            
+            # Find matching LocationArgument objects
+            for key, location_obj in original_locations.items():
+                location_name = self._extract_location_name(location_obj)
+                if location_name == source:
+                    step_locations['source'] = location_obj
+                elif location_name == target:
+                    step_locations['target'] = location_obj
+            
+            # If we couldn't find matching LocationArgument objects, fall back to names
+            if 'source' not in step_locations:
+                step_locations['source'] = source
+            if 'target' not in step_locations:
+                step_locations['target'] = target
+                
+            step_template['locations'] = step_locations
         
         # Create Step
         concrete_step = Step(**step_template)
@@ -247,6 +292,37 @@ class TransferManager:
         merged.update(user_parameters)
         
         return merged
+    
+    def _extract_location_name(self, location_value) -> str:
+        """
+        Extract location name from LocationArgument object or string.
+        
+        Args:
+            location_value: Either a LocationArgument object or a string
+            
+        Returns:
+            str: The location name to use for graph lookups
+        """
+        # If it's a LocationArgument object
+        if hasattr(location_value, 'location_name') or hasattr(location_value, 'location'):
+            # First try location_name if it's provided and not None
+            if hasattr(location_value, 'location_name') and location_value.location_name:
+                return location_value.location_name
+            
+            # If location_name is None/missing, use location field as string
+            if hasattr(location_value, 'location') and location_value.location is not None:
+                return str(location_value.location)
+        
+        # If it's already a string, return it
+        if isinstance(location_value, str):
+            return location_value
+        
+        # If it has a 'name' attribute (alternative structure)
+        if hasattr(location_value, 'name'):
+            return location_value.name
+            
+        # Fallback: convert to string
+        return str(location_value)
     
     def _replace_template_variables(self, template: Any, **variables) -> Any:
         """Replace template variables like {robot_name}, {source}, {target}."""
