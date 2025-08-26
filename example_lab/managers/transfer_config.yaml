@@ -1,0 +1,138 @@
+transfer_manager_name: Example Workcell
+manager_type: transfer_manager
+workcell_id: 01K3M523RJQ6E4APD43SR1VQ9G
+description: An example transfer manager config
+
+robots:
+  platecrane:
+    robot_name: platecrane
+    default_step_template:
+      name: "Transfer via {robot_name}"
+      node: platecrane
+      action: transfer
+      args:
+        plate_type: "flat_bottom_96well"
+      locations:
+        source: "{source}"
+        target: "{target}"
+    default_args:
+      plate_type: "flat_bottom_96well"
+
+  sciclops:
+    robot_name: sciclops
+    default_step_template:
+      name: "Get plate via {robot_name}"
+      node: sciclops
+      action: get_plate
+      locations:
+        source: "{source}"
+        target: "{target}"
+    default_args: {}
+
+  pf400:
+    robot_name: pf400
+    default_step_template:
+      name: "Transfer via {robot_name}"
+      node: pf400
+      action: transfer
+      locations:
+        source: "{source}"
+        target: "{target}"
+    default_args: {}
+
+  robotarm_1:
+    robot_name: robotarm_1
+    default_step_template:
+      name: "Transfer via {robot_name}"
+      node: robotarm_1
+      action: transfer
+      locations:
+        source: "{source}"
+        target: "{target}"
+    default_args:
+      grip_force: 10.0
+
+locations:
+  tower1:
+    location_name: tower1
+    description: "Storage tower 1"
+    accessible_by: ["sciclops"]
+    capacity: 20
+    default_args: {}
+
+  exchange:
+    location_name: exchange
+    description: "Central exchange location - hub for transfers"
+    accessible_by: ["sciclops", "pf400"]
+    capacity: 2
+    default_args: {}
+
+  camera_station:
+    location_name: camera_station
+    description: "Camera imaging station"
+    accessible_by: ["pf400"]
+    capacity: 1
+    default_args: {}
+    robot_overrides:
+      pf400:
+        source_plate_rotation: "narrow"
+        target_plate_rotation: "narrow"
+
+  ot2_gamma_deck_2:
+    location_name: ot2_gamma_deck_2
+    description: "OT2 Gamma robot deck position 2"
+    accessible_by: ["pf400"]
+    capacity: 1
+    default_args: {}
+    robot_overrides:
+      pf400:
+        target_plate_rotation: "wide"
+
+  hidex_nest:
+    location_name: hidex_nest
+    description: "Hidex plate reader nest position"
+    accessible_by: ["platecrane"]
+    capacity: 1
+    default_args:
+      height_offset: 8
+    robot_overrides:
+      platecrane:
+        approach_speed: "slow"
+
+  sealer_nest:
+    location_name: sealer_nest
+    description: "Plate sealer nest position"
+    accessible_by: ["platecrane"]
+    capacity: 1
+    default_args: {}
+
+  liconic_nest:
+    location_name: liconic_nest
+    description: "Liconic incubator loading position"
+    accessible_by: ["platecrane"]
+    capacity: 1
+    default_args: {}
+
+  location_1:
+    location_name: location_1
+    description: "Robot arm position 1"
+    accessible_by: ["robotarm_1"]
+    capacity: 1
+    default_args:
+      approach_height: 50.0
+
+  location_2:
+    location_name: location_2
+    description: "Robot arm position 2"
+    accessible_by: ["robotarm_1"]
+    capacity: 1
+    default_args:
+      approach_height: 50.0
+
+  # Hub location that connects different robot zones
+  central_hub:
+    location_name: central_hub
+    description: "Central hub connecting all robot zones"
+    accessible_by: ["platecrane", "pf400", "robotarm_1"]
+    capacity: 3
+    default_args: {}

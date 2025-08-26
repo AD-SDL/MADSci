@@ -1,0 +1,5 @@
+transfer_manager_name: transfer_manager_definition
+manager_type: transfer_manager
+transfer_manager_id: 01K3M9S8G9HVFW6PQWDBDPK0HC
+description: null
+transfer_manager_config_path: transfer_config.yaml
