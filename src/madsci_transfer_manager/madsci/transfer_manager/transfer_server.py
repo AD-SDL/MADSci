@@ -1,4 +1,4 @@
-"""REST API and Server for the Transfer Manager."""
+"""Simplified REST API and Server for the Transfer Manager using .env file paths."""
 
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -23,11 +23,15 @@ def create_transfer_manager_server(
     transfer_manager_definition: Optional[TransferManagerDefinition] = None,
     transfer_manager_settings: Optional[TransferManagerSettings] = None,
 ) -> FastAPI:
-    """Creates a Transfer Manager's REST server."""
+    """Creates a Transfer Manager's REST server using .env file paths."""
     
     logger = EventClient()
     transfer_manager_settings = transfer_manager_settings or TransferManagerSettings()
+    
+    # SIMPLIFIED: Let Pydantic settings handle the path from .env file
     transfer_manager_path = Path(transfer_manager_settings.transfer_manager_definition)
+    
+    print(f"Looking for definition file at: {transfer_manager_path.absolute()}")
     
     if not transfer_manager_definition:
         if transfer_manager_path.exists():
@@ -35,21 +39,35 @@ def create_transfer_manager_server(
         else:
             name = str(transfer_manager_path.name).split(".")[0]
             transfer_manager_definition = TransferManagerDefinition(transfer_manager_name=name)
+            
         logger.log_info(f"Writing to transfer manager definition file: {transfer_manager_path}")
+        # Create directory if it doesn't exist
+        transfer_manager_path.parent.mkdir(parents=True, exist_ok=True)
         transfer_manager_definition.to_yaml(transfer_manager_path)
     
     global_ownership_info.manager_id = transfer_manager_definition.transfer_manager_id
     logger = EventClient(name=f"transfer_manager.{transfer_manager_definition.transfer_manager_name}")
     logger.log_info(transfer_manager_definition)
     
-    # Initialize Transfer Manager with paths from definition
-    config = TransferManagerConfig(
-        robot_definitions_path=Path(transfer_manager_definition.robot_definitions_path),
-        location_constraints_path=Path(transfer_manager_definition.location_constraints_path)
-    )
+    # SIMPLIFIED: Resolve transfer config path relative to definition file
+    transfer_config_path = Path(transfer_manager_definition.transfer_manager_config_path)
+    
+    # If it's not absolute, look in the same directory as the definition file
+    if not transfer_config_path.is_absolute():
+        transfer_config_path = transfer_manager_path.parent / transfer_config_path
+    
+    print(f"Looking for transfer config file at: {transfer_config_path.absolute()}")
+    
+    if not transfer_config_path.exists():
+        logger.log_error(f"Transfer config file not found: {transfer_config_path}")
+        raise FileNotFoundError(f"Transfer config file not found: {transfer_config_path}")
+    
+    # Create the actual config object for TransferManager
+    transfer_config = TransferManagerConfig(config_file_path=transfer_config_path)
     
     try:
-        transfer_manager = TransferManager(config)
+        # Pass proper config object
+        transfer_manager = TransferManager(transfer_config)
         logger.log_info("Transfer Manager initialized successfully")
     except Exception as e:
         logger.log_error(f"Failed to initialize Transfer Manager: {e}")
@@ -63,7 +81,7 @@ def create_transfer_manager_server(
         # LOG TRANSFER MANAGER START EVENT
         logger.log(
             Event(
-                event_type=EventType.TRANSFER_MANAGER_START,  # You may need to add this to EventType
+                event_type=EventType.TRANSFER_MANAGER_START,
                 event_data=transfer_manager_definition.model_dump(mode="json"),
             )
         )
@@ -74,7 +92,7 @@ def create_transfer_manager_server(
             # LOG TRANSFER MANAGER STOP EVENT
             logger.log(
                 Event(
-                    event_type=EventType.TRANSFER_MANAGER_STOP,  # You may need to add this to EventType
+                    event_type=EventType.TRANSFER_MANAGER_STOP,
                     event_data=transfer_manager_definition.model_dump(mode="json"),
                 )
             )
@@ -148,6 +166,7 @@ def create_transfer_manager_server(
 
 if __name__ == "__main__":
     transfer_manager_settings = TransferManagerSettings()
+    print(transfer_manager_settings)
     app = create_transfer_manager_server(transfer_manager_settings=transfer_manager_settings)
     uvicorn.run(
         app,
