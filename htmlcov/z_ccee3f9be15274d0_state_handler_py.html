@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/madsci_workcell_manager/madsci/workcell_manager/state_handler.py: 76%</title>
+    <title>Coverage for src/madsci_workcell_manager/madsci/workcell_manager/state_handler.py: 77%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
     <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
     <script src="coverage_html_cb_6fb7b396.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src/madsci_workcell_manager/madsci/workcell_manager/state_handler.py</b>:
-            <span class="pc_cov">76%</span>
+            <span class="pc_cov">77%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">214 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">163<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">51<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">165<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">49<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_ccee3f9be15274d0_workcell_engine_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.3">coverage.py v7.10.3</a>,
-            created at 2025-08-18 18:40 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.5">coverage.py v7.10.5</a>,
+            created at 2025-08-26 20:48 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -523,8 +523,8 @@
     <p class="pln"><span class="n"><a id="t441" href="#t441">441</a></span><span class="t">        <span class="str">"""</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t442" href="#t442">442</a></span><span class="t"><span class="str">        Deletes a location by ID</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t443" href="#t443">443</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t444" href="#t444">444</a></span><span class="t">        <span class="key">del</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_locations</span><span class="op">[</span><span class="nam">location_id</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t445" href="#t445">445</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">mark_state_changed</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t444" href="#t444">444</a></span><span class="t">        <span class="key">del</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_locations</span><span class="op">[</span><span class="nam">location_id</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t445" href="#t445">445</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">mark_state_changed</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t446" href="#t446">446</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t447" href="#t447">447</a></span><span class="t">    <span class="key">def</span> <span class="nam">update_location</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t448" href="#t448">448</a></span><span class="t">        <span class="nam">self</span><span class="op">,</span> <span class="nam">location_id</span><span class="op">:</span> <span class="nam">str</span><span class="op">,</span> <span class="nam">func</span><span class="op">:</span> <span class="nam">Callable</span><span class="op">[</span><span class="op">...</span><span class="op">,</span> <span class="nam">Any</span><span class="op">]</span><span class="op">,</span> <span class="op">*</span><span class="nam">args</span><span class="op">:</span> <span class="nam">Any</span><span class="op">,</span> <span class="op">**</span><span class="nam">kwargs</span><span class="op">:</span> <span class="nam">Any</span>&nbsp;</span><span class="r"></span></p>
@@ -541,8 +541,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_ccee3f9be15274d0_workcell_engine_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.3">coverage.py v7.10.3</a>,
-            created at 2025-08-18 18:40 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.5">coverage.py v7.10.5</a>,
+            created at 2025-08-26 20:48 +0000
         </p>
     </div>
 </footer>
