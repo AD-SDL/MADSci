@@ -15,8 +15,8 @@ def get_config_path(filename):
 def create_test_config():
     """Create a config with paths relative to this script."""
     return TransferManagerConfig(
-        robot_definitions_path=get_config_path("test_robot_definitions.yaml"),
-        location_constraints_path=get_config_path("test_location_constraints.yaml")
+        robot_definitions_path=get_config_path("robot_definitions.yaml"),
+        location_constraints_path=get_config_path("location_constraints.yaml")
     )
 
 
