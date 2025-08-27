@@ -41,9 +41,9 @@ bibliography: paper.bib
 # Summary
 
 The Modular Autonomous Discovery for Science (MADSci) toolkit is a modular, open source software framework for enabling laboratory automation, high-throughput experimentation, and self driving labs.
-It allows laboratory operators to define autonomous workcells as collections of Nodes, each controlling individual instruments, robots, or other devices.
-These nodes, when combined with Managers that provide general lab functionality and coordination, form flexible, modular autonomous laboratories.
-Lab users can then create and run experimental campaigns using simple python applications and YAML workflow definitions.
+It allows laboratory operators to define autonomous workcells as collections of *Nodes*, each controlling individual instruments, robots, or other devices.
+These nodes, when combined with *Managers* that provide general lab functionality and coordination, form flexible, modular autonomous laboratories.
+Lab users can then create and run experimental campaigns using simple Python applications and YAML workflow definitions.
 This design allows a separation of expertise and concerns between device integrators, automated/autonomous lab operators, and domain and data scientists running automated, autonomous, and high-throughput experiments using them.
 MADSci and its predecesor have enabled autonomous science in domains including Biology, Chemistry, materials science, and quantum science. 
 
@@ -52,7 +52,7 @@ MADSci and its predecesor have enabled autonomous science in domains including B
 The existing software ecosystem for lab automation and autonomous discovery is highly fragmented and inconsistent. Many existing solutions are proprietary, expensive, or closed source (Chemspeed Autosuite and Arksuite [citation], Retisoft Genera [citation], Cellario [citation]); or are targeted at specific experimental domains, problems, or setups (AlabOS [citation], ChemOS [citation], BlueSky [citation], Polybot [citation]). 
 MADSci aims to provide a flexible, domain-agnostic, and modular set of open source tools for handling the complexity of autonomous experimental setups and self driving labs
 To achieve this, it supports integrating arbitrary equipment, devices, sensors, and robots as "nodes", and provides "managers" for handling common functionality such as workflow orchestration and scheduling, resource management and inventory tracking, experimental campaigns, events and logging, and data collection.
-In order to be adaptable and flexible to the wide diversity of needs and challenges in lab autonomy, MADSci is implemented based on a microservices architecture, as a collection of RESTful OpenAPI servers, with python clients provided to easily interface with any part of the system, backed by standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open source python libraries (FastAPI, Pydantic, SQLModel).
+In order to be adaptable and flexible to the wide diversity of needs and challenges in lab autonomy, MADSci is implemented with a microservices architecture, as a collection of RESTful OpenAPI servers, with Python clients provided to interface easily with any part of the system, backed by standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open source Python libraries (FastAPI, Pydantic, SQLModel).
 
 ## Software Architecture and Features
 
@@ -64,14 +64,14 @@ Figure 1: Schematic architecture diagram for MADSci
 
 ### Nodes
 
-MADSci enables modular integration of lab equipment, devices, robots, sensors, or any other components necessary for the operation of an automated or self driving lab via the MADSci Nodes API (see Fig. 1).
+MADSci enables modular integration of lab equipment, devices, robots, sensors, and other components needed to operate an automated or self driving lab via the MADSci Nodes API (see Fig. 1).
 
 Any software which implements a subset of common endpoints, summarized below, can be used as a MADSci Node; in addition, we provide a `RestNode` Python class which can be extended to easily integrate a new device.
 
 - `/action`: allows `POST` requests to invoke specific functionality of the controlled device or service
-- `/status`: get information about the current status of the node, such as whether it is currently busy, idle, or in an error state.
+- `/status`: retrieves information about current node status, such as whether busy, idle, or in an error state.
 - `/state`: allows the node to publish arbitrary state information related to the integrated device or service.
-- `/admin`: supports receiving administrative commands, such as cancelling, pausing, or resuming a current action, or safety stopping the device
+- `/admin`: supports administrative commands, such as cancelling, pausing, or resuming a current action, or safety stopping the device
 - `/info`: allows the node to publish structured metadata about the controlled device or service and its capabilities
 
 While we provide and support a RESTful implementation of the MADSci Node API standard, we also have implemented an `AbstractNode` and `AbstractNodeClient` with the intention of enabling and eventually supporting additional implementations. The MADSci node approach is compatible with the commonly used SiLA2 device communication standard.
@@ -97,15 +97,15 @@ Optionally, the output from previous steps can inform parameter values for later
 ### Event Management and Logging
 
 We implement an Event Manager, which allows nodes and other managers to log JSON-based events to a central event tracking and storage system.
-Our EventClient implementation also supports logging to local terminal output and log files, based on Python's native logging library, providing users with familiar syntax and usage patterns, as well as the ability to easily convert existing python logging to use the Event Manager.
+Our EventClient implementation also supports logging to local terminal output and log files, based on Python's native logging library, providing users with familiar syntax and usage patterns, as well as the ability to easily convert existing Python logging to use the Event Manager.
 The Event Manager is backed by MongoDB, a document-based database, and supports advanced querying using Mongo's query selectors.
 
 ### Resource Management
 
 Most autonomous laboratories involve various consumables, labware, and other trackable assets.
-Often, these physical resources are collected into different containters.
+Often, these physical resources are collected into different containers.
 We provide a Resource Manager to support flexible and distributed definition, templating, validation, instantiation, tracking, and lifecycle management of these resources.
-Backed by PostgreSQL, our implementation supports a wide range of different types of assets, containers, and consumables, as well as nested resources inside of containers. It's designed to be flexible, allowing users to define the properties of specific resources, while also providing a rich library of verbs for interacting with these resources in a standardized fashion.
+Backed by PostgreSQL, our implementation supports numerous types of assets, containers, and consumables, as well as nested resources inside of containers. It is designed to be flexible, allowing users to define the properties of specific resources, while also providing a rich library of verbs for interacting with these resources in a standardized fashion.
 Finally, we provide automated history and resource locking functionality to help ensure data provenance and robustness.
 
 ### Experiment Management
@@ -115,7 +115,7 @@ Finally, we provide automated history and resource locking functionality to help
 
 MADSci's Experiment Manager allows users to define experimental campaigns, start experiment runs associated with those campaiagns, and link MADSci objects (workflows, resources, datapoints, etc) with experimental runs.
 The Experiment Manager supports Experiment Designs, which allow users to specify properties and conditions of experiments.
-Finally, MADSci includes an `ExperimentApplication` class, which provides a foundation for defining autonomous experimental applications, including all of the neccessary clients to interact with a MADSci powered lab and helper functions for common autonomous experimental needs.
+Finally, an `ExperimentApplication` classmprovides a foundation for defining autonomous experimental applications, including all clients needed to interact with a MADSci-powered lab and helper functions for common autonomous experimental needs.
 
 ### Data Management
 
