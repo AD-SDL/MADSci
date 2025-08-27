@@ -104,3 +104,53 @@ class CustomSettings(MadsciBaseSettings, env_prefix="CUSTOM_"):
 # Reads from CUSTOM_API_KEY, CUSTOM_TIMEOUT environment variables
 settings = CustomSettings()
 ```
+
+## Context Management
+
+MADSci provides a flexible context management system for handling global and temporary configuration across components.
+
+### Core API
+- `MadsciContext`: The main context object holding context information about the wider lab.
+- `madsci_context(**overrides)`: Context manager to temporarily override context fields.
+- `get_current_madsci_context()`: Returns the current context (global or overridden).
+
+#### Example Usage
+```python
+from madsci.common.context import madsci_context, get_current_madsci_context
+
+# Access the current context
+ctx = get_current_madsci_context()
+
+# Temporarily override context fields
+with madsci_context(workcell_server_url="http://example.com") as ctx:
+    # ctx has the overridden values
+    ...
+# After the block, context reverts to previous state
+```
+
+This system ensures consistent context handling for logging, configuration, and runtime state throughout the toolkit.
+
+## Ownership Context Management
+
+MADSci provides ownership context tooling to manage and propagate ownership information (user, experiment, project, etc.) across system components.
+
+### Core API
+- `OwnershipInfo`: Data model for ownership fields (user, experiment, project, etc.)
+- `ownership_context(**overrides)`: Context manager to temporarily override ownership fields
+- `get_current_ownership_info()`: Returns the current ownership info (global or overridden)
+
+#### Example Usage
+```python
+from madsci.common.ownership import ownership_context, get_current_ownership_info
+
+# Access the current ownership info
+info = get_current_ownership_info()
+
+# Temporarily override ownership fields
+with ownership_context(user_id="alice", project_id="proj42") as info:
+    # info has the overridden values
+    ...
+# After the block, ownership info reverts to previous state
+```
+
+This system ensures consistent propagation of ownership metadata for access control, auditing, and object tracking throughout the toolkit.
