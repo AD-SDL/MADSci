@@ -49,14 +49,15 @@ MADSci and its predecesor have enabled autonomous science in domains including B
 
 # Statement of Need
 
-The existing software ecosystem for lab automation and autonomous discovery is highly fragmented and inconsistent. Many existing solutions are proprietary, expensive, or closed source (Chemspeed Autosuite and Arksuite [citation], Retisoft Genera [citation], Cellario [citation]); or are targeted at specific experimental domains, problems, or setups (AlabOS [citation], ChemOS [citation], BlueSky [citation], Polybot [citation]).
-MADSci aims to provide a flexible, domain-agnostic, and modular set of open source tools for handling the complexity of autonomous experimental setups and self driving labs
-To achieve this, it supports integrating arbitrary equipment, devices, sensors, and robots as "nodes", and provides "managers" for handling common functionality such as workflow orchestration and scheduling, resource management and inventory tracking, experimental campaigns, events and logging, and data collection.
-In order to be adaptable and flexible to the wide diversity of needs and challenges in lab autonomy, MADSci is implemented with a microservices architecture, as a collection of RESTful OpenAPI servers, with Python clients provided to interface easily with any part of the system, backed by standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open source Python libraries (FastAPI, Pydantic, SQLModel).
+The lab automation ecosystem is fragmented, with many proprietary, costly, or narrowly domain-specific tools. 
+MADSci provides a flexible, open-source, easily extensible, and domain-agnostic toolkit for autonomous labs. 
+It integrates equipment, sensors, and robots as “nodes,” with modular managers for workflows, resources, experiments, logging, and data collection. 
+Built as a microservices architecture with developer-friendly RESTful APIs and Python clients, MADSci leverages standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open-source libraries (FastAPI, Pydantic, SQLModel) to ensure adaptability and extensibility.
+
 
 ## Software Architecture and Features
 
-Below we describe the modular, composable, distributed microservice-based architecture of MADSci, which focuses on enabling separation of concerns for different system components.
+The modular, composable, distributed microservice-based MADSci architecture enables separation of concerns among different system components.
 
 <!-- if there's something in the figure we don't mention, it should not be included in the figure -->
 ![MADSci Architecture Diagram.\label{fig:madsci_architecture}](assets/drawio/madsci_architecture.drawio.svg)
@@ -72,41 +73,39 @@ Any software which implements a subset of common endpoints, summarized below, ca
 - `/status`: retrieves information about current node status, such as whether busy, idle, or in an error state.
 - `/state`: allows the node to publish arbitrary state information related to the integrated device or service.
 - `/admin`: supports administrative commands, such as cancelling, pausing, or resuming a current action, or safety stopping the device
-- `/info`: allows the node to publish structured metadata about the controlled device or service and its capabilities
+- `/info`: publishes structured metadata about the controlled device or service and its capabilities
 
-While we provide and support a RESTful implementation of the MADSci Node API standard, we also have implemented an `AbstractNode` and `AbstractNodeClient` with the intention of enabling and eventually supporting additional implementations. The MADSci node approach is compatible with the commonly used SiLA2 device communication standard.
+We provide and support a RESTful implementation of the MADSci Node API standard. We have also implemented an `AbstractNode` and `AbstractNodeClient` to enable additional implementations. The MADSci node approach is compatible with the commonly used SiLA2 device communication standard.
 
 ### Workcell and Workflow Management
 
-The MADSci Workcell Manager handles the operation of a **Workcell**--a collection of **Nodes**, **Locations**, and **Resources** that are scheduled together--to perform **Workflows**. A self-driving lab may consist of one or more Workcells, with each Workcell able to execute workflows semi-independently.
+The MADSci Workcell Manager handles the operation of a **Workcell**--a collection of **Nodes**, **Locations**, and **Resources** that are scheduled together--to perform **Workflows**. A self-driving lab may comprise one or more Workcells, each able to execute workflows semi-independently.
 
-At the core of the workcell manager is the scheduler, which determines which steps in one or more workflows to run next based on the current state of the workcell's constituent nodes, locations, and resources.
-This scheduler is a modular component of the workcell manager that is designed to be swapped out by the lab operator to meet the specific requirements of their lab.
+At the core of the workcell manager is the scheduler, which determines which steps in active workflow(s) to run next based on the current state of the workcell's nodes, locations, and resources.
+A modular design allows this component to be swapped out by a lab operator to meet specific requirements of their lab.
 We include a straightforward opportunistic first-in-first-out scheduler as a default.
 
 Workflows can be defined using a straightforward YAML syntax, or as Pydantic-based Python data models.
 In either case, a workflow consists of a linear sequence of steps to be run on individual nodes.
-A Step Definition includes the node to run on, the specific action to take, and any required or optional arguments for that action.
+A Step Definition specifies a node, an action, and any (required or optional) action arguments.
 In addition to standard JSON-serializable arguments, workflow steps can include Location or File arguments.
-The value of location arguments are provided by the Workcell at runtime, and the WorkcellManager substitutes an appropriate representation.
+The value of location arguments are provided by the Workcell at runtime; the WorkcellManager substitutes an appropriate representation.
 
-Finally, Workflows are parameterizable, allowing users to specify the node, action, or arguments for certain steps at submission time.
+Workflows are parameterizable: users can specify the node, action, or arguments for certain steps at submission time.
 This enables reusable template workflows.
-Optionally, the output from previous steps can inform parameter values for later steps, allowing simple intra-workflow data flow.
+The output from previous steps can inform parameter values for later steps, allowing simple intra-workflow data flow.
 
 ### Event Management and Logging
 
-We implement an Event Manager, which allows nodes and other managers to log JSON-based events to a central event tracking and storage system.
-Our EventClient implementation also supports logging to local terminal output and log files, based on Python's native logging library, providing users with familiar syntax and usage patterns, as well as the ability to easily convert existing Python logging to use the Event Manager.
-The Event Manager is backed by MongoDB, a document-based database, and supports advanced querying using Mongo's query selectors.
+The MADSci Event Manager lets nodes and managers log JSON events to a central system backed by MongoDB, which supports advanced queries. The EventClient can also log to the terminal or files using Python’s standard logging library, making it easy to reuse existing Python logging code.
 
 ### Resource Management
 
-Most autonomous laboratories involve various consumables, labware, and other trackable assets.
-Often, these physical resources are collected into different containers.
-We provide a Resource Manager to support flexible and distributed definition, templating, validation, instantiation, tracking, and lifecycle management of these resources.
-Backed by PostgreSQL, our implementation supports numerous types of assets, containers, and consumables, as well as nested resources inside of containers. It is designed to be flexible, allowing users to define the properties of specific resources, while also providing a rich library of verbs for interacting with these resources in a standardized fashion.
-Finally, we provide automated history and resource locking functionality to help ensure data provenance and robustness.
+Autonomous labs rely on consumables, labware, and other assets, often organized into containers. 
+Our Resource Manager provides flexible tools to define, validate, track, and manage these resources across their lifecycle. 
+Built on PostgreSQL, it supports many asset types, including nested resources, and lets users customize properties while interacting through a standardized set of operations. 
+It also maintains automated histories and locking to ensure provenance and reliability.
+
 
 ### Experiment Management
 
