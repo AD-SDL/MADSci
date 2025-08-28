@@ -45,11 +45,11 @@ It allows laboratory operators to define autonomous workcells as collections of 
 These nodes, when combined with *Managers* that provide general lab functionality and coordination, form flexible, modular autonomous laboratories.
 Lab users can then create and run experimental campaigns using simple Python applications and YAML workflow definitions.
 This design allows a separation of expertise and concerns between device integrators, automated/autonomous lab operators, and domain and data scientists running automated, autonomous, and high-throughput experiments using them.
-MADSci and its predecesor have enabled autonomous science in domains including Biology, Chemistry, materials science, and quantum science. 
+MADSci and its predecesor have enabled autonomous science in domains including Biology, Chemistry, materials science, and quantum science.
 
 # Statement of Need
 
-The existing software ecosystem for lab automation and autonomous discovery is highly fragmented and inconsistent. Many existing solutions are proprietary, expensive, or closed source (Chemspeed Autosuite and Arksuite [citation], Retisoft Genera [citation], Cellario [citation]); or are targeted at specific experimental domains, problems, or setups (AlabOS [citation], ChemOS [citation], BlueSky [citation], Polybot [citation]). 
+The existing software ecosystem for lab automation and autonomous discovery is highly fragmented and inconsistent. Many existing solutions are proprietary, expensive, or closed source (Chemspeed Autosuite and Arksuite [citation], Retisoft Genera [citation], Cellario [citation]); or are targeted at specific experimental domains, problems, or setups (AlabOS [citation], ChemOS [citation], BlueSky [citation], Polybot [citation]).
 MADSci aims to provide a flexible, domain-agnostic, and modular set of open source tools for handling the complexity of autonomous experimental setups and self driving labs
 To achieve this, it supports integrating arbitrary equipment, devices, sensors, and robots as "nodes", and provides "managers" for handling common functionality such as workflow orchestration and scheduling, resource management and inventory tracking, experimental campaigns, events and logging, and data collection.
 In order to be adaptable and flexible to the wide diversity of needs and challenges in lab autonomy, MADSci is implemented with a microservices architecture, as a collection of RESTful OpenAPI servers, with Python clients provided to interface easily with any part of the system, backed by standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open source Python libraries (FastAPI, Pydantic, SQLModel).
@@ -115,7 +115,7 @@ Finally, we provide automated history and resource locking functionality to help
 
 MADSci's Experiment Manager allows users to define experimental campaigns, start experiment runs associated with those campaiagns, and link MADSci objects (workflows, resources, datapoints, etc) with experimental runs.
 The Experiment Manager supports Experiment Designs, which allow users to specify properties and conditions of experiments.
-Finally, an `ExperimentApplication` classmprovides a foundation for defining autonomous experimental applications, including all clients needed to interact with a MADSci-powered lab and helper functions for common autonomous experimental needs.
+Finally, an `ExperimentApplication` class provides a foundation for defining autonomous experimental applications, including all clients needed to interact with a MADSci-powered lab and helper functions for common autonomous experimental needs.
 
 ### Data Management
 
