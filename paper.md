@@ -121,7 +121,12 @@ Finally, an `ExperimentApplication` class provides a foundation for defining aut
 
 MADSci's Data Manager supports the creation, storage, and querying of data generated during autonomous experimentation from any component of the autonomous laboratory.
 The Data Manager currently supports the storage and querying of JSON-serializable data directly in MongoDB, storing file-based data either on a filesystem or in S3-compatible object storage.
-When working with large data where unneccesary data transfer is undesirable, the `DataClient` implementation optionally supports direct upload to object storage.
+When working with large data where unneccesary data transfer is undesirable, the `DataClient` implementation optionally supports direct upload to object storage
+
+### Clients and the Experiment App
+
+While the managers all function as RESTful APIs, and therefore can be communicated with using basic http requests, in order to allow ease of use, we provide custom Clients that wrap these http requests and ensure that they are formatted correctly. in order to facilitate use of these clients, we provide the Experiment App class, which is intended as the main point of interactions for users.The ExperimentApp class facilitates the creation of an experiment specific python program that uses clients to send workflows, retrieve data, log events and update experiment progress.  Because it is simply a slightly structured python program, this ExperimentApp also allows for easy integration of any third part python libraries, including Globus transfer for data management, Globus compute to leverage larger comput power, Scikit for bayesian optimization and calls to LLM APIs for AI integration. The experiment app also can function as a Rest node and provide Experiment Actions, which can integrate data processing directly into workflows.
+
 
 ---
 
