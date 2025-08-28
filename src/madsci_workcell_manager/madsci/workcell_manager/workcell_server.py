@@ -283,12 +283,11 @@ def create_workcell_server(  # noqa: C901, PLR0915
         return state_handler.get_active_workflow(wf.workflow_id)
 
     @app.post("/workflow/{workflow_id}/retry")
-    def retry_workflow(workflow_id: str, index: int = -1) -> Workflow:
+    def retry_workflow(workflow_id: str, index: int = 0) -> Workflow:
         """Retry an existing workflow from a specific step."""
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
             if wf.status.terminal:
-                index = max(index, 0)
                 wf.status.reset(index)
                 state_handler.set_active_workflow(wf)
                 state_handler.delete_archived_workflow(wf.workflow_id)

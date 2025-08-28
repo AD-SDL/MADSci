@@ -191,6 +191,31 @@ class WorkcellClient:
         response.raise_for_status()
         return str(response.json())
 
+    def analyze_parameter_types(
+        self,
+        workflow_definition: WorkflowDefinition,
+        input_values: Optional[dict[str, Any]],
+    ) -> None:
+        """Check the type of parameter input values"""
+        if input_values:
+            for parameter in workflow_definition.parameters.input_values:
+                if (
+                    parameter.input_key in input_values
+                    and parameter.parameter_type
+                    and not (
+                        type(input_values[parameter.input_key]).__name__
+                        == parameter.parameter_type
+                        or (
+                            "Union" in parameter.parameter_type
+                            and type(input_values[parameter.input_key]).__name__
+                            in parameter.parameter_type
+                        )
+                    )
+                ):
+                    raise TypeError(
+                        f"Input Value {parameter.input_key} has wrong type, must be type {parameter.parameter_type}"
+                    )
+
     def start_workflow(
         self,
         workflow_definition: Union[PathLike, WorkflowDefinition],
@@ -243,6 +268,7 @@ class WorkcellClient:
             )
         workflow_definition = self.get_workflow_definition(workflow_definition_id)
         files = {}
+        self.analyze_parameter_types(workflow_definition, input_values)
         if input_files:
             files = self.make_paths_absolute(input_files)
 
@@ -313,8 +339,27 @@ class WorkcellClient:
                 files[file] = str(path)
         return files
 
+    def check_parameters_lists(
+        self,
+        workflows: list[str],
+        input_values: list[dict[str, Any]] = [],
+        input_files: dict[str, PathLike] = [],
+    ) -> None:
+        """Check if the parameter lists are the right length"""
+        if len(workflows) > len(input_values):
+            raise ValueError(
+                "Must submit input_values, in order, for each workflow, submit empty dictionaries if no input_values"
+            )
+        if len(workflows) > len(input_files):
+            raise ValueError(
+                "Must submit input_files, in order, for each workflow, submit empty dictionaries if no input_files"
+            )
+
     def submit_workflow_sequence(
-        self, workflows: list[str], parameters: list[dict[str, Any]]
+        self,
+        workflows: list[str],
+        input_values: list[dict[str, Any]] = [],
+        input_files: dict[str, PathLike] = [],
     ) -> list[Workflow]:
         """
         Submit a sequence of workflows to run in order.
@@ -332,15 +377,19 @@ class WorkcellClient:
             A list of submitted workflow objects.
         """
         wfs = []
+        self.check_parameter_lists(workflows, input_values, input_files)
         for i in range(len(workflows)):
             wf = self.submit_workflow(
-                workflows[i], parameters[i], await_completion=True
+                workflows[i], input_values[i], await_completion=True
             )
             wfs.append(wf)
         return wfs
 
     def submit_workflow_batch(
-        self, workflows: list[str], parameters: list[dict[str, Any]]
+        self,
+        workflows: list[str],
+        input_values: list[dict[str, Any]] = [],
+        input_files: list[dict[str, PathLike]] = [],
     ) -> list[Workflow]:
         """
         Submit a batch of workflows to run concurrently.
@@ -358,9 +407,10 @@ class WorkcellClient:
             A list of completed workflow objects.
         """
         id_list = []
+        self.check_parameter_lists(workflows, input_values, input_files)
         for i in range(len(workflows)):
             response = self.submit_workflow(
-                workflows[i], parameters[i], await_completion=False
+                workflows[i], input_values=[i], await_completion=False
             )
             id_list.append(response.json()["workflow_id"])
         finished = False
@@ -377,7 +427,7 @@ class WorkcellClient:
     def retry_workflow(
         self,
         workflow_id: str,
-        index: int = -1,
+        index: int = 0,
         await_completion: bool = True,
         raise_on_cancelled: bool = True,
         raise_on_failed: bool = True,
@@ -424,47 +474,6 @@ class WorkcellClient:
             )
 
         return Workflow(**response.json())
-
-    def resubmit_workflow(
-        self,
-        workflow_id: str,
-        await_completion: bool = True,
-        raise_on_failed: bool = True,
-        raise_on_cancelled: bool = True,
-        prompt_on_error: bool = True,
-    ) -> Workflow:
-        """
-        Resubmit a workflow as a new workflow with a new ID.
-
-        Parameters
-        ----------
-        workflow_id : str
-            The ID of the workflow to resubmit.
-        await_completion : bool, optional
-            If True, wait for the workflow to complete, by default True.
-        raise_on_failed : bool, optional
-            If True, raise an exception if the workflow fails, by default True.
-        raise_on_cancelled : bool, optional
-            If True, raise an exception if the workflow is cancelled, by default True.
-        prompt_on_error : bool, optional
-            If True, prompt the user for what action to take on workflow errors, by default True.
-
-        Returns
-        -------
-        Workflow
-            The resubmitted workflow object.
-        """
-        url = f"{self.url}/workflow/{workflow_id}/resubmit"
-        response = requests.get(url, timeout=10)
-        new_wf = Workflow(**response.json())
-        if await_completion:
-            return self.await_workflow(
-                new_wf.workflow_id,
-                raise_on_failed=raise_on_failed,
-                raise_on_cancelled=raise_on_cancelled,
-                prompt_on_error=prompt_on_error,
-            )
-        return new_wf
 
     def _handle_workflow_error(
         self,
