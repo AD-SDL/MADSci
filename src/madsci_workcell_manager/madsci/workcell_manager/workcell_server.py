@@ -13,10 +13,10 @@ from fastapi.params import Body
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
@@ -46,7 +46,6 @@ from ulid import ULID
 def create_workcell_server(  # noqa: C901, PLR0915
     workcell: Optional[WorkcellDefinition] = None,
     workcell_settings: Optional[WorkcellManagerSettings] = None,
-    context: Optional[MadsciContext] = None,
     redis_connection: Optional[Any] = None,
     mongo_connection: Optional[Database] = None,
     start_engine: bool = True,
@@ -70,14 +69,14 @@ def create_workcell_server(  # noqa: C901, PLR0915
         name=f"workcell.{workcell.workcell_name}",
     )
     logger.info(workcell)
-    context = context or MadsciContext()
-    logger.info(context)
+    logger.info(get_current_madsci_context())
 
     state_handler = WorkcellStateHandler(
         workcell,
         redis_connection=redis_connection,
         mongo_connection=mongo_connection,
     )
+    context = get_current_madsci_context()
 
     data_client = DataClient(context.data_server_url)
 
@@ -168,7 +167,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         if permanent:
             workcell = state_handler.get_workcell_definition()
             workcell.nodes[node_name] = node_url
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
             state_handler.set_workcell_definition(workcell)
 
         return state_handler.get_node(node_name)
@@ -476,7 +476,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         if permanent:
             workcell = state_handler.get_workcell_definition()
             workcell.locations.append(location)
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
         return state_handler.get_location(location.location_id)
 
     @app.get("/location/{location_id}")
@@ -496,7 +497,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     workcell.locations,
                 )
             )
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
             state_handler.set_workcell_definition(workcell)
         return {"status": "deleted"}
 

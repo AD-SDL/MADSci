@@ -14,12 +14,13 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
+from madsci.common.types.parameter_types import FeedForwardValue
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
-    WorkflowParameter,
+    WorkflowParameters,
     WorkflowStatus,
 )
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
@@ -148,8 +149,12 @@ def test_run_single_step_with_update_parameters(
     workflow = Workflow(
         name="Test Workflow",
         parameters=[
-            WorkflowParameter(
-                name="test_param", step_name="Test Step 1", label="test_label"
+            WorkflowParameters(
+                feed_forward_values=[
+                    FeedForwardValue(
+                        name="test_param", step_name="Test Step 1", label="test_label"
+                    )
+                ]
             )
         ],
         steps=[step],

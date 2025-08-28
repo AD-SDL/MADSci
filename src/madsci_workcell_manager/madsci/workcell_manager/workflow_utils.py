@@ -24,13 +24,20 @@ from madsci.common.types.workflow_types import (
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 
 
-def validate_node_names(workflow: Workflow, workcell: WorkcellDefinition) -> None:
+def validate_node_names(
+    workflow: Workflow, state_handler: WorkcellStateHandler
+) -> None:
     """
-    Validates that the nodes in the workflow.step are in the workcell.nodes
+    Validates that the nodes in the workflow.step are in the workcell's nodes
     """
     for node_name in [step.node for step in workflow.steps]:
-        if node_name not in workcell.nodes:
-            raise ValueError(f"Node {node_name} not in Workcell {workcell.name}")
+        try:
+            if node_name:
+                state_handler.get_node(node_name)
+        except KeyError as e:
+            raise ValueError(
+                f"Node {node_name} not in Workcell {state_handler.get_workcell_definition().workcell_name}"
+            ) from e
 
 
 def validate_step(step: Step, state_handler: WorkcellStateHandler) -> tuple[bool, str]:
@@ -118,6 +125,7 @@ def create_workflow(
     steps: WorkflowRun
         a completely initialized workflow run
     """
+    validate_node_names(workflow_def, state_handler)
     wf_dict = workflow_def.model_dump(mode="json")
     wf_dict.update(
         {

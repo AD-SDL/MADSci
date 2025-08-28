@@ -345,7 +345,7 @@ def test_template_client():
     print("Starting Template Client Tests...")
 
     # Initialize client with REST API URL
-    client = ResourceClient(url="http://localhost:8003")
+    client = ResourceClient(resource_server_url="http://localhost:8003")
 
     # Create a sample plate resource
     plate_resource = Container(
@@ -561,7 +561,7 @@ def test_template_client_edge_cases():
     """Test edge cases with the client approach."""
     print("\nTesting Edge Cases...")
 
-    client = ResourceClient(url="http://localhost:8003")
+    client = ResourceClient(resource_server_url="http://localhost:8003")
 
     # Test with minimal resource
     minimal_resource = Resource(resource_name="MinimalResource")

@@ -7,10 +7,10 @@ from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
+from madsci.common.context import get_current_madsci_context
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.base_types import PathLike
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellState
@@ -18,6 +18,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
+from pydantic import AnyUrl
 from rich import print
 from ulid import ULID
 
@@ -25,11 +26,11 @@ from ulid import ULID
 class WorkcellClient:
     """A client for interacting with the Workcell Manager to perform various actions."""
 
-    context: MadsciContext
+    workcell_server_url: Optional[AnyUrl]
 
     def __init__(
         self,
-        workcell_server_url: Optional[str] = None,
+        workcell_server_url: Optional[Union[str, AnyUrl]] = None,
         working_directory: str = "./",
         event_client: Optional[EventClient] = None,
         retry: bool = False,
@@ -39,26 +40,23 @@ class WorkcellClient:
 
         Parameters
         ----------
-        workcell_server_url : Optional[str]
-            The base URL of the Workcell Manager.
+        workcell_server_url : Optional[Union[str, AnyUrl]]
+            The base URL of the Workcell Manager. If not provided, it will be taken from the current MadsciContext.
         working_directory : str, optional
             The directory to look for relative paths. Defaults to "./".
         """
-        self.context = (
-            MadsciContext(workcell_server_url=workcell_server_url)
+        self.workcell_server_url = (
+            AnyUrl(workcell_server_url)
             if workcell_server_url
-            else MadsciContext()
+            else get_current_madsci_context().workcell_server_url
         )
         self.retry = retry
         self.logger = event_client or EventClient()
-        self.url = self.context.workcell_server_url
-        if not self.url:
+        if not self.workcell_server_url:
             raise ValueError(
                 "Workcell server URL is not provided and cannot be found in the context."
             )
         self.working_directory = Path(working_directory).expanduser()
-        if str(self.url).endswith("/"):
-            self.url = str(self.url)[:-1]
 
     def query_workflow(
         self, workflow_id: str, retry: Optional[bool] = None
@@ -412,7 +410,7 @@ class WorkcellClient:
             response = self.submit_workflow(
                 workflows[i], input_values=[i], await_completion=False
             )
-            id_list.append(response.json()["workflow_id"])
+            id_list.append(response.workflow_id)
         finished = False
         while not finished:
             flag = True
@@ -456,7 +454,7 @@ class WorkcellClient:
         dict
             The response from the Workcell Manager.
         """
-        url = f"{self.url}/workflow/{workflow_id}/retry"
+        url = f"{self.workcell_server_url}workflow/{workflow_id}/retry"
         response = requests.post(
             url,
             params={
@@ -465,6 +463,7 @@ class WorkcellClient:
             },
             timeout=10,
         )
+        response.raise_for_status()
         if await_completion:
             return self.await_workflow(
                 workflow_id=workflow_id,
@@ -473,7 +472,7 @@ class WorkcellClient:
                 prompt_on_error=prompt_on_error,
             )
 
-        return Workflow(**response.json())
+        return Workflow.model_validate(response.json())
 
     def _handle_workflow_error(
         self,
@@ -616,8 +615,7 @@ Options:
         dict[str, Node]
             A dictionary of node names and their details.
         """
-        url = f"{self.url}/nodes"
-        response = requests.get(url, timeout=10)
+        response = requests.get(f"{self.workcell_server_url}nodes", timeout=10)
         return response.json()
 
     def get_node(self, node_name: str) -> Node:
@@ -634,8 +632,9 @@ Options:
         Node
             The node details.
         """
-        url = f"{self.url}/node/{node_name}"
-        response = requests.get(url, timeout=10)
+        response = requests.get(
+            f"{self.workcell_server_url}node/{node_name}", timeout=10
+        )
         return response.json()
 
     def add_node(
@@ -664,9 +663,8 @@ Options:
         Node
             The added node details.
         """
-        url = f"{self.url}/node"
         response = requests.post(
-            url,
+            f"{self.workcell_server_url}node",
             params={
                 "node_name": node_name,
                 "node_url": node_url,
@@ -686,8 +684,9 @@ Options:
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
         """
-        url = f"{self.url}/workflows/active"
-        response = requests.get(url, timeout=100)
+        response = requests.get(
+            f"{self.workcell_server_url}workflows/active", timeout=100
+        )
         response.raise_for_status()
         workflow_dict = response.json()
         if not isinstance(workflow_dict, dict):
@@ -707,8 +706,11 @@ Options:
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
         """
-        url = f"{self.url}/workflows/archived"
-        response = requests.get(url, params={"number": number}, timeout=100)
+        response = requests.get(
+            f"{self.workcell_server_url}workflows/archived",
+            params={"number": number},
+            timeout=100,
+        )
         response.raise_for_status()
         workflow_dict = response.json()
         if not isinstance(workflow_dict, dict):
@@ -728,8 +730,9 @@ Options:
         list[Workflow]
             A list of queued workflows.
         """
-        url = f"{self.url}/workflows/queue"
-        response = requests.get(url, timeout=10)
+        response = requests.get(
+            f"{self.workcell_server_url}workflows/queue", timeout=10
+        )
         response.raise_for_status()
         return [Workflow.model_validate(wf) for wf in response.json()]
 
@@ -742,8 +745,7 @@ Options:
         WorkcellState
             The current state of the workcell.
         """
-        url = f"{self.url}/state"
-        response = requests.get(url, timeout=10)
+        response = requests.get(f"{self.workcell_server_url}state", timeout=10)
         response.raise_for_status()
         return WorkcellState.model_validate(response.json())
 
@@ -761,8 +763,9 @@ Options:
         Workflow
             The paused workflow object.
         """
-        url = f"{self.url}/workflow/{workflow_id}/pause"
-        response = requests.post(url, timeout=10)
+        response = requests.post(
+            f"{self.workcell_server_url}workflow/{workflow_id}/pause", timeout=10
+        )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
 
@@ -780,8 +783,9 @@ Options:
         Workflow
             The resumed workflow object.
         """
-        url = f"{self.url}/workflow/{workflow_id}/resume"
-        response = requests.post(url, timeout=10)
+        response = requests.post(
+            f"{self.workcell_server_url}workflow/{workflow_id}/resume", timeout=10
+        )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
 
@@ -799,8 +803,9 @@ Options:
         Workflow
             The cancelled workflow object.
         """
-        url = f"{self.url}/workflow/{workflow_id}/cancel"
-        response = requests.post(url, timeout=10)
+        response = requests.post(
+            f"{self.workcell_server_url}workflow/{workflow_id}/cancel", timeout=10
+        )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
 
@@ -813,8 +818,7 @@ Options:
         list[Location]
             A list of locations.
         """
-        url = f"{self.url}/locations"
-        response = requests.get(url, timeout=10)
+        response = requests.get(f"{self.workcell_server_url}locations", timeout=10)
         response.raise_for_status()
         return [Location.model_validate(loc) for loc in response.json().values()]
 
@@ -832,8 +836,9 @@ Options:
         Location
             The location details.
         """
-        url = f"{self.url}/location/{location_id}"
-        response = requests.get(url, timeout=10)
+        response = requests.get(
+            f"{self.workcell_server_url}location/{location_id}", timeout=10
+        )
         response.raise_for_status()
         return Location.model_validate(response.json())
 
@@ -851,9 +856,8 @@ Options:
         Location
             The added location details.
         """
-        url = f"{self.url}/location"
         response = requests.post(
-            url,
+            f"{self.workcell_server_url}location",
             json=location.model_dump(mode="json"),
             timeout=10,
             params={"permanent": permanent},
@@ -879,9 +883,8 @@ Options:
         Location
             The updated location details.
         """
-        url = f"{self.url}/location/{location_id}/attach_resource"
         response = requests.post(
-            url,
+            f"{self.workcell_server_url}location/{location_id}/attach_resource",
             params={
                 "resource_id": resource_id,
             },
@@ -904,6 +907,7 @@ Options:
         dict
             A dictionary indicating the deletion status.
         """
-        url = f"{self.url}/location/{location_id}"
-        response = requests.delete(url, timeout=10)
+        response = requests.delete(
+            f"{self.workcell_server_url}location/{location_id}", timeout=10
+        )
         response.raise_for_status()

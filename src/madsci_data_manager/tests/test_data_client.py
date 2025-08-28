@@ -67,7 +67,7 @@ def client(test_client: TestClient) -> Generator[DataClient, None, None]:
 
         mock_requests.get.side_effect = get_no_timeout
 
-        yield DataClient(url="http://testserver")
+        yield DataClient(data_server_url="http://testserver")
 
 
 def test_create_datapoint(client: DataClient) -> None:

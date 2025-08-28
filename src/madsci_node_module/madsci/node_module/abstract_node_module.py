@@ -38,7 +38,6 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import (
     LocationArgument,
@@ -95,8 +94,6 @@ class AbstractNode:
     """The node configuration."""
     config_model: ClassVar[type[NodeConfig]] = NodeConfig
     """The node config model class. This is the class that will be used to instantiate self.config."""
-    context: ClassVar[MadsciContext] = MadsciContext()
-    """The context for the node. This allows the node to access the MADSci context, including the event client and resource client."""
     _action_lock: ClassVar[threading.Lock] = threading.Lock()
     """Ensures only one blocking action can run at a time."""
 
