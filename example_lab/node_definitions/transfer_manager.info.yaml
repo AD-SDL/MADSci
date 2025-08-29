@@ -1,8 +1,8 @@
-node_name: example_app
+node_name: transfer_manager
 node_id: 01K1HJKYJN6S4HWX2P5K4B1R4J
-node_description: null
-node_type: device
-module_name: example_app
+node_description: This node manages the transfer operations.
+node_type: transfer_manager
+module_name: transfer_manager
 module_version: 0.0.1
 capabilities:
   get_info: true
@@ -87,15 +87,16 @@ actions:
     blocking: false
     asynchronous: true
 config:
-  node_definition: default.node.yaml
+  node_definition: node_definitions/transfer_manager.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://127.0.0.1:2000/
+  node_url: http://localhost:8006
   uvicorn_kwargs: {}
+  workcell_server_url: http://localhost:8005
 config_schema:
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: Configuration for the Transfer Node.
   properties:
     node_definition:
       anyOf:
@@ -140,17 +141,17 @@ config_schema:
       description: The interval in seconds at which the node should update its state.
       title: State Update Interval
     node_url:
-      default: http://127.0.0.1:2000/
-      description: The URL used to communicate with the node. This is the base URL
-        for the REST API.
-      format: uri
-      minLength: 1
-      title: Node URL
+      default: http://localhost:8006
+      title: Node Url
       type: string
     uvicorn_kwargs:
       additionalProperties: true
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-  title: RestNodeConfig
+    workcell_server_url:
+      default: http://localhost:8005
+      title: Workcell Server Url
+      type: string
+  title: TransferNodeConfig
   type: object

@@ -1,0 +1,7 @@
+node_name: transfer_manager
+node_id: 01K1HJKYJN6S4HWX2P5K4B1R4J
+node_description: This node manages the transfer operations.
+node_type: transfer_manager
+module_name: transfer_manager
+module_version: 0.0.1
+capabilities: null

@@ -1,8 +1,8 @@
-node_name: example_app
-node_id: 01K1HJKYJN6S4HWX2P5K4B1R4J
+node_name: transfer_manager.node
+node_id: 01K3T4QNAW5ASBHRGZ2BK9JD97
 node_description: null
 node_type: device
-module_name: example_app
+module_name: transfer_node
 module_version: 0.0.1
 capabilities:
   get_info: true
@@ -87,7 +87,7 @@ actions:
     blocking: false
     asynchronous: true
 config:
-  node_definition: default.node.yaml
+  node_definition: example_lab/node_definitions/transfer_manager.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
