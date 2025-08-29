@@ -7,12 +7,13 @@ nodes:
   liquidhandler_1: http://localhost:2000/
   robotarm_1: http://localhost:2001/
   platereader_1: http://localhost:2002/
+  transfer_manager: http://localhost:8006/
 locations:
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: null
   lookup:
-    robotarm_1:
+    transfer_manager:
     - 1
     - 2
     - 3
@@ -33,7 +34,7 @@ locations:
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
   lookup:
-    robotarm_1:
+    transfer_manager:
     - 1
     - 2
     - 3

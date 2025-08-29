@@ -82,20 +82,21 @@ class RobotArmNode(RestNode):
             return ActionSucceeded()
 
         if self.resource_client:
-            try:
-                popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
-            except Exception:
-                return ActionFailed(errors=[Error(message="No plate in source!")])
-            self.resource_client.push(
-                resource=self.gripper.resource_id, child=popped_plate
-            )
+            pass
+            # try:
+            #     popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
+            # except Exception:
+            #     return ActionFailed(errors=[Error(message="No plate in source!")])
+            # self.resource_client.push(
+            #     resource=self.gripper.resource_id, child=popped_plate
+            # )
 
-            time.sleep(1)
+            # time.sleep(1)
 
-            popped_plate, _ = self.resource_client.pop(
-                resource=self.gripper.resource_id
-            )
-            self.resource_client.push(resource=target.resource_id, child=popped_plate)
+            # popped_plate, _ = self.resource_client.pop(
+            #     resource=self.gripper.resource_id
+            # )
+            # self.resource_client.push(resource=target.resource_id, child=popped_plate)
 
         return ActionSucceeded()
 

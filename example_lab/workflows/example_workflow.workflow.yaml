@@ -11,18 +11,17 @@ parameters:
 steps:
   - name: Run Liquid Handeler Protocol
     node: liquidhandler_1
-    action: run_protocol
-    args:
-      input_val_1: 1
-      input_val_2: $example_parameter
+    action: run_command
+    args: 
+      command: first_command
   - name: Transfer Plate
-    node: robotarm_1
-    action: Transfer
+    node: transfer_manager
+    action: transfer
     locations:
-      source: location_1
-      target: location_2
+      source: location_2
+      target: location_1
   - name: Run Plate Reader Protocol
     node: platereader_1
-    action: run_protocol
-    files:
-      protocol: "./test.txt"
+    action: read_plate
+    # files:
+    #   protocol: "./test.txt"

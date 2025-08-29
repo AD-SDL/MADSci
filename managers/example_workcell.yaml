@@ -2,5 +2,9 @@ workcell_name: example_workcell
 manager_type: workcell_manager
 workcell_id: 01K3HWZPB5YB2K285NTN1PXYYB
 description: null
-nodes: {}
+nodes: 
+  liquidhandler_1: http://localhost:2000/
+  robotarm_1: http://localhost:2001/
+  platereader_1: http://localhost:2002/
+  transfer_manager: http://localhost:8006/
 locations: []

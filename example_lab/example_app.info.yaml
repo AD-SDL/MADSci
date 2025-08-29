@@ -1,5 +1,5 @@
 node_name: example_app
-node_id: 01K1HJKYJN6S4HWX2P5K4B1R4J
+node_id: 01K3VYADTK62WJRJYN0P017TQN
 node_description: null
 node_type: device
 module_name: example_app
@@ -22,70 +22,7 @@ capabilities:
   - shutdown
   - unlock
 node_url: null
-actions:
-  transfer:
-    name: transfer
-    description: Transfer between two locations by submitting child workflow
-    args: {}
-    locations:
-      source:
-        name: source
-        description: Location to transfer from
-        argument_type: location
-        required: true
-        default: null
-      target:
-        name: target
-        description: Location to transfer to
-        argument_type: location
-        required: true
-        default: null
-    files: {}
-    results: {}
-    blocking: false
-    asynchronous: true
-  get_transfer_options:
-    name: get_transfer_options
-    description: Get available transfer path options between two locations
-    args:
-      source:
-        name: source
-        description: Source location name
-        argument_type: str
-        required: true
-        default: null
-      target:
-        name: target
-        description: Target location name
-        argument_type: str
-        required: true
-        default: null
-    locations: {}
-    files: {}
-    results: {}
-    blocking: false
-    asynchronous: true
-  validate_transfer:
-    name: validate_transfer
-    description: Validate if a transfer between two locations is possible
-    args:
-      source:
-        name: source
-        description: Source location name
-        argument_type: str
-        required: true
-        default: null
-      target:
-        name: target
-        description: Target location name
-        argument_type: str
-        required: true
-        default: null
-    locations: {}
-    files: {}
-    results: {}
-    blocking: false
-    asynchronous: true
+actions: {}
 config:
   node_definition: default.node.yaml
   node_info_path: null
@@ -94,8 +31,16 @@ config:
   state_update_interval: 2.0
   node_url: http://127.0.0.1:2000/
   uvicorn_kwargs: {}
+  server_mode: false
+  run_args: []
+  run_kwargs: {}
 config_schema:
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: 'Configuration for the ExperimentApplication.
+
+
+    This class is used to define the configuration for the ExperimentApplication node.
+
+    It can be extended to add custom configurations.'
   properties:
     node_definition:
       anyOf:
@@ -152,5 +97,17 @@ config_schema:
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-  title: RestNodeConfig
+    server_mode:
+      default: false
+      title: Server Mode
+      type: boolean
+    run_args:
+      items: {}
+      title: Run Args
+      type: array
+    run_kwargs:
+      additionalProperties: true
+      title: Run Kwargs
+      type: object
+  title: ExperimentApplicationConfig
   type: object
