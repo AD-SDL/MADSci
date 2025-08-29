@@ -136,7 +136,7 @@ services:
   transfer_manager:
     <<: *madsci-service
     container_name: transfer_manager
-    command: python -m madsci.transfer_manager.transfer_server
+    command: python -m madsci.transfer_manager.transfer_server --node_definition node_definitions/transfer_manager.node.yaml
     depends_on:
       - event_manager
       - workcell_manager
