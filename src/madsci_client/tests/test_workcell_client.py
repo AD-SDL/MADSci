@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from madsci.common.types.parameter_types import FeedForwardValue, WorkflowInputValue
 import pytest
 from fastapi.testclient import TestClient
-from madsci.client.workcell_client import WorkcellClient, insert_parameter_values
+from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.step_types import Step, StepDefinition
@@ -16,7 +17,7 @@ from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
-    WorkflowParameter,
+    WorkflowParameters,
     WorkflowStatus,
 )
 from madsci.common.utils import new_ulid_str
@@ -28,7 +29,7 @@ from pytest_mock_resources import (
     MongoConfig,
     RedisConfig,
     create_mongo_fixture,
-    create_redis_fixture,
+    create_redis_fixture
 )
 from redis import Redis
 from requests import Response
@@ -75,7 +76,7 @@ def sample_workflow() -> WorkflowDefinition:
                 args={"test_arg": "test_value"},
             )
         ],
-        parameters=[WorkflowParameter(name="test_param", default="default_value")],
+        parameters=WorkflowParameters(input_values=[WorkflowInputValue(name="test_param", default="default_value")]),
     )
 
 
@@ -359,7 +360,7 @@ def test_submit_workflow_sequence(
 ) -> None:
     """Test submitting a sequence of workflows."""
     workflows = [sample_workflow, sample_workflow]
-    parameters = [{"test_param": "value1"}, {"test_param": "value2"}]
+    input_values = [{"test_param": "value1"}, {"test_param": "value2"}]
 
     with patch.object(client, "submit_workflow") as mock_submit:
         mock_workflow1 = Workflow(
@@ -376,12 +377,12 @@ def test_submit_workflow_sequence(
         )
         mock_submit.side_effect = [mock_workflow1, mock_workflow2]
 
-        result = client.submit_workflow_sequence(workflows, parameters)
+        result = client.submit_workflow_sequence(workflows, input_values)
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
-        mock_submit.assert_any_call(workflows[0], parameters[0], await_completion=True)
-        mock_submit.assert_any_call(workflows[1], parameters[1], await_completion=True)
+        mock_submit.assert_any_call(workflows[0], input_values[0], await_completion=True)
+        mock_submit.assert_any_call(workflows[1], input_values[1], await_completion=True)
 
 
 def test_submit_workflow_batch(
@@ -389,7 +390,7 @@ def test_submit_workflow_batch(
 ) -> None:
     """Test submitting a batch of workflows."""
     workflows = [sample_workflow, sample_workflow]
-    parameters = [{"test_param": "value1"}, {"test_param": "value2"}]
+    input_values = [{"test_param": "value1"}, {"test_param": "value2"}]
 
     # Create mock response objects that mimic what submit_workflow returns
     mock_response1 = MagicMock()
@@ -420,7 +421,7 @@ def test_submit_workflow_batch(
         mock_submit.side_effect = [mock_response1, mock_response2]
         mock_query.side_effect = [mock_workflow1, mock_workflow2]
 
-        result = client.submit_workflow_batch(workflows, parameters)
+        result = client.submit_workflow_batch(workflows, input_values)
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
@@ -714,92 +715,6 @@ def test_workcell_client_init_no_url() -> None:
             WorkcellClient()
 
 
-# Parameter Insertion Tests
-def test_insert_parameter_values_basic() -> None:
-    """Test basic parameter value insertion."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="test_param", default="default")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${test_param}"},
-            )
-        ],
-    )
-
-    insert_parameter_values(workflow, {"test_param": "custom_value"})
-
-    assert workflow.steps[0].args["param"] == "custom_value"
-
-
-def test_insert_parameter_values_with_default() -> None:
-    """Test parameter insertion using default values."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="test_param", default="default_value")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${test_param}"},
-            )
-        ],
-    )
-
-    insert_parameter_values(workflow, {})
-
-    assert workflow.steps[0].args["param"] == "default_value"
-
-
-def test_insert_parameter_values_missing_required() -> None:
-    """Test parameter insertion with missing required parameter."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="required_param")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${required_param}"},
-            )
-        ],
-    )
-
-    with pytest.raises(
-        ValueError, match="Workflow parameter required_param is required"
-    ):
-        insert_parameter_values(workflow, {})
-
-
-def test_insert_parameter_values_conflict() -> None:
-    """Test parameter insertion with conflicting configuration."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[
-            WorkflowParameter(
-                name="conflict_param", label="some_label", step_name="step1"
-            )
-        ],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${conflict_param}"},
-            )
-        ],
-    )
-
-    with pytest.raises(
-        ValueError, match="looks like it's configured to use data from a previous step"
-    ):
-        insert_parameter_values(workflow, {"conflict_param": "value"})
-
 
 # Additional Error Handling and Edge Case Tests
 def test_start_workflow_alias(client: WorkcellClient) -> None:
@@ -859,3 +774,62 @@ def test_location_edge_cases(client: WorkcellClient) -> None:
     # Get the specific location
     retrieved_location = client.get_location(added_location.location_id)
     assert retrieved_location.location_name == "edge_case_location"
+
+
+
+
+def test_check_parameter_missing(client: WorkcellClient) -> None:
+    """Test parameter insertion with missing required parameter."""
+    workflow =  workflow = WorkflowDefinition(
+        name="Test",
+        parameters=[
+            WorkflowParameters(
+                input_values=[WorkflowInputValue(input_key="required_param")]
+            )
+        ],
+        steps=[
+            StepDefinition(
+                name="step1",
+                node="node1",
+                action="action1",
+                parameters={
+                    "args": {"param": "required_param"},
+                }
+                
+            )
+        ],
+    )
+    
+
+    with pytest.raises(
+        ValueError, match="Required value required_param not provided"
+    ):
+       client.check_parameters(workflow, {})
+
+
+def test_check_parameter_conflict(client: WorkcellClient) -> None:
+    """Test parameter insertion with conflicting configuration."""
+    workflow = WorkflowDefinition(
+        name="Test",
+        parameters=[
+            WorkflowParameters(
+                feed_forward_values=[FeedForwardValue(name="conflict_param", label="some_label", step_name="step1")]
+            )
+        ],
+        steps=[
+            StepDefinition(
+                name="step1",
+                node="node1",
+                action="action1",
+                parameters={
+                    "args": {"param": "conflict_param"},
+                }
+                
+            )
+        ],
+    )
+
+    with pytest.raises(
+        ValueError, match="conflict_param is a Feed Forward Value and will be calculated during execution"
+    ):
+        client.check_parameters(workflow, {"conflict_param": "value"})

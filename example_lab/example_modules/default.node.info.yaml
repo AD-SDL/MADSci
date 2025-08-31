@@ -24,30 +24,34 @@ capabilities:
   - unlock
 node_url: null
 actions:
-  read_plate:
-    name: read_plate
-    description: Run a command on the plate reader.
-    args: {}
+  run_command:
+    name: run_command
+    description: Run a command on the liquid handler.
+    args:
+      command:
+        name: command
+        description: ''
+        argument_type: str
+        required: true
+        default: null
     locations: {}
     files: {}
-    results:
-      example_data:
-        result_label: example_data
-        description: null
-        result_type: json
+    results: {}
     blocking: false
     asynchronous: true
-  create_plate_file:
-    name: create_plate_file
-    description: Run a command on the plate reader.
+  run_protocol:
+    name: run_protocol
+    description: Run a protocol on the liquid handler
     args: {}
     locations: {}
-    files: {}
-    results:
-      example_file:
-        result_label: example_file
-        description: null
-        result_type: file
+    files:
+      protocol:
+        name: protocol
+        description: ''
+        argument_type: file
+        required: true
+        default: null
+    results: {}
     blocking: false
     asynchronous: true
 config:
@@ -58,8 +62,9 @@ config:
   state_update_interval: 2.0
   node_url: http://127.0.0.1:2000/
   uvicorn_kwargs: {}
+  device_number: 0
 config_schema:
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: Configuration for the liquid handler node module.
   properties:
     node_definition:
       anyOf:
@@ -112,8 +117,13 @@ config_schema:
       title: Node URL
       type: string
     uvicorn_kwargs:
+      additionalProperties: true
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-  title: RestNodeConfig
+    device_number:
+      default: 0
+      title: Device Number
+      type: integer
+  title: LiquidHandlerConfig
   type: object

@@ -5,6 +5,7 @@ import tempfile
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
+import time
 from typing import Any, Optional
 
 from fastapi import UploadFile
@@ -17,13 +18,13 @@ from madsci.common.types.location_types import (
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
-    InputFile,
     Workflow,
     WorkflowDefinition,
 )
+from madsci.common.types.parameter_types import InputFile
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
-
-
+from madsci.common.types.action_types import ActionSucceeded, ActionResult
+import inspect
 def validate_node_names(
     workflow: Workflow, state_handler: WorkcellStateHandler
 ) -> None:
@@ -38,11 +39,34 @@ def validate_node_names(
             raise ValueError(
                 f"Node {node_name} not in Workcell {state_handler.get_workcell_definition().workcell_name}"
             ) from e
+def wait(seconds: int)-> ActionResult:
+    time.sleep(seconds)
+    return ActionSucceeded()
+        
+workcell_actions = {
+    "wait": wait
+
+}
 
 
 def validate_step(step: Step, state_handler: WorkcellStateHandler) -> tuple[bool, str]:
     """Check if a step is valid based on the node's info"""
-    if step.node in state_handler.get_nodes():
+    if step.node is None:
+        if step.action in workcell_actions:
+            action_callable = workcell_actions[step.action]
+            signature = inspect.signature(action_callable)
+            for name, parameter in signature.parameters.items():
+                if name not in step.args and parameter.default is None:
+                        result = (False, f"Step '{step.name}': Missing Required Argument {name}")
+        
+            result = (True, f"Step '{step.name}': Validated successfully")
+        else:
+            result = (
+                    False,
+                    f"Action {step.action} is not an existing workcell action, and no node is provided",
+                )
+
+    elif step.node in state_handler.get_nodes():
         node = state_handler.get_node(step.node)
         info = node.info
         if info is None:
@@ -135,12 +159,6 @@ def create_workflow(
         }
     )
     wf = Workflow(**wf_dict)
-    for parameter in wf.parameters.input_values:
-        if (
-            parameter.input_key not in wf.parameter_values
-            and parameter.default is not None
-        ):
-            wf.parameter_values[parameter.input_key] = parameter.default
     wf.step_definitions = workflow_def.steps
     steps = []
     for step in workflow_def.steps:
@@ -157,18 +175,19 @@ def create_workflow(
 
 def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
     """Replace parameter values in a provided step"""
-    step_dict = step.model_dump()
-    for key, parameter_name in step.parameters.model_dump().items():
-        if type(parameter_name) is str and parameter_name in parameter_values:
-            step_dict[key] = parameter_values[parameter_name]
-    step = Step.model_validate(step_dict)
+    if step.parameters is not None:
+        step_dict = step.model_dump()
+        for key, parameter_name in step.parameters.model_dump().items():
+            if type(parameter_name) is str and parameter_name in parameter_values:
+                step_dict[key] = parameter_values[parameter_name]
+        step = Step.model_validate(step_dict)
 
-    for key, parameter_name in step.parameters.args.items():
-        if parameter_name in parameter_values:
-            step.args[key] = parameter_values[parameter_name]
-    for key, parameter_name in step.parameters.locations.items():
-        if parameter_name in parameter_values:
-            step.locations[key] = parameter_values[parameter_name]
+        for key, parameter_name in step.parameters.args.items():
+            if parameter_name in parameter_values:
+                step.args[key] = parameter_values[parameter_name]
+        for key, parameter_name in step.parameters.locations.items():
+            if parameter_name in parameter_values:
+                step.locations[key] = parameter_values[parameter_name]
     return step
 
 

@@ -31,6 +31,7 @@ from madsci.workcell_manager.workcell_utils import (
 from madsci.workcell_manager.workflow_utils import (
     cancel_active_workflows,
     prepare_workflow_step,
+    workcell_actions
 )
 
 
@@ -180,43 +181,46 @@ class Engine:
             self.logger.log_info(
                 f"Running step {step.step_id} in workflow {workflow_id}"
             )
-            node = self.state_handler.get_node(step.node)
-            client = find_node_client(node.node_url)
-            wf = self.update_step(wf, step)
+            if step.node is None:
+                step = self.run_workcell_action(step)
+            else:
+                node = self.state_handler.get_node(step.node)
+                client = find_node_client(node.node_url)
+                wf = self.update_step(wf, step)
 
-            # * Send the action request
-            response = None
+                # * Send the action request
+                response = None
 
-            # Merge with step.args
-            args = {**step.args, **step.locations}
-            request = ActionRequest(
-                action_name=step.action,
-                args=args,
-                files=step.file_paths,
-            )
-            action_id = request.action_id
-            self.add_pending_action(step, action_id)
-            try:
-                response = client.send_action(request, await_result=False)
-            except Exception as e:
-                self.logger.log_error(
-                    f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                # Merge with step.args
+                args = {**step.args, **step.locations}
+                request = ActionRequest(
+                    action_name=step.action,
+                    args=args,
+                    files=step.file_paths,
                 )
-                if response is None:
-                    response = request.unknown(errors=[Error.from_exception(e)])
-                else:
-                    response.errors.append(Error.from_exception(e))
-            finally:
-                self.remove_pending_action(step)
-            response = self.handle_response(wf, step, response)
-            action_id = response.action_id
+                action_id = request.action_id
+                self.add_pending_action(step, action_id)
+                try:
+                    response = client.send_action(request, await_result=False)
+                except Exception as e:
+                    self.logger.log_error(
+                        f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                    )
+                    if response is None:
+                        response = request.unknown(errors=[Error.from_exception(e)])
+                    else:
+                        response.errors.append(Error.from_exception(e))
+                finally:
+                    self.remove_pending_action(step)
+                response = self.handle_response(wf, step, response)
+                action_id = response.action_id
 
-            # * Periodically query the action status until complete, updating the workflow as needed
-            # * If the node or client supports get_action_result, query the action result
-            self.monitor_action_progress(
-                wf, step, node, client, response, request, action_id
-            )
-            # * Finalize the step
+                # * Periodically query the action status until complete, updating the workflow as needed
+                # * If the node or client supports get_action_result, query the action result
+                self.monitor_action_progress(
+                    wf, step, node, client, response, request, action_id
+                )
+                # * Finalize the step
             self.finalize_step(workflow_id, step)
             self.logger.log_info(
                 f"Completed step {step.step_id} in workflow {workflow_id}"
@@ -232,6 +236,12 @@ class Engine:
             )
             wf = self.update_step(wf, step)
             self.finalize_step(workflow_id, step)
+    def run_workcell_action(self, step: Step):
+        action_callable = workcell_actions[step.action]
+        step.result = action_callable(**step.args)
+        step.status = step.result.status
+        return step
+
 
     def monitor_action_progress(
         self,

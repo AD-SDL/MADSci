@@ -76,7 +76,7 @@ class WorkcellClient:
         """
         if retry is None:
             retry = self.retry
-        url = f"{self.url}/workflow/{workflow_id}"
+        url = f"{self.workcell_server_url}/workflow/{workflow_id}"
         if not retry:
             response = requests.get(url, timeout=10)
         else:
@@ -101,7 +101,7 @@ class WorkcellClient:
         """
         get the workflow definition
         """
-        url = f"{self.url}/workflow_definition/{workflow_definition_id}"
+        url = f"{self.workcell_server_url}/workflow_definition/{workflow_definition_id}"
         if retry is None:
             retry = self.retry
         if not retry:
@@ -160,7 +160,7 @@ class WorkcellClient:
         workflow_definition.definition_metadata.ownership_info = (
             get_current_ownership_info()
         )
-        url = self.url + "/workflow_definition"
+        url = f"{self.workcell_server_url}workflow_definition"
 
         if not retry:
             response = requests.post(
@@ -269,8 +269,9 @@ class WorkcellClient:
         self.analyze_parameter_types(workflow_definition, input_values)
         if input_files:
             files = self.make_paths_absolute(input_files)
+        self.check_parameters(workflow_definition, input_values)
 
-        url = self.url + "/workflow"
+        url = f"{self.workcell_server_url}workflow"
         data = {
             "workflow_definition_id": workflow_definition_id,
             "input_values": json.dumps(input_values) if input_values else None,
@@ -314,6 +315,19 @@ class WorkcellClient:
         )
 
     submit_workflow = start_workflow
+    def check_parameters(self,
+                         workflow_definition:WorkflowDefinition,
+                         input_values: Optional[dict[str, Any]] = None):
+        if input_values is not None:
+            for input_value in workflow_definition.parameters.input_values:
+                if input_value.input_key not in input_values:
+                    if input_value.default is not None:      
+                      input_values[input_value.input_key] = input_value.default
+                    else:
+                      raise ValueError(f"Required balue {input_value.input_key} not provided")
+        for ffv in workflow_definition.parameters.feed_forward_values:
+            if ffv.name in input_values:
+                 raise ValueError(f"{ffv.name} is a Feed Forward Value and will be calculated during execution")
 
     def make_paths_absolute(self, files: dict[str, PathLike]) -> dict[str, Path]:
         """
@@ -503,21 +517,10 @@ class WorkcellClient:
                 decision = input(
                     f"""Workflow {"Failed" if wf.status.failed else "Cancelled"}.
 Options:
-
-- Resubmit the workflow, from the beginning (resubmit, r)
 - Retry from a specific step (Enter the step index, e.g., 1; 0 for the first step; -1 for the current step)
 - {"R" if raise_on_failed else "Do not r"}aise an exception and continue (c, enter to continue)
 """
                 ).strip()
-                if decision in {"resubmit", "r"}:
-                    wf = self.resubmit_workflow(
-                        wf.workflow_id,
-                        await_completion=True,
-                        raise_on_failed=raise_on_failed,
-                        raise_on_cancelled=raise_on_cancelled,
-                        prompt_on_error=prompt_on_error,
-                    )
-                    break
                 try:
                     step = int(decision)
                     if step in range(-1, len(wf.steps)):

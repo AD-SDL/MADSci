@@ -38,3 +38,7 @@ steps:
       action: run_command_1
       args:
         command: test_command_1
+  - name: Wait test
+    action: wait
+    args:
+      seconds: 2

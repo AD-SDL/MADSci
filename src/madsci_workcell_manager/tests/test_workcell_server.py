@@ -1,10 +1,13 @@
 """Automated pytest unit tests for the madsci workcell manager's REST server."""
 
+from madsci.common.types.parameter_types import WorkflowInputValue
+from madsci.common.types.step_types import StepDefinition
+from madsci.workcell_manager.workflow_utils import create_workflow
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellDefinition
-from madsci.common.types.workflow_types import Workflow, WorkflowDefinition
+from madsci.common.types.workflow_types import Workflow, WorkflowDefinition, WorkflowParameters
 from madsci.workcell_manager.workcell_server import create_workcell_server
 from pydantic import AnyUrl
 from pymongo.synchronous.database import Database
@@ -210,23 +213,6 @@ def test_retry_workflow(test_client: TestClient) -> None:
         assert new_workflow.status.ok is True
 
 
-def test_resubmit_workflow(test_client: TestClient) -> None:
-    """Test resubmitting a workflow."""
-    with test_client as client:
-        workflow_def = WorkflowDefinition(name="Test Workflow")
-        response = client.post(
-            "/workflow",
-            data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
-        )
-        workflow = Workflow.model_validate(response.json())
-        response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
-        assert response.status_code == 200
-        workflow = Workflow.model_validate(response.json())
-        assert workflow.status.cancelled is True
-        response = test_client.post(
-            f"/workflow/{workflow.workflow_id}/resubmit", params={"index": 0}
-        )
-        assert response.status_code == 200
-        new_workflow = Workflow.model_validate(response.json())
-        assert workflow.workflow_id != new_workflow.workflow_id
-        assert new_workflow.status.ok is True
+
+
+

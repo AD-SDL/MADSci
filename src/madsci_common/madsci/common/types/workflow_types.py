@@ -164,7 +164,7 @@ class WorkflowDefinition(MadsciBaseModel):
                             [
                                 input_file
                                 for input_file in self.parameters.input_files
-                                if file.input_file_key == file
+                                if input_file.input_file_key == file
                             ]
                         )
                         > 0

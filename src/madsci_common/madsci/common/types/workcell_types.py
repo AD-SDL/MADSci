@@ -1,5 +1,6 @@
 """Types for MADSci Workcell configuration."""
 
+from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
@@ -58,6 +59,9 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
         return Path(WorkcellManagerSettings().workcells_directory) / self.workcell_name
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
+
+
+
 
 
 class WorkcellStatus(MadsciBaseModel):

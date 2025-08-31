@@ -4,6 +4,7 @@ import copy
 import warnings
 from unittest.mock import patch
 
+from madsci_workcell_manager.madsci.workcell_manager.workflow_utils import insert_parameters
 import pytest
 from madsci.common.types.action_types import (
     ActionDefinition,
@@ -14,7 +15,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
-from madsci.common.types.parameter_types import FeedForwardValue
+from madsci.common.types.parameter_types import FeedForwardValue, WorkflowInputValue, InputFile
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -133,6 +134,27 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellStateHandler) ->
         assert updated_workflow.status.completed is True
         assert updated_workflow.end_time is not None
         assert updated_workflow.status.active is False
+
+# Parameter Insertion Tests
+def test_insert_parameter_values_basic() -> None:
+    """Test basic parameter value insertion."""
+    
+    step = Step(
+        name="step1",
+        node="node1",
+        action="action1",
+        parameters={
+            "args": {"param", "test_param"}
+        },
+    )
+       
+
+    insert_parameters(step, {"test_param": "custom_value"})
+
+    assert step.args["param"] == "custom_value"
+
+
+
 
 
 def test_run_single_step_with_update_parameters(
