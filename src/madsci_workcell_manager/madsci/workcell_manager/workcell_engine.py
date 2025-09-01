@@ -237,7 +237,8 @@ class Engine:
             wf = self.update_step(wf, step)
             self.finalize_step(workflow_id, step)
 
-    def run_workcell_action(self, step: Step):
+    def run_workcell_action(self, step: Step) -> Step:
+        """Runs one of the built-in workcell actions"""
         action_callable = workcell_actions[step.action]
         step.result = action_callable(**step.args)
         step.status = step.result.status

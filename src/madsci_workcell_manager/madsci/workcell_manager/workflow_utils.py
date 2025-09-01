@@ -44,6 +44,7 @@ def validate_node_names(
 
 
 def wait(seconds: int) -> ActionResult:
+    """Waits for a specified number of seconds"""
     time.sleep(seconds)
     return ActionSucceeded()
 
@@ -51,27 +52,30 @@ def wait(seconds: int) -> ActionResult:
 workcell_actions = {"wait": wait}
 
 
+def validate_workcell_action_step(step: Step) -> tuple[bool, str]:
+    """Check if a step calling a workcell action is  valid"""
+    if step.action in workcell_actions:
+        action_callable = workcell_actions[step.action]
+        signature = inspect.signature(action_callable)
+        for name, parameter in signature.parameters.items():
+            if name not in step.args and parameter.default is None:
+                result = (
+                    False,
+                    f"Step '{step.name}': Missing Required Argument {name}",
+                )
+        result = (True, f"Step '{step.name}': Validated successfully")
+    else:
+        result = (
+            False,
+            f"Action {step.action} is not an existing workcell action, and no node is provided",
+        )
+    return result
+
+
 def validate_step(step: Step, state_handler: WorkcellStateHandler) -> tuple[bool, str]:
     """Check if a step is valid based on the node's info"""
-    if step.node is None:
-        if step.action in workcell_actions:
-            action_callable = workcell_actions[step.action]
-            signature = inspect.signature(action_callable)
-            for name, parameter in signature.parameters.items():
-                if name not in step.args and parameter.default is None:
-                    result = (
-                        False,
-                        f"Step '{step.name}': Missing Required Argument {name}",
-                    )
-
-            result = (True, f"Step '{step.name}': Validated successfully")
-        else:
-            result = (
-                False,
-                f"Action {step.action} is not an existing workcell action, and no node is provided",
-            )
-
-    elif step.node in state_handler.get_nodes():
+    result = validate_workcell_action_step(step)
+    if step.node is not None and step.node in state_handler.get_nodes():
         node = state_handler.get_node(step.node)
         info = node.info
         if info is None:
