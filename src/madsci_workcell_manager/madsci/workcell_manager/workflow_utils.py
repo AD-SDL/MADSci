@@ -1,30 +1,32 @@
 """Utility function for the workcell manager."""
 
+import inspect
 import shutil
 import tempfile
+import time
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-import time
 from typing import Any, Optional
 
 from fastapi import UploadFile
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
+from madsci.common.types.action_types import ActionResult, ActionSucceeded
 from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.location_types import (
     LocationArgument,
 )
+from madsci.common.types.parameter_types import InputFile
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.types.parameter_types import InputFile
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
-from madsci.common.types.action_types import ActionSucceeded, ActionResult
-import inspect
+
+
 def validate_node_names(
     workflow: Workflow, state_handler: WorkcellStateHandler
 ) -> None:
@@ -39,14 +41,14 @@ def validate_node_names(
             raise ValueError(
                 f"Node {node_name} not in Workcell {state_handler.get_workcell_definition().workcell_name}"
             ) from e
-def wait(seconds: int)-> ActionResult:
+
+
+def wait(seconds: int) -> ActionResult:
     time.sleep(seconds)
     return ActionSucceeded()
-        
-workcell_actions = {
-    "wait": wait
 
-}
+
+workcell_actions = {"wait": wait}
 
 
 def validate_step(step: Step, state_handler: WorkcellStateHandler) -> tuple[bool, str]:
@@ -57,14 +59,17 @@ def validate_step(step: Step, state_handler: WorkcellStateHandler) -> tuple[bool
             signature = inspect.signature(action_callable)
             for name, parameter in signature.parameters.items():
                 if name not in step.args and parameter.default is None:
-                        result = (False, f"Step '{step.name}': Missing Required Argument {name}")
-        
+                    result = (
+                        False,
+                        f"Step '{step.name}': Missing Required Argument {name}",
+                    )
+
             result = (True, f"Step '{step.name}': Validated successfully")
         else:
             result = (
-                    False,
-                    f"Action {step.action} is not an existing workcell action, and no node is provided",
-                )
+                False,
+                f"Action {step.action} is not an existing workcell action, and no node is provided",
+            )
 
     elif step.node in state_handler.get_nodes():
         node = state_handler.get_node(step.node)

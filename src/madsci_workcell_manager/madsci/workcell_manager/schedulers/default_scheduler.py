@@ -13,6 +13,7 @@ from madsci.workcell_manager.condition_checks import evaluate_condition_checks
 from madsci.workcell_manager.schedulers.scheduler import AbstractScheduler
 from madsci.workcell_manager.workflow_utils import insert_parameters
 
+
 class Scheduler(AbstractScheduler):
     """
     This is the default scheduler for the MADSci Workcell Manager. It is a simple FIFO scheduler that checks if the workflow is ready to run.
@@ -123,7 +124,9 @@ class Scheduler(AbstractScheduler):
                     f"Node {step.node} has a pending action that needs to be resolved"
                 )
 
-            if node.reservation is not None and node.reservation.check(wf.ownership_info):
+            if node.reservation is not None and node.reservation.check(
+                wf.ownership_info
+            ):
                 metadata.ready_to_run = False
                 metadata.reasons.append(
                     f"Node {step.node} is reserved by {node.reservation.owned_by.model_dump(mode='json', exclude_none=True)}"

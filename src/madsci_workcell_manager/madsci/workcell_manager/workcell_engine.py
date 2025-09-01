@@ -31,7 +31,7 @@ from madsci.workcell_manager.workcell_utils import (
 from madsci.workcell_manager.workflow_utils import (
     cancel_active_workflows,
     prepare_workflow_step,
-    workcell_actions
+    workcell_actions,
 )
 
 
@@ -236,12 +236,12 @@ class Engine:
             )
             wf = self.update_step(wf, step)
             self.finalize_step(workflow_id, step)
+
     def run_workcell_action(self, step: Step):
         action_callable = workcell_actions[step.action]
         step.result = action_callable(**step.args)
         step.status = step.result.status
         return step
-
 
     def monitor_action_progress(
         self,
