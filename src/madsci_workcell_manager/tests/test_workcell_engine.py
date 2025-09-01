@@ -4,8 +4,8 @@ import copy
 import warnings
 from unittest.mock import patch
 
-from madsci_workcell_manager.madsci.workcell_manager.workflow_utils import insert_parameters
 import pytest
+from madsci.client.data_client import DataClient
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionFailed,
@@ -15,8 +15,10 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
-from madsci.common.types.parameter_types import FeedForwardValue, WorkflowInputValue, InputFile
-from madsci.common.types.step_types import Step
+from madsci.common.types.parameter_types import (
+    FeedForwardValue,
+)
+from madsci.common.types.step_types import Step, StepParameters
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
@@ -28,6 +30,10 @@ from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from pytest_mock_resources import RedisConfig, create_redis_fixture
 from redis import Redis
+
+from madsci_workcell_manager.madsci.workcell_manager.workflow_utils import (
+    insert_parameters,
+)
 
 
 # Create a Redis server fixture for testing
@@ -70,7 +76,7 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
     """Fixture for creating an Engine instance."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        return Engine(state_handler=state_handler)
+        return Engine(state_handler=state_handler, data_client=DataClient())
 
 
 def test_engine_initialization(engine: Engine) -> None:
@@ -135,26 +141,20 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellStateHandler) ->
         assert updated_workflow.end_time is not None
         assert updated_workflow.status.active is False
 
+
 # Parameter Insertion Tests
 def test_insert_parameter_values_basic() -> None:
     """Test basic parameter value insertion."""
-    
     step = Step(
         name="step1",
         node="node1",
         action="action1",
-        parameters={
-            "args": {"param", "test_param"}
-        },
+        parameters=StepParameters(args={"param": "test_param"}),
     )
-       
 
-    insert_parameters(step, {"test_param": "custom_value"})
+    step = insert_parameters(step, {"test_param": "custom_value"})
 
     assert step.args["param"] == "custom_value"
-
-
-
 
 
 def test_run_single_step_with_update_parameters(
@@ -170,15 +170,13 @@ def test_run_single_step_with_update_parameters(
     )
     workflow = Workflow(
         name="Test Workflow",
-        parameters=[
-            WorkflowParameters(
-                feed_forward_values=[
-                    FeedForwardValue(
-                        name="test_param", step_name="Test Step 1", label="test_label"
-                    )
-                ]
-            )
-        ],
+        parameters=WorkflowParameters(
+            feed_forward_values=[
+                FeedForwardValue(
+                    name="test_param", step_name="Test Step 1", label="test_label"
+                )
+            ]
+        ),
         steps=[step],
         status=WorkflowStatus(running=True),
     )

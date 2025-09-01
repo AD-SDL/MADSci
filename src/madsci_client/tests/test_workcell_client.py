@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from madsci.common.types.parameter_types import FeedForwardValue, WorkflowInputValue
 import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.location_types import Location, LocationDefinition
+from madsci.common.types.parameter_types import FeedForwardValue, WorkflowInputValue
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
@@ -29,7 +29,7 @@ from pytest_mock_resources import (
     MongoConfig,
     RedisConfig,
     create_mongo_fixture,
-    create_redis_fixture
+    create_redis_fixture,
 )
 from redis import Redis
 from requests import Response
@@ -76,7 +76,11 @@ def sample_workflow() -> WorkflowDefinition:
                 args={"test_arg": "test_value"},
             )
         ],
-        parameters=WorkflowParameters(input_values=[WorkflowInputValue(name="test_param", default="default_value")]),
+        parameters=WorkflowParameters(
+            input_values=[
+                WorkflowInputValue(input_key="test_param", default="default_value")
+            ]
+        ),
     )
 
 
@@ -90,7 +94,12 @@ def sample_workflow_with_files() -> WorkflowDefinition:
                 name="test_step",
                 node="test_node",
                 action="test_action",
-                files={"input_file": Path("test_file.txt")},
+                files={
+                    "input_file": {
+                        "input_file_key": "input_file",
+                        "description": "An input file",
+                    }
+                },  # type: ignore
             )
         ],
     )
@@ -240,7 +249,7 @@ def test_get_workcell_state(client: WorkcellClient) -> None:
 
 def test_pause_workflow(client: WorkcellClient) -> None:
     """Test pausing a workflow."""
-    workflow = client.submit_workflow(
+    workflow = client.start_workflow(
         WorkflowDefinition(name="Test Workflow"), None, await_completion=False
     )
     paused_workflow = client.pause_workflow(workflow.workflow_id)
@@ -329,19 +338,6 @@ def test_submit_workflow_definition(
     assert workflow.workflow_id is not None
 
 
-def test_submit_workflow_validate_only(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test validating a workflow without submission."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    workflow = client.submit_workflow(
-        sample_workflow, validate_only=True, await_completion=False
-    )
-    assert workflow.name == "Test Workflow"
-
-
 def test_query_workflow(
     client: WorkcellClient, sample_workflow: WorkflowDefinition
 ) -> None:
@@ -381,8 +377,12 @@ def test_submit_workflow_sequence(
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
-        mock_submit.assert_any_call(workflows[0], input_values[0], await_completion=True)
-        mock_submit.assert_any_call(workflows[1], input_values[1], await_completion=True)
+        mock_submit.assert_any_call(
+            workflows[0], input_values[0], {}, await_completion=True
+        )
+        mock_submit.assert_any_call(
+            workflows[1], input_values[1], {}, await_completion=True
+        )
 
 
 def test_submit_workflow_batch(
@@ -488,67 +488,6 @@ def test_retry_workflow_no_await(
         )
 
 
-def test_resubmit_workflow(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test resubmitting a workflow."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
-
-    with (
-        patch.object(client, "await_workflow") as mock_await,
-        patch.object(client, "resubmit_workflow") as mock_resubmit,
-    ):
-        mock_workflow = Workflow(
-            workflow_id=new_ulid_str(),
-            name="Test Workflow",
-            status=WorkflowStatus(completed=True),
-            steps=[],
-        )
-        mock_await.return_value = mock_workflow
-        mock_resubmit.return_value = mock_workflow
-
-        resubmitted_workflow = client.resubmit_workflow(
-            submitted_workflow.workflow_id, await_completion=True
-        )
-
-        assert isinstance(resubmitted_workflow, Workflow)
-        mock_resubmit.assert_called_once_with(
-            submitted_workflow.workflow_id, await_completion=True
-        )
-
-
-def test_resubmit_workflow_no_await(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test resubmitting a workflow without waiting for completion."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
-
-    # Mock the resubmit operation since actual resubmit may have constraints
-    with patch.object(client, "resubmit_workflow") as mock_resubmit:
-        mock_workflow = Workflow(
-            workflow_id=new_ulid_str(),
-            name="Test Workflow",
-            status=WorkflowStatus(paused=False),
-            steps=[],
-        )
-        mock_resubmit.return_value = mock_workflow
-
-        resubmitted_workflow = client.resubmit_workflow(
-            submitted_workflow.workflow_id, await_completion=False
-        )
-
-        assert isinstance(resubmitted_workflow, Workflow)
-        mock_resubmit.assert_called_once_with(
-            submitted_workflow.workflow_id, await_completion=False
-        )
-
-
 def test_await_workflow_completed(
     client: WorkcellClient, sample_workflow_instance: Workflow
 ) -> None:
@@ -595,41 +534,6 @@ def test_await_workflow_failed(
 
         assert result == failed_workflow
         mock_handle.assert_called_once()
-
-
-# File Extraction Tests
-def test_extract_files_from_workflow(
-    client: WorkcellClient, sample_workflow_with_files: WorkflowDefinition
-) -> None:
-    """Test extracting files from a workflow definition."""
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".txt", delete=False
-    ) as temp_file:
-        temp_file.write("test content")
-        temp_file_path = Path(temp_file.name)
-
-    try:
-        sample_workflow_with_files.steps[0].files = {"input_file": temp_file_path}
-
-        extracted_files = client._extract_files_from_workflow(
-            sample_workflow_with_files
-        )
-
-        assert len(extracted_files) == 1
-        assert any("input_file" in key for key in extracted_files)
-
-        file_paths = list(extracted_files.values())
-        assert all(isinstance(path, Path) for path in file_paths)
-    finally:
-        temp_file_path.unlink(missing_ok=True)
-
-
-def test_extract_files_from_workflow_no_files(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test extracting files when workflow has no files."""
-    extracted_files = client._extract_files_from_workflow(sample_workflow)
-    assert len(extracted_files) == 0
 
 
 # Error Handling Tests
@@ -715,7 +619,6 @@ def test_workcell_client_init_no_url() -> None:
             WorkcellClient()
 
 
-
 # Additional Error Handling and Edge Case Tests
 def test_start_workflow_alias(client: WorkcellClient) -> None:
     """Test that start_workflow is an alias for submit_workflow."""
@@ -776,17 +679,13 @@ def test_location_edge_cases(client: WorkcellClient) -> None:
     assert retrieved_location.location_name == "edge_case_location"
 
 
-
-
 def test_check_parameter_missing(client: WorkcellClient) -> None:
     """Test parameter insertion with missing required parameter."""
-    workflow =  workflow = WorkflowDefinition(
+    workflow = WorkflowDefinition(
         name="Test",
-        parameters=[
-            WorkflowParameters(
-                input_values=[WorkflowInputValue(input_key="required_param")]
-            )
-        ],
+        parameters=WorkflowParameters(
+            input_values=[WorkflowInputValue(input_key="required_param")]
+        ),
         steps=[
             StepDefinition(
                 name="step1",
@@ -794,28 +693,26 @@ def test_check_parameter_missing(client: WorkcellClient) -> None:
                 action="action1",
                 parameters={
                     "args": {"param": "required_param"},
-                }
-                
+                },
             )
         ],
     )
-    
 
-    with pytest.raises(
-        ValueError, match="Required value required_param not provided"
-    ):
-       client.check_parameters(workflow, {})
+    with pytest.raises(ValueError, match="Required value required_param not provided"):
+        client.check_parameters(workflow, {})
 
 
 def test_check_parameter_conflict(client: WorkcellClient) -> None:
     """Test parameter insertion with conflicting configuration."""
     workflow = WorkflowDefinition(
         name="Test",
-        parameters=[
-            WorkflowParameters(
-                feed_forward_values=[FeedForwardValue(name="conflict_param", label="some_label", step_name="step1")]
-            )
-        ],
+        parameters=WorkflowParameters(
+            feed_forward_values=[
+                FeedForwardValue(
+                    name="conflict_param", label="some_label", step_name="step1"
+                )
+            ]
+        ),
         steps=[
             StepDefinition(
                 name="step1",
@@ -823,13 +720,13 @@ def test_check_parameter_conflict(client: WorkcellClient) -> None:
                 action="action1",
                 parameters={
                     "args": {"param": "conflict_param"},
-                }
-                
+                },
             )
         ],
     )
 
     with pytest.raises(
-        ValueError, match="conflict_param is a Feed Forward Value and will be calculated during execution"
+        ValueError,
+        match="conflict_param is a Feed Forward Value and will be calculated during execution",
     ):
         client.check_parameters(workflow, {"conflict_param": "value"})

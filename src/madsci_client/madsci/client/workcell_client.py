@@ -76,7 +76,7 @@ class WorkcellClient:
         """
         if retry is None:
             retry = self.retry
-        url = f"{self.workcell_server_url}/workflow/{workflow_id}"
+        url = f"{self.workcell_server_url}workflow/{workflow_id}"
         if not retry:
             response = requests.get(url, timeout=10)
         else:
@@ -101,7 +101,7 @@ class WorkcellClient:
         """
         get the workflow definition
         """
-        url = f"{self.workcell_server_url}/workflow_definition/{workflow_definition_id}"
+        url = f"{self.workcell_server_url}workflow_definition/{workflow_definition_id}"
         if retry is None:
             retry = self.retry
         if not retry:
@@ -252,18 +252,18 @@ class WorkcellClient:
         """
         if retry is None:
             retry = self.retry
-        try:
-            ULID.from_str(workflow_definition)
-        except ValueError:
-            if isinstance(workflow_definition, (Path, str)):
-                workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
-            else:
-                workflow_definition = WorkflowDefinition.model_validate(
-                    workflow_definition
-                )
+        if isinstance(workflow_definition, WorkflowDefinition):
             workflow_definition_id = self.submit_workflow_definition(
                 workflow_definition
             )
+        else:
+            try:
+                workflow_definition_id = ULID.from_str(workflow_definition)
+            except ValueError:
+                workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
+                workflow_definition_id = self.submit_workflow_definition(
+                    workflow_definition
+                )
         workflow_definition = self.get_workflow_definition(workflow_definition_id)
         files = {}
         self.analyze_parameter_types(workflow_definition, input_values)
@@ -315,19 +315,27 @@ class WorkcellClient:
         )
 
     submit_workflow = start_workflow
-    def check_parameters(self,
-                         workflow_definition:WorkflowDefinition,
-                         input_values: Optional[dict[str, Any]] = None):
+
+    def check_parameters(
+        self,
+        workflow_definition: WorkflowDefinition,
+        input_values: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Check that all required parameters are provided"""
         if input_values is not None:
             for input_value in workflow_definition.parameters.input_values:
                 if input_value.input_key not in input_values:
-                    if input_value.default is not None:      
-                      input_values[input_value.input_key] = input_value.default
+                    if input_value.default is not None:
+                        input_values[input_value.input_key] = input_value.default
                     else:
-                      raise ValueError(f"Required balue {input_value.input_key} not provided")
+                        raise ValueError(
+                            f"Required value {input_value.input_key} not provided"
+                        )
         for ffv in workflow_definition.parameters.feed_forward_values:
             if ffv.name in input_values:
-                 raise ValueError(f"{ffv.name} is a Feed Forward Value and will be calculated during execution")
+                raise ValueError(
+                    f"{ffv.name} is a Feed Forward Value and will be calculated during execution"
+                )
 
     def make_paths_absolute(self, files: dict[str, PathLike]) -> dict[str, Path]:
         """
@@ -355,9 +363,13 @@ class WorkcellClient:
         self,
         workflows: list[str],
         input_values: list[dict[str, Any]] = [],
-        input_files: dict[str, PathLike] = [],
-    ) -> None:
+        input_files: list[dict[str, PathLike]] = [],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, PathLike]]]:
         """Check if the parameter lists are the right length"""
+        if len(input_values) == 0:
+            input_values = [{} for _ in workflows]
+        if len(input_files) == 0:
+            input_files = [{} for _ in workflows]
         if len(workflows) > len(input_values):
             raise ValueError(
                 "Must submit input_values, in order, for each workflow, submit empty dictionaries if no input_values"
@@ -366,6 +378,7 @@ class WorkcellClient:
             raise ValueError(
                 "Must submit input_files, in order, for each workflow, submit empty dictionaries if no input_files"
             )
+        return input_values, input_files
 
     def submit_workflow_sequence(
         self,
@@ -389,10 +402,12 @@ class WorkcellClient:
             A list of submitted workflow objects.
         """
         wfs = []
-        self.check_parameter_lists(workflows, input_values, input_files)
+        input_values, input_files = self.check_parameters_lists(
+            workflows, input_values, input_files
+        )
         for i in range(len(workflows)):
             wf = self.submit_workflow(
-                workflows[i], input_values[i], await_completion=True
+                workflows[i], input_values[i], input_files[i], await_completion=True
             )
             wfs.append(wf)
         return wfs
@@ -419,10 +434,12 @@ class WorkcellClient:
             A list of completed workflow objects.
         """
         id_list = []
-        self.check_parameter_lists(workflows, input_values, input_files)
+        input_values, input_files = self.check_parameters_lists(
+            workflows, input_values, input_files
+        )
         for i in range(len(workflows)):
             response = self.submit_workflow(
-                workflows[i], input_values=[i], await_completion=False
+                workflows[i], input_values[i], input_files[i], await_completion=False
             )
             id_list.append(response.workflow_id)
         finished = False

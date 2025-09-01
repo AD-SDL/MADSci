@@ -3,7 +3,6 @@
 import json
 import traceback
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Optional, Union
 
@@ -15,7 +14,6 @@ from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import global_ownership_info, ownership_context
-from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import Location
@@ -29,12 +27,10 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
-    copy_workflow_files,
     create_workflow,
     save_workflow_files,
     # validate_workflow_definition,
@@ -257,30 +253,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
             wf.status.cancelled = True
             state_handler.set_active_workflow(wf)
         return state_handler.get_active_workflow(workflow_id)
-
-    @app.post("/workflow/{workflow_id}/resubmit")
-    def resubmit_workflow(workflow_id: str) -> Workflow:
-        """resubmit a previous workflow as a new workflow."""
-        with state_handler.wc_state_lock():
-            wf = state_handler.get_workflow(workflow_id)
-            wf.workflow_id = new_ulid_str()
-            wf.status.reset()
-            wf.start_time = None
-            wf.end_time = None
-            wf.submitted_time = datetime.now()
-            for step in wf.steps:
-                step.step_id = new_ulid_str()
-                step.start_time = None
-                step.end_time = None
-                step.status = ActionStatus.NOT_STARTED
-            copy_workflow_files(
-                old_id=workflow_id,
-                workflow=wf,
-                working_directory=workcell.workcell_directory,
-            )
-            state_handler.set_active_workflow(wf)
-            state_handler.enqueue_workflow(wf.workflow_id)
-        return state_handler.get_active_workflow(wf.workflow_id)
 
     @app.post("/workflow/{workflow_id}/retry")
     def retry_workflow(workflow_id: str, index: int = 0) -> Workflow:

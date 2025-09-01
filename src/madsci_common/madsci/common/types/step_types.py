@@ -26,9 +26,10 @@ class StepParameters(MadsciBaseModel):
     action: Optional[str] = Field(
         title="Step Action",
         description="The action to perform in the step.",
+        default=None,
     )
     node: Optional[str] = Field(
-        title="Node Name", description="Name of the node to run on"
+        title="Node Name", description="Name of the node to run on", default=None
     )
     args: dict[str, Any] = Field(
         title="Step Arguments",
