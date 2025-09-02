@@ -23,7 +23,7 @@ class StepParameters(MadsciBaseModel):
         description="A description of the step.",
         default=None,
     )
-    
+
     action: Optional[str] = Field(
         title="Step Action",
         description="The action to perform in the step.",

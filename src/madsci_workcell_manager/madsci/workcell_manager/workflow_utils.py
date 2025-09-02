@@ -212,25 +212,25 @@ def prepare_workflow_step(
         raise ValueError(validation_string)
     return working_step
 
+
 def check_parameters(
-        workflow_definition: WorkflowDefinition,
-        input_values: Optional[dict[str, Any]] = None,
-    ) -> None:
-        """Check that all required parameters are provided"""
-        if input_values is not None:
-            for input_value in workflow_definition.parameters.input_values:
-                if input_value.key not in input_values:
-                    if input_value.default is not None:
-                        input_values[input_value.key] = input_value.default
-                    else:
-                        raise ValueError(
-                            f"Required value {input_value.key} not provided"
-                        )
-        for ffv in workflow_definition.parameters.feed_forward_values:
-            if ffv.key in input_values:
-                raise ValueError(
-                    f"{ffv.key} is a Feed Forward Value and will be calculated during execution"
-                )
+    workflow_definition: WorkflowDefinition,
+    input_values: Optional[dict[str, Any]] = None,
+) -> None:
+    """Check that all required parameters are provided"""
+    if input_values is not None:
+        for input_value in workflow_definition.parameters.input_values:
+            if input_value.key not in input_values:
+                if input_value.default is not None:
+                    input_values[input_value.key] = input_value.default
+                else:
+                    raise ValueError(f"Required value {input_value.key} not provided")
+    for ffv in workflow_definition.parameters.feed_forward_values:
+        if ffv.key in input_values:
+            raise ValueError(
+                f"{ffv.key} is a Feed Forward Value and will be calculated during execution"
+            )
+
 
 def prepare_workflow_files(
     step: Step, workflow: Workflow, data_client: DataClient
@@ -246,9 +246,7 @@ def prepare_workflow_files(
         elif type(definition) is InputFile:
             datapoint_id = input_file_ids[definition.key]
             if definition.key in workflow.input_file_paths:
-                suffixes = Path(
-                    workflow.input_file_paths[definition.key]
-                ).suffixes
+                suffixes = Path(workflow.input_file_paths[definition.key]).suffixes
 
         with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
             data_client.save_datapoint_value(datapoint_id, f.name)

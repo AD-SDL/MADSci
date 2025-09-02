@@ -347,7 +347,7 @@ async function send_wf(action: any) {
 
   fetch(urls.value.workcell_server_url.concat('workflow'), {
     method: "POST",
-    
+
     body: formData
   });
 

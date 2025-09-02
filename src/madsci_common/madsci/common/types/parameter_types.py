@@ -16,8 +16,7 @@ class InputValue(MadsciBaseModel):
     """A description of the parameter file"""
     default: Optional[Any] = None
     """The default value of a parameter, if not provided, the parameter must be provided when the workflow is run"""
-    
-   
+
 
 class InputFile(MadsciBaseModel):
     """Input files for the workflow"""

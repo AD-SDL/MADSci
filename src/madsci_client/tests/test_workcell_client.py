@@ -77,9 +77,7 @@ def sample_workflow() -> WorkflowDefinition:
             )
         ],
         parameters=WorkflowParameters(
-            input_values=[
-                InputValue(key="test_param", default="default_value")
-            ]
+            input_values=[InputValue(key="test_param", default="default_value")]
         ),
     )
 
@@ -688,9 +686,7 @@ def test_check_parameter_missing() -> None:
     """Test parameter insertion with missing required parameter."""
     workflow = WorkflowDefinition(
         name="Test",
-        parameters=WorkflowParameters(
-            input_values=[InputValue(key="required_param")]
-        ),
+        parameters=WorkflowParameters(input_values=[InputValue(key="required_param")]),
         steps=[
             StepDefinition(
                 name="step1",
