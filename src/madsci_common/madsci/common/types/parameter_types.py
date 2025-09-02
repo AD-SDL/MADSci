@@ -59,7 +59,7 @@ class FeedForwardValue(MadsciBaseModel):
     """The name of the parameter"""
     step_name: Optional[str] = None
     """Name of a step in the workflow; this will use the value of a datapoint from the step with the matching name as the value for this parameter"""
-    step_index: Optional[str] = None
+    step_index: Optional[int] = None
     """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
     value_type: Optional[FeedForwardValueType] = None
     """The python type of the parameter value"""
