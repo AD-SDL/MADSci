@@ -12,7 +12,7 @@
         <div v-else-if="modal_text.base_type=='slot'">
           <Slot :resource="modal_text" />
         </div>
-        <div v-else-if="modal_text.base_type=='consumable'">
+        <div v-else-if="['consumable', 'discrete_consumable', 'continuous_consumable'].includes(modal_text.base_type)">
           <Consumable :resource="modal_text" />
         </div>
         <div v-else>
