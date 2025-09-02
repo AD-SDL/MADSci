@@ -3,7 +3,6 @@
 import inspect
 import shutil
 import tempfile
-import time
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -12,7 +11,6 @@ from typing import Any, Optional
 from fastapi import UploadFile
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionResult, ActionSucceeded
 from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.location_types import (
     LocationArgument,
@@ -24,6 +22,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
+from madsci.workcell_manager import workcell_actions
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 
 
@@ -41,15 +40,6 @@ def validate_node_names(
             raise ValueError(
                 f"Node {node_name} not in Workcell {state_handler.get_workcell_definition().workcell_name}"
             ) from e
-
-
-def wait(seconds: int) -> ActionResult:
-    """Waits for a specified number of seconds"""
-    time.sleep(seconds)
-    return ActionSucceeded()
-
-
-workcell_actions = {"wait": wait}
 
 
 def validate_workcell_action_step(step: Step) -> tuple[bool, str]:

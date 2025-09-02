@@ -39,13 +39,13 @@ class Scheduler(AbstractScheduler):
 
                 if wf.status.current_step_index < len(wf.steps):
                     step = wf.steps[wf.status.current_step_index]
-                    test_step = insert_parameters(step, wf.parameter_values)
+                    updated_step = insert_parameters(step, wf.parameter_values)
                     self.check_workflow_status(wf, metadata)
-                    self.location_checks(test_step, metadata)
-                    self.resource_checks(test_step, metadata)
-                    self.node_checks(test_step, wf, metadata)
-                    self.step_checks(test_step, metadata)
-                    metadata = evaluate_condition_checks(test_step, self, metadata)
+                    self.location_checks(updated_step, metadata)
+                    self.resource_checks(updated_step, metadata)
+                    self.node_checks(updated_step, wf, metadata)
+                    self.step_checks(updated_step, metadata)
+                    metadata = evaluate_condition_checks(updated_step, self, metadata)
                     metadata.priority = priority
                     priority -= 1
 

@@ -178,7 +178,7 @@ class WorkflowDefinition(MadsciBaseModel):
                         > 0
                     ):
                         raise ValueError(
-                            "Input Files referenced by key inline must be defined at the top of the workflow"
+                            "Input Files referenced by key inline must be defined as part of the workflow file parameters."
                         )
         self.parameters.input_files = self.parameters.input_files + inline_inputs
 
