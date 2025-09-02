@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from madsci.client.workcell_client import WorkcellClient, check_parameters
+from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.location_types import Location, LocationDefinition
-from madsci.common.types.parameter_types import FeedForwardValue, InputValue
+from madsci.common.types.parameter_types import InputValue
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
@@ -140,47 +140,42 @@ def test_client(
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     """Fixture for WorkcellClient patched to use TestClient."""
+    with patch("madsci.client.workcell_client.requests") as mock_requests:
 
-    def add_ok_property(resp: Response) -> Response:
-        if not hasattr(resp, "ok"):
-            resp.ok = resp.status_code < 400
-        return resp
+        def add_ok_property(resp: Response) -> Response:
+            if not hasattr(resp, "ok"):
+                resp.ok = resp.status_code < 400
+            return resp
 
-    def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.post(*args, **kwargs)
-        return add_ok_property(resp)
+        def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
+            kwargs.pop("timeout", None)
+            resp = test_client.post(*args, **kwargs)
+            return add_ok_property(resp)
 
-    def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.get(*args, **kwargs)
-        return add_ok_property(resp)
+        mock_requests.post.side_effect = post_no_timeout
 
-    def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.delete(*args, **kwargs)
-        return add_ok_property(resp)
+        def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
+            kwargs.pop("timeout", None)
+            resp = test_client.get(*args, **kwargs)
+            return add_ok_property(resp)
 
-    def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.put(*args, **kwargs)
-        return add_ok_property(resp)
+        mock_requests.get.side_effect = get_no_timeout
 
-    # Create the client
-    workcell_client = WorkcellClient(workcell_server_url="http://testserver")
+        def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
+            kwargs.pop("timeout", None)
+            resp = test_client.delete(*args, **kwargs)
+            return add_ok_property(resp)
 
-    # Mock both sessions to use the test client
-    workcell_client.session.get = get_no_timeout
-    workcell_client.session.post = post_no_timeout
-    workcell_client.session.delete = delete_no_timeout
-    workcell_client.session.put = put_no_timeout
+        mock_requests.delete.side_effect = delete_no_timeout
 
-    workcell_client.session_no_retry.get = get_no_timeout
-    workcell_client.session_no_retry.post = post_no_timeout
-    workcell_client.session_no_retry.delete = delete_no_timeout
-    workcell_client.session_no_retry.put = put_no_timeout
+        def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
+            kwargs.pop("timeout", None)
+            resp = test_client.put(*args, **kwargs)
+            return add_ok_property(resp)
 
-    yield workcell_client
+        mock_requests.put.side_effect = put_no_timeout
+
+        yield WorkcellClient(workcell_server_url="http://testserver")
 
 
 def test_get_nodes(client: WorkcellClient) -> None:
@@ -680,54 +675,3 @@ def test_location_edge_cases(client: WorkcellClient) -> None:
     # Get the specific location
     retrieved_location = client.get_location(added_location.location_id)
     assert retrieved_location.location_name == "edge_case_location"
-
-
-def test_check_parameter_missing() -> None:
-    """Test parameter insertion with missing required parameter."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=WorkflowParameters(input_values=[InputValue(key="required_param")]),
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                parameters={
-                    "args": {"param": "required_param"},
-                },
-            )
-        ],
-    )
-
-    with pytest.raises(ValueError, match="Required value required_param not provided"):
-        check_parameters(workflow, {})
-
-
-def test_check_parameter_conflict() -> None:
-    """Test parameter insertion with conflicting configuration."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=WorkflowParameters(
-            feed_forward_values=[
-                FeedForwardValue(
-                    key="conflict_param", label="some_label", step_name="step1"
-                )
-            ]
-        ),
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                parameters={
-                    "args": {"param": "conflict_param"},
-                },
-            )
-        ],
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="conflict_param is a Feed Forward Value and will be calculated during execution",
-    ):
-        check_parameters(workflow, {"conflict_param": "value"})

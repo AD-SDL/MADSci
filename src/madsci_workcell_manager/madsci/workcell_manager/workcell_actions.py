@@ -2,8 +2,7 @@
 
 import time
 
-from madsci.common.types.action_types import ActionResult
-from madsci.workcell_manager.workflow_utils import ActionSucceeded
+from madsci.common.types.action_types import ActionResult, ActionSucceeded
 
 
 def wait(seconds: int) -> ActionResult:
