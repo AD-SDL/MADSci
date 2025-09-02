@@ -33,6 +33,7 @@ from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
     create_workflow,
     save_workflow_files,
+    check_parameters
     # validate_workflow_definition,
 )
 from pymongo.synchronous.database import Database
@@ -255,11 +256,13 @@ def create_workcell_server(  # noqa: C901, PLR0915
         return state_handler.get_active_workflow(workflow_id)
 
     @app.post("/workflow/{workflow_id}/retry")
-    def retry_workflow(workflow_id: str, index: int = 0) -> Workflow:
+    def retry_workflow(workflow_id: str, index: int = -1) -> Workflow:
         """Retry an existing workflow from a specific step."""
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
             if wf.status.terminal:
+                if index < 0:
+                    index = wf.status.current_step_index
                 wf.status.reset(index)
                 state_handler.set_active_workflow(wf)
                 state_handler.delete_archived_workflow(wf.workflow_id)
@@ -400,6 +403,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                             detail="Input File Paths must be a dictionary with string keys",
                         )
                 workcell = state_handler.get_workcell_definition()
+                check_parameters(wf_def, input_values)
                 wf = create_workflow(
                     workflow_def=wf_def,
                     workcell=workcell,

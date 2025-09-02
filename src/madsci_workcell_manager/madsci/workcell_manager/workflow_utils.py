@@ -218,6 +218,25 @@ def prepare_workflow_step(
         raise ValueError(validation_string)
     return working_step
 
+def check_parameters(
+        workflow_definition: WorkflowDefinition,
+        input_values: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Check that all required parameters are provided"""
+        if input_values is not None:
+            for input_value in workflow_definition.parameters.input_values:
+                if input_value.key not in input_values:
+                    if input_value.default is not None:
+                        input_values[input_value.key] = input_value.default
+                    else:
+                        raise ValueError(
+                            f"Required value {input_value.key} not provided"
+                        )
+        for ffv in workflow_definition.parameters.feed_forward_values:
+            if ffv.key in input_values:
+                raise ValueError(
+                    f"{ffv.key} is a Feed Forward Value and will be calculated during execution"
+                )
 
 def prepare_workflow_files(
     step: Step, workflow: Workflow, data_client: DataClient
@@ -231,10 +250,10 @@ def prepare_workflow_files(
             if definition in workflow.input_file_paths:
                 suffixes = Path(workflow.input_file_paths[definition]).suffixes
         elif type(definition) is InputFile:
-            datapoint_id = input_file_ids[definition.input_file_key]
-            if definition.input_file_key in workflow.input_file_paths:
+            datapoint_id = input_file_ids[definition.key]
+            if definition.key in workflow.input_file_paths:
                 suffixes = Path(
-                    workflow.input_file_paths[definition.input_file_key]
+                    workflow.input_file_paths[definition.key]
                 ).suffixes
 
         with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
@@ -291,19 +310,19 @@ def save_workflow_files(
         input_files[file.filename] = file.file
     input_file_ids = {}
     for file in workflow.parameters.input_files:
-        if file.input_file_key not in input_files:
-            raise ValueError(f"Missing file: {file.input_file_key}")
-        path = Path(input_file_paths[file.input_file_key])
+        if file.key not in input_files:
+            raise ValueError(f"Missing file: {file.key}")
+        path = Path(input_file_paths[file.key])
         suffixes = path.suffixes
         with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
-            f.write(input_files[file.input_file_key].read())
+            f.write(input_files[file.key].read())
             datapoint = FileDataPoint(
-                label=file.input_file_key,
+                label=file.key,
                 ownership_info=workflow.ownership_info,
                 path=Path(f.name),
             )
             datapoint_id = data_client.submit_datapoint(datapoint).datapoint_id
-            input_file_ids[file.input_file_key] = datapoint_id
+            input_file_ids[file.key] = datapoint_id
     workflow.input_file_ids = input_file_ids
     return workflow
 

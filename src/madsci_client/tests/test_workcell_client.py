@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.location_types import Location, LocationDefinition
-from madsci.common.types.parameter_types import FeedForwardValue, WorkflowInputValue
+from madsci.common.types.parameter_types import FeedForwardValue, InputValue
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
@@ -78,7 +78,7 @@ def sample_workflow() -> WorkflowDefinition:
         ],
         parameters=WorkflowParameters(
             input_values=[
-                WorkflowInputValue(input_key="test_param", default="default_value")
+                InputValue(key="test_param", default="default_value")
             ]
         ),
     )
@@ -684,7 +684,7 @@ def test_check_parameter_missing(client: WorkcellClient) -> None:
     workflow = WorkflowDefinition(
         name="Test",
         parameters=WorkflowParameters(
-            input_values=[WorkflowInputValue(input_key="required_param")]
+            input_values=[InputValue(key="required_param")]
         ),
         steps=[
             StepDefinition(
@@ -709,7 +709,7 @@ def test_check_parameter_conflict(client: WorkcellClient) -> None:
         parameters=WorkflowParameters(
             feed_forward_values=[
                 FeedForwardValue(
-                    name="conflict_param", label="some_label", step_name="step1"
+                    key="conflict_param", label="some_label", step_name="step1"
                 )
             ]
         ),

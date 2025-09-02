@@ -299,9 +299,9 @@ class Engine:
         """updates the parameters in a workflow"""
 
         if datapoint.data_type == "data_value":
-            wf.parameter_values[parameter.name] = datapoint.value
+            wf.parameter_values[parameter.key] = datapoint.value
         elif datapoint.data_type in {"object_storage", "file"}:
-            wf.input_file_ids[parameter.name] = datapoint.datapoint_id
+            wf.input_file_ids[parameter.key] = datapoint.datapoint_id
         return wf
 
     def finalize_step(self, workflow_id: str, step: Step) -> None:
@@ -312,9 +312,9 @@ class Engine:
             wf.steps[wf.status.current_step_index] = step
             for value in wf.parameters.feed_forward_values:
                 if (
-                    value.step_name == step.name
+                    (value.step_key is not None and value.step_key == step.key)
                     or wf.status.current_step_index == value.step_index
-                    or (value.step_name is None and value.step_index is None)
+                    or (value.step_key is None and value.step_index is None)
                 ) and value.label in step.result.datapoints:
                     datapoint = step.result.datapoints[value.label]
                     wf = self.update_parameters(wf, datapoint, value)

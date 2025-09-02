@@ -173,7 +173,7 @@ def test_run_single_step_with_update_parameters(
         parameters=WorkflowParameters(
             feed_forward_values=[
                 FeedForwardValue(
-                    name="test_param", step_name="Test Step 1", label="test_label"
+                    key="test_param", step_name="Test Step 1", label="test_label"
                 )
             ]
         ),

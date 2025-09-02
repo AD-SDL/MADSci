@@ -189,30 +189,6 @@ class WorkcellClient:
         response.raise_for_status()
         return str(response.json())
 
-    def analyze_parameter_types(
-        self,
-        workflow_definition: WorkflowDefinition,
-        input_values: Optional[dict[str, Any]],
-    ) -> None:
-        """Check the type of parameter input values"""
-        if input_values:
-            for parameter in workflow_definition.parameters.input_values:
-                if (
-                    parameter.input_key in input_values
-                    and parameter.parameter_type
-                    and not (
-                        type(input_values[parameter.input_key]).__name__
-                        == parameter.parameter_type
-                        or (
-                            "Union" in parameter.parameter_type
-                            and type(input_values[parameter.input_key]).__name__
-                            in parameter.parameter_type
-                        )
-                    )
-                ):
-                    raise TypeError(
-                        f"Input Value {parameter.input_key} has wrong type, must be type {parameter.parameter_type}"
-                    )
 
     def start_workflow(
         self,
@@ -266,11 +242,8 @@ class WorkcellClient:
                 )
         workflow_definition = self.get_workflow_definition(workflow_definition_id)
         files = {}
-        self.analyze_parameter_types(workflow_definition, input_values)
         if input_files:
             files = self.make_paths_absolute(input_files)
-        self.check_parameters(workflow_definition, input_values)
-
         url = f"{self.workcell_server_url}workflow"
         data = {
             "workflow_definition_id": workflow_definition_id,
@@ -316,26 +289,7 @@ class WorkcellClient:
 
     submit_workflow = start_workflow
 
-    def check_parameters(
-        self,
-        workflow_definition: WorkflowDefinition,
-        input_values: Optional[dict[str, Any]] = None,
-    ) -> None:
-        """Check that all required parameters are provided"""
-        if input_values is not None:
-            for input_value in workflow_definition.parameters.input_values:
-                if input_value.input_key not in input_values:
-                    if input_value.default is not None:
-                        input_values[input_value.input_key] = input_value.default
-                    else:
-                        raise ValueError(
-                            f"Required value {input_value.input_key} not provided"
-                        )
-        for ffv in workflow_definition.parameters.feed_forward_values:
-            if ffv.name in input_values:
-                raise ValueError(
-                    f"{ffv.name} is a Feed Forward Value and will be calculated during execution"
-                )
+    
 
     def make_paths_absolute(self, files: dict[str, PathLike]) -> dict[str, Path]:
         """

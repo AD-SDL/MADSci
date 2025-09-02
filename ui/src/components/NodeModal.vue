@@ -299,17 +299,26 @@ async function send_wf(action: any) {
 
   })
   var files: { [k: string]: any } = {};
-  var input_files = Object.keys(action.files).map(function(key){
-    return action.files[key];});
+  var input_files = Object.values(action.files)
+  let i = 0;
+  let input_file_params: any[] = []
+  let input_file_values: any = {}
   input_files.forEach(function (file: any) {
     if (file.value === undefined) {
       files[file.name] = ""
     }
     else {
-
+      i = i +  1
       files[file.name] = file.value.name
+      input_file_params =  input_file_params.concat(input_file_params, [{"key": file.value.name}])
+      input_file_values[file.value.name] = file.value.name
     }
+
   })
+  wf.parameters = {
+    "input_files": input_file_params
+  }
+
   wf.steps = [{
     "name": action.name,
     "node": props.modal_title,
@@ -320,14 +329,25 @@ async function send_wf(action: any) {
     "comment": "Test",
     "files": files
   }]
-  formData.append("workflow", JSON.stringify(wf))
+  let workflow_definition_id = await ((await fetch(urls.value.workcell_server_url.concat('workflow_definition'),  {
+    method: "POST",
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(wf)
+  })).json())
+  formData.append("workflow_definition_id", workflow_definition_id)
+  formData.append("input_file_paths", JSON.stringify(input_file_values))
   input_files.forEach(function (file: any) {
     if (file.value) {
       formData.append("files", file.value)
     }
   })
+
   fetch(urls.value.workcell_server_url.concat('workflow'), {
     method: "POST",
+    
     body: formData
   });
 

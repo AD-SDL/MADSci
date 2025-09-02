@@ -10,7 +10,7 @@ from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.parameter_types import (
     FeedForwardValue,
     InputFile,
-    WorkflowInputValue,
+    InputValue,
 )
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.utils import new_ulid_str
@@ -99,7 +99,7 @@ class WorkflowStatus(MadsciBaseModel):
 class WorkflowParameters(MadsciBaseModel):
     """container for all of the workflow parameters"""
 
-    input_values: list[WorkflowInputValue] = Field(default_factory=list)
+    input_values: list[InputValue] = Field(default_factory=list)
     """JSON serializable value inputs to the workflow"""
 
     feed_forward_values: list[FeedForwardValue] = Field(default_factory=list)
@@ -139,10 +139,15 @@ class WorkflowDefinition(MadsciBaseModel):
 
     @field_validator("steps", mode="after")
     @classmethod
-    def ensure_data_label_uniqueness(cls, v: Any) -> Any:
+    def ensure_data_label_and_step_key_uniqueness(cls, v: Any) -> Any:
         """Ensure that the names of the data labels are unique"""
         labels = []
+        keys = []
         for step in v:
+            if step.key:
+                if step.key in keys:
+                    raise ValueError("Step keys must be unique across workflow")
+                keys.append(step.key)
             if step.data_labels:
                 for key in step.data_labels:
                     if step.data_labels[key] in labels:
@@ -164,7 +169,7 @@ class WorkflowDefinition(MadsciBaseModel):
                             [
                                 input_file
                                 for input_file in self.parameters.input_files
-                                if input_file.input_file_key == file
+                                if input_file.key == file
                             ]
                         )
                         > 0
@@ -172,7 +177,7 @@ class WorkflowDefinition(MadsciBaseModel):
                             [
                                 ffv
                                 for ffv in self.parameters.feed_forward_values
-                                if ffv.name == file
+                                if ffv.key == file
                             ]
                         )
                         > 0
@@ -189,17 +194,17 @@ class WorkflowDefinition(MadsciBaseModel):
         labels = []
         error = ValueError("Input value keys must be unique across workflow definition")
         for input_value in self.parameters.input_values:
-            if input_value.input_key in labels:
+            if input_value.key in labels:
                 raise error
-            labels.append(input_value.input_key)
+            labels.append(input_value.key)
         for ffv in self.parameters.feed_forward_values:
-            if ffv.name in labels:
+            if ffv.key in labels:
                 raise error
-            labels.append(ffv.name)
+            labels.append(ffv.key)
         for input_file in self.parameters.input_files:
-            if input_file.input_file_key in labels:
+            if input_file.key in labels:
                 raise error
-            labels.append(input_file.input_file_key)
+            labels.append(input_file.key)
         return self
 
 
