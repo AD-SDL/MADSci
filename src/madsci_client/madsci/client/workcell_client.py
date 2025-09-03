@@ -200,7 +200,7 @@ class WorkcellClient:
 
     def start_workflow(
         self,
-        workflow_definition: Union[PathLike, WorkflowDefinition],
+        workflow_definition: Union[str, PathLike, WorkflowDefinition],
         json_inputs: Optional[dict[str, Any]] = None,
         file_inputs: Optional[dict[str, PathLike]] = None,
         await_completion: bool = True,

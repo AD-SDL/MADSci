@@ -13,7 +13,7 @@ from madsci.common.types.parameter_types import (
     ParameterJsonTypes,
 )
 from madsci.common.utils import new_ulid_str
-from pydantic import Field
+from pydantic import Field, model_validator
 
 
 class StepParameters(MadsciBaseModel):
@@ -27,7 +27,6 @@ class StepParameters(MadsciBaseModel):
         description="A description of the step.",
         default=None,
     )
-
     action: Optional[Union[str, ParameterJsonTypes]] = Field(
         title="Step Action",
         description="The action to perform in the step.",
@@ -104,6 +103,15 @@ class StepDefinition(MadsciBaseModel):
         description="Any parameterized values used in the step",
         default=None,
     )
+
+    @model_validator(mode="after")
+    def check_action_or_action_parameter(self) -> "StepDefinition":
+        """Ensure that either an action or action parameter is provided."""
+        if not self.action and (not self.parameters or not self.parameters.action):
+            raise ValueError(
+                f"Step {self.name} ({self.key}) must have either an action or action parameter"
+            )
+        return self
 
 
 class Step(StepDefinition):

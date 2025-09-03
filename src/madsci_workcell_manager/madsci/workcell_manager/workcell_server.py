@@ -403,7 +403,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
                             detail="Input File Paths must be a dictionary with string keys",
                         )
                 workcell = state_handler.get_workcell_definition()
-                check_parameters(wf_def, json_inputs)
+                check_parameters(wf_def, json_inputs, file_input_paths)
                 wf = create_workflow(
                     workflow_def=wf_def,
                     workcell=workcell,

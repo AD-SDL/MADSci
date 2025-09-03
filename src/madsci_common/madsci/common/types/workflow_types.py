@@ -1,7 +1,22 @@
 """Types for MADSci Worfklow running."""
 
 from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from madsci.client.data_client import DataPointTypeEnum
+else:
+    try:
+        from madsci.client.data_client import DataPointTypeEnum
+    except ImportError:
+        # Fallback for circular import situations
+        class DataPointTypeEnum:
+            """Fallback enum for data point types during import resolution."""
+
+            FILE = "FILE"
+            JSON = "JSON"
+            OBJECT_STORAGE = "OBJECT_STORAGE"
+
 
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.action_types import ActionStatus
@@ -299,6 +314,61 @@ class WorkflowDefinition(MadsciBaseModel):
             if file_input.key in labels:
                 raise error
             labels.append(file_input.key)
+        return self
+
+    @model_validator(mode="after")
+    def ensure_all_param_keys_have_matching_parameters(self) -> "WorkflowDefinition":
+        """Ensures that all step parameters have matching workflow parameters."""
+
+        file_param_keys = [param.key for param in self.parameters.file_inputs] + [
+            param.key
+            for param in self.parameters.feed_forward
+            if param.data_type
+            in [DataPointTypeEnum.FILE, DataPointTypeEnum.OBJECT_STORAGE]
+        ]
+        json_param_keys = [param.key for param in self.parameters.json_inputs] + [
+            param.key
+            for param in self.parameters.feed_forward
+            if param.data_type == DataPointTypeEnum.JSON
+        ]
+
+        def validate_keys(
+            keys: list[Optional[str]], valid_keys: list[str], error_msg: str
+        ) -> None:
+            """Validate that all keys are in the list of valid keys."""
+            for key in keys:
+                if key is not None and key not in valid_keys:
+                    raise ValueError(error_msg.format(key=key, step=step.name))
+
+        for step in self.steps:
+            if step.files:
+                validate_keys(
+                    step.files.values(),
+                    file_param_keys,
+                    "Step {step}: File Parameter {key} not found in workflow parameters",
+                )
+
+            if step.parameters is not None:
+                validate_keys(
+                    step.parameters.args.values(),
+                    json_param_keys,
+                    "Step {step}: Argument Parameter {key} not found in workflow parameters",
+                )
+                validate_keys(
+                    step.parameters.locations.values(),
+                    json_param_keys,
+                    "Step {step}: Location Parameter {key} not found in workflow parameters",
+                )
+                for field_name, field_value in [
+                    ("name", step.parameters.name),
+                    ("description", step.parameters.description),
+                    ("action", step.parameters.action),
+                    ("node", step.parameters.node),
+                ]:
+                    if field_value is not None and field_value not in json_param_keys:
+                        raise ValueError(
+                            f"Parameter {field_value} for field {field_name} of step {step.name} not found in workflow parameters"
+                        )
         return self
 
 

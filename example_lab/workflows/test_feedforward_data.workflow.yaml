@@ -7,7 +7,7 @@ metadata:
 
 parameters:
   feed_forward:
-    - name: test_file
+    - key: test_file
       step: generate
       label: example_file
       data_type: file
