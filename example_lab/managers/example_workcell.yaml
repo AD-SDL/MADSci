@@ -9,6 +9,28 @@ nodes:
   platereader_1: http://localhost:2002/
   transfer_manager: http://localhost:8006/
 locations:
+- location_name: plate
+  location_id: 01K468KWJXD5ZX0W8D97MM63YC
+  description: Plate resource
+  lookup:
+    transfer_manager:
+    - 1
+    - 2
+    - 3
+    - 4
+  resource_definition:
+    resource_name: plate
+    resource_name_prefix: null
+    resource_class: asset
+    base_type: asset
+    resource_description: null
+    owner: {}
+    custom_attributes: null
+    resource_id: 01K46AB1RCZABZB5NDJWXW4NHG
+    capacity: null
+    default_children: null
+    default_child_template: null
+    default_child_quantity: null
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: null
