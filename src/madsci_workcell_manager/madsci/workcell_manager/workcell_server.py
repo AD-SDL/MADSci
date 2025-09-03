@@ -340,8 +340,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
     async def start_workflow(
         workflow_definition_id: Annotated[str, Form()],
         ownership_info: Annotated[Optional[str], Form()] = None,
-        input_values: Annotated[Optional[str], Form()] = None,
-        input_file_paths: Annotated[Optional[str], Form()] = None,
+        json_inputs: Annotated[Optional[str], Form()] = None,
+        file_input_paths: Annotated[Optional[str], Form()] = None,
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
@@ -380,35 +380,35 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 else OwnershipInfo()
             )
             with ownership_context(**ownership_info.model_dump(exclude_none=True)):
-                if input_values is None or input_values == "":
-                    input_values = {}
+                if json_inputs is None or json_inputs == "":
+                    json_inputs = {}
                 else:
-                    input_values = json.loads(input_values)
-                    if not isinstance(input_values, dict) or not all(
-                        isinstance(k, str) for k in input_values
+                    json_inputs = json.loads(json_inputs)
+                    if not isinstance(json_inputs, dict) or not all(
+                        isinstance(k, str) for k in json_inputs
                     ):
                         raise HTTPException(
                             status_code=400,
                             detail="Parameters must be a dictionary with string keys",
                         )
-                if input_file_paths is None or input_file_paths == "":
-                    input_file_paths = {}
+                if file_input_paths is None or file_input_paths == "":
+                    file_input_paths = {}
                 else:
-                    input_file_paths = json.loads(input_file_paths)
-                    if not isinstance(input_file_paths, dict) or not all(
-                        isinstance(k, str) for k in input_file_paths
+                    file_input_paths = json.loads(file_input_paths)
+                    if not isinstance(file_input_paths, dict) or not all(
+                        isinstance(k, str) for k in file_input_paths
                     ):
                         raise HTTPException(
                             status_code=400,
                             detail="Input File Paths must be a dictionary with string keys",
                         )
                 workcell = state_handler.get_workcell_definition()
-                check_parameters(wf_def, input_values)
+                check_parameters(wf_def, json_inputs)
                 wf = create_workflow(
                     workflow_def=wf_def,
                     workcell=workcell,
-                    input_values=input_values,
-                    input_file_paths=input_file_paths,
+                    json_inputs=json_inputs,
+                    file_input_paths=file_input_paths,
                     data_client=data_client,
                     state_handler=state_handler,
                 )

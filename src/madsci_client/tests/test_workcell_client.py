@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.location_types import Location, LocationDefinition
-from madsci.common.types.parameter_types import InputValue
+from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
@@ -77,7 +77,7 @@ def sample_workflow() -> WorkflowDefinition:
             )
         ],
         parameters=WorkflowParameters(
-            input_values=[InputValue(key="test_param", default="default_value")]
+            json_inputs=[ParameterInputJson(key="test_param", default="default_value")]
         ),
     )
 
@@ -93,8 +93,8 @@ def sample_workflow_with_files() -> WorkflowDefinition:
                 node="test_node",
                 action="test_action",
                 files={
-                    "input_file": {
-                        "key": "input_file",
+                    "file_input": {
+                        "key": "file_input",
                         "description": "An input file",
                     }
                 },  # type: ignore
@@ -359,7 +359,7 @@ def test_submit_workflow_sequence(
 ) -> None:
     """Test submitting a sequence of workflows."""
     workflows = [sample_workflow, sample_workflow]
-    input_values = [{"test_param": "value1"}, {"test_param": "value2"}]
+    json_inputs = [{"test_param": "value1"}, {"test_param": "value2"}]
 
     with patch.object(client, "submit_workflow") as mock_submit:
         mock_workflow1 = Workflow(
@@ -376,15 +376,15 @@ def test_submit_workflow_sequence(
         )
         mock_submit.side_effect = [mock_workflow1, mock_workflow2]
 
-        result = client.submit_workflow_sequence(workflows, input_values)
+        result = client.submit_workflow_sequence(workflows, json_inputs)
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
         mock_submit.assert_any_call(
-            workflows[0], input_values[0], {}, await_completion=True
+            workflows[0], json_inputs[0], {}, await_completion=True
         )
         mock_submit.assert_any_call(
-            workflows[1], input_values[1], {}, await_completion=True
+            workflows[1], json_inputs[1], {}, await_completion=True
         )
 
 
@@ -393,7 +393,7 @@ def test_submit_workflow_batch(
 ) -> None:
     """Test submitting a batch of workflows."""
     workflows = [sample_workflow, sample_workflow]
-    input_values = [{"test_param": "value1"}, {"test_param": "value2"}]
+    json_inputs = [{"test_param": "value1"}, {"test_param": "value2"}]
 
     # Create mock response objects that mimic what submit_workflow returns
     mock_response1 = MagicMock()
@@ -424,7 +424,7 @@ def test_submit_workflow_batch(
         mock_submit.side_effect = [mock_response1, mock_response2]
         mock_query.side_effect = [mock_workflow1, mock_workflow2]
 
-        result = client.submit_workflow_batch(workflows, input_values)
+        result = client.submit_workflow_batch(workflows, json_inputs)
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
@@ -618,7 +618,7 @@ def test_workcell_client_init_no_url() -> None:
     ) as mock_context:
         mock_context.return_value.workcell_server_url = None
 
-        with pytest.raises(ValueError, match="Workcell server URL is not provided"):
+        with pytest.raises(ValueError, match="Workcell server URL was not provided"):
             WorkcellClient()
 
 

@@ -6,8 +6,8 @@ metadata:
   version: 0.1
 
 parameters:
-  input_values:
-    - name: example_parameter
+  json_inputs:
+    - key: example_parameter
       default: 0
 steps:
   - name: Run Liquid Handeler Protocol
@@ -15,7 +15,8 @@ steps:
     action: run_protocol
     args:
       input_val_1: 1
-      input_val_2: $example_parameter
+    parameters:
+      input_val_2: example_parameter
   - name: Transfer Plate
     node: robotarm_1
     action: Transfer

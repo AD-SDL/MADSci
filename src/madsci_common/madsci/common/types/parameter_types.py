@@ -1,60 +1,111 @@
 """Types for MADSci Worfklow parameters."""
 
-from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import MadsciBaseModel
-from pydantic.functional_validators import model_validator
+from madsci.common.types.base_types import Annotated, MadsciBaseModel
+from madsci.common.types.datapoint_types import DataPointTypeEnum
+from pydantic import Discriminator, model_validator
 
 
-class InputValue(MadsciBaseModel):
-    """container for a workflow input value"""
+class WorkflowParameter(MadsciBaseModel):
+    """Definition of a workflow parameter"""
 
     key: str
-    """The key of the parameter in the parameters dictionary"""
+    """The unique key of the parameter"""
     description: Optional[str] = None
-    """A description of the parameter file"""
+    """A description of the parameter"""
+
+
+class ParameterInputJson(WorkflowParameter):
+    """Definition of a workflow parameter input value"""
+
+    parameter_type: Literal["json_input"] = "json_input"
+    """The type of the parameter"""
     default: Optional[Any] = None
-    """The default value of a parameter, if not provided, the parameter must be provided when the workflow is run"""
+    """The default value of the parameter; if not provided, the parameter must be set when the workflow is run"""
 
 
-class InputFile(MadsciBaseModel):
-    """Input files for the workflow"""
+class ParameterInputFile(WorkflowParameter):
+    """Definition of a workflow parameter input file"""
 
-    key: str
-    """The key of the input file in the files input dictionary"""
-    description: Optional[str] = None
-    """A description of the input file"""
+    parameter_type: Literal["file_input"] = "file_input"
+    """The type of the parameter"""
 
 
-class FeedForwardValueType(str, Enum):
-    """The type of a MADSci node."""
+class ParameterFeedForwardJson(WorkflowParameter):
+    """Definition of a workflow parameter that is fed forward from a previous step (JSON value).
 
-    VALUE = "value"
-    FILE = "file"
-    OBJECT = "object"
+    Notes
+    -----
+    - Either 'step' or 'label' must be provided.
+    - If only 'step' is provided, the parameter value will be taken from the step with the matching index or key. If there are multiple datapoints, the first will be used.
+    - If only 'label' is provided, the parameter value will be taken from the most recent datapoint with the matching label.
+    - If both 'step' and 'label' are provided, the parameter value will be taken from the matching step and label.
+    """
 
-
-class FeedForwardValue(MadsciBaseModel):
-    """container for a workflow parameter"""
-
-    key: str
-    """The name of the parameter"""
-    description: Optional[str] = None
-    """A description of the input file"""
-    step_key: Optional[str] = None
-    """Key of a step in the workflow; this will use the value of a datapoint from the step with the matching name as the value for this parameter"""
-    step_index: Optional[str] = None
-    """Index of a step in the workflow; this will use the value of a datapoint from the step with the matching index as the value for this parameter"""
-    value_type: Optional[FeedForwardValueType] = None
-    """The python type of the parameter value"""
-    label: str
-    """This will use the value of a datapoint from a previous step with the matching label."""
+    parameter_type: Literal["feed_forward_json"] = "feed_forward_json"
+    """The type of the parameter"""
+    step: Optional[Union[int, str]] = None
+    """Index or key of the step to pull the parameter from."""
+    label: Optional[str] = None
+    """This must match the label of a datapoint from the step with the matching name or index. If not specified, the first datapoint will be used."""
+    data_type: Literal[DataPointTypeEnum.JSON] = DataPointTypeEnum.JSON
+    """This specifies that the parameter expects JSON data."""
 
     @model_validator(mode="after")
-    def validate_feedforward_parameters(self) -> "FeedForwardValue":
-        """Assert that at most one of step_name, step_index, and label are set."""
-        if self.step_key and self.step_index:
-            raise ValueError("Cannot set both step_name and step_index for a parameter")
-
+    def validate_feed_forward(self) -> "ParameterFeedForwardJson":
+        """Validate that either 'step' or 'label' is provided."""
+        if self.step is None and self.label is None:
+            raise ValueError("Either 'step' or 'label' must be provided.")
         return self
+
+
+class ParameterFeedForwardFile(WorkflowParameter):
+    """Definition of a workflow parameter that is fed forward from a previous step (file).
+
+    Notes
+    -----
+    - Either 'step' or 'label' must be provided.
+    - If only 'step' is provided, the parameter value will be taken from the step with the matching index or key. If there are multiple datapoints, the first will be used.
+    - If only 'label' is provided, the parameter value will be taken from the most recent datapoint with the matching label.
+    - If both 'step' and 'label' are provided, the parameter value will be taken from the matching step and label.
+    """
+
+    parameter_type: Literal["feed_forward_file"] = "feed_forward_file"
+    """The type of the parameter"""
+    step: Optional[Union[int, str]] = None
+    """Index or key of the step to pull the parameter from."""
+    label: Optional[str] = None
+    """This must match the label of a datapoint from the step with the matching name or index. If not specified, the first datapoint will be used."""
+    data_type: Literal[DataPointTypeEnum.FILE, DataPointTypeEnum.OBJECT_STORAGE] = (
+        DataPointTypeEnum.FILE
+    )
+    """This specifies that the parameter expects file or object storage data."""
+
+    @model_validator(mode="after")
+    def validate_feed_forward(self) -> "ParameterFeedForwardFile":
+        """Validate that either 'step' or 'label' is provided."""
+        if self.step is None and self.label is None:
+            raise ValueError("Either 'step' or 'label' must be provided.")
+        return self
+
+
+ParameterJsonTypes = Annotated[
+    Union[ParameterInputJson, ParameterFeedForwardJson],
+    Discriminator("parameter_type"),
+]
+
+ParameterInputFileTypes = Annotated[
+    Union[ParameterInputFile, ParameterFeedForwardFile],
+    Discriminator("parameter_type"),
+]
+
+ParameterTypes = Annotated[
+    Union[
+        ParameterInputJson,
+        ParameterInputFile,
+        ParameterFeedForwardJson,
+        ParameterFeedForwardFile,
+    ],
+    Discriminator("parameter_type"),
+]

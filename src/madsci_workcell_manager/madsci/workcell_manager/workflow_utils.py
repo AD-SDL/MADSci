@@ -15,7 +15,7 @@ from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.location_types import (
     LocationArgument,
 )
-from madsci.common.types.parameter_types import InputFile
+from madsci.common.types.parameter_types import ParameterInputFile
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -121,8 +121,8 @@ def create_workflow(
     workcell: WorkcellDefinition,
     state_handler: WorkcellStateHandler,
     data_client: DataClient,
-    input_values: Optional[dict[str, Any]] = None,
-    input_file_paths: Optional[dict[str, str]] = None,
+    json_inputs: Optional[dict[str, Any]] = None,
+    file_input_paths: Optional[dict[str, str]] = None,
 ) -> Workflow:
     """Pulls the workcell and builds a list of dictionary steps to be executed
 
@@ -153,8 +153,8 @@ def create_workflow(
     wf_dict.update(
         {
             "label": workflow_def.name,
-            "parameter_values": input_values,
-            "input_file_paths": input_file_paths,
+            "parameter_values": json_inputs,
+            "file_input_paths": file_input_paths,
         }
     )
     wf = Workflow(**wf_dict)
@@ -215,18 +215,18 @@ def prepare_workflow_step(
 
 def check_parameters(
     workflow_definition: WorkflowDefinition,
-    input_values: Optional[dict[str, Any]] = None,
+    json_inputs: Optional[dict[str, Any]] = None,
 ) -> None:
     """Check that all required parameters are provided"""
-    if input_values is not None:
-        for input_value in workflow_definition.parameters.input_values:
-            if input_value.key not in input_values:
-                if input_value.default is not None:
-                    input_values[input_value.key] = input_value.default
+    if json_inputs is not None:
+        for json_input in workflow_definition.parameters.json_inputs:
+            if json_input.key not in json_inputs:
+                if json_input.default is not None:
+                    json_inputs[json_input.key] = json_input.default
                 else:
-                    raise ValueError(f"Required value {input_value.key} not provided")
-    for ffv in workflow_definition.parameters.feed_forward_values:
-        if ffv.key in input_values:
+                    raise ValueError(f"Required value {json_input.key} not provided")
+    for ffv in workflow_definition.parameters.feed_forward:
+        if ffv.key in json_inputs:
             raise ValueError(
                 f"{ffv.key} is a Feed Forward Value and will be calculated during execution"
             )
@@ -236,17 +236,17 @@ def prepare_workflow_files(
     step: Step, workflow: Workflow, data_client: DataClient
 ) -> Step:
     """Get workflow files ready to upload"""
-    input_file_ids = workflow.input_file_ids
+    file_input_ids = workflow.file_input_ids
     for file, definition in step.files.items():
         suffixes = []
         if type(definition) is str:
-            datapoint_id = input_file_ids[definition]
-            if definition in workflow.input_file_paths:
-                suffixes = Path(workflow.input_file_paths[definition]).suffixes
-        elif type(definition) is InputFile:
-            datapoint_id = input_file_ids[definition.key]
-            if definition.key in workflow.input_file_paths:
-                suffixes = Path(workflow.input_file_paths[definition.key]).suffixes
+            datapoint_id = file_input_ids[definition]
+            if definition in workflow.file_input_paths:
+                suffixes = Path(workflow.file_input_paths[definition]).suffixes
+        elif type(definition) is ParameterInputFile:
+            datapoint_id = file_input_ids[definition.key]
+            if definition.key in workflow.file_input_paths:
+                suffixes = Path(workflow.file_input_paths[definition.key]).suffixes
 
         with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
             data_client.save_datapoint_value(datapoint_id, f.name)
@@ -295,27 +295,27 @@ def save_workflow_files(
 ) -> Workflow:
     """Saves the files to the workflow run directory,
     and updates the step files to point to the new location"""
-    input_file_paths = workflow.input_file_paths
-    input_files = {}
+    file_input_paths = workflow.file_input_paths
+    file_inputs = {}
 
     for file in files:
-        input_files[file.filename] = file.file
-    input_file_ids = {}
-    for file in workflow.parameters.input_files:
-        if file.key not in input_files:
+        file_inputs[file.filename] = file.file
+    file_input_ids = {}
+    for file in workflow.parameters.file_inputs:
+        if file.key not in file_inputs:
             raise ValueError(f"Missing file: {file.key}")
-        path = Path(input_file_paths[file.key])
+        path = Path(file_input_paths[file.key])
         suffixes = path.suffixes
         with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
-            f.write(input_files[file.key].read())
+            f.write(file_inputs[file.key].read())
             datapoint = FileDataPoint(
                 label=file.key,
                 ownership_info=workflow.ownership_info,
                 path=Path(f.name),
             )
             datapoint_id = data_client.submit_datapoint(datapoint).datapoint_id
-            input_file_ids[file.key] = datapoint_id
-    workflow.input_file_ids = input_file_ids
+            file_input_ids[file.key] = datapoint_id
+    workflow.file_input_ids = file_input_ids
     return workflow
 
 

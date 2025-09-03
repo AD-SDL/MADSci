@@ -3,7 +3,10 @@
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.node_types import Node
-from madsci.common.types.parameter_types import FeedForwardValue, InputValue
+from madsci.common.types.parameter_types import (
+    ParameterFeedForwardJson,
+    ParameterInputJson,
+)
 from madsci.common.types.step_types import StepDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -240,7 +243,9 @@ def test_check_parameter_missing() -> None:
     """Test parameter insertion with missing required parameter."""
     workflow = WorkflowDefinition(
         name="Test",
-        parameters=WorkflowParameters(input_values=[InputValue(key="required_param")]),
+        parameters=WorkflowParameters(
+            json_inputs=[ParameterInputJson(key="required_param")]
+        ),
         steps=[
             StepDefinition(
                 name="step1",
@@ -262,9 +267,9 @@ def test_check_parameter_conflict() -> None:
     workflow = WorkflowDefinition(
         name="Test",
         parameters=WorkflowParameters(
-            feed_forward_values=[
-                FeedForwardValue(
-                    key="conflict_param", label="some_label", step_key="step1"
+            feed_forward=[
+                ParameterFeedForwardJson(
+                    key="conflict_param", label="some_label", step="step1"
                 )
             ]
         ),

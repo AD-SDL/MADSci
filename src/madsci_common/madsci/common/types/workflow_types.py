@@ -8,14 +8,16 @@ from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.parameter_types import (
-    FeedForwardValue,
-    InputFile,
-    InputValue,
+    ParameterFeedForwardFile,
+    ParameterFeedForwardJson,
+    ParameterInputFile,
+    ParameterInputJson,
+    ParameterTypes,
 )
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
-from pydantic import Field, computed_field, field_validator
+from pydantic import AliasChoices, Field, computed_field, field_validator
 from pydantic.functional_validators import model_validator
 
 
@@ -99,27 +101,34 @@ class WorkflowStatus(MadsciBaseModel):
 class WorkflowParameters(MadsciBaseModel):
     """container for all of the workflow parameters"""
 
-    input_values: list[InputValue] = Field(default_factory=list)
+    json_inputs: list[ParameterInputJson] = Field(
+        default_factory=list,
+        alias=AliasChoices("json_inputs", "value_inputs", "json", "inputs"),
+    )
     """JSON serializable value inputs to the workflow"""
 
-    feed_forward_values: list[FeedForwardValue] = Field(default_factory=list)
-    """Parameters based on datapoints generated during execution of the workflow"""
+    file_inputs: list[ParameterInputFile] = Field(
+        default_factory=list, alias=AliasChoices("file_inputs", "files")
+    )
+    """Required file inputs to the workflow"""
 
-    input_files: list[InputFile] = Field(default_factory=list)
-    """required file inputs to the workflow"""
+    feed_forward: list[Union[ParameterFeedForwardJson, ParameterFeedForwardFile]] = (
+        Field(default_factory=list)
+    )
+    """Parameters based on datapoints generated during execution of the workflow"""
 
 
 class WorkflowMetadata(MadsciBaseModel, extra="allow"):
     """Metadata container"""
 
     author: Optional[str] = None
-    """Who wrote this object"""
+    """Who wrote this workflow definition"""
     description: Optional[str] = None
-    """Description of the object"""
+    """Description of the workflow definition"""
     version: Union[float, str] = ""
-    """Version of the object"""
+    """Version of the workflow definition"""
     ownership_info: Optional[OwnershipInfo] = None
-    """OwnershipInfo of the workflow defintion"""
+    """OwnershipInfo for this workflow definition"""
 
 
 class WorkflowDefinition(MadsciBaseModel):
@@ -131,8 +140,10 @@ class WorkflowDefinition(MadsciBaseModel):
     """ID of the workflow definition"""
     definition_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
-    parameters: WorkflowParameters = Field(default_factory=WorkflowParameters)
-    """the parameterized inputs to the workflow"""
+    parameters: Union[WorkflowParameters, list[ParameterTypes]] = Field(
+        default_factory=WorkflowParameters
+    )
+    """Parameters used in the workflow"""
 
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
@@ -155,56 +166,139 @@ class WorkflowDefinition(MadsciBaseModel):
                     labels.append(step.data_labels[key])
         return v
 
-    def move_inline_files(self) -> None:
-        """Ensure that the names of the arguments and files are unique"""
-
-        inline_inputs = []
-        for step in self.steps:
-            if step.files:
-                for file in step.files.values():
-                    if type(file) is InputFile:
-                        inline_inputs.append(file)
-                    elif type(file) is str and not (
-                        len(
-                            [
-                                input_file
-                                for input_file in self.parameters.input_files
-                                if input_file.key == file
-                            ]
-                        )
-                        > 0
-                        or len(
-                            [
-                                ffv
-                                for ffv in self.parameters.feed_forward_values
-                                if ffv.key == file
-                            ]
-                        )
-                        > 0
-                    ):
-                        raise ValueError(
-                            "Input Files referenced by key inline must be defined as part of the workflow file parameters."
-                        )
-        self.parameters.input_files = self.parameters.input_files + inline_inputs
+    @field_validator("parameters", mode="after")
+    @classmethod
+    def promote_parameters_list_to_data_model(cls, v: Any) -> Any:
+        """Promote parameters to data model form"""
+        if isinstance(v, list):
+            new_parameters = WorkflowParameters()
+            for param in v:
+                if isinstance(param, ParameterInputJson):
+                    new_parameters.json_inputs.append(param)
+                elif isinstance(param, ParameterInputFile):
+                    new_parameters.file_inputs.append(param)
+                elif isinstance(
+                    param,
+                    (
+                        ParameterFeedForwardJson,
+                        ParameterFeedForwardFile,
+                    ),
+                ):
+                    new_parameters.feed_forward.append(param)
+            return new_parameters
+        return v
 
     @model_validator(mode="after")
-    def ensure_input_label_uniqueness(self) -> Any:
-        """ensure that all parameter labels are unique"""
-        self.move_inline_files()
+    def promote_inline_step_parameters(self) -> Any:
+        """Promote inline step parameters to workflow level parameters."""
+        # Ensure parameters is a WorkflowParameters object
+        if isinstance(self.parameters, list):
+            raise ValueError(
+                "Parameters should be WorkflowParameters object by this point"
+            )
+
+        promoted_params = {}
+
+        # Process each step to find inline parameters
+        for step in self.steps:
+            # Check step files field for inline file parameters
+            for file_key, file_value in list(step.files.items()):
+                if isinstance(
+                    file_value,
+                    (ParameterInputFile, ParameterFeedForwardFile),
+                ):
+                    param_key = file_value.key
+                    promoted_params[param_key] = file_value
+                    step.files[file_key] = param_key
+
+            if step.parameters:
+                self._extract_inline_params_from_step_fields(step, promoted_params)
+                self._extract_inline_params_from_step_dicts(step, promoted_params)
+
+        # Add promoted parameters to workflow parameters
+        self._add_promoted_params_to_workflow(promoted_params)
+
+        return self
+
+    def _extract_inline_params_from_step_fields(
+        self, step: StepDefinition, promoted_params: dict[str, ParameterTypes]
+    ) -> None:
+        """Extract inline parameters from step fields."""
+        param_types = (
+            ParameterInputJson,
+            ParameterFeedForwardJson,
+            ParameterFeedForwardFile,
+            ParameterInputFile,
+        )
+
+        for field_name, field_value in [
+            ("name", step.parameters.name),
+            ("description", step.parameters.description),
+            ("action", step.parameters.action),
+            ("node", step.parameters.node),
+        ]:
+            if isinstance(field_value, param_types):
+                param_key = field_value.key
+                promoted_params[param_key] = field_value
+                setattr(step.parameters, field_name, param_key)
+
+    def _extract_inline_params_from_step_dicts(
+        self, step: StepDefinition, promoted_params: dict[str, ParameterTypes]
+    ) -> None:
+        """Extract inline parameters from step args and locations dicts."""
+        param_types = (
+            ParameterInputJson,
+            ParameterFeedForwardJson,
+            ParameterFeedForwardFile,
+            ParameterInputFile,
+        )
+
+        # Check args dict
+        for arg_key, arg_value in list(step.parameters.args.items()):
+            if isinstance(arg_value, param_types):
+                param_key = arg_value.key
+                promoted_params[param_key] = arg_value
+                step.parameters.args[arg_key] = param_key
+
+        # Check locations dict
+        for loc_key, loc_value in list(step.parameters.locations.items()):
+            if isinstance(loc_value, param_types):
+                param_key = loc_value.key
+                promoted_params[param_key] = loc_value
+                step.parameters.locations[loc_key] = param_key
+
+    def _add_promoted_params_to_workflow(
+        self, promoted_params: dict[str, ParameterTypes]
+    ) -> None:
+        """Add promoted parameters to workflow parameters."""
+        for param in promoted_params.values():
+            if isinstance(param, ParameterInputJson):
+                self.parameters.json_inputs.append(param)
+            elif isinstance(param, ParameterInputFile):
+                self.parameters.file_inputs.append(param)
+            elif isinstance(
+                param,
+                (ParameterFeedForwardJson, ParameterFeedForwardFile),
+            ):
+                self.parameters.feed_forward.append(param)
+
+    @model_validator(mode="after")
+    def ensure_param_key_uniqueness(self) -> Any:
+        """Ensure that all parameter keys are unique"""
         labels = []
         error = ValueError("Input value keys must be unique across workflow definition")
-        for input_value in self.parameters.input_values:
-            if input_value.key in labels:
+        for json_input in self.parameters.json_inputs:
+            if json_input.key in labels:
                 raise error
-            labels.append(input_value.key)
-        for ffv in self.parameters.feed_forward_values:
+            labels.append(json_input.key)
+        for ffv in self.parameters.feed_forward:
             if ffv.key in labels:
                 raise error
             labels.append(ffv.key)
-        for input_file in self.parameters.input_files:
-            if input_file.key in labels:
+        for file_input in self.parameters.file_inputs:
+            if file_input.key in labels:
                 raise error
-            labels.append(input_file.key)
+            labels.append(file_input.key)
         return self
 
 
@@ -232,9 +326,9 @@ class Workflow(WorkflowDefinition):
     """Processed Steps of the flow"""
     parameter_values: dict[str, Any] = Field(default_factory=dict)
     """parameter values used in this workflow"""
-    input_file_paths: dict[str, str] = Field(default_factory=dict)
+    file_input_paths: dict[str, str] = Field(default_factory=dict)
     """The paths to the original input files on the experiment computer, used for records purposes"""
-    input_file_ids: dict[str, str] = Field(default_factory=dict)
+    file_input_ids: dict[str, str] = Field(default_factory=dict)
     """The datapoint ids of the input files """
     ownership_info: OwnershipInfo = Field(default_factory=get_current_ownership_info)
     """Ownership information for the workflow run"""

@@ -72,7 +72,7 @@ class WorkcellClient:
         self.logger = event_client or EventClient()
         if not self.workcell_server_url:
             raise ValueError(
-                "Workcell server URL is not provided and cannot be found in the context."
+                "Workcell server URL was not provided and cannot be found in the context."
             )
         self.working_directory = Path(working_directory).expanduser()
 
@@ -201,8 +201,8 @@ class WorkcellClient:
     def start_workflow(
         self,
         workflow_definition: Union[PathLike, WorkflowDefinition],
-        input_values: Optional[dict[str, Any]] = None,
-        input_files: Optional[dict[str, PathLike]] = None,
+        json_inputs: Optional[dict[str, Any]] = None,
+        file_inputs: Optional[dict[str, PathLike]] = None,
         await_completion: bool = True,
         prompt_on_error: bool = True,
         raise_on_failed: bool = True,
@@ -250,14 +250,14 @@ class WorkcellClient:
                 )
         workflow_definition = self.get_workflow_definition(workflow_definition_id)
         files = {}
-        if input_files:
-            files = self.make_paths_absolute(input_files)
+        if file_inputs:
+            files = self.make_paths_absolute(file_inputs)
         url = f"{self.workcell_server_url}workflow"
         data = {
             "workflow_definition_id": workflow_definition_id,
-            "input_values": json.dumps(input_values) if input_values else None,
+            "json_inputs": json.dumps(json_inputs) if json_inputs else None,
             "ownership_info": get_current_ownership_info().model_dump_json(),
-            "input_file_paths": json.dumps(input_files) if input_files else None,
+            "file_input_paths": json.dumps(file_inputs) if file_inputs else None,
         }
         files = {
             (
@@ -311,8 +311,8 @@ class WorkcellClient:
     def submit_workflow_sequence(
         self,
         workflows: list[str],
-        input_values: list[dict[str, Any]] = [],
-        input_files: list[dict[str, PathLike]] = [],
+        json_inputs: list[dict[str, Any]] = [],
+        file_inputs: list[dict[str, PathLike]] = [],
     ) -> list[Workflow]:
         """
         Submit a sequence of workflows to run in order.
@@ -330,12 +330,12 @@ class WorkcellClient:
             A list of submitted workflow objects.
         """
         wfs = []
-        input_values, input_files = check_parameters_lists(
-            workflows, input_values, input_files
+        json_inputs, file_inputs = check_parameters_lists(
+            workflows, json_inputs, file_inputs
         )
         for i in range(len(workflows)):
             wf = self.submit_workflow(
-                workflows[i], input_values[i], input_files[i], await_completion=True
+                workflows[i], json_inputs[i], file_inputs[i], await_completion=True
             )
             wfs.append(wf)
         return wfs
@@ -343,8 +343,8 @@ class WorkcellClient:
     def submit_workflow_batch(
         self,
         workflows: list[str],
-        input_values: list[dict[str, Any]] = [],
-        input_files: list[dict[str, PathLike]] = [],
+        json_inputs: list[dict[str, Any]] = [],
+        file_inputs: list[dict[str, PathLike]] = [],
     ) -> list[Workflow]:
         """
         Submit a batch of workflows to run concurrently.
@@ -362,12 +362,12 @@ class WorkcellClient:
             A list of completed workflow objects.
         """
         id_list = []
-        input_values, input_files = check_parameters_lists(
-            workflows, input_values, input_files
+        json_inputs, file_inputs = check_parameters_lists(
+            workflows, json_inputs, file_inputs
         )
         for i in range(len(workflows)):
             response = self.submit_workflow(
-                workflows[i], input_values[i], input_files[i], await_completion=False
+                workflows[i], json_inputs[i], file_inputs[i], await_completion=False
             )
             id_list.append(response.workflow_id)
         finished = False
