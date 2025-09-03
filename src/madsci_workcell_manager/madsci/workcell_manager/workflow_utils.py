@@ -22,8 +22,8 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.workcell_manager import workcell_actions
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
+from madsci.workcell_manager.workcell_actions import workcell_action_dict
 
 
 def validate_node_names(
@@ -44,8 +44,8 @@ def validate_node_names(
 
 def validate_workcell_action_step(step: Step) -> tuple[bool, str]:
     """Check if a step calling a workcell action is  valid"""
-    if step.action in workcell_actions:
-        action_callable = workcell_actions[step.action]
+    if step.action in workcell_action_dict:
+        action_callable = workcell_action_dict[step.action]
         signature = inspect.signature(action_callable)
         for name, parameter in signature.parameters.items():
             if name not in step.args and parameter.default is None:

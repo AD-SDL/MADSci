@@ -94,7 +94,7 @@ def sample_workflow_with_files() -> WorkflowDefinition:
                 action="test_action",
                 files={
                     "input_file": {
-                        "input_file_key": "input_file",
+                        "key": "input_file",
                         "description": "An input file",
                     }
                 },  # type: ignore
@@ -140,42 +140,47 @@ def test_client(
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     """Fixture for WorkcellClient patched to use TestClient."""
-    with patch("madsci.client.workcell_client.requests") as mock_requests:
 
-        def add_ok_property(resp: Response) -> Response:
-            if not hasattr(resp, "ok"):
-                resp.ok = resp.status_code < 400
-            return resp
+    def add_ok_property(resp: Response) -> Response:
+        if not hasattr(resp, "ok"):
+            resp.ok = resp.status_code < 400
+        return resp
 
-        def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.post(*args, **kwargs)
-            return add_ok_property(resp)
+    def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.post(*args, **kwargs)
+        return add_ok_property(resp)
 
-        mock_requests.post.side_effect = post_no_timeout
+    def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.get(*args, **kwargs)
+        return add_ok_property(resp)
 
-        def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.get(*args, **kwargs)
-            return add_ok_property(resp)
+    def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.delete(*args, **kwargs)
+        return add_ok_property(resp)
 
-        mock_requests.get.side_effect = get_no_timeout
+    def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.put(*args, **kwargs)
+        return add_ok_property(resp)
 
-        def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.delete(*args, **kwargs)
-            return add_ok_property(resp)
+    # Create the client
+    workcell_client = WorkcellClient(workcell_server_url="http://testserver")
 
-        mock_requests.delete.side_effect = delete_no_timeout
+    # Mock both sessions to use the test client
+    workcell_client.session.get = get_no_timeout
+    workcell_client.session.post = post_no_timeout
+    workcell_client.session.delete = delete_no_timeout
+    workcell_client.session.put = put_no_timeout
 
-        def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.put(*args, **kwargs)
-            return add_ok_property(resp)
+    workcell_client.session_no_retry.get = get_no_timeout
+    workcell_client.session_no_retry.post = post_no_timeout
+    workcell_client.session_no_retry.delete = delete_no_timeout
+    workcell_client.session_no_retry.put = put_no_timeout
 
-        mock_requests.put.side_effect = put_no_timeout
-
-        yield WorkcellClient(workcell_server_url="http://testserver")
+    yield workcell_client
 
 
 def test_get_nodes(client: WorkcellClient) -> None:

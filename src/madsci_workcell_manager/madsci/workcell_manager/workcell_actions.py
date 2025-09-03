@@ -11,4 +11,4 @@ def wait(seconds: int) -> ActionResult:
     return ActionSucceeded()
 
 
-workcell_actions = {"wait": wait}
+workcell_action_dict = {"wait": wait}

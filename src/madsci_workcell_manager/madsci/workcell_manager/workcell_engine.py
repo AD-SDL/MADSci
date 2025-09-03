@@ -25,7 +25,7 @@ from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import Workflow
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
-from madsci.workcell_manager.workcell_actions import workcell_actions
+from madsci.workcell_manager.workcell_actions import workcell_action_dict
 from madsci.workcell_manager.workcell_utils import (
     find_node_client,
 )
@@ -239,7 +239,7 @@ class Engine:
 
     def run_workcell_action(self, step: Step) -> Step:
         """Runs one of the built-in workcell actions"""
-        action_callable = workcell_actions[step.action]
+        action_callable = workcell_action_dict[step.action]
         step.result = action_callable(**step.args)
         step.status = step.result.status
         return step
