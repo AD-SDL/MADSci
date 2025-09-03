@@ -139,6 +139,107 @@ class TransferNode(RestNode):
             except Exception as e:
                 self.logger.log_error(f"Transfer action failed: {e}")
                 return ActionFailed(errors=[f"Transfer execution error: {str(e)}"])
+    @action(
+        name="transfer_resource",
+        description="Transfer a resource by ID to a target location"
+    )
+    def transfer_resource(
+        self,
+        source_resource: Annotated[LocationArgument, "ID of the resource to transfer"],
+        target: Annotated[LocationArgument, "Target location to transfer to"],
+        **kwargs
+    ) -> ActionResult:
+        """Transfer a resource by ID to a target location."""
+        
+        if not self.resource_client:
+            return ActionFailed(errors=["Resource client not available"])
+        
+        # Acquire lock for this transfer operation
+        with self.reservation_lock:
+            try:
+                resource_id = source_resource.resource_id
+                self.logger.log_info(f"Starting resource transfer: {resource_id} -> {target.location_name}")
+                
+                # Get the resource
+                try:
+                    resource = self.resource_client.get_resource(resource_id)
+                except Exception as e:
+                    return ActionFailed(errors=[f"Could not find resource {resource_id}: {str(e)}"])
+                
+                # Check if resource has a parent (location)
+                if not resource.parent_id:
+                    return ActionFailed(errors=[f"Resource {resource_id} has no parent location - cannot determine source"])
+                
+                # Get the parent resource (which should be a location)
+                try:
+                    parent_resource = self.resource_client.get_resource(resource.parent_id)
+                    source_location_name = parent_resource.resource_name
+                except Exception as e:
+                    return ActionFailed(errors=[f"Could not find parent location for resource {resource_id}: {str(e)}"])
+                
+                self.logger.log_info(f"Resource {resource_id} found at location '{source_location_name}', transferring to '{target.location_name}'")
+                print(vars(target))
+                # Create source LocationArgument
+                source_location = LocationArgument(
+                    location=source_resource.location,
+                    location_name=source_location_name,
+                    resource_id=parent_resource.resource_id
+                )
+                
+                # Create transfer step
+                transfer_step = Step(
+                    name=f"Transfer resource {resource_id}: {source_location_name} -> {target.location_name}",
+                    action="transfer",
+                    node="",  # Let transfer manager choose path
+                    locations={"source": source_location, "target": target},
+                    args=kwargs
+                )
+                
+                # Expand transfer step into resolved steps
+                resolved_steps = self.transfer_manager.expand_transfer_step(transfer_step)
+                
+                self.logger.log_info(f"Resource transfer expanded to {len(resolved_steps)} resolved steps")
+                
+                # Create child workflow definition
+                child_workflow_def = WorkflowDefinition(
+                    name=f"Resource Transfer: {resource_id} to {target.location_name}",
+                    steps=resolved_steps,
+                    parameters=[]
+                )
+                
+                # Submit child workflow and wait for completion
+                child_workflow = self.workcell_client.submit_workflow(
+                    workflow=child_workflow_def,
+                    parameters={},
+                    await_completion=True
+                )
+                
+                # Check child workflow result
+                if child_workflow.status.completed:
+                    self.logger.log_info(f"Resource transfer completed successfully: {child_workflow.workflow_id}")
+                    return ActionSucceeded(data={"resolved_steps_count": len(resolved_steps)})
+                    
+                elif child_workflow.status.failed:
+                    self.logger.log_error(f"Resource transfer workflow failed: {child_workflow.workflow_id}")
+                    return ActionFailed(
+                        errors=[f"Resource transfer workflow failed: {child_workflow.status.errors}"]
+                    )
+                    
+                elif child_workflow.status.cancelled:
+                    self.logger.log_warning(f"Resource transfer workflow cancelled: {child_workflow.workflow_id}")
+                    return ActionFailed(
+                        errors=["Resource transfer workflow was cancelled"]
+                    )
+                    
+                else:
+                    self.logger.log_error(f"Resource transfer workflow ended unexpectedly: {child_workflow.workflow_id}")
+                    return ActionFailed(
+                        errors=["Resource transfer workflow ended in unexpected state"]
+                    )
+                    
+            except Exception as e:
+                self.logger.log_error(f"Resource transfer action failed: {e}")
+                return ActionFailed(errors=[f"Resource transfer execution error: {str(e)}"])
 
     @action(
         name="get_transfer_options",
