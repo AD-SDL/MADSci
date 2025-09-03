@@ -7,12 +7,20 @@ from madsci.common.types.resource_types import (
     Pool,
     Queue,
     Stack,
+    Slot,
 )
 
 # Initialize the ResourcesClient with the database URL
 base_url = "http://localhost:8003"
 client = ResourceClient(url=base_url)
-
+plate = Asset(resource_name="plate", resource_class="asset")
+location1 = Slot(resource_name="location_1", resource_class="slot")
+client.add_resource(plate)
+client.add_resource(location1)
+client.push(location1, plate)
+a = client.get_resource(location1)
+# print(a.parent_id)
+# print(plate.resource_id)
 # stack = Stack(
 #     resource_name="stack", resource_class="stack", capacity=10, ownership=None
 # )
@@ -58,31 +66,31 @@ client = ResourceClient(url=base_url)
 # consumable = client.add_resource(consumable)
 
 # # Create and add a pool resource with the consumable as a child
-pool = Pool(
-    resource_name="Vial_1",
-    resource_class="pool",
-    capacity=500.0,
-    # children={"Water": consumable},
-)
-pool = client.add_resource(pool)
+# pool = Pool(
+#     resource_name="Vial_1",
+#     resource_class="pool",
+#     capacity=500.0,
+#     # children={"Water": consumable},
+# )
+# pool = client.add_resource(pool)
 
 # # Perform operations on the pool
-print(f"Initial Pool Quantity: {pool.quantity}")
-pool = client.increase_quantity(pool, 50.0)
-print(f"After Increase: {pool.quantity}")
+# print(f"Initial Pool Quantity: {pool.quantity}")
+# pool = client.increase_quantity(pool, 50.0)
+# print(f"After Increase: {pool.quantity}")
 
-pool = client.decrease_quantity(pool, 20.0)
-print(f"After Decrease: {pool.quantity}")
+# pool = client.decrease_quantity(pool, 20.0)
+# print(f"After Decrease: {pool.quantity}")
 
-pool = client.fill(pool)
-print(f"After Fill: {pool.quantity}")
+# pool = client.fill(pool)
+# print(f"After Fill: {pool.quantity}")
 
-pool = client.empty(pool)
-print(f"After Empty: {pool.quantity}")
+# pool = client.empty(pool)
+# print(f"After Empty: {pool.quantity}")
 
 # Add another pool resource
-pool1 = Pool(resource_name="Pool1", resource_class="pool", capacity=100, quantity=50)
-pool1 = client.add_resource(pool1)
+# pool1 = Pool(resource_name="Pool1", resource_class="pool", capacity=100, quantity=50)
+# pool1 = client.add_resource(pool1)
 
 # # Create and add a plate resource with an initial child pool
 # plate = Collection(

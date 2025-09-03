@@ -44,6 +44,27 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+  transfer_resource:
+    name: transfer_resource
+    description: Transfer a resource by ID to a target location
+    args: {}
+    locations:
+      source_resource:
+        name: source_resource
+        description: ID of the resource to transfer
+        argument_type: location
+        required: true
+        default: null
+      target:
+        name: target
+        description: Target location to transfer to
+        argument_type: location
+        required: true
+        default: null
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
   get_transfer_options:
     name: get_transfer_options
     description: Get available transfer path options between two locations
