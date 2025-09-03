@@ -2,7 +2,9 @@
 
 import yaml
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+
+from madsci.client.event_client import EventClient
 from pydantic import BaseModel
 from madsci.common.types.step_types import Step
 from madsci.common.utils import new_ulid_str
@@ -28,17 +30,23 @@ class TransferManagerConfig(BaseModel):
 class TransferManager:
     """Main Transfer Manager with graph pathfinding."""
     
-    def __init__(self, config):
+    def __init__(
+        self, 
+        config: TransferManagerConfig, 
+        logger: Optional[EventClient] = None,
+    )->None:
+        """Initialize Transfer Manager with configuration."""
         self.config = config
+        self.logger = logger or EventClient()
         self.robot_definitions: Dict[str, Dict] = {}
         self.location_constraints: Dict[str, Dict] = {}
         self.transfer_graph = TransferGraph()
-        
-        print("Loading configuration...")
+       
+        self.logger.info("Loading configuration...")
         self._load_configuration()
-        print("Building transfer graph...")
+        self.logger.info("Building transfer graph...")
         self._build_transfer_graph()
-        print("Transfer Manager initialized successfully!")
+        self.logger.info("Transfer Manager initialized successfully!")
     
     def _load_configuration(self):
         """Load configuration from unified YAML file."""
@@ -56,8 +64,8 @@ class TransferManager:
             with open(self.config.location_constraints_path, 'r') as f:
                 self.location_constraints = yaml.safe_load(f)
         
-        print(f"Loaded {len(self.robot_definitions)} robot definitions: {list(self.robot_definitions.keys())}")
-        print(f"Loaded {len(self.location_constraints)} location constraints: {list(self.location_constraints.keys())}")
+        self.logger.info(f"Loaded {len(self.robot_definitions)} robot definitions: {list(self.robot_definitions.keys())}")
+        self.logger.info(f"Loaded {len(self.location_constraints)} location constraints: {list(self.location_constraints.keys())}")
     
     def _build_transfer_graph(self):
         """Build the transfer graph from configuration."""
@@ -69,7 +77,7 @@ class TransferManager:
         total_edges = 0
         for robot_name, robot_def in self.robot_definitions.items():
             accessible_locations = self._get_robot_accessible_locations(robot_name)
-            print(f"Robot '{robot_name}' can access: {accessible_locations}")
+            self.logger.info(f"Robot '{robot_name}' can access: {accessible_locations}")
             
             # Create edges between all accessible location pairs
             for source in accessible_locations:
@@ -79,7 +87,7 @@ class TransferManager:
                         self.transfer_graph.add_edge(source, target, robot_name, cost)
                         total_edges += 1
         
-        print(f"Created {total_edges} total edges in transfer graph")
+        self.logger.info(f"Created {total_edges} total edges in transfer graph")
     
     def _get_robot_accessible_locations(self, robot_name: str) -> List[str]:
         """Get locations a robot can access."""
@@ -115,13 +123,13 @@ class TransferManager:
         Main method: Expand a transfer step into concrete workflow steps.
         This is what the workcell manager calls.
         """
-        print(f"\n=== EXPAND_TRANSFER_STEP ===")
-        print(f"Input step: node='{step.node}', action='{step.action}'")
-        print(f"Locations: {step.locations}")
+        self.logger.info(f"\n=== EXPAND_TRANSFER_STEP ===")
+        self.logger.info(f"Input step: node='{step.node}', action='{step.action}'")
+        self.logger.info(f"Locations: {step.locations}")
         
         # Only process transfer steps
         if step.action != "transfer":
-            print("Not a transfer step - returning as-is")
+            self.logger.warning("Not a transfer step - returning as-is")
             return [step]
         
         # Extract source and target - handle LocationArgument objects
@@ -132,16 +140,16 @@ class TransferManager:
         source = self._extract_location_name(source_raw)
         target = self._extract_location_name(target_raw)
         
-        print(f"Source: '{source}', Target: '{target}'")
+        self.logger.info(f"Source: '{source}', Target: '{target}'")
         
         if not source or not target:
             raise ValueError(f"Transfer step missing source or target: {step.name}")
         
         # Check if specific robot requested and can do direct transfer
         if step.node and step.node.strip() and step.node in self.robot_definitions:
-            print(f"Checking if robot '{step.node}' can do direct transfer...")
+            self.logger.info(f"Checking if robot '{step.node}' can do direct transfer...")
             if self._can_robot_transfer(step.node, source, target):
-                print(f"Using direct transfer with robot '{step.node}'")
+                self.logger.info(f"Using direct transfer with robot '{step.node}'")
                 concrete_step = self._build_transfer_step(
                     source=source,
                     target=target,
@@ -152,9 +160,9 @@ class TransferManager:
                 )
                 return [concrete_step]
             else:
-                print(f"Robot '{step.node}' cannot do direct transfer - using graph")
+                self.logger.warning(f"Robot '{step.node}' cannot do direct transfer - using graph")
         else:
-            print("No specific robot requested - using graph pathfinding")
+            self.logger.warning("No specific robot requested - using graph pathfinding")
 
         # Use graph pathfinding
         transfer_path = self.transfer_graph.find_shortest_path(source, target)
@@ -162,9 +170,9 @@ class TransferManager:
         if not transfer_path:
             raise ValueError(f"No transfer path found from {source} to {target}")
         
-        print(f"\nFound path with {len(transfer_path)} hops:")
+        self.logger.info(f"\nFound path with {len(transfer_path)} hops:")
         for i, hop in enumerate(transfer_path):
-            print(f"  Hop {i+1}: {hop['source']} -> {hop['target']} via '{hop['robot']}'")
+            self.logger.info(f"  Hop {i+1}: {hop['source']} -> {hop['target']} via '{hop['robot']}'")
         
         # Build concrete steps
         concrete_steps = []
@@ -185,7 +193,7 @@ class TransferManager:
             concrete_step.name = f"Transfer {i+1}: {hop['source']} -> {hop['target']} via {robot_name}"
             concrete_steps.append(concrete_step)
         
-        print(f"Generated {len(concrete_steps)} concrete steps")
+        self.logger.info(f"Generated {len(concrete_steps)} concrete steps")
         return concrete_steps
     
     def _can_robot_transfer(self, robot_name: str, source: str, target: str) -> bool:
@@ -208,7 +216,7 @@ class TransferManager:
         original_locations: Dict = None
     ) -> Step:
         """Build a concrete transfer step with merged parameters."""
-        print(f"Building step for {source} -> {target} via {robot_name}")
+        self.logger.log_info(f"Building step for {source} -> {target} via {robot_name}")
         
         # Start with robot's template
         step_template = robot_definition["default_step_template"].copy()
@@ -234,24 +242,26 @@ class TransferManager:
             step_template['args'] = {}
         step_template['args'].update(merged_args)
         
-        # Handle locations - use original LocationArgument objects if available
+        # Handle locations - use original LocationArgument objects and update with robot-specific lookup values
         if original_locations:
             # For multi-hop transfers, we need to map the source/target names back to LocationArgument objects
             step_locations = {}
             
-            # Find matching LocationArgument objects
+            # Find matching LocationArgument objects and update with robot-specific coordinates
             for key, location_obj in original_locations.items():
                 location_name = self._extract_location_name(location_obj)
                 if location_name == source:
-                    step_locations['source'] = location_obj
+                    updated_location = self._update_location_with_lookup(location_obj, source, robot_name)
+                    step_locations['source'] = updated_location
                 elif location_name == target:
-                    step_locations['target'] = location_obj
+                    updated_location = self._update_location_with_lookup(location_obj, target, robot_name)
+                    step_locations['target'] = updated_location
             
-            # If we couldn't find matching LocationArgument objects, fall back to names
+            # If we couldn't find matching LocationArgument objects, create new ones with lookup values
             if 'source' not in step_locations:
-                step_locations['source'] = source
+                step_locations['source'] = self._create_location_argument_with_lookup(source, robot_name)
             if 'target' not in step_locations:
-                step_locations['target'] = target
+                step_locations['target'] = self._create_location_argument_with_lookup(target, robot_name)
                 
             step_template['locations'] = step_locations
         
@@ -260,7 +270,51 @@ class TransferManager:
         concrete_step.step_id = new_ulid_str()
         
         return concrete_step
+    def _update_location_with_lookup(self, location_obj: Any, location_name: str, robot_name: str) -> Any:
+        """Update a LocationArgument object with robot-specific lookup coordinates."""
+        # Create a copy of the location object to avoid modifying the original
+        if hasattr(location_obj, 'model_copy'):
+            updated_location = location_obj.model_copy()
+        else:
+            # Fallback for objects without model_copy
+            updated_location = location_obj
+        
+        # Get lookup coordinates for this robot and location
+        lookup_coordinates = self._get_lookup_coordinates(location_name, robot_name)
+        
+        if lookup_coordinates is not None:
+            updated_location.location = lookup_coordinates
+            print(f"Updated {location_name} coordinates for {robot_name}: {lookup_coordinates}")
+        else:
+            print(f"No lookup coordinates found for {location_name} with robot {robot_name}")
+        
+        return updated_location
     
+    def _create_location_argument_with_lookup(self, location_name: str, robot_name: str) -> Dict:
+        """Create a new LocationArgument with robot-specific lookup coordinates."""
+        lookup_coordinates = self._get_lookup_coordinates(location_name, robot_name)
+        
+        return {
+            "location_name": location_name,
+            "location": lookup_coordinates,
+            "resource_id": None  # Will be filled by workcell if needed
+        }
+    
+    def _get_lookup_coordinates(self, location_name: str, robot_name: str) -> Any:
+        """Get robot-specific coordinates from location lookup table."""
+        location_constraint = self.location_constraints.get(location_name, {})
+        lookup_table = location_constraint.get("lookup", {})
+        
+        # Check if this robot has lookup coordinates for this location
+        robot_coordinates = lookup_table.get(robot_name)
+        
+        if robot_coordinates is not None:
+            print(f"Found lookup coordinates for {location_name}.{robot_name}: {robot_coordinates}")
+            return robot_coordinates
+        else:
+            print(f"No lookup coordinates found for {location_name}.{robot_name}")
+            return None
+        
     def _merge_parameters(
         self,
         robot_definition: Dict,
