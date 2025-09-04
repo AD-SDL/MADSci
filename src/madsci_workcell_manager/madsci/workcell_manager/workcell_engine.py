@@ -5,37 +5,41 @@ Engine Class and associated helpers and data
 import concurrent
 import copy
 import importlib
-import tempfile
 import time
 import traceback
 from datetime import datetime
-from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
-from madsci.common.data_manipulation import walk_and_replace
 from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.base_types import Error
-from madsci.common.types.datapoint_types import DataPoint, FileDataPoint, ValueDataPoint
+from madsci.common.types.datapoint_types import (
+    DataPoint,
+    DataPointTypeEnum,
+    FileDataPoint,
+    ValueDataPoint,
+)
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import Node, NodeStatus
-from madsci.common.types.step_types import Step
-from madsci.common.types.workflow_types import (
-    Workflow,
-    WorkflowParameter,
+from madsci.common.types.parameter_types import (
+    ParameterFeedForwardFile,
+    ParameterFeedForwardJson,
 )
+from madsci.common.types.step_types import Step
+from madsci.common.types.workflow_types import Workflow
 from madsci.common.utils import threaded_daemon
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
+from madsci.workcell_manager.workcell_actions import workcell_action_dict
 from madsci.workcell_manager.workcell_utils import (
     find_node_client,
 )
 from madsci.workcell_manager.workflow_utils import (
     cancel_active_workflows,
-    prepare_workcell_step,
+    prepare_workflow_step,
 )
 
 
@@ -46,8 +50,7 @@ class Engine:
     """
 
     def __init__(
-        self,
-        state_handler: WorkcellStateHandler,
+        self, state_handler: WorkcellStateHandler, data_client: DataClient
     ) -> None:
         """Initialize the scheduler."""
         self.state_handler = state_handler
@@ -61,7 +64,7 @@ class Engine:
         self.scheduler = scheduler_module.Scheduler(
             self.workcell_definition, self.state_handler
         )
-        self.data_client = DataClient()
+        self.data_client = data_client
         self.resource_client = ResourceClient()
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state(
@@ -96,14 +99,16 @@ class Engine:
                         self.state_handler.update_workflow_queue()
                         self.state_handler.archive_terminal_workflows()
                         workflows = self.state_handler.get_workflow_queue()
-                        workflow_metadata_map = self.scheduler.run_iteration(
+                        workflow_definition_metadata_map = self.scheduler.run_iteration(
                             workflows=workflows
                         )
                         for workflow in workflows:
-                            if workflow.workflow_id in workflow_metadata_map:
-                                workflow.scheduler_metadata = workflow_metadata_map[
-                                    workflow.workflow_id
-                                ]
+                            if workflow.workflow_id in workflow_definition_metadata_map:
+                                workflow.scheduler_metadata = (
+                                    workflow_definition_metadata_map[
+                                        workflow.workflow_id
+                                    ]
+                                )
                                 self.state_handler.set_active_workflow(
                                     workflow, mark_state_changed=False
                                 )
@@ -175,55 +180,57 @@ class Engine:
             # * Prepare the step
             wf = self.state_handler.get_active_workflow(workflow_id)
             step = wf.steps[wf.status.current_step_index]
-            step.args = walk_and_replace(step.args, wf.parameter_values)
-            step.files = walk_and_replace(step.files, wf.parameter_values)
-            step.locations = walk_and_replace(step.locations, wf.parameter_values)
-            step = prepare_workcell_step(
+            step = prepare_workflow_step(
                 step=step,
                 workcell=self.workcell_definition,
                 state_handler=self.state_handler,
+                workflow=wf,
+                data_client=self.data_client,
             )
             step.start_time = datetime.now()
             self.logger.log_info(
                 f"Running step {step.step_id} in workflow {workflow_id}"
             )
-            node = self.state_handler.get_node(step.node)
-            client = find_node_client(node.node_url)
-            wf = self.update_step(wf, step)
+            if step.node is None:
+                step = self.run_workcell_action(step)
+            else:
+                node = self.state_handler.get_node(step.node)
+                client = find_node_client(node.node_url)
+                wf = self.update_step(wf, step)
 
-            # * Send the action request
-            response = None
+                # * Send the action request
+                response = None
 
-            # Merge with step.args
-            args = {**step.args, **step.locations}
-            request = ActionRequest(
-                action_name=step.action,
-                args=args,
-                files=step.files,
-            )
-            action_id = request.action_id
-            self.add_pending_action(step, action_id)
-            try:
-                response = client.send_action(request, await_result=False)
-            except Exception as e:
-                self.logger.log_error(
-                    f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                # Merge with step.args
+                args = {**step.args, **step.locations}
+                request = ActionRequest(
+                    action_name=step.action,
+                    args=args,
+                    files=step.file_paths,
                 )
-                if response is None:
-                    response = request.unknown(errors=[Error.from_exception(e)])
-                else:
-                    response.errors.append(Error.from_exception(e))
-            finally:
-                self.remove_pending_action(step)
-            response = self.handle_response(wf, step, response)
-            action_id = response.action_id
+                action_id = request.action_id
+                self.add_pending_action(step, action_id)
+                try:
+                    response = client.send_action(request, await_result=False)
+                except Exception as e:
+                    self.logger.log_error(
+                        f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                    )
+                    if response is None:
+                        response = request.unknown(errors=[Error.from_exception(e)])
+                    else:
+                        response.errors.append(Error.from_exception(e))
+                finally:
+                    self.remove_pending_action(step)
+                response = self.handle_response(wf, step, response)
+                action_id = response.action_id
 
-            # * Periodically query the action status until complete, updating the workflow as needed
-            # * If the node or client supports get_action_result, query the action result
-            self.monitor_action_progress(
-                wf, step, node, client, response, request, action_id
-            )
-            # * Finalize the step
+                # * Periodically query the action status until complete, updating the workflow as needed
+                # * If the node or client supports get_action_result, query the action result
+                self.monitor_action_progress(
+                    wf, step, node, client, response, request, action_id
+                )
+                # * Finalize the step
             self.finalize_step(workflow_id, step)
             self.logger.log_info(
                 f"Completed step {step.step_id} in workflow {workflow_id}"
@@ -239,6 +246,13 @@ class Engine:
             )
             wf = self.update_step(wf, step)
             self.finalize_step(workflow_id, step)
+
+    def run_workcell_action(self, step: Step) -> Step:
+        """Runs one of the built-in workcell actions"""
+        action_callable = workcell_action_dict[step.action]
+        step.result = action_callable(**step.args)
+        step.status = step.result.status
+        return step
 
     def monitor_action_progress(
         self,
@@ -290,21 +304,21 @@ class Engine:
                     break
                 retry_count += 1
 
-    def update_parameters(
-        self, wf: Workflow, datapoint: DataPoint, parameter: WorkflowParameter
+    def update_param_value_from_datapoint(
+        self,
+        wf: Workflow,
+        datapoint: DataPoint,
+        parameter: Union[ParameterFeedForwardJson, ParameterFeedForwardFile],
     ) -> Workflow:
-        """updates the parameters in a workflow"""
+        """Updates the parameters in a workflow"""
 
-        if datapoint.data_type == "data_value":
-            wf.parameter_values[parameter.name] = datapoint.value
-        elif datapoint.data_type in {"object_storage", "file"}:
-            filename = Path(datapoint.path).name
-            with tempfile.NamedTemporaryFile(
-                suffix="".join(Path(filename).suffixes), delete=False
-            ) as temp_file:
-                temp_path = Path(temp_file.name)
-                self.data_client.save_datapoint_value(datapoint.datapoint_id, temp_path)
-                wf.parameter_values[parameter.name] = temp_path
+        if datapoint.data_type == DataPointTypeEnum.JSON:
+            wf.parameter_values[parameter.key] = datapoint.value
+        elif datapoint.data_type in {
+            DataPointTypeEnum.FILE,
+            DataPointTypeEnum.OBJECT_STORAGE,
+        }:
+            wf.file_input_ids[parameter.key] = datapoint.datapoint_id
         return wf
 
     def finalize_step(self, workflow_id: str, step: Step) -> None:
@@ -313,14 +327,7 @@ class Engine:
             wf = self.state_handler.get_active_workflow(workflow_id)
             step.end_time = datetime.now()
             wf.steps[wf.status.current_step_index] = step
-            for parameter in wf.parameters:
-                if (
-                    parameter.step_name == step.name
-                    or wf.status.current_step_index == parameter.step_index
-                    or (parameter.step_name is None and parameter.step_index is None)
-                ) and parameter.label in step.result.datapoints:
-                    datapoint = step.result.datapoints[parameter.label]
-                    wf = self.update_parameters(wf, datapoint, parameter)
+            wf = self._feed_data_forward(step, wf)
             wf.status.running = False
 
             if step.status == ActionStatus.SUCCEEDED:
@@ -355,6 +362,36 @@ class Engine:
             if wf.status.terminal:
                 self._log_completion_event(wf)
 
+    def _feed_data_forward(self, step: Step, wf: Workflow) -> Workflow:
+        """Feed data forward from the completed step to the workflow parameters"""
+        for param in wf.parameters.feed_forward:
+            if (
+                (isinstance(param.step, str) and param.step == step.key)
+                or (
+                    isinstance(param.step, int)
+                    and wf.status.current_step_index == param.step
+                )
+                or param.step is None
+            ):
+                if param.label is None:
+                    if len(step.result.datapoints) == 1:
+                        datapoint = next(iter(step.result.datapoints.values()))
+                        wf = self.update_param_value_from_datapoint(
+                            wf, datapoint, param
+                        )
+                    else:
+                        raise ValueError(
+                            f"Ambiguous feed-forward parameter {param.key}: multiple possible matching labels: {step.result.datapoints.keys()}"
+                        )
+                elif param.label in step.result.datapoints:
+                    datapoint = step.result.datapoints[param.label]
+                    wf = self.update_param_value_from_datapoint(wf, datapoint, param)
+                elif param.step is not None:
+                    raise ValueError(
+                        f"Feed-forward parameter {param.key}'s specified label {param.label} not found in step result datapoints: {step.result.datapoints.keys()}"
+                    )
+        return wf
+
     def _log_completion_event(self, workflow: Workflow) -> None:
         """Log the completion event and info message."""
         try:
@@ -371,7 +408,7 @@ class Engine:
 
             self.logger.log_info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {event_data['status']}, Author: {event_data['workflow_metadata']['author'] or 'Unknown'}, "
+                f"Status: {event_data['status']}, Author: {event_data['workflow_definition_metadata']['author'] or 'Unknown'}, "
                 f"{duration_text}"
             )
         except Exception as e:
@@ -415,7 +452,14 @@ class Engine:
                 )
             )
         step.result = response
-        step.history.append(response)
+        if (
+            len(step.history) == 0
+            or step.history[-1].action_id != response.action_id
+            or step.history[-1].status != response.status
+        ):
+            # * Don't append redundant status updates
+            step.history.append(response)
+        step.last_status_update = datetime.now()
         wf = self.update_step(wf, step)
         return response
 

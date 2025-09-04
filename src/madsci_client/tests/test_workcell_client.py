@@ -8,15 +8,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from madsci.client.workcell_client import WorkcellClient, insert_parameter_values
+from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.location_types import Location, LocationDefinition
+from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
-    WorkflowParameter,
+    WorkflowParameters,
     WorkflowStatus,
 )
 from madsci.common.utils import new_ulid_str
@@ -75,7 +76,9 @@ def sample_workflow() -> WorkflowDefinition:
                 args={"test_arg": "test_value"},
             )
         ],
-        parameters=[WorkflowParameter(name="test_param", default="default_value")],
+        parameters=WorkflowParameters(
+            json_inputs=[ParameterInputJson(key="test_param", default="default_value")]
+        ),
     )
 
 
@@ -89,7 +92,12 @@ def sample_workflow_with_files() -> WorkflowDefinition:
                 name="test_step",
                 node="test_node",
                 action="test_action",
-                files={"input_file": Path("test_file.txt")},
+                files={
+                    "file_input": {
+                        "key": "file_input",
+                        "description": "An input file",
+                    }
+                },  # type: ignore
             )
         ],
     )
@@ -132,42 +140,47 @@ def test_client(
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     """Fixture for WorkcellClient patched to use TestClient."""
-    with patch("madsci.client.workcell_client.requests") as mock_requests:
 
-        def add_ok_property(resp: Response) -> Response:
-            if not hasattr(resp, "ok"):
-                resp.ok = resp.status_code < 400
-            return resp
+    def add_ok_property(resp: Response) -> Response:
+        if not hasattr(resp, "ok"):
+            resp.ok = resp.status_code < 400
+        return resp
 
-        def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.post(*args, **kwargs)
-            return add_ok_property(resp)
+    def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.post(*args, **kwargs)
+        return add_ok_property(resp)
 
-        mock_requests.post.side_effect = post_no_timeout
+    def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.get(*args, **kwargs)
+        return add_ok_property(resp)
 
-        def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.get(*args, **kwargs)
-            return add_ok_property(resp)
+    def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.delete(*args, **kwargs)
+        return add_ok_property(resp)
 
-        mock_requests.get.side_effect = get_no_timeout
+    def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.put(*args, **kwargs)
+        return add_ok_property(resp)
 
-        def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.delete(*args, **kwargs)
-            return add_ok_property(resp)
+    # Create the client
+    workcell_client = WorkcellClient(workcell_server_url="http://testserver")
 
-        mock_requests.delete.side_effect = delete_no_timeout
+    # Mock both sessions to use the test client
+    workcell_client.session.get = get_no_timeout
+    workcell_client.session.post = post_no_timeout
+    workcell_client.session.delete = delete_no_timeout
+    workcell_client.session.put = put_no_timeout
 
-        def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.put(*args, **kwargs)
-            return add_ok_property(resp)
+    workcell_client.session_no_retry.get = get_no_timeout
+    workcell_client.session_no_retry.post = post_no_timeout
+    workcell_client.session_no_retry.delete = delete_no_timeout
+    workcell_client.session_no_retry.put = put_no_timeout
 
-        mock_requests.put.side_effect = put_no_timeout
-
-        yield WorkcellClient(workcell_server_url="http://testserver")
+    yield workcell_client
 
 
 def test_get_nodes(client: WorkcellClient) -> None:
@@ -239,7 +252,7 @@ def test_get_workcell_state(client: WorkcellClient) -> None:
 
 def test_pause_workflow(client: WorkcellClient) -> None:
     """Test pausing a workflow."""
-    workflow = client.submit_workflow(
+    workflow = client.start_workflow(
         WorkflowDefinition(name="Test Workflow"), None, await_completion=False
     )
     paused_workflow = client.pause_workflow(workflow.workflow_id)
@@ -328,19 +341,6 @@ def test_submit_workflow_definition(
     assert workflow.workflow_id is not None
 
 
-def test_submit_workflow_validate_only(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test validating a workflow without submission."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    workflow = client.submit_workflow(
-        sample_workflow, validate_only=True, await_completion=False
-    )
-    assert workflow.name == "Test Workflow"
-
-
 def test_query_workflow(
     client: WorkcellClient, sample_workflow: WorkflowDefinition
 ) -> None:
@@ -359,7 +359,7 @@ def test_submit_workflow_sequence(
 ) -> None:
     """Test submitting a sequence of workflows."""
     workflows = [sample_workflow, sample_workflow]
-    parameters = [{"test_param": "value1"}, {"test_param": "value2"}]
+    json_inputs = [{"test_param": "value1"}, {"test_param": "value2"}]
 
     with patch.object(client, "submit_workflow") as mock_submit:
         mock_workflow1 = Workflow(
@@ -376,12 +376,16 @@ def test_submit_workflow_sequence(
         )
         mock_submit.side_effect = [mock_workflow1, mock_workflow2]
 
-        result = client.submit_workflow_sequence(workflows, parameters)
+        result = client.submit_workflow_sequence(workflows, json_inputs)
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
-        mock_submit.assert_any_call(workflows[0], parameters[0], await_completion=True)
-        mock_submit.assert_any_call(workflows[1], parameters[1], await_completion=True)
+        mock_submit.assert_any_call(
+            workflows[0], json_inputs[0], {}, await_completion=True
+        )
+        mock_submit.assert_any_call(
+            workflows[1], json_inputs[1], {}, await_completion=True
+        )
 
 
 def test_submit_workflow_batch(
@@ -389,7 +393,7 @@ def test_submit_workflow_batch(
 ) -> None:
     """Test submitting a batch of workflows."""
     workflows = [sample_workflow, sample_workflow]
-    parameters = [{"test_param": "value1"}, {"test_param": "value2"}]
+    json_inputs = [{"test_param": "value1"}, {"test_param": "value2"}]
 
     # Create mock response objects that mimic what submit_workflow returns
     mock_response1 = MagicMock()
@@ -420,7 +424,7 @@ def test_submit_workflow_batch(
         mock_submit.side_effect = [mock_response1, mock_response2]
         mock_query.side_effect = [mock_workflow1, mock_workflow2]
 
-        result = client.submit_workflow_batch(workflows, parameters)
+        result = client.submit_workflow_batch(workflows, json_inputs)
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
@@ -487,67 +491,6 @@ def test_retry_workflow_no_await(
         )
 
 
-def test_resubmit_workflow(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test resubmitting a workflow."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
-
-    with (
-        patch.object(client, "await_workflow") as mock_await,
-        patch.object(client, "resubmit_workflow") as mock_resubmit,
-    ):
-        mock_workflow = Workflow(
-            workflow_id=new_ulid_str(),
-            name="Test Workflow",
-            status=WorkflowStatus(completed=True),
-            steps=[],
-        )
-        mock_await.return_value = mock_workflow
-        mock_resubmit.return_value = mock_workflow
-
-        resubmitted_workflow = client.resubmit_workflow(
-            submitted_workflow.workflow_id, await_completion=True
-        )
-
-        assert isinstance(resubmitted_workflow, Workflow)
-        mock_resubmit.assert_called_once_with(
-            submitted_workflow.workflow_id, await_completion=True
-        )
-
-
-def test_resubmit_workflow_no_await(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test resubmitting a workflow without waiting for completion."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
-
-    # Mock the resubmit operation since actual resubmit may have constraints
-    with patch.object(client, "resubmit_workflow") as mock_resubmit:
-        mock_workflow = Workflow(
-            workflow_id=new_ulid_str(),
-            name="Test Workflow",
-            status=WorkflowStatus(paused=False),
-            steps=[],
-        )
-        mock_resubmit.return_value = mock_workflow
-
-        resubmitted_workflow = client.resubmit_workflow(
-            submitted_workflow.workflow_id, await_completion=False
-        )
-
-        assert isinstance(resubmitted_workflow, Workflow)
-        mock_resubmit.assert_called_once_with(
-            submitted_workflow.workflow_id, await_completion=False
-        )
-
-
 def test_await_workflow_completed(
     client: WorkcellClient, sample_workflow_instance: Workflow
 ) -> None:
@@ -594,41 +537,6 @@ def test_await_workflow_failed(
 
         assert result == failed_workflow
         mock_handle.assert_called_once()
-
-
-# File Extraction Tests
-def test_extract_files_from_workflow(
-    client: WorkcellClient, sample_workflow_with_files: WorkflowDefinition
-) -> None:
-    """Test extracting files from a workflow definition."""
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".txt", delete=False
-    ) as temp_file:
-        temp_file.write("test content")
-        temp_file_path = Path(temp_file.name)
-
-    try:
-        sample_workflow_with_files.steps[0].files = {"input_file": temp_file_path}
-
-        extracted_files = client._extract_files_from_workflow(
-            sample_workflow_with_files
-        )
-
-        assert len(extracted_files) == 1
-        assert any("input_file" in key for key in extracted_files)
-
-        file_paths = list(extracted_files.values())
-        assert all(isinstance(path, Path) for path in file_paths)
-    finally:
-        temp_file_path.unlink(missing_ok=True)
-
-
-def test_extract_files_from_workflow_no_files(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test extracting files when workflow has no files."""
-    extracted_files = client._extract_files_from_workflow(sample_workflow)
-    assert len(extracted_files) == 0
 
 
 # Error Handling Tests
@@ -710,95 +618,8 @@ def test_workcell_client_init_no_url() -> None:
     ) as mock_context:
         mock_context.return_value.workcell_server_url = None
 
-        with pytest.raises(ValueError, match="Workcell server URL is not provided"):
+        with pytest.raises(ValueError, match="Workcell server URL was not provided"):
             WorkcellClient()
-
-
-# Parameter Insertion Tests
-def test_insert_parameter_values_basic() -> None:
-    """Test basic parameter value insertion."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="test_param", default="default")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${test_param}"},
-            )
-        ],
-    )
-
-    insert_parameter_values(workflow, {"test_param": "custom_value"})
-
-    assert workflow.steps[0].args["param"] == "custom_value"
-
-
-def test_insert_parameter_values_with_default() -> None:
-    """Test parameter insertion using default values."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="test_param", default="default_value")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${test_param}"},
-            )
-        ],
-    )
-
-    insert_parameter_values(workflow, {})
-
-    assert workflow.steps[0].args["param"] == "default_value"
-
-
-def test_insert_parameter_values_missing_required() -> None:
-    """Test parameter insertion with missing required parameter."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="required_param")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${required_param}"},
-            )
-        ],
-    )
-
-    with pytest.raises(
-        ValueError, match="Workflow parameter required_param is required"
-    ):
-        insert_parameter_values(workflow, {})
-
-
-def test_insert_parameter_values_conflict() -> None:
-    """Test parameter insertion with conflicting configuration."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[
-            WorkflowParameter(
-                name="conflict_param", label="some_label", step_name="step1"
-            )
-        ],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${conflict_param}"},
-            )
-        ],
-    )
-
-    with pytest.raises(
-        ValueError, match="looks like it's configured to use data from a previous step"
-    ):
-        insert_parameter_values(workflow, {"conflict_param": "value"})
 
 
 # Additional Error Handling and Edge Case Tests

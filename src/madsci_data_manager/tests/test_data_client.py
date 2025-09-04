@@ -104,7 +104,7 @@ def test_query_datapoints(client: DataClient) -> None:
     client.submit_datapoint(datapoint3)
     queried_datapoints = client.query_datapoints(
         {
-            "data_type": DataPointTypeEnum.DATA_VALUE,
+            "data_type": DataPointTypeEnum.JSON,
             "label": "Test",
             "value": "test_value",
         }

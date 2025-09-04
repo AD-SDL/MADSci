@@ -3,9 +3,19 @@
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.node_types import Node
+from madsci.common.types.parameter_types import (
+    ParameterFeedForwardJson,
+    ParameterInputJson,
+)
+from madsci.common.types.step_types import StepDefinition
 from madsci.common.types.workcell_types import WorkcellDefinition
-from madsci.common.types.workflow_types import Workflow, WorkflowDefinition
+from madsci.common.types.workflow_types import (
+    Workflow,
+    WorkflowDefinition,
+    WorkflowParameters,
+)
 from madsci.workcell_manager.workcell_server import create_workcell_server
+from madsci.workcell_manager.workflow_utils import check_parameters
 from pydantic import AnyUrl
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import (
@@ -137,9 +147,14 @@ def test_start_workflow(test_client: TestClient) -> None:
     """Test starting a new workflow."""
     with test_client as client:
         workflow_def = WorkflowDefinition(name="Test Workflow")
+        response1 = client.post(
+            "/workflow_definition", json=workflow_def.model_dump(mode="json")
+        )
+        assert response1.status_code == 200
+        id = response1.json()
         response = client.post(
             "/workflow",
-            data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
+            data={"workflow_definition_id": id},
         )
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
@@ -154,10 +169,16 @@ def test_pause_and_resume_workflow(test_client: TestClient) -> None:
     """Test pausing and resuming a workflow."""
     with test_client as client:
         workflow_def = WorkflowDefinition(name="Test Workflow")
+        response1 = client.post(
+            "/workflow_definition", json=workflow_def.model_dump(mode="json")
+        )
+        assert response1.status_code == 200
+        id = response1.json()
         response = client.post(
             "/workflow",
-            data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
+            data={"workflow_definition_id": id},
         )
+        assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         response = client.post(f"/workflow/{workflow.workflow_id}/pause")
         assert response.status_code == 200
@@ -170,32 +191,40 @@ def test_pause_and_resume_workflow(test_client: TestClient) -> None:
 
 
 def test_cancel_workflow(test_client: TestClient) -> None:
-    """Test canceling and resubmitting a workflow."""
+    """Test canceling a workflow."""
     with test_client as client:
         workflow_def = WorkflowDefinition(name="Test Workflow")
+        response1 = client.post(
+            "/workflow_definition", json=workflow_def.model_dump(mode="json")
+        )
+        assert response1.status_code == 200
+        id = response1.json()
         response = client.post(
             "/workflow",
-            data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
+            data={"workflow_definition_id": id},
         )
+        assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
         assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         assert workflow.status.cancelled is True
-        response = test_client.post(f"/workflow/{workflow.workflow_id}/resubmit")
-        assert response.status_code == 200
-        new_workflow = Workflow.model_validate(response.json())
-        assert workflow.workflow_id != new_workflow.workflow_id
 
 
 def test_retry_workflow(test_client: TestClient) -> None:
     """Test retrying a workflow."""
     with test_client as client:
         workflow_def = WorkflowDefinition(name="Test Workflow")
+        response1 = client.post(
+            "/workflow_definition", json=workflow_def.model_dump(mode="json")
+        )
+        assert response1.status_code == 200
+        id = response1.json()
         response = client.post(
             "/workflow",
-            data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
+            data={"workflow_definition_id": id},
         )
+        assert response.status_code == 200
         workflow = Workflow.model_validate(response.json())
         response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
         assert response.status_code == 200
@@ -210,23 +239,55 @@ def test_retry_workflow(test_client: TestClient) -> None:
         assert new_workflow.status.ok is True
 
 
-def test_resubmit_workflow(test_client: TestClient) -> None:
-    """Test resubmitting a workflow."""
-    with test_client as client:
-        workflow_def = WorkflowDefinition(name="Test Workflow")
-        response = client.post(
-            "/workflow",
-            data={"workflow": workflow_def.model_dump_json(), "validate_only": False},
-        )
-        workflow = Workflow.model_validate(response.json())
-        response = test_client.post(f"/workflow/{workflow.workflow_id}/cancel")
-        assert response.status_code == 200
-        workflow = Workflow.model_validate(response.json())
-        assert workflow.status.cancelled is True
-        response = test_client.post(
-            f"/workflow/{workflow.workflow_id}/resubmit", params={"index": 0}
-        )
-        assert response.status_code == 200
-        new_workflow = Workflow.model_validate(response.json())
-        assert workflow.workflow_id != new_workflow.workflow_id
-        assert new_workflow.status.ok is True
+def test_check_parameter_missing() -> None:
+    """Test parameter insertion with missing required parameter."""
+    workflow = WorkflowDefinition(
+        name="Test",
+        parameters=WorkflowParameters(
+            json_inputs=[ParameterInputJson(key="required_param")]
+        ),
+        steps=[
+            StepDefinition(
+                name="step1",
+                node="node1",
+                action="action1",
+                parameters={
+                    "args": {"param": "required_param"},
+                },
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Required value required_param not provided"):
+        check_parameters(workflow, {})
+
+
+def test_check_parameter_conflict() -> None:
+    """Test parameter insertion with conflicting configuration."""
+    workflow = WorkflowDefinition(
+        name="Test",
+        parameters=WorkflowParameters(
+            feed_forward=[
+                ParameterFeedForwardJson(
+                    key="conflict_param", label="some_label", step="step1"
+                )
+            ]
+        ),
+        steps=[
+            StepDefinition(
+                name="step 1!!",
+                key="step1",
+                node="node1",
+                action="action1",
+                parameters={
+                    "args": {"param": "conflict_param"},
+                },
+            )
+        ],
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="conflict_param is a Feed Forward Value and will be calculated during execution",
+    ):
+        check_parameters(workflow, {"conflict_param": "value"})

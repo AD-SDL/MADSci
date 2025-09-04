@@ -29,6 +29,7 @@ x-madsci-service: &madsci-service
   volumes:
     - ${REPO_PATH:-.}/example_lab:/home/madsci/example_lab
     - ${REPO_PATH:-.}/.madsci:/home/madsci/.madsci
+    - ${REPO_PATH:-.}/src:/home/madsci/MADSci/src
   restart: unless-stopped
   working_dir: /home/madsci/example_lab
 

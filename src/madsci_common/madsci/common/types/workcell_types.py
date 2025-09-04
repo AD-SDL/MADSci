@@ -52,10 +52,17 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
         description="The Locations used in the workcell.",
     )
 
-    @property
-    def workcell_directory(self) -> Path:
-        """The directory for the workcell."""
-        return Path(WorkcellManagerSettings().workcells_directory) / self.workcell_name
+    def get_workcell_directory(
+        self, workcells_directory: Optional[PathLike] = None
+    ) -> Path:
+        """Get the directory for the workcell.
+
+        Args:
+            workcells_directory: Optional directory path. If not provided, defaults to ~/.madsci/workcells
+        """
+        if workcells_directory is None:
+            workcells_directory = Path("~") / ".madsci" / "workcells"
+        return Path(workcells_directory) / self.workcell_name
 
     is_ulid = field_validator("workcell_id")(ulid_validator)
 

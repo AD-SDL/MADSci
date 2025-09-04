@@ -452,7 +452,7 @@ class ActionResultDefinition(MadsciBaseModel):
         title="Result Label",
         description="The label of the result.",
     )
-    description: str = Field(
+    description: Optional[str] = Field(
         title="Result Description",
         description="A description of the result.",
         default=None,
@@ -470,6 +470,16 @@ class FileActionResultDefinition(ActionResultDefinition):
         title="Result Type",
         description="The type of the result.",
         default="file",
+    )
+
+
+class DatapointActionResultDefinition(ActionResultDefinition):
+    """Defines a file result for a node action"""
+
+    result_type: Literal["datapoint"] = Field(
+        title="Result Type",
+        description="The type of the result.",
+        default="datapoint",
     )
 
 

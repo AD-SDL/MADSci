@@ -1235,9 +1235,11 @@ class UtilizationAnalyzer:
 
             # Safely extract author
             author = None
-            workflow_metadata = event_data.get("workflow_metadata")
-            if isinstance(workflow_metadata, dict):
-                author_value = workflow_metadata.get("author")
+            workflow_definition_metadata = event_data.get(
+                "workflow_definition_metadata"
+            )
+            if isinstance(workflow_definition_metadata, dict):
+                author_value = workflow_definition_metadata.get("author")
                 if author_value and isinstance(author_value, str):
                     author = author_value.strip() or None
 
@@ -1269,10 +1271,12 @@ class UtilizationAnalyzer:
         if not workflow.get("author"):
             author = None
 
-            # Try new structure (workflow_metadata.author)
-            workflow_metadata = event_data.get("workflow_metadata")
-            if isinstance(workflow_metadata, dict):
-                author_value = workflow_metadata.get("author")
+            # Try new structure (workflow_definition_metadata.author)
+            workflow_definition_metadata = event_data.get(
+                "workflow_definition_metadata"
+            )
+            if isinstance(workflow_definition_metadata, dict):
+                author_value = workflow_definition_metadata.get("author")
                 if author_value and isinstance(author_value, str):
                     author = author_value.strip() or None
 

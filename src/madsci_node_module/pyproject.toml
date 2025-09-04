@@ -15,6 +15,7 @@ license = {text = "MIT"}
 dependencies = [
   "madsci.common",
   "madsci.client",
+  "regex"
 ]
 
 [project.urls]

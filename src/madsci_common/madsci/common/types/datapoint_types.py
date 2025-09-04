@@ -26,12 +26,20 @@ class DataPointTypeEnum(str, Enum):
 
     Attributes:
         FILE: Represents a data point that contains a file.
-        DATA_VALUE: Represents a data point that contains a JSON serializable value.
+        JSON: Represents a data point that contains a JSON serializable value.
     """
 
+    JSON = "json"
     FILE = "file"
-    DATA_VALUE = "data_value"
     OBJECT_STORAGE = "object_storage"
+
+    @classmethod
+    def _missing_(cls, value: str) -> "DataPointTypeEnum":
+        """Handle missing enum values."""
+        value = value.lower()
+        if value == "data_value":
+            return cls.JSON
+        raise ValueError(f"Invalid DataPointType: {value}")
 
 
 class DataPoint(MadsciBaseModel, extra="allow"):
@@ -114,7 +122,7 @@ class ValueDataPoint(DataPoint):
         value: The value of the data point.
     """
 
-    data_type: Literal[DataPointTypeEnum.DATA_VALUE] = DataPointTypeEnum.DATA_VALUE
+    data_type: Literal[DataPointTypeEnum.JSON] = DataPointTypeEnum.JSON
     """The type of the data point, in this case a value"""
     value: Any
     """Value of the data point"""
@@ -174,7 +182,7 @@ class ObjectStorageDataPoint(DataPoint):
 DataPointDataModels = Annotated[
     Union[
         Annotated[FileDataPoint, Tag(DataPointTypeEnum.FILE)],
-        Annotated[ValueDataPoint, Tag(DataPointTypeEnum.DATA_VALUE)],
+        Annotated[ValueDataPoint, Tag(DataPointTypeEnum.JSON)],
         Annotated[ObjectStorageDataPoint, Tag(DataPointTypeEnum.OBJECT_STORAGE)],
     ],
     Discriminator("data_type"),
@@ -182,7 +190,7 @@ DataPointDataModels = Annotated[
 
 DataPointTypeMap = {
     DataPointTypeEnum.FILE: FileDataPoint,
-    DataPointTypeEnum.DATA_VALUE: ValueDataPoint,
+    DataPointTypeEnum.JSON: ValueDataPoint,
     DataPointTypeEnum.OBJECT_STORAGE: ObjectStorageDataPoint,
 }
 
