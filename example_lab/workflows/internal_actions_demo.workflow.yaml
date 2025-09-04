@@ -1,0 +1,208 @@
+name: Internal Actions Demonstration
+
+metadata:
+  author: MADSci Team
+  info: Demonstrates internal workcell actions for workflow control and validation
+  version: 2.0
+  features:
+    - internal_actions
+    - workflow_validation
+    - conditional_execution
+    - error_handling
+    - file_management
+
+parameters:
+  json_inputs:
+    - key: experiment_id
+      description: "Experiment ID for context tracking"
+    - key: validation_mode
+      default: "strict"
+      description: "Validation mode: strict, lenient, or disabled"
+    - key: max_retries
+      default: 3
+      description: "Maximum retry attempts for failed steps"
+
+  file_inputs:
+    - key: input_data_file
+      description: "Input data file for processing"
+
+  feed_forward:
+    - key: processed_data
+      step: process_input
+      label: processed_output
+      data_type: file
+      description: "Processed data from input step"
+
+    - key: validation_results
+      step: validate_processing
+      label: validation_status
+      data_type: json
+      description: "Validation results and metrics"
+
+steps:
+  # Step 1: Validate input file before processing
+  - name: Validate Input
+    action: validate_file
+    args:
+      file_path: input_data_file
+      required_format: "csv"
+      max_size_mb: 10
+      required_columns: ["sample_id", "value", "timestamp"]
+    conditions:
+      - type: file_exists
+        file: input_data_file
+        timeout: 30
+    outputs:
+      - label: input_validation
+        data_type: json
+        description: "Input file validation results"
+
+  # Step 2: Process input data with error handling
+  - name: Process Input
+    key: process_input
+    node: liquidhandler_1
+    action: process_data_file
+    files:
+      input_file: input_data_file
+    parameters:
+      processing_mode: "enhanced"
+      experiment_context: experiment_id
+      validation_mode: validation_mode
+    retry_config:
+      max_attempts: max_retries
+      retry_delay: 10
+      retry_conditions: ["timeout", "processing_error"]
+    outputs:
+      - label: processed_output
+        data_type: file
+        description: "Processed data file"
+      - label: processing_log
+        data_type: file
+        description: "Processing execution log"
+
+  # Internal Action: Validate processing results
+  - name: Validate Processing
+    key: validate_processing
+    action: validate_step_output
+    args:
+      step_key: "process_input"
+      required_outputs: ["processed_output", "processing_log"]
+      validation_checks:
+        - type: "file_size"
+          min_bytes: 100
+          file: "processed_output"
+        - type: "log_analysis"
+          file: "processing_log"
+          required_patterns: ["Processing completed", "Success"]
+          forbidden_patterns: ["ERROR", "FATAL"]
+    conditions:
+      - type: step_completed
+        step: process_input
+        timeout: 120
+    outputs:
+      - label: validation_status
+        data_type: json
+        description: "Comprehensive validation results"
+
+  # Step 3: Conditional execution based on validation
+  - name: Execute Analysis
+    node: platereader_1
+    action: analyze_processed_data
+    files:
+      data_file: processed_data  # Feed-forward from process_input
+    parameters:
+      analysis_mode: "full"
+      experiment_id: experiment_id
+      quality_check: validation_results  # Feed-forward JSON from validate_processing
+    conditions:
+      - type: json_value
+        data: validation_results
+        field: "validation_passed"
+        expected: true
+        timeout: 60
+    outputs:
+      - label: analysis_results
+        data_type: file
+        description: "Analysis results file"
+
+  # Internal Action: Generate comprehensive report
+  - name: Generate Report
+    action: generate_comprehensive_report
+    args:
+      title: "Internal Actions Demonstration Results"
+      experiment_id: experiment_id
+      sections:
+        - name: "Input Validation"
+          data_source: "input_validation"
+          type: "json"
+        - name: "Processing Results"
+          data_source: "processed_data"
+          type: "file"
+        - name: "Validation Summary"
+          data_source: "validation_results"
+          type: "json"
+        - name: "Analysis Output"
+          data_source: "analysis_results"
+          type: "file"
+      output_formats: ["pdf", "json", "html"]
+      include_metadata: true
+    outputs:
+      - label: final_report
+        data_type: file
+        description: "Comprehensive workflow report"
+
+  # Internal Action: Cleanup and finalize
+  - name: Finalize Session
+    action: finalize_workflow
+    args:
+      experiment_id: experiment_id
+      cleanup_actions:
+        - "archive_temporary_files"
+        - "update_resource_status"
+        - "log_completion_metrics"
+      notification_settings:
+        notify_user: true
+        include_summary: true
+        attach_report: true
+    conditions:
+      - type: all_steps_completed
+        exclude_internal: true
+        timeout: 300
+
+# Advanced error handling configuration
+error_handling:
+  global_timeout: 1800  # 30 minutes
+  step_timeout: 300     # 5 minutes default
+  retry_strategy: "exponential_backoff"
+  failure_notifications: true
+  context_preservation: true
+
+  failure_actions:
+    - action: log_failure_context
+      args:
+        experiment_id: experiment_id
+        include_stack_trace: true
+        include_resource_state: true
+
+    - action: preserve_partial_results
+      args:
+        output_directory: "/tmp/madsci_partial_results"
+        include_logs: true
+
+    - action: cleanup_resources
+      args:
+        cleanup_mode: "safe"
+        preserve_data: true
+
+# Workflow metadata and tracking
+tracking:
+  performance_monitoring: true
+  resource_utilization: true
+  context_validation: true
+  audit_logging: true
+
+  metrics:
+    - step_execution_time
+    - resource_allocation_efficiency
+    - context_propagation_success
+    - error_recovery_rate

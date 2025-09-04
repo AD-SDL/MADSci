@@ -110,9 +110,14 @@ unfixable = []
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
+# Allow confusable unicode characters used in user-facing output
+allowed-confusables = ["×", "ℹ"]
+
 [lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101", "ANN", "D"]
 "example_lab/*" = ["T201"]
+# Allow commented code in setup/tutorial notebooks (intentional examples)
+"example_lab/setup/**/*.ipynb" = ["ERA001"]
 
 [format]
 # Like Black, use double quotes for strings.

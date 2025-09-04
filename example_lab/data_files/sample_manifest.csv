@@ -1,0 +1,11 @@
+sample_id,sample_type,concentration,volume,source_plate,source_well,target_plate,target_well,compound_id,timestamp
+SAMPLE_001,control,0.0,100,SourcePlate_001,A1,AssayPlate_001,A1,CTRL_001,2024-12-01T10:00:00
+SAMPLE_002,test_compound,10.0,100,SourcePlate_001,A2,AssayPlate_001,A2,COMP_001,2024-12-01T10:01:00
+SAMPLE_003,test_compound,5.0,100,SourcePlate_001,A3,AssayPlate_001,A3,COMP_001,2024-12-01T10:02:00
+SAMPLE_004,test_compound,1.0,100,SourcePlate_001,A4,AssayPlate_001,A4,COMP_001,2024-12-01T10:03:00
+SAMPLE_005,control,0.0,100,SourcePlate_001,A5,AssayPlate_001,A5,CTRL_002,2024-12-01T10:04:00
+SAMPLE_006,test_compound,0.1,100,SourcePlate_001,A6,AssayPlate_001,A6,COMP_002,2024-12-01T10:05:00
+SAMPLE_007,test_compound,0.01,100,SourcePlate_001,A7,AssayPlate_001,A7,COMP_002,2024-12-01T10:06:00
+SAMPLE_008,blank,0.0,100,SourcePlate_001,A8,AssayPlate_001,A8,BLANK_001,2024-12-01T10:07:00
+SAMPLE_009,test_compound,20.0,100,SourcePlate_001,B1,AssayPlate_001,B1,COMP_003,2024-12-01T10:08:00
+SAMPLE_010,standard,100.0,100,SourcePlate_001,B2,AssayPlate_001,B2,STD_001,2024-12-01T10:09:00

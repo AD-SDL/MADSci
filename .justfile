@@ -77,7 +77,7 @@ dcb: env
 
 # Start the example lab
 up *args: env
-  @docker compose up {{args}}
+  @docker compose up --remove-orphans {{args}}
 
 # Stop the example lab and remove the containers
 down:

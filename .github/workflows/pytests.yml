@@ -39,6 +39,21 @@ jobs:
       - name: Test with pytest
         run: pdm run pytest --cov --cov-report=term-missing
 
+      - name: Test Example Lab (Integration)
+        run: |
+          # Start services for integration tests
+          just build
+          just up -d
+
+          # Wait for services to be ready
+          sleep 10
+
+          # Run example lab tests
+          pdm run pytest tests/example_lab/ --cov --cov-report=term-missing --cov-append
+
+          # Clean up services
+          just down
+
       - name: Coverage comment
         id: coverage_comment
         uses: py-cov-action/python-coverage-comment-action@v3

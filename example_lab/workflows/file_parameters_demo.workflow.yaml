@@ -1,0 +1,266 @@
+name: File-Based Parameters Demonstration
+
+metadata:
+  author: MADSci Team
+  info: Demonstrates file-based workflow parameters and automatic promotion
+  version: 2.0
+  features:
+    - file_based_parameters
+    - automatic_parameter_promotion
+    - file_validation
+    - dynamic_file_generation
+    - file_transformation_chains
+
+parameters:
+  # Input file parameters
+  file_inputs:
+    - key: sample_manifest
+      description: "CSV file containing sample information"
+    - key: protocol_template
+      description: "Protocol template file to be customized"
+    - key: config_file
+      description: "JSON configuration file for processing parameters"
+
+  # JSON inputs for control
+  json_inputs:
+    - key: experiment_id
+      description: "Experiment ID for tracking"
+    - key: processing_mode
+      default: "standard"
+      description: "Processing mode: standard, enhanced, or custom"
+    - key: enable_validation
+      default: true
+      description: "Whether to validate generated files"
+
+  # Feed-forward file parameters (automatically promoted)
+  feed_forward:
+    - key: validated_manifest
+      step: validate_manifest
+      label: validated_samples
+      data_type: file
+      description: "Validated and enriched sample manifest"
+
+    - key: customized_protocol
+      step: customize_protocol
+      label: protocol_output
+      data_type: file
+      description: "Customized protocol file based on manifest"
+
+    - key: execution_plan
+      step: generate_plan
+      label: plan_file
+      data_type: file
+      description: "Generated execution plan file"
+
+    - key: results_metadata
+      step: execute_protocol
+      label: metadata_output
+      data_type: file
+      description: "Execution results metadata file"
+
+steps:
+  # Step 1: Validate and enrich input manifest file
+  - name: Validate Manifest
+    key: validate_manifest
+    node: liquidhandler_1
+    action: validate_sample_manifest
+    files:
+      input_manifest: sample_manifest
+      config: config_file
+    parameters:
+      validation_level: enable_validation
+      experiment_id: experiment_id
+      enrichment_mode: "auto"
+    outputs:
+      - label: validated_samples
+        data_type: file
+        description: "Validated sample manifest with enriched metadata"
+        auto_promote: true  # Automatically available as feed-forward parameter
+      - label: validation_report
+        data_type: file
+        description: "Validation report and statistics"
+
+  # Step 2: Customize protocol based on validated manifest
+  - name: Customize Protocol
+    key: customize_protocol
+    node: liquidhandler_1
+    action: customize_protocol_template
+    files:
+      template: protocol_template
+      manifest: validated_manifest  # Auto-promoted from Step 1
+    parameters:
+      customization_mode: processing_mode
+      experiment_id: experiment_id
+    outputs:
+      - label: protocol_output
+        data_type: file
+        description: "Customized protocol file"
+        auto_promote: true
+      - label: customization_log
+        data_type: file
+        description: "Protocol customization log"
+
+  # Internal Action: Validate customized protocol
+  - name: Validate Protocol
+    action: validate_file_content
+    args:
+      file_path: customized_protocol  # Uses feed-forward parameter
+      validation_rules:
+        - type: "syntax_check"
+          language: "python"
+        - type: "required_functions"
+          functions: ["main", "setup", "cleanup"]
+        - type: "parameter_validation"
+          required_params: ["plate_id", "volume", "steps"]
+      error_handling: "strict"
+    conditions:
+      - type: file_exists
+        file: customized_protocol
+        timeout: 60
+
+  # Step 3: Generate execution plan from files
+  - name: Generate Plan
+    key: generate_plan
+    node: liquidhandler_1
+    action: generate_execution_plan
+    files:
+      protocol: customized_protocol  # Feed-forward from Step 2
+      manifest: validated_manifest   # Feed-forward from Step 1
+      config: config_file            # Original input
+    parameters:
+      plan_optimization: "resource_efficiency"
+      experiment_id: experiment_id
+    outputs:
+      - label: plan_file
+        data_type: file
+        description: "Detailed execution plan"
+        auto_promote: true
+      - label: resource_requirements
+        data_type: file
+        description: "Resource requirements summary"
+
+  # Internal Action: Pre-execution validation
+  - name: Pre-Execution Check
+    action: validate_execution_readiness
+    args:
+      files_to_check:
+        - validated_manifest
+        - customized_protocol
+        - execution_plan
+      resource_availability_check: true
+      dependency_validation: true
+      estimated_duration_check: true
+    conditions:
+      - type: all_files_exist
+        files: [validated_manifest, customized_protocol, execution_plan]
+        timeout: 120
+
+  # Step 4: Execute protocol with all generated files
+  - name: Execute Protocol
+    key: execute_protocol
+    node: liquidhandler_1
+    action: execute_comprehensive_protocol
+    files:
+      protocol: customized_protocol  # Feed-forward
+      manifest: validated_manifest   # Feed-forward
+      plan: execution_plan          # Feed-forward
+      config: config_file           # Original input
+    parameters:
+      execution_mode: processing_mode
+      experiment_id: experiment_id
+      track_resource_usage: true
+    outputs:
+      - label: execution_results
+        data_type: file
+        description: "Protocol execution results"
+      - label: metadata_output
+        data_type: file
+        description: "Execution metadata and metrics"
+        auto_promote: true
+      - label: resource_usage_log
+        data_type: file
+        description: "Resource utilization log"
+
+  # Step 5: Post-process results using all generated files
+  - name: Post-Process Results
+    node: platereader_1
+    action: comprehensive_analysis
+    files:
+      results: execution_results     # From Step 4
+      metadata: results_metadata    # Feed-forward from Step 4
+      original_manifest: validated_manifest  # Feed-forward from Step 1
+      execution_plan: execution_plan # Feed-forward from Step 3
+    parameters:
+      analysis_depth: "comprehensive"
+      include_qc: enable_validation
+      experiment_id: experiment_id
+    outputs:
+      - label: final_analysis
+        data_type: file
+        description: "Comprehensive analysis results"
+      - label: qc_report
+        data_type: file
+        description: "Quality control analysis report"
+
+  # Internal Action: Generate file summary and archive
+  - name: Archive Session Files
+    action: archive_workflow_files
+    args:
+      experiment_id: experiment_id
+      archive_format: "tar.gz"
+      include_files:
+        input_files:
+          - sample_manifest
+          - protocol_template
+          - config_file
+        generated_files:
+          - validated_manifest
+          - customized_protocol
+          - execution_plan
+          - results_metadata
+          - final_analysis
+        logs:
+          - validation_report
+          - customization_log
+          - resource_usage_log
+          - qc_report
+      compression_level: 6
+      metadata_inclusion: true
+    outputs:
+      - label: session_archive
+        data_type: file
+        description: "Complete session archive"
+
+# File handling configuration
+file_handling:
+  auto_promotion: true
+  validation_required: true
+  cleanup_policy: "preserve_outputs"
+  max_file_size_mb: 100
+  allowed_formats: ["csv", "json", "txt", "py", "yaml", "pdf"]
+
+  promotion_rules:
+    - from_output: true
+    - to_parameter: true
+    - validation_required: true
+    - naming_convention: "step_key_label"
+
+# Advanced validation settings
+validation:
+  file_integrity_check: true
+  content_validation: true
+  format_compliance: true
+  dependency_verification: true
+
+  failure_handling:
+    on_validation_failure: "halt_workflow"
+    preserve_partial_files: true
+    generate_error_report: true
+    notification_level: "error"
+
+# Resource and performance monitoring
+monitoring:
+  file_transfer_metrics: true
+  processing_time_tracking: true
+  resource_utilization_logging: true
+  error_rate_monitoring: true

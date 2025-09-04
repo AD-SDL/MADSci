@@ -1,0 +1,178 @@
+name: Enhanced Context Workflow
+
+metadata:
+  author: MADSci Team
+  info: Demonstrates new parameter system with context management and feedforward data
+  version: 2.0
+  features:
+    - input_parameter_separation
+    - feedforward_parameters
+    - file_based_parameters
+    - context_management
+    - internal_actions
+
+parameters:
+  # Input parameters (provided at workflow submission)
+  json_inputs:
+    - key: experiment_id
+      description: "ID of the running experiment for context tracking"
+    - key: user_id
+      description: "ID of the user running the workflow"
+    - key: plate_id
+      description: "Resource ID of the plate to use"
+    - key: reagent_buffer_id
+      description: "Resource ID of the buffer reagent"
+    - key: context_demo
+      default: "false"
+      description: "Flag indicating this is a context demonstration"
+
+  # File input parameters
+  file_inputs:
+    - key: protocol_file
+      description: "Liquid handler protocol file"
+
+  # Feed-forward parameters (generated during workflow execution)
+  feed_forward:
+    - key: plate_layout_file
+      step: generate_layout
+      label: plate_layout
+      data_type: file
+      description: "Plate layout file generated in step 1"
+
+    - key: measurement_data
+      step: read_plate
+      label: measurement_results
+      data_type: file
+      description: "Plate reader measurement results"
+
+    - key: processing_status
+      step: process_data
+      label: status_info
+      data_type: json
+      description: "Data processing status and metrics"
+
+steps:
+  # Step 1: Generate plate layout using context
+  - name: Generate Layout
+    key: generate_layout
+    node: liquidhandler_1
+    action: generate_plate_layout
+    parameters:
+      plate_id: plate_id
+      reagent_id: reagent_buffer_id
+      experiment_context: experiment_id
+      user_context: user_id
+    outputs:
+      - label: plate_layout
+        data_type: file
+        description: "Generated plate layout file"
+
+  # Step 2: Execute protocol with context tracking
+  - name: Execute Protocol
+    node: liquidhandler_1
+    action: run_protocol
+    files:
+      protocol: protocol_file
+      layout: plate_layout_file  # Feed-forward from step 1
+    parameters:
+      context_tracking: context_demo
+      experiment_id: experiment_id
+    outputs:
+      - label: execution_log
+        data_type: file
+        description: "Protocol execution log"
+
+  # Internal action: Validate execution before proceeding
+  - name: Validate Execution
+    action: validate_step
+    args:
+      step_outputs: ["execution_log"]
+      required_files: ["layout"]
+      timeout_seconds: 60
+    conditions:
+      - type: file_exists
+        file: execution_log
+        timeout: 30
+
+  # Step 3: Transfer plate with ownership tracking
+  - name: Transfer Plate
+    node: robotarm_1
+    action: transfer_with_context
+    parameters:
+      source_location: "liquid_handler_nest"
+      target_location: "plate_reader_nest"
+      resource_id: plate_id
+      owner_context: user_id
+      experiment_context: experiment_id
+
+  # Step 4: Read plate with context-aware measurement
+  - name: Read Plate
+    key: read_plate
+    node: platereader_1
+    action: read_plate_with_context
+    parameters:
+      plate_id: plate_id
+      experiment_id: experiment_id
+      measurement_type: "absorbance"
+      context_tracking: context_demo
+    outputs:
+      - label: measurement_results
+        data_type: file
+        description: "Raw measurement data with context metadata"
+
+  # Step 5: Process data with feedforward parameters
+  - name: Process Data
+    key: process_data
+    node: liquidhandler_1  # Using as data processor
+    action: process_measurements
+    files:
+      raw_data: measurement_data  # Feed-forward from step 4
+      layout: plate_layout_file   # Feed-forward from step 1
+    parameters:
+      experiment_id: experiment_id
+      processing_mode: "context_aware"
+    outputs:
+      - label: status_info
+        data_type: json
+        description: "Processing status and metrics"
+      - label: processed_results
+        data_type: file
+        description: "Processed measurement results"
+
+  # Internal action: Generate summary report
+  - name: Generate Summary
+    action: generate_report
+    args:
+      title: "Enhanced Context Workflow Results"
+      experiment_id: experiment_id
+      user_id: user_id
+      status: processing_status  # Feed-forward JSON from step 5
+      data_files:
+        - measurement_data
+        - processed_results
+      output_format: "pdf"
+    outputs:
+      - label: final_report
+        data_type: file
+        description: "Complete experiment summary report"
+
+# Error handling configuration
+error_handling:
+  max_retries: 3
+  retry_delay: 5
+  timeout_per_step: 300
+  failure_actions:
+    - action: log_context
+      args:
+        ownership: experiment_id
+        context: user_id
+    - action: cleanup_resources
+      args:
+        resource_ids: [plate_id, reagent_buffer_id]
+
+# Context propagation settings
+context:
+  ownership_required: true
+  context_validation: true
+  ownership_inheritance: true
+  context_logging: true

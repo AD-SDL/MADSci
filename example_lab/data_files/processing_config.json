@@ -1,0 +1,66 @@
+{
+  "processing_settings": {
+    "validation_level": "strict",
+    "error_tolerance": 0.05,
+    "auto_retry": true,
+    "max_retries": 3,
+    "timeout_seconds": 300
+  },
+  "liquid_handling": {
+    "default_transfer_volume": 100,
+    "mixing_cycles": 5,
+    "aspiration_speed": 50,
+    "dispensing_speed": 30,
+    "tip_tracking": true
+  },
+  "plate_configuration": {
+    "plate_type": "96_well_standard",
+    "well_volume_ul": 300,
+    "dead_volume_ul": 10,
+    "mixing_volume_ul": 80
+  },
+  "quality_control": {
+    "enable_volume_verification": true,
+    "enable_tip_presence_check": true,
+    "enable_plate_detection": true,
+    "log_all_operations": true
+  },
+  "file_handling": {
+    "auto_backup": true,
+    "compression_enabled": true,
+    "metadata_generation": true,
+    "cleanup_temp_files": true
+  },
+  "experiment_tracking": {
+    "log_resource_usage": true,
+    "track_timing": true,
+    "include_environment_data": true,
+    "generate_summary": true
+  },
+  "parameter_customization": {
+    "manifest_based_volumes": true,
+    "dynamic_plate_assignment": true,
+    "concentration_based_mixing": true,
+    "sample_type_protocols": {
+      "control": {
+        "special_handling": false,
+        "extra_mixing": false
+      },
+      "test_compound": {
+        "special_handling": true,
+        "extra_mixing": true,
+        "pre_incubation_time": 30
+      },
+      "standard": {
+        "special_handling": true,
+        "extra_mixing": false,
+        "reference_measurement": true
+      },
+      "blank": {
+        "special_handling": false,
+        "extra_mixing": false,
+        "background_correction": true
+      }
+    }
+  }
+}

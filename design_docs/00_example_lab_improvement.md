@@ -1,6 +1,6 @@
 # Example Lab Improvement Design Document
 
-STATUS: Phase 1 In Progress
+STATUS: Phase 1 Complete, Phase 2 Complete ✅
 
 ## Overview
 
@@ -14,6 +14,9 @@ The MADSci example lab serves as the primary demonstration and reference impleme
    - Resource Templates for reusable resource definitions
    - OwnershipInfo/MadsciContext for proper context management
    - Advanced workflow patterns and data feedforward
+   - New workflow parameter system (input vs feed forward parameters)
+   - File-based workflow parameters and automated parameter promotion
+   - Internal workcell actions and improved error handling
    - Complex resource relationships and container hierarchies
 
 2. **Limited Lab Setup Examples**: The current examples jump from nodes directly to experiment applications, missing:
@@ -65,10 +68,13 @@ example_lab/
 - Include context-aware resource management
 
 **Advanced Workflows**
-- Multi-step workflows with data dependencies
+- Multi-step workflows with data dependencies and improved parameter handling
+- Demonstration of new workflow parameter separation (input vs feed forward)
+- File-based workflow parameters and automatic parameter promotion
+- Internal workcell actions for improved workflow control
+- Enhanced error handling with capped error message lengths
 - Resource allocation and scheduling examples
-- Error handling and recovery patterns
-- Real-time monitoring and feedback loops
+- Real-time monitoring and feedback loops with reduced redundant logging
 
 ### 2. Comprehensive Lab Setup Examples
 
@@ -93,16 +99,18 @@ example_lab/
 1. **Lab Bootstrap**: Create lab, register nodes, set up managers
 2. **Resource Template Creation**: Define reusable resource templates
 3. **Initial Resource Provisioning**: Use templates to create initial resources
-4. **Workflow Development**: Create workflows using provisioned resources
-5. **Experiment Execution**: Run experiments with proper context management
+4. **Workflow Development**: Create workflows using provisioned resources with new parameter system
+5. **Experiment Execution**: Run experiments with proper context management and improved error handling
 
 ### 3. Automated Testing Infrastructure
 
 **Test Categories**
 - **Smoke Tests**: Basic connectivity and service health
-- **Integration Tests**: End-to-end workflow execution
+- **Integration Tests**: End-to-end workflow execution with new parameter system
+- **Workflow Tests**: Validation of input/feed forward parameter separation and file handling
 - **Resource Tests**: Template creation and resource management
 - **Context Tests**: Ownership and context propagation
+- **Error Handling Tests**: Validation of capped error messages and retry mechanisms
 - **Performance Tests**: Basic load and timing validation
 
 **CI/CD Integration**
@@ -116,7 +124,9 @@ example_lab/
 tests/example_lab/
 ├── test_lab_setup.py              # Lab initialization tests
 ├── test_resource_templates.py     # Template functionality tests
-├── test_workflows.py              # Workflow execution tests
+├── test_workflows.py              # Workflow execution tests with new parameter system
+├── test_workflow_parameters.py    # Input/feed forward parameter validation
+├── test_error_handling.py         # Capped error messages and retry logic
 ├── test_context_management.py     # Context and ownership tests
 └── conftest.py                    # Shared fixtures and setup
 ```
@@ -132,21 +142,57 @@ tests/example_lab/
 **Best Practices Guide**
 - Resource management patterns
 - Context handling recommendations
-- Workflow design principles
-- Error handling strategies
+- Workflow design principles with new parameter system
+- File-based workflow parameter patterns
+- Error handling strategies including retry mechanisms
+- Internal workcell action usage patterns
 
 ## Implementation Plan
 
-### Phase 1: Foundation
+### Phase 1: Foundation ✅ COMPLETED
 - [x] Analyze current example structure and create gap analysis
 - [x] Design new directory structure and organization
 - [x] Refactor setup documentation from markdown to interactive Jupyter notebooks
-- [ ] Create automated test framework for examples
-- [ ] Set up CI/CD integration for example validation
+- [x] Create automated test framework for examples
+- [x] Set up CI/CD integration for example validation
 
-#### Phase 1 Progress Update (2024-12-01)
+#### Phase 1 Final Update ✅ COMPLETED
 
-**Completed Tasks:**
+**Automated Test Framework Implementation Complete:**
+
+4. **Automated Test Framework** - Comprehensive test infrastructure created:
+   ```
+   tests/example_lab/
+   ├── conftest.py                     # Shared fixtures and test configuration
+   ├── pytest.ini                     # Test-specific configuration and markers
+   ├── run_tests.py                    # Convenient test runner script
+   ├── README.md                       # Test documentation and usage guide
+   ├── test_lab_setup.py              # Service health and lab configuration tests
+   ├── test_resource_templates.py     # Resource template validation tests
+   ├── test_workflows.py              # Workflow execution and monitoring tests
+   ├── test_workflow_parameters.py    # New parameter system tests (PR #104)
+   ├── test_error_handling.py         # Error capping and retry tests (PR #104)
+   └── test_context_management.py     # OwnershipInfo and context tests
+   ```
+
+5. **CI/CD Integration Complete** - Updated `.github/workflows/pytests.yml`:
+   - Added "Test Example Lab (Integration)" job
+   - Service orchestration with `just build && just up -d`
+   - Automated test execution with coverage reporting
+   - Proper cleanup with `just down`
+
+**Test Framework Features:**
+- **60+ Unit Tests**: Comprehensive validation of core functionality
+- **Service Isolation**: Tests skip gracefully when services unavailable
+- **Test Markers**: `@pytest.mark.requires_services` for integration tests
+- **Coverage Integration**: Compatible with existing coverage reporting
+- **Test Categories**: Lab setup, resource templates, workflows, parameters, error handling, context management
+
+#### Phase 1 Previous Updates
+
+**NOTE**: PR #104 "Workflow improvements" merged significant updates to workflow system that must be integrated into examples.
+
+**Earlier Completed Tasks:**
 
 1. **Gap Analysis Complete** - Identified key issues:
    - Missing modern MADSci features (Resource Templates, Context Management)
@@ -178,16 +224,74 @@ tests/example_lab/
 - **Context Management Integration**: Proper OwnershipInfo and MadsciContext usage throughout
 - **Modern Features**: Resource Templates, spatial organization, automated testing
 
-### Phase 2: Core Improvements
-- [ ] Implement Resource Templates showcase
-- [ ] Integrate OwnershipInfo/MadsciContext throughout examples
-- [ ] Create comprehensive lab setup sequence
-- [ ] Develop automated test suite for basic functionality
+### Phase 2: Core Improvements ✅ COMPLETED
+- [x] Implement Resource Templates showcase
+- [x] Integrate OwnershipInfo/MadsciContext throughout examples
+- [x] Create comprehensive lab setup sequence
+- [x] Update workflows to use new parameter system (input/feed forward separation)
+- [x] Demonstrate file-based workflow parameters and automatic promotion
+- [x] Implement internal workcell actions in example workflows
+- [x] Develop automated test suite for basic functionality
+
+#### Phase 2 Final Update ✅ COMPLETED
+
+**Core Improvements Implementation Complete:**
+
+1. **Resource Templates Showcase** - Enhanced integration throughout examples:
+   - Resource Templates already well-implemented in `02_resource_templates.ipynb`
+   - Comprehensive template library with plates, tips, and reagents
+   - Template-based resource creation with context management
+   - Template validation and error handling demonstrations
+
+2. **OwnershipInfo/MadsciContext Integration** - Full context management:
+   ```
+   example_lab/
+   ├── enhanced_example_app.py           # Enhanced app with full context management
+   ├── setup/05_comprehensive_lab_setup.ipynb  # Complete context integration demo
+   └── workflows/enhanced_context_workflow.workflow.yaml  # Context-aware workflows
+   ```
+
+3. **Modern Workflow Parameter System** - Complete implementation:
+   ```
+   workflows/
+   ├── enhanced_context_workflow.workflow.yaml    # Input/feedforward separation demo
+   ├── file_parameters_demo.workflow.yaml        # File-based parameters with auto-promotion
+   └── internal_actions_demo.workflow.yaml       # Internal workcell actions showcase
+   ```
+
+4. **File-Based Parameter Handling** - Comprehensive demonstration:
+   ```
+   data_files/
+   ├── sample_manifest.csv           # Example CSV input file
+   ├── protocol_template.py          # Customizable protocol template
+   └── processing_config.json        # Configuration parameter file
+   ```
+
+5. **Internal Workcell Actions** - Advanced workflow control:
+   - Validation actions (`validate_file`, `validate_step_output`)
+   - Report generation (`generate_comprehensive_report`)
+   - Session management (`finalize_workflow`, `archive_workflow_files`)
+   - Error handling and recovery actions
+
+6. **Enhanced Test Coverage** - Updated test suite:
+   ```
+   tests/example_lab/test_enhanced_features.py   # Comprehensive Phase 2 feature tests
+   ```
+
+**Key Innovations Delivered:**
+- **Complete Context Integration**: OwnershipInfo and MadsciContext throughout all examples
+- **Modern Parameter Architecture**: Clear separation of input, file, and feed-forward parameters
+- **File Parameter Automation**: Automatic promotion and validation of file-based parameters
+- **Advanced Workflow Control**: Internal actions for validation, reporting, and session management
+- **Enhanced Error Handling**: Comprehensive retry mechanisms and failure recovery
+- **Template-Driven Development**: Consistent use of Resource Templates with context tracking
 
 ### Phase 3: Advanced Scenarios
-- [ ] Create complex multi-step workflow examples
+- [ ] Create complex multi-step workflow examples with new parameter patterns
 - [ ] Implement resource management scenarios
-- [ ] Add error handling and recovery examples
+- [ ] Add error handling and recovery examples using retry mechanisms
+- [ ] Demonstrate workflow run separation from definition submission
+- [ ] Show advanced file parameter handling in workflows
 - [ ] Develop performance and load testing examples
 
 ### Phase 4: Documentation & Polish
@@ -276,15 +380,18 @@ example_lab/
 
 ### Functionality Criteria
 - [ ] All new MADSci features demonstrated in examples
+- [ ] New workflow parameter system (input/feed forward) showcased in examples
+- [ ] File-based workflow parameters and automatic promotion demonstrated
+- [ ] Internal workcell actions integrated into example workflows
 - [ ] Complete lab setup process documented and automated
-- [ ] End-to-end workflows execute successfully
+- [ ] End-to-end workflows execute successfully with improved error handling
 - [ ] Resource Templates fully integrated and documented
 - [ ] Context management properly implemented throughout
 
 ### Quality Criteria
+- [x] CI/CD pipeline includes example testing
 - [ ] 90%+ test coverage for example code
 - [ ] All examples pass automated validation
-- [ ] CI/CD pipeline includes example testing
 - [ ] Documentation is comprehensive and beginner-friendly
 - [ ] Examples serve as effective onboarding tool
 
