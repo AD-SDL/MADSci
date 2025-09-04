@@ -12,14 +12,21 @@ steps:
   - name: Run Liquid Handeler Protocol
     node: liquidhandler_1
     action: run_command
-    args: 
+    args:
       command: first_command
   - name: Transfer Plate
     node: transfer_manager
-    action: transfer
+    action: transfer_resource
+    args:
+      source_resource: 01K4B3CZA2GHANSBD85T7C1EPZ
     locations:
-      source: location_2
-      target: location_1
+      target: location_2
+  - name: Transfer Plate
+    node: transfer_manager
+    action: transfer_resource
+    locations:
+      source: location_1
+      target: location_2
   - name: Run Plate Reader Protocol
     node: platereader_1
     action: read_plate
