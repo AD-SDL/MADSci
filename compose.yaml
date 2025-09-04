@@ -140,7 +140,7 @@ services:
     depends_on:
       - event_manager
       - workcell_manager
-      
+
    # *Nodes
   liquidhandler:
     <<: *madsci-service
