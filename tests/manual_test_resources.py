@@ -18,7 +18,8 @@ location1 = Slot(resource_name="location_1", resource_class="slot")
 client.add_resource(plate)
 client.add_resource(location1)
 client.push(location1, plate)
-a = client.get_resource(location1)
+print(plate.resource_id)
+# a = client.get_
 # print(a.parent_id)
 # print(plate.resource_id)
 # stack = Stack(
