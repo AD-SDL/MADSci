@@ -64,7 +64,7 @@ def validate_workcell_action_step(step: Step) -> tuple[bool, str]:
 
 def _validate_feedforward(
     step: Step, feedforward_parameters: dict[str, Any]
-) -> tuple[bool, str] | None:
+) -> Optional[tuple[bool, str]]:
     if step.node is None and step.parameters and step.parameters.node is not None:
         if step.parameters.node in [param.key for param in feedforward_parameters]:
             return (
