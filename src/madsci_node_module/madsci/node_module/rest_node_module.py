@@ -245,12 +245,13 @@ class RestNode(AbstractNode):
         self.router.add_api_route("/status", self.get_status, methods=["GET"])
         self.router.add_api_route("/info", self.get_info, methods=["GET"])
         self.router.add_api_route("/state", self.get_state, methods=["GET"])
-        self.router.add_api_route(
-            "/action",
-            self.run_action,
-            methods=["POST"],
-            response_model=None,
-        )
+        for action, function in self.action_handlers.items():
+            self.router.add_api_route(
+                f"/action/{action}",
+                function,
+                methods=["POST"],
+                response_model=None,
+            )
         self.router.add_api_route(
             "/action/{action_id}",
             self.get_action_result,
