@@ -161,4 +161,4 @@ class TestConfig:
 
 
 # Mark module as providing pytest fixtures
-pytest_plugins = []
+# Note: pytest_plugins moved to root conftest.py to avoid deprecation warning
