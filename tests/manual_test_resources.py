@@ -12,16 +12,8 @@ from madsci.common.types.resource_types import (
 
 # Initialize the ResourcesClient with the database URL
 base_url = "http://localhost:8003"
-client = ResourceClient(url=base_url)
-plate = Asset(resource_name="plate", resource_class="asset")
-location1 = Slot(resource_name="location_1", resource_class="slot")
-client.add_resource(plate)
-client.add_resource(location1)
-client.push(location1, plate)
-print(plate.resource_id)
-# a = client.get_
-# print(a.parent_id)
-# print(plate.resource_id)
+client = ResourceClient(resource_server_url=base_url)
+
 # stack = Stack(
 #     resource_name="stack", resource_class="stack", capacity=10, ownership=None
 # )

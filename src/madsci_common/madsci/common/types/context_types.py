@@ -11,9 +11,9 @@ from pydantic import AnyUrl, Field
 class MadsciContext(
     MadsciBaseSettings,
     env_file=(".env", "context.env"),
-    toml_file="context.toml",
-    yaml_file="context.yaml",
-    json_file="context.json",
+    toml_file=("settings.toml", "context.settings.toml"),
+    yaml_file=("settings.yaml", "context.settings.yaml"),
+    json_file=("settings.json", "context.settings.json"),
 ):
     """Base class for MADSci context settings."""
 

@@ -12,8 +12,8 @@ from fastapi.exceptions import HTTPException
 from fastapi.params import Body
 from fastapi.responses import Response
 from madsci.client.event_client import EventClient
+from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import global_ownership_info
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import (
     Event,
     EventLogLevel,
@@ -32,7 +32,6 @@ def create_event_server(  # noqa: C901, PLR0915
     event_manager_definition: Optional[EventManagerDefinition] = None,
     event_manager_settings: Optional[EventManagerSettings] = None,
     db_connection: Optional[Database] = None,
-    context: Optional[MadsciContext] = None,
 ) -> FastAPI:
     """Creates an Event Manager's REST server with optional utilization tracking."""
 
@@ -60,8 +59,7 @@ def create_event_server(  # noqa: C901, PLR0915
     if db_connection is None:
         db_client = MongoClient(event_manager_settings.db_url)
         db_connection = db_client[event_manager_settings.collection_name]
-    context = context or MadsciContext()
-    logger.log_info(context)
+    logger.log_info(get_current_madsci_context())
 
     app = FastAPI()
     events = db_connection["events"]

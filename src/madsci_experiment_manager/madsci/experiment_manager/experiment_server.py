@@ -8,6 +8,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient, EventType
+from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
@@ -32,6 +33,7 @@ def create_experiment_server(  # noqa: C901, PLR0915
         experiment_manager_settings or ExperimentManagerSettings()
     )
     logger.log_info(experiment_manager_settings)
+    logger.log_info(get_current_madsci_context())
     if not experiment_manager_definition:
         def_path = Path(
             experiment_manager_settings.experiment_manager_definition
@@ -226,6 +228,6 @@ if __name__ == "__main__":
     )
     uvicorn.run(
         app,
-        host=experiment_manager_settings.experiment_server_url.host,
-        port=experiment_manager_settings.experiment_server_url.port,
+        host=get_current_madsci_context().experiment_server_url.host,
+        port=get_current_madsci_context().experiment_server_url.port,
     )

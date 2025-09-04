@@ -14,7 +14,7 @@ from threading import Lock, Thread
 from typing import Any, Optional, Union
 
 import requests
-from madsci.common.types.context_types import MadsciContext
+from madsci.common.context import get_current_madsci_context
 from madsci.common.types.event_types import (
     Event,
     EventClientConfig,
@@ -74,7 +74,8 @@ class EventClient:
         self.logger.addHandler(file_handler)
         self.logger.addHandler(RichHandler(rich_tracebacks=True, show_path=False))
         self.event_server = (
-            self.config.event_server_url or MadsciContext().event_server_url
+            self.config.event_server_url
+            or get_current_madsci_context().event_server_url
         )
         self.log_debug(
             "Event logger {self.name} initialized.",

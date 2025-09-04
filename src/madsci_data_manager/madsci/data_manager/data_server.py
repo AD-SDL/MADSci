@@ -13,13 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
 from madsci.client.event_client import EventClient
+from madsci.common.context import get_current_madsci_context
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
     upload_file_to_object_storage,
 )
 from madsci.common.ownership import global_ownership_info
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
     DataManagerSettings,
@@ -35,7 +35,6 @@ def create_data_server(  # noqa: C901, PLR0915
     data_manager_definition: Optional[DataManagerDefinition] = None,
     object_storage_settings: Optional[ObjectStorageSettings] = None,
     db_client: Optional[MongoClient] = None,
-    context: Optional[MadsciContext] = None,
 ) -> FastAPI:
     """Creates a Data Manager's REST server."""
     logger = EventClient()
@@ -57,8 +56,7 @@ def create_data_server(  # noqa: C901, PLR0915
         name=f"data_manager.{data_manager_definition.name}",
     )
     logger.log_info(data_manager_definition)
-    context = context or MadsciContext()
-    logger.log_info(context)
+    logger.log_info(get_current_madsci_context())
 
     if db_client is None:
         db_client = MongoClient(data_manager_settings.db_url)
