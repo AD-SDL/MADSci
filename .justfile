@@ -86,3 +86,15 @@ down:
 # Alias for docker compose
 dc *args:
   @docker compose {{args}}
+
+# Execute MADSci setup notebooks automatically (using papermill)
+notebooks:
+  @python scripts/run_notebooks.py
+
+# Execute a single notebook with papermill
+notebook notebook_path *params:
+  @python scripts/run_notebooks.py --notebook {{notebook_path}} {{params}}
+
+# Execute notebooks and run tests to validate setup
+setup-and-test: notebooks test
+  @echo "✅ Full setup and testing completed!"

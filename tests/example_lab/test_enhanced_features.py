@@ -28,7 +28,7 @@ class TestEnhancedContextIntegration:
     """Test enhanced context integration throughout examples."""
 
     @pytest.mark.requires_services
-    def test_comprehensive_context_creation(self, madsci_context, _ownership_info):
+    def test_comprehensive_context_creation(self, madsci_context):
         """Test creation of comprehensive MADSci context."""
 
         # Verify all required service URLs are present
@@ -358,7 +358,7 @@ class TestWorkflowIntegration:
             assert workflow_path.exists(), f"Missing workflow file: {workflow_file}"
 
     @pytest.mark.requires_services
-    def test_enhanced_app_workflow_execution(self, _madsci_context, _ownership_info):
+    def test_enhanced_app_workflow_execution(self):
         """Test enhanced application workflow execution."""
 
         try:
@@ -632,7 +632,7 @@ class TestPhase2Integration:
             assert feature in content, f"Feature not documented: {feature}"
 
     @pytest.mark.requires_services
-    def test_end_to_end_integration(self, madsci_context, _ownership_info):
+    def test_end_to_end_integration(self, madsci_context):
         """Test end-to-end integration of all Phase 2 features."""
 
         try:

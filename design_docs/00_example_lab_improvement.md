@@ -181,6 +181,13 @@ tests/example_lab/
    - Automated test execution with coverage reporting
    - Proper cleanup with `just down`
 
+6. **Automated Notebook Execution** - Comprehensive notebook automation system:
+   - Papermill-based execution with parameter injection capabilities
+   - Automated notebook validation as part of CI/CD pipeline
+   - Error handling and progress reporting for notebook workflows
+   - Integration with `just notebooks` command for easy execution
+   - Documentation and examples for parameterized notebook execution
+
 **Test Framework Features:**
 - **60+ Unit Tests**: Comprehensive validation of core functionality
 - **Service Isolation**: Tests skip gracefully when services unavailable
@@ -293,6 +300,8 @@ tests/example_lab/
 - [ ] Demonstrate workflow run separation from definition submission
 - [ ] Show advanced file parameter handling in workflows
 - [ ] Develop performance and load testing examples
+- [ ] Integrate automated notebook execution into CI/CD pipeline
+- [ ] Add notebook validation to GitHub Actions workflow
 
 ### Phase 4: Documentation & Polish
 - [ ] Create interactive Jupyter tutorials
@@ -367,6 +376,13 @@ example_lab/
     just build
     just up -d  # Start services in background
     pytest tests/example_lab/ --cov=example_lab
+    just down  # Clean up services
+
+- name: Validate Example Notebooks
+  run: |
+    just build
+    just up -d  # Start services in background
+    just notebooks  # Execute all setup notebooks with papermill
     just down  # Clean up services
 ```
 
