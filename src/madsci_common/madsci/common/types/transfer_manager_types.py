@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Literal, Optional
+
 from madsci.common.types.base_types import (
     MadsciBaseModel,
     MadsciBaseSettings,
@@ -17,15 +18,15 @@ from pydantic.networks import AnyUrl
 
 class TransferManagerDefinition(MadsciBaseModel, extra="allow"):
     """Definition of a MADSci Transfer Manager."""
-    
+
     transfer_manager_name: str = Field(
         title="Transfer Manager Name",
-        description="The name of the transfer manager service."
+        description="The name of the transfer manager service.",
     )
     manager_type: Literal[ManagerType.TRANSFER_MANAGER] = Field(
         title="Manager Type",
         description="The type of manager",
-        default="transfer_manager", # Add this to ManagerType enum
+        default="transfer_manager",  # Add this to ManagerType enum
     )
     transfer_manager_id: str = Field(
         title="Transfer Manager ID",
@@ -37,7 +38,7 @@ class TransferManagerDefinition(MadsciBaseModel, extra="allow"):
         title="Transfer Manager Description",
         description="A description of the transfer manager service.",
     )
-    
+
     # Path to the transfer logic config file (robots and locations)
     transfer_manager_config_path: PathLike = Field(
         title="Transfer Manager Config File",
@@ -48,7 +49,10 @@ class TransferManagerDefinition(MadsciBaseModel, extra="allow"):
     @property
     def transfer_manager_directory(self) -> Path:
         """The directory for the transfer manager."""
-        return Path(TransferManagerSettings().transfer_managers_directory) / self.transfer_manager_name
+        return (
+            Path(TransferManagerSettings().transfer_managers_directory)
+            / self.transfer_manager_name
+        )
 
     is_ulid = field_validator("transfer_manager_id")(ulid_validator)
 
@@ -62,14 +66,14 @@ class TransferManagerSettings(
     env_prefix="TRANSFER_MANAGER_",
 ):
     """Settings for the MADSci Transfer Manager - simplified to use .env file paths."""
-    
+
     transfer_manager_server_url: AnyUrl = Field(
         title="Transfer Manager Server URL",
         description="The URL where the transfer manager server will run.",
         default=AnyUrl("http://localhost:8006"),
         alias="transfer_manager_server_url",
     )
-    
+
     # This will load from TRANSFER_MANAGER_DEFINITION in .env file
     transfer_manager_definition: PathLike = Field(
         title="Transfer Manager Definition File",
@@ -77,7 +81,7 @@ class TransferManagerSettings(
         default=Path("transfer_manager_definition.yaml"),
         alias="transfer_manager_definition",
     )
-    
+
     # Optional: Keep this for backwards compatibility but simplify
     transfer_managers_directory: Optional[PathLike] = Field(
         title="Transfer Managers Directory",
