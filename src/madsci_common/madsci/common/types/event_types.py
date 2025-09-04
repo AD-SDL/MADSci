@@ -219,7 +219,7 @@ class EventType(str, Enum):
     # *Transfer Events
     TRANSFER_MANAGER_START = "transfer_manager_start"
     TRANSFER_MANAGER_STOP = "transfer_manager_stop"
-    
+
     @classmethod
     def _missing_(cls, value: str) -> "EventType":
         value = value.lower()
