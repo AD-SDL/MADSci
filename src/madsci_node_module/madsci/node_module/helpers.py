@@ -147,7 +147,7 @@ def parse_results(func: Callable) -> list[ActionResultDefinition]:
         for datum in get_named_input(result, "data"):
             result_list.append(JSONActionResultDefinition(result_label=datum))
         for datapoint in get_named_input(result, "datapoints"):
-            DatapointActionResultDefinition(result_label=datapoint)
+            result_list.append(DatapointActionResultDefinition(result_label=datapoint))
     return result_list
 
 
