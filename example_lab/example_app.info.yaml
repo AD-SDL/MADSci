@@ -1,5 +1,5 @@
 node_name: example_app
-node_id: 01K1HJKYJN6S4HWX2P5K4B1R4J
+node_id: 01K48WSN4V1R0K0V4Q1YYSHFE2
 node_description: null
 node_type: device
 module_name: example_app
@@ -31,8 +31,16 @@ config:
   state_update_interval: 2.0
   node_url: http://127.0.0.1:2000/
   uvicorn_kwargs: {}
+  server_mode: false
+  run_args: []
+  run_kwargs: {}
 config_schema:
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: 'Configuration for the ExperimentApplication.
+
+
+    This class is used to define the configuration for the ExperimentApplication node.
+
+    It can be extended to add custom configurations.'
   properties:
     node_definition:
       anyOf:
@@ -85,8 +93,21 @@ config_schema:
       title: Node URL
       type: string
     uvicorn_kwargs:
+      additionalProperties: true
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-  title: RestNodeConfig
+    server_mode:
+      default: false
+      title: Server Mode
+      type: boolean
+    run_args:
+      items: {}
+      title: Run Args
+      type: array
+    run_kwargs:
+      additionalProperties: true
+      title: Run Kwargs
+      type: object
+  title: ExperimentApplicationConfig
   type: object
