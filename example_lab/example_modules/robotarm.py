@@ -6,7 +6,6 @@ from typing import Annotated, Any, Optional
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.base_types import Error
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types.definitions import SlotResourceDefinition
@@ -79,24 +78,37 @@ class RobotArmNode(RestNode):
         """Run a command on the robot arm."""
         if not source or not target:
             time.sleep(3)
-            return ActionSucceeded()
+            return ActionFailed()
 
         if self.resource_client:
-            pass
-            # try:
-            #     popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
-            # except Exception:
-            #     return ActionFailed(errors=[Error(message="No plate in source!")])
-            # self.resource_client.push(
-            #     resource=self.gripper.resource_id, child=popped_plate
-            # )
+            try:
+                popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
+            except Exception:
+                self.logger.log_error(
+                    "No plate in source! In real scenario, action failed here."
+                )
+            try:
+                self.resource_client.push(
+                    resource=self.gripper.resource_id, child=popped_plate
+                )
+            except Exception:
+                self.logger.log_error(
+                    "Gripper is full! In real scenario, action failed here."
+                )
 
-            # time.sleep(1)
+            time.sleep(1)
 
-            # popped_plate, _ = self.resource_client.pop(
-            #     resource=self.gripper.resource_id
-            # )
-            # self.resource_client.push(resource=target.resource_id, child=popped_plate)
+            try:
+                popped_plate, _ = self.resource_client.pop(
+                    resource=self.gripper.resource_id
+                )
+                self.resource_client.push(
+                    resource=target.resource_id, child=popped_plate
+                )
+            except Exception:
+                self.logger.log_error(
+                    "Target is occupied! In real scenario, action failed here."
+                )
 
         return ActionSucceeded()
 
