@@ -12,7 +12,7 @@ robots:
         target: "{target}"
     default_args:
       plate_type: "flat_bottom_96well"
-  
+
   sciclops:
     robot_name: sciclops
     default_step_template:
@@ -23,7 +23,7 @@ robots:
         source: "{source}"
         target: "{target}"
     default_args: {}
-  
+
   pf400:
     robot_name: pf400
     default_step_template:
@@ -34,7 +34,7 @@ robots:
         source: "{source}"
         target: "{target}"
     default_args: {}
-  
+
   robotarm_1:
     robot_name: robotarm_1
     default_step_template:
@@ -55,7 +55,7 @@ locations:
     default_args: {}
     lookup:
       sciclops: [100, 200, 300, 400, 500, 600]
-  
+
   exchange:
     location_name: exchange
     description: "Central exchange location - hub for transfers"
@@ -65,7 +65,7 @@ locations:
     lookup:
       sciclops: [150, 250, 350, 450, 550, 650]
       pf400: [75.5, 25.3, 45.7, 600.2, 75.8, 900.1]
-  
+
   camera_station:
     location_name: camera_station
     description: "Camera imaging station"
@@ -78,7 +78,7 @@ locations:
         target_plate_rotation: "narrow"
     lookup:
       pf400: [94.597, 26.416, 66.422, 714.811, 81.916, 995.074]
-  
+
   ot2_gamma_deck_2:
     location_name: ot2_gamma_deck_2
     description: "OT2 Gamma robot deck position 2"
@@ -90,7 +90,7 @@ locations:
         target_plate_rotation: "wide"
     lookup:
       pf400: [85.2, 30.1, 70.5, 720.3, 85.4, 1000.2]
-  
+
   hidex_nest:
     location_name: hidex_nest
     description: "Hidex plate reader nest position"
@@ -103,7 +103,7 @@ locations:
         approach_speed: "slow"
     lookup:
       platecrane: [45.0, 15.0, 30.0, 500.0, 40.0, 750.0]
-  
+
   sealer_nest:
     location_name: sealer_nest
     description: "Plate sealer nest position"
@@ -112,7 +112,7 @@ locations:
     default_args: {}
     lookup:
       platecrane: [50.0, 20.0, 35.0, 520.0, 45.0, 780.0]
-  
+
   liconic_nest:
     location_name: liconic_nest
     description: "Liconic incubator loading position"
@@ -121,7 +121,7 @@ locations:
     default_args: {}
     lookup:
       platecrane: [55.0, 25.0, 40.0, 540.0, 50.0, 800.0]
-  
+
   location_1:
     location_name: location_1
     description: "Robot arm position 1"
@@ -130,7 +130,7 @@ locations:
     default_args: {}
     lookup:
       robotarm_1: [1, 2, 3, 4]
-  
+
   location_2:
     location_name: location_2
     description: "Robot arm position 2"
@@ -139,7 +139,7 @@ locations:
     default_args: {}
     lookup:
       robotarm_1: [5, 6, 7, 8]
-  
+
   central_hub:
     location_name: central_hub
     description: "Central hub connecting all robot zones"
