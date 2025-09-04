@@ -310,7 +310,7 @@ async function send_wf(action: any) {
     else {
       i = i +  1
       files[file.name] = file.value.name
-      file_input_params =  file_input_params.concat(file_input_params, [{"key": file.value.name}])
+      file_input_params = file_input_params.concat([{"key": file.value.name}])
       file_input_values[file.value.name] = file.value.name
     }
 
