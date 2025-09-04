@@ -125,9 +125,9 @@ def get_named_input(main_string: str, plural: str) -> list[str]:
         if len(data) > 0:
             for datum in data:
                 name = datum.split(":")[0]
-                if (name[0] == '"' and name[-1]) == '"' or (
-                    name[0] == "'" and name[-1]
-                ) == "'":
+                if (name[0] == '"' and name[-1] == '"') or (
+                    name[0] == "'" and name[-1] == "'"
+                ):
                     result_list.append(name[1:-1])
                 else:
                     string1 = f"{singular} label : "
@@ -147,7 +147,7 @@ def parse_results(func: Callable) -> list[ActionResultDefinition]:
         for datum in get_named_input(result, "data"):
             result_list.append(JSONActionResultDefinition(result_label=datum))
         for datapoint in get_named_input(result, "datapoints"):
-            DatapointActionResultDefinition(result_label=datapoint)
+            result_list.append(DatapointActionResultDefinition(result_label=datapoint))
     return result_list
 
 

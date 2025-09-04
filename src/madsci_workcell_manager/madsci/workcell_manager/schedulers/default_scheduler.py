@@ -29,7 +29,7 @@ class Scheduler(AbstractScheduler):
             workflows,
             key=lambda item: item.submitted_time,
         )
-        workflow_metadata_map = {}
+        workflow_definition_metadata_map = {}
 
         for wf in workflows:
             try:
@@ -56,9 +56,9 @@ class Scheduler(AbstractScheduler):
                 metadata.ready_to_run = False
                 metadata.reasons.append(f"Exception in scheduler: {e}")
             finally:
-                workflow_metadata_map[wf.workflow_id] = metadata
+                workflow_definition_metadata_map[wf.workflow_id] = metadata
 
-        return workflow_metadata_map
+        return workflow_definition_metadata_map
 
     def check_workflow_status(self, wf: Workflow, metadata: SchedulerMetadata) -> None:
         """Check if the workflow is ready to run (i.e. not paused, not completed, etc.)"""

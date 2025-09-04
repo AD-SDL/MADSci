@@ -517,7 +517,7 @@ def test_action_response_from_headers():
         "x-madsci-status": "succeeded",
         "x-madsci-errors": '["error1", "error2"]',
         "x-madsci-files": '{"output.txt": "result.txt"}',
-        "x-madsci-datapoints": '{"temp": {"label": "temp", "data_type": "data_value", "value": 25.0}}',
+        "x-madsci-datapoints": '{"temp": {"label": "temp", "data_type": "json", "value": 25.0}}',
         "x-madsci-data": '{"key": "value"}',
     }
 

@@ -8,66 +8,64 @@ from madsci.common.types.workflow_types import WorkflowDefinition
 
 def analyze_parameter_types(
     workflow_definition: WorkflowDefinition,
-    input_values: Optional[dict[str, Any]],
+    json_inputs: Optional[dict[str, Any]],
 ) -> None:
     """Check the type of parameter input values"""
-    if input_values:
-        for parameter in workflow_definition.parameters.input_values:
+    if json_inputs:
+        for parameter in workflow_definition.parameters.json_inputs:
             if (
-                parameter.input_key in input_values
+                parameter.key in json_inputs
                 and parameter.parameter_type
                 and not (
-                    type(input_values[parameter.input_key]).__name__
+                    type(json_inputs[parameter.key]).__name__
                     == parameter.parameter_type
                     or (
                         "Union" in parameter.parameter_type
-                        and type(input_values[parameter.input_key]).__name__
+                        and type(json_inputs[parameter.key]).__name__
                         in parameter.parameter_type
                     )
                 )
             ):
                 raise TypeError(
-                    f"Input Value {parameter.input_key} has wrong type, must be type {parameter.parameter_type}"
+                    f"Input Value {parameter.key} has wrong type, must be type {parameter.parameter_type}"
                 )
 
 
 def check_parameters(
     workflow_definition: WorkflowDefinition,
-    input_values: Optional[dict[str, Any]] = None,
+    json_inputs: Optional[dict[str, Any]] = None,
 ) -> None:
     """Check that all required parameters are provided"""
-    if input_values is not None:
-        for input_value in workflow_definition.parameters.input_values:
-            if input_value.input_key not in input_values:
-                if input_value.default is not None:
-                    input_values[input_value.input_key] = input_value.default
+    if json_inputs is not None:
+        for json_input in workflow_definition.parameters.json_inputs:
+            if json_input.key not in json_inputs:
+                if json_input.default is not None:
+                    json_inputs[json_input.key] = json_input.default
                 else:
-                    raise ValueError(
-                        f"Required value {input_value.input_key} not provided"
-                    )
-    for ffv in workflow_definition.parameters.feed_forward_values:
-        if ffv.name in input_values:
+                    raise ValueError(f"Required value {json_input.key} not provided")
+    for ffv in workflow_definition.parameters.feed_forward:
+        if ffv.key in json_inputs:
             raise ValueError(
-                f"{ffv.name} is a Feed Forward Value and will be calculated during execution"
+                f"{ffv.key} is a Feed Forward Value and will be calculated during execution"
             )
 
 
 def check_parameters_lists(
     workflows: list[str],
-    input_values: list[dict[str, Any]] = [],
-    input_files: list[dict[str, PathLike]] = [],
+    json_inputs: list[dict[str, Any]] = [],
+    file_inputs: list[dict[str, PathLike]] = [],
 ) -> tuple[list[dict[str, Any]], list[dict[str, PathLike]]]:
     """Check if the parameter lists are the right length"""
-    if len(input_values) == 0:
-        input_values = [{} for _ in workflows]
-    if len(input_files) == 0:
-        input_files = [{} for _ in workflows]
-    if len(workflows) > len(input_values):
+    if len(json_inputs) == 0:
+        json_inputs = [{} for _ in workflows]
+    if len(file_inputs) == 0:
+        file_inputs = [{} for _ in workflows]
+    if len(workflows) > len(json_inputs):
         raise ValueError(
-            "Must submit input_values, in order, for each workflow, submit empty dictionaries if no input_values"
+            "Must submit json_inputs, in order, for each workflow, submit empty dictionaries if no json_inputs"
         )
-    if len(workflows) > len(input_files):
+    if len(workflows) > len(file_inputs):
         raise ValueError(
-            "Must submit input_files, in order, for each workflow, submit empty dictionaries if no input_files"
+            "Must submit file_inputs, in order, for each workflow, submit empty dictionaries if no file_inputs"
         )
-    return input_values, input_files
+    return json_inputs, file_inputs

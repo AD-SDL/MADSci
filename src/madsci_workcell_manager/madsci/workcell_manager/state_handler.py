@@ -247,9 +247,11 @@ class WorkcellStateHandler:
         """
         self.workflow_definitions.delete_one({"workflow_id": workflow_definition_id})
 
-    def get_workflow_definition(self, workflow_definition_id: str) -> None:
+    def get_workflow_definition(
+        self, workflow_definition_id: str
+    ) -> WorkflowDefinition:
         """
-        Deletes an active workflow by ID
+        Returns a workflow definition by ID
         """
         return WorkflowDefinition.model_validate(
             self.workflow_definitions.find_one(
@@ -257,7 +259,9 @@ class WorkcellStateHandler:
             )
         )
 
-    def get_workflow_definitions(self, number: int = 20) -> dict[str, Workflow]:
+    def get_workflow_definitions(
+        self, number: int = 20
+    ) -> dict[str, WorkflowDefinition]:
         """Get the latest experiments."""
         workflow_definition_list = (
             self.workflow_definitions.find()
