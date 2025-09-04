@@ -312,3 +312,9 @@ test_experiment/
 htmlcov/
 coverage.xml
 .coverage
+
+# MCP/Agents
+.mcp.json
+
+# Executed notebooks (papermill artifacts)
+executed_*.ipynb
