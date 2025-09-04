@@ -19,8 +19,6 @@ class ExampleApp(ExperimentApplication):
         """main experiment function"""
         calculated_value = 0
         while calculated_value < 3:
-            print(self.workcell_client.get_nodes())
-
             workflow = self.workcell_client.submit_workflow(
                 "./workflows/example_workflow.workflow.yaml",
                 parameters={"example_parameter": 2},
