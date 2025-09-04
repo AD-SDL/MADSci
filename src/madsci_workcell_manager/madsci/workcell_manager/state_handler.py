@@ -257,7 +257,7 @@ class WorkcellStateHandler:
             )
         )
 
-    def get_workflow_definitions(self, number: int = 20) -> dict[str, Workflow]:
+    def get_workflow_definitions(self, number: int = 20) -> dict[str, WorkflowDefinition]:
         """Get the latest experiments."""
         workflow_definition_list = (
             self.workflow_definitions.find()
