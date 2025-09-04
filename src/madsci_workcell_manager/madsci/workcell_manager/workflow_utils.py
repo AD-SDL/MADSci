@@ -49,17 +49,15 @@ def validate_workcell_action_step(step: Step) -> tuple[bool, str]:
         signature = inspect.signature(action_callable)
         for name, parameter in signature.parameters.items():
             if name not in step.args and parameter.default is None:
-                result = (
+                return (
                     False,
                     f"Step '{step.name}': Missing Required Argument {name}",
                 )
-        result = (True, f"Step '{step.name}': Validated successfully")
-    else:
-        result = (
-            False,
-            f"Action {step.action} is not an existing workcell action, and no node is provided",
-        )
-    return result
+        return True, f"Step '{step.name}': Validated successfully"
+    return (
+        False,
+        f"Action {step.action} is not an existing workcell action, and no node is provided",
+    )
 
 
 def _validate_feedforward(

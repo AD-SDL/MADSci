@@ -14,20 +14,20 @@ def analyze_parameter_types(
     if json_inputs:
         for parameter in workflow_definition.parameters.json_inputs:
             if (
-                parameter.input_key in json_inputs
+                parameter.key in json_inputs
                 and parameter.parameter_type
                 and not (
-                    type(json_inputs[parameter.input_key]).__name__
+                    type(json_inputs[parameter.key]).__name__
                     == parameter.parameter_type
                     or (
                         "Union" in parameter.parameter_type
-                        and type(json_inputs[parameter.input_key]).__name__
+                        and type(json_inputs[parameter.key]).__name__
                         in parameter.parameter_type
                     )
                 )
             ):
                 raise TypeError(
-                    f"Input Value {parameter.input_key} has wrong type, must be type {parameter.parameter_type}"
+                    f"Input Value {parameter.key} has wrong type, must be type {parameter.parameter_type}"
                 )
 
 
@@ -38,17 +38,15 @@ def check_parameters(
     """Check that all required parameters are provided"""
     if json_inputs is not None:
         for json_input in workflow_definition.parameters.json_inputs:
-            if json_input.input_key not in json_inputs:
+            if json_input.key not in json_inputs:
                 if json_input.default is not None:
-                    json_inputs[json_input.input_key] = json_input.default
+                    json_inputs[json_input.key] = json_input.default
                 else:
-                    raise ValueError(
-                        f"Required value {json_input.input_key} not provided"
-                    )
+                    raise ValueError(f"Required value {json_input.key} not provided")
     for ffv in workflow_definition.parameters.feed_forward:
-        if ffv.name in json_inputs:
+        if ffv.key in json_inputs:
             raise ValueError(
-                f"{ffv.name} is a Feed Forward Value and will be calculated during execution"
+                f"{ffv.key} is a Feed Forward Value and will be calculated during execution"
             )
 
 
