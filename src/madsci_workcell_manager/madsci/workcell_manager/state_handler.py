@@ -247,9 +247,9 @@ class WorkcellStateHandler:
         """
         self.workflow_definitions.delete_one({"workflow_id": workflow_definition_id})
 
-    def get_workflow_definition(self, workflow_definition_id: str) -> None:
+    def get_workflow_definition(self, workflow_definition_id: str) -> WorkflowDefinition:
         """
-        Deletes an active workflow by ID
+        Returns a workflow definition by ID
         """
         return WorkflowDefinition.model_validate(
             self.workflow_definitions.find_one(
