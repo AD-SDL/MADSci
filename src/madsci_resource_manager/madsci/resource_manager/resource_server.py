@@ -34,6 +34,7 @@ from madsci.common.types.resource_types.server_types import (
     TemplateGetQuery,
     TemplateUpdateBody,
 )
+from madsci.resource_manager.db_version_checker import DatabaseVersionChecker
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_tables import ResourceHistoryTable
 from sqlalchemy.exc import NoResultFound
@@ -65,6 +66,32 @@ def create_resource_server(  # noqa: C901, PLR0915
     global_ownership_info.manager_id = resource_manager_definition.resource_manager_id
     logger = EventClient(name=f"resource_manager.{resource_manager_definition.name}")
     logger.log_info(resource_manager_definition)
+    # DATABASE VERSION VALIDATION - This is the key addition
+    logger.info("Validating database schema version...")
+    version_checker = None
+    try:
+        version_checker = DatabaseVersionChecker(
+            resource_server_settings.db_url, logger
+        )
+        version_checker.validate_or_fail()
+        logger.info("Database version validation completed successfully")
+    except RuntimeError as e:
+        logger.error(
+            "DATABASE VERSION MISMATCH DETECTED SERVER STARTUP ABORTED! Please run the migration tool before starting the server."
+        )
+        logger.error(str(e))
+        logger.error("\nTo resolve this issue:")
+        logger.error("1. Stop the server")
+        logger.error("2. Run the migration tool:")
+        logger.error(
+            f"   python -m madsci.resource_manager.migration_tool --db-url '{resource_server_settings.db_url}'"
+        )
+        logger.error("3. Restart the server")
+        return None
+    finally:
+        # Always dispose of the version checker engine
+        if version_checker:
+            version_checker.dispose()
 
     if not resource_interface:
         resource_interface = ResourceInterface(
