@@ -115,6 +115,7 @@ Laboratory instruments implement the Node interface:
 - Uses pytest with docker containers for integration tests
 - Mock resources for database testing
 - Component tests are located in each package's `tests/` directory
+- **IMPORTANT**: Use `pytest` directly instead of `python -m pytest` for running tests
 
 ## File Structure Conventions
 
@@ -139,3 +140,5 @@ src/madsci_common/
 - The project is currently in beta with potential breaking changes
 - Each package can be used independently or composed together
 - Use PDM virtual environments for development isolation
+- Ignore minor linting errors that will be fixed by autoformatting, such as "No newline at end of file"
+- Always use pydantic's `AnyUrl` to store URL's, and note that AnyUrl always ensures a trailing forward slash

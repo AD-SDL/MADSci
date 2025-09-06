@@ -27,7 +27,7 @@
                   <td>{{ item.data_type }}</td>
                   <td v-if="item.data_type == 'file'"><v-btn @click="trydownload(item.datapoint_id, item.label)">Download</v-btn>
                   </td>
-                  <td v-if="item.data_type == 'data_value'">
+                  <td v-if="item.data_type == 'json'">
                     <VueJsonPretty :data="item.value" />
                   </td>
 

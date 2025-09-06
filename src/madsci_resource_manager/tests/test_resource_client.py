@@ -90,7 +90,7 @@ def client(test_client: TestClient) -> Generator[ResourceClient, None, None]:
         mock_requests.put.side_effect = put_no_timeout
 
         mock_requests.delete.side_effect = delete_no_timeout
-        yield ResourceClient(url="http://testserver")
+        yield ResourceClient(resource_server_url="http://testserver")
 
 
 def test_add_resource(client: ResourceClient) -> None:

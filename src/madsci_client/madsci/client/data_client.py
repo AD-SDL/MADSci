@@ -7,6 +7,7 @@ from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
+from madsci.common.context import get_current_madsci_context
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
@@ -15,7 +16,6 @@ from madsci.common.object_storage_helpers import (
     upload_file_to_object_storage,
 )
 from madsci.common.ownership import get_current_ownership_info
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     DataPoint,
     DataPointTypeEnum,
@@ -29,20 +29,28 @@ from ulid import ULID
 class DataClient:
     """Client for the MADSci Experiment Manager."""
 
-    url: AnyUrl
-    context: MadsciContext
+    data_server_url: Optional[AnyUrl]
     _minio_client: Optional[ObjectStorageSettings] = None
 
     def __init__(
         self,
-        url: Optional[Union[str, AnyUrl]] = None,
+        data_server_url: Optional[Union[str, AnyUrl]] = None,
         object_storage_settings: Optional[ObjectStorageSettings] = None,
     ) -> "DataClient":
-        """Create a new Datapoint Client."""
-        self.context = MadsciContext(data_server_url=url) if url else MadsciContext()
-        self.url = self.context.data_server_url
+        """
+        Create a new Datapoint Client.
+
+        Args:
+            data_server_url: The base URL of the Data Manager. If not provided, it will be taken from the current MadsciContext.
+            object_storage_settings: Configuration for object storage (e.g., MinIO). If not provided, defaults will be used.
+        """
+        self.data_server_url = (
+            AnyUrl(data_server_url)
+            if data_server_url
+            else get_current_madsci_context().data_server_url
+        )
         self.logger = EventClient()
-        if self.url is None:
+        if self.data_server_url is None:
             self.logger.warn(
                 "No URL provided for the data client. Cannot persist datapoints.",
                 warning_category=MadsciLocalOnlyWarning,
@@ -57,12 +65,14 @@ class DataClient:
 
     def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
         """Get a datapoint's metadata by ID, either from local storage or server."""
-        if self.url is None:
+        if self.data_server_url is None:
             if datapoint_id in self._local_datapoints:
                 return self._local_datapoints[datapoint_id]
             raise ValueError(f"Datapoint {datapoint_id} not found in local storage")
 
-        response = requests.get(f"{self.url}datapoint/{datapoint_id}", timeout=10)
+        response = requests.get(
+            f"{self.data_server_url}datapoint/{datapoint_id}", timeout=10
+        )
         response.raise_for_status()
         return DataPoint.discriminate(response.json())
 
@@ -102,9 +112,9 @@ class DataClient:
             return datapoint.value
 
         # Fall back to server API if we have a URL
-        if self.url is not None:
+        if self.data_server_url is not None:
             response = requests.get(
-                f"{self.url}datapoint/{datapoint_id}/value", timeout=10
+                f"{self.data_server_url}datapoint/{datapoint_id}/value", timeout=10
             )
             response.raise_for_status()
             try:
@@ -136,7 +146,7 @@ class DataClient:
             return
             # If download failed, fall back to server API
 
-        if self.url is None:
+        if self.data_server_url is None:
             if self._local_datapoints[datapoint_id].data_type == "file":
                 shutil.copyfile(
                     self._local_datapoints[datapoint_id].path, output_filepath
@@ -146,7 +156,9 @@ class DataClient:
                     f.write(str(self._local_datapoints[datapoint_id].value))
             return
 
-        response = requests.get(f"{self.url}datapoint/{datapoint_id}/value", timeout=10)
+        response = requests.get(
+            f"{self.data_server_url}datapoint/{datapoint_id}/value", timeout=10
+        )
         response.raise_for_status()
         try:
             with Path(output_filepath).open("w") as f:
@@ -159,12 +171,12 @@ class DataClient:
 
     def get_datapoints(self, number: int = 10) -> list[DataPoint]:
         """Get a list of the latest datapoints."""
-        if self.url is None:
+        if self.data_server_url is None:
             return list(self._local_datapoints.values()).sort(
                 key=lambda x: x.datapoint_id, reverse=True
             )[:number]
         response = requests.get(
-            f"{self.url}datapoints", params={number: number}, timeout=10
+            f"{self.data_server_url}datapoints", params={number: number}, timeout=10
         )
         response.raise_for_status()
         return [
@@ -173,14 +185,14 @@ class DataClient:
 
     def query_datapoints(self, selector: Any) -> dict[str, DataPoint]:
         """Query datapoints based on a selector."""
-        if self.url is None:
+        if self.data_server_url is None:
             return {
                 datapoint_id: datapoint
                 for datapoint_id, datapoint in self._local_datapoints.items()
                 if selector(datapoint)
             }
         response = requests.post(
-            f"{self.url}datapoints/query", json=selector, timeout=10
+            f"{self.data_server_url}datapoints/query", json=selector, timeout=10
         )
         response.raise_for_status()
         return {
@@ -244,7 +256,7 @@ class DataClient:
                 # Fall back to regular submission if object storage fails
 
         # Handle regular submission (non-object storage or fallback)
-        if self.url is None:
+        if self.data_server_url is None:
             # Store locally if no server URL is provided
             self._local_datapoints[datapoint.datapoint_id] = datapoint
             return datapoint
@@ -262,7 +274,7 @@ class DataClient:
         else:
             files = {}
         response = requests.post(
-            f"{self.url}datapoint",
+            f"{self.data_server_url}datapoint",
             data={"datapoint": datapoint.model_dump_json()},
             files=files,
             timeout=10,
@@ -329,10 +341,10 @@ class DataClient:
         datapoint = DataPoint.discriminate(datapoint_dict)
 
         # Submit the datapoint to the Data Manager (metadata only)
-        if self.url is not None:
+        if self.data_server_url is not None:
             # Use a direct POST instead of recursively calling submit_datapoint
             response = requests.post(
-                f"{self.url}datapoint",
+                f"{self.data_server_url}datapoint",
                 data={"datapoint": datapoint.model_dump_json()},
                 files={},
                 timeout=10,

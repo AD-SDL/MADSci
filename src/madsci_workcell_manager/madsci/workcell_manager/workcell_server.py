@@ -3,19 +3,18 @@
 import json
 import traceback
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Optional, Union
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Body
+from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import global_ownership_info, ownership_context
-from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
@@ -28,22 +27,22 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
-    copy_workflow_files,
+    check_parameters,
+    # validate_workflow_definition,
     create_workflow,
     save_workflow_files,
 )
 from pymongo.synchronous.database import Database
+from ulid import ULID
 
 
 def create_workcell_server(  # noqa: C901, PLR0915
     workcell: Optional[WorkcellDefinition] = None,
     workcell_settings: Optional[WorkcellManagerSettings] = None,
-    context: Optional[MadsciContext] = None,
     redis_connection: Optional[Any] = None,
     mongo_connection: Optional[Database] = None,
     start_engine: bool = True,
@@ -67,14 +66,16 @@ def create_workcell_server(  # noqa: C901, PLR0915
         name=f"workcell.{workcell.workcell_name}",
     )
     logger.info(workcell)
-    context = context or MadsciContext()
-    logger.info(context)
+    logger.info(get_current_madsci_context())
 
     state_handler = WorkcellStateHandler(
         workcell,
         redis_connection=redis_connection,
         mongo_connection=mongo_connection,
     )
+    context = get_current_madsci_context()
+
+    data_client = DataClient(context.data_server_url)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # noqa: ANN202, ARG001
@@ -91,7 +92,7 @@ def create_workcell_server(  # noqa: C901, PLR0915
         )
 
         if start_engine:
-            engine = Engine(state_handler)
+            engine = Engine(state_handler, data_client)
             engine.spin()
         else:
             with state_handler.wc_state_lock():
@@ -163,7 +164,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         if permanent:
             workcell = state_handler.get_workcell_definition()
             workcell.nodes[node_name] = node_url
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
             state_handler.set_workcell_definition(workcell)
 
         return state_handler.get_node(node_name)
@@ -253,37 +255,14 @@ def create_workcell_server(  # noqa: C901, PLR0915
             state_handler.set_active_workflow(wf)
         return state_handler.get_active_workflow(workflow_id)
 
-    @app.post("/workflow/{workflow_id}/resubmit")
-    def resubmit_workflow(workflow_id: str) -> Workflow:
-        """resubmit a previous workflow as a new workflow."""
-        with state_handler.wc_state_lock():
-            wf = state_handler.get_workflow(workflow_id)
-            wf.workflow_id = new_ulid_str()
-            wf.status.reset()
-            wf.start_time = None
-            wf.end_time = None
-            wf.submitted_time = datetime.now()
-            for step in wf.steps:
-                step.step_id = new_ulid_str()
-                step.start_time = None
-                step.end_time = None
-                step.status = ActionStatus.NOT_STARTED
-            copy_workflow_files(
-                old_id=workflow_id,
-                workflow=wf,
-                working_directory=workcell.workcell_directory,
-            )
-            state_handler.set_active_workflow(wf)
-            state_handler.enqueue_workflow(wf.workflow_id)
-        return state_handler.get_active_workflow(wf.workflow_id)
-
     @app.post("/workflow/{workflow_id}/retry")
     def retry_workflow(workflow_id: str, index: int = -1) -> Workflow:
         """Retry an existing workflow from a specific step."""
         with state_handler.wc_state_lock():
             wf = state_handler.get_workflow(workflow_id)
             if wf.status.terminal:
-                index = max(index, 0)
+                if index < 0:
+                    index = wf.status.current_step_index
                 wf.status.reset(index)
                 state_handler.set_active_workflow(wf)
                 state_handler.delete_archived_workflow(wf.workflow_id)
@@ -295,12 +274,74 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 )
         return state_handler.get_active_workflow(workflow_id)
 
+    @app.post("/workflow_definition")
+    async def submit_workflow_definition(
+        workflow_definition: WorkflowDefinition,
+    ) -> str:
+        """
+        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+
+        Parameters
+        ----------
+        workflow_definition: YAML string
+        - The workflow_definition yaml file
+
+
+        Returns
+        -------
+        response: Workflow Definition ID
+        - the workflow definition ID
+        """
+        try:
+            try:
+                wf_def = WorkflowDefinition.model_validate(workflow_definition)
+
+            except Exception as e:
+                traceback.print_exc()
+                raise HTTPException(status_code=422, detail=str(e)) from e
+            # TODO: Validation
+            return state_handler.save_workflow_definition(
+                workflow_definition=wf_def,
+            )
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.error(f"Error saving workflow definition: {e}")
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error saving workflow definition: {e}",
+            ) from e
+
+    @app.get("/workflow_definition/{workflow_definition_id}")
+    async def get_workflow_definition(
+        workflow_definition_id: str,
+    ) -> WorkflowDefinition:
+        """
+        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+
+        Parameters
+        ----------
+        Workflow Definition ID: str
+        - the workflow definition ID
+
+        Returns
+        -------
+        response: WorkflowDefinition
+        - a workflow run object for the requested run_id
+        """
+        try:
+            return state_handler.get_workflow_definition(workflow_definition_id)
+        except Exception as e:
+            traceback.print_exc()
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
     @app.post("/workflow")
     async def start_workflow(
-        workflow: Annotated[str, Form()],
+        workflow_definition_id: Annotated[str, Form()],
         ownership_info: Annotated[Optional[str], Form()] = None,
-        parameters: Annotated[Optional[str], Form()] = None,
-        validate_only: Annotated[Optional[bool], Form()] = False,
+        json_inputs: Annotated[Optional[str], Form()] = None,
+        file_input_paths: Annotated[Optional[str], Form()] = None,
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
@@ -326,7 +367,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         """
         try:
             try:
-                wf_def = WorkflowDefinition.model_validate_json(workflow)
+                workflow_id = ULID.from_str(workflow_definition_id)
+                wf_def = state_handler.get_workflow_definition(str(workflow_id))
 
             except Exception as e:
                 traceback.print_exc()
@@ -338,42 +380,53 @@ def create_workcell_server(  # noqa: C901, PLR0915
                 else OwnershipInfo()
             )
             with ownership_context(**ownership_info.model_dump(exclude_none=True)):
-                if parameters is None or parameters == "":
-                    parameters = {}
+                if json_inputs is None or json_inputs == "":
+                    json_inputs = {}
                 else:
-                    parameters = json.loads(parameters)
-                    if not isinstance(parameters, dict) or not all(
-                        isinstance(k, str) for k in parameters
+                    json_inputs = json.loads(json_inputs)
+                    if not isinstance(json_inputs, dict) or not all(
+                        isinstance(k, str) for k in json_inputs
                     ):
                         raise HTTPException(
                             status_code=400,
                             detail="Parameters must be a dictionary with string keys",
                         )
+                if file_input_paths is None or file_input_paths == "":
+                    file_input_paths = {}
+                else:
+                    file_input_paths = json.loads(file_input_paths)
+                    if not isinstance(file_input_paths, dict) or not all(
+                        isinstance(k, str) for k in file_input_paths
+                    ):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Input File Paths must be a dictionary with string keys",
+                        )
                 workcell = state_handler.get_workcell_definition()
+                check_parameters(wf_def, json_inputs, file_input_paths)
                 wf = create_workflow(
                     workflow_def=wf_def,
                     workcell=workcell,
-                    parameters=parameters,
+                    json_inputs=json_inputs,
+                    file_input_paths=file_input_paths,
+                    data_client=data_client,
                     state_handler=state_handler,
                 )
 
-                if not validate_only:
-                    wf = save_workflow_files(
-                        working_directory=workcell.workcell_directory,
-                        workflow=wf,
-                        files=files,
-                    )
+                wf = save_workflow_files(
+                    workflow=wf, files=files, data_client=data_client
+                )
 
-                    with state_handler.wc_state_lock():
-                        state_handler.set_active_workflow(wf)
-                        state_handler.enqueue_workflow(wf.workflow_id)
+                with state_handler.wc_state_lock():
+                    state_handler.set_active_workflow(wf)
+                    state_handler.enqueue_workflow(wf.workflow_id)
 
-                    logger.log(
-                        Event(
-                            event_type=EventType.WORKFLOW_START,
-                            event_data=wf.model_dump(mode="json"),
-                        )
+                logger.log(
+                    Event(
+                        event_type=EventType.WORKFLOW_START,
+                        event_data=wf.model_dump(mode="json"),
                     )
+                )
                 return wf
 
         except HTTPException as e:
@@ -399,7 +452,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
         if permanent:
             workcell = state_handler.get_workcell_definition()
             workcell.locations.append(location)
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
         return state_handler.get_location(location.location_id)
 
     @app.get("/location/{location_id}")
@@ -419,7 +473,8 @@ def create_workcell_server(  # noqa: C901, PLR0915
                     workcell.locations,
                 )
             )
-            workcell.to_yaml(workcell_path)
+            if workcell_path.exists():
+                workcell.to_yaml(workcell_path)
             state_handler.set_workcell_definition(workcell)
         return {"status": "deleted"}
 

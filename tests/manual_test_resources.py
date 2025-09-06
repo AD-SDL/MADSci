@@ -11,7 +11,7 @@ from madsci.common.types.resource_types import (
 
 # Initialize the ResourcesClient with the database URL
 base_url = "http://localhost:8003"
-client = ResourceClient(url=base_url)
+client = ResourceClient(resource_server_url=base_url)
 
 # stack = Stack(
 #     resource_name="stack", resource_class="stack", capacity=10, ownership=None
