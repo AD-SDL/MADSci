@@ -13,9 +13,9 @@
           <td>{{ item.created_at }}</td>
           <td>{{ item.resource_id }}</td>
           <td v-if="item.children && get_all(item.children).length > 0">
-            <v-btn :icon="isExpanded(internalItem) ? 'mdi-chevron-up' : 'mdi-chevron-down'" 
+            <v-btn :icon="isExpanded(internalItem) ? 'mdi-chevron-up' : 'mdi-chevron-down'"
                     variant="plain"
-                    @click.stop="toggleExpand(internalItem)"/>  
+                    @click.stop="toggleExpand(internalItem)"/>
           </td>
         </tr>
       </template>
@@ -55,7 +55,7 @@ watch(() => props.resources, (newResources: any) => {
     const resource = newResources.find((r: any) => r.resource_id === resourceId);
     return resource && get_all(resource.children).length > 0;
   });
-}, 
+},
 {deep: true}
 );
 function prune_tree(input_resources: any): any[] {

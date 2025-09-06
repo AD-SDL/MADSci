@@ -1,10 +1,10 @@
 <template>
     <v-card class="pa-2">
     <div v-if="updatedQuantity && updatedCapacity" class="mb-4">
-        <ProgressBar 
-            :value="progressPercent" 
-            :showValue="true" 
-            :style="{ height: '40px', width: '100%'}" 
+        <ProgressBar
+            :value="progressPercent"
+            :showValue="true"
+            :style="{ height: '40px', width: '100%'}"
             :pt="{ value: { style: { backgroundColor: barColor }}}"
         />
         <div class="text-right text-body-2 mt-1 grey--text">
@@ -36,7 +36,7 @@
                                 Clear
                             </v-btn> -->
 
-                            <!-- Currently no type check requiring quantity field on consumables, but can only be a positive number and is not optional. 
+                            <!-- Currently no type check requiring quantity field on consumables, but can only be a positive number and is not optional.
                             Default is 0. For now removing ability to clear. -->
                         </template>
                     </v-text-field>
@@ -89,12 +89,12 @@ const editCapacity = ref<number | null>(null);
 const updatedResource = computed(() =>
     resources.value.find((r: any) => r.resource_id === props.resource.resource_id) || props.resource
 );
-const updatedQuantity = computed(() => 
-    updatedResource.value?.quantity !== undefined 
+const updatedQuantity = computed(() =>
+    updatedResource.value?.quantity !== undefined
     && updatedResource.value?.quantity !== null
 );
-const updatedCapacity = computed(() => 
-    updatedResource.value?.capacity !== undefined 
+const updatedCapacity = computed(() =>
+    updatedResource.value?.capacity !== undefined
     && updatedResource.value?.capacity !== null
 );
 const progress = computed(() =>
