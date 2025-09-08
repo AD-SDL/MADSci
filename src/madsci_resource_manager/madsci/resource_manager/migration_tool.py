@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Optional
 
 from madsci.client.event_client import EventClient
-from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
+from madsci.resource_manager.db_version_checker import DatabaseVersionChecker
 from madsci.resource_manager.resource_tables import ResourceTable
-from madsci.resource_manager.schema_version import SchemaVersionTable
+from madsci.resource_manager.resource_tables import SchemaVersionTable
 from sqlalchemy import text
 from sqlmodel import Session, create_engine
 
@@ -42,10 +42,10 @@ class DatabaseMigrator:
 
         parsed = urlparse.urlparse(self.db_url)
         return {
-            "host": parsed.hostname or "localhost",
-            "port": parsed.port or 5432,
-            "user": parsed.username or "postgres",
-            "password": parsed.password or "",
+            "host": parsed.hostname,
+            "port": parsed.port,
+            "user": parsed.username,
+            "password": parsed.password,
             "database": parsed.path.lstrip("/") if parsed.path else "resources",
         }
 
@@ -148,23 +148,29 @@ class DatabaseMigrator:
         """Drop and recreate the database for restore."""
         # Connect to postgres database to drop/create target database
         postgres_url = self.db_url.replace(f"/{db_info['database']}", "/postgres")
-        postgres_engine = create_engine(postgres_url)
-
-        with postgres_engine.connect() as conn:
-            # Terminate existing connections to the target database
-            conn.execute(
-                text(f"""
-                SELECT pg_terminate_backend(pg_stat_activity.pid)
-                FROM pg_stat_activity
-                WHERE pg_stat_activity.datname = '{db_info["database"]}'
-                AND pid <> pg_backend_pid()
-            """)
-            )
-
-            # Drop and recreate database
-            conn.execute(text(f'DROP DATABASE IF EXISTS "{db_info["database"]}"'))
-            conn.execute(text(f'CREATE DATABASE "{db_info["database"]}"'))
-            conn.commit()
+        postgres_engine = create_engine(postgres_url, isolation_level="AUTOCOMMIT")
+        
+        # Get raw connection properly
+        raw_conn = postgres_engine.raw_connection()
+        try:
+            cursor = raw_conn.cursor()
+            try:
+                # Terminate existing connections to the target database
+                cursor.execute(f"""
+                    SELECT pg_terminate_backend(pg_stat_activity.pid)
+                    FROM pg_stat_activity
+                    WHERE pg_stat_activity.datname = '{db_info['database']}'
+                    AND pid <> pg_backend_pid()
+                """)
+                
+                # Drop and recreate database
+                cursor.execute(f'DROP DATABASE IF EXISTS "{db_info["database"]}"')
+                cursor.execute(f'CREATE DATABASE "{db_info["database"]}"')
+            finally:
+                cursor.close()
+        finally:
+            raw_conn.close()
+            postgres_engine.dispose()
 
     def apply_schema_migrations(self, target_version: str) -> None:
         """Apply schema migrations to bring database up to target version."""
