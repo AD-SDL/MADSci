@@ -79,15 +79,9 @@ def create_resource_server(  # noqa: C901, PLR0915
         logger.error(
             "DATABASE VERSION MISMATCH DETECTED SERVER STARTUP ABORTED! Please run the migration tool before starting the server."
         )
-        logger.error(str(e))
-        logger.error("\nTo resolve this issue:")
-        logger.error("1. Stop the server")
-        logger.error("2. Run the migration tool:")
-        logger.error(
-            f"   python -m madsci.resource_manager.migration_tool --db-url '{resource_server_settings.db_url}'"
-        )
-        logger.error("3. Restart the server")
-        return None
+        
+        logger.error("\nTo resolve this issue, run the migration tool and restart the server.")
+        raise 
     finally:
         # Always dispose of the version checker engine
         if version_checker:
