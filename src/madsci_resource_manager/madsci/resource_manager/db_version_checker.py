@@ -97,16 +97,18 @@ class DatabaseVersionChecker:
             if db_version is None:
                 message = (
                     f"Database schema version not found. MADSci version is {madsci_version}. "
-                    "Please run the migration tool to initialize version tracking."
+                    f"Please run the migration tool to initialize version tracking:\n"
+                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
                 )
             else:
                 message = (
                     f"Database schema version mismatch detected!\n"
                     f"MADSci version: {madsci_version}\n"
                     f"Database version: {db_version}\n"
-                    f"Please run the migration tool to update the database schema."
+                    f"Please run the migration tool to update the database schema:\n"
+                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
                 )
-
+            
             self.logger.error(message)
             raise RuntimeError(message)
 
