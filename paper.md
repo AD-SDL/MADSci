@@ -40,24 +40,24 @@ bibliography: paper.bib
 
 # Summary
 
-The Modular Autonomous Discovery for Science (MADSci) toolkit is a modular, open source software framework for enabling laboratory automation, high-throughput experimentation, and self driving labs.
-It allows laboratory operators to define autonomous workcells as collections of *Nodes*, each controlling individual instruments, robots, or other devices.
-These nodes, when combined with *Managers* that provide general lab functionality and coordination, form flexible, modular autonomous laboratories.
-Lab users can then create and run experimental campaigns using simple Python applications and YAML workflow definitions.
-This design allows a separation of expertise and concerns between device integrators, automated/autonomous lab operators, and domain and data scientists running automated, autonomous, and high-throughput experiments using them.
-MADSci and its predecesor have enabled autonomous science in domains including biology, chemistry, materials science, and quantum science.
+The Modular Autonomous Discovery for Science (MADSci) toolkit enables laboratory automation, high-throughput experimentation, and self-driving labs.
+Laboratory operators define workcells as collections of *Nodes* controlling individual instruments, robots, or devices.
+These nodes, combined with *Managers* providing lab functionality and coordination, form flexible laboratories.
+Users create and run experimental campaigns using Python applications and YAML workflow definitions.
+This design separates concerns between device integrators, lab operators, and domain scientists.
+MADSci enables science in biology, chemistry, materials science, and quantum science.
 
 # Statement of Need
 
 The lab automation ecosystem is fragmented, with many proprietary, costly, or narrowly domain-specific tools.
-MADSci provides a flexible, open-source, easily extensible, and domain-agnostic toolkit for autonomous labs.
-It integrates equipment, sensors, and robots as “nodes,” with modular managers for workflows, resources, experiments, logging, and data collection.
+MADSci provides an open-source, extensible, domain-agnostic toolkit for labs.
+It integrates equipment, sensors, and robots as "nodes," with managers for workflows, resources, experiments, logging, and data collection.
 Built on a microservices architecture with developer-friendly RESTful APIs and Python clients, MADSci leverages standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open-source libraries (FastAPI, Pydantic, SQLModel) to ensure adaptability and extensibility.
 
 
 ## Software Architecture and Features
 
-The modular, composable, distributed microservice-based MADSci architecture enables separation of concerns among different system components.
+MADSci's microservice architecture enables separation of concerns among system components.
 
 <!-- if there's something in the figure we don't mention, it should not be included in the figure -->
 ![MADSci Architecture Diagram.\label{fig:madsci_architecture}](assets/drawio/madsci_architecture.drawio.svg)
@@ -65,17 +65,11 @@ Figure 1: Schematic architecture diagram for MADSci
 
 ### Nodes
 
-MADSci enables modular integration of lab equipment, devices, robots, sensors, and other components needed to operate an automated or self driving lab via the MADSci **Node** Protocol (see Fig. 1).
+MADSci enables integration of lab equipment, devices, robots, and sensors via the **Node** Protocol (see Fig. 1).
 
-Any software which implements a subset of common API endpoints, summarized below, can be used as a MADSci Node; in addition, we provide a `RestNode` Python class which can be extended to easily integrate a new device.
+Any software implementing common API endpoints can be used as a MADSci Node. We provide a `RestNode` Python class for easy device integration. Key endpoints include `/action` for device functionality, `/status` for node state, `/state` for device information, `/admin` for administrative commands, and `/info` for metadata and capabilities.
 
-- `/action`: accepts `POST` requests to invoke specific functionality of the controlled device or service
-- `/status`: retrieves information about current node status, such as whether busy, idle, or in an error state.
-- `/state`: allows the node to publish arbitrary state information related to the integrated device or service.
-- `/admin`: supports administrative commands, such as cancelling, pausing, or resuming a current action, or safety stopping the device
-- `/info`: publishes structured metadata about the controlled device or service and its capabilities
-
-We provide and support a RESTful implementation of the MADSci Node API standard. We have also implemented an `AbstractNode` and `AbstractNodeClient` to enable additional implementations. The MADSci node approach is compatible with the commonly used SiLA2 device communication standard.
+We provide RESTful and abstract implementations to enable diverse integrations.
 
 ### Workcell and Workflow Management
 
@@ -83,9 +77,9 @@ The MADSci Workcell Manager handles the operation of a **Workcell**--a collectio
 
 At the core of the workcell manager is the scheduler, which determines which steps in active workflow(s) to run next based on the current state of the workcell's nodes, locations, and resources.
 A modular design allows this component to be swapped out by a lab operator to meet specific requirements of their lab.
-We include a straightforward opportunistic first-in-first-out scheduler as a default.
+We include an opportunistic first-in-first-out scheduler as a default.
 
-Workflows can be defined using a straightforward YAML syntax, or as Pydantic-based Python data models.
+Workflows can be defined using YAML syntax or Pydantic-based Python data models.
 In either case, a workflow consists of a linear sequence of steps to be run on individual nodes.
 A Step Definition specifies a node, an action, and any (required or optional) action arguments.
 In addition to standard JSON-serializable arguments, workflow steps can include Location or File arguments.
@@ -112,9 +106,9 @@ It also maintains automated histories and locking to ensure provenance and relia
 MADSci's Experiment Manager allows users to define experimental campaigns, start experiment runs associated with those campaigns, and link MADSci objects (workflows, resources, datapoints, etc) with experimental runs.
 The Experiment Manager supports Experiment Designs, which allow users to specify the properties and conditions of experiments.
 
-An included `ExperimentApplication` class provides a foundation for defining autonomous experimental applications using python, including all python clients needed to interact with a MADSci-powered lab and helper methods for common autonomous experimental needs.
-This `ExperimentApplication` can be run either as a standard python script, or as a first class MADSci Rest node, allowing the user to define experiment-specific actions that can be included in workflows and started, stopped, or monitored from the Lab Dashboard.
-Because it is a scaffolded python class, the `ExperimentApplication` is both powerful (making the entire capabilities of a MADSci-powered autonomous laboratory accessible) while also being simple and flexible, allowing users to easily combine MADSci's capabilities with other python tools, libraries, workflows, and scripts.
+An included `ExperimentApplication` class provides a foundation for defining experimental applications in Python, including clients for lab interaction and helper methods for common needs.
+This class can run as a standard Python script or as a MADSci Rest node, enabling experiment-specific actions in workflows that can be monitored from the Lab Dashboard.
+The scaffolded design makes laboratory capabilities accessible while remaining simple and flexible for integration with other Python tools and workflows.
 
 ### Data Management
 
@@ -124,7 +118,7 @@ When working with large datasets where extra transfer steps are undesirable, the
 
 ### Lab Management
 
-Finally, the MADSci Lab Manager provides a primary entrypoint to users and applications for a given MADSci-powered autonomous lab.
+The MADSci Lab Manager provides a primary entrypoint for users and applications.
 A web-based Dashboard provides both overview and detailed information on the lab's status, performance, and history.
 Additionally, the lab manager's API surfaces important context about the lab, including information about what managers are available.
 
