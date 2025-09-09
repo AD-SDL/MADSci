@@ -312,3 +312,6 @@ test_experiment/
 htmlcov/
 coverage.xml
 .coverage
+
+# Alembic migration versions (environment-specific)
+src/madsci_resource_manager/madsci/resource_manager/alembic/versions/*.py
