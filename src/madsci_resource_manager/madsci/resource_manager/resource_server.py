@@ -34,7 +34,7 @@ from madsci.common.types.resource_types.server_types import (
     TemplateGetQuery,
     TemplateUpdateBody,
 )
-from madsci.resource_manager.db_version_checker import DatabaseVersionChecker
+from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_tables import ResourceHistoryTable
 from sqlalchemy.exc import NoResultFound
@@ -75,13 +75,15 @@ def create_resource_server(  # noqa: C901, PLR0915
         )
         version_checker.validate_or_fail()
         logger.info("Database version validation completed successfully")
-    except RuntimeError as e:
+    except RuntimeError:
         logger.error(
             "DATABASE VERSION MISMATCH DETECTED SERVER STARTUP ABORTED! Please run the migration tool before starting the server."
         )
-        
-        logger.error("\nTo resolve this issue, run the migration tool and restart the server.")
-        raise 
+
+        logger.error(
+            "\nTo resolve this issue, run the migration tool and restart the server."
+        )
+        raise
     finally:
         # Always dispose of the version checker engine
         if version_checker:
