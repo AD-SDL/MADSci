@@ -1,5 +1,5 @@
 ---
-title: ‘MADSci: A modular Python-based framework to enable autonomous science’
+title: "MADSci: A modular Python-based framework to enable autonomous science"
 tags:
   - Python
   - laboratory autonomy
@@ -55,18 +55,17 @@ It integrates equipment, sensors, and robots as "nodes," with managers for workf
 Built on a microservices architecture with developer-friendly RESTful APIs and Python clients, MADSci leverages standard databases (PostgreSQL, MongoDB, Redis, MiniIO) and open-source libraries (FastAPI, Pydantic, SQLModel) to ensure adaptability and extensibility.
 
 Laboratory automation software systems exhibit distinct architectural approaches and domain focus areas that influence their applicability across research environments.
-Commercial platforms such as Chemspeed's Autosuite \cite{seifrid2024chemspyd} and Retisoft Genera \cite{retisoft2024genera} provide comprehensive functionality but operate under proprietary licensing models that may limit accessibility in academic settings.
-Open-source alternatives including AlabOS \cite{fei2024alabos}, ChemOS \cite{sim2024chemos, roch2020chemos}, and Bluesky \cite{allan2019bluesky} demonstrate strong capabilities within specific research domains but exhibit varying degrees of cross-disciplinary transferability.
-Specialized systems such as Polybot \cite{wang2025autonomous, vriza2023selfdriving} and the Workcell Execution Interface \cite{vescovi2023modular} showcase advanced automation features tailored to particular scientific applications.
+Commercial platforms such as Chemspeed's Autosuite [@seifrid2024chemspyd] and Retisoft Genera [@retisoft2024genera] provide comprehensive functionality but operate under proprietary licensing models that may limit accessibility in academic settings.
+Open-source alternatives including AlabOS [@fei2024alabos], ChemOS [@sim2024chemos; @roch2020chemos], and Bluesky [@allan2019bluesky] demonstrate strong capabilities within specific research domains but exhibit varying degrees of cross-disciplinary transferability.
+Specialized systems such as Polybot [@wang2025autonomous; @vriza2023selfdriving] and the Workcell Execution Interface [@vescovi2023modular] showcase advanced automation features tailored to particular scientific applications.
 MADSci represents an open-source, modular framework designed to provide domain-agnostic laboratory automation capabilities while maintaining compatibility with diverse instrumentation ecosystems and institutional deployment requirements.
 
 ## Software Architecture and Features
 
 MADSci's microservice architecture enables separation of concerns among system components.
 
-<!-- if there's something in the figure we don't mention, it should not be included in the figure -->
-![MADSci Architecture Diagram.\label{fig:madsci_architecture}](assets/drawio/madsci_architecture.drawio.svg)
-Figure 1: Schematic architecture diagram for MADSci
+![MADSci Architecture Diagram.\label{fig:madsci_architecture}](assets/drawio/madsci_architecture.drawio.svg) { width=50% }
+Figure 1: Schematic architecture diagram for MADSci, depicting the relationship between devices, nodes, managers, and users (via experiment applications and the web-based dashboard)
 
 ### Nodes
 

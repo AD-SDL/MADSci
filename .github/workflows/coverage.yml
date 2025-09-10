@@ -8,7 +8,7 @@ on:
       - completed
 
 jobs:
-  test:
+  test_comment:
     name: Run tests & display coverage
     runs-on: ubuntu-latest
     if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
