@@ -525,7 +525,7 @@ class DatabaseMigrator:
 
             try:
                 # Apply Alembic migrations
-                self.apply_schema_migrations(target_version)
+                self.apply_schema_migrations()
 
                 # Record new version in our tracking system
                 migration_notes = f"Alembic migration from {current_db_version or 'unversioned'} to {target_version}"
