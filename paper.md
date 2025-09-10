@@ -57,7 +57,8 @@ Built on a microservices architecture with developer-friendly RESTful APIs and P
 Laboratory automation software systems exhibit distinct architectural approaches and domain focus areas that influence their applicability across research environments.
 Commercial platforms such as Chemspeed's Autosuite [@seifrid2024chemspyd] and Retisoft Genera [@retisoft2024genera] provide comprehensive functionality but operate under proprietary licensing models that may limit accessibility in academic settings.
 Open-source alternatives including AlabOS [@fei2024alabos], ChemOS [@sim2024chemos; @roch2020chemos], and Bluesky [@allan2019bluesky] demonstrate strong capabilities within specific research domains but exhibit varying degrees of cross-disciplinary transferability.
-Specialized systems such as Polybot [@wang2025autonomous; @vriza2023selfdriving] and the Workcell Execution Interface [@vescovi2023modular] showcase advanced automation features tailored to particular scientific applications.
+Specialized systems such as Polybot [@wang2025autonomous; @vriza2023selfdriving] showcase advanced automation features tailored to particular scientific applications.
+The Workcell Execution Interface [@vescovi2023modular], MADSci's predecessor, has a similar focus on instrument modularity but lacks some of the advanced features and microservices principles at the management layer.
 MADSci represents an open-source, modular framework designed to provide domain-agnostic laboratory automation capabilities while maintaining compatibility with diverse instrumentation ecosystems and institutional deployment requirements.
 
 ## Software Architecture and Features
