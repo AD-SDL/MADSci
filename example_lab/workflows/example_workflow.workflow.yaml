@@ -6,10 +6,13 @@ metadata:
   version: 0.1
 
 parameters:
-  - name: example_parameter
-    default: 0
+  json_inputs:
+    - key: example_parameter
+      default: 0
+  file_inputs:
+    - key: liquidhandler_protocol
 steps:
-  - name: Run Liquid Handeler Protocol
+  - name: Run Liquid Handler Protocol
     node: liquidhandler_1
     action: run_command
     args:
@@ -30,5 +33,3 @@ steps:
   - name: Run Plate Reader Protocol
     node: platereader_1
     action: read_plate
-    # files:
-    #   protocol: "./test.txt"

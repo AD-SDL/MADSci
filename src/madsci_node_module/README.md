@@ -276,12 +276,12 @@ def risky_action(self, param: str) -> ActionResult:
 ### File Handling
 ```python
 @action
-def process_file(self, input_file: Path, output_dir: Path = None) -> ActionResult:
+def process_file(self, file_input: Path, output_dir: Path = None) -> ActionResult:
     """Process an uploaded file."""
-    # input_file is automatically handled as file upload
+    # file_input is automatically handled as file upload
     # output_dir is optional with default handling
 
-    processed_data = self.device.process_file(input_file)
+    processed_data = self.device.process_file(file_input)
 
     # Return files in response
     return ActionSucceeded(
