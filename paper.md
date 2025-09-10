@@ -64,8 +64,7 @@ MADSci represents an open-source, modular framework designed to provide domain-a
 
 MADSci's microservice architecture enables separation of concerns among system components.
 
-![MADSci Architecture Diagram.\label{fig:madsci_architecture}](assets/drawio/madsci_architecture.drawio.svg) { width=50% }
-Figure 1: Schematic architecture diagram for MADSci, depicting the relationship between devices, nodes, managers, and users (via experiment applications and the web-based dashboard)
+![Schematic architecture diagram for MADSci, depicting the relationship between devices, nodes, managers, and users (via experiment applications and the web-based dashboard).\label{fig:madsci_architecture}](assets/drawio/madsci_architecture.png)
 
 ### Nodes
 
