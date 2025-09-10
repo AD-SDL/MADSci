@@ -67,7 +67,7 @@ def client(test_client: TestClient) -> Generator[DataClient, None, None]:
 
         mock_requests.get.side_effect = get_no_timeout
 
-        yield DataClient(url="http://testserver")
+        yield DataClient(data_server_url="http://testserver")
 
 
 def test_create_datapoint(client: DataClient) -> None:
@@ -104,7 +104,7 @@ def test_query_datapoints(client: DataClient) -> None:
     client.submit_datapoint(datapoint3)
     queried_datapoints = client.query_datapoints(
         {
-            "data_type": DataPointTypeEnum.DATA_VALUE,
+            "data_type": DataPointTypeEnum.JSON,
             "label": "Test",
             "value": "test_value",
         }

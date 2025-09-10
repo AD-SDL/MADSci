@@ -65,7 +65,9 @@ class TestExperimentClientInit:
 
     def test_init_without_url_raises_error(self):
         """Test initialization without server URL raises ValueError."""
-        with patch("madsci.client.experiment_client.MadsciContext") as mock_context:
+        with patch(
+            "madsci.client.experiment_client.get_current_madsci_context"
+        ) as mock_context:
             mock_context.return_value.experiment_server_url = None
             with pytest.raises(ValueError, match="No experiment server URL provided"):
                 ExperimentClient()

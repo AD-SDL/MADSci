@@ -72,7 +72,6 @@ def search_for_file_pattern(
     if children:
         results.extend(Path("./").glob(str(Path("**") / pattern)))
     else:
-        results.extend(Path("./").glob(str(Path("./") / pattern)))
         results.extend(Path("./").glob(pattern))
     if parents:
         for parent in start_dir.parents:

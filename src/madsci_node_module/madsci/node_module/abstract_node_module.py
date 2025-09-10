@@ -38,7 +38,6 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error
-from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import (
     LocationArgument,
@@ -95,8 +94,6 @@ class AbstractNode:
     """The node configuration."""
     config_model: ClassVar[type[NodeConfig]] = NodeConfig
     """The node config model class. This is the class that will be used to instantiate self.config."""
-    context: ClassVar[MadsciContext] = MadsciContext()
-    """The context for the node. This allows the node to access the MADSci context, including the event client and resource client."""
     _action_lock: ClassVar[threading.Lock] = threading.Lock()
     """Ensures only one blocking action can run at a time."""
 
@@ -156,6 +153,7 @@ class AbstractNode:
                     action_name=action_callable.__madsci_action_name__,
                     description=action_callable.__madsci_action_description__,
                     blocking=action_callable.__madsci_action_blocking__,
+                    result_definitions=action_callable.__madsci_action_result_definitions__,
                 )
 
         # * Save the node info and update definition, if possible
@@ -384,6 +382,7 @@ class AbstractNode:
         action_name: str,
         description: str,
         blocking: bool = True,
+        result_definitions: list[str] = [],
     ) -> None:
         """Add an action to the node module.
 
@@ -402,6 +401,7 @@ class AbstractNode:
             blocking=blocking,
             args=[],
             files=[],
+            results=result_definitions,
         )
         # *Create basic action definition from function signature
         signature = inspect.signature(func)
@@ -633,7 +633,10 @@ class AbstractNode:
         if set_node_errored:
             self.node_status.errored = True
         madsci_error = Error.from_exception(e)
+
         self.node_status.errors.append(madsci_error)
+        if len(self.node_status.errors) > 100:
+            self.node_status.errors = self.node_status.errors[1:]
         self.logger.log_error(
             Event(event_type=EventType.NODE_ERROR, event_data=madsci_error)
         )

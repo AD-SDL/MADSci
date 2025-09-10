@@ -124,13 +124,13 @@
                     </tr>
                   </template>
                 </v-data-table>
-                <h5 v-if="action.results.length > 0">Results</h5>
-                <v-data-table v-if="action.results.length > 0" :headers="result_headers" :items="action.results" hover
+                <h5 v-if="Object.keys(action.results).length > 0">Results</h5>
+                <v-data-table v-if="Object.keys(action.results).length > 0" :headers="result_headers" :items="Object.values(action.results)" hover
                   items-per-page="-1" no-data-text="No Results" density="compact">
                   <template v-slot:item="{ item }: { item: any }">
                     <tr>
-                      <td>{{ item.label }}</td>
-                      <td>{{ item.type }}</td>
+                      <td>{{ item.result_label }}</td>
+                      <td>{{ item.result_type }}</td>
                       <td>{{ item.description }}</td>
                     </tr>
                   </template>
@@ -299,17 +299,26 @@ async function send_wf(action: any) {
 
   })
   var files: { [k: string]: any } = {};
-  var input_files = Object.keys(action.files).map(function(key){
-    return action.files[key];});
-  input_files.forEach(function (file: any) {
+  var file_inputs = Object.values(action.files)
+  let i = 0;
+  let file_input_params: any[] = []
+  let file_input_values: any = {}
+  file_inputs.forEach(function (file: any) {
     if (file.value === undefined) {
       files[file.name] = ""
     }
     else {
-
+      i = i +  1
       files[file.name] = file.value.name
+      file_input_params = file_input_params.concat([{"key": file.value.name}])
+      file_input_values[file.value.name] = file.value.name
     }
+
   })
+  wf.parameters = {
+    "file_inputs": file_input_params
+  }
+
   wf.steps = [{
     "name": action.name,
     "node": props.modal_title,
@@ -320,14 +329,25 @@ async function send_wf(action: any) {
     "comment": "Test",
     "files": files
   }]
-  formData.append("workflow", JSON.stringify(wf))
-  input_files.forEach(function (file: any) {
+  let workflow_definition_id = await ((await fetch(urls.value.workcell_server_url.concat('workflow_definition'),  {
+    method: "POST",
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(wf)
+  })).json())
+  formData.append("workflow_definition_id", workflow_definition_id)
+  formData.append("file_input_paths", JSON.stringify(file_input_values))
+  file_inputs.forEach(function (file: any) {
     if (file.value) {
       formData.append("files", file.value)
     }
   })
+
   fetch(urls.value.workcell_server_url.concat('workflow'), {
     method: "POST",
+
     body: formData
   });
 

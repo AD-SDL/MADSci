@@ -34,6 +34,6 @@ COPY pyproject.toml pdm.lock README.md /home/${CONTAINER_USER}/MADSci/
 COPY src/ /home/${CONTAINER_USER}/MADSci/src
 WORKDIR /home/${CONTAINER_USER}/MADSci
 RUN --mount=type=cache,target=/root/.cache \
-    pdm install -G:all -g -p . --check
+ pdm install -G:all -g -p . --check
 
 WORKDIR /home/${CONTAINER_USER}

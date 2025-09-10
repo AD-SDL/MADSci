@@ -1,16 +1,21 @@
 """Utility function for the workcell manager."""
 
+import inspect
 import shutil
+import tempfile
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import UploadFile
+from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
+from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.location_types import (
     LocationArgument,
 )
+from madsci.common.types.parameter_types import ParameterInputFile, ParameterTypes
 from madsci.common.types.step_types import Step
 from madsci.common.types.workcell_types import WorkcellDefinition
 from madsci.common.types.workflow_types import (
@@ -18,6 +23,7 @@ from madsci.common.types.workflow_types import (
     WorkflowDefinition,
 )
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
+from madsci.workcell_manager.workcell_actions import workcell_action_dict
 
 
 def validate_node_names(
@@ -36,59 +42,140 @@ def validate_node_names(
             ) from e
 
 
-def validate_step(step: Step, state_handler: WorkcellStateHandler) -> tuple[bool, str]:
-    """Check if a step is valid based on the node's info"""
-    if step.node in state_handler.get_nodes():
-        node = state_handler.get_node(step.node)
-        info = node.info
-        if info is None:
-            result = (
+def validate_workcell_action_step(step: Step) -> tuple[bool, str]:
+    """Check if a step calling a workcell action is  valid"""
+    if step.action in workcell_action_dict:
+        action_callable = workcell_action_dict[step.action]
+        signature = inspect.signature(action_callable)
+        for name, parameter in signature.parameters.items():
+            if name not in step.args and parameter.default is None:
+                return (
+                    False,
+                    f"Step '{step.name}': Missing Required Argument {name}",
+                )
+        return True, f"Step '{step.name}': Validated successfully"
+    return (
+        False,
+        f"Action {step.action} is not an existing workcell action, and no node is provided",
+    )
+
+
+def _validate_feedforward(
+    step: Step, feedforward_parameters: dict[str, Any]
+) -> Optional[tuple[bool, str]]:
+    if step.node is None and step.parameters and step.parameters.node is not None:
+        if step.parameters.node in [param.key for param in feedforward_parameters]:
+            return (
                 True,
-                f"Node {step.node} didn't return proper about information, skipping validation",
+                f"Waiting for value from feedforward parameter {step.parameters.node} before validating step {step.name}",
             )
-        elif step.action in info.actions:
-            action = info.actions[step.action]
-            for action_arg in action.args.values():
-                if action_arg.name not in step.args and action_arg.required:
-                    return (
-                        False,
-                        f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing arg '{action_arg.name}'",
-                    )
-                # TODO: Action arg type validation goes here
-            for action_location in action.locations.values():
-                if (
-                    action_location.name not in step.locations
-                    and action_location.required
-                ):
-                    return (
-                        False,
-                        f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing location '{action_location.name}'",
-                    )
-            for action_file in action.files.values():
-                if action_file.name not in step.files and action_file.required:
-                    return (
-                        False,
-                        f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing file '{action_file.name}'",
-                    )
-            result = (True, f"Step '{step.name}': Validated successfully")
-        else:
-            result = (
-                False,
-                f"Step '{step.name}': Node {step.node} has no action '{step.action}'",
-            )
-    else:
-        result = (
+        return (
+            False,
+            f"Step '{step.name}': Feedforward parameter {step.parameters.node} not found",
+        )
+    return None
+
+
+def _validate_node_action(
+    step: Step, state_handler: WorkcellStateHandler
+) -> tuple[bool, str]:
+    node = state_handler.get_node(step.node)
+    info = node.info
+    if info is None:
+        return (
+            True,
+            f"Node {step.node} didn't return proper about information, skipping validation",
+        )
+    if step.action is None or step.action not in info.actions:
+        return (
+            False,
+            f"Step '{step.name}': Node {step.node} has no action '{step.action}'",
+        )
+    action = info.actions[step.action]
+    missing_arg = next(
+        (
+            arg.name
+            for arg in action.args.values()
+            if arg.required
+            and arg.name not in step.args
+            and arg.name not in step.parameters.args
+        ),
+        None,
+    )
+    if missing_arg:
+        return (
+            False,
+            f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing arg '{missing_arg}'",
+        )
+    missing_location = next(
+        (
+            loc.name
+            for loc in action.locations.values()
+            if loc.required
+            and loc.name not in step.locations
+            and loc.name not in step.parameters.locations
+        ),
+        None,
+    )
+    if missing_location:
+        return (
+            False,
+            f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing location '{missing_location}'",
+        )
+    missing_file = next(
+        (
+            file.name
+            for file in action.files.values()
+            if file.required and file.name not in step.files
+        ),
+        None,
+    )
+    if missing_file:
+        return (
+            False,
+            f"Step '{step.name}': Node {step.node}'s action, '{step.action}', is missing file '{missing_file}'",
+        )
+    return (True, f"Step '{step.name}': Validated successfully")
+
+
+def validate_step(
+    step: Step,
+    state_handler: WorkcellStateHandler,
+    feedforward_parameters: list[ParameterTypes],
+) -> tuple[bool, str]:
+    """Check if a step is valid based on the node's info"""
+
+    feedforward_result = _validate_feedforward(step, feedforward_parameters)
+    if feedforward_result:
+        return feedforward_result
+
+    if step.node is not None:
+        if step.node in state_handler.get_nodes():
+            return _validate_node_action(step, state_handler)
+        return (
             False,
             f"Step '{step.name}': Node {step.node} is not defined in workcell",
         )
-    return result
+    if step.node is None:
+        if step.action in workcell_action_dict:
+            return validate_workcell_action_step(step)
+        return (
+            False,
+            f"Step '{step.name}': No internal workcell action matching '{step.action}'",
+        )
+    return (
+        False,
+        f"Step '{step.name}': Unable to validate step due to unknown configuration",
+    )
 
 
 def create_workflow(
     workflow_def: WorkflowDefinition,
     workcell: WorkcellDefinition,
     state_handler: WorkcellStateHandler,
-    parameters: Optional[dict[str, Any]] = None,
+    data_client: DataClient,
+    json_inputs: Optional[dict[str, Any]] = None,
+    file_input_paths: Optional[dict[str, str]] = None,
 ) -> Workflow:
     """Pulls the workcell and builds a list of dictionary steps to be executed
 
@@ -119,31 +206,129 @@ def create_workflow(
     wf_dict.update(
         {
             "label": workflow_def.name,
-            "parameter_values": parameters,
+            "parameter_values": json_inputs,
+            "file_input_paths": file_input_paths,
         }
     )
     wf = Workflow(**wf_dict)
     wf.step_definitions = workflow_def.steps
     steps = []
     for step in workflow_def.steps:
-        steps.append(prepare_workcell_step(workcell, state_handler, step))
+        steps.append(
+            prepare_workflow_step(
+                workcell, state_handler, step, wf, data_client, running=False
+            )
+        )
 
     wf.steps = [Step.model_validate(step.model_dump()) for step in steps]
     wf.submitted_time = datetime.now()
     return wf
 
 
-def prepare_workcell_step(
-    workcell: WorkcellDefinition, state_handler: WorkcellStateHandler, step: Step
+def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
+    """Replace parameter values in a provided step"""
+    if step.parameters is not None:
+        step_dict = step.model_dump()
+        for key, parameter_name in step.parameters.model_dump().items():
+            if type(parameter_name) is str and parameter_name in parameter_values:
+                step_dict[key] = parameter_values[parameter_name]
+        step = Step.model_validate(step_dict)
+
+        for key, parameter_name in step.parameters.args.items():
+            if parameter_name in parameter_values:
+                step.args[key] = parameter_values[parameter_name]
+        for key, parameter_name in step.parameters.locations.items():
+            if parameter_name in parameter_values:
+                step.locations[key] = parameter_values[parameter_name]
+    return step
+
+
+def prepare_workflow_step(
+    workcell: WorkcellDefinition,
+    state_handler: WorkcellStateHandler,
+    step: Step,
+    workflow: Workflow,
+    data_client: DataClient,
+    running: bool = True,
 ) -> Step:
     """Prepares a step for execution by replacing locations and validating it"""
+    parameter_values = workflow.parameter_values
     working_step = deepcopy(step)
+    if step.parameters is not None:
+        working_step = insert_parameters(working_step, parameter_values)
     replace_locations(workcell, working_step, state_handler)
-    valid, validation_string = validate_step(working_step, state_handler=state_handler)
+    valid, validation_string = validate_step(
+        working_step,
+        state_handler=state_handler,
+        feedforward_parameters=workflow.parameters.feed_forward,
+    )
+    if running:
+        working_step = prepare_workflow_files(working_step, workflow, data_client)
     EventClient().log_info(validation_string)
     if not valid:
         raise ValueError(validation_string)
     return working_step
+
+
+def check_parameters(
+    workflow_definition: WorkflowDefinition,
+    json_inputs: Optional[dict[str, Any]] = None,
+    file_input_paths: Optional[dict[str, str]] = None,
+) -> None:
+    """Check that all required parameters are provided"""
+    if workflow_definition.parameters.json_inputs:
+        check_json_parameters(workflow_definition, json_inputs)
+    for ffv in workflow_definition.parameters.feed_forward:
+        if ffv.key in json_inputs or ffv.key in file_input_paths:
+            raise ValueError(
+                f"{ffv.key} is a Feed Forward Value and will be calculated during execution; it should not be provided as an input."
+            )
+    if workflow_definition.parameters.file_inputs:
+        if file_input_paths is None:
+            raise ValueError(
+                "Workflow requires at least one file input; none were provided"
+            )
+        for file_input in workflow_definition.parameters.file_inputs:
+            if file_input.key not in file_input_paths:
+                raise ValueError(f"Required file {file_input.key} not provided")
+
+
+def check_json_parameters(
+    workflow_definition: WorkflowDefinition, json_inputs: Optional[dict[str, Any]]
+) -> None:
+    """Check that all required JSON parameters are provided"""
+    if json_inputs is None:
+        raise ValueError(
+            "Workflow requires at least one JSON input; none were provided"
+        )
+    for json_input in workflow_definition.parameters.json_inputs:
+        if json_input.key not in json_inputs:
+            if json_input.default is not None:
+                json_inputs[json_input.key] = json_input.default
+            else:
+                raise ValueError(f"Required value {json_input.key} not provided")
+
+
+def prepare_workflow_files(
+    step: Step, workflow: Workflow, data_client: DataClient
+) -> Step:
+    """Get workflow files ready to upload"""
+    file_input_ids = workflow.file_input_ids
+    for file, definition in step.files.items():
+        suffixes = []
+        if type(definition) is str:
+            datapoint_id = file_input_ids[definition]
+            if definition in workflow.file_input_paths:
+                suffixes = Path(workflow.file_input_paths[definition]).suffixes
+        elif type(definition) is ParameterInputFile:
+            datapoint_id = file_input_ids[definition.key]
+            if definition.key in workflow.file_input_paths:
+                suffixes = Path(workflow.file_input_paths[definition.key]).suffixes
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
+            data_client.save_datapoint_value(datapoint_id, f.name)
+            step.file_paths[file] = f.name
+    return step
 
 
 def replace_locations(
@@ -183,32 +368,31 @@ def replace_locations(
 
 
 def save_workflow_files(
-    working_directory: str, workflow: Workflow, files: list[UploadFile]
+    workflow: Workflow, files: list[UploadFile], data_client: DataClient
 ) -> Workflow:
     """Saves the files to the workflow run directory,
     and updates the step files to point to the new location"""
+    file_input_paths = workflow.file_input_paths
+    file_inputs = {}
 
-    get_workflow_inputs_directory(
-        workflow_id=workflow.workflow_id, working_directory=working_directory
-    ).expanduser().mkdir(parents=True, exist_ok=True)
-    if files:
-        for file in files:
-            file_path = (
-                get_workflow_inputs_directory(
-                    working_directory=working_directory,
-                    workflow_id=workflow.workflow_id,
-                )
-                / file.filename
-            ).expanduser()
-            with Path.open(file_path, "wb") as f:
-                f.write(file.file.read())
-            for step in workflow.steps:
-                for step_file_key, step_file_path in step.files.items():
-                    if step_file_path == file.filename:
-                        step.files[step_file_key] = str(file_path)
-                        EventClient().log_info(
-                            f"{step_file_key}: {file_path} ({step_file_path})"
-                        )
+    for file in files:
+        file_inputs[file.filename] = file.file
+    file_input_ids = {}
+    for file in workflow.parameters.file_inputs:
+        if file.key not in file_inputs:
+            raise ValueError(f"Missing file: {file.key}")
+        path = Path(file_input_paths[file.key])
+        suffixes = path.suffixes
+        with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
+            f.write(file_inputs[file.key].read())
+            datapoint = FileDataPoint(
+                label=file.key,
+                ownership_info=workflow.ownership_info,
+                path=Path(f.name),
+            )
+            datapoint_id = data_client.submit_datapoint(datapoint).datapoint_id
+            file_input_ids[file.key] = datapoint_id
+    workflow.file_input_ids = file_input_ids
     return workflow
 
 

@@ -52,8 +52,8 @@ pdm-build:
   @pdm build
 
 # Run automated tests
-test:
-  @pytest
+test *args:
+  @pytest {{args}}
 # Run automated tests
 tests: test
 # Run automated tests
