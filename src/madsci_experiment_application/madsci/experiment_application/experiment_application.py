@@ -241,7 +241,7 @@ class ExperimentApplication(RestNode):
         )
         exception = None
         if self.experiment.status == ExperimentStatus.PAUSED:
-            self.logger.log_warning(
+            self.logger.warning(
                 f"Experiment '{self.experiment.experiment_design.experiment_name}' has been paused."
             )
             while True:
@@ -261,7 +261,7 @@ class ExperimentApplication(RestNode):
             )
 
         if exception:
-            self.logger.log_error(exception.message)
+            self.logger.error(exception.message)
             raise exception
 
     def get_resource_from_condition(self, condition: Condition) -> Optional[Resource]:

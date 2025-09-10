@@ -232,7 +232,7 @@ class ResourceClient:
         self.local_resources = {}
         self.logger = event_client if event_client is not None else EventClient()
         if self.resource_server_url is None:
-            self.logger.log_warning(
+            self.logger.warning(
                 "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
                 warning_category=MadsciLocalOnlyWarning,
             )
@@ -305,7 +305,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_warning(
+            self.logger.warning(
                 "Local-only mode does not check to see if an existing resource match already exists."
             )
             resource = Resource.discriminate(resource_definition)
@@ -395,7 +395,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_warning(
+            self.logger.warning(
                 "Local-only mode does not currently search through child resources to get children."
             )
             resource = self.local_resources.get(resource_id)
@@ -460,9 +460,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_error(
-                "Local-only mode does not currently support querying."
-            )
+            self.logger.error("Local-only mode does not currently support querying.")
             raise NotImplementedError(
                 "Local-only mode does not currently support querying."
             )
@@ -523,7 +521,7 @@ class ResourceClient:
             )
             response.raise_for_status()
         else:
-            self.logger.log_error(
+            self.logger.error(
                 "Local-only mode does not currently support querying history."
             )
             raise NotImplementedError(
@@ -549,7 +547,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_error(
+            self.logger.error(
                 "Local-only mode does not currently support restoring resources."
             )
             raise NotImplementedError(
@@ -1333,22 +1331,20 @@ class ResourceClient:
                     f"Acquired lock on resource {resource_id} for client {locked_resource.locked_by}"
                 )
                 return self._wrap_resource(locked_resource)
-            self.logger.log_warning(
+            self.logger.warning(
                 f"Failed to acquire lock on resource {resource_id} for client {self._client_id}"
             )
             return None
         # Local-only mode implementation
         if resource_id not in self.local_resources:
-            self.logger.log_warning(
-                f"Resource {resource_id} not found in local resources"
-            )
+            self.logger.warning(f"Resource {resource_id} not found in local resources")
             return None
 
         # Simple local locking - just mark as locked
         local_resource = self.local_resources[resource_id]
         try:
             if local_resource.locked_by and local_resource.locked_by != self._client_id:
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Resource {resource_id} already locked by {local_resource.locked_by}"
                 )
                 return None
@@ -1405,16 +1401,16 @@ class ResourceClient:
 
             except requests.HTTPError as e:
                 if e.response.status_code == 403:
-                    self.logger.log_warning(
+                    self.logger.warning(
                         f"Access denied: {e.response.json().get('detail', str(e))}"
                     )
                     return None
-                self.logger.log_error(f"Error releasing lock: {e}")
+                self.logger.error(f"Error releasing lock: {e}")
                 raise e
         else:
             # Local-only mode implementation
             if resource_id not in self.local_resources:
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Resource {resource_id} not found in local resources"
                 )
                 return None
@@ -1428,7 +1424,7 @@ class ResourceClient:
                     and self._client_id
                     and local_resource.locked_by != self._client_id
                 ):
-                    self.logger.log_warning(
+                    self.logger.warning(
                         f"Cannot release lock on {resource_id}: not owned by {self._client_id}"
                     )
                     return None

@@ -84,7 +84,7 @@ class RobotArmNode(RestNode):
             try:
                 popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
             except Exception:
-                self.logger.log_error(
+                self.logger.error(
                     "No plate in source! In real scenario, action failed here."
                 )
             try:
@@ -92,7 +92,7 @@ class RobotArmNode(RestNode):
                     resource=self.gripper.resource_id, child=popped_plate
                 )
             except Exception:
-                self.logger.log_error(
+                self.logger.error(
                     "Gripper is full! In real scenario, action failed here."
                 )
 
@@ -106,7 +106,7 @@ class RobotArmNode(RestNode):
                     resource=target.resource_id, child=popped_plate
                 )
             except Exception:
-                self.logger.log_error(
+                self.logger.error(
                     "Target is occupied! In real scenario, action failed here."
                 )
 

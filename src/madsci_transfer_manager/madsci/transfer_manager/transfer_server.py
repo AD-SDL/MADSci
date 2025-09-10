@@ -142,7 +142,7 @@ class TransferNode(RestNode):
                     )
 
                 if child_workflow.status.failed:
-                    self.logger.log_error(
+                    self.logger.error(
                         f"Transfer workflow failed: {child_workflow.workflow_id}"
                     )
                     return ActionFailed(
@@ -152,12 +152,12 @@ class TransferNode(RestNode):
                     )
 
                 if child_workflow.status.cancelled:
-                    self.logger.log_warning(
+                    self.logger.warning(
                         f"Transfer workflow cancelled: {child_workflow.workflow_id}"
                     )
                     return ActionFailed(errors=["Transfer workflow was cancelled"])
 
-                self.logger.log_error(
+                self.logger.error(
                     f"Transfer workflow ended unexpectedly: {child_workflow.workflow_id}"
                 )
                 return ActionFailed(
@@ -165,7 +165,7 @@ class TransferNode(RestNode):
                 )
 
             except Exception as e:
-                self.logger.log_error(f"Transfer action failed: {e}")
+                self.logger.error(f"Transfer action failed: {e}")
                 return ActionFailed(errors=[f"Transfer execution error: {e!s}"])
 
     @action(
@@ -266,7 +266,7 @@ class TransferNode(RestNode):
                 # Handle all non-success states with generic failure
                 status_info = f"Status: {child_workflow.status}"
                 if child_workflow.status.failed or child_workflow.status.cancelled:
-                    self.logger.log_error(
+                    self.logger.error(
                         f"Resource transfer workflow failed: {status_info}"
                     )
                 return ActionFailed(
@@ -274,7 +274,7 @@ class TransferNode(RestNode):
                 )
 
             except Exception as e:
-                self.logger.log_error(f"Resource transfer action failed: {e}")
+                self.logger.error(f"Resource transfer action failed: {e}")
                 return ActionFailed(
                     errors=[f"Resource transfer execution error: {e!s}"]
                 )
@@ -319,7 +319,7 @@ class TransferNode(RestNode):
                 self.transfer_manager = None
                 self.logger.info("Transfer manager shut down successfully.")
         except Exception as e:
-            self.logger.log_error(f"Error during transfer node shutdown: {e}")
+            self.logger.error(f"Error during transfer node shutdown: {e}")
             raise e
 
     def state_handler(self) -> None:
@@ -334,7 +334,7 @@ class TransferNode(RestNode):
             }
         else:
             self.node_state = {"status": "initializing"}
-            self.logger.log_warning("Transfer manager is not initialized.")
+            self.logger.warning("Transfer manager is not initialized.")
 
 
 if __name__ == "__main__":

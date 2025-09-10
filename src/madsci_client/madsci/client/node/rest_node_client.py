@@ -86,7 +86,7 @@ class RestNodeClient(AbstractNodeClient):
         try:
             rest_response.raise_for_status()
         except requests.HTTPError as e:
-            self.logger.log_error(f"{rest_response.status_code}: {rest_response.text}")
+            self.logger.error(f"{rest_response.status_code}: {rest_response.text}")
             raise e
         if "x-madsci-status" in rest_response.headers:
             self.logger.info("Processing file response")

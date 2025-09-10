@@ -121,8 +121,8 @@ class Engine:
                         self.run_next_step()
                         scheduler_tick = time.time()
             except Exception as e:
-                self.logger.log_error(e)
-                self.logger.log_warning(
+                self.logger.error(e)
+                self.logger.warning(
                     f"Error in engine loop, waiting {10 * self.workcell_settings.node_update_interval} seconds before trying again."
                 )
                 with self.state_handler.wc_state_lock():
@@ -149,7 +149,7 @@ class Engine:
                 next_wf = sorted_ready_workflows[0]
                 # * Check if the workflow is already complete
                 if next_wf.status.current_step_index >= len(next_wf.steps):
-                    self.logger.log_warning(
+                    self.logger.warning(
                         f"Workflow {next_wf.workflow_id} has no more steps, marking as completed"
                     )
                     next_wf.status.completed = True
@@ -211,7 +211,7 @@ class Engine:
                 try:
                     response = client.send_action(request, await_result=False)
                 except Exception as e:
-                    self.logger.log_error(
+                    self.logger.error(
                         f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
                     )
                     if response is None:
@@ -231,9 +231,9 @@ class Engine:
                 # * Finalize the step
             self.finalize_step(workflow_id, step)
             self.logger.info(f"Completed step {step.step_id} in workflow {workflow_id}")
-            self.logger.log_debug(self.state_handler.get_workflow(workflow_id))
+            self.logger.debug(self.state_handler.get_workflow(workflow_id))
         except Exception as e:
-            self.logger.log_error(
+            self.logger.error(
                 f"Running step in workflow {workflow_id} triggered unhandled exception: {traceback.format_exc()}"
             )
             step.result = ActionResult(
@@ -268,7 +268,7 @@ class Engine:
                 node.info.capabilities.get_action_result is None
                 and client.supported_capabilities.get_action_result is False
             ):
-                self.logger.log_warning(
+                self.logger.warning(
                     f"While running Step {step.step_id} of workflow {wf.workflow_id}, send_action returned a non-terminal response {response}. However, node {step.node} does not support querying an action result."
                 )
                 break
@@ -285,7 +285,7 @@ class Engine:
                     # * If the action is unknown, that means the node does not have a record of the action
                     break
             except Exception as e:
-                self.logger.log_error(
+                self.logger.error(
                     f"Querying action {action_id} for step {step.step_id} resulted in exception: {e!s}"
                 )
                 if response is None:
@@ -294,7 +294,7 @@ class Engine:
                     response.errors.append(Error.from_exception(e))
                 self.handle_response(wf, step, response)
                 if retry_count >= self.workcell_settings.get_action_result_retries:
-                    self.logger.log_error(
+                    self.logger.error(
                         f"Exceeded maximum number of retries for querying action {action_id} for step {step.step_id}"
                     )
                     break
@@ -342,13 +342,13 @@ class Engine:
             elif step.status == ActionStatus.NOT_READY:
                 pass
             elif step.status == ActionStatus.UNKNOWN:
-                self.logger.log_error(
+                self.logger.error(
                     f"Step {step.step_id} in workflow {workflow_id} ended with unknown status"
                 )
                 wf.status.failed = True
                 wf.end_time = datetime.now()
             else:
-                self.logger.log_error(
+                self.logger.error(
                     f"Step {step.step_id} in workflow {workflow_id} ended with unexpected status {step.status}"
                 )
                 wf.status.failed = True
@@ -408,7 +408,7 @@ class Engine:
                 f"{duration_text}"
             )
         except Exception as e:
-            self.logger.log_error(
+            self.logger.error(
                 f"Error logging workflow completion event for workflow {workflow.workflow_id}: {e!s}\n{traceback.format_exc()}"
             )
 
@@ -494,13 +494,11 @@ class Engine:
                     ownership_info=ownership_info,
                     path=str(response.files[file_key]),
                 )
-                self.logger.log_debug(
+                self.logger.debug(
                     "Submitting datapoint: " + str(datapoint.datapoint_id)
                 )
                 self.data_client.submit_datapoint(datapoint)
-                self.logger.log_debug(
-                    "Submitted datapoint: " + str(datapoint.datapoint_id)
-                )
+                self.logger.debug("Submitted datapoint: " + str(datapoint.datapoint_id))
 
                 labeled_data[label] = datapoint.datapoint_id
                 datapoints[label] = datapoint
@@ -543,7 +541,7 @@ class Engine:
                 workcell_id=self.workcell_definition.workcell_id,
                 node_id=node.info.node_id if node.info else None,
             ):
-                self.logger.log_warning(
+                self.logger.warning(
                     event=Event(
                         event_type=EventType.NODE_STATUS_UPDATE,
                         event_data=node.status,
