@@ -593,3 +593,32 @@ class AnalyzerNode(RestNode):
 ```
 
 **Examples**: See [example_lab/](../../example_lab/) for complete resource management workflows integrated with laboratory operations.
+
+## Database Migration Tools
+
+MADSci includes automated database migration tools that handle schema changes and version tracking for the resource management system.
+
+### Features
+
+- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and database schema version
+- **Automated Backup**: Creates PostgreSQL dumps before applying migrations to enable rollback on failure
+- **Schema Migration**: Uses Alembic to generate and apply database schema changes
+- **Type Conversion Safety**: Automatically handles PostgreSQL type conversions (e.g., VARCHAR to FLOAT) with safe SQL transformations
+- **Location Independence**: Can be run from any directory while finding its own configuration files
+
+### Usage
+```bash
+# Run migration to current MADSci version
+python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@localhost:5432/resources'
+
+# Migrate to specific version
+python -m madsci.resource_manager.migration_tool --target-version 1.0.0
+
+# Create backup only
+python -m madsci.resource_manager.migration_tool --backup-only
+
+# Restore from backup
+python -m madsci.resource_manager.migration_tool --restore-from /path/to/backup.sql
+
+# Generate new migration file
+python -m madsci.resource_manager.migration_tool --generate-migration "Add new feature"
