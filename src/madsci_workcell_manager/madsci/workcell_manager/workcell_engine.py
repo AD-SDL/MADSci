@@ -71,7 +71,7 @@ class Engine:
                 self.resource_client,
             )
         time.sleep(self.workcell_settings.cold_start_delay)
-        self.logger.log_info("Engine initialized, waiting for workflows...")
+        self.logger.info("Engine initialized, waiting for workflows...")
 
     @threaded_daemon
     def spin(self) -> None:
@@ -166,7 +166,7 @@ class Engine:
                 self.state_handler.set_active_workflow(next_wf)
                 break
             else:
-                self.logger.log_info("No workflows ready to run")
+                self.logger.info("No workflows ready to run")
         if next_wf:
             thread = self.run_step(next_wf.workflow_id)
             if await_step_completion:
@@ -188,9 +188,7 @@ class Engine:
                 data_client=self.data_client,
             )
             step.start_time = datetime.now()
-            self.logger.log_info(
-                f"Running step {step.step_id} in workflow {workflow_id}"
-            )
+            self.logger.info(f"Running step {step.step_id} in workflow {workflow_id}")
             if step.node is None:
                 step = self.run_workcell_action(step)
             else:
@@ -232,9 +230,7 @@ class Engine:
                 )
                 # * Finalize the step
             self.finalize_step(workflow_id, step)
-            self.logger.log_info(
-                f"Completed step {step.step_id} in workflow {workflow_id}"
-            )
+            self.logger.info(f"Completed step {step.step_id} in workflow {workflow_id}")
             self.logger.log_debug(self.state_handler.get_workflow(workflow_id))
         except Exception as e:
             self.logger.log_error(
@@ -406,7 +402,7 @@ class Engine:
                 else "Duration: Unknown"
             )
 
-            self.logger.log_info(
+            self.logger.info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
                 f"Status: {event_data['status']}, Author: {event_data['workflow_definition_metadata']['author'] or 'Unknown'}, "
                 f"{duration_text}"

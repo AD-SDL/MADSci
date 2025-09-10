@@ -100,7 +100,7 @@ class EmailAlerts:
             finally:
                 server.quit()
 
-            self.logger.log_info(f"Email alert sent to {email_address}")
+            self.logger.info(f"Email alert sent to {email_address}")
             return True
         except Exception as e:
             self.logger.log_error(f"Failed to send email to {email_address}: {e}")

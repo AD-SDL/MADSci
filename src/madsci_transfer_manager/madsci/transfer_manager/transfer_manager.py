@@ -233,7 +233,7 @@ class TransferManager:
         original_locations: Optional[Dict] = None,
     ) -> Step:
         """Build a concrete transfer step with merged parameters."""
-        self.logger.log_info(f"Building step for {source} -> {target} via {robot_name}")
+        self.logger.info(f"Building step for {source} -> {target} via {robot_name}")
 
         # Start with robot's template
         step_template = robot_definition["default_step_template"].copy()
@@ -309,7 +309,7 @@ class TransferManager:
 
         if lookup_coordinates is not None:
             updated_location.location = lookup_coordinates
-            self.logger.log_info(
+            self.logger.info(
                 f"Updated {location_name} coordinates for {robot_name}: {lookup_coordinates}"
             )
         else:
@@ -340,7 +340,7 @@ class TransferManager:
         robot_coordinates = lookup_table.get(robot_name)
 
         if robot_coordinates is not None:
-            self.logger.log_info(
+            self.logger.info(
                 f"Found lookup coordinates for {location_name}.{robot_name}: {robot_coordinates}"
             )
             return robot_coordinates

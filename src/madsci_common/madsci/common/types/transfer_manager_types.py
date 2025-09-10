@@ -26,7 +26,7 @@ class TransferManagerDefinition(MadsciBaseModel, extra="allow"):
     manager_type: Literal[ManagerType.TRANSFER_MANAGER] = Field(
         title="Manager Type",
         description="The type of manager",
-        default="transfer_manager",  # Add this to ManagerType enum
+        default=ManagerType.TRANSFER_MANAGER,
     )
     transfer_manager_id: str = Field(
         title="Transfer Manager ID",

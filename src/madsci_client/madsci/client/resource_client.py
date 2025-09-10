@@ -1329,7 +1329,7 @@ class ResourceClient:
                     f"{self.resource_server_url}resource/{locked_resource.resource_id}"
                 )
 
-                self.logger.log_info(
+                self.logger.info(
                     f"Acquired lock on resource {resource_id} for client {locked_resource.locked_by}"
                 )
                 return self._wrap_resource(locked_resource)
@@ -1360,7 +1360,7 @@ class ResourceClient:
         local_resource.locked_by = self._client_id
         local_resource.locked_until = datetime.now() + timedelta(seconds=lock_duration)
 
-        self.logger.log_info(f"Acquired local lock on resource {resource_id}")
+        self.logger.info(f"Acquired local lock on resource {resource_id}")
         return self._wrap_resource(local_resource)
 
     def release_lock(
@@ -1398,7 +1398,7 @@ class ResourceClient:
                     unlocked_resource = Resource.discriminate(unlocked_resource_data)
                     unlocked_resource.resource_url = f"{self.resource_server_url}resource/{unlocked_resource.resource_id}"
 
-                    self.logger.log_info(
+                    self.logger.info(
                         f"Released lock on resource {resource_id} for client {self._client_id}"
                     )
                     return self._wrap_resource(unlocked_resource)
@@ -1440,7 +1440,7 @@ class ResourceClient:
             local_resource.locked_by = None
             local_resource.locked_until = None
 
-            self.logger.log_info(f"Released local lock on resource {resource_id}")
+            self.logger.info(f"Released local lock on resource {resource_id}")
             return self._wrap_resource(local_resource)
 
     def is_locked(

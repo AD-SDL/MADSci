@@ -89,12 +89,12 @@ class RestNodeClient(AbstractNodeClient):
             self.logger.log_error(f"{rest_response.status_code}: {rest_response.text}")
             raise e
         if "x-madsci-status" in rest_response.headers:
-            self.logger.log_info("Processing file response")
+            self.logger.info("Processing file response")
             response = process_file_response(rest_response)
         else:
-            self.logger.log_info("Processing JSON response")
+            self.logger.info("Processing JSON response")
             response = ActionResult.model_validate(rest_response.json())
-        self.logger.log_info(response)
+        self.logger.info(response)
         if await_result and not response.status.is_terminal:
             response = self.await_action_result(response.action_id, timeout=timeout)
         return response

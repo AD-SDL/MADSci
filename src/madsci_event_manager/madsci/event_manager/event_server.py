@@ -39,7 +39,7 @@ def create_event_server(  # noqa: C901, PLR0915
     logger.event_server = None  # * Ensure we don't recursively log events
 
     event_manager_settings = event_manager_settings or EventManagerSettings()
-    logger.log_info(event_manager_settings)
+    logger.info(event_manager_settings)
 
     if event_manager_definition is None:
         def_path = Path(event_manager_settings.event_manager_definition).expanduser()
@@ -49,17 +49,17 @@ def create_event_server(  # noqa: C901, PLR0915
             )
         else:
             event_manager_definition = EventManagerDefinition()
-        logger.log_info(f"Writing to event manager definition file: {def_path}")
+        logger.info(f"Writing to event manager definition file: {def_path}")
         event_manager_definition.to_yaml(def_path)
 
     global_ownership_info.manager_id = event_manager_definition.event_manager_id
     logger = EventClient(name=f"event_manager.{event_manager_definition.name}")
     logger.event_server = None  # * Ensure we don't recursively log events
-    logger.log_info(event_manager_definition)
+    logger.info(event_manager_definition)
     if db_connection is None:
         db_client = MongoClient(event_manager_settings.db_url)
         db_connection = db_client[event_manager_settings.collection_name]
-    logger.log_info(get_current_madsci_context())
+    logger.info(get_current_madsci_context())
 
     app = FastAPI()
     events = db_connection["events"]

@@ -3,7 +3,6 @@
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import yaml
@@ -484,7 +483,6 @@ def test_lookup_coordinates_retrieval(transfer_manager: TransferManager) -> None
     assert coordinates is None
 
 
-@patch("builtins.print")
 def test_transfer_manager_debug_output(transfer_manager: TransferManager) -> None:
     """
     Test that debug output is generated during transfer planning.

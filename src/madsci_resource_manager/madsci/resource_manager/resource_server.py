@@ -47,7 +47,7 @@ def create_resource_server(  # noqa: C901, PLR0915
     """Creates a Resource Manager's REST server."""
     logger = EventClient()
     resource_server_settings = resource_server_settings or ResourceManagerSettings()
-    logger.log_info(resource_server_settings)
+    logger.info(resource_server_settings)
 
     if not resource_manager_definition:
         def_path = Path(
@@ -59,12 +59,12 @@ def create_resource_server(  # noqa: C901, PLR0915
             )
         else:
             resource_manager_definition = ResourceManagerDefinition()
-        logger.log_info(f"Writing to resource manager definition file: {def_path}")
+        logger.info(f"Writing to resource manager definition file: {def_path}")
         resource_manager_definition.to_yaml(def_path)
 
     global_ownership_info.manager_id = resource_manager_definition.resource_manager_id
     logger = EventClient(name=f"resource_manager.{resource_manager_definition.name}")
-    logger.log_info(resource_manager_definition)
+    logger.info(resource_manager_definition)
 
     if not resource_interface:
         resource_interface = ResourceInterface(

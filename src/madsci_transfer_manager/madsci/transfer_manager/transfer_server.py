@@ -62,7 +62,7 @@ class TransferNode(RestNode):
         )
         if not transfer_config_path.is_absolute():
             transfer_config_path = transfer_manager_path.parent / transfer_config_path
-        self.logger.log_info(f"Using transfer config at: {transfer_config_path}")
+        self.logger.info(f"Using transfer config at: {transfer_config_path}")
 
         # Initialize transfer manager with resolved config
         transfer_config = TransferManagerConfig(config_file_path=transfer_config_path)
@@ -75,10 +75,10 @@ class TransferNode(RestNode):
         if self.resource_client:
             self.resource_owner = OwnershipInfo(node_id=self.node_definition.node_id)
         self.reservation_lock = Lock()
-        self.logger.log_info(
+        self.logger.info(
             f"Transfer Node initialized with {len(self.transfer_manager.get_available_robots())} robots"
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Available locations: {self.transfer_manager.get_available_locations()}"
         )
 
@@ -96,7 +96,7 @@ class TransferNode(RestNode):
         # Acquire lock to ensure only one transfer executes at a time
         with self.reservation_lock:
             try:
-                self.logger.log_info(
+                self.logger.info(
                     f"Starting transfer: {source.location_name} -> {target.location_name}"
                 )
 
@@ -113,7 +113,7 @@ class TransferNode(RestNode):
                     transfer_step
                 )
 
-                self.logger.log_info(
+                self.logger.info(
                     f"Transfer expanded to {len(resolved_steps)} resolved steps"
                 )
 
@@ -131,7 +131,7 @@ class TransferNode(RestNode):
                 )
                 # Check child workflow result
                 if child_workflow.status.completed:
-                    self.logger.log_info(
+                    self.logger.info(
                         f"Transfer completed successfully: {child_workflow.workflow_id}"
                     )
                     return ActionSucceeded(
@@ -192,7 +192,7 @@ class TransferNode(RestNode):
                     if isinstance(source_resource, str)
                     else source_resource.resource_id
                 )
-                self.logger.log_info(
+                self.logger.info(
                     f"Starting resource transfer: {resource_id} -> {target.location_name}"
                 )
 
@@ -211,7 +211,7 @@ class TransferNode(RestNode):
                 except Exception as e:
                     return ActionFailed(errors=[f"Resource validation failed: {e!s}"])
 
-                self.logger.log_info(
+                self.logger.info(
                     f"Resource {resource_id} found at location '{source_location_name}', transferring to '{target.location_name}'"
                 )
 
@@ -237,7 +237,7 @@ class TransferNode(RestNode):
                     transfer_step
                 )
 
-                self.logger.log_info(
+                self.logger.info(
                     f"Resource transfer expanded to {len(resolved_steps)} resolved steps"
                 )
 
@@ -254,7 +254,7 @@ class TransferNode(RestNode):
 
                 # Handle workflow completion
                 if child_workflow.status.completed:
-                    self.logger.log_info(
+                    self.logger.info(
                         f"Resource transfer completed successfully: {child_workflow.workflow_id}"
                     )
                     return ActionSucceeded(
@@ -317,7 +317,7 @@ class TransferNode(RestNode):
             if self.transfer_manager is not None:
                 del self.transfer_manager
                 self.transfer_manager = None
-                self.logger.log_info("Transfer manager shut down successfully.")
+                self.logger.info("Transfer manager shut down successfully.")
         except Exception as e:
             self.logger.log_error(f"Error during transfer node shutdown: {e}")
             raise e

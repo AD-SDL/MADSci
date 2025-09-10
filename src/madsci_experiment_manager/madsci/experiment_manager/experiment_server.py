@@ -32,8 +32,8 @@ def create_experiment_server(  # noqa: C901, PLR0915
     experiment_manager_settings = (
         experiment_manager_settings or ExperimentManagerSettings()
     )
-    logger.log_info(experiment_manager_settings)
-    logger.log_info(get_current_madsci_context())
+    logger.info(experiment_manager_settings)
+    logger.info(get_current_madsci_context())
     if not experiment_manager_definition:
         def_path = Path(
             experiment_manager_settings.experiment_manager_definition
@@ -44,7 +44,7 @@ def create_experiment_server(  # noqa: C901, PLR0915
             )
         else:
             experiment_manager_definition = ExperimentManagerDefinition()
-        logger.log_info(f"Writing to experiment manager definition file: {def_path}")
+        logger.info(f"Writing to experiment manager definition file: {def_path}")
         experiment_manager_definition.to_yaml(def_path)
     logger = EventClient(
         name=f"experiment_manager.{experiment_manager_definition.name}",
@@ -53,7 +53,7 @@ def create_experiment_server(  # noqa: C901, PLR0915
     global_ownership_info.manager_id = (
         experiment_manager_definition.experiment_manager_id
     )
-    logger.log_info(experiment_manager_definition)
+    logger.info(experiment_manager_definition)
 
     # * DB Config
     if db_connection is None:

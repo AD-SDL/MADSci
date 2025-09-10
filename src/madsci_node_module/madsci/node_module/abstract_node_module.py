@@ -355,13 +355,13 @@ class AbstractNode:
     def lock(self) -> bool:
         """Admin command to lock the node."""
         self.node_status.locked = True
-        self.logger.log_info("Node locked")
+        self.logger.info("Node locked")
         return True
 
     def unlock(self) -> bool:
         """Admin command to unlock the node."""
         self.node_status.locked = False
-        self.logger.log_info("Node unlocked")
+        self.logger.info("Node unlocked")
         return True
 
     """------------------------------------------------------------------------------------------------"""
@@ -731,7 +731,7 @@ class AbstractNode:
             self._exception_handler(exception)
             self.node_status.errored = True
         else:
-            self.logger.log_info(
+            self.logger.info(
                 Event(
                     event_type=EventType.NODE_START,
                     event_data=self.node_definition.model_dump(mode="json"),
@@ -748,7 +748,7 @@ class AbstractNode:
             self.action_history[action_result.action_id] = [action_result]
         else:
             self.action_history[action_result.action_id].append(action_result)
-        self.logger.log_info(
+        self.logger.info(
             Event(
                 event_type=EventType.ACTION_STATUS_CHANGE,
                 event_data=action_result,

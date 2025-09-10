@@ -40,7 +40,7 @@ def create_data_server(  # noqa: C901, PLR0915
     logger = EventClient()
 
     data_manager_settings = data_manager_settings or DataManagerSettings()
-    logger.log_info(data_manager_settings)
+    logger.info(data_manager_settings)
     if not data_manager_definition:
         def_path = Path(data_manager_settings.data_manager_definition).expanduser()
         if def_path.exists():
@@ -49,14 +49,14 @@ def create_data_server(  # noqa: C901, PLR0915
             )
         else:
             data_manager_definition = DataManagerDefinition()
-        logger.log_info(f"Writing to data manager definition file: {def_path}")
+        logger.info(f"Writing to data manager definition file: {def_path}")
         data_manager_definition.to_yaml(def_path)
     global_ownership_info.manager_id = data_manager_definition.data_manager_id
     logger = EventClient(
         name=f"data_manager.{data_manager_definition.name}",
     )
-    logger.log_info(data_manager_definition)
-    logger.log_info(get_current_madsci_context())
+    logger.info(data_manager_definition)
+    logger.info(get_current_madsci_context())
 
     if db_client is None:
         db_client = MongoClient(data_manager_settings.db_url)
