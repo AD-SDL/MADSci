@@ -14,21 +14,21 @@ from madsci.common.types.resource_types import (
 base_url = "http://localhost:8003"
 client = ResourceClient(resource_server_url=base_url)
 
-# stack = Stack(
-#     resource_name="stack", resource_class="stack", capacity=10, ownership=None
-# )
-# stack = client.add_resource(stack)
-# # # Add assets to the stack and push them
-# for i in range(5):
-#     asset = Asset(resource_name=f"Test plate {i}", resource_class="asset")
-#     asset = client.add_resource(asset)
-#     stack = client.push(stack, asset)
+stack = Stack(
+    resource_name="stack", resource_class="stack", capacity=10, ownership=None
+)
+stack = client.add_resource(stack)
+# # Add assets to the stack and push them
+for i in range(5):
+    asset = Asset(resource_name=f"Test plate {i}", resource_class="asset")
+    asset = client.add_resource(asset)
+    stack = client.push(stack, asset)
 
-# # # # Retrieve the stack and pop two assets
-# retrieved_stack = client.query_resource(resource_id=stack.resource_id)
-# for _ in range(2):
-#     popped_asset, retrieved_stack = client.pop(retrieved_stack)
-#     print(popped_asset)
+# # # Retrieve the stack and pop two assets
+retrieved_stack = client.query_resource(resource=stack.resource_id)
+for _ in range(2):
+    popped_asset, retrieved_stack = client.pop(retrieved_stack)
+    print(popped_asset)
 
 # # # Create and add a queue
 # queue = Queue(
