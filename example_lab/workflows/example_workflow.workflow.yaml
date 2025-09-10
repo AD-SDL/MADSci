@@ -14,12 +14,19 @@ parameters:
 steps:
   - name: Run Liquid Handler Protocol
     node: liquidhandler_1
-    action: run_protocol
-    files:
-      protocol: liquidhandler_protocol
+    action: run_command
+    args:
+      command: first_command
   - name: Transfer Plate
-    node: robotarm_1
-    action: transfer
+    node: transfer_manager
+    action: transfer_resource
+    args:
+      source_resource: 01K4B3CZA2GHANSBD85T7C1EPZ
+    locations:
+      target: location_2
+  - name: Transfer Plate
+    node: transfer_manager
+    action: transfer_resource
     locations:
       source: location_1
       target: location_2

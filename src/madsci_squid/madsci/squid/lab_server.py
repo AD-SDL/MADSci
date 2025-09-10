@@ -22,7 +22,7 @@ def create_lab_server(
     logger = EventClient()
 
     lab_settings = lab_settings or LabManagerSettings()
-    logger.log_info(lab_settings)
+    logger.info(lab_settings)
     if not lab_definition:
         lab_def_path = Path(lab_settings.lab_definition).expanduser()
         if lab_def_path.exists():
@@ -31,16 +31,16 @@ def create_lab_server(
             )
         else:
             lab_definition = LabDefinition()
-        logger.log_info(f"Writing to lab definition file: {lab_def_path}")
+        logger.info(f"Writing to lab definition file: {lab_def_path}")
         lab_definition.to_yaml(lab_def_path)
     global_ownership_info.manager_id = lab_definition.lab_id
     global_ownership_info.lab_id = lab_definition.lab_id
     logger = EventClient(
         name=f"lab_manager.{lab_definition.name}",
     )
-    logger.log_info(lab_definition)
+    logger.info(lab_definition)
     context = get_current_madsci_context()
-    logger.log_info(context)
+    logger.info(context)
 
     app = FastAPI()
 

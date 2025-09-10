@@ -47,3 +47,8 @@ class MadsciContext(
         description="The URL of the workcell server.",
         default=None,
     )
+    transfer_server_url: Optional[AnyUrl] = Field(
+        title="Transfer Server URL",
+        description="The URL of the transfer server.",
+        default=None,
+    )

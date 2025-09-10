@@ -50,7 +50,7 @@ class Scheduler(AbstractScheduler):
                     priority -= 1
 
             except Exception as e:
-                self.logger.log_error(
+                self.logger.error(
                     f"Error in scheduler while evaluating workflow {wf.workflow_id}: {traceback.format_exc()}"
                 )
                 metadata.ready_to_run = False

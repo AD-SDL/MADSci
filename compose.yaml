@@ -122,6 +122,7 @@ services:
     depends_on:
       - mongodb
       - event_manager
+
   workcell_manager:
     <<: *madsci-service
     container_name: workcell_manager
@@ -133,6 +134,13 @@ services:
       - event_manager
       - postgres
 
+  transfer_manager:
+    <<: *madsci-service
+    container_name: transfer_manager
+    command: python -m madsci.transfer_manager.transfer_server --node_definition node_definitions/transfer_manager.node.yaml
+    depends_on:
+      - event_manager
+      - workcell_manager
 
    # *Nodes
   liquidhandler:

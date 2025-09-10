@@ -80,7 +80,7 @@ class PlateReaderNode(RestNode):
         """Run a command on the plate reader."""
 
         with (Path.home() / "test.txt").open("w") as f:
-            self.logger.log_info(f.write("test"))
+            self.logger.info(f.write("test"))
         path = str(Path.home() / "test.txt")
 
         return ActionSucceeded(files={"example_file": path})

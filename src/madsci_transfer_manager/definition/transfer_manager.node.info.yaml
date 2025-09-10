@@ -1,8 +1,8 @@
-node_name: example_app
-node_id: 01K3VYADTK62WJRJYN0P017TQN
+node_name: transfer_manager.node
+node_id: 01K3T5G185TVCZCGGYVK3VR1XK
 node_description: null
 node_type: device
-module_name: example_app
+module_name: transfer_node
 module_version: 0.0.1
 capabilities:
   get_info: true
@@ -22,25 +22,81 @@ capabilities:
   - shutdown
   - unlock
 node_url: null
-actions: {}
+actions:
+  transfer:
+    name: transfer
+    description: Transfer between two locations by submitting child workflow
+    args: {}
+    locations:
+      source:
+        name: source
+        description: Location to transfer from
+        argument_type: location
+        required: true
+        default: null
+      target:
+        name: target
+        description: Location to transfer to
+        argument_type: location
+        required: true
+        default: null
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+  get_transfer_options:
+    name: get_transfer_options
+    description: Get available transfer path options between two locations
+    args:
+      source:
+        name: source
+        description: Source location name
+        argument_type: str
+        required: true
+        default: null
+      target:
+        name: target
+        description: Target location name
+        argument_type: str
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+  validate_transfer:
+    name: validate_transfer
+    description: Validate if a transfer between two locations is possible
+    args:
+      source:
+        name: source
+        description: Source location name
+        argument_type: str
+        required: true
+        default: null
+      target:
+        name: target
+        description: Target location name
+        argument_type: str
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
 config:
-  node_definition: default.node.yaml
+  node_definition: src/madsci_transfer_manager/definition/transfer_manager.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://127.0.0.1:2000/
+  node_url: http://localhost:8006
   uvicorn_kwargs: {}
-  server_mode: false
-  run_args: []
-  run_kwargs: {}
+  workcell_server_url: http://localhost:8005
 config_schema:
-  description: 'Configuration for the ExperimentApplication.
-
-
-    This class is used to define the configuration for the ExperimentApplication node.
-
-    It can be extended to add custom configurations.'
+  description: Configuration for the Transfer Node.
   properties:
     node_definition:
       anyOf:
@@ -85,29 +141,17 @@ config_schema:
       description: The interval in seconds at which the node should update its state.
       title: State Update Interval
     node_url:
-      default: http://127.0.0.1:2000/
-      description: The URL used to communicate with the node. This is the base URL
-        for the REST API.
-      format: uri
-      minLength: 1
-      title: Node URL
+      default: http://localhost:8006
+      title: Node Url
       type: string
     uvicorn_kwargs:
       additionalProperties: true
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-    server_mode:
-      default: false
-      title: Server Mode
-      type: boolean
-    run_args:
-      items: {}
-      title: Run Args
-      type: array
-    run_kwargs:
-      additionalProperties: true
-      title: Run Kwargs
-      type: object
-  title: ExperimentApplicationConfig
+    workcell_server_url:
+      default: http://localhost:8005
+      title: Workcell Server Url
+      type: string
+  title: TransferNodeConfig
   type: object

@@ -39,7 +39,7 @@ def create_event_server(  # noqa: C901, PLR0915
     logger.event_server = None  # * Ensure we don't recursively log events
 
     event_manager_settings = event_manager_settings or EventManagerSettings()
-    logger.log_info(event_manager_settings)
+    logger.info(event_manager_settings)
 
     if event_manager_definition is None:
         def_path = Path(event_manager_settings.event_manager_definition).expanduser()
@@ -49,17 +49,17 @@ def create_event_server(  # noqa: C901, PLR0915
             )
         else:
             event_manager_definition = EventManagerDefinition()
-        logger.log_info(f"Writing to event manager definition file: {def_path}")
+        logger.info(f"Writing to event manager definition file: {def_path}")
         event_manager_definition.to_yaml(def_path)
 
     global_ownership_info.manager_id = event_manager_definition.event_manager_id
     logger = EventClient(name=f"event_manager.{event_manager_definition.name}")
     logger.event_server = None  # * Ensure we don't recursively log events
-    logger.log_info(event_manager_definition)
+    logger.info(event_manager_definition)
     if db_connection is None:
         db_client = MongoClient(event_manager_settings.db_url)
         db_connection = db_client[event_manager_settings.collection_name]
-    logger.log_info(get_current_madsci_context())
+    logger.info(get_current_madsci_context())
 
     app = FastAPI()
     events = db_connection["events"]
@@ -79,12 +79,10 @@ def create_event_server(  # noqa: C901, PLR0915
             try:
                 events.insert_one(mongo_data)
             except errors.DuplicateKeyError:
-                logger.log_warning(
-                    f"Duplicate event ID {event.event_id} - skipping insert"
-                )
+                logger.warning(f"Duplicate event ID {event.event_id} - skipping insert")
                 # Just continue - don't fail the request
         except Exception as e:
-            logger.log_error(f"Failed to log event: {e}")
+            logger.error(f"Failed to log event: {e}")
             raise e
 
         if (
@@ -102,7 +100,7 @@ def create_event_server(  # noqa: C901, PLR0915
         """Look up an event by event_id"""
         event = events.find_one({"_id": event_id})
         if not event:
-            logger.log_error(f"Event with ID {event_id} not found")
+            logger.error(f"Event with ID {event_id} not found")
             raise HTTPException(
                 status_code=404, detail=f"Event with ID {event_id} not found"
             )
@@ -194,7 +192,7 @@ def create_event_server(  # noqa: C901, PLR0915
             return report
 
         except Exception as e:
-            logger.log_error(f"Error generating session utilization: {e}")
+            logger.error(f"Error generating session utilization: {e}")
             return {"error": f"Failed to generate report: {e!s}"}
 
     @app.get("/utilization/periods", response_model=None)
@@ -264,7 +262,7 @@ def create_event_server(  # noqa: C901, PLR0915
             return utilization
 
         except Exception as e:
-            logger.log_error(f"Error generating utilization periods: {e}")
+            logger.error(f"Error generating utilization periods: {e}")
             return {"error": f"Failed to generate summary: {e!s}"}
 
     @app.get("/utilization/users", response_model=None)
@@ -329,7 +327,7 @@ def create_event_server(  # noqa: C901, PLR0915
             return report
 
         except Exception as e:
-            logger.log_error(f"Error generating user utilization report: {e}")
+            logger.error(f"Error generating user utilization report: {e}")
             return {"error": f"Failed to generate user report: {e!s}"}
 
     def _get_session_analyzer() -> Optional[UtilizationAnalyzer]:
@@ -337,7 +335,7 @@ def create_event_server(  # noqa: C901, PLR0915
         try:
             return UtilizationAnalyzer(events)
         except Exception as e:
-            logger.log_error(f"Failed to create session analyzer: {e}")
+            logger.error(f"Failed to create session analyzer: {e}")
             return None
 
     def _parse_session_time_parameters(

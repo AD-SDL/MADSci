@@ -28,7 +28,7 @@ class EmailAlerts:
     ) -> None:
         """Send email alerts to the configured email addresses."""
         if not self.config.email_addresses:
-            self.logger.log_warning("No email addresses configured for alerts.")
+            self.logger.warning("No email addresses configured for alerts.")
             return
 
         def send_to_address(email_address: str) -> None:
@@ -40,7 +40,7 @@ class EmailAlerts:
                 headers={"X-MADSci-Event-ID": event.event_id},
                 importance=self.config.default_importance,
             ):
-                self.logger.log_error(f"Failed to send email to {email_address}")
+                self.logger.error(f"Failed to send email to {email_address}")
 
         with ThreadPoolExecutor() as executor:
             executor.map(send_to_address, self.config.email_addresses)
@@ -90,9 +90,7 @@ class EmailAlerts:
             server = smtplib.SMTP(smtp_server, smtp_port)
             try:
                 if self.config.use_tls:
-                    self.logger.log_debug(
-                        "Starting TLS for secure connection"
-                    )  # Debug log
+                    self.logger.debug("Starting TLS for secure connection")  # Debug log
                     server.starttls()
                 if smtp_username and smtp_password:
                     server.login(smtp_username, smtp_password)
@@ -100,8 +98,8 @@ class EmailAlerts:
             finally:
                 server.quit()
 
-            self.logger.log_info(f"Email alert sent to {email_address}")
+            self.logger.info(f"Email alert sent to {email_address}")
             return True
         except Exception as e:
-            self.logger.log_error(f"Failed to send email to {email_address}: {e}")
+            self.logger.error(f"Failed to send email to {email_address}: {e}")
             return False
