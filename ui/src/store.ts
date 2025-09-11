@@ -92,23 +92,23 @@ watchEffect(async () => {
 
 })
 
-function get_status(status: NodeStatus): string {
-    if(status["errored"] != false)  {
+function get_status(value: any) {
+    if(value["errored"] && value["errored"] != false)  {
         return "errored"
     }
-    if(status["cancelled"] != false)  {
+    if(value["cancelled"] && value["cancelled"] != false)  {
         return "cancelled"
     }
-    if(status["locked"] != false)  {
+    if(value["locked"] && value["locked"] != false)  {
         return "locked"
     }
-    if(status["paused"] != false) {
+    if(value["paused"] && value["paused"] != false) {
         return "paused"
     }
-    if((status["busy"] != false) || (status["running_actions"] && (status["running_actions"].length > 0))) {
+    if((value["busy"] && value["busy"]) || (value["running_actions"] && (value["running_actions"].length > 0))) {
         return "running"
     }
-    if (status["initializing"] != false) {
+    if (value["initializing"] && value["initializing"] != false) {
         return "initializing"
     } else {
         return "ready"
