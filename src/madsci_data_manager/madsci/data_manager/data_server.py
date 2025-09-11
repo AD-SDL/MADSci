@@ -14,6 +14,7 @@ from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
@@ -57,6 +58,35 @@ def create_data_server(  # noqa: C901, PLR0915
     )
     logger.log_info(data_manager_definition)
     logger.log_info(get_current_madsci_context())
+
+    # DATABASE VERSION VALIDATION - MongoDB version checking
+    logger.info("Validating MongoDB schema version...")
+    version_checker = None
+    try:
+        # Get schema file path relative to this module
+        schema_file_path = Path(__file__).parent / "schema.json"
+        
+        version_checker = MongoDBVersionChecker(
+            db_url=data_manager_settings.db_url,
+            database_name="madsci_data",
+            schema_file_path=str(schema_file_path),
+            logger=logger
+        )
+        version_checker.validate_or_fail()
+        logger.info("MongoDB version validation completed successfully")
+    except RuntimeError:
+        logger.error(
+            "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+            "Please run the migration tool before starting the server."
+        )
+        logger.error(
+            "\nTo resolve this issue, run the migration tool and restart the server."
+        )
+        raise
+    finally:
+        # Always dispose of the version checker
+        if version_checker:
+            version_checker.dispose()
 
     if db_client is None:
         db_client = MongoClient(data_manager_settings.db_url)
