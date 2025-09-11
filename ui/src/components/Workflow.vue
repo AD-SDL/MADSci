@@ -25,7 +25,7 @@
                 <tr>
                   <td>{{ item.label }}</td>
                   <td>{{ item.data_type }}</td>
-                  <td v-if="item.data_type == 'file'"><v-btn @click="trydownload(item.datapoint_id, item.label)">Download</v-btn>
+                  <td v-if="item.data_type == 'file'"><v-btn @click="trydownload(item._id, item.label)">Download</v-btn>
                   </td>
                   <td v-if="item.data_type == 'json'">
                     <VueJsonPretty :data="item.value" />
@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import VueJsonPretty from 'vue-json-pretty';
 import { VDataTable } from 'vuetify/components';
 const props = defineProps(['steps', 'wf'])
@@ -60,17 +60,26 @@ const data_headers = [
 
 
 ]
-props.steps.forEach((step: any) => {
-  console.log(step); test.value[step.step_id] = {}; if (step.result && step.result.data) {
-    Object.keys(step.result.data).forEach(async (key: string) => {
-
-      let val = await ((await fetch(urls.value["data_server_url"].concat("datapoint/").concat(step.result.data[key]))).json())
-      test.value[step.step_id][val.datapoint_id] = val;
-      console.log(test.value)
-    })
-
-  }
-});
+watch (() => props.steps, async(newSteps) => {
+  const tmp: Record<string, Record<string, any>> = {}
+  for (const step of newSteps) {
+    tmp[step.step_id] = {}
+    if (step.result?.data) {
+      for (const [label, datapointId] of Object.entries(step.result.data)) {
+        try { const resp = await fetch(urls.value["data_server_url"] + "datapoint/" + datapointId)
+          const val = await resp.json()
+          const key = val.datapoint_id ?? val._id
+          if (!key) { console.warn("No valid ID found", val)
+            continue
+          }
+          tmp[step.step_id][key] = val;
+        } catch (err) { console.error("Failed to fetch datapoint", datapointId, err)}
+    }}}
+  test.value = tmp;
+  console.log(test.value)
+  },
+  { immediate: true, deep: false}
+)
 
 const forceFileDownload = (val: any, title: any) => {
   console.log(title)
@@ -85,7 +94,7 @@ const forceFileDownload = (val: any, title: any) => {
 async function trydownload(id: string, label: string) {
   let val = await (await fetch(urls.value["data_server_url"].concat('datapoint/').concat(id).concat('/value'))).blob()
   forceFileDownload(val, label)
-
-
 }
 </script>
+
+
