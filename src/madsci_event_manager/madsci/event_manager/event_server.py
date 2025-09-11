@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import global_ownership_info
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.event_types import (
     Event,
     EventLogLevel,
@@ -56,6 +57,36 @@ def create_event_server(  # noqa: C901, PLR0915
     logger = EventClient(name=f"event_manager.{event_manager_definition.name}")
     logger.event_server = None  # * Ensure we don't recursively log events
     logger.log_info(event_manager_definition)
+
+    # DATABASE VERSION VALIDATION - MongoDB version checking
+    logger.info("Validating MongoDB schema version...")
+    version_checker = None
+    try:
+        # Get schema file path relative to this module
+        schema_file_path = Path(__file__).parent / "schema.json"
+        
+        version_checker = MongoDBVersionChecker(
+            db_url=event_manager_settings.db_url,
+            database_name="madsci_events",
+            schema_file_path=str(schema_file_path),
+            logger=logger
+        )
+        version_checker.validate_or_fail()
+        logger.info("MongoDB version validation completed successfully")
+    except RuntimeError:
+        logger.error(
+            "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+            "Please run the migration tool before starting the server."
+        )
+        logger.error(
+            "\nTo resolve this issue, run the migration tool and restart the server."
+        )
+        raise
+    finally:
+        # Always dispose of the version checker
+        if version_checker:
+            version_checker.dispose()
+            
     if db_connection is None:
         db_client = MongoClient(event_manager_settings.db_url)
         db_connection = db_client[event_manager_settings.collection_name]
