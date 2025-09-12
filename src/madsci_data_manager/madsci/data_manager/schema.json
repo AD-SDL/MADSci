@@ -1,6 +1,6 @@
 {
     "database": "madsci_data",
-    "version": "1.0.0", 
+    "version": "0.4.7", 
     "description": "Schema definition for MADSci Data Manager MongoDB",
     "collections": {
       "datapoints": {
@@ -12,30 +12,6 @@
             "background": true,
             "unique": true,
             "description": "Unique constraint on datapoint_id for fast lookups"
-          },
-          {
-            "keys": [["data_timestamp", -1]], 
-            "name": "data_timestamp_desc",
-            "background": true,
-            "description": "Index for efficient timestamp-based queries (most recent first)"
-          },
-          {
-            "keys": [["data_type", 1]], 
-            "name": "data_type_asc",
-            "background": true,
-            "description": "Index for filtering datapoints by type (file, value, etc.)"
-          },
-          {
-            "keys": [["label", 1]], 
-            "name": "label_asc",
-            "background": true,
-            "description": "Index for searching datapoints by label"
-          },
-          {
-            "keys": [["data_type", 1], ["data_timestamp", -1]], 
-            "name": "data_type_timestamp_compound",
-            "background": true,
-            "description": "Compound index for efficient data type + timestamp queries"
           }
         ]
       },
