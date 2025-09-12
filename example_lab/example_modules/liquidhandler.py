@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionResult, ActionSucceeded
+from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
@@ -38,6 +38,15 @@ class LiquidHandlerInterface:
             f"Running command {command} on device number {self.device_number}."
         )
         time.sleep(2)  # Simulate command execution
+    
+    def arg_type_test(self, x: bool, y: int, z: float, w: str) -> None:
+        """Test types of return input argument values."""
+        self.logger.log(f"Input argument types expected.")
+        if x:
+            self.logger.log(f"Successfully registers bool as True.")
+        if not x:
+            self.logger.log(f"Successfully registers bool as False")
+        time.sleep(5)
 
 
 class LiquidHandlerNode(RestNode):
@@ -78,6 +87,14 @@ class LiquidHandlerNode(RestNode):
         self.logger.log(protocol)
         self.liquid_handler.run_command("run_protocol")
         return ActionSucceeded()
+    
+    @action
+    def arg_type_test(self, x: bool, y: int, z: float, w: str) -> ActionResult:
+        if type(x) == bool and type(y) == int and type(z) == float and type(w) == str: 
+            self.logger.log(f"Value of x is {x} and type is {type(x)}")
+            self.liquid_handler.arg_type_test(x, y, z, w)
+            return ActionSucceeded()
+        else: return ActionFailed()
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the liquid handler"""
