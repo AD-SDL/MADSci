@@ -249,6 +249,11 @@ class DataManagerSettings(
         default=Path("data.manager.yaml"),
         alias="data_manager_definition",  # * Don't double prefix
     )
+    collection_name: str = Field(
+        default="madsci_data",
+        title="Collection Name",
+        description="The name of the MongoDB collection where data are stored.",
+    )
     db_url: str = Field(
         default="mongodb://localhost:27017",
         title="Database URL",
