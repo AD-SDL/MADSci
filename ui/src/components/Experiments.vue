@@ -68,9 +68,16 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-/// <reference path="../store.d.ts" />
-import { active_workflows, archived_workflows,  experiments } from "@/store";
 import { VDataTable } from 'vuetify/components';
+
+/// <reference path="../store.d.ts" />
+import {
+  active_workflows,
+  archived_workflows,
+  experiments,
+} from '@/store';
+import { Experiment } from '@/types/experiment_types';
+import { Workflow } from '@/types/workflow_types';
 
 const sortBy: VDataTable['sortBy'] = [{ key: 'started_at', order: 'desc' }];
 
@@ -84,20 +91,20 @@ const arg_headers = [
 const dialogVisible = ref(false);
 const selectedExperiment = ref();
 
-const openExperimentDetails = (item: any) => {
+const openExperimentDetails = (item: Experiment) => {
   selectedExperiment.value = item;
   dialogVisible.value = true;
 };
 
 
-function filter_workflows(active_workflows: any, archived_workflows: any, experiment_id: any)  {
-  var active_workflow_list = Object.values(active_workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
-  var archived_workflow_list = Object.values(archived_workflows).filter( (workflow: any) => workflow.ownership_info.experiment_id == experiment_id)
+function filter_workflows(active_workflows: Record<string, Workflow>, archived_workflows: Record<string, Workflow>, experiment_id: string)  {
+  var active_workflow_list = Object.values(active_workflows).filter( (workflow: Workflow) => workflow.ownership_info && workflow.ownership_info.experiment_id && workflow.ownership_info.experiment_id == experiment_id)
+  var archived_workflow_list = Object.values(archived_workflows).filter( (workflow: Workflow) => workflow.ownership_info && workflow.ownership_info.experiment_id && workflow.ownership_info.experiment_id == experiment_id)
 
-  var dict: any = {}
-  active_workflow_list.forEach((workflow: any) => dict[workflow.workflow_id] = workflow)
-  archived_workflow_list.forEach((workflow: any) => dict[workflow.workflow_id] = workflow)
-  return dict
+  var workflow_dict: Record<string, Workflow> = {}
+  active_workflow_list.forEach((workflow: any) => workflow_dict[workflow.workflow_id] = workflow)
+  archived_workflow_list.forEach((workflow: any) => workflow_dict[workflow.workflow_id] = workflow)
+  return workflow_dict
 }
 </script>
 

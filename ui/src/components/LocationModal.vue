@@ -2,17 +2,17 @@
   <v-dialog class="pa-3" v-slot:default="{ isActive }">
     <v-card>
       <v-card-title>
-        <h2 class="title">Location: {{ modal_title }}</h2>
-        {{modal_text.location_id}}
+        <h2 class="title">Location: {{ location_name }}</h2>
+        {{location.location_id}}
         <h3>Lookup Values:</h3>
-        <div v-for="value, key in get_location_object(workcell_state, modal_text).lookup">
+        <div v-for="value, key in location.lookup">
 
           {{ key }} : {{ value }}
 
         </div>
         <v-btn v-if="!add_lookup_toggle" @click="add_lookup_toggle = !add_lookup_toggle">Add or Replace Lookup</v-btn>
       <div v-if="add_lookup_toggle" >
-        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state.nodes)"
+        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state?.nodes ?? {})"
                           dense>
 
 
@@ -22,20 +22,20 @@
                           <template #append>
 
                             <v-btn @click="get_location(node_to_add)">Get Current Position</v-btn>
-                            <v-btn @click="submit_location(node_to_add); add_lookup_toggle = !add_lookup_toggle">Submit</v-btn>
+                            <v-btn @click="submit_location_lookup(node_to_add); add_lookup_toggle = !add_lookup_toggle">Submit</v-btn>
                           </template>
       </v-text-field>
       </div>
       <h3>Resource Info: </h3>
-      <div v-if="get_resource(resources, modal_text) != null">
-        <div v-if="get_resource(resources, modal_text).base_type=='stack'">
-          <Stack :resource="get_resource(resources, modal_text)"/>
+      <div v-if="get_resource(resources, location) != null">
+        <div v-if="get_resource(resources, location).base_type=='stack'">
+          <Stack :resource="get_resource(resources, location)"/>
         </div>
-        <div v-else-if="get_resource(resources, modal_text).base_type=='slot'">
-          <Slot :resource="get_resource(resources, modal_text)" />
+        <div v-else-if="get_resource(resources, location).base_type=='slot'">
+          <Slot :resource="get_resource(resources, location)" />
         </div>
         <div v-else>
-          <Resource :resource="get_resource(resources, modal_text)" />
+          <Resource :resource="get_resource(resources, location)" />
       </div>
     </div>
       </v-card-title>
@@ -52,26 +52,40 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-const props = defineProps(['modal_title', 'modal_text'])
+
+import {
+  resources,
+  urls,
+  workcell_state,
+} from '../store';
+import { Location } from '../types/workcell_types';
+import Resource from './ResourceComponents/Resource.vue';
+import Slot from './ResourceComponents/Slot.vue';
+import Stack from './ResourceComponents/Stack.vue';
+
 const flowdef = ref(false)
-import { urls, resources, workcell_state } from '../store';
-import Stack from "./ResourceComponents/Stack.vue";
-import Slot from "./ResourceComponents/Slot.vue";
-import Resource from "./ResourceComponents/Resource.vue";
-const loc_text = ref(props.modal_text)
+
+interface LocationModalProps {
+      location_name: string;
+      location: Location;
+    }
+
+
+const props = defineProps<LocationModalProps>()
+const loc_text = ref(props.location)
 const add_lookup_toggle = ref(false)
 const node_to_add = ref()
 const add_lookup_value = ref()
-loc_text.value=props.modal_text
+loc_text.value=props.location
 
 
-async function get_location(node: string): Promise<any>{
-  var loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(node))).json())
+async function get_location(location_name: string): Promise<void>{
+  var loc_data = await ((await fetch(urls.value.workcell_manager.concat('admin/get_location/').concat(location_name))).json())
   add_lookup_value.value = JSON.stringify(loc_data[0].data)
 }
 
-async function submit_location(node: string): Promise<any>{
-  var test = await ((await fetch(urls.value.workcell_server_url.concat('location/').concat(props.modal_text.location_id).concat("/add_lookup/").concat(node),
+async function submit_location_lookup(node_name: string): Promise<void>{
+  await ((await fetch(urls.value.workcell_manager.concat('location/').concat(props.location.location_id).concat("/add_lookup/").concat(node_name),
     {method: "POST",
     headers: {
     'Content-Type': 'application/json'
@@ -81,17 +95,13 @@ async function submit_location(node: string): Promise<any>{
 
 )
 
-).json())
-}
-
-function get_location_object(workcell_state: any, location: any) {
-  console.log(workcell_state.locations)
-   var new_location = workcell_state.locations[location["location_id"]]
-    return new_location
+))
 }
 
 
-function get_resource(resources: any, location: any) {
+
+
+function get_resource(resources: any, location: Location) {
   if ("resource_id" in location && location.resource_id != null) {
    var resource = resources.find((element: any) => element.resource_id == location["resource_id"])
     return resource

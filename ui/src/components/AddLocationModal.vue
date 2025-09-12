@@ -14,7 +14,7 @@
           {{ key }} : {{ value}}
         </div>
         <div>
-        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state.nodes)"
+        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state?.nodes ?? {})"
                           dense>
 
 
@@ -24,7 +24,7 @@
                           <template #append>
 
                             <v-btn @click="get_location(node_to_add)">Get Current Location</v-btn>
-                            <v-btn @click="append_location(node_to_add)">Add or Update Lookup</v-btn>
+                            <v-btn @click="append_lookup_to_location(node_to_add)">Add or Update Lookup</v-btn>
 
                           </template>
       </v-text-field>
@@ -72,8 +72,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { urls  } from "@/store";
-import { workcell_state  } from "../store";
+
+import { urls } from '@/store';
+
+import { workcell_state } from '../store';
 
 const new_name = ref()
 const base_type = ref()
@@ -114,7 +116,7 @@ async function get_location(node: string): Promise<any>{
 }
 
 
-function append_location(node: string) {
+function append_lookup_to_location(node: string) {
       lookups.value[node] = add_lookup_value.value
     }
 

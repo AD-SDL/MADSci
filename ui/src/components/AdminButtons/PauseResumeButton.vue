@@ -24,8 +24,15 @@
   </template>
 
 <script lang="ts" setup>
-import { urls, workcell_state } from "@/store";
-import { ref, watchEffect } from 'vue';
+import {
+  ref,
+  watchEffect,
+} from 'vue';
+
+import {
+  urls,
+  workcell_state,
+} from '@/store';
 
 const props = defineProps<{
     module?: string;
@@ -70,7 +77,7 @@ watchEffect(() => {
     }
     else {
         if (workcell_state.value) {
-            isPaused.value = workcell_state.value.paused
+            isPaused.value = !!workcell_state.value.status?.paused
         } else {
             isPaused.value = false
         }

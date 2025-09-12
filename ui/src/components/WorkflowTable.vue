@@ -11,6 +11,7 @@
       process_status(item.status) }}
             </v-sheet>
           </td>
+          <td>{{ item.submitted_time }}</td>
           <td>{{ item.start_time }}</td>
           <td>Step {{ item.status.current_step_index }}: {{ item.steps[item.status.current_step_index].name }}</td>
           <td>{{ item.end_time }}</td>
@@ -20,9 +21,11 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps(['workflows'])
 import { ref } from 'vue';
+
 import { VDataTable } from 'vuetify/components';
+
+const props = defineProps(['workflows'])
 
 const modal = ref(false)
 const modal_text = ref()
