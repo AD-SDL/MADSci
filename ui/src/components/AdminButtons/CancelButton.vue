@@ -26,8 +26,8 @@ import { urls } from "@/store";
 import { ref, watchEffect } from 'vue';
 
 const props = defineProps<{
-    module?: string;
-    module_status?: string;
+    node?: string;
+    node_status?: any;
 }>();
 
 const cancel_url = ref('')
@@ -36,9 +36,9 @@ const hoverText = ref('')
 
 // Format cancel url
 watchEffect(() => {
-    if (props.module) {
-        cancel_url.value = urls.value.workcell_server_url.concat('admin/cancel/'.concat(props.module))
-        hoverText.value = "Cancel Module Action"
+    if (props.node) {
+        cancel_url.value = urls.value.workcell_server_url.concat('admin/cancel/'.concat(props.node))
+        hoverText.value = "Cancel Node Action"
     }
     else {
         cancel_url.value = urls.value.workcell_server_url.concat('admin/cancel')
@@ -47,9 +47,9 @@ watchEffect(() => {
 })
 
 watchEffect(() => {
-    // Determine if the module is cancelable (if actively running something)
-    if (props.module) {
-        if (props.module_status == 'BUSY' || props.module_status == 'PAUSED') {
+    // Determine if the node is cancelable (if actively running something)
+    if (props.node) {
+        if (props.node_status == 'BUSY' || props.node_status == 'PAUSED') {
             canCancel.value = true
         }
         else {
