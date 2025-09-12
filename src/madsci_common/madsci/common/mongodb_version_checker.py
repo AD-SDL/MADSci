@@ -75,27 +75,28 @@ class MongoDBVersionChecker:
     def get_database_version(self) -> Optional[str]:
         """Get the current database schema version from the schema_versions collection."""
         try:
-            # Check if database exists
-            if self.database_name not in self.client.list_database_names():
+            # Try to access the database directly instead of checking list_database_names()
+            # MongoDB only shows databases in list_database_names() if they have collections with data
+            collection_names = self.database.list_collection_names()
+            # If database has no collections at all, it doesn't really exist
+            if not collection_names:
                 return None
-
+            
             # Check if schema_versions collection exists
-            if "schema_versions" not in self.database.list_collection_names():
-                return None
+            if "schema_versions" not in collection_names:
+                return "NO_VERSION_TRACKING"
 
             # Get the latest version entry
             schema_versions = self.database["schema_versions"]
             latest_version = schema_versions.find_one(
                 {},
-                sort=[("applied_at", -1)],  # Most recent first
+                sort=[("applied_at", -1)]  # Most recent first
             )
-
-            return latest_version["version"] if latest_version else None
+            
+            return latest_version["version"] if latest_version else "NO_VERSION_TRACKING"
 
         except Exception:
-            self.logger.error(
-                f"Error getting database version: {traceback.format_exc()}"
-            )
+            self.logger.error(f"Error getting database version: {traceback.format_exc()}")
             return None
 
     def is_migration_needed(self) -> tuple[bool, Optional[str], Optional[str]]:
@@ -138,13 +139,17 @@ class MongoDBVersionChecker:
 
         if needs_migration:
             if db_version is None:
+                # Database exists but no version tracking - this is initialization, not a mismatch
                 message = (
-                    f"Database schema version not found for {self.database_name}. "
+                    f"Database {self.database_name} needs version tracking initialization. "
+                    f"The database exists but has no schema version tracking set up. "
                     f"MADSci version is {madsci_version}, expected schema version is {expected_schema_version}. "
                     f"Please run the migration tool to initialize version tracking:\n"
                     f"python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
                 )
+                self.logger.warning("Database needs version tracking initialization")
             else:
+                # Actual version mismatch between what's expected and what's in database
                 message = (
                     f"Database schema version mismatch detected for {self.database_name}!\n"
                     f"MADSci version: {madsci_version}\n"
@@ -153,6 +158,7 @@ class MongoDBVersionChecker:
                     f"Please run the migration tool to update the database schema:\n"
                     f"python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
                 )
+                self.logger.error("Database schema version mismatch detected")
 
             self.logger.error(message)
             raise RuntimeError(message)
