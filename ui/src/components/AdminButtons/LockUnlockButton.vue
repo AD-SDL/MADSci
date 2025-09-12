@@ -22,8 +22,15 @@
   </template>
 
 <script lang="ts" setup>
-import { urls, workcell_state } from "@/store";
-import { ref, watchEffect } from 'vue';
+import {
+  ref,
+  watchEffect,
+} from 'vue';
+
+import {
+  urls,
+  workcell_state,
+} from '@/store';
 
 const props = defineProps<{
     module?: string;
@@ -55,14 +62,14 @@ watchEffect(() => {
             isLocked.value = true
         } else {
             if (workcell_state.value) {
-                isLocked.value = workcell_state.value.locked
+                isLocked.value = !!workcell_state.value.status?.locked
             } else {
                 isLocked.value = false
             }
         }
     } else {
         if (workcell_state.value) {
-            isLocked.value = workcell_state.value.locked
+            isLocked.value = workcell_state.value.status?.locked as boolean
         } else {
             isLocked.value = false
         }

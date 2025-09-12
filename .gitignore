@@ -312,3 +312,5 @@ test_experiment/
 htmlcov/
 coverage.xml
 .coverage
+
+.mcp.json

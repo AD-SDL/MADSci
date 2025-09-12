@@ -1,19 +1,27 @@
+import {
+  ref,
+  watchEffect,
+} from 'vue';
 
-import { Console } from 'console';
-import { ref, watchEffect } from 'vue';
+import { Event } from './types/event_types';
+import { Experiment } from './types/experiment_types';
+import {
+  WorkcellState,
+} from './types/workcell_types';
+import { Workflow } from './types/workflow_types';
 
-const main_url = ref()
-const state_url = ref()
-const workcell_info_url = ref()
-const active_workflows_url = ref()
-const archived_workflows_url = ref()
-const active_workflows = ref()
-const archived_workflows = ref()
-const experiments = ref()
-const experiments_url = ref()
-const events_url = ref()
-const events = ref()
-const workcell_state = ref()
+const main_url = ref<string>("")
+const state_url = ref<string>("")
+const workcell_info_url = ref<string>("")
+const active_workflows_url = ref<string>("")
+const archived_workflows_url = ref<string>("")
+const active_workflows = ref<Record<string, Workflow>>({})
+const archived_workflows = ref<Record<string, Workflow>>({})
+const experiments = ref<Experiment[]>([])
+const experiments_url = ref<string>("")
+const events_url = ref<string>("")
+const events = ref<Event[]>([])
+const workcell_state = ref<WorkcellState>()
 const workcell_info = ref()
 const campaigns = ref()
 const campaigns_url = ref()
@@ -23,13 +31,13 @@ const urls = ref()
 const experiment_objects: any = ref([])
 const resources = ref()
 main_url.value = "http://".concat(window.location.host)
-class ExperimentInfo {
+interface ExperimentInfo {
     experiment_id?: string;
-    experiment_workflows: any;
+    experiment_workflows: Workflow[];
     experiment_name?: string;
-    num_wfs?: any;
-    num_events?: any;
-    events?: any
+    num_wfs?: number;
+    num_events?: number;
+    events?: Event[]
 }
 async function get_events(experiment_id: string) {
     return Object.values(await ((await fetch(main_url.value.concat("/experiments/".concat(experiment_id).concat("/events"))))).json());
@@ -84,26 +92,44 @@ watchEffect(async () => {
 })
 
 function get_status(value: any) {
-    if(value["errored"] && value["errored"] != false)  {
+    if(value["errored"] === true)  {
         return "errored"
     }
-    if(value["cancelled"] && value["cancelled"] != false)  {
+    if(value["cancelled"] === true)  {
         return "cancelled"
     }
-    if(value["locked"] && value["locked"] != false)  {
+    if(value["locked"] === true)  {
         return "locked"
     }
-    if(value["paused"] && value["paused"] != false) {
+    if(value["paused"] === true) {
         return "paused"
     }
-    if((value["busy"] && value["busy"]) || (value["running_actions"] && (value["running_actions"].length > 0))) {
+    if((value["busy"] === true) || (value["running_actions"] && (value["running_actions"].length > 0))) {
         return "running"
     }
-    if (value["initializing"] && value["initializing"] != false) {
+    if (value["initializing"] === true) {
         return "initializing"
     } else {
         return "ready"
     }
 }
 
-export { campaigns, campaigns_url, events, experiment_keys, experiment_objects, experiments, experiments_url, get_status, main_url, state_url, workcell_info, workcell_info_url, workcell_state, active_workflows, archived_workflows, urls, resources };
+export {
+  active_workflows,
+  archived_workflows,
+  campaigns,
+  campaigns_url,
+  events,
+  experiment_keys,
+  experiment_objects,
+  experiments,
+  experiments_url,
+  get_status,
+  main_url,
+  resources,
+  state_url,
+  urls,
+  workcell_info,
+  workcell_info_url,
+  workcell_state,
+};
