@@ -13,8 +13,8 @@ from fastapi.params import Body
 from fastapi.responses import Response
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.ownership import global_ownership_info
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
+from madsci.common.ownership import global_ownership_info
 from madsci.common.types.event_types import (
     Event,
     EventLogLevel,
@@ -64,12 +64,12 @@ def create_event_server(  # noqa: C901, PLR0915
     try:
         # Get schema file path relative to this module
         schema_file_path = Path(__file__).parent / "schema.json"
-        
+
         version_checker = MongoDBVersionChecker(
             db_url=event_manager_settings.db_url,
             database_name=event_manager_settings.collection_name,
             schema_file_path=str(schema_file_path),
-            logger=logger
+            logger=logger,
         )
         version_checker.validate_or_fail()
         logger.info("MongoDB version validation completed successfully")

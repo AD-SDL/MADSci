@@ -64,7 +64,7 @@ class MongoDBVersionChecker:
                     f"Schema file not found: {self.schema_file_path}"
                 )
 
-            with open(self.schema_file_path) as f:
+            with open(self.schema_file_path) as f:  # noqa PTH123
                 schema = json.load(f)
 
             return schema.get("version", "1.0.0")
@@ -81,7 +81,7 @@ class MongoDBVersionChecker:
             # If database has no collections at all, it doesn't really exist
             if not collection_names:
                 return None
-            
+
             # Check if schema_versions collection exists
             if "schema_versions" not in collection_names:
                 return "NO_VERSION_TRACKING"
@@ -90,13 +90,17 @@ class MongoDBVersionChecker:
             schema_versions = self.database["schema_versions"]
             latest_version = schema_versions.find_one(
                 {},
-                sort=[("applied_at", -1)]  # Most recent first
+                sort=[("applied_at", -1)],  # Most recent first
             )
-            
-            return latest_version["version"] if latest_version else "NO_VERSION_TRACKING"
+
+            return (
+                latest_version["version"] if latest_version else "NO_VERSION_TRACKING"
+            )
 
         except Exception:
-            self.logger.error(f"Error getting database version: {traceback.format_exc()}")
+            self.logger.error(
+                f"Error getting database version: {traceback.format_exc()}"
+            )
             return None
 
     def is_migration_needed(self) -> tuple[bool, Optional[str], Optional[str]]:

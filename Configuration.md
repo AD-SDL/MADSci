@@ -69,12 +69,13 @@ Settings for the MADSci Data Manager.
 
 **Environment Prefix**: `DATA_`
 
-| Name                                                   | Type               | Default                       | Description                                       | Example                       |
-|--------------------------------------------------------|--------------------|-------------------------------|---------------------------------------------------|-------------------------------|
-| `DATA_SERVER_URL` \| `DATA_SERVER_URL`                 | `AnyUrl`           | `"http://localhost:8004/"`    | The URL of the lab manager.                       | `"http://localhost:8004/"`    |
-| `DATA_MANAGER_DEFINITION` \| `DATA_MANAGER_DEFINITION` | `string` \| `Path` | `"data.manager.yaml"`         | Path to the data manager definition file to use.  | `"data.manager.yaml"`         |
-| `DATA_DB_URL`                                          | `string`           | `"mongodb://localhost:27017"` | The URL of the database used by the Data Manager. | `"mongodb://localhost:27017"` |
-| `DATA_FILE_STORAGE_PATH`                               | `string` \| `Path` | `"~/.madsci/datapoints"`      | The path where files are stored on the server.    | `"~/.madsci/datapoints"`      |
+| Name                                                   | Type               | Default                       | Description                                               | Example                       |
+|--------------------------------------------------------|--------------------|-------------------------------|-----------------------------------------------------------|-------------------------------|
+| `DATA_SERVER_URL` \| `DATA_SERVER_URL`                 | `AnyUrl`           | `"http://localhost:8004/"`    | The URL of the lab manager.                               | `"http://localhost:8004/"`    |
+| `DATA_MANAGER_DEFINITION` \| `DATA_MANAGER_DEFINITION` | `string` \| `Path` | `"data.manager.yaml"`         | Path to the data manager definition file to use.          | `"data.manager.yaml"`         |
+| `DATA_COLLECTION_NAME`                                 | `string`           | `"madsci_data"`               | The name of the MongoDB collection where data are stored. | `"madsci_data"`               |
+| `DATA_DB_URL`                                          | `string`           | `"mongodb://localhost:27017"` | The URL of the database used by the Data Manager.         | `"mongodb://localhost:27017"` |
+| `DATA_FILE_STORAGE_PATH`                               | `string` \| `Path` | `"~/.madsci/datapoints"`      | The path where files are stored on the server.            | `"~/.madsci/datapoints"`      |
 
 ## EventManagerSettings
 

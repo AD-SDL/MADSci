@@ -65,12 +65,12 @@ def create_data_server(  # noqa: C901, PLR0915
     try:
         # Get schema file path relative to this module
         schema_file_path = Path(__file__).parent / "schema.json"
-        
+
         version_checker = MongoDBVersionChecker(
             db_url=data_manager_settings.db_url,
             database_name=data_manager_settings.collection_name,
             schema_file_path=str(schema_file_path),
-            logger=logger
+            logger=logger,
         )
         version_checker.validate_or_fail()
         logger.info("MongoDB version validation completed successfully")
