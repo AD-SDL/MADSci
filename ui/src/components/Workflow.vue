@@ -96,5 +96,3 @@ async function trydownload(id: string, label: string) {
   forceFileDownload(val, label)
 }
 </script>
-
-
