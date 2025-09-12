@@ -6,7 +6,6 @@ import {
 import { Event } from './types/event_types';
 import { Experiment } from './types/experiment_types';
 import {
-  NodeStatus,
   WorkcellState,
 } from './types/workcell_types';
 import { Workflow } from './types/workflow_types';
@@ -93,22 +92,22 @@ watchEffect(async () => {
 })
 
 function get_status(value: any) {
-    if(value["errored"] && value["errored"] != false)  {
+    if(value["errored"] === true)  {
         return "errored"
     }
-    if(value["cancelled"] && value["cancelled"] != false)  {
+    if(value["cancelled"] === true)  {
         return "cancelled"
     }
-    if(value["locked"] && value["locked"] != false)  {
+    if(value["locked"] === true)  {
         return "locked"
     }
-    if(value["paused"] && value["paused"] != false) {
+    if(value["paused"] === true) {
         return "paused"
     }
-    if((value["busy"] && value["busy"]) || (value["running_actions"] && (value["running_actions"].length > 0))) {
+    if((value["busy"] === true) || (value["running_actions"] && (value["running_actions"].length > 0))) {
         return "running"
     }
-    if (value["initializing"] && value["initializing"] != false) {
+    if (value["initializing"] === true) {
         return "initializing"
     } else {
         return "ready"

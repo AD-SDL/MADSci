@@ -31,12 +31,10 @@ import {
   resources,
   workcell_state,
 } from '@/store';
-import { isTemplateElement } from '@babel/types';
 
 import AddLocationModal from './AddLocationModal.vue';
 import LocationModal from './LocationModal.vue';
 
-const props = defineProps(['locations'])
 const modal_title = ref()
 const modal_text = ref()
 const modal = ref(false)

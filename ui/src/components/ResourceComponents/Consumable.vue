@@ -76,9 +76,7 @@
 <script setup lang="ts">
 import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
-import { VDataTable } from 'vuetify/components';
 import { computed, ref } from "vue";
-//import ProgressBar from 'primevue/progressbar';
 import { resources, urls } from "@/store";
 
 const props = defineProps(['resource'])
