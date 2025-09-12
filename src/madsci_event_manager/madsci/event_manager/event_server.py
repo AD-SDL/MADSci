@@ -67,17 +67,23 @@ def create_event_server(  # noqa: C901, PLR0915
         
         version_checker = MongoDBVersionChecker(
             db_url=event_manager_settings.db_url,
-            database_name="madsci_events",
+            database_name=event_manager_settings.collection_name,
             schema_file_path=str(schema_file_path),
             logger=logger
         )
         version_checker.validate_or_fail()
         logger.info("MongoDB version validation completed successfully")
-    except RuntimeError:
-        logger.error(
-            "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
-            "Please run the migration tool before starting the server."
-        )
+    except RuntimeError as e:
+        if "needs version tracking initialization" in str(e):
+            logger.error(
+                "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
+                "The database exists but needs version tracking setup."
+            )
+        else:
+            logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+                "Please run the migration tool before starting the server."
+            )
         logger.error(
             "\nTo resolve this issue, run the migration tool and restart the server."
         )
@@ -86,7 +92,7 @@ def create_event_server(  # noqa: C901, PLR0915
         # Always dispose of the version checker
         if version_checker:
             version_checker.dispose()
-            
+
     if db_connection is None:
         db_client = MongoClient(event_manager_settings.db_url)
         db_connection = db_client[event_manager_settings.collection_name]
