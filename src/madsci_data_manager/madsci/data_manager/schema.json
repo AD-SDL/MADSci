@@ -1,6 +1,5 @@
 {
     "database": "madsci_data",
-    "version": "0.4.7",
     "description": "Schema definition for MADSci Data Manager MongoDB",
     "collections": {
       "datapoints": {
