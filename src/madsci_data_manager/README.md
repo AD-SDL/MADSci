@@ -153,3 +153,72 @@ uploaded = client.submit_datapoint(storage_dp)
 ```
 
 **Authentication**: Use IAM users/service accounts with appropriate storage permissions. See cloud provider documentation for detailed setup.
+
+## Database Migration Tools
+
+MADSci Data Manager includes automated MongoDB migration tools that handle schema changes and version tracking for the data management system.
+
+### Features
+
+- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and MongoDB schema version
+- **Automated Backup**: Creates MongoDB dumps using `mongodump` before applying migrations to enable rollback on failure
+- **Schema Management**: Creates collections and indexes based on schema definitions
+- **Index Management**: Ensures required indexes exist, including unique constraints on `datapoint_id`
+- **Location Independence**: Auto-detects schema files or accepts explicit paths
+- **Safe Migration**: All changes are applied transactionally with automatic rollback on failure
+
+### Usage
+
+```bash
+# Run migration for data database (auto-detects schema file)
+python -m madsci.common.mongodb_migration_tool --database madsci_data
+
+# Migrate with explicit database URL
+python -m madsci.common.mongodb_migration_tool --db-url mongodb://localhost:27017 --database madsci_data
+
+# Use custom schema file
+python -m madsci.common.mongodb_migration_tool --database madsci_data --schema-file /path/to/schema.json
+
+# Create backup only
+python -m madsci.common.mongodb_migration_tool --database madsci_data --backup-only
+
+# Restore from backup
+python -m madsci.common.mongodb_migration_tool --database madsci_data --restore-from /path/to/backup
+
+# Check version compatibility without migrating
+python -m madsci.common.mongodb_migration_tool --database madsci_data --check-version
+```
+
+### Server Integration
+
+The Data Manager server automatically checks for version compatibility on startup. If a mismatch is detected, the server will refuse to start and display migration instructions:
+
+```bash
+DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED!
+The database exists but needs version tracking setup.
+
+To resolve this issue, run the migration tool and restart the server.
+```
+
+### Schema File Location
+
+The migration tool automatically searches for schema files in:
+- `madsci/data_manager/schema.json`
+
+### Database Schema
+
+The Data Manager maintains:
+- **datapoints collection**: Stores metadata for all datapoints with unique `datapoint_id` index
+- **schema_versions collection**: Tracks database schema versions and migration history
+
+### Backup Location
+
+Backups are stored in `.madsci/mongodb/backups/` with timestamped filenames:
+- Format: `madsci_data_backup_YYYYMMDD_HHMMSS`
+- Can be restored using the `--restore-from` option
+
+### Requirements
+
+- MongoDB server running and accessible
+- MongoDB tools (`mongodump`, `mongorestore`) installed
+- Appropriate database permissions for the specified user
