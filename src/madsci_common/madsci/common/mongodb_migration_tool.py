@@ -91,12 +91,10 @@ class MongoDBMigrator:
                     f"Schema file not found: {self.schema_file_path}"
                 )
 
-            with open(self.schema_file_path) as f:  # noqa PTH123
+            with open(self.schema_file_path) as f:  # noqa
                 schema = json.load(f)
 
-            self.logger.info(
-                f"Loaded schema version {schema.get('version', 'unknown')} from {self.schema_file_path}"
-            )
+            self.logger.info(f"Loaded schema from {self.schema_file_path}")
             return schema
 
         except Exception as e:
@@ -129,7 +127,7 @@ class MongoDBMigrator:
 
         try:
             self.logger.info(f"Creating database backup: {backup_path}")
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(  # noqa
                 mongodump_cmd, capture_output=True, text=True, check=True
             )
 
@@ -185,7 +183,7 @@ class MongoDBMigrator:
 
         try:
             self.logger.info(f"Restoring database from backup: {backup_path}")
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(  # noqa
                 mongorestore_cmd, capture_output=True, text=True, check=True
             )
 
@@ -317,11 +315,9 @@ class MongoDBMigrator:
     def run_migration(self, target_version: Optional[str] = None) -> None:
         """Run the complete migration process."""
         try:
-            expected_schema = self.load_expected_schema()
-            schema_version = expected_schema.get("version", "1.0.0")
-
+            # Use MADSci version as target if not specified
             if target_version is None:
-                target_version = schema_version
+                target_version = self.version_checker.get_current_madsci_version()
 
             current_madsci_version = self.version_checker.get_current_madsci_version()
             current_db_version = self.version_checker.get_database_version()
@@ -473,10 +469,8 @@ def handle_migration_commands(
         needs_migration, madsci_version, db_version = (
             version_checker.is_migration_needed()
         )
-        expected_schema_version = version_checker.get_expected_schema_version()
 
         logger.log_warning(f"MADSci version: {madsci_version}")
-        logger.log_warning(f"Expected schema version: {expected_schema_version}")
         logger.log_warning(f"Database version: {db_version or 'None'}")
         logger.log_warning(f"Migration needed: {needs_migration}")
 
@@ -539,7 +533,7 @@ Examples:
     )
     parser.add_argument(
         "--target-version",
-        help="Target version to migrate to (defaults to version in schema.json file)",
+        help="Target version to migrate to (defaults to current MADSci version)",
     )
     parser.add_argument(
         "--backup-only",
