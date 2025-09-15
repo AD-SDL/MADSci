@@ -197,7 +197,6 @@ def test_event_check_version_command(mock_migrator_class, mock_resolve_schema):
     ) as mock_checker_class:
         mock_checker = Mock()
         mock_checker.is_migration_needed.return_value = (False, "1.0.0", "1.0.0")
-        mock_checker.get_expected_schema_version.return_value = "1.0.0"
         mock_checker_class.return_value = mock_checker
 
         with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
