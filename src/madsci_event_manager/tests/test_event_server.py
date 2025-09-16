@@ -16,7 +16,7 @@ from madsci.common.types.event_types import (
     EventManagerSettings,
     EventType,
 )
-from madsci.event_manager.event_server import create_event_server
+from madsci.event_manager.event_server import EventManager
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
@@ -40,11 +40,12 @@ db_connection = create_mongo_fixture()
 @pytest.fixture
 def test_client(db_connection: Database) -> TestClient:
     """Event Server Test Client Fixture"""
-    app = create_event_server(
-        event_manager_settings=event_manager_settings,
-        event_manager_definition=event_manager_def,
+    manager = EventManager(
+        settings=event_manager_settings,
+        definition=event_manager_def,
         db_connection=db_connection,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 

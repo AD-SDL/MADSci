@@ -11,7 +11,7 @@ from madsci.client.resource_client import ResourceClient
 from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import (
-    WorkcellDefinition,
+    WorkcellManagerDefinition,
     WorkcellManagerSettings,
     WorkcellState,
     WorkcellStatus,
@@ -35,7 +35,7 @@ class WorkcellStateHandler:
 
     def __init__(
         self,
-        workcell_definition: Optional[WorkcellDefinition] = None,
+        workcell_definition: Optional[WorkcellManagerDefinition] = None,
         workcell_settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
@@ -44,7 +44,7 @@ class WorkcellStateHandler:
         Initialize a StateManager for a given workcell.
         """
         self.workcell_settings = workcell_settings or WorkcellManagerSettings()
-        self._workcell_id = workcell_definition.workcell_id
+        self._workcell_id = workcell_definition.manager_id
         self._redis_host = self.workcell_settings.redis_host
         self._redis_port = self.workcell_settings.redis_port
         self._redis_password = self.workcell_settings.redis_password
@@ -206,13 +206,15 @@ class WorkcellStateHandler:
         return False
 
     # *Workcell Methods
-    def get_workcell_definition(self) -> WorkcellDefinition:
+    def get_workcell_definition(self) -> WorkcellManagerDefinition:
         """
         Returns the current workcell definition as a WorkcellDefinition object
         """
-        return WorkcellDefinition.model_validate(self._workcell_definition.to_dict())
+        return WorkcellManagerDefinition.model_validate(
+            self._workcell_definition.to_dict()
+        )
 
-    def set_workcell_definition(self, workcell: WorkcellDefinition) -> None:
+    def set_workcell_definition(self, workcell: WorkcellManagerDefinition) -> None:
         """
         Sets the active workcell
         """

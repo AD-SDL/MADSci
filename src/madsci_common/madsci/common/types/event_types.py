@@ -12,7 +12,7 @@ from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
-from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import ManagerDefinition, ManagerType
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
@@ -43,21 +43,19 @@ class EventManagerSettings(
     toml_file=("settings.toml", "events.settings.toml"),
     yaml_file=("settings.yaml", "events.settings.yaml"),
     json_file=("settings.json", "events.settings.json"),
-    env_prefix="EVENTS_",
+    env_prefix="EVENT_",
 ):
     """Handles settings and configuration for the Event Manager."""
 
-    event_server_url: Optional[AnyUrl] = Field(
+    server_url: Optional[AnyUrl] = Field(
         title="Event Server URL",
         description="The URL of the Event Manager server.",
         default="http://localhost:8001",
-        alias="event_server_url",  # * Don't double prefix
     )
-    event_manager_definition: PathLike = Field(
+    manager_definition: PathLike = Field(
         title="Event Manager Definition File",
         description="Path to the event manager definition file to use.",
         default=Path("event.manager.yaml"),
-        alias="event_manager_definition",  # * Don't double prefix
     )
     db_url: str = Field(
         default="mongodb://localhost:27017",
@@ -279,10 +277,11 @@ class EventManagerDefinition(ManagerDefinition):
         description="The name of this manager instance.",
         default="Event Manager",
     )
-    event_manager_id: str = Field(
+    manager_id: str = Field(
         title="Event Manager ID",
         description="The ID of the event manager.",
         default_factory=new_ulid_str,
+        alias=AliasChoices("manager_id", "event_manager_id"),
     )
     manager_type: Literal[ManagerType.EVENT_MANAGER] = Field(
         title="Manager Type",

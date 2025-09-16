@@ -8,13 +8,13 @@ from madsci.common.types.parameter_types import (
     ParameterInputJson,
 )
 from madsci.common.types.step_types import StepDefinition
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellManagerDefinition
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
     WorkflowParameters,
 )
-from madsci.workcell_manager.workcell_server import create_workcell_server
+from madsci.workcell_manager.workcell_server import WorkcellManager
 from madsci.workcell_manager.workflow_utils import check_parameters
 from pydantic import AnyUrl
 from pymongo.synchronous.database import Database
@@ -45,32 +45,33 @@ mongo_server = create_mongo_fixture()
 
 
 @pytest.fixture
-def workcell() -> WorkcellDefinition:
+def workcell() -> WorkcellManagerDefinition:
     """Fixture for creating a WorkcellDefinition."""
     # TODO: Add node(s) to this workcell for testing purposes
-    return WorkcellDefinition(workcell_name="Test Workcell")
+    return WorkcellManagerDefinition(name="Test Workcell")
 
 
 @pytest.fixture
 def test_client(
-    workcell: WorkcellDefinition, redis_server: Redis, mongo_server: Database
+    workcell: WorkcellManagerDefinition, redis_server: Redis, mongo_server: Database
 ) -> TestClient:
     """Workcell Server Test Client Fixture"""
-    app = create_workcell_server(
-        workcell=workcell,
+    manager = WorkcellManager(
+        definition=workcell,
         redis_connection=redis_server,
         mongo_connection=mongo_server,
         start_engine=False,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 
 def test_get_workcell(test_client: TestClient) -> None:
-    """Test the /definition endpoint."""
+    """Test the /workcell endpoint."""
     with test_client as client:
-        response = client.get("/definition")
+        response = client.get("/workcell")
         assert response.status_code == 200
-        WorkcellDefinition.model_validate(response.json())
+        WorkcellManagerDefinition.model_validate(response.json())
 
 
 def test_get_nodes(test_client: TestClient) -> None:

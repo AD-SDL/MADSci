@@ -9,10 +9,10 @@ from madsci.common.types.base_types import (
     MadsciBaseSettings,
     PathLike,
 )
-from madsci.common.types.lab_types import ManagerType
 from madsci.common.types.location_types import Location, LocationDefinition
+from madsci.common.types.manager_types import ManagerType
 from madsci.common.types.node_types import Node
-from madsci.common.types.workflow_types import Workflow
+from madsci.common.types.workflow_types import AliasChoices, Workflow
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field
@@ -20,21 +20,24 @@ from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 
 
-class WorkcellDefinition(MadsciBaseModel, extra="allow"):
+class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
     """Definition of a MADSci Workcell."""
 
-    workcell_name: str = Field(
-        title="Workcell Name", description="The name of the workcell."
+    name: str = Field(
+        title="Workcell Name",
+        description="The name of the workcell.",
+        alias=AliasChoices("name", "workcell_name"),
     )
     manager_type: Literal[ManagerType.WORKCELL_MANAGER] = Field(
         title="Manager Type",
         description="The type of manager",
         default=ManagerType.WORKCELL_MANAGER,
     )
-    workcell_id: str = Field(
+    manager_id: str = Field(
         title="Workcell ID",
         description="The ID of the workcell.",
         default_factory=new_ulid_str,
+        alias=AliasChoices("workcell_id", "manager_id", "workcell_manager_id"),
     )
     description: Optional[str] = Field(
         default=None,
@@ -62,9 +65,9 @@ class WorkcellDefinition(MadsciBaseModel, extra="allow"):
         """
         if workcells_directory is None:
             workcells_directory = Path("~") / ".madsci" / "workcells"
-        return Path(workcells_directory) / self.workcell_name
+        return Path(workcells_directory) / self.name
 
-    is_ulid = field_validator("workcell_id")(ulid_validator)
+    is_ulid = field_validator("manager_id")(ulid_validator)
 
 
 class WorkcellStatus(MadsciBaseModel):
@@ -147,7 +150,7 @@ class WorkcellState(MadsciBaseModel):
         title="Workflow Queue",
         description="The queue of workflows in non-terminal states.",
     )
-    workcell_definition: WorkcellDefinition = Field(
+    workcell_definition: WorkcellManagerDefinition = Field(
         title="Workcell Definition",
         description="The definition of the workcell.",
     )
@@ -173,17 +176,18 @@ class WorkcellManagerSettings(
 ):
     """Settings for the MADSci Workcell Manager."""
 
-    workcell_server_url: AnyUrl = Field(
+    server_url: AnyUrl = Field(
         title="Workcell Server URL",
         description="The URL of the workcell manager server.",
         default=AnyUrl("http://localhost:8005"),
-        alias="workcell_server_url",  # * Don't double prefix
     )
-    workcell_definition: PathLike = Field(
+    manager_definition: PathLike = Field(
         title="Workcell Definition File",
         description="Path to the workcell definition file to use.",
         default=Path("workcell.manager.yaml"),
-        alias="workcell_definition",  # * Don't double prefix
+        validation_alias=AliasChoices(
+            "workcell_manager_definition", "workcell_definition", "manager_definition"
+        ),
     )
     workcells_directory: Optional[PathLike] = Field(
         title="Workcells Directory",

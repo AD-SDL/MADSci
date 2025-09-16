@@ -14,7 +14,7 @@ from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.node_types import Node, NodeInfo, NodeStatus
 from madsci.common.types.resource_types import Slot
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellManagerDefinition
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -26,8 +26,8 @@ from madsci.workcell_manager.schedulers.default_scheduler import Scheduler
 @pytest.fixture
 def mock_scheduler() -> Generator[Scheduler, None, None]:
     """Fixture to create a mock scheduler"""
-    mock_workcell_definition = WorkcellDefinition(
-        workcell_name="test workcell",
+    mock_workcell_definition = WorkcellManagerDefinition(
+        name="test workcell",
         locations=[
             LocationDefinition(
                 location_name="loc1",

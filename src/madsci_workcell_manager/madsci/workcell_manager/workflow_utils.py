@@ -17,7 +17,7 @@ from madsci.common.types.location_types import (
 )
 from madsci.common.types.parameter_types import ParameterInputFile, ParameterTypes
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellManagerDefinition
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
@@ -38,7 +38,7 @@ def validate_node_names(
                 state_handler.get_node(node_name)
         except KeyError as e:
             raise ValueError(
-                f"Node {node_name} not in Workcell {state_handler.get_workcell_definition().workcell_name}"
+                f"Node {node_name} not in Workcell {state_handler.get_workcell_definition().name}"
             ) from e
 
 
@@ -171,7 +171,7 @@ def validate_step(
 
 def create_workflow(
     workflow_def: WorkflowDefinition,
-    workcell: WorkcellDefinition,
+    workcell: WorkcellManagerDefinition,
     state_handler: WorkcellStateHandler,
     data_client: DataClient,
     json_inputs: Optional[dict[str, Any]] = None,
@@ -244,7 +244,7 @@ def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
 
 
 def prepare_workflow_step(
-    workcell: WorkcellDefinition,
+    workcell: WorkcellManagerDefinition,
     state_handler: WorkcellStateHandler,
     step: Step,
     workflow: Workflow,
@@ -332,7 +332,7 @@ def prepare_workflow_files(
 
 
 def replace_locations(
-    workcell: WorkcellDefinition, step: Step, state_handler: WorkcellStateHandler
+    workcell: WorkcellManagerDefinition, step: Step, state_handler: WorkcellStateHandler
 ) -> None:
     """Replaces the location names with the location objects"""
     locations = state_handler.get_locations()
@@ -357,7 +357,7 @@ def replace_locations(
         )
         if target_loc is None:
             raise ValueError(
-                f"Location {location_name_or_object} not found in Workcell '{workcell.workcell_name}'"
+                f"Location {location_name_or_object} not found in Workcell '{workcell.name}'"
             )
         node_location = LocationArgument(
             location=target_loc.lookup[step.node],

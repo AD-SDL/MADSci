@@ -23,7 +23,7 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageSettings,
     ValueDataPoint,
 )
-from madsci.data_manager.data_server import create_data_server
+from madsci.data_manager.data_server import DataManager
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
@@ -44,9 +44,8 @@ db_connection = create_mongo_fixture()
 @pytest.fixture
 def test_client(db_connection: Database) -> TestClient:
     """Data Server Test Client Fixture"""
-    app = create_data_server(
-        data_manager_definition=data_manager_def, db_client=db_connection
-    )
+    manager = DataManager(definition=data_manager_def, db_client=db_connection)
+    app = manager.create_server()
     return TestClient(app)
 
 
@@ -448,8 +447,8 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
             name="test_data_manager_with_minio",
         )
 
-        app = create_data_server(
-            data_manager_definition=data_manager_def,
+        manager = DataManager(
+            definition=data_manager_def,
             db_client=db_connection,
             object_storage_settings=ObjectStorageSettings(
                 endpoint="localhost:9000",
@@ -459,6 +458,7 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
                 default_bucket="madsci-test",
             ),
         )
+        app = manager.create_server()
         test_client = TestClient(app)
 
         # Create test file
@@ -531,8 +531,8 @@ def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:
         name="test_data_manager_with_minio",
     )
 
-    app = create_data_server(
-        data_manager_definition=data_manager_def,
+    manager = DataManager(
+        definition=data_manager_def,
         db_client=db_connection,
         object_storage_settings=ObjectStorageSettings(
             endpoint=minio_server["endpoint"],
@@ -542,6 +542,7 @@ def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:
             default_bucket="test-bucket",
         ),
     )
+    app = manager.create_server()
     test_client = TestClient(app)
 
     # Create a test file

@@ -1,79 +1,80 @@
-"""REST API and Server for the lab Manager."""
+"""Lab Manager implementation using the new AbstractManagerBase class."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-import uvicorn
+from classy_fastapi import get
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.context_types import MadsciContext
-from madsci.common.types.lab_types import LabDefinition, LabManagerSettings
+from madsci.common.types.lab_types import LabManagerDefinition, LabManagerSettings
 
 
-def create_lab_server(
-    lab_settings: Optional[LabManagerSettings] = None,
-    lab_definition: Optional[LabDefinition] = None,
-) -> FastAPI:
-    """Creates an lab Manager's REST server."""
-    logger = EventClient()
+class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
+    """Lab Manager REST Server."""
 
-    lab_settings = lab_settings or LabManagerSettings()
-    logger.log_info(lab_settings)
-    if not lab_definition:
-        lab_def_path = Path(lab_settings.lab_definition).expanduser()
-        if lab_def_path.exists():
-            lab_definition = LabDefinition.from_yaml(
-                lab_def_path,
-            )
-        else:
-            lab_definition = LabDefinition()
-        logger.log_info(f"Writing to lab definition file: {lab_def_path}")
-        lab_definition.to_yaml(lab_def_path)
-    global_ownership_info.manager_id = lab_definition.lab_id
-    global_ownership_info.lab_id = lab_definition.lab_id
-    logger = EventClient(
-        name=f"lab_manager.{lab_definition.name}",
-    )
-    logger.log_info(lab_definition)
-    context = get_current_madsci_context()
-    logger.log_info(context)
+    def __init__(
+        self,
+        settings: Optional[LabManagerSettings] = None,
+        definition: Optional[LabManagerDefinition] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the Lab Manager."""
+        super().__init__(settings=settings, definition=definition, **kwargs)
 
-    app = FastAPI()
+        # Set up additional ownership context for lab
+        self._setup_lab_ownership()
 
-    @app.get("/context")
-    async def get_context() -> MadsciContext:
+    def create_default_settings(self) -> LabManagerSettings:
+        """Create default settings instance for this manager."""
+        return LabManagerSettings()
+
+    def get_definition_path(self) -> Path:
+        """Get the path to the definition file."""
+        return Path(self.settings.manager_definition).expanduser()
+
+    def create_default_definition(self) -> LabManagerDefinition:
+        """Create a default definition instance for this manager."""
+        return LabManagerDefinition()
+
+    def _setup_lab_ownership(self) -> None:
+        """Setup lab-specific ownership information."""
+        # Lab Manager also sets the lab_id in global ownership
+        global_ownership_info.lab_id = self.definition.manager_id
+
+    def create_server(self, **kwargs: Any) -> FastAPI:
+        """Create the FastAPI server application with proper route order."""
+        # Call parent method to get the basic app with routes registered
+        app = super().create_server(**kwargs)
+
+        # Mount static files AFTER API routes to ensure API routes take precedence
+        if self.settings.dashboard_files_path:
+            dashboard_path = Path(self.settings.dashboard_files_path).expanduser()
+            if dashboard_path.exists():
+                app.mount(
+                    "/",
+                    StaticFiles(directory=dashboard_path, html=True),
+                )
+
+        return app
+
+    # Lab-specific endpoints
+
+    @get("/context")
+    async def get_context(self) -> MadsciContext:
         """Get the context of the lab server."""
-        return context
+        return get_current_madsci_context()
 
-    if lab_settings.dashboard_files_path:
-        app.mount(
-            "/",
-            StaticFiles(
-                directory=Path(lab_settings.dashboard_files_path).expanduser(),
-                html=True,
-            ),
-        )
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    return app
+    @get("/definition")
+    def get_definition(self) -> LabManagerDefinition:
+        """Return the manager definition."""
+        return self._definition
 
 
+# Main entry point for running the server
 if __name__ == "__main__":
-    lab_settings = LabManagerSettings()
-    app = create_lab_server(lab_settings=lab_settings)
-    uvicorn.run(
-        app,
-        host=lab_settings.lab_server_url.host,
-        port=lab_settings.lab_server_url.port,
-    )
+    manager = LabManager()
+    manager.run_server()

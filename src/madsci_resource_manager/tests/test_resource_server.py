@@ -16,13 +16,13 @@ from madsci.common.types.resource_types.definitions import (
     ResourceDefinition,
     ResourceManagerDefinition,
 )
-from madsci.common.utils import new_ulid_str
-from madsci.resource_manager.resource_interface import ResourceInterface
-from madsci.resource_manager.resource_server import (
+from madsci.common.types.resource_types.server_types import (
     ResourceGetQuery,
     ResourceHistoryGetQuery,
-    create_resource_server,
 )
+from madsci.common.utils import new_ulid_str
+from madsci.resource_manager.resource_interface import ResourceInterface
+from madsci.resource_manager.resource_server import ResourceManager
 from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
@@ -59,10 +59,11 @@ def test_client(interface: ResourceInterface) -> TestClient:
     resource_manager_definition = ResourceManagerDefinition(
         name="Test Resource Manager"
     )
-    app = create_resource_server(
-        resource_manager_definition=resource_manager_definition,
+    manager = ResourceManager(
+        definition=resource_manager_definition,
         resource_interface=interface,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 

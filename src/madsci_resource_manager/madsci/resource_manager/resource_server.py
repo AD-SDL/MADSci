@@ -1,14 +1,13 @@
-"""Fast API Server for Resources"""
+"""Resource Manager implementation using the new AbstractManagerBase class."""
 
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 import fastapi
-from fastapi import FastAPI
-from fastapi.exceptions import HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from classy_fastapi import delete, get, post, put
+from fastapi import HTTPException
 from fastapi.params import Body
-from madsci.client.event_client import EventClient
+from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.resource_types import (
     ContainerDataModels,
@@ -38,68 +37,106 @@ from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_tables import ResourceHistoryTable
 from sqlalchemy.exc import NoResultFound
 
+# Module-level constants for Body() calls to avoid B008 linting errors
+RESOURCE_DEFINITION_BODY = Body(...)
+RESOURCE_BODY_WITH_DISCRIMINATOR = Body(..., discriminator="base_type")
+QUERY_BODY = Body(...)
+HISTORY_QUERY_BODY = Body(...)
 
-def create_resource_server(  # noqa: C901, PLR0915
-    resource_manager_definition: Optional[ResourceManagerDefinition] = None,
-    resource_server_settings: Optional[ResourceManagerSettings] = None,
-    resource_interface: Optional[ResourceInterface] = None,
-) -> FastAPI:
-    """Creates a Resource Manager's REST server."""
-    logger = EventClient()
-    resource_server_settings = resource_server_settings or ResourceManagerSettings()
-    logger.log_info(resource_server_settings)
 
-    if not resource_manager_definition:
-        def_path = Path(
-            resource_server_settings.resource_manager_definition
-        ).expanduser()
-        if def_path.exists():
-            resource_manager_definition = ResourceManagerDefinition.from_yaml(
-                def_path,
+class ResourceManager(
+    AbstractManagerBase[ResourceManagerSettings, ResourceManagerDefinition]
+):
+    """Resource Manager REST Server."""
+
+    def __init__(
+        self,
+        settings: Optional[ResourceManagerSettings] = None,
+        definition: Optional[ResourceManagerDefinition] = None,
+        resource_interface: Optional[ResourceInterface] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the Resource Manager."""
+        # Store additional dependencies before calling super().__init__
+        self._resource_interface = resource_interface
+
+        super().__init__(settings=settings, definition=definition, **kwargs)
+
+        # Initialize the resource interface
+        self._setup_resource_interface()
+
+        # Set up ownership middleware
+        self._setup_ownership()
+
+    def create_default_settings(self) -> ResourceManagerSettings:
+        """Create default settings instance for this manager."""
+        return ResourceManagerSettings()
+
+    def get_definition_path(self) -> Path:
+        """Get the path to the definition file."""
+        return Path(self.settings.manager_definition).expanduser()
+
+    def create_default_definition(self) -> ResourceManagerDefinition:
+        """Create a default definition instance for this manager."""
+        return ResourceManagerDefinition()
+
+    def _setup_resource_interface(self) -> None:
+        """Setup the resource interface."""
+        if not self._resource_interface:
+            self._resource_interface = ResourceInterface(
+                url=self.settings.db_url, logger=self.logger
             )
-        else:
-            resource_manager_definition = ResourceManagerDefinition()
-        logger.log_info(f"Writing to resource manager definition file: {def_path}")
-        resource_manager_definition.to_yaml(def_path)
+            self.logger.info(self._resource_interface)
+            self.logger.info(self._resource_interface.session)
 
-    global_ownership_info.manager_id = resource_manager_definition.resource_manager_id
-    logger = EventClient(name=f"resource_manager.{resource_manager_definition.name}")
-    logger.log_info(resource_manager_definition)
-
-    if not resource_interface:
-        resource_interface = ResourceInterface(
-            url=resource_server_settings.db_url, logger=logger
+    def _setup_ownership(self) -> None:
+        """Setup ownership information."""
+        # Use resource_manager_id as the primary field, but support manager_id for compatibility
+        manager_id = getattr(
+            self.definition,
+            "resource_manager_id",
+            getattr(self.definition, "manager_id", None),
         )
-        logger.info(resource_interface)
-        logger.info(resource_interface.session)
+        global_ownership_info.manager_id = manager_id
 
-    app = FastAPI()
+    def create_server(self) -> fastapi.FastAPI:
+        """Create and configure the FastAPI server with middleware."""
+        app = super().create_server()
 
-    @app.middleware("http")
-    async def ownership_middleware(
-        request: fastapi.Request, call_next: Callable
-    ) -> fastapi.Response:
-        global_ownership_info.manager_id = (
-            resource_manager_definition.resource_manager_id
-        )
-        return await call_next(request)
+        @app.middleware("http")
+        async def ownership_middleware(
+            request: fastapi.Request, call_next: Callable
+        ) -> fastapi.Response:
+            # Use resource_manager_id as the primary field, but support manager_id for compatibility
+            manager_id = getattr(
+                self.definition,
+                "resource_manager_id",
+                getattr(self.definition, "manager_id", None),
+            )
+            global_ownership_info.manager_id = manager_id
+            return await call_next(request)
 
-    @app.get("/")
-    @app.get("/info")
-    @app.get("/definition")
-    def info() -> ResourceManagerDefinition:
-        """Get information about the resource manager."""
-        return resource_manager_definition
+        return app
 
-    @app.post("/resource/init")
+    @get("/")
+    def get_definition(self) -> ResourceManagerDefinition:
+        """Return the manager definition."""
+        return self.definition
+
+    @get("/definition")
+    def get_definition_alt(self) -> ResourceManagerDefinition:
+        """Return the manager definition."""
+        return self.definition
+
+    @post("/resource/init")
     async def init_resource(
-        resource_definition: ResourceDefinitions = Body(...),  # noqa: B008
+        self, resource_definition: ResourceDefinitions = RESOURCE_DEFINITION_BODY
     ) -> ResourceDataModels:
         """
         Initialize a resource in the database based on a definition. If a matching resource already exists, it will be returned.
         """
         try:
-            resource = resource_interface.get_resource(
+            resource = self._resource_interface.get_resource(
                 **resource_definition.model_dump(exclude_none=True),
                 multiple=False,
                 unique=True,
@@ -108,102 +145,102 @@ def create_resource_server(  # noqa: C901, PLR0915
                 if (
                     resource_definition.resource_class
                     and resource_definition.resource_class
-                    in resource_manager_definition.custom_types
+                    in self.definition.custom_types
                 ):
-                    custom_definition = resource_manager_definition.custom_types[
+                    custom_definition = self.definition.custom_types[
                         resource_definition.resource_class
                     ]
-                    resource = resource_interface.init_custom_resource(
+                    resource = self._resource_interface.init_custom_resource(
                         resource_definition, custom_definition
                     )
                 else:
-                    resource = resource_interface.add_resource(
+                    resource = self._resource_interface.add_resource(
                         Resource.discriminate(resource_definition)
                     )
 
             return resource
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise e
 
-    @app.post("/resource/add")
+    @post("/resource/add")
     async def add_resource(
-        resource: ResourceDataModels = Body(..., discriminator="base_type"),  # noqa: B008
+        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR
     ) -> ResourceDataModels:
         """
         Add a new resource to the Resource Manager.
         """
         try:
-            return resource_interface.add_resource(resource)
+            return self._resource_interface.add_resource(resource)
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/add_or_update")
+    @post("/resource/add_or_update")
     async def add_or_update_resource(
-        resource: ResourceDataModels = Body(..., discriminator="base_type"),  # noqa: B008
+        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR
     ) -> ResourceDataModels:
         """
         Add a new resource to the Resource Manager.
         """
         try:
-            return resource_interface.add_or_update_resource(resource)
+            return self._resource_interface.add_or_update_resource(resource)
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/update")
+    @post("/resource/update")
     async def update_resource(
-        resource: ResourceDataModels = Body(..., discriminator="base_type"),  # noqa: B008
+        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR
     ) -> ResourceDataModels:
         """
         Update or refresh a resource in the database, including its children.
         """
         try:
-            return resource_interface.update_resource(resource)
+            return self._resource_interface.update_resource(resource)
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.delete("/resource/{resource_id}")
-    async def remove_resource(resource_id: str) -> ResourceDataModels:
+    @delete("/resource/{resource_id}")
+    async def remove_resource(self, resource_id: str) -> ResourceDataModels:
         """
         Marks a resource as removed. This will remove the resource from the active resources table,
         but it will still be available in the history table.
         """
         try:
-            return resource_interface.remove_resource(resource_id)
+            return self._resource_interface.remove_resource(resource_id)
         except NoResultFound as e:
-            logger.info(f"Resource not found: {resource_id}")
+            self.logger.info(f"Resource not found: {resource_id}")
             raise HTTPException(status_code=404, detail="Resource not found") from e
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.get("/resource/{resource_id}")
-    async def get_resource(resource_id: str) -> ResourceDataModels:
+    @get("/resource/{resource_id}")
+    async def get_resource(self, resource_id: str) -> ResourceDataModels:
         """
         Retrieve a resource from the database by ID.
         """
         try:
-            resource = resource_interface.get_resource(resource_id=resource_id)
+            resource = self._resource_interface.get_resource(resource_id=resource_id)
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
 
             return resource
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise
 
-    @app.post("/resource/query")
+    @post("/resource/query")
     async def query_resource(
-        query: ResourceGetQuery = Body(...),  # noqa: B008
+        self, query: ResourceGetQuery = QUERY_BODY
     ) -> Union[ResourceDataModels, list[ResourceDataModels]]:
         """
         Retrieve a resource from the database based on the specified parameters.
         """
         try:
-            resource = resource_interface.get_resource(
+            resource = self._resource_interface.get_resource(
                 **query.model_dump(exclude_none=True),
             )
             if not resource:
@@ -211,12 +248,12 @@ def create_resource_server(  # noqa: C901, PLR0915
 
             return resource
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise e
 
-    @app.post("/history/query")
+    @post("/history/query")
     async def query_history(
-        query: ResourceHistoryGetQuery = Body(...),  # noqa: B008
+        self, query: ResourceHistoryGetQuery = HISTORY_QUERY_BODY
     ) -> list[ResourceHistoryTable]:
         """
         Retrieve the history of a resource.
@@ -228,15 +265,15 @@ def create_resource_server(  # noqa: C901, PLR0915
             list[ResourceHistoryTable]: A list of historical resource entries.
         """
         try:
-            return resource_interface.query_history(
+            return self._resource_interface.query_history(
                 **query.model_dump(exclude_none=True)
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/history/{resource_id}/restore")
-    async def restore_deleted_resource(resource_id: str) -> ResourceDataModels:
+    @post("/history/{resource_id}/restore")
+    async def restore_deleted_resource(self, resource_id: str) -> ResourceDataModels:
         """
         Restore a previously deleted resource from the history table.
 
@@ -248,7 +285,7 @@ def create_resource_server(  # noqa: C901, PLR0915
         """
         try:
             # Fetch the most recent deleted entry
-            restored_resource = resource_interface.restore_resource(
+            restored_resource = self._resource_interface.restore_resource(
                 resource_id=resource_id
             )
             if not restored_resource:
@@ -259,14 +296,14 @@ def create_resource_server(  # noqa: C901, PLR0915
 
             return restored_resource
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise e
 
-    @app.post("/templates")
-    async def create_template(body: TemplateCreateBody) -> ResourceDataModels:
+    @post("/templates")
+    async def create_template(self, body: TemplateCreateBody) -> ResourceDataModels:
         """Create a new resource template from a resource."""
         try:
-            return resource_interface.create_template(
+            return self._resource_interface.create_template(
                 resource=body.resource,
                 template_name=body.template_name,
                 description=body.description,
@@ -278,46 +315,46 @@ def create_resource_server(  # noqa: C901, PLR0915
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/templates/query")
-    async def list_templates(query: TemplateGetQuery) -> list[ResourceDataModels]:
+    @post("/templates/query")
+    async def list_templates(self, query: TemplateGetQuery) -> list[ResourceDataModels]:
         """List templates with optional filtering."""
         try:
-            return resource_interface.list_templates(
+            return self._resource_interface.list_templates(
                 base_type=query.base_type,
                 tags=query.tags,
                 created_by=query.created_by,
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.get("/templates")
-    async def list_templates_simple() -> list[ResourceDataModels]:
+    @get("/templates")
+    async def list_templates_simple(self) -> list[ResourceDataModels]:
         """List all templates (simple endpoint without filtering)."""
         try:
-            return resource_interface.list_templates()
+            return self._resource_interface.list_templates()
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.get("/templates/categories")
-    async def get_templates_by_category() -> dict[str, list[str]]:
+    @get("/templates/categories")
+    async def get_templates_by_category(self) -> dict[str, list[str]]:
         """Get templates organized by base_type category."""
         try:
-            logger.info("Fetching templates by category")
-            return resource_interface.get_templates_by_category()
+            self.logger.info("Fetching templates by category")
+            return self._resource_interface.get_templates_by_category()
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.get("/templates/{template_name}")
-    async def get_template(template_name: str) -> ResourceDataModels:
+    @get("/templates/{template_name}")
+    async def get_template(self, template_name: str) -> ResourceDataModels:
         """Get a template by name."""
         try:
-            template = resource_interface.get_template(template_name)
+            template = self._resource_interface.get_template(template_name)
             if not template:
                 raise HTTPException(
                     status_code=404, detail=f"Template '{template_name}' not found"
@@ -326,14 +363,14 @@ def create_resource_server(  # noqa: C901, PLR0915
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.get("/templates/{template_name}/info")
-    async def get_template_info(template_name: str) -> dict[str, Any]:
+    @get("/templates/{template_name}/info")
+    async def get_template_info(self, template_name: str) -> dict[str, Any]:
         """Get detailed template metadata."""
         try:
-            template_info = resource_interface.get_template_info(template_name)
+            template_info = self._resource_interface.get_template_info(template_name)
             if not template_info:
                 raise HTTPException(
                     status_code=404, detail=f"Template '{template_name}' not found"
@@ -342,29 +379,29 @@ def create_resource_server(  # noqa: C901, PLR0915
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.put("/templates/{template_name}")
+    @put("/templates/{template_name}")
     async def update_template(
-        template_name: str, body: TemplateUpdateBody
+        self, template_name: str, body: TemplateUpdateBody
     ) -> ResourceDataModels:
         """Update an existing template."""
         try:
             updates = body.updates.copy()
 
-            return resource_interface.update_template(template_name, updates)
+            return self._resource_interface.update_template(template_name, updates)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.delete("/templates/{template_name}")
-    async def delete_template(template_name: str) -> dict[str, str]:
+    @delete("/templates/{template_name}")
+    async def delete_template(self, template_name: str) -> dict[str, str]:
         """Delete a template from the database."""
         try:
-            deleted = resource_interface.delete_template(template_name)
+            deleted = self._resource_interface.delete_template(template_name)
             if not deleted:
                 raise HTTPException(
                     status_code=404, detail=f"Template '{template_name}' not found"
@@ -373,16 +410,16 @@ def create_resource_server(  # noqa: C901, PLR0915
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/templates/{template_name}/create_resource")
+    @post("/templates/{template_name}/create_resource")
     async def create_resource_from_template(
-        template_name: str, body: CreateResourceFromTemplateBody
+        self, template_name: str, body: CreateResourceFromTemplateBody
     ) -> ResourceDataModels:
         """Create a resource from a template."""
         try:
-            return resource_interface.create_resource_from_template(
+            return self._resource_interface.create_resource_from_template(
                 template_name=template_name,
                 resource_name=body.resource_name,
                 overrides=body.overrides,
@@ -391,34 +428,34 @@ def create_resource_server(  # noqa: C901, PLR0915
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/push")
+    @post("/resource/{resource_id}/push")
     async def push(
-        resource_id: str, body: PushResourceBody
+        self, resource_id: str, body: PushResourceBody
     ) -> Union[Stack, Queue, Slot]:
         """
         Push a resource onto a stack or queue.
 
         Args:
-            resource_id (str): The ID of the stNetworkErrorack or queue to push the resource onto.
+            resource_id (str): The ID of the stack or queue to push the resource onto.
             body (PushResourceBody): The resource to push onto the stack or queue, or the ID of an existing resource.
 
         Returns:
             Union[Stack, Queue, Slot]: The updated stack or queue.
         """
         try:
-            return resource_interface.push(
+            return self._resource_interface.push(
                 parent_id=resource_id, child=body.child if body.child else body.child_id
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/pop")
+    @post("/resource/{resource_id}/pop")
     async def pop(
-        resource_id: str,
+        self, resource_id: str
     ) -> tuple[ResourceDataModels, Union[Stack, Queue, Slot]]:
         """
         Pop an asset from a stack or queue.
@@ -430,13 +467,15 @@ def create_resource_server(  # noqa: C901, PLR0915
             tuple[ResourceDataModels, Union[Stack, Queue, Slot]]: The popped asset and the updated stack or queue.
         """
         try:
-            return resource_interface.pop(parent_id=resource_id)
+            return self._resource_interface.pop(parent_id=resource_id)
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/child/set")
-    async def set_child(resource_id: str, body: SetChildBody) -> ContainerDataModels:
+    @post("/resource/{resource_id}/child/set")
+    async def set_child(
+        self, resource_id: str, body: SetChildBody
+    ) -> ContainerDataModels:
         """
         Set a child resource for a parent resource. Must be a container type that supports random access.
 
@@ -448,16 +487,16 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated parent resource.
         """
         try:
-            return resource_interface.set_child(
+            return self._resource_interface.set_child(
                 container_id=resource_id, key=body.key, child=body.child
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/child/remove")
+    @post("/resource/{resource_id}/child/remove")
     async def remove_child(
-        resource_id: str, body: RemoveChildBody
+        self, resource_id: str, body: RemoveChildBody
     ) -> ContainerDataModels:
         """
         Remove a child resource from a parent resource. Must be a container type that supports random access.
@@ -470,16 +509,16 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated parent resource.
         """
         try:
-            return resource_interface.remove_child(
+            return self._resource_interface.remove_child(
                 container_id=resource_id, key=body.key
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/quantity")
+    @post("/resource/{resource_id}/quantity")
     async def set_quantity(
-        resource_id: str, quantity: Union[float, int]
+        self, resource_id: str, quantity: Union[float, int]
     ) -> ResourceDataModels:
         """
         Set the quantity of a resource.
@@ -492,16 +531,16 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated resource.
         """
         try:
-            return resource_interface.set_quantity(
+            return self._resource_interface.set_quantity(
                 resource_id=resource_id, quantity=quantity
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/quantity/change_by")
+    @post("/resource/{resource_id}/quantity/change_by")
     async def change_quantity_by(
-        resource_id: str, amount: Union[float, int]
+        self, resource_id: str, amount: Union[float, int]
     ) -> ResourceDataModels:
         """
         Change the quantity of a resource by a given amount.
@@ -514,19 +553,19 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated resource.
         """
         try:
-            resource = resource_interface.get_resource(resource_id=resource_id)
+            resource = self._resource_interface.get_resource(resource_id=resource_id)
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
-            return resource_interface.set_quantity(
+            return self._resource_interface.set_quantity(
                 resource_id=resource_id, quantity=resource.quantity + amount
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/quantity/increase")
+    @post("/resource/{resource_id}/quantity/increase")
     async def increase_quantity(
-        resource_id: str, amount: Union[float, int]
+        self, resource_id: str, amount: Union[float, int]
     ) -> ResourceDataModels:
         """
         Increase the quantity of a resource by a given amount.
@@ -539,19 +578,19 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated resource.
         """
         try:
-            resource = resource_interface.get_resource(resource_id=resource_id)
+            resource = self._resource_interface.get_resource(resource_id=resource_id)
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
-            return resource_interface.set_quantity(
+            return self._resource_interface.set_quantity(
                 resource_id=resource_id, quantity=resource.quantity + abs(amount)
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/quantity/decrease")
+    @post("/resource/{resource_id}/quantity/decrease")
     async def decrease_quantity(
-        resource_id: str, amount: Union[float, int]
+        self, resource_id: str, amount: Union[float, int]
     ) -> ResourceDataModels:
         """
         Decrease the quantity of a resource by a given amount.
@@ -564,20 +603,20 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated resource.
         """
         try:
-            resource = resource_interface.get_resource(resource_id=resource_id)
+            resource = self._resource_interface.get_resource(resource_id=resource_id)
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
-            return resource_interface.set_quantity(
+            return self._resource_interface.set_quantity(
                 resource_id=resource_id,
                 quantity=max(resource.quantity - abs(amount), 0),
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/capacity")
+    @post("/resource/{resource_id}/capacity")
     async def set_capacity(
-        resource_id: str, capacity: Union[float, int]
+        self, resource_id: str, capacity: Union[float, int]
     ) -> ResourceDataModels:
         """
         Set the capacity of a resource.
@@ -590,15 +629,15 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated resource.
         """
         try:
-            return resource_interface.set_capacity(
+            return self._resource_interface.set_capacity(
                 resource_id=resource_id, capacity=capacity
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.delete("/resource/{resource_id}/capacity")
-    async def remove_capacity_limit(resource_id: str) -> ResourceDataModels:
+    @delete("/resource/{resource_id}/capacity")
+    async def remove_capacity_limit(self, resource_id: str) -> ResourceDataModels:
         """
         Remove the capacity limit of a resource.
 
@@ -609,13 +648,15 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated resource.
         """
         try:
-            return resource_interface.remove_capacity_limit(resource_id=resource_id)
+            return self._resource_interface.remove_capacity_limit(
+                resource_id=resource_id
+            )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/empty")
-    async def empty_resource(resource_id: str) -> ResourceDataModels:
+    @post("/resource/{resource_id}/empty")
+    async def empty_resource(self, resource_id: str) -> ResourceDataModels:
         """
         Empty the contents of a container or consumable resource.
 
@@ -626,16 +667,16 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated resource.
         """
         try:
-            return resource_interface.empty(resource_id=resource_id)
+            return self._resource_interface.empty(resource_id=resource_id)
         except NoResultFound as e:
-            logger.info(f"Resource not found: {resource_id}")
+            self.logger.info(f"Resource not found: {resource_id}")
             raise HTTPException(status_code=404, detail="Resource not found") from e
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/fill")
-    async def fill_resource(resource_id: str) -> ResourceDataModels:
+    @post("/resource/{resource_id}/fill")
+    async def fill_resource(self, resource_id: str) -> ResourceDataModels:
         """
         Fill a consumable resource to capacity.
 
@@ -646,16 +687,17 @@ def create_resource_server(  # noqa: C901, PLR0915
             ResourceDataModels: The updated resource.
         """
         try:
-            return resource_interface.fill(resource_id=resource_id)
+            return self._resource_interface.fill(resource_id=resource_id)
         except NoResultFound as e:
-            logger.info(f"Resource not found: {resource_id}")
+            self.logger.info(f"Resource not found: {resource_id}")
             raise HTTPException(status_code=404, detail="Resource not found") from e
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.post("/resource/{resource_id}/lock")
+    @post("/resource/{resource_id}/lock")
     async def acquire_resource_lock(
+        self,
         resource_id: str,
         lock_duration: float = 300.0,
         client_id: Optional[str] = None,
@@ -672,13 +714,13 @@ def create_resource_server(  # noqa: C901, PLR0915
             dict: Lock acquisition result.
         """
         try:
-            locked_resource = resource_interface.acquire_lock(
+            locked_resource = self._resource_interface.acquire_lock(
                 resource=resource_id,
                 lock_duration=lock_duration,
                 client_id=client_id,
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
         # Handle the response outside the try-except
@@ -689,9 +731,9 @@ def create_resource_server(  # noqa: C901, PLR0915
             detail=f"Resource {resource_id} is already locked or lock acquisition failed",
         )
 
-    @app.delete("/resource/{resource_id}/unlock")
+    @delete("/resource/{resource_id}/unlock")
     async def release_resource_lock(
-        resource_id: str, client_id: Optional[str] = None
+        self, resource_id: str, client_id: Optional[str] = None
     ) -> Optional[dict[str, Any]]:
         """
         Release a lock on a resource.
@@ -704,12 +746,12 @@ def create_resource_server(  # noqa: C901, PLR0915
             dict: Lock release result.
         """
         try:
-            unlocked_resource = resource_interface.release_lock(
+            unlocked_resource = self._resource_interface.release_lock(
                 resource=resource_id,
                 client_id=client_id,
             )
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
         if unlocked_resource:
@@ -720,8 +762,8 @@ def create_resource_server(  # noqa: C901, PLR0915
             detail=f"Cannot release lock on resource {resource_id}: not owned by client {client_id}",
         )
 
-    @app.get("/resource/{resource_id}/check_lock")
-    async def check_resource_lock(resource_id: str) -> dict[str, Any]:
+    @get("/resource/{resource_id}/check_lock")
+    async def check_resource_lock(self, resource_id: str) -> dict[str, Any]:
         """
         Check if a resource is currently locked.
 
@@ -732,35 +774,20 @@ def create_resource_server(  # noqa: C901, PLR0915
             dict: Lock status information.
         """
         try:
-            is_locked, locked_by = resource_interface.is_locked(resource=resource_id)
+            is_locked, locked_by = self._resource_interface.is_locked(
+                resource=resource_id
+            )
             return {
                 "resource_id": resource_id,
                 "is_locked": is_locked,
                 "locked_by": locked_by,
             }
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    return app
 
-
+# Main entry point for running the server
 if __name__ == "__main__":
-    import uvicorn
-
-    resource_server_settings = ResourceManagerSettings()
-    app = create_resource_server(
-        resource_server_settings=resource_server_settings,
-    )
-    uvicorn.run(
-        app,
-        host=resource_server_settings.resource_server_url.host,
-        port=resource_server_settings.resource_server_url.port,
-    )
+    manager = ResourceManager()
+    manager.run_server()
