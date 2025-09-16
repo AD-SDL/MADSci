@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionResult, ActionSucceeded
+from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
@@ -78,6 +78,14 @@ class LiquidHandlerNode(RestNode):
         self.logger.log(protocol)
         self.liquid_handler.run_command("run_protocol")
         return ActionSucceeded()
+
+    @action
+    def arg_type_test(self, x: bool, y: int, z: float, w: str) -> ActionResult:
+        """Used to test that argument types are correctly passed to the node module."""
+        if type(x) is bool and type(y) is int and type(z) is float and type(w) is str:
+            self.logger.log(f"Value of x is {x} and type is {type(x)}")
+            return ActionSucceeded()
+        return ActionFailed()
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the liquid handler"""

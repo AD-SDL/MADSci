@@ -33,8 +33,8 @@ import {
 } from '@/store';
 
 const props = defineProps<{
-    module?: string;
-    module_status?: any;
+    node?: string;
+    node_status?: any;
 }>();
 const lock_url = ref('')
 const unlock_url = ref('')
@@ -43,10 +43,10 @@ const hoverText = ref('')
 
 // Format pause and resume urls
 watchEffect(() => {
-    if (props.module) {
-        lock_url.value = urls.value.workcell_server_url.concat('admin/lock/'.concat(props.module))
-        unlock_url.value = urls.value.workcell_server_url.concat('admin/unlock/'.concat(props.module))
-        hoverText.value = "Module"
+    if (props.node) {
+        lock_url.value = urls.value.workcell_server_url.concat('admin/lock/'.concat(props.node))
+        unlock_url.value = urls.value.workcell_server_url.concat('admin/unlock/'.concat(props.node))
+        hoverText.value = "Node"
     }
     else {
         lock_url.value = urls.value.workcell_server_url.concat('admin/lock')
@@ -56,9 +56,9 @@ watchEffect(() => {
 })
 
 watchEffect(() => {
-    if (props.module) {
-        // Determine if the module is already locked
-        if (props.module_status["LOCKED"] == true) {
+    if (props.node) {
+        // Determine if the node is already locked
+        if (props.node_status["LOCKED"] == true) {
             isLocked.value = true
         } else {
             if (workcell_state.value) {
