@@ -56,9 +56,7 @@ class Engine:
         self.state_handler = state_handler
         self.workcell_definition = state_handler.get_workcell_definition()
         self.workcell_settings = self.state_handler.workcell_settings
-        self.logger = EventClient(
-            name=f"workcell.{self.workcell_definition.workcell_name}"
-        )
+        self.logger = EventClient(name=f"workcell.{self.workcell_definition.name}")
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(self.workcell_settings.scheduler)
         self.scheduler = scheduler_module.Scheduler(
@@ -544,7 +542,7 @@ class Engine:
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
             with ownership_context(
-                workcell_id=self.workcell_definition.workcell_id,
+                workcell_id=self.workcell_definition.manager_id,
                 node_id=node.info.node_id if node.info else None,
             ):
                 self.logger.log_warning(

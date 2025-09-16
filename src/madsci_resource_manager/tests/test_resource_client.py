@@ -21,7 +21,7 @@ from madsci.resource_manager.resource_interface import (
     ResourceInterface,
     ResourceTable,
 )
-from madsci.resource_manager.resource_server import create_resource_server
+from madsci.resource_manager.resource_server import ResourceManager
 from madsci.resource_manager.resource_tables import Resource, create_session
 from pytest_mock_resources import PostgresConfig, create_postgres_fixture
 from sqlalchemy import Engine
@@ -55,10 +55,11 @@ def test_client(interface: ResourceInterface) -> TestClient:
     resource_manager_definition = ResourceManagerDefinition(
         name="Test Resource Manager"
     )
-    app = create_resource_server(
-        resource_manager_definition=resource_manager_definition,
+    manager = ResourceManager(
+        definition=resource_manager_definition,
         resource_interface=interface,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 

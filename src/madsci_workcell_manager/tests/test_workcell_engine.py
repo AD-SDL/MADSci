@@ -24,7 +24,7 @@ from madsci.common.types.parameter_types import (
     ParameterFeedForwardJson,
 )
 from madsci.common.types.step_types import Step, StepParameters
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellManagerDefinition
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -68,8 +68,8 @@ test_node = Node(
 @pytest.fixture
 def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
-    workcell_def = WorkcellDefinition(
-        workcell_name="Test Workcell",
+    workcell_def = WorkcellManagerDefinition(
+        name="Test Workcell",
     )
     return WorkcellStateHandler(
         workcell_definition=workcell_def, redis_connection=redis_server
@@ -87,7 +87,7 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
 def test_engine_initialization(engine: Engine) -> None:
     """Test the initialization of the Engine."""
     assert engine.state_handler is not None
-    assert engine.workcell_definition.workcell_name == "Test Workcell"
+    assert engine.workcell_definition.name == "Test Workcell"
 
 
 def test_run_next_step_no_ready_workflows(engine: Engine) -> None:

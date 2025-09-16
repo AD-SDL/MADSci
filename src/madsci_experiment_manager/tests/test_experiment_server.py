@@ -15,7 +15,7 @@ from madsci.common.types.experiment_types import (
     ExperimentRegistration,
     ExperimentStatus,
 )
-from madsci.experiment_manager.experiment_server import create_experiment_server
+from madsci.experiment_manager.experiment_server import ExperimentManager
 from pymongo.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
@@ -36,10 +36,11 @@ db_connection = create_mongo_fixture()
 @pytest.fixture()
 def test_client(db_connection: Database) -> TestClient:
     """Test client fixture for the Experiment Manager's server."""
-    app = create_experiment_server(
-        experiment_manager_definition=experiment_manager_def,
+    manager = ExperimentManager(
+        definition=experiment_manager_def,
         db_connection=db_connection,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 
@@ -208,3 +209,21 @@ def test_fail_experiment(test_client: TestClient) -> None:
     failed_experiment = Experiment.model_validate(result)
     assert failed_experiment.status == ExperimentStatus.FAILED
     assert failed_experiment.experiment_id == test_experiment.experiment_id
+
+
+def test_health_endpoint(test_client: TestClient) -> None:
+    """Test the health endpoint of the Experiment Manager."""
+    response = test_client.get("/health")
+    assert response.status_code == 200
+
+    health_data = response.json()
+    assert "healthy" in health_data
+    assert "description" in health_data
+    assert "db_connected" in health_data
+    assert "total_experiments" in health_data
+
+    # Health should be True when database is working
+    assert health_data["healthy"] is True
+    assert health_data["db_connected"] is True
+    assert isinstance(health_data["total_experiments"], int)
+    assert health_data["total_experiments"] >= 0

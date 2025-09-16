@@ -16,7 +16,7 @@ from madsci.common.types.event_types import (
     EventManagerSettings,
     EventType,
 )
-from madsci.event_manager.event_server import create_event_server
+from madsci.event_manager.event_server import EventManager
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
@@ -40,11 +40,12 @@ db_connection = create_mongo_fixture()
 @pytest.fixture
 def test_client(db_connection: Database) -> TestClient:
     """Event Server Test Client Fixture"""
-    app = create_event_server(
-        event_manager_settings=event_manager_settings,
-        event_manager_definition=event_manager_def,
+    manager = EventManager(
+        settings=event_manager_settings,
+        definition=event_manager_def,
         db_connection=db_connection,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 
@@ -136,3 +137,21 @@ def test_event_alert(test_client: TestClient) -> None:
         assert mock_send_email.call_count == len(
             event_manager_settings.email_alerts.email_addresses
         )
+
+
+def test_health_endpoint(test_client: TestClient) -> None:
+    """Test the health endpoint of the Event Manager."""
+    response = test_client.get("/health")
+    assert response.status_code == 200
+
+    health_data = response.json()
+    assert "healthy" in health_data
+    assert "description" in health_data
+    assert "db_connected" in health_data
+    assert "total_events" in health_data
+
+    # Health should be True when database is working
+    assert health_data["healthy"] is True
+    assert health_data["db_connected"] is True
+    assert isinstance(health_data["total_events"], int)
+    assert health_data["total_events"] >= 0

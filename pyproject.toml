@@ -13,6 +13,7 @@ dev = [
     "ipykernel>=6.29.5",
     "pre-commit>=4.3.0",
     "pydantic-settings-export>=1.0.2",
+    "ruff>=0.13.0",
 ]
 
 [tool.pydantic_settings_export]

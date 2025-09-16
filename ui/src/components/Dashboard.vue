@@ -14,6 +14,9 @@
     <v-tab :value="4">
       Experiments
     </v-tab>
+    <v-tab :value="5">
+      Lab
+    </v-tab>
 
   </v-tabs>
   <v-window v-model="tab">
@@ -58,6 +61,11 @@
         </v-card>
       </v-container>
     </v-window-item>
+    <v-window-item :key="5" :value="5">
+      <v-container class="pa-1 ma-1 justify-center" fluid>
+        <LabPanel />
+      </v-container>
+    </v-window-item>
   </v-window>
 </template>
 
@@ -65,6 +73,7 @@
 import { ref } from 'vue';
 import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
+import LabPanel from './LabPanel.vue';
 import { resources, active_workflows, archived_workflows } from "@/store";
 import WorkcellPanel from './WorkcellPanel.vue';
 import CreaetWorkcellPanel from './CreateWorkcellPanel.vue';

@@ -13,7 +13,7 @@ from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
-from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
+from madsci.common.types.workcell_types import WorkcellManagerDefinition, WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
@@ -21,9 +21,7 @@ from madsci.common.types.workflow_types import (
     WorkflowStatus,
 )
 from madsci.common.utils import new_ulid_str
-from madsci.workcell_manager.workcell_server import (
-    create_workcell_server,
-)
+from madsci.workcell_manager.workcell_server import WorkcellManager
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import (
     MongoConfig,
@@ -53,10 +51,10 @@ mongo_server = create_mongo_fixture()
 
 
 @pytest.fixture
-def workcell() -> WorkcellDefinition:
+def workcell() -> WorkcellManagerDefinition:
     """Fixture for creating a WorkcellDefinition."""
-    return WorkcellDefinition(
-        workcell_name="Test Workcell",
+    return WorkcellManagerDefinition(
+        name="Test Workcell",
         locations=[
             LocationDefinition(location_name="test_location"),
         ],
@@ -123,15 +121,16 @@ def sample_workflow_instance() -> Workflow:
 
 @pytest.fixture
 def test_client(
-    workcell: WorkcellDefinition, redis_server: Redis, mongo_server: Database
+    workcell: WorkcellManagerDefinition, redis_server: Redis, mongo_server: Database
 ) -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
-    app = create_workcell_server(
-        workcell=workcell,
+    manager = WorkcellManager(
+        definition=workcell,
         redis_connection=redis_server,
         mongo_connection=mongo_server,
         start_engine=False,
     )
+    app = manager.create_server()
     client = TestClient(app)
     with client:
         yield client

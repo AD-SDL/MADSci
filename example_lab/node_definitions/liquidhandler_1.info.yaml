@@ -56,7 +56,8 @@ actions:
     asynchronous: true
   arg_type_test:
     name: arg_type_test
-    description: ''
+    description: Used to test that argument types are correctly passed to the node
+      module.
     args:
       x:
         name: x
