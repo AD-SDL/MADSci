@@ -54,6 +54,28 @@ class ManagerSettings(MadsciBaseSettings):
     )
 
 
+class ManagerHealth(MadsciBaseModel):
+    """Base health status for MADSci Manager services.
+
+    This class provides common health check fields that all managers need.
+    Manager-specific health classes should inherit from this class and add
+    additional fields for database connections, external dependencies, etc.
+    """
+
+    healthy: bool = Field(
+        title="Manager Health Status",
+        description="Whether the manager is operating normally.",
+        default=True,
+    )
+    description: Optional[str] = Field(
+        title="Health Status Description",
+        description="Human-readable description of any problems or status.",
+        default=None,
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
 class ManagerDefinition(MadsciBaseModel):
     """Definition for a MADSci Manager."""
 

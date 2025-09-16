@@ -19,6 +19,7 @@ from madsci.common.object_storage_helpers import (
 )
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
+    DataManagerHealth,
     DataManagerSettings,
     DataPoint,
     ObjectStorageSettings,
@@ -74,6 +75,46 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         self.minio_client = create_minio_client(
             object_storage_settings=self._object_storage_settings
         )
+
+    def get_health(self) -> DataManagerHealth:
+        """Get the health status of the Data Manager."""
+        health = DataManagerHealth()
+
+        try:
+            # Test database connection
+            self._db_client.admin.command("ping")
+            health.db_connected = True
+
+            # Test storage accessibility
+            storage_path = Path(self.settings.file_storage_path).expanduser()
+            storage_path.mkdir(parents=True, exist_ok=True)
+            test_file = storage_path / ".health_check"
+            test_file.write_text("health_check")
+            test_file.unlink()
+            health.storage_accessible = True
+
+            # Get total datapoints count
+            health.total_datapoints = self.datapoints.count_documents({})
+
+            health.healthy = True
+            health.description = "Data Manager is running normally"
+
+        except Exception as e:
+            health.healthy = False
+            if hasattr(e, "__contains__") and "mongo" in str(e).lower():
+                health.db_connected = False
+            if hasattr(e, "__contains__") and (
+                "file" in str(e).lower() or "path" in str(e).lower()
+            ):
+                health.storage_accessible = False
+            health.description = f"Health check failed: {e!s}"
+
+        return health
+
+    @get("/health")
+    def health_endpoint(self) -> DataManagerHealth:
+        """Health check endpoint for the Data Manager."""
+        return self.get_health()
 
     @get("/")
     def get_definition(self) -> DataManagerDefinition:

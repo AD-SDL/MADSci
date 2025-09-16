@@ -13,6 +13,7 @@ from madsci.common.types.base_types import (
 )
 from madsci.common.types.manager_types import (
     ManagerDefinition,
+    ManagerHealth,
     ManagerSettings,
     ManagerType,
 )
@@ -64,6 +65,21 @@ class ResourceManagerSettings(
         title="Database URL",
         description="The URL of the database for the resource manager.",
         default="postgresql://madsci:madsci@localhost:5432/resources",
+    )
+
+
+class ResourceManagerHealth(ManagerHealth):
+    """Health status for Resource Manager including database connectivity."""
+
+    db_connected: Optional[bool] = Field(
+        title="Database Connected",
+        description="Whether the database connection is working.",
+        default=None,
+    )
+    total_resources: Optional[int] = Field(
+        title="Total Resources",
+        description="Total number of resources in the database.",
+        default=None,
     )
 
 

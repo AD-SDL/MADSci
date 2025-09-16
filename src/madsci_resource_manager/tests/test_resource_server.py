@@ -1078,3 +1078,21 @@ def test_init_resource(test_client: TestClient) -> None:
     assert second_init_resource.resource_name == "Test Resource"
     assert second_init_resource.resource_id == init_resource.resource_id
     assert second_init_resource.owner.node_id == init_resource.owner.node_id
+
+
+def test_health_endpoint(test_client: TestClient) -> None:
+    """Test the health endpoint of the Resource Manager."""
+    response = test_client.get("/health")
+    assert response.status_code == 200
+
+    health_data = response.json()
+    assert "healthy" in health_data
+    assert "description" in health_data
+    assert "db_connected" in health_data
+    assert "total_resources" in health_data
+
+    # Health should be True when database is working
+    assert health_data["healthy"] is True
+    assert health_data["db_connected"] is True
+    assert isinstance(health_data["total_resources"], int)
+    assert health_data["total_resources"] >= 0

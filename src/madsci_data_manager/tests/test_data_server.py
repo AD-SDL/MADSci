@@ -44,7 +44,7 @@ db_connection = create_mongo_fixture()
 @pytest.fixture
 def test_client(db_connection: Database) -> TestClient:
     """Data Server Test Client Fixture"""
-    manager = DataManager(definition=data_manager_def, db_client=db_connection)
+    manager = DataManager(definition=data_manager_def, db_client=db_connection.client)
     app = manager.create_server()
     return TestClient(app)
 
@@ -603,3 +603,23 @@ def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:
     response = real_minio_client.get_object(bucket_name, object_name)
     downloaded_content = response.read().decode("utf-8")
     assert downloaded_content == test_content
+
+
+def test_health_endpoint(test_client: TestClient) -> None:
+    """Test the health endpoint of the Data Manager."""
+    response = test_client.get("/health")
+    assert response.status_code == 200
+
+    health_data = response.json()
+    assert "healthy" in health_data
+    assert "description" in health_data
+    assert "db_connected" in health_data
+    assert "storage_accessible" in health_data
+    assert "total_datapoints" in health_data
+
+    # Health should be True when database and storage are working
+    assert health_data["healthy"] is True
+    assert health_data["db_connected"] is True
+    assert health_data["storage_accessible"] is True
+    assert isinstance(health_data["total_datapoints"], int)
+    assert health_data["total_datapoints"] >= 0

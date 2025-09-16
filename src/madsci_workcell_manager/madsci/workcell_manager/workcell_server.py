@@ -20,6 +20,7 @@ from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
     WorkcellManagerDefinition,
+    WorkcellManagerHealth,
     WorkcellManagerSettings,
     WorkcellState,
 )
@@ -151,6 +152,44 @@ class WorkcellManager(
         return app
 
     # Endpoint implementations
+
+    def get_health(self) -> WorkcellManagerHealth:
+        """Get the health status of the Workcell Manager."""
+        health = WorkcellManagerHealth()
+
+        try:
+            # Test Redis connection if configured
+            if (
+                hasattr(self.state_handler, "_redis_client")
+                and self.state_handler._redis_client
+            ):
+                self.state_handler._redis_client.ping()
+                health.redis_connected = True
+            else:
+                health.redis_connected = None
+
+            # Count nodes and check their reachability
+            total_nodes = len(self.definition.nodes)
+            health.total_nodes = total_nodes
+
+            # TODO: Implement actual node reachability checks
+            health.nodes_reachable = total_nodes
+
+            health.healthy = True
+            health.description = "Workcell Manager is running normally"
+
+        except Exception as e:
+            health.healthy = False
+            if "redis" in str(e).lower():
+                health.redis_connected = False
+            health.description = f"Health check failed: {e!s}"
+
+        return health
+
+    @get("/health")
+    def health_endpoint(self) -> WorkcellManagerHealth:
+        """Health check endpoint for the Workcell Manager."""
+        return self.get_health()
 
     @get("/")
     @get("/info")

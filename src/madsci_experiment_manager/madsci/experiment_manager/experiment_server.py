@@ -12,6 +12,7 @@ from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentManagerDefinition,
+    ExperimentManagerHealth,
     ExperimentManagerSettings,
     ExperimentRegistration,
     ExperimentStatus,
@@ -63,6 +64,39 @@ class ExperimentManager(
             self._db_connection = self._db_client["experiment_manager"]
 
         self.experiments = self._db_connection["experiments"]
+
+    def get_health(self) -> ExperimentManagerHealth:
+        """Get the health status of the Experiment Manager."""
+        health = ExperimentManagerHealth()
+
+        try:
+            # Test database connection
+            if self._db_client is not None:
+                self._db_client.admin.command("ping")
+            elif self._db_connection is not None:
+                # Use the database connection directly to ping
+                self._db_connection.client.admin.command("ping")
+            else:
+                raise Exception("No database connection available")
+            health.db_connected = True
+
+            # Get total experiments count
+            health.total_experiments = self.experiments.count_documents({})
+
+            health.healthy = True
+            health.description = "Experiment Manager is running normally"
+
+        except Exception as e:
+            health.healthy = False
+            health.db_connected = False
+            health.description = f"Database connection failed: {e!s}"
+
+        return health
+
+    @get("/health")
+    def health_endpoint(self) -> ExperimentManagerHealth:
+        """Health check endpoint for the Experiment Manager."""
+        return self.get_health()
 
     @get("/")
     def get_definition(self) -> ExperimentManagerDefinition:

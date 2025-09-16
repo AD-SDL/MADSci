@@ -20,6 +20,7 @@ from madsci.common.types.resource_types import (
 from madsci.common.types.resource_types.definitions import (
     ResourceDefinitions,
     ResourceManagerDefinition,
+    ResourceManagerHealth,
     ResourceManagerSettings,
 )
 from madsci.common.types.resource_types.server_types import (
@@ -35,6 +36,7 @@ from madsci.common.types.resource_types.server_types import (
 )
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_tables import ResourceHistoryTable
+from sqlalchemy import text
 from sqlalchemy.exc import NoResultFound
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -117,6 +119,41 @@ class ResourceManager(
             return await call_next(request)
 
         return app
+
+    def get_health(self) -> ResourceManagerHealth:
+        """Get the health status of the Resource Manager."""
+        health = ResourceManagerHealth()
+
+        try:
+            # Test database connection and get resource count
+            with self._resource_interface.get_session() as session:
+                session.execute(text("SELECT 1")).fetchone()
+                health.db_connected = True
+
+                try:
+                    # Get total resources count (may fail if table doesn't exist)
+                    result = session.execute(
+                        text("SELECT COUNT(*) FROM resources")
+                    ).fetchone()
+                    health.total_resources = result[0] if result else 0
+                except Exception:
+                    # Table might not exist yet - this is OK for health check
+                    health.total_resources = 0
+
+            health.healthy = True
+            health.description = "Resource Manager is running normally"
+
+        except Exception as e:
+            health.healthy = False
+            health.db_connected = False
+            health.description = f"Database connection failed: {e!s}"
+
+        return health
+
+    @get("/health")
+    def health_endpoint(self) -> ResourceManagerHealth:
+        """Health check endpoint for the Resource Manager."""
+        return self.get_health()
 
     @get("/")
     def get_definition(self) -> ResourceManagerDefinition:

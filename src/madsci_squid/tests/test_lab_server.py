@@ -73,3 +73,51 @@ def test_lab_manager_ownership_setup():
     # Lab manager should set both manager_id and lab_id
     assert global_ownership_info.manager_id == definition.manager_id
     assert global_ownership_info.lab_id == definition.manager_id
+
+
+def test_health_endpoint():
+    """Test the basic health endpoint of the Lab Manager."""
+    manager = LabManager()
+    app = manager.create_server()
+
+    with TestClient(app) as client:
+        response = client.get("/health")
+        assert response.status_code == 200
+
+        health_data = response.json()
+        assert "healthy" in health_data
+        assert "description" in health_data
+
+        # Basic lab manager should be healthy
+        assert health_data["healthy"] is True
+
+
+def test_lab_health_endpoint():
+    """Test the lab health endpoint that checks all managers."""
+    manager = LabManager()
+    app = manager.create_server()
+
+    with TestClient(app) as client:
+        response = client.get("/lab_health")
+        assert response.status_code == 200
+
+        health_data = response.json()
+        assert "healthy" in health_data
+        assert "description" in health_data
+        assert "managers" in health_data
+        assert "total_managers" in health_data
+        assert "healthy_managers" in health_data
+
+        # Verify the structure of the lab health response
+        assert isinstance(health_data["managers"], dict)
+        assert isinstance(health_data["total_managers"], int)
+        assert isinstance(health_data["healthy_managers"], int)
+        assert (
+            health_data["total_managers"] >= 0
+        )  # May be 0 in test environment with no configured managers
+
+        # Each manager in the response should have health information
+        for _, manager_health in health_data["managers"].items():
+            assert "healthy" in manager_health
+            assert "description" in manager_health
+            assert isinstance(manager_health["healthy"], bool)

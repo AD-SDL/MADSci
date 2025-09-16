@@ -17,7 +17,7 @@ from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
-from madsci.common.types.manager_types import ManagerType
+from madsci.common.types.manager_types import ManagerHealth, ManagerType
 
 # Type variables for generic typing
 SettingsT = TypeVar("SettingsT", bound=MadsciBaseSettings)
@@ -133,6 +133,29 @@ class AbstractManagerBase(
     def setup_ownership(self) -> None:
         """Setup ownership context for the manager."""
         global_ownership_info.manager_id = self._definition.manager_id
+
+    def get_health(self) -> ManagerHealth:
+        """
+        Get the health status of this manager.
+
+        This base implementation returns a healthy status.
+        Subclasses should override this method to check specific
+        dependencies like databases, external services, etc.
+
+        Returns:
+            ManagerHealth: The current health status
+        """
+        try:
+            # Basic health check - if we can create a ManagerHealth object,
+            # the manager is at least partially functional
+            return ManagerHealth(
+                healthy=True,
+                description="Manager is running and responding to requests",
+            )
+        except Exception as e:
+            return ManagerHealth(
+                healthy=False, description=f"Health check failed: {e!s}"
+            )
 
     def load_or_create_definition(self) -> DefinitionT:
         """Load definition from file or create default."""

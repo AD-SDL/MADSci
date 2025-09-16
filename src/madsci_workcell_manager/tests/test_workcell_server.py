@@ -292,3 +292,24 @@ def test_check_parameter_conflict() -> None:
         match="conflict_param is a Feed Forward Value and will be calculated during execution",
     ):
         check_parameters(workflow, {"conflict_param": "value"})
+
+
+def test_health_endpoint(test_client: TestClient) -> None:
+    """Test the health endpoint of the Workcell Manager."""
+    response = test_client.get("/health")
+    assert response.status_code == 200
+
+    health_data = response.json()
+    assert "healthy" in health_data
+    assert "description" in health_data
+    assert "redis_connected" in health_data
+    assert "nodes_reachable" in health_data
+    assert "total_nodes" in health_data
+
+    # Health should be True for basic functionality
+    assert health_data["healthy"] is True
+    # Note: redis_connected may be None if Redis is not configured
+    assert isinstance(health_data["total_nodes"], int)
+    assert isinstance(health_data["nodes_reachable"], int)
+    assert health_data["total_nodes"] >= 0
+    assert health_data["nodes_reachable"] >= 0

@@ -15,6 +15,7 @@ from madsci.common.types.event_types import (
     Event,
     EventLogLevel,
     EventManagerDefinition,
+    EventManagerHealth,
     EventManagerSettings,
 )
 from madsci.event_manager.events_csv_exporter import CSVExporter
@@ -61,6 +62,33 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             self._db_connection = db_client[self.settings.collection_name]
 
         self.events = self._db_connection["events"]
+
+    def get_health(self) -> EventManagerHealth:
+        """Get the health status of the Event Manager."""
+        health = EventManagerHealth()
+
+        try:
+            # Test database connection
+            self._db_connection.command("ping")
+            health.db_connected = True
+
+            # Get total event count
+            health.total_events = self.events.count_documents({})
+
+            health.healthy = True
+            health.description = "Event Manager is running normally"
+
+        except Exception as e:
+            health.healthy = False
+            health.db_connected = False
+            health.description = f"Database connection failed: {e!s}"
+
+        return health
+
+    @get("/health")
+    def health_endpoint(self) -> EventManagerHealth:
+        """Health check endpoint for the Event Manager."""
+        return self.get_health()
 
     @get("/")
     def get_definition(self) -> EventManagerDefinition:

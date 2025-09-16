@@ -14,6 +14,7 @@ from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
 from madsci.common.types.manager_types import (
     ManagerDefinition,
+    ManagerHealth,
     ManagerSettings,
     ManagerType,
 )
@@ -81,6 +82,21 @@ class EventManagerSettings(
         default=None,
         title="Email Alerts Configuration",
         description="The configuration for sending email alerts.",
+    )
+
+
+class EventManagerHealth(ManagerHealth):
+    """Health status for Event Manager including database connectivity."""
+
+    db_connected: Optional[bool] = Field(
+        title="Database Connected",
+        description="Whether the database connection is working.",
+        default=None,
+    )
+    total_events: Optional[int] = Field(
+        title="Total Events",
+        description="Total number of events stored in the database.",
+        default=None,
     )
 
 

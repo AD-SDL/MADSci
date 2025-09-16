@@ -11,6 +11,7 @@ from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
 from madsci.common.types.manager_types import (
     ManagerDefinition,
+    ManagerHealth,
     ManagerSettings,
     ManagerType,
 )
@@ -268,6 +269,26 @@ class DataManagerSettings(
         title="File Storage Path",
         description="The path where files are stored on the server.",
         default="~/.madsci/datapoints",
+    )
+
+
+class DataManagerHealth(ManagerHealth):
+    """Health status for Data Manager including database and storage connectivity."""
+
+    db_connected: Optional[bool] = Field(
+        title="Database Connected",
+        description="Whether the database connection is working.",
+        default=None,
+    )
+    storage_accessible: Optional[bool] = Field(
+        title="Storage Accessible",
+        description="Whether file storage is accessible.",
+        default=None,
+    )
+    total_datapoints: Optional[int] = Field(
+        title="Total Datapoints",
+        description="Total number of datapoints stored in the database.",
+        default=None,
     )
 
 

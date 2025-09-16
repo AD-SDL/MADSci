@@ -9,7 +9,11 @@ from madsci.common.types.base_types import (
     PathLike,
 )
 from madsci.common.types.location_types import Location, LocationDefinition
-from madsci.common.types.manager_types import ManagerSettings, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerHealth,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.types.node_types import Node
 from madsci.common.types.workflow_types import AliasChoices, Workflow
 from madsci.common.utils import new_ulid_str
@@ -238,4 +242,24 @@ class WorkcellManagerSettings(
         default=3,
         title="Get Action Result Retries",
         description="Number of times to retry getting an action result",
+    )
+
+
+class WorkcellManagerHealth(ManagerHealth):
+    """Health status for Workcell Manager including Redis connectivity."""
+
+    redis_connected: Optional[bool] = Field(
+        title="Redis Connected",
+        description="Whether the Redis connection is working.",
+        default=None,
+    )
+    nodes_reachable: Optional[int] = Field(
+        title="Nodes Reachable",
+        description="Number of nodes that are reachable.",
+        default=None,
+    )
+    total_nodes: Optional[int] = Field(
+        title="Total Nodes",
+        description="Total number of configured nodes.",
+        default=None,
     )

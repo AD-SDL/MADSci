@@ -137,3 +137,21 @@ def test_event_alert(test_client: TestClient) -> None:
         assert mock_send_email.call_count == len(
             event_manager_settings.email_alerts.email_addresses
         )
+
+
+def test_health_endpoint(test_client: TestClient) -> None:
+    """Test the health endpoint of the Event Manager."""
+    response = test_client.get("/health")
+    assert response.status_code == 200
+
+    health_data = response.json()
+    assert "healthy" in health_data
+    assert "description" in health_data
+    assert "db_connected" in health_data
+    assert "total_events" in health_data
+
+    # Health should be True when database is working
+    assert health_data["healthy"] is True
+    assert health_data["db_connected"] is True
+    assert isinstance(health_data["total_events"], int)
+    assert health_data["total_events"] >= 0

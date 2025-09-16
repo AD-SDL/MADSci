@@ -6,6 +6,7 @@ from typing import Literal, Optional
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.manager_types import (
     ManagerDefinition,
+    ManagerHealth,
     ManagerSettings,
     ManagerType,
 )
@@ -38,6 +39,26 @@ class LabManagerSettings(
         title="Lab Definition File",
         description="Path to the lab definition file to use.",
         default=Path("lab.manager.yaml"),
+    )
+
+
+class LabHealth(ManagerHealth):
+    """Health status for Lab Manager including status of other managers in the lab."""
+
+    managers: Optional[dict[str, ManagerHealth]] = Field(
+        title="Manager Health Status",
+        description="Health status of all managers in the lab.",
+        default=None,
+    )
+    total_managers: Optional[int] = Field(
+        title="Total Managers",
+        description="Total number of managers configured in the lab.",
+        default=None,
+    )
+    healthy_managers: Optional[int] = Field(
+        title="Healthy Managers",
+        description="Number of managers that are healthy.",
+        default=None,
     )
 
 

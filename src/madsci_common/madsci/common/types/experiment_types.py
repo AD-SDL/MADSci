@@ -14,6 +14,7 @@ from madsci.common.types.base_types import (
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.manager_types import (
     ManagerDefinition,
+    ManagerHealth,
     ManagerSettings,
     ManagerType,
 )
@@ -243,5 +244,20 @@ class ExperimentalCampaign(MadsciBaseModel):
     ended_at: Optional[datetime] = Field(
         title="Ended At",
         description="The time the campaign was ended.",
+        default=None,
+    )
+
+
+class ExperimentManagerHealth(ManagerHealth):
+    """Health status for Experiment Manager including database connectivity."""
+
+    db_connected: Optional[bool] = Field(
+        title="Database Connected",
+        description="Whether the database connection is working.",
+        default=None,
+    )
+    total_experiments: Optional[int] = Field(
+        title="Total Experiments",
+        description="Total number of experiments in the database.",
         default=None,
     )
