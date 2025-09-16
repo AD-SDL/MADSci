@@ -26,8 +26,8 @@
 import { ref, watchEffect } from 'vue';
 
     const props = defineProps<{
-        module?: string;
-        module_status?: string;
+        node?: string;
+        node_status?: any;
     }>();
 
     const shutdown_url = ref('')
@@ -36,9 +36,9 @@ import { ref, watchEffect } from 'vue';
 
     // Format shutdown url
     watchEffect(() => {
-        if (props.module) {
-            shutdown_url.value = urls.value.workcell_server_url.concat('admin/shutdown/'.concat(props.module))
-            hoverText.value = "Shutdown Module"
+        if (props.node) {
+            shutdown_url.value = urls.value.workcell_server_url.concat('admin/shutdown/'.concat(props.node))
+            hoverText.value = "Shutdown Node"
         }
         else {
             shutdown_url.value = urls.value.workcell_server_url.concat('admin/shutdown')
@@ -47,8 +47,8 @@ import { ref, watchEffect } from 'vue';
     })
 
     watchEffect(() => {
-        // Determine if the module is already shutdown
-        if (props.module_status == 'UNKNOWN') {
+        // Determine if the node is already shutdown
+        if (props.node_status == 'UNKNOWN') {
             isShutdown.value = true
         } else {
             isShutdown.value = false
