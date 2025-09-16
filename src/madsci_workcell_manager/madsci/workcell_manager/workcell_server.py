@@ -3,7 +3,6 @@
 import json
 import traceback
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, Optional, Union
 
 from classy_fastapi import delete, get, post
@@ -48,6 +47,9 @@ class WorkcellManager(
 ):
     """MADSci Workcell Manager using the new AbstractManagerBase pattern."""
 
+    SETTINGS_CLASS = WorkcellManagerSettings
+    DEFINITION_CLASS = WorkcellManagerDefinition
+
     def __init__(
         self,
         settings: Optional[WorkcellManagerSettings] = None,
@@ -63,14 +65,6 @@ class WorkcellManager(
         self.start_engine = start_engine
 
         super().__init__(settings=settings, definition=definition, **kwargs)
-
-    def create_default_settings(self) -> WorkcellManagerSettings:
-        """Create default settings instance for this manager."""
-        return WorkcellManagerSettings()
-
-    def get_definition_path(self) -> Path:
-        """Get the path to the definition file."""
-        return Path(self.settings.manager_definition)
 
     def create_default_definition(self) -> WorkcellManagerDefinition:
         """Create a default definition instance for this manager."""

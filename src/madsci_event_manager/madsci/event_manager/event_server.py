@@ -1,7 +1,6 @@
 """Example Event Manager implementation using the new AbstractManagerBase class."""
 
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import pymongo
@@ -10,6 +9,7 @@ from fastapi import Query
 from fastapi.exceptions import HTTPException
 from fastapi.params import Body
 from fastapi.responses import Response
+from madsci.client.event_client import EventClient
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.types.event_types import (
     Event,
@@ -28,6 +28,9 @@ from pymongo.synchronous.database import Database
 class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinition]):
     """Event Manager REST Server."""
 
+    SETTINGS_CLASS = EventManagerSettings
+    DEFINITION_CLASS = EventManagerDefinition
+
     def __init__(
         self,
         settings: Optional[EventManagerSettings] = None,
@@ -43,17 +46,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         # Initialize database connection and collections
         self._setup_database()
 
-    def create_default_settings(self) -> EventManagerSettings:
-        """Create default settings instance for this manager."""
-        return EventManagerSettings()
-
-    def get_definition_path(self) -> Path:
-        """Get the path to the definition file."""
-        return Path(self.settings.manager_definition).expanduser()
-
-    def create_default_definition(self) -> EventManagerDefinition:
-        """Create a default definition instance for this manager."""
-        return EventManagerDefinition()
+    def setup_logging(self) -> None:
+        """Setup logging for the event manager. Prevent recursive logging."""
+        self._logger = EventClient(
+            name=f"{self._definition.name}", event_server_url=None
+        )
+        self._logger.event_server = None
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""

@@ -31,6 +31,9 @@ from pymongo import MongoClient
 class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition]):
     """Data Manager REST Server."""
 
+    SETTINGS_CLASS = DataManagerSettings
+    DEFINITION_CLASS = DataManagerDefinition
+
     def __init__(
         self,
         settings: Optional[DataManagerSettings] = None,
@@ -49,18 +52,6 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         # Initialize database and storage
         self._setup_database()
         self._setup_storage()
-
-    def create_default_settings(self) -> DataManagerSettings:
-        """Create default settings instance for this manager."""
-        return DataManagerSettings()
-
-    def get_definition_path(self) -> Path:
-        """Get the path to the definition file."""
-        return Path(self.settings.manager_definition).expanduser()
-
-    def create_default_definition(self) -> DataManagerDefinition:
-        """Create a default definition instance for this manager."""
-        return DataManagerDefinition()
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""

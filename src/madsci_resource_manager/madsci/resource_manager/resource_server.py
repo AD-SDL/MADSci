@@ -1,6 +1,5 @@
 """Resource Manager server implementation, extending th AbstractBaseManager class."""
 
-from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 import fastapi
@@ -40,16 +39,19 @@ from sqlalchemy import text
 from sqlalchemy.exc import NoResultFound
 
 # Module-level constants for Body() calls to avoid B008 linting errors
-RESOURCE_DEFINITION_BODY = Body(...)
-RESOURCE_BODY_WITH_DISCRIMINATOR = Body(..., discriminator="base_type")
-QUERY_BODY = Body(...)
-HISTORY_QUERY_BODY = Body(...)
+RESOURCE_DEFINITION_BODY_PARAM = Body(...)
+RESOURCE_BODY_WITH_DISCRIMINATOR_PARAM = Body(..., discriminator="base_type")
+QUERY_BODY_PARAM = Body(...)
+HISTORY_QUERY_BODY_PARAM = Body(...)
 
 
 class ResourceManager(
     AbstractManagerBase[ResourceManagerSettings, ResourceManagerDefinition]
 ):
     """Resource Manager REST Server."""
+
+    SETTINGS_CLASS = ResourceManagerSettings
+    DEFINITION_CLASS = ResourceManagerDefinition
 
     def __init__(
         self,
@@ -69,18 +71,6 @@ class ResourceManager(
 
         # Set up ownership middleware
         self._setup_ownership()
-
-    def create_default_settings(self) -> ResourceManagerSettings:
-        """Create default settings instance for this manager."""
-        return ResourceManagerSettings()
-
-    def get_definition_path(self) -> Path:
-        """Get the path to the definition file."""
-        return Path(self.settings.manager_definition).expanduser()
-
-    def create_default_definition(self) -> ResourceManagerDefinition:
-        """Create a default definition instance for this manager."""
-        return ResourceManagerDefinition()
 
     def _setup_resource_interface(self) -> None:
         """Setup the resource interface."""
@@ -167,7 +157,7 @@ class ResourceManager(
 
     @post("/resource/init")
     async def init_resource(
-        self, resource_definition: ResourceDefinitions = RESOURCE_DEFINITION_BODY
+        self, resource_definition: ResourceDefinitions = RESOURCE_DEFINITION_BODY_PARAM
     ) -> ResourceDataModels:
         """
         Initialize a resource in the database based on a definition. If a matching resource already exists, it will be returned.
@@ -202,7 +192,7 @@ class ResourceManager(
 
     @post("/resource/add")
     async def add_resource(
-        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR
+        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR_PARAM
     ) -> ResourceDataModels:
         """
         Add a new resource to the Resource Manager.
@@ -215,7 +205,7 @@ class ResourceManager(
 
     @post("/resource/add_or_update")
     async def add_or_update_resource(
-        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR
+        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR_PARAM
     ) -> ResourceDataModels:
         """
         Add a new resource to the Resource Manager.
@@ -228,7 +218,7 @@ class ResourceManager(
 
     @post("/resource/update")
     async def update_resource(
-        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR
+        self, resource: ResourceDataModels = RESOURCE_BODY_WITH_DISCRIMINATOR_PARAM
     ) -> ResourceDataModels:
         """
         Update or refresh a resource in the database, including its children.
@@ -271,7 +261,7 @@ class ResourceManager(
 
     @post("/resource/query")
     async def query_resource(
-        self, query: ResourceGetQuery = QUERY_BODY
+        self, query: ResourceGetQuery = QUERY_BODY_PARAM
     ) -> Union[ResourceDataModels, list[ResourceDataModels]]:
         """
         Retrieve a resource from the database based on the specified parameters.
@@ -290,7 +280,7 @@ class ResourceManager(
 
     @post("/history/query")
     async def query_history(
-        self, query: ResourceHistoryGetQuery = HISTORY_QUERY_BODY
+        self, query: ResourceHistoryGetQuery = HISTORY_QUERY_BODY_PARAM
     ) -> list[ResourceHistoryTable]:
         """
         Retrieve the history of a resource.

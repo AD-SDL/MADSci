@@ -1,7 +1,6 @@
 """Experiment Manager implementation using the new AbstractManagerBase class."""
 
 import datetime
-from pathlib import Path
 from typing import Any, Optional
 
 from classy_fastapi import get, post
@@ -26,6 +25,9 @@ class ExperimentManager(
 ):
     """Experiment Manager REST Server."""
 
+    SETTINGS_CLASS = ExperimentManagerSettings
+    DEFINITION_CLASS = ExperimentManagerDefinition
+
     def __init__(
         self,
         settings: Optional[ExperimentManagerSettings] = None,
@@ -43,18 +45,6 @@ class ExperimentManager(
 
         # Initialize database connection
         self._setup_database()
-
-    def create_default_settings(self) -> ExperimentManagerSettings:
-        """Create default settings instance for this manager."""
-        return ExperimentManagerSettings()
-
-    def get_definition_path(self) -> Path:
-        """Get the path to the definition file."""
-        return Path(self.settings.manager_definition).expanduser()
-
-    def create_default_definition(self) -> ExperimentManagerDefinition:
-        """Create a default definition instance for this manager."""
-        return ExperimentManagerDefinition()
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""

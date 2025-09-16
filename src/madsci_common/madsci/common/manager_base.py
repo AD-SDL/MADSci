@@ -5,7 +5,7 @@ This module provides a base class for all MADSci manager services,
 standardizing common patterns and reducing code duplication.
 """
 
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 from pathlib import Path
 from typing import Any, Generic, Optional, TypeVar
 
@@ -17,7 +17,7 @@ from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
-from madsci.common.types.manager_types import ManagerHealth, ManagerType
+from madsci.common.types.manager_types import ManagerHealth
 
 # Type variables for generic typing
 SettingsT = TypeVar("SettingsT", bound=MadsciBaseSettings)
@@ -46,7 +46,15 @@ class AbstractManagerBase(
     Type Parameters:
         SettingsT: The manager's settings class (must inherit from MadsciBaseSettings)
         DefinitionT: The manager's definition class (must inherit from MadsciBaseModel)
+
+    Class Attributes:
+        SETTINGS_CLASS: The settings class for this manager (set by subclasses)
+        DEFINITION_CLASS: The definition class for this manager (set by subclasses)
     """
+
+    # Class attributes to be set by subclasses
+    SETTINGS_CLASS: Optional[type[MadsciBaseSettings]] = None
+    DEFINITION_CLASS: Optional[type[MadsciBaseModel]] = None
 
     def __init__(
         self,
@@ -95,17 +103,25 @@ class AbstractManagerBase(
         """Get the logger instance."""
         return self._logger
 
-    @abstractmethod
     def create_default_settings(self) -> SettingsT:
         """Create default settings instance for this manager."""
+        if self.SETTINGS_CLASS is None:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} must set SETTINGS_CLASS class attribute"
+            )
+        return self.SETTINGS_CLASS()
 
-    @abstractmethod
     def get_definition_path(self) -> Path:
         """Get the path to the definition file."""
+        return Path(self.settings.manager_definition).expanduser()
 
-    @abstractmethod
     def create_default_definition(self) -> DefinitionT:
         """Create a default definition instance for this manager."""
+        if self.DEFINITION_CLASS is None:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} must set DEFINITION_CLASS class attribute"
+            )
+        return self.DEFINITION_CLASS()
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -122,13 +138,7 @@ class AbstractManagerBase(
 
     def setup_logging(self) -> None:
         """Setup logging for the manager."""
-        if self.definition.manager_type == ManagerType.EVENT_MANAGER:
-            self._logger = EventClient(
-                name=f"{self._definition.name}", event_server_url=None
-            )
-            self._logger.event_server = None  # Prevent recursive logging
-        else:
-            self._logger = EventClient(name=f"{self._definition.name}")
+        self._logger = EventClient(name=f"{self._definition.name}")
 
     def setup_ownership(self) -> None:
         """Setup ownership context for the manager."""
@@ -165,7 +175,7 @@ class AbstractManagerBase(
 
         def_path = self.get_definition_path()
         if def_path.exists():
-            definition = self.create_default_definition().__class__.from_yaml(def_path)
+            definition = self.DEFINITION_CLASS.from_yaml(def_path)
         else:
             definition = self.create_default_definition()
 

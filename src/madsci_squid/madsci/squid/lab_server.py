@@ -22,6 +22,9 @@ from madsci.common.types.manager_types import ManagerHealth
 class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
     """Lab Manager REST Server."""
 
+    SETTINGS_CLASS = LabManagerSettings
+    DEFINITION_CLASS = LabManagerDefinition
+
     def __init__(
         self,
         settings: Optional[LabManagerSettings] = None,
@@ -33,18 +36,6 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
 
         # Set up additional ownership context for lab
         self._setup_lab_ownership()
-
-    def create_default_settings(self) -> LabManagerSettings:
-        """Create default settings instance for this manager."""
-        return LabManagerSettings()
-
-    def get_definition_path(self) -> Path:
-        """Get the path to the definition file."""
-        return Path(self.settings.manager_definition).expanduser()
-
-    def create_default_definition(self) -> LabManagerDefinition:
-        """Create a default definition instance for this manager."""
-        return LabManagerDefinition()
 
     def _setup_lab_ownership(self) -> None:
         """Setup lab-specific ownership information."""
