@@ -23,7 +23,7 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageSettings,
     ValueDataPoint,
 )
-from madsci.data_manager.data_server import create_data_server
+from madsci.data_manager.data_server import DataManager
 from pymongo import MongoClient
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 from starlette.testclient import TestClient
@@ -43,10 +43,11 @@ mongo_client = create_mongo_fixture()
 def test_client(mongo_client: MongoClient) -> TestClient:
     """Data Server Test Client Fixture"""
     data_manager_definition = DataManagerDefinition(name="Test Data Manager")
-    app = create_data_server(
-        data_manager_definition=data_manager_definition,
+    manager = DataManager(
+        definition=data_manager_definition,
         db_client=mongo_client,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 

@@ -26,8 +26,8 @@
 import { ref, watchEffect } from 'vue';
 
     const props = defineProps<{
-        module?: string;
-        module_status?: string;
+        node?: string;
+        node_status?: any;
     }>();
 
     const reset_url = ref('')
@@ -36,9 +36,9 @@ import { ref, watchEffect } from 'vue';
 
     // Format reset url
     watchEffect(() => {
-        if (props.module) {
-            reset_url.value = urls.value.workcell_server_url.concat('admin/reset/'.concat(props.module))
-            hoverText.value = "Reset Module"
+        if (props.node) {
+            reset_url.value = urls.value.workcell_server_url.concat('admin/reset/'.concat(props.node))
+            hoverText.value = "Reset Node"
         }
         else {
             reset_url.value = urls.value.workcell_server_url.concat('admin/reset')
@@ -47,9 +47,9 @@ import { ref, watchEffect } from 'vue';
     })
 
     watchEffect(() => {
-        if (props.module) {
-            // Determine if the module is able to be reset (if actively running something)
-            if (props.module_status == 'BUSY') {
+        if (props.node) {
+            // Determine if the node is able to be reset (if actively running something)
+            if (props.node_status == 'BUSY') {
                 canReset.value = false
                 //user should pause or stop running action before resetting
             }

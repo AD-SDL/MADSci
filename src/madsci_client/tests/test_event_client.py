@@ -264,7 +264,10 @@ class TestEventClientLogging:
         client = EventClient(config=config_with_server)
 
         # Should not raise an exception, should buffer the event
-        client.log_info("Test message")
+        client.log_info("Test message gets queued 1")
+        client.log_info(
+            "Test message gets queued 2"
+        )  # * Need a second event so there's at least one in the queue while the other is being retried
 
         time.sleep(0.1)
 

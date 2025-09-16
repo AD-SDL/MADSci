@@ -1,19 +1,17 @@
-"""REST API and Server for the Experiment Manager."""
+"""Experiment Manager implementation using the new AbstractManagerBase class."""
 
 import datetime
-from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from madsci.client.event_client import EventClient, EventType
-from madsci.common.context import get_current_madsci_context
-from madsci.common.ownership import global_ownership_info
+from classy_fastapi import get, post
+from fastapi import HTTPException
+from madsci.client.event_client import EventType
+from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentManagerDefinition,
+    ExperimentManagerHealth,
     ExperimentManagerSettings,
     ExperimentRegistration,
     ExperimentStatus,
@@ -22,75 +20,105 @@ from pymongo import MongoClient
 from pymongo.database import Database
 
 
-def create_experiment_server(  # noqa: C901, PLR0915
-    experiment_manager_definition: Optional[ExperimentManagerDefinition] = None,
-    experiment_manager_settings: Optional[ExperimentManagerSettings] = None,
-    db_connection: Optional[Database] = None,
-) -> FastAPI:
-    """Creates an Experiment Manager's REST server."""
-    logger = EventClient()
-    experiment_manager_settings = (
-        experiment_manager_settings or ExperimentManagerSettings()
-    )
-    logger.log_info(experiment_manager_settings)
-    logger.log_info(get_current_madsci_context())
-    if not experiment_manager_definition:
-        def_path = Path(
-            experiment_manager_settings.experiment_manager_definition
-        ).expanduser()
-        if def_path.exists():
-            experiment_manager_definition = ExperimentManagerDefinition.from_yaml(
-                def_path,
-            )
-        else:
-            experiment_manager_definition = ExperimentManagerDefinition()
-        logger.log_info(f"Writing to experiment manager definition file: {def_path}")
-        experiment_manager_definition.to_yaml(def_path)
-    logger = EventClient(
-        name=f"experiment_manager.{experiment_manager_definition.name}",
-    )
-    # Set global ownership info directly
-    global_ownership_info.manager_id = (
-        experiment_manager_definition.experiment_manager_id
-    )
-    logger.log_info(experiment_manager_definition)
+class ExperimentManager(
+    AbstractManagerBase[ExperimentManagerSettings, ExperimentManagerDefinition]
+):
+    """Experiment Manager REST Server."""
 
-    # * DB Config
-    if db_connection is None:
-        db_client = MongoClient(experiment_manager_settings.db_url)
-        db_connection = db_client["experiment_manager"]
-    experiments = db_connection["experiments"]
+    SETTINGS_CLASS = ExperimentManagerSettings
+    DEFINITION_CLASS = ExperimentManagerDefinition
 
-    app = FastAPI()
+    def __init__(
+        self,
+        settings: Optional[ExperimentManagerSettings] = None,
+        definition: Optional[ExperimentManagerDefinition] = None,
+        db_client: Optional[MongoClient] = None,
+        db_connection: Optional[Database] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the Experiment Manager."""
+        # Store additional dependencies before calling super().__init__
+        self._db_client = db_client
+        self._db_connection = db_connection
 
-    @app.get("/")
-    @app.get("/info")
-    @app.get("/definition")
-    async def definition() -> Optional[ExperimentManagerDefinition]:
-        """Get the definition for the Experiment Manager."""
-        return experiment_manager_definition
+        super().__init__(settings=settings, definition=definition, **kwargs)
 
-    @app.get("/experiment/{experiment_id}")
-    async def get_experiment(experiment_id: str) -> Experiment:
+        # Initialize database connection
+        self._setup_database()
+
+    def _setup_database(self) -> None:
+        """Setup database connection and collections."""
+        if self._db_connection is None:
+            if self._db_client is None:
+                self._db_client = MongoClient(self.settings.db_url)
+            self._db_connection = self._db_client["experiment_manager"]
+
+        self.experiments = self._db_connection["experiments"]
+
+    def get_health(self) -> ExperimentManagerHealth:
+        """Get the health status of the Experiment Manager."""
+        health = ExperimentManagerHealth()
+
+        try:
+            # Test database connection
+            if self._db_client is not None:
+                self._db_client.admin.command("ping")
+            elif self._db_connection is not None:
+                # Use the database connection directly to ping
+                self._db_connection.client.admin.command("ping")
+            else:
+                raise Exception("No database connection available")
+            health.db_connected = True
+
+            # Get total experiments count
+            health.total_experiments = self.experiments.count_documents({})
+
+            health.healthy = True
+            health.description = "Experiment Manager is running normally"
+
+        except Exception as e:
+            health.healthy = False
+            health.db_connected = False
+            health.description = f"Database connection failed: {e!s}"
+
+        return health
+
+    @get("/health")
+    def health_endpoint(self) -> ExperimentManagerHealth:
+        """Health check endpoint for the Experiment Manager."""
+        return self.get_health()
+
+    @get("/")
+    def get_definition(self) -> ExperimentManagerDefinition:
+        """Return the manager definition."""
+        return self.definition
+
+    @get("/definition")
+    def get_definition_alt(self) -> ExperimentManagerDefinition:
+        """Return the manager definition."""
+        return self.definition
+
+    @get("/experiment/{experiment_id}")
+    async def get_experiment(self, experiment_id: str) -> Experiment:
         """Get an experiment by ID."""
-        experiment = experiments.find_one({"_id": experiment_id})
+        experiment = self.experiments.find_one({"_id": experiment_id})
         if not experiment:
             raise HTTPException(status_code=404, detail="Experiment not found")
         return Experiment.model_validate(experiment)
 
-    @app.get("/experiments")
-    async def get_experiments(number: int = 10) -> list[Experiment]:
+    @get("/experiments")
+    async def get_experiments(self, number: int = 10) -> list[Experiment]:
         """Get the latest experiments."""
         experiments_list = (
-            experiments.find().sort("started_at", -1).limit(number).to_list()
+            self.experiments.find().sort("started_at", -1).limit(number).to_list()
         )
         return [
             Experiment.model_validate(experiment) for experiment in experiments_list
         ]
 
-    @app.post("/experiment")
+    @post("/experiment")
     async def start_experiment(
-        experiment_request: ExperimentRegistration,
+        self, experiment_request: ExperimentRegistration
     ) -> Experiment:
         """Start a new experiment."""
         experiment = Experiment.from_experiment_design(
@@ -100,8 +128,10 @@ def create_experiment_server(  # noqa: C901, PLR0915
         )
         experiment.started_at = datetime.datetime.now()
 
-        experiments.insert_one(experiment.to_mongo())
-        logger.log(
+        self.experiments.insert_one(experiment.to_mongo())
+
+        # Log the experiment start event
+        self.logger.log(
             event=Event(
                 event_type=EventType.EXPERIMENT_START,
                 event_data={"experiment": experiment},
@@ -109,20 +139,20 @@ def create_experiment_server(  # noqa: C901, PLR0915
         )
         return experiment
 
-    @app.post("/experiment/{experiment_id}/end")
-    async def end_experiment(experiment_id: str) -> Experiment:
+    @post("/experiment/{experiment_id}/end")
+    async def end_experiment(self, experiment_id: str) -> Experiment:
         """End an experiment by ID."""
-        experiment = experiments.find_one({"_id": experiment_id})
+        experiment = self.experiments.find_one({"_id": experiment_id})
         if not experiment:
             raise HTTPException(status_code=404, detail="Experiment not found")
         experiment = Experiment.model_validate(experiment)
         experiment.ended_at = datetime.datetime.now()
         experiment.status = ExperimentStatus.COMPLETED
-        experiments.update_one(
+        self.experiments.update_one(
             {"_id": experiment_id},
             {"$set": experiment.to_mongo()},
         )
-        logger.log(
+        self.logger.log(
             event=Event(
                 event_type=EventType.EXPERIMENT_COMPLETE,
                 event_data={"experiment": experiment},
@@ -130,19 +160,19 @@ def create_experiment_server(  # noqa: C901, PLR0915
         )
         return experiment
 
-    @app.post("/experiment/{experiment_id}/continue")
-    async def continue_experiment(experiment_id: str) -> Experiment:
+    @post("/experiment/{experiment_id}/continue")
+    async def continue_experiment(self, experiment_id: str) -> Experiment:
         """Continue an experiment by ID."""
-        experiment = experiments.find_one({"_id": experiment_id})
+        experiment = self.experiments.find_one({"_id": experiment_id})
         if not experiment:
             raise HTTPException(status_code=404, detail="Experiment not found")
         experiment = Experiment.model_validate(experiment)
         experiment.status = ExperimentStatus.IN_PROGRESS
-        experiments.update_one(
+        self.experiments.update_one(
             {"_id": experiment_id},
             {"$set": experiment.to_mongo()},
         )
-        logger.log(
+        self.logger.log(
             event=Event(
                 event_type=EventType.EXPERIMENT_CONTINUED,
                 event_data={"experiment": experiment},
@@ -150,19 +180,19 @@ def create_experiment_server(  # noqa: C901, PLR0915
         )
         return experiment
 
-    @app.post("/experiment/{experiment_id}/pause")
-    async def pause_experiment(experiment_id: str) -> Experiment:
+    @post("/experiment/{experiment_id}/pause")
+    async def pause_experiment(self, experiment_id: str) -> Experiment:
         """Pause an experiment by ID."""
-        experiment = experiments.find_one({"_id": experiment_id})
+        experiment = self.experiments.find_one({"_id": experiment_id})
         if not experiment:
             raise HTTPException(status_code=404, detail="Experiment not found")
         experiment = Experiment.model_validate(experiment)
         experiment.status = ExperimentStatus.PAUSED
-        experiments.update_one(
+        self.experiments.update_one(
             {"_id": experiment_id},
             {"$set": experiment.to_mongo()},
         )
-        logger.log(
+        self.logger.log(
             event=Event(
                 event_type=EventType.EXPERIMENT_PAUSE,
                 event_data={"experiment": experiment},
@@ -170,19 +200,19 @@ def create_experiment_server(  # noqa: C901, PLR0915
         )
         return experiment
 
-    @app.post("/experiment/{experiment_id}/cancel")
-    async def cancel_experiment(experiment_id: str) -> Experiment:
+    @post("/experiment/{experiment_id}/cancel")
+    async def cancel_experiment(self, experiment_id: str) -> Experiment:
         """Cancel an experiment by ID."""
-        experiment = experiments.find_one({"_id": experiment_id})
+        experiment = self.experiments.find_one({"_id": experiment_id})
         if not experiment:
             raise HTTPException(status_code=404, detail="Experiment not found")
         experiment = Experiment.model_validate(experiment)
         experiment.status = ExperimentStatus.CANCELLED
-        experiments.update_one(
+        self.experiments.update_one(
             {"_id": experiment_id},
             {"$set": experiment.to_mongo()},
         )
-        logger.log(
+        self.logger.log(
             event=Event(
                 event_type=EventType.EXPERIMENT_CANCELLED,
                 event_data={"experiment": experiment},
@@ -190,19 +220,19 @@ def create_experiment_server(  # noqa: C901, PLR0915
         )
         return experiment
 
-    @app.post("/experiment/{experiment_id}/fail")
-    async def fail_experiment(experiment_id: str) -> Experiment:
+    @post("/experiment/{experiment_id}/fail")
+    async def fail_experiment(self, experiment_id: str) -> Experiment:
         """Fail an experiment by ID."""
-        experiment = experiments.find_one({"_id": experiment_id})
+        experiment = self.experiments.find_one({"_id": experiment_id})
         if not experiment:
             raise HTTPException(status_code=404, detail="Experiment not found")
         experiment = Experiment.model_validate(experiment)
         experiment.status = ExperimentStatus.FAILED
-        experiments.update_one(
+        self.experiments.update_one(
             {"_id": experiment_id},
             {"$set": experiment.to_mongo()},
         )
-        logger.log(
+        self.logger.log(
             event=Event(
                 event_type=EventType.EXPERIMENT_FAILED,
                 event_data={"experiment": experiment},
@@ -210,24 +240,8 @@ def create_experiment_server(  # noqa: C901, PLR0915
         )
         return experiment
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
-    return app
-
-
+# Main entry point for running the server
 if __name__ == "__main__":
-    experiment_manager_settings = ExperimentManagerSettings()
-    app = create_experiment_server(
-        experiment_manager_settings=experiment_manager_settings,
-    )
-    uvicorn.run(
-        app,
-        host=get_current_madsci_context().experiment_server_url.host,
-        port=get_current_madsci_context().experiment_server_url.port,
-    )
+    manager = ExperimentManager()
+    manager.run_server()

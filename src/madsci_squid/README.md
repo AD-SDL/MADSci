@@ -42,7 +42,7 @@ Create a lab definition file:
 name: My_Lab
 description: My MADSci-powered laboratory
 manager_type: lab_manager
-lab_id: 01JYKZDPANTNRYXF5TQKRJS0F2  # Generate with ulid
+manager_id: 01JYKZDPANTNRYXF5TQKRJS0F2  # Generate with ulid
 ```
 
 Run the lab manager:
@@ -100,7 +100,7 @@ For dashboard development, see [ui/README.md](../../ui/README.md).
 name: Production_Lab
 description: Production MADSci Laboratory
 manager_type: lab_manager
-lab_id: 01JYKZDPANTNRYXF5TQKRJS0F2
+manager_id: 01JYKZDPANTNRYXF5TQKRJS0F2
 ```
 
 ### Environment Variables

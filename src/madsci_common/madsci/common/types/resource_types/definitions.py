@@ -6,16 +6,20 @@ from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     ConfigDict,
-    MadsciBaseSettings,
     MadsciSQLModel,
     PathLike,
     PositiveInt,
     PositiveNumber,
 )
-from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerHealth,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.types.resource_types.resource_enums import ResourceTypeEnum
 from madsci.common.utils import new_name_str, new_ulid_str
-from pydantic import AfterValidator, AnyUrl, Field
+from pydantic import AfterValidator, AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic.types import Discriminator, Tag
 from sqlalchemy.dialects.postgresql import JSON
@@ -38,31 +42,44 @@ GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 
 class ResourceManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "resources.env"),
     toml_file=("settings.toml", "resources.settings.toml"),
     yaml_file=("settings.yaml", "resources.settings.yaml"),
     json_file=("settings.json", "resources.settings.json"),
-    env_prefix="RESOURCES_",
+    env_prefix="RESOURCE_",
 ):
     """Settings for the MADSci Resource Manager."""
 
-    resource_server_url: AnyUrl = Field(
+    server_url: AnyUrl = Field(
         title="Resource Server URL",
         description="The URL of the resource manager server.",
         default="http://localhost:8003",
-        alias="resource_server_url",  # * Don't double prefix
     )
-    resource_manager_definition: PathLike = Field(
+    manager_definition: PathLike = Field(
         title="Resource Manager Definition File",
         description="Path to the resource manager definition file to use.",
         default="resource.manager.yaml",
-        alias="resource_manager_definition",  # * Don't double prefix
     )
     db_url: str = Field(
         title="Database URL",
         description="The URL of the database for the resource manager.",
         default="postgresql://madsci:madsci@localhost:5432/resources",
+    )
+
+
+class ResourceManagerHealth(ManagerHealth):
+    """Health status for Resource Manager including database connectivity."""
+
+    db_connected: Optional[bool] = Field(
+        title="Database Connected",
+        description="Whether the database connection is working.",
+        default=None,
+    )
+    total_resources: Optional[int] = Field(
+        title="Total Resources",
+        description="Total number of resources in the database.",
+        default=None,
     )
 
 
@@ -78,6 +95,7 @@ class ResourceManagerDefinition(ManagerDefinition):
         title="Resource Manager ID",
         description="The ID of the resource manager.",
         default_factory=new_ulid_str,
+        alias=AliasChoices("resource_manager_id", "manager_id"),
     )
     manager_type: Literal[ManagerType.RESOURCE_MANAGER] = SQLField(
         title="Manager Type",

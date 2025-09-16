@@ -16,13 +16,13 @@ from madsci.common.types.resource_types.definitions import (
     ResourceDefinition,
     ResourceManagerDefinition,
 )
-from madsci.common.utils import new_ulid_str
-from madsci.resource_manager.resource_interface import ResourceInterface
-from madsci.resource_manager.resource_server import (
+from madsci.common.types.resource_types.server_types import (
     ResourceGetQuery,
     ResourceHistoryGetQuery,
-    create_resource_server,
 )
+from madsci.common.utils import new_ulid_str
+from madsci.resource_manager.resource_interface import ResourceInterface
+from madsci.resource_manager.resource_server import ResourceManager
 from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
@@ -59,10 +59,11 @@ def test_client(interface: ResourceInterface) -> TestClient:
     resource_manager_definition = ResourceManagerDefinition(
         name="Test Resource Manager"
     )
-    app = create_resource_server(
-        resource_manager_definition=resource_manager_definition,
+    manager = ResourceManager(
+        definition=resource_manager_definition,
         resource_interface=interface,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 
@@ -1077,3 +1078,21 @@ def test_init_resource(test_client: TestClient) -> None:
     assert second_init_resource.resource_name == "Test Resource"
     assert second_init_resource.resource_id == init_resource.resource_id
     assert second_init_resource.owner.node_id == init_resource.owner.node_id
+
+
+def test_health_endpoint(test_client: TestClient) -> None:
+    """Test the health endpoint of the Resource Manager."""
+    response = test_client.get("/health")
+    assert response.status_code == 200
+
+    health_data = response.json()
+    assert "healthy" in health_data
+    assert "description" in health_data
+    assert "db_connected" in health_data
+    assert "total_resources" in health_data
+
+    # Health should be True when database is working
+    assert health_data["healthy"] is True
+    assert health_data["db_connected"] is True
+    assert isinstance(health_data["total_resources"], int)
+    assert health_data["total_resources"] >= 0

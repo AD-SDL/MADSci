@@ -4,7 +4,7 @@ from typing import ClassVar, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellManagerDefinition
 from madsci.common.types.workflow_types import SchedulerMetadata, Workflow
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 
@@ -22,7 +22,7 @@ class AbstractScheduler:
 
     """
 
-    workcell_definition: ClassVar[WorkcellDefinition]
+    workcell_definition: ClassVar[WorkcellManagerDefinition]
     running: bool
     state_handler: WorkcellStateHandler
     logger: Optional[EventClient]
@@ -30,7 +30,7 @@ class AbstractScheduler:
 
     def __init__(
         self,
-        workcell_definition: WorkcellDefinition,
+        workcell_definition: WorkcellManagerDefinition,
         state_handler: WorkcellStateHandler,
     ) -> "AbstractScheduler":
         """sets the state handler and workcell definition"""

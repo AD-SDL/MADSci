@@ -25,7 +25,7 @@
 import { ref, watchEffect } from 'vue';
 
     const props = defineProps<{
-        module?: string;
+        node?: string;
     }>();
 
     const safetyStop_url = ref('')
@@ -33,9 +33,9 @@ import { ref, watchEffect } from 'vue';
 
     // Format safety stop url
     watchEffect(() => {
-        if (props.module) {
-            safetyStop_url.value = urls.value.workcell_server_url.concat('admin/safety_stop/'.concat(props.module))
-            hoverText.value = "Stop Module"
+        if (props.node) {
+            safetyStop_url.value = urls.value.workcell_server_url.concat('admin/safety_stop/'.concat(props.node))
+            hoverText.value = "Stop Node"
         }
         else {
             safetyStop_url.value = urls.value.workcell_server_url.concat('admin/safety_stop')
@@ -52,10 +52,10 @@ import { ref, watchEffect } from 'vue';
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            console.log('Module Stopped');
+            console.log('Node Stopped');
 
         } catch (error) {
-            console.error('Error stopping module:', error);
+            console.error('Error stopping node:', error);
         }
     };
 

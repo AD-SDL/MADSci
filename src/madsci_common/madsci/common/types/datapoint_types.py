@@ -9,7 +9,12 @@ from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
-from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerHealth,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.utils import new_ulid_str
 from pydantic import (
     AliasChoices,
@@ -236,7 +241,7 @@ class ObjectStorageSettings(
 
 
 class DataManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "data.env"),
     toml_file=("settings.toml", "data.settings.toml"),
     yaml_file=("settings.yaml", "data.settings.yaml"),
@@ -245,17 +250,15 @@ class DataManagerSettings(
 ):
     """Settings for the MADSci Data Manager."""
 
-    data_server_url: AnyUrl = Field(
-        title="Lab URL",
-        description="The URL of the lab manager.",
+    server_url: AnyUrl = Field(
+        title="Data Manager Server URL",
+        description="The URL of the data manager server.",
         default=AnyUrl("http://localhost:8004"),
-        alias="data_server_url",  # * Don't double prefix
     )
-    data_manager_definition: PathLike = Field(
+    manager_definition: PathLike = Field(
         title="Data Manager Definition File",
         description="Path to the data manager definition file to use.",
         default=Path("data.manager.yaml"),
-        alias="data_manager_definition",  # * Don't double prefix
     )
     db_url: str = Field(
         default="mongodb://localhost:27017",
@@ -266,6 +269,26 @@ class DataManagerSettings(
         title="File Storage Path",
         description="The path where files are stored on the server.",
         default="~/.madsci/datapoints",
+    )
+
+
+class DataManagerHealth(ManagerHealth):
+    """Health status for Data Manager including database and storage connectivity."""
+
+    db_connected: Optional[bool] = Field(
+        title="Database Connected",
+        description="Whether the database connection is working.",
+        default=None,
+    )
+    storage_accessible: Optional[bool] = Field(
+        title="Storage Accessible",
+        description="Whether file storage is accessible.",
+        default=None,
+    )
+    total_datapoints: Optional[int] = Field(
+        title="Total Datapoints",
+        description="Total number of datapoints stored in the database.",
+        default=None,
     )
 
 
@@ -284,10 +307,11 @@ class DataManagerDefinition(ManagerDefinition):
         description="The name of this manager instance.",
         default="Data Manager",
     )
-    data_manager_id: str = Field(
+    manager_id: str = Field(
         title="Data Manager ID",
         description="The ID of the data manager.",
         default_factory=new_ulid_str,
+        alias=AliasChoices("manager_id", "data_manager_id"),
     )
     manager_type: Literal[ManagerType.DATA_MANAGER] = Field(
         title="Manager Type",

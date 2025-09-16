@@ -30,6 +30,9 @@ const resources_url = ref()
 const urls = ref()
 const experiment_objects: any = ref([])
 const resources = ref()
+const labContext = ref<any>(null)
+const labHealth = ref<any>(null)
+const isRefreshing = ref<boolean>(false)
 main_url.value = "http://".concat(window.location.host)
 interface ExperimentInfo {
     experiment_id?: string;
@@ -88,8 +91,46 @@ watchEffect(async () => {
         archived_workflows.value = await (await fetch(archived_workflows_url.value)).json();
     }
 
+    async function updateLabContext() {
+        try {
+            labContext.value = await (await fetch(main_url.value.concat("/context"))).json();
+        } catch (error) {
+            console.error("Failed to fetch lab context:", error);
+            labContext.value = null;
+        }
+    }
+
+    async function updateLabHealth() {
+        try {
+            labHealth.value = await (await fetch(main_url.value.concat("/lab_health"))).json();
+        } catch (error) {
+            console.error("Failed to fetch lab health:", error);
+            labHealth.value = null;
+        }
+    }
+
+    // Initial load of lab information
+    updateLabContext();
+    updateLabHealth();
 
 })
+
+async function refreshLabInfo() {
+    isRefreshing.value = true;
+    try {
+        const contextPromise = fetch(main_url.value.concat("/context")).then(res => res.json());
+        const healthPromise = fetch(main_url.value.concat("/lab_health")).then(res => res.json());
+
+        const [context, health] = await Promise.all([contextPromise, healthPromise]);
+
+        labContext.value = context;
+        labHealth.value = health;
+    } catch (error) {
+        console.error("Failed to refresh lab information:", error);
+    } finally {
+        isRefreshing.value = false;
+    }
+}
 
 function get_status(value: any) {
     if(value["errored"] === true)  {
@@ -125,7 +166,11 @@ export {
   experiments,
   experiments_url,
   get_status,
+  isRefreshing,
+  labContext,
+  labHealth,
   main_url,
+  refreshLabInfo,
   resources,
   state_url,
   urls,
