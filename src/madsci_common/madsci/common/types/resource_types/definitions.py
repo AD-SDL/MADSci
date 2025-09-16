@@ -6,13 +6,16 @@ from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     ConfigDict,
-    MadsciBaseSettings,
     MadsciSQLModel,
     PathLike,
     PositiveInt,
     PositiveNumber,
 )
-from madsci.common.types.manager_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.types.resource_types.resource_enums import ResourceTypeEnum
 from madsci.common.utils import new_name_str, new_ulid_str
 from pydantic import AfterValidator, AliasChoices, AnyUrl, Field
@@ -38,7 +41,7 @@ GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 
 class ResourceManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "resources.env"),
     toml_file=("settings.toml", "resources.settings.toml"),
     yaml_file=("settings.yaml", "resources.settings.yaml"),

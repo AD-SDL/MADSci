@@ -12,7 +12,11 @@ from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
-from madsci.common.types.manager_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
@@ -38,7 +42,7 @@ class EventLogLevel(int, Enum):
 
 
 class EventManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "events.env"),
     toml_file=("settings.toml", "events.settings.toml"),
     yaml_file=("settings.yaml", "events.settings.yaml"),

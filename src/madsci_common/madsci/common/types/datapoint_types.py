@@ -9,7 +9,11 @@ from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
-from madsci.common.types.manager_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.utils import new_ulid_str
 from pydantic import (
     AliasChoices,
@@ -236,7 +240,7 @@ class ObjectStorageSettings(
 
 
 class DataManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "data.env"),
     toml_file=("settings.toml", "data.settings.toml"),
     yaml_file=("settings.yaml", "data.settings.yaml"),
@@ -246,8 +250,8 @@ class DataManagerSettings(
     """Settings for the MADSci Data Manager."""
 
     server_url: AnyUrl = Field(
-        title="Lab URL",
-        description="The URL of the lab manager.",
+        title="Data Manager Server URL",
+        description="The URL of the data manager server.",
         default=AnyUrl("http://localhost:8004"),
     )
     manager_definition: PathLike = Field(

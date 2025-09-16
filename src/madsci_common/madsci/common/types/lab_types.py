@@ -3,18 +3,19 @@
 from pathlib import Path
 from typing import Literal, Optional
 
-from madsci.common.types.base_types import (
-    MadsciBaseSettings,
-    PathLike,
+from madsci.common.types.base_types import PathLike
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerSettings,
+    ManagerType,
 )
-from madsci.common.types.manager_types import ManagerDefinition, ManagerType
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, Field
 from pydantic.networks import AnyUrl
 
 
 class LabManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "lab.env"),
     toml_file=("settings.toml", "lab.settings.toml"),
     yaml_file=("settings.yaml", "lab.settings.yaml"),

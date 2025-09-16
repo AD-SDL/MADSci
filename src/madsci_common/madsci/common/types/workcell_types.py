@@ -6,11 +6,10 @@ from typing import Any, Literal, Optional, Union
 from madsci.common.types.base_types import (
     Error,
     MadsciBaseModel,
-    MadsciBaseSettings,
     PathLike,
 )
 from madsci.common.types.location_types import Location, LocationDefinition
-from madsci.common.types.manager_types import ManagerType
+from madsci.common.types.manager_types import ManagerSettings, ManagerType
 from madsci.common.types.node_types import Node
 from madsci.common.types.workflow_types import AliasChoices, Workflow
 from madsci.common.utils import new_ulid_str
@@ -167,7 +166,7 @@ class WorkcellState(MadsciBaseModel):
 
 
 class WorkcellManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "workcell.env"),
     toml_file=("settings.toml", "workcell.settings.toml"),
     yaml_file=("settings.yaml", "workcell.settings.yaml"),

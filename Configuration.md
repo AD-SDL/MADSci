@@ -70,7 +70,7 @@ Settings for the MADSci Data Manager.
 
 | Name                      | Type               | Default                       | Description                                       | Example                       |
 |---------------------------|--------------------|-------------------------------|---------------------------------------------------|-------------------------------|
-| `DATA_SERVER_URL`         | `AnyUrl`           | `"http://localhost:8004/"`    | The URL of the lab manager.                       | `"http://localhost:8004/"`    |
+| `DATA_SERVER_URL`         | `AnyUrl`           | `"http://localhost:8004/"`    | The URL of the data manager server.               | `"http://localhost:8004/"`    |
 | `DATA_MANAGER_DEFINITION` | `string` \| `Path` | `"data.manager.yaml"`         | Path to the data manager definition file to use.  | `"data.manager.yaml"`         |
 | `DATA_DB_URL`             | `string`           | `"mongodb://localhost:27017"` | The URL of the database used by the Data Manager. | `"mongodb://localhost:27017"` |
 | `DATA_FILE_STORAGE_PATH`  | `string` \| `Path` | `"~/.madsci/datapoints"`      | The path where files are stored on the server.    | `"~/.madsci/datapoints"`      |
@@ -144,5 +144,5 @@ Settings for the MADSci Lab.
 | Name                       | Type                             | Default                    | Description                                                                       | Example                    |
 |----------------------------|----------------------------------|----------------------------|-----------------------------------------------------------------------------------|----------------------------|
 | `LAB_SERVER_URL`           | `AnyUrl`                         | `"http://localhost:8000/"` | The URL of the lab manager.                                                       | `"http://localhost:8000/"` |
-| `LAB_DASHBOARD_FILES_PATH` | `string` \| `Path` \| `NoneType` | `"~/MADSci/ui/dist"`       | Path to the static files for the dashboard. Set to None to disable the dashboard. | `"~/MADSci/ui/dist"`       |
 | `LAB_MANAGER_DEFINITION`   | `string` \| `Path`               | `"lab.manager.yaml"`       | Path to the lab definition file to use.                                           | `"lab.manager.yaml"`       |
+| `LAB_DASHBOARD_FILES_PATH` | `string` \| `Path` \| `NoneType` | `"~/MADSci/ui/dist"`       | Path to the static files for the dashboard. Set to None to disable the dashboard. | `"~/MADSci/ui/dist"`       |

@@ -8,18 +8,21 @@ from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     MadsciBaseModel,
-    MadsciBaseSettings,
     PathLike,
     datetime,
 )
 from madsci.common.types.condition_types import Conditions
-from madsci.common.types.manager_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, AnyUrl, Field, computed_field, field_validator
 
 
 class ExperimentManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "experiments.env"),
     toml_file=("settings.toml", "experiments.settings.toml"),
     yaml_file=("settings.yaml", "experiments.settings.yaml"),
@@ -29,7 +32,7 @@ class ExperimentManagerSettings(
     """Settings for the MADSci Experiment Manager."""
 
     server_url: AnyUrl = Field(
-        title="Server URL",
+        title="Experiment Manager Server URL",
         description="The URL of the experiment manager server.",
         default=AnyUrl("http://localhost:8002"),
     )
