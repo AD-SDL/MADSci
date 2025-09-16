@@ -1,4 +1,4 @@
-"""Resource Manager implementation using the new AbstractManagerBase class."""
+"""Resource Manager server implementation, extending th AbstractBaseManager class."""
 
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
@@ -133,7 +133,7 @@ class ResourceManager(
                 try:
                     # Get total resources count (may fail if table doesn't exist)
                     result = session.execute(
-                        text("SELECT COUNT(*) FROM resources")
+                        text("SELECT COUNT(*) FROM resource")
                     ).fetchone()
                     health.total_resources = result[0] if result else 0
                 except Exception:

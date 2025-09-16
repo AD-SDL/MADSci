@@ -89,6 +89,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
             storage_path = Path(self.settings.file_storage_path).expanduser()
             storage_path.mkdir(parents=True, exist_ok=True)
             test_file = storage_path / ".health_check"
+            test_file.touch(exist_ok=True)
             test_file.write_text("health_check")
             test_file.unlink()
             health.storage_accessible = True
