@@ -6,14 +6,15 @@ Here you can find all available configuration options using ENV variables.
 
 Base class for MADSci context settings.
 
-| Name                    | Type                   | Default | Description                       | Example |
-|-------------------------|------------------------|---------|-----------------------------------|---------|
-| `LAB_SERVER_URL`        | `AnyUrl` \| `NoneType` | `null`  | The URL of the lab server.        | `null`  |
-| `EVENT_SERVER_URL`      | `AnyUrl` \| `NoneType` | `null`  | The URL of the event server.      | `null`  |
-| `EXPERIMENT_SERVER_URL` | `AnyUrl` \| `NoneType` | `null`  | The URL of the experiment server. | `null`  |
-| `DATA_SERVER_URL`       | `AnyUrl` \| `NoneType` | `null`  | The URL of the data server.       | `null`  |
-| `RESOURCE_SERVER_URL`   | `AnyUrl` \| `NoneType` | `null`  | The URL of the resource server.   | `null`  |
-| `WORKCELL_SERVER_URL`   | `AnyUrl` \| `NoneType` | `null`  | The URL of the workcell server.   | `null`  |
+| Name                    | Type                   | Default                    | Description                       | Example                    |
+|-------------------------|------------------------|----------------------------|-----------------------------------|----------------------------|
+| `LAB_SERVER_URL`        | `AnyUrl` \| `NoneType` | `null`                     | The URL of the lab server.        | `null`                     |
+| `EVENT_SERVER_URL`      | `AnyUrl` \| `NoneType` | `null`                     | The URL of the event server.      | `null`                     |
+| `EXPERIMENT_SERVER_URL` | `AnyUrl` \| `NoneType` | `null`                     | The URL of the experiment server. | `null`                     |
+| `DATA_SERVER_URL`       | `AnyUrl` \| `NoneType` | `null`                     | The URL of the data server.       | `null`                     |
+| `RESOURCE_SERVER_URL`   | `AnyUrl` \| `NoneType` | `null`                     | The URL of the resource server.   | `null`                     |
+| `WORKCELL_SERVER_URL`   | `AnyUrl` \| `NoneType` | `null`                     | The URL of the workcell server.   | `null`                     |
+| `LOCATION_SERVER_URL`   | `AnyUrl` \| `NoneType` | `"http://localhost:8006/"` | The URL of the location server.   | `"http://localhost:8006/"` |
 
 ## EventClientConfig
 

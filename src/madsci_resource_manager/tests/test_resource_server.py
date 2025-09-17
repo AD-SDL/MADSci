@@ -67,9 +67,9 @@ def test_client(interface: ResourceInterface) -> TestClient:
     return TestClient(app)
 
 
-def test_info(test_client: TestClient) -> None:
-    """Test the root endpoint for the Resource Manager's server."""
-    result = test_client.get("/info").json()
+def test_definition(test_client: TestClient) -> None:
+    """Test the definition endpoint for the Resource Manager's server."""
+    result = test_client.get("/definition").json()
     ResourceManagerDefinition.model_validate(result)
 
 

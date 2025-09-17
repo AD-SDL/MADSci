@@ -1,0 +1,273 @@
+"""Client for performing location management actions."""
+
+from typing import Any, Optional, Union
+
+import requests
+from madsci.common.context import get_current_madsci_context
+from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.location_types import Location
+from pydantic import AnyUrl
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+class LocationClient:
+    """A client for interacting with the Location Manager to perform location operations."""
+
+    location_server_url: Optional[AnyUrl]
+
+    def __init__(
+        self,
+        location_server_url: Optional[Union[str, AnyUrl]] = None,
+        retry: bool = False,
+        retry_total: int = 3,
+        retry_backoff_factor: float = 0.3,
+        retry_status_forcelist: Optional[list[int]] = None,
+    ) -> None:
+        """
+        Initialize the LocationClient.
+
+        Parameters
+        ----------
+        location_server_url : Optional[Union[str, AnyUrl]]
+            The URL of the location server. If None, will try to get from context.
+        retry : bool
+            Whether to enable request retries.
+        retry_total : int
+            Total number of retries.
+        retry_backoff_factor : float
+            Backoff factor for retries.
+        retry_status_forcelist : Optional[list[int]]
+            HTTP status codes to retry on.
+        """
+        self.retry = retry
+
+        # Set up location server URL
+        if location_server_url is not None:
+            if isinstance(location_server_url, str):
+                self.location_server_url = AnyUrl(location_server_url)
+            else:
+                self.location_server_url = location_server_url
+        else:
+            context = get_current_madsci_context()
+            self.location_server_url = context.location_server_url
+
+        # Ensure URL ends with /
+        if self.location_server_url and not str(self.location_server_url).endswith("/"):
+            self.location_server_url = AnyUrl(str(self.location_server_url) + "/")
+
+        # Set up retry strategy
+        if retry_status_forcelist is None:
+            retry_status_forcelist = [500, 502, 503, 504]
+
+        retry_strategy = Retry(
+            total=retry_total,
+            status_forcelist=retry_status_forcelist,
+            backoff_factor=retry_backoff_factor,
+        )
+
+        # Create sessions with and without retry
+        self.session = requests.Session()
+        self.session_no_retry = requests.Session()
+
+        if self.retry:
+            adapter = HTTPAdapter(max_retries=retry_strategy)
+            self.session.mount("http://", adapter)
+            self.session.mount("https://", adapter)
+
+    def _get_headers(self) -> dict[str, str]:
+        """Get headers for requests including ownership information."""
+        headers = {"Content-Type": "application/json"}
+
+        ownership_info = get_current_ownership_info()
+        if ownership_info and ownership_info.user_id:
+            headers["X-Owner"] = ownership_info.user_id
+
+        return headers
+
+    def get_locations(self, retry: Optional[bool] = None) -> list[Location]:
+        """
+        Get all locations.
+
+        Parameters
+        ----------
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        list[Location]
+            A list of all locations.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.get(
+            f"{self.location_server_url}locations",
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return [Location.model_validate(loc) for loc in response.json()]
+
+    def get_location(self, location_id: str, retry: Optional[bool] = None) -> Location:
+        """
+        Get details of a specific location.
+
+        Parameters
+        ----------
+        location_id : str
+            The ID of the location.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        Location
+            The location details.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.get(
+            f"{self.location_server_url}location/{location_id}",
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    def add_location(
+        self, location: Location, retry: Optional[bool] = None
+    ) -> Location:
+        """
+        Add a location.
+
+        Parameters
+        ----------
+        location : Location
+            The location object to add.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        Location
+            The created location.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.post(
+            f"{self.location_server_url}location",
+            json=location.model_dump(),
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    def delete_location(
+        self, location_id: str, retry: Optional[bool] = None
+    ) -> dict[str, str]:
+        """
+        Delete a specific location.
+
+        Parameters
+        ----------
+        location_id : str
+            The ID of the location to delete.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        dict[str, str]
+            A message confirming deletion.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.delete(
+            f"{self.location_server_url}location/{location_id}",
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def add_lookup_values(
+        self,
+        location_id: str,
+        node_name: str,
+        lookup_values: dict[str, Any],
+        retry: Optional[bool] = None,
+    ) -> Location:
+        """
+        Add lookup values to a location for a specific node.
+
+        Parameters
+        ----------
+        location_id : str
+            The ID of the location.
+        node_name : str
+            The name of the node.
+        lookup_values : dict[str, Any]
+            The lookup values to add.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        Location
+            The updated location.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.post(
+            f"{self.location_server_url}location/{location_id}/add_lookup/{node_name}",
+            json=lookup_values,
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    def attach_resource(
+        self, location_id: str, resource_id: str, retry: Optional[bool] = None
+    ) -> Location:
+        """
+        Attach a resource to a location.
+
+        Parameters
+        ----------
+        location_id : str
+            The ID of the location.
+        resource_id : str
+            The ID of the resource to attach.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        Location
+            The updated location.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.post(
+            f"{self.location_server_url}location/{location_id}/attach_resource",
+            params={"resource_id": resource_id},
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())

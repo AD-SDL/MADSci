@@ -7,6 +7,7 @@ from madsci.client import workcell_client
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
+from madsci.client.location_client import LocationClient
 from madsci.client.node import NODE_CLIENT_MAP, AbstractNodeClient, RestNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
@@ -22,6 +23,7 @@ __all__ = [
     "DataClient",
     "EventClient",
     "ExperimentClient",
+    "LocationClient",
     "ResourceClient",
     "RestNodeClient",
     "WorkcellClient",

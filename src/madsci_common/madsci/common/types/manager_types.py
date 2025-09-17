@@ -20,6 +20,7 @@ class ManagerType(str, Enum):
     TRANSFER_MANAGER = "transfer_manager"
     EXPERIMENT_MANAGER = "experiment_manager"
     LAB_MANAGER = "lab_manager"
+    LOCATION_MANAGER = "location_manager"
 
     @classmethod
     def _missing_(cls, value: str) -> "ManagerType":

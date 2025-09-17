@@ -186,7 +186,6 @@ class WorkcellManager(
         return self.get_health()
 
     @get("/")
-    @get("/info")
     @get("/definition")
     def get_definition(self) -> WorkcellManagerDefinition:
         """Return the manager definition."""
