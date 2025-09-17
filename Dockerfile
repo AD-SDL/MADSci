@@ -4,8 +4,8 @@ LABEL org.opencontainers.image.description="The Modular Autonomous Discovery for
 LABEL org.opencontainers.image.licenses=MIT
 
 # * Arguments and Environment Variables
-ARG USER_ID=1000
-ARG GROUP_ID=1000
+ARG USER_ID=9999
+ARG GROUP_ID=9999
 ARG CONTAINER_USER=madsci
 ENV PDM_CHECK_UPDATE=false
 
