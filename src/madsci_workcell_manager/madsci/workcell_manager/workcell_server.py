@@ -13,6 +13,7 @@ from fastapi.params import Body
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
@@ -52,6 +53,41 @@ def create_workcell_server(  # noqa: C901, PLR0915
     logger = EventClient()
     workcell_settings = workcell_settings or WorkcellManagerSettings()
     workcell_path = Path(workcell_settings.workcell_definition)
+    # DATABASE VERSION VALIDATION - MongoDB version checking
+    logger.info("Validating MongoDB schema version...")
+    version_checker = None
+    try:
+        # Get schema file path relative to this module
+        schema_file_path = Path(__file__).parent / "schema.json"
+
+        version_checker = MongoDBVersionChecker(
+            db_url=workcell_settings.mongo_url or "mongodb://localhost:27017",
+            database_name=workcell_settings.database_name,
+            schema_file_path=str(schema_file_path),
+            logger=logger,
+        )
+        version_checker.validate_or_fail()
+        logger.info("MongoDB version validation completed successfully")
+    except RuntimeError as e:
+        if "needs version tracking initialization" in str(e):
+            logger.error(
+                "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
+                "The database exists but needs version tracking setup."
+            )
+        else:
+            logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+                "Please run the migration tool before starting the server."
+            )
+        logger.error(
+            "\nTo resolve this issue, run the migration tool and restart the server."
+        )
+        raise
+    finally:
+        # Always dispose of the version checker
+        if version_checker:
+            version_checker.dispose()
+
     if not workcell:
         if workcell_path.exists():
             workcell = WorkcellDefinition.from_yaml(workcell_path)
