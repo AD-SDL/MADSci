@@ -1,6 +1,7 @@
 """MongoDB version checking and validation for MADSci."""
 
 import importlib.metadata
+import os
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -137,31 +138,85 @@ class MongoDBVersionChecker:
         needs_migration, madsci_version, db_version = self.is_migration_needed()
 
         if needs_migration:
+            # Detect if running in Docker
+            is_docker = self._is_running_in_docker()
+
             if db_version is None or db_version == "NO_VERSION_TRACKING":
-                # Database exists but no version tracking - this is initialization, not a mismatch
-                message = (
-                    f"Database {self.database_name} needs version tracking initialization. "
-                    f"The database exists but has no schema version tracking set up. "
-                    f"MADSci version is {madsci_version}. "
-                    f"Please run the migration tool to initialize version tracking:\n"
-                    f"python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                )
+                if is_docker:
+                    container_name = (
+                        os.getenv("container_name") or self._get_container_name()  # noqa
+                    )
+                    message = (
+                        f"Database {self.database_name} needs version tracking initialization. "
+                        f"The database exists but has no schema version tracking set up. "
+                        f"MADSci version is {madsci_version}. "
+                        f"Please run the migration tool in the container:\n"
+                        f"docker-compose run --rm {container_name} python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
+                    )
+                else:
+                    message = (
+                        f"Database {self.database_name} needs version tracking initialization. "
+                        f"The database exists but has no schema version tracking set up. "
+                        f"MADSci version is {madsci_version}. "
+                        f"Please run the migration tool to initialize version tracking:\n"
+                        f"python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
+                    )
                 self.logger.warning("Database needs version tracking initialization")
             else:
-                # Actual version mismatch between MADSci version and database version
-                message = (
-                    f"Database schema version mismatch detected for {self.database_name}!\n"
-                    f"MADSci version: {madsci_version}\n"
-                    f"Database version: {db_version}\n"
-                    f"Please run the migration tool to update the database schema:\n"
-                    f"python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                )
+                # Similar logic for version mismatches
+                if is_docker:
+                    container_name = (
+                        os.getenv("container_name") or self._get_container_name()  # noqa
+                    )
+                    message = (
+                        f"Database schema version mismatch detected for {self.database_name}!\n"
+                        f"MADSci version: {madsci_version}\n"
+                        f"Database version: {db_version}\n"
+                        f"Please run the migration tool in the container:\n"
+                        f"docker-compose run --rm {container_name} python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
+                    )
+                else:
+                    message = (
+                        f"Database schema version mismatch detected for {self.database_name}!\n"
+                        f"MADSci version: {madsci_version}\n"
+                        f"Database version: {db_version}\n"
+                        f"Please run the migration tool to update the database schema:\n"
+                        f"python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
+                    )
                 self.logger.error("Database schema version mismatch detected")
 
             self.logger.error(message)
             raise RuntimeError(message)
 
         self.logger.info(f"Database version validation passed for {self.database_name}")
+
+    def _is_running_in_docker(self) -> bool:
+        """Detect if the application is running inside a Docker container."""
+        try:
+            # Check for .dockerenv file
+            if Path("/.dockerenv").exists():
+                return True
+
+            # Check cgroup for docker
+            if Path("/proc/1/cgroup").exists():
+                with open("/proc/1/cgroup") as f:  # noqa
+                    return "docker" in f.read() or "containerd" in f.read()
+
+            return False
+        except Exception:
+            return False
+
+    def _get_container_name(self) -> str:
+        """Get the container name based on database name."""
+        if self.database_name == "madsci_events":
+            return "event_manager"
+        if self.database_name == "madsci_data":
+            return "data_manager"
+        if self.database_name == "madsci_experiments":
+            return "experiment_manager"
+        if self.database_name == "madsci_workcells":
+            return "workcell_manager"
+        return "container_name"
 
     def create_schema_versions_collection(self) -> None:
         """Create the schema_versions collection if it doesn't exist."""
