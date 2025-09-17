@@ -97,6 +97,7 @@ MADSci Event Manager includes automated MongoDB migration tools that handle sche
 
 ### Usage
 
+#### Standard Usage
 ```bash
 # Run migration for events database (auto-detects schema file)
 python -m madsci.common.mongodb_migration_tool --database madsci_events
@@ -117,6 +118,20 @@ python -m madsci.common.mongodb_migration_tool --database madsci_events --restor
 python -m madsci.common.mongodb_migration_tool --database madsci_events --check-version
 ```
 
+#### Docker Usage
+When running in Docker containers, use docker-compose to execute migration commands:
+
+```bash
+# Run migration for events database in Docker
+docker-compose run --rm event-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json'
+
+# Create backup only in Docker
+docker-compose run --rm event-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json' --backup-only
+
+# Check version compatibility in Docker
+docker-compose run --rm event-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json' --check-version
+```
+
 ### Server Integration
 
 The Event Manager server automatically checks for version compatibility on startup. If a mismatch is detected, the server will refuse to start and display migration instructions:
@@ -124,7 +139,6 @@ The Event Manager server automatically checks for version compatibility on start
 ```bash
 DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED!
 The database exists but needs version tracking setup.
-
 To resolve this issue, run the migration tool and restart the server.
 ```
 

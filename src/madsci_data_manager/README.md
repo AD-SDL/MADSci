@@ -163,12 +163,13 @@ MADSci Data Manager includes automated MongoDB migration tools that handle schem
 - **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and MongoDB schema version
 - **Automated Backup**: Creates MongoDB dumps using `mongodump` before applying migrations to enable rollback on failure
 - **Schema Management**: Creates collections and indexes based on schema definitions
-- **Index Management**: Ensures required indexes exist, including unique constraints on `datapoint_id`
+- **Index Management**: Ensures required indexes exist for optimal query performance
 - **Location Independence**: Auto-detects schema files or accepts explicit paths
 - **Safe Migration**: All changes are applied transactionally with automatic rollback on failure
 
 ### Usage
 
+#### Standard Usage
 ```bash
 # Run migration for data database (auto-detects schema file)
 python -m madsci.common.mongodb_migration_tool --database madsci_data
@@ -189,6 +190,20 @@ python -m madsci.common.mongodb_migration_tool --database madsci_data --restore-
 python -m madsci.common.mongodb_migration_tool --database madsci_data --check-version
 ```
 
+#### Docker Usage
+When running in Docker containers, use docker-compose to execute migration commands:
+
+```bash
+# Run migration for data database in Docker
+docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json'
+
+# Create backup only in Docker
+docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json' --backup-only
+
+# Check version compatibility in Docker
+docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json' --check-version
+```
+
 ### Server Integration
 
 The Data Manager server automatically checks for version compatibility on startup. If a mismatch is detected, the server will refuse to start and display migration instructions:
@@ -196,7 +211,6 @@ The Data Manager server automatically checks for version compatibility on startu
 ```bash
 DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED!
 The database exists but needs version tracking setup.
-
 To resolve this issue, run the migration tool and restart the server.
 ```
 
@@ -204,12 +218,6 @@ To resolve this issue, run the migration tool and restart the server.
 
 The migration tool automatically searches for schema files in:
 - `madsci/data_manager/schema.json`
-
-### Database Schema
-
-The Data Manager maintains:
-- **datapoints collection**: Stores metadata for all datapoints with unique `datapoint_id` index
-- **schema_versions collection**: Tracks database schema versions and migration history
 
 ### Backup Location
 

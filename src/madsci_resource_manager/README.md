@@ -607,6 +607,8 @@ MADSci includes automated database migration tools that handle schema changes an
 - **Location Independence**: Can be run from any directory while finding its own configuration files
 
 ### Usage
+
+#### Standard Usage
 ```bash
 # Run migration to current MADSci version
 python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@localhost:5432/resources'
@@ -622,3 +624,44 @@ python -m madsci.resource_manager.migration_tool --restore-from /path/to/backup.
 
 # Generate new migration file
 python -m madsci.resource_manager.migration_tool --generate-migration "Add new feature"
+```
+
+#### Docker Usage
+When running in Docker containers, use docker-compose to execute migration commands:
+
+```bash
+# Run migration to current MADSci version in Docker
+docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src resource-manager python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@postgres:5432/resources'
+
+# Migrate to specific version in Docker
+docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src resource-manager python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@postgres:5432/resources' --target-version 1.0.0
+
+# Create backup only in Docker
+docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src resource-manager python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@postgres:5432/resources' --backup-only
+
+# Generate new migration file in Docker
+docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src resource-manager python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@postgres:5432/resources' --generate-migration "Add new feature"
+```
+
+### Server Integration
+
+The Resource Manager server automatically checks for version compatibility on startup. If a mismatch is detected, the server will refuse to start and display migration instructions:
+
+```bash
+DATABASE MIGRATION REQUIRED! SERVER STARTUP ABORTED!
+The database schema version does not match the MADSci package version.
+To resolve this issue, run the migration tool and restart the server.
+```
+
+### Backup Location
+
+Backups are stored in `.madsci/postgresql/backups/` with timestamped filenames:
+- Format: `resources_backup_YYYYMMDD_HHMMSS.sql`
+- Can be restored using the `--restore-from` option
+
+### Requirements
+
+- PostgreSQL server running and accessible
+- PostgreSQL tools (`pg_dump`, `pg_restore`, `psql`) installed
+- Appropriate database permissions for the specified user
+- Alembic for schema migration management
