@@ -1,4 +1,5 @@
 name: Example Event Manager
 description: An example event manager
 manager_type: event_manager
-event_manager_id: 01JWV8FYP11JT3E2JXDM70T6DN
+event_manager_id: 01K5AN06RKGWAFRXYT2JYSKC7S
+manager_id: 01JWV8FYP11JT3E2JXDM70T6DN
