@@ -6,6 +6,7 @@ from madsci.common.types.location_types import (
     Location,
     LocationDefinition,
     LocationManagerDefinition,
+    LocationManagerHealth,
     LocationManagerSettings,
 )
 from madsci.common.utils import new_ulid_str
@@ -59,9 +60,6 @@ def sample_location():
         location_id=new_ulid_str(),
         name="Test Location",
         description="A test location",
-        x=10.0,
-        y=20.0,
-        z=30.0,
     )
 
 
@@ -69,6 +67,17 @@ def test_health_endpoint(client):
     """Test the health endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
+
+    # Validate the response structure matches LocationManagerHealth
+    health_data = response.json()
+    health = LocationManagerHealth.model_validate(health_data)
+
+    # Check that required fields are present
+    assert isinstance(health.healthy, bool)
+    assert isinstance(health.description, str)
+    assert health.redis_connected is not None  # Should be True for test Redis
+    assert isinstance(health.num_locations, int)
+    assert health.num_locations >= 0
 
 
 def test_definition_endpoint(client):
@@ -195,15 +204,11 @@ def test_multiple_locations(client):
             location_id=new_ulid_str(),
             name="Location 1",
             description="First test location",
-            x=10.0,
-            y=20.0,
         ),
         Location(
             location_id=new_ulid_str(),
             name="Location 2",
             description="Second test location",
-            x=30.0,
-            y=40.0,
         ),
     ]
 

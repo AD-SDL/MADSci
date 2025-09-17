@@ -7,6 +7,7 @@ from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.types.manager_types import (
     ManagerDefinition,
+    ManagerHealth,
     ManagerSettings,
     ManagerType,
 )
@@ -186,4 +187,19 @@ class LocationManagerDefinition(ManagerDefinition):
         title="Locations",
         description="The locations managed by this LocationManager.",
         default_factory=list,
+    )
+
+
+class LocationManagerHealth(ManagerHealth):
+    """Health status for the Location Manager."""
+
+    redis_connected: Optional[bool] = Field(
+        title="Redis Connection Status",
+        description="Whether the Location Manager is connected to the Redis server.",
+        default=None,
+    )
+    num_locations: int = Field(
+        title="Number of Locations",
+        description="The number of locations managed by the Location Manager.",
+        default=0,
     )

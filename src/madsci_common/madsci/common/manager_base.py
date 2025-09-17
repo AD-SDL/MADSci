@@ -158,7 +158,7 @@ class AbstractManagerBase(
             # the manager is at least partially functional
             return ManagerHealth(
                 healthy=True,
-                description="Manager is running and responding to requests",
+                description="Manager is running normally.",
             )
         except Exception as e:
             return ManagerHealth(

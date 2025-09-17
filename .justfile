@@ -19,6 +19,13 @@ env:
 venv:
   @$(pdm venv activate)
 
+# Run the full check test and build pipeline
+pipe: check tests build
+
+# Run ci plus start the example lab
+pipeup: ci up
+
+pipeupd: ci up -d
 
 # Run the pre-commit checks
 checks:

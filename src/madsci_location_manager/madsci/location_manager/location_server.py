@@ -11,9 +11,9 @@ from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.location_types import (
     Location,
     LocationManagerDefinition,
+    LocationManagerHealth,
     LocationManagerSettings,
 )
-from madsci.common.types.manager_types import ManagerHealth
 from madsci.location_manager.location_state_handler import LocationStateHandler
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -73,8 +73,38 @@ class LocationManager(
                     location.location_id, existing_location
                 )
 
+    def get_health(self) -> LocationManagerHealth:
+        """Get the health status of the Location Manager."""
+        health = LocationManagerHealth()
+
+        try:
+            # Test Redis connection if configured
+            if (
+                hasattr(self.state_handler, "_redis_client")
+                and self.state_handler._redis_client
+            ):
+                self.state_handler._redis_client.ping()
+                health.redis_connected = True
+            else:
+                health.redis_connected = None
+
+            # Count managed locations
+            locations = self.state_handler.get_locations()
+            health.num_locations = len(locations)
+
+            health.healthy = True
+            health.description = "Location Manager is running normally"
+
+        except Exception as e:
+            health.healthy = False
+            if "redis" in str(e).lower():
+                health.redis_connected = False
+            health.description = f"Health check failed: {e!s}"
+
+        return health
+
     @get("/health", tags=["Status"])
-    def health_endpoint(self) -> ManagerHealth:
+    def health_endpoint(self) -> LocationManagerHealth:
         """Get the health status of the Location Manager."""
         return self.get_health()
 

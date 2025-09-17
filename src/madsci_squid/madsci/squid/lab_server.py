@@ -97,6 +97,9 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
             if context.workcell_server_url:
                 manager_urls["workcell_manager"] = str(context.workcell_server_url)
 
+            if context.location_server_url:
+                manager_urls["location_manager"] = str(context.location_server_url)
+
             # Check each manager's health
             healthy_count, total_count = await self.check_each_managers_health(
                 manager_healths, manager_urls

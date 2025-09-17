@@ -33,6 +33,10 @@
                 <v-list-item-title>Workcell Server URL</v-list-item-title>
                 <v-list-item-subtitle>{{ labContext.workcell_server_url || 'Not configured' }}</v-list-item-subtitle>
               </v-list-item>
+              <v-list-item>
+                <v-list-item-title>Location Server URL</v-list-item-title>
+                <v-list-item-subtitle>{{ labContext.location_server_url || 'Not configured' }}</v-list-item-subtitle>
+              </v-list-item>
             </v-list>
             <v-alert v-else type="warning" class="mt-4">
               Failed to load lab context
