@@ -126,7 +126,7 @@ class DatabaseVersionChecker:
                         f"Database schema version not found. "
                         f"MADSci version is {madsci_version}. "
                         f"Please run the migration tool in the container:\n"
-                        f"docker-compose run --rm {container_name} python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                        f"docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src {container_name} python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
                     )
                 else:
                     message = (
@@ -144,7 +144,7 @@ class DatabaseVersionChecker:
                         f"MADSci version: {madsci_version}\n"
                         f"Database version: {db_version}\n"
                         f"Please run the migration tool in the container:\n"
-                        f"docker-compose run --rm {container_name} python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                        f"docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src {container_name} python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
                     )
                 else:
                     message = (
