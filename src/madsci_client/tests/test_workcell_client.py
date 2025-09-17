@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
-from madsci.common.types.location_types import Location, LocationDefinition
+from madsci.common.types.location_types import LocationDefinition
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellManagerDefinition, WorkcellState
@@ -277,52 +277,8 @@ def test_cancel_workflow(client: WorkcellClient) -> None:
     assert canceled_workflow.status.cancelled is True
 
 
-def test_get_locations(client: WorkcellClient) -> None:
-    """Test retrieving locations."""
-    locations = client.get_locations()
-    assert isinstance(locations, list)
-    assert len(locations) == 1
-    assert locations[0].location_name == "test_location"
-
-
-def test_get_location(client: WorkcellClient) -> None:
-    """Test retrieving a specific location."""
-    location_id = client.get_locations()[0].location_id
-    fetched_location = client.get_location(location_id)
-    assert fetched_location.location_id == location_id
-
-
-def test_add_location(client: WorkcellClient) -> None:
-    """Test adding a location."""
-    location = Location(location_name="test_location2")
-    added_location = client.add_location(location, permanent=False)
-    assert added_location.location_id == location.location_id
-    assert added_location.location_name == location.location_name
-
-
-def test_add_location_permanent(client: WorkcellClient) -> None:
-    """Test adding a permanent location."""
-    location = Location(location_name="permanent_location")
-    added_location = client.add_location(location, permanent=True)
-    assert added_location.location_name == location.location_name
-
-
-def test_attach_resource_to_location(client: WorkcellClient) -> None:
-    """Test attaching a resource to a location."""
-    location = Location(location_name="test_location3")
-    client.add_location(location, permanent=False)
-    mock_resource_id = new_ulid_str()
-    updated_location = client.attach_resource_to_location(
-        location.location_id, mock_resource_id
-    )
-    assert updated_location.resource_id == mock_resource_id
-
-
-def test_delete_location(client: WorkcellClient) -> None:
-    """Test deleting a location."""
-    location = Location(location_name="temp_location")
-    added_location = client.add_location(location, permanent=False)
-    client.delete_location(added_location.location_id)
+# NOTE: Location-related methods have been moved to LocationManager service
+# These methods no longer exist in WorkcellClient and should use LocationClient instead
 
 
 # Additional Workflow Tests
@@ -662,20 +618,4 @@ def test_add_node_error_handling(client: WorkcellClient) -> None:
     assert retrieved_node["node_url"] == "http://test_node/"
 
 
-def test_location_edge_cases(client: WorkcellClient) -> None:
-    """Test location methods with edge cases."""
-    # Get all locations initially
-    initial_locations = client.get_locations()
-    initial_count = len(initial_locations)
-
-    # Add a new location
-    location = Location(location_name="edge_case_location")
-    added_location = client.add_location(location, permanent=False)
-
-    # Verify it was added
-    all_locations = client.get_locations()
-    assert len(all_locations) == initial_count + 1
-
-    # Get the specific location
-    retrieved_location = client.get_location(added_location.location_id)
-    assert retrieved_location.location_name == "edge_case_location"
+# NOTE: test_location_edge_cases() removed - location methods moved to LocationManager

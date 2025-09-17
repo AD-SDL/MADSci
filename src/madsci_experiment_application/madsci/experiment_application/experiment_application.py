@@ -9,6 +9,7 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
+from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
@@ -105,6 +106,7 @@ class ExperimentApplication(RestNode):
             experiment_server_url=experiment_server_url
         )
         self.workcell_client = WorkcellClient()
+        self.location_client = LocationClient()
         self.data_client = DataClient()
         self.resource_client = ResourceClient()
         self.event_client = self.logger = EventClient()
@@ -295,13 +297,17 @@ class ExperimentApplication(RestNode):
         """get the location referenced by a condition"""
         location = None
         if condition.location_name:
+            locations = self.location_client.get_locations()
             location = next(
-                location
-                for location in self.workcell_client.get_locations()
-                if location.location_name == condition.location_name
+                (
+                    location
+                    for location in locations
+                    if location.name == condition.location_name
+                ),
+                None,
             )
         elif condition.location_id:
-            location = self.workcell_client.get_location(condition.location_id)
+            location = self.location_client.get_location(condition.location_id)
         if location is None:
             raise (Exception("Invalid Identifier for Location"))
         return location

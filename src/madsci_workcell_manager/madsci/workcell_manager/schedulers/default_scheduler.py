@@ -81,13 +81,27 @@ class Scheduler(AbstractScheduler):
         for location in step.locations.values():
             if location is None:
                 continue
-            if location.resource_id is not None and self.resource_client is not None:
-                self.resource_client.get_resource(location.resource_id)
+            # Get the current location state from LocationManager
+            current_location = location
+            try:
+                if self.location_client is not None:
+                    current_location = self.location_client.get_location(
+                        location.location_id
+                    )
+            except Exception:
+                # If LocationManager is not available or location not found, use step's location
+                current_location = location
+
+            if (
+                current_location.resource_id is not None
+                and self.resource_client is not None
+            ):
+                self.resource_client.get_resource(current_location.resource_id)
                 # TODO: what do we do with the location_resource?
-            if location.reservation is not None:
+            if current_location.reservation is not None:
                 metadata.ready_to_run = False
                 metadata.reasons.append(
-                    f"Location {location.location_id} is reserved by {location.reservation.owned_by.model_dump(mode='json', exclude_none=True)}"
+                    f"Location {current_location.location_id} is reserved by {current_location.reservation.owned_by.model_dump(mode='json', exclude_none=True)}"
                 )
 
     def resource_checks(self, step: Step, metadata: SchedulerMetadata) -> None:

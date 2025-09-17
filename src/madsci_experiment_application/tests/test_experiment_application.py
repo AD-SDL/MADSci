@@ -81,7 +81,7 @@ def mock_location() -> Location:
     """Create a mock location object."""
     return Location(
         location_id=new_ulid_str(),
-        location_name="test_location",
+        name="test_location",
         resource_id=new_ulid_str(),
     )
 
@@ -136,6 +136,7 @@ def experiment_app(
         EventClient=Mock,
         ExperimentClient=Mock,
         WorkcellClient=Mock,
+        LocationClient=Mock,
         ResourceClient=Mock,
         DataClient=Mock,
     ):
@@ -150,6 +151,7 @@ def experiment_app(
         app.logger = app.event_client
         app.experiment_client = Mock()
         app.workcell_client = Mock()
+        app.location_client = Mock()
         app.resource_client = Mock()
         app.data_client = Mock()
 
@@ -171,7 +173,8 @@ def experiment_app_with_mocks(
     experiment_app.experiment_client.cancel_experiment.return_value = mock_experiment
     experiment_app.experiment_client.get_experiment.return_value = mock_experiment
     experiment_app.experiment_client.continue_experiment.return_value = mock_experiment
-    experiment_app.workcell_client.get_locations.return_value = [mock_location]
+    experiment_app.location_client.get_locations.return_value = [mock_location]
+    experiment_app.location_client.get_location.return_value = mock_location
     experiment_app.resource_client.get_resource.return_value = mock_resource
     return experiment_app
 
@@ -186,6 +189,7 @@ class TestExperimentApplicationInit:
             EventClient=Mock,
             ExperimentClient=Mock,
             WorkcellClient=Mock,
+            LocationClient=Mock,
             ResourceClient=Mock,
             DataClient=Mock,
         ):
@@ -208,6 +212,7 @@ class TestExperimentApplicationInit:
             EventClient=Mock,
             ExperimentClient=Mock,
             WorkcellClient=Mock,
+            LocationClient=Mock,
             ResourceClient=Mock,
             DataClient=Mock,
         ):
@@ -227,6 +232,7 @@ class TestExperimentApplicationInit:
             EventClient=Mock,
             ExperimentClient=Mock,
             WorkcellClient=Mock,
+            LocationClient=Mock,
             ResourceClient=Mock,
             DataClient=Mock,
         ):
@@ -255,6 +261,7 @@ resource_conditions: []
                 EventClient=Mock,
                 ExperimentClient=Mock,
                 WorkcellClient=Mock,
+                LocationClient=Mock,
                 ResourceClient=Mock,
                 DataClient=Mock,
             ),
@@ -282,6 +289,7 @@ resource_conditions: []
             EventClient=Mock,
             ExperimentClient=Mock,
             WorkcellClient=Mock,
+            LocationClient=Mock,
             ResourceClient=Mock,
             DataClient=Mock,
         ):
@@ -670,9 +678,9 @@ class TestConditionEvaluation:
         """Test getting location from condition by location_name."""
         condition = ResourceInLocationCondition(
             condition_name="test_condition",
-            location_name=mock_location.location_name,
+            location_name=mock_location.name,
         )
-        experiment_app_with_mocks.workcell_client.get_locations.return_value = [
+        experiment_app_with_mocks.location_client.get_locations.return_value = [
             mock_location
         ]
 
@@ -690,14 +698,14 @@ class TestConditionEvaluation:
             condition_name="test_condition",
             location_id=mock_location.location_id,
         )
-        experiment_app_with_mocks.workcell_client.get_location.return_value = (
+        experiment_app_with_mocks.location_client.get_location.return_value = (
             mock_location
         )
 
         result = experiment_app_with_mocks.get_location_from_condition(condition)
 
         assert result == mock_location
-        experiment_app_with_mocks.workcell_client.get_location.assert_called_once_with(
+        experiment_app_with_mocks.location_client.get_location.assert_called_once_with(
             mock_location.location_id
         )
 
@@ -708,8 +716,8 @@ class TestConditionEvaluation:
         condition = ResourceInLocationCondition(
             condition_name="test_condition",
         )
-        experiment_app_with_mocks.workcell_client.get_locations.return_value = []
-        experiment_app_with_mocks.workcell_client.get_location.return_value = None
+        experiment_app_with_mocks.location_client.get_locations.return_value = []
+        experiment_app_with_mocks.location_client.get_location.return_value = None
 
         with pytest.raises(Exception, match="Invalid Identifier for Location"):
             experiment_app_with_mocks.get_location_from_condition(condition)
@@ -878,7 +886,7 @@ class TestClassMethods:
 
         mock_location = Location(
             location_id=new_ulid_str(),
-            location_name="test_location",
+            name="test_location",
             resource_id=new_ulid_str(),
         )
         mock_resource = Resource(
@@ -906,6 +914,9 @@ class TestClassMethods:
                 "madsci.experiment_application.experiment_application.WorkcellClient"
             ) as mock_workcell_client_class,
             patch(
+                "madsci.experiment_application.experiment_application.LocationClient"
+            ) as mock_location_client_class,
+            patch(
                 "madsci.experiment_application.experiment_application.ResourceClient"
             ) as mock_resource_client_class,
             patch(
@@ -917,7 +928,8 @@ class TestClassMethods:
             # Set up client class mocks to return configured instances
             mock_experiment_client_class.return_value = mock_experiment_client
             mock_workcell_client_class.return_value = Mock()
-            mock_workcell_client_class.return_value.get_locations.return_value = [
+            mock_location_client_class.return_value = Mock()
+            mock_location_client_class.return_value.get_locations.return_value = [
                 mock_location
             ]
             mock_resource_client_class.return_value = Mock()
@@ -959,6 +971,9 @@ class TestClassMethods:
                 "madsci.experiment_application.experiment_application.WorkcellClient"
             ) as mock_workcell_client_class,
             patch(
+                "madsci.experiment_application.experiment_application.LocationClient"
+            ) as mock_location_client_class,
+            patch(
                 "madsci.experiment_application.experiment_application.ResourceClient"
             ) as mock_resource_client_class,
             patch(
@@ -968,6 +983,7 @@ class TestClassMethods:
             # Set up client class mocks to return configured instances
             mock_experiment_client_class.return_value = mock_experiment_client
             mock_workcell_client_class.return_value = Mock()
+            mock_location_client_class.return_value = Mock()
             mock_resource_client_class.return_value = Mock()
             mock_event_client_class.return_value = Mock()
             mock_data_client_class.return_value = Mock()
@@ -1062,7 +1078,7 @@ class TestConditionEvaluationIntegration:
             resource_class="child_class",
         )
 
-        experiment_app_with_mocks.workcell_client.get_locations.return_value = [
+        experiment_app_with_mocks.location_client.get_locations.return_value = [
             mock_location
         ]
         experiment_app_with_mocks.resource_client.get_resource.return_value = (
@@ -1072,7 +1088,7 @@ class TestConditionEvaluationIntegration:
         result = experiment_app_with_mocks.evaluate_condition(condition)
 
         assert result is True
-        experiment_app_with_mocks.workcell_client.get_locations.assert_called_once()
+        experiment_app_with_mocks.location_client.get_locations.assert_called_once()
         experiment_app_with_mocks.resource_client.get_resource.assert_called_once_with(
             mock_location.resource_id
         )
@@ -1090,7 +1106,7 @@ class TestConditionEvaluationIntegration:
             key="nonexistent_slot",
         )
 
-        experiment_app_with_mocks.workcell_client.get_locations.return_value = [
+        experiment_app_with_mocks.location_client.get_locations.return_value = [
             mock_location
         ]
         experiment_app_with_mocks.resource_client.get_resource.return_value = (

@@ -5,17 +5,17 @@ import traceback
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, AsyncGenerator, Optional, Union
 
-from classy_fastapi import delete, get, post
+from classy_fastapi import get, post
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.params import Body
 from madsci.client.data_client import DataClient
+from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.event_types import Event, EventType
-from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
     WorkcellManagerDefinition,
@@ -86,9 +86,10 @@ class WorkcellManager(
             mongo_connection=self.mongo_connection,
         )
 
-        # Initialize data client
+        # Initialize clients
         context = get_current_madsci_context()
         self.data_client = DataClient(context.data_server_url)
+        self.location_client = LocationClient(context.location_server_url)
 
     def create_server(self, **kwargs: Any) -> FastAPI:
         """Create the FastAPI server application with lifespan."""
@@ -481,6 +482,7 @@ class WorkcellManager(
                     file_input_paths=file_input_paths,
                     data_client=self.data_client,
                     state_handler=self.state_handler,
+                    location_client=self.location_client,
                 )
 
                 wf = save_workflow_files(
@@ -508,74 +510,6 @@ class WorkcellManager(
                 status_code=500,
                 detail=f"Error starting workflow: {e}",
             ) from e
-
-    @get("/locations")
-    def get_locations(self) -> dict[str, Location]:
-        """Get the locations of the workcell."""
-        return self.state_handler.get_locations()
-
-    @post("/location")
-    def add_location(self, location: Location, permanent: bool = True) -> Location:
-        """Add a location to the workcell's location list"""
-        with self.state_handler.wc_state_lock():
-            self.state_handler.set_location(location)
-        if permanent:
-            workcell = self.state_handler.get_workcell_definition()
-            workcell.locations.append(location)
-            workcell_path = self.get_definition_path()
-            if workcell_path.exists():
-                workcell.to_yaml(workcell_path)
-        return self.state_handler.get_location(location.location_id)
-
-    @get("/location/{location_id}")
-    def get_location(self, location_id: str) -> Location:
-        """Get information about about a specific location."""
-        return self.state_handler.get_location(location_id)
-
-    @delete("/location/{location_id}")
-    def delete_location(self, location_id: str) -> dict:
-        """Delete a location from the workcell's location list"""
-        with self.state_handler.wc_state_lock():
-            self.state_handler.delete_location(location_id)
-            workcell = self.state_handler.get_workcell_definition()
-            workcell.locations = list(
-                filter(
-                    lambda location: location.location_id != location_id,
-                    workcell.locations,
-                )
-            )
-            workcell_path = self.get_definition_path()
-            if workcell_path.exists():
-                workcell.to_yaml(workcell_path)
-            self.state_handler.set_workcell_definition(workcell)
-        return {"status": "deleted"}
-
-    @post("/location/{location_id}/add_lookup/{node_name}")
-    def add_or_update_location_lookup(
-        self,
-        location_id: str,
-        node_name: str,
-        lookup_val: Any = LOOKUP_VAL_BODY,
-    ) -> Location:
-        """Add a lookup value to a locations lookup list"""
-        with self.state_handler.wc_state_lock():
-            location = self.state_handler.get_location(location_id)
-            location.lookup[node_name] = lookup_val["lookup_val"]
-            self.state_handler.set_location(location)
-        return self.state_handler.get_location(location.location_id)
-
-    @post("/location/{location_id}/attach_resource")
-    def add_resource_to_location(
-        self,
-        location_id: str,
-        resource_id: str,
-    ) -> Location:
-        """Attach a resource container to a location."""
-        with self.state_handler.wc_state_lock():
-            location = self.state_handler.get_location(location_id)
-            location.resource_id = resource_id
-            self.state_handler.set_location(location)
-        return self.state_handler.get_location(location_id)
 
 
 if __name__ == "__main__":

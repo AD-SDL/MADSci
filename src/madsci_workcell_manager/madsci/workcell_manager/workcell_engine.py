@@ -12,6 +12,7 @@ from typing import Optional, Union
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
+from madsci.client.location_client import LocationClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.ownership import ownership_context
@@ -64,6 +65,7 @@ class Engine:
         )
         self.data_client = data_client
         self.resource_client = ResourceClient()
+        self.location_client = LocationClient()
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state(
                 self.resource_client,
@@ -184,6 +186,7 @@ class Engine:
                 state_handler=self.state_handler,
                 workflow=wf,
                 data_client=self.data_client,
+                location_client=self.location_client,
             )
             step.start_time = datetime.now()
             self.logger.log_info(

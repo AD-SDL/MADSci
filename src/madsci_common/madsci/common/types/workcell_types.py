@@ -52,10 +52,12 @@ class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
         title="Workcell Node URLs",
         description="The URL for each node in the workcell.",
     )
+    # DEPRECATED: locations field is being moved to LocationManager
+    # TODO: Remove locations field in next major version
     locations: list[LocationDefinition] = Field(
         default_factory=list,
-        title="Workcell Locations",
-        description="The Locations used in the workcell.",
+        title="Workcell Locations (Deprecated)",
+        description="The Locations used in the workcell. DEPRECATED: Use LocationManager service instead.",
     )
 
     def get_workcell_directory(
@@ -162,10 +164,12 @@ class WorkcellState(MadsciBaseModel):
         title="Workcell Nodes",
         description="The nodes in the workcell.",
     )
+    # DEPRECATED: locations field is being moved to LocationManager
+    # TODO: Remove locations field in next major version
     locations: dict[str, Location] = Field(
         default_factory=dict,
-        title="Workcell Locations",
-        description="The locations in the workcell.",
+        title="Workcell Locations (Deprecated)",
+        description="The locations in the workcell. DEPRECATED: Use LocationManager service instead.",
     )
 
 

@@ -11,8 +11,10 @@ from typing import Any, Optional
 from fastapi import UploadFile
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
+from madsci.client.location_client import LocationClient
 from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.location_types import (
+    Location,
     LocationArgument,
 )
 from madsci.common.types.parameter_types import ParameterInputFile, ParameterTypes
@@ -176,6 +178,7 @@ def create_workflow(
     data_client: DataClient,
     json_inputs: Optional[dict[str, Any]] = None,
     file_input_paths: Optional[dict[str, str]] = None,
+    location_client: Optional[LocationClient] = None,
 ) -> Workflow:
     """Pulls the workcell and builds a list of dictionary steps to be executed
 
@@ -216,7 +219,13 @@ def create_workflow(
     for step in workflow_def.steps:
         steps.append(
             prepare_workflow_step(
-                workcell, state_handler, step, wf, data_client, running=False
+                workcell,
+                state_handler,
+                step,
+                wf,
+                data_client,
+                location_client,
+                running=False,
             )
         )
 
@@ -249,6 +258,7 @@ def prepare_workflow_step(
     step: Step,
     workflow: Workflow,
     data_client: DataClient,
+    location_client: Optional[LocationClient] = None,
     running: bool = True,
 ) -> Step:
     """Prepares a step for execution by replacing locations and validating it"""
@@ -256,7 +266,7 @@ def prepare_workflow_step(
     working_step = deepcopy(step)
     if step.parameters is not None:
         working_step = insert_parameters(working_step, parameter_values)
-    replace_locations(workcell, working_step, state_handler)
+    replace_locations(workcell, working_step, location_client)
     valid, validation_string = validate_step(
         working_step,
         state_handler=state_handler,
@@ -332,10 +342,28 @@ def prepare_workflow_files(
 
 
 def replace_locations(
-    workcell: WorkcellManagerDefinition, step: Step, state_handler: WorkcellStateHandler
+    workcell: WorkcellManagerDefinition,
+    step: Step,
+    location_client: Optional[LocationClient] = None,
 ) -> None:
     """Replaces the location names with the location objects"""
-    locations = state_handler.get_locations()
+    locations = {}
+    if location_client is not None:
+        try:
+            location_list = location_client.get_locations()
+            locations = {loc.location_id: loc for loc in location_list}
+        except Exception:
+            # If LocationManager is not available, fall back to using workcell definition
+
+            locations = {
+                loc.location_id: Location(
+                    location_id=loc.location_id,
+                    name=loc.location_name,
+                    description=loc.description,
+                    lookup_values=loc.lookup,
+                )
+                for loc in workcell.locations
+            }
     for location_arg, location_name_or_object in step.locations.items():
         # * No location provided, set to None
         if location_name_or_object is None:
@@ -348,11 +376,7 @@ def replace_locations(
 
         # * Location is a string, find the corresponding Location object from state_handler
         target_loc = next(
-            (
-                loc
-                for loc in locations.values()
-                if loc.location_name == location_name_or_object
-            ),
+            (loc for loc in locations.values() if loc.name == location_name_or_object),
             None,
         )
         if target_loc is None:
@@ -360,9 +384,9 @@ def replace_locations(
                 f"Location {location_name_or_object} not found in Workcell '{workcell.name}'"
             )
         node_location = LocationArgument(
-            location=target_loc.lookup[step.node],
+            location=target_loc.lookup_values[step.node],
             resource_id=target_loc.resource_id,
-            location_name=target_loc.location_name,
+            location_name=target_loc.name,
         )
         step.locations[location_arg] = node_location
 
