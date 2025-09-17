@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient, EventType
 from madsci.common.context import get_current_madsci_context
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
@@ -34,6 +35,42 @@ def create_experiment_server(  # noqa: C901, PLR0915
     )
     logger.log_info(experiment_manager_settings)
     logger.log_info(get_current_madsci_context())
+
+    # DATABASE VERSION VALIDATION - MongoDB version checking
+    logger.info("Validating MongoDB schema version...")
+    version_checker = None
+    try:
+        # Get schema file path relative to this module
+        schema_file_path = Path(__file__).parent / "schema.json"
+
+        version_checker = MongoDBVersionChecker(
+            db_url=experiment_manager_settings.db_url,
+            database_name=experiment_manager_settings.database_name,
+            schema_file_path=str(schema_file_path),
+            logger=logger,
+        )
+        version_checker.validate_or_fail()
+        logger.info("MongoDB version validation completed successfully")
+    except RuntimeError as e:
+        if "needs version tracking initialization" in str(e):
+            logger.error(
+                "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
+                "The database exists but needs version tracking setup."
+            )
+        else:
+            logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+                "Please run the migration tool before starting the server."
+            )
+        logger.error(
+            "\nTo resolve this issue, run the migration tool and restart the server."
+        )
+        raise
+    finally:
+        # Always dispose of the version checker
+        if version_checker:
+            version_checker.dispose()
+
     if not experiment_manager_definition:
         def_path = Path(
             experiment_manager_settings.experiment_manager_definition
