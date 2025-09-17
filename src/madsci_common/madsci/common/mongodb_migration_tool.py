@@ -61,13 +61,35 @@ class MongoDBMigrator:
             self.logger.info("MongoDB migrator client disposed")
 
     def _get_backup_directory(self) -> Path:
-        """Get the backup directory path in the current working directory."""
-        current_dir = Path.cwd()
-        backup_dir = current_dir / ".madsci" / "mongodb" / "backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
+        """Get the backup directory path that works consistently in both local and Docker environments."""
+        # Check if we're running in a Docker container
+        if Path("/.dockerenv").exists() or self._is_running_in_docker():
+            # In Docker, use the mounted .madsci directory
+            backup_dir = Path("/home/madsci/.madsci/mongodb/backups")
+        else:
+            # Local development - use current directory structure
+            current_dir = Path.cwd()
+            backup_dir = current_dir / ".madsci" / "mongodb" / "backups"
 
+        backup_dir.mkdir(parents=True, exist_ok=True)
         self.logger.info(f"Using backup directory: {backup_dir}")
         return backup_dir
+
+    def _is_running_in_docker(self) -> bool:
+        """Detect if running inside a Docker container."""
+        try:
+            # Check for .dockerenv file
+            if Path("/.dockerenv").exists():
+                return True
+
+            # Check cgroup for docker
+            if Path("/proc/1/cgroup").exists():
+                with open("/proc/1/cgroup") as f:  # noqa
+                    return "docker" in f.read() or "containerd" in f.read()
+
+            return False
+        except Exception:
+            return False
 
     def _parse_db_url(self) -> Dict[str, Any]:
         """Parse MongoDB connection details from database URL."""
@@ -330,11 +352,11 @@ class MongoDBMigrator:
                 f"Current database version: {current_db_version or 'None'}"
             )
 
-            # Create backup
+            # ALWAYS CREATE BACKUP FIRST
             backup_path = self.create_backup()
 
             try:
-                # Apply schema migrations
+                # ALWAYS apply schema migrations - this will create collections and indexes as needed
                 self.apply_schema_migrations()
 
                 # Record new version in our tracking system
