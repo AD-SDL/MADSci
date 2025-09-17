@@ -106,12 +106,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             try:
                 self.events.insert_one(mongo_data)
             except errors.DuplicateKeyError:
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Duplicate event ID {event.event_id} - skipping insert"
                 )
                 # Just continue - don't fail the request
         except Exception as e:
-            self.logger.log_error(f"Failed to log event: {e}")
+            self.logger.error(f"Failed to log event: {e}")
             raise e
 
         if (
@@ -129,7 +129,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         """Look up an event by event_id"""
         event = self.events.find_one({"_id": event_id})
         if not event:
-            self.logger.log_error(f"Event with ID {event_id} not found")
+            self.logger.error(f"Event with ID {event_id} not found")
             raise HTTPException(
                 status_code=404, detail=f"Event with ID {event_id} not found"
             )
@@ -206,7 +206,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             return report
 
         except Exception as e:
-            self.logger.log_error(f"Error generating session utilization: {e}")
+            self.logger.error(f"Error generating session utilization: {e}")
             return {"error": f"Failed to generate report: {e!s}"}
 
     def _get_session_analyzer(self) -> Optional[UtilizationAnalyzer]:
@@ -214,7 +214,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         try:
             return UtilizationAnalyzer(self.events)
         except Exception as e:
-            self.logger.log_error(f"Failed to create session analyzer: {e}")
+            self.logger.error(f"Failed to create session analyzer: {e}")
             return None
 
     def _parse_session_time_parameters(

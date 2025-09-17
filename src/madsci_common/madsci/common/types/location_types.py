@@ -48,7 +48,7 @@ class LocationDefinition(MadsciBaseModel):
         description="A description of the location.",
         default=None,
     )
-    lookup: dict[str, Any] = Field(
+    references: dict[str, Any] = Field(
         title="Location Representation Map",
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
         default={},
@@ -80,9 +80,9 @@ class Location(MadsciBaseModel):
         description="A description of the location.",
         default=None,
     )
-    lookup_values: Optional[dict[str, Any]] = Field(
-        title="Location Lookup Values",
-        description="A dictionary of node-specific lookup values for the location.",
+    references: Optional[dict[str, Any]] = Field(
+        title="Location References",
+        description="A dictionary of node-specific references for the location.",
         default=None,
     )
     reservation: Optional["LocationReservation"] = Field(

@@ -343,7 +343,7 @@ class TestExperimentLifecycle:
             run_name="test_run",
             run_description="test description",
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_end_experiment(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -355,7 +355,7 @@ class TestExperimentLifecycle:
             experiment_id=experiment_app_with_mocks.experiment.experiment_id,
             status=ExperimentStatus.COMPLETED,
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_end_experiment_default_status(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -377,7 +377,7 @@ class TestExperimentLifecycle:
         experiment_app_with_mocks.experiment_client.pause_experiment.assert_called_once_with(
             experiment_id=experiment_app_with_mocks.experiment.experiment_id
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_cancel_experiment(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -388,7 +388,7 @@ class TestExperimentLifecycle:
         experiment_app_with_mocks.experiment_client.cancel_experiment.assert_called_once_with(
             experiment_id=experiment_app_with_mocks.experiment.experiment_id
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_fail_experiment(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -400,7 +400,7 @@ class TestExperimentLifecycle:
             experiment_id=experiment_app_with_mocks.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_handle_exception(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -410,7 +410,7 @@ class TestExperimentLifecycle:
 
         experiment_app_with_mocks.handle_exception(test_exception)
 
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
         experiment_app_with_mocks.experiment_client.end_experiment.assert_called_once_with(
             experiment_id=experiment_app_with_mocks.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
@@ -439,7 +439,7 @@ class TestExperimentLifecycle:
         with pytest.raises(ExperimentCancelledError):
             experiment_app_with_mocks.check_experiment_status()
 
-        experiment_app_with_mocks.logger.log_error.assert_called()
+        experiment_app_with_mocks.logger.error.assert_called()
 
     def test_check_experiment_status_failed(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -454,7 +454,7 @@ class TestExperimentLifecycle:
         with pytest.raises(ExperimentFailedError):
             experiment_app_with_mocks.check_experiment_status()
 
-        experiment_app_with_mocks.logger.log_error.assert_called()
+        experiment_app_with_mocks.logger.error.assert_called()
 
     @patch("time.sleep")
     def test_check_experiment_status_paused_then_resumed(
@@ -478,7 +478,7 @@ class TestExperimentLifecycle:
         assert (
             experiment_app_with_mocks.experiment_client.get_experiment.call_count == 3
         )
-        experiment_app_with_mocks.logger.log_warning.assert_called()
+        experiment_app_with_mocks.logger.warning.assert_called()
         mock_sleep.assert_called_with(5)
 
 

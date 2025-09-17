@@ -7,8 +7,8 @@ locations:
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: Location 1 - Primary slot for experiments
-  lookup:
-    robotarm_1:
+  references:
+    robot_arm:
     - 1
     - 2
     - 3
@@ -28,12 +28,12 @@ locations:
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: Location 2 - Secondary slot for experiments
-  lookup:
-    robotarm_1:
-    - 4
-    - 3
-    - 2
-    - 1
+  references:
+    robot_arm:
+    - 5
+    - 6
+    - 7
+    - 8
   resource_definition:
     resource_name: slot_2
     resource_name_prefix: null

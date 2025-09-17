@@ -78,9 +78,9 @@ class AbstractManagerBase(
 
         # Setup logging
         self.setup_logging()
-        self.logger.log_info(self._settings)
-        self.logger.log_info(self._definition)
-        self.logger.log_info(get_current_madsci_context())
+        self.logger.info(self._settings)
+        self.logger.info(self._definition)
+        self.logger.info(get_current_madsci_context())
 
         # Setup ownership context
         self.setup_ownership()
@@ -179,7 +179,7 @@ class AbstractManagerBase(
 
         # Only log if logger is initialized
         if hasattr(self, "_logger"):
-            self.logger.log_info(f"Writing to definition file: {def_path}")
+            self.logger.info(f"Writing to definition file: {def_path}")
         definition.to_yaml(def_path)
         return definition
 

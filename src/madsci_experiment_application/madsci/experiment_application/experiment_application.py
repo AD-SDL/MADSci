@@ -148,7 +148,7 @@ class ExperimentApplication(RestNode):
             run_name=run_name,
             run_description=run_description,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Started run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
         passed_checks = False
@@ -169,7 +169,7 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id,
             status=status,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Ended run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -178,7 +178,7 @@ class ExperimentApplication(RestNode):
         self.experiment = self.experiment_client.pause_experiment(
             experiment_id=self.experiment.experiment_id
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Paused run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -187,7 +187,7 @@ class ExperimentApplication(RestNode):
         self.experiment = self.experiment_client.cancel_experiment(
             experiment_id=self.experiment.experiment_id
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Cancelled run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -197,13 +197,13 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
     def handle_exception(self, exception: Exception) -> None:
         """Exception handler that makes experiment fail by default, can be overwritten"""
-        self.logger.log_info(
+        self.logger.info(
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}' with exception {exception!s}"
         )
         self.end_experiment(ExperimentStatus.FAILED)
@@ -243,7 +243,7 @@ class ExperimentApplication(RestNode):
         )
         exception = None
         if self.experiment.status == ExperimentStatus.PAUSED:
-            self.logger.log_warning(
+            self.logger.warning(
                 f"Experiment '{self.experiment.experiment_design.experiment_name}' has been paused."
             )
             while True:
@@ -263,7 +263,7 @@ class ExperimentApplication(RestNode):
             )
 
         if exception:
-            self.logger.log_error(exception.message)
+            self.logger.error(exception.message)
             raise exception
 
     def get_resource_from_condition(self, condition: Condition) -> Optional[Resource]:

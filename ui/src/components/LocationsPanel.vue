@@ -11,7 +11,7 @@
           <td>{{ item.name || item.location_name }}</td>
           <td>{{ get_resource(resources, item) }}</td>
           <td>{{ item.location_id }}</td>
-          <td>{{ Object.keys(item.lookup_values || item.lookup || {}) }}</td>
+          <td>{{ Object.keys(item.references || item.lookup_values || item.reference || item.lookup || {}) }}</td>
         </tr>
       </template>
     </v-data-table>

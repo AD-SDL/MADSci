@@ -200,15 +200,15 @@ class LocationClient:
         response.raise_for_status()
         return response.json()
 
-    def add_lookup_values(
+    def set_references(
         self,
         location_id: str,
         node_name: str,
-        lookup_values: dict[str, Any],
+        references: dict[str, Any],
         retry: Optional[bool] = None,
     ) -> Location:
         """
-        Add lookup values to a location for a specific node.
+        Set references for a location for a specific node.
 
         Parameters
         ----------
@@ -216,8 +216,8 @@ class LocationClient:
             The ID of the location.
         node_name : str
             The name of the node.
-        lookup_values : dict[str, Any]
-            The lookup values to add.
+        references : dict[str, Any]
+            The references to set.
         retry : Optional[bool]
             Whether to use retry for this request. If None, uses instance default.
 
@@ -231,8 +231,8 @@ class LocationClient:
         session = self.session if retry else self.session_no_retry
 
         response = session.post(
-            f"{self.location_server_url}location/{location_id}/add_lookup/{node_name}",
-            json=lookup_values,
+            f"{self.location_server_url}location/{location_id}/set_reference/{node_name}",
+            json=references,
             headers=self._get_headers(),
             timeout=10,
         )

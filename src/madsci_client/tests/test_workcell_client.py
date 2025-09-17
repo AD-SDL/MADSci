@@ -277,10 +277,6 @@ def test_cancel_workflow(client: WorkcellClient) -> None:
     assert canceled_workflow.status.cancelled is True
 
 
-# NOTE: Location-related methods have been moved to LocationManager service
-# These methods no longer exist in WorkcellClient and should use LocationClient instead
-
-
 # Additional Workflow Tests
 def test_submit_workflow_definition(
     client: WorkcellClient, sample_workflow: WorkflowDefinition
@@ -616,6 +612,3 @@ def test_add_node_error_handling(client: WorkcellClient) -> None:
     # Get the node to verify it exists
     retrieved_node = client.get_node("test_node")
     assert retrieved_node["node_url"] == "http://test_node/"
-
-
-# NOTE: test_location_edge_cases() removed - location methods moved to LocationManager

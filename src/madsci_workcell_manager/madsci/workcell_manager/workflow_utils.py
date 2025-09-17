@@ -274,7 +274,7 @@ def prepare_workflow_step(
     )
     if running:
         working_step = prepare_workflow_files(working_step, workflow, data_client)
-    EventClient().log_info(validation_string)
+    EventClient().info(validation_string)
     if not valid:
         raise ValueError(validation_string)
     return working_step
@@ -360,7 +360,7 @@ def replace_locations(
                     location_id=loc.location_id,
                     name=loc.location_name,
                     description=loc.description,
-                    lookup_values=loc.lookup,
+                    references=loc.references,
                 )
                 for loc in workcell.locations
             }
@@ -384,7 +384,7 @@ def replace_locations(
                 f"Location {location_name_or_object} not found in Workcell '{workcell.name}'"
             )
         node_location = LocationArgument(
-            location=target_loc.lookup_values[step.node],
+            location=target_loc.references[step.node],
             resource_id=target_loc.resource_id,
             location_name=target_loc.name,
         )

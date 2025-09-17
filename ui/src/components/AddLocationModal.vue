@@ -9,8 +9,8 @@
         <v-text-field class="pt-5 mr-2 w-25" height="20px" v-model="location_name"
                           dense>
                         </v-text-field>
-        <h4>Lookup Info:</h4>
-        <div v-for="(value, key) in lookups">
+        <h4>Reference Info:</h4>
+        <div v-for="(value, key) in references">
           {{ key }} : {{ value}}
         </div>
         <div>
@@ -19,12 +19,12 @@
 
 
       </v-select>
-      <v-text-field v-model="add_lookup_value"
+      <v-text-field v-model="add_reference_value"
                           dense>
                           <template #append>
 
                             <v-btn @click="get_location(node_to_add)">Get Current Location</v-btn>
-                            <v-btn @click="append_lookup_to_location(node_to_add)">Add or Update Lookup</v-btn>
+                            <v-btn @click="append_reference_to_location(node_to_add)">Add or Update Reference</v-btn>
 
                           </template>
       </v-text-field>
@@ -80,8 +80,8 @@ import { workcell_state } from '../store';
 const new_name = ref()
 const base_type = ref()
 const node_to_add = ref()
-const add_lookup_value = ref()
-const lookups = ref()
+const add_reference_value = ref()
+const references = ref()
 const location_name = ref()
 const add_resource = ref(false)
 const formFields =  ref([
@@ -104,7 +104,7 @@ const base_types = ref([
          "slot",
 
 ])
-lookups.value = {}
+references.value = {}
 
 function addField() {
       formFields.value.push({ label: new_name.value, value: null, placeholder: 'Enter value' });
@@ -112,12 +112,12 @@ function addField() {
 
 async function get_location(node: string): Promise<any>{
   var loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(node))).json())
-  add_lookup_value.value = JSON.stringify(loc_data[0].data)
+  add_reference_value.value = JSON.stringify(loc_data[0].data)
 }
 
 
-function append_lookup_to_location(node: string) {
-      lookups.value[node] = add_lookup_value.value
+function append_reference_to_location(node: string) {
+      references.value[node] = add_reference_value.value
     }
 
 function removeField(index: any) {
@@ -126,9 +126,9 @@ function removeField(index: any) {
 function submitLocation() {
     var location: any = {}
     location["name"] = location_name.value // Use 'name' instead of 'location_name' for new API
-    var new_lookups: any  = {}
-    Object.keys(lookups.value).forEach((key: string) => {new_lookups[key] = JSON.parse(lookups.value[key])})
-    location["lookup_values"] = new_lookups // Use 'lookup_values' instead of 'lookup'
+    var new_references: any  = {}
+    Object.keys(references.value).forEach((key: string) => {new_references[key] = JSON.parse(references.value[key])})
+    location["references"] = new_references // Use 'references' instead of 'lookup_values'
     location["coordinates"] = { x: 0.0, y: 0.0, z: 0.0 } // Add default coordinates
     location["resource_ids"] = [] // Add empty resource_ids array
     var resource: any = {}
