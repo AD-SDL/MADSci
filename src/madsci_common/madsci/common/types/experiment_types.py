@@ -39,6 +39,16 @@ class ExperimentManagerSettings(
         description="The URL of the database for the experiment manager.",
         default="mongodb://localhost:27017",
     )
+    database_name: str = Field(
+        default="madsci_experiments",
+        title="Database Name",
+        description="The name of the MongoDB database where events are stored.",
+    )
+    collection_name: str = Field(
+        default="experiments",
+        title="Collection Name",
+        description="The name of the MongoDB collection where events are stored.",
+    )
 
 
 class ExperimentManagerDefinition(ManagerDefinition):

@@ -53,8 +53,10 @@ class WorkcellStateHandler:
             self.db_connection = mongo_connection
         else:
             self.db_client = MongoClient(self.workcell_settings.mongo_url)
-            self.db_connection = self.db_client["workcell_manager"]
-        self.archived_workflows = self.db_connection["archived_workflows"]
+            self.db_connection = self.db_client[self.workcell_settings.database_name]
+        self.archived_workflows = self.db_connection[
+            self.workcell_settings.collection_name
+        ]
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
 

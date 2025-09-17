@@ -1,7 +1,9 @@
 """Database version checking and validation for MADSci."""
 
 import importlib.metadata
+import os
 import traceback
+from pathlib import Path
 from typing import Optional
 
 from madsci.client.event_client import EventClient
@@ -86,6 +88,26 @@ class DatabaseVersionChecker:
         )
         return False, current_version, db_version
 
+    def _is_running_in_docker(self) -> bool:
+        """Detect if the application is running inside a Docker container."""
+        try:
+            # Check for .dockerenv file
+            if Path("/.dockerenv").exists():
+                return True
+
+            # Check cgroup for docker
+            if Path("/proc/1/cgroup").exists():
+                with open("/proc/1/cgroup") as f:  # noqa
+                    return "docker" in f.read() or "containerd" in f.read()
+
+            return False
+        except Exception:
+            return False
+
+    def _get_container_name(self) -> str:
+        """Get the container name for resource manager."""
+        return os.getenv("container_name", "resource_manager")  # noqa
+
     def validate_or_fail(self) -> None:
         """
         Validate database version compatibility or raise an exception.
@@ -94,20 +116,45 @@ class DatabaseVersionChecker:
         needs_migration, madsci_version, db_version = self.is_migration_needed()
 
         if needs_migration:
+            # Detect if running in Docker
+            is_docker = self._is_running_in_docker()
+
             if db_version is None:
-                message = (
-                    f"Database schema version not found. MADSci version is {madsci_version}. "
-                    f"Please run the migration tool to initialize version tracking:\n"
-                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                )
+                if is_docker:
+                    container_name = self._get_container_name()
+                    message = (
+                        f"Database schema version not found. "
+                        f"MADSci version is {madsci_version}. "
+                        f"Please run the migration tool in the container:\n"
+                        f"docker-compose run --rm {container_name} python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                    )
+                else:
+                    message = (
+                        f"Database schema version not found. "
+                        f"MADSci version is {madsci_version}. "
+                        f"Please run the migration tool to initialize version tracking:\n"
+                        f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                    )
+                self.logger.warning("Database needs version tracking initialization")
             else:
-                message = (
-                    f"Database schema version mismatch detected!\n"
-                    f"MADSci version: {madsci_version}\n"
-                    f"Database version: {db_version}\n"
-                    f"Please run the migration tool to update the database schema:\n"
-                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                )
+                if is_docker:
+                    container_name = self._get_container_name()
+                    message = (
+                        f"Database schema version mismatch detected!\n"
+                        f"MADSci version: {madsci_version}\n"
+                        f"Database version: {db_version}\n"
+                        f"Please run the migration tool in the container:\n"
+                        f"docker-compose run --rm {container_name} python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                    )
+                else:
+                    message = (
+                        f"Database schema version mismatch detected!\n"
+                        f"MADSci version: {madsci_version}\n"
+                        f"Database version: {db_version}\n"
+                        f"Please run the migration tool to update the database schema:\n"
+                        f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                    )
+                self.logger.error("Database schema version mismatch detected")
 
             self.logger.error(message)
             raise RuntimeError(message)

@@ -64,8 +64,13 @@ class EventManagerSettings(
         title="Database URL",
         description="The URL of the database used by the Event Manager.",
     )
-    collection_name: str = Field(
+    database_name: str = Field(
         default="madsci_events",
+        title="Database Name",
+        description="The name of the MongoDB database where events are stored.",
+    )
+    collection_name: str = Field(
+        default="events",
         title="Collection Name",
         description="The name of the MongoDB collection where events are stored.",
     )

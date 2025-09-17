@@ -67,7 +67,7 @@ def create_event_server(  # noqa: C901, PLR0915
 
         version_checker = MongoDBVersionChecker(
             db_url=event_manager_settings.db_url,
-            database_name=event_manager_settings.collection_name,
+            database_name=event_manager_settings.database_name,
             schema_file_path=str(schema_file_path),
             logger=logger,
         )
@@ -95,11 +95,11 @@ def create_event_server(  # noqa: C901, PLR0915
 
     if db_connection is None:
         db_client = MongoClient(event_manager_settings.db_url)
-        db_connection = db_client[event_manager_settings.collection_name]
+        db_connection = db_client[event_manager_settings.database_name]
     logger.log_info(get_current_madsci_context())
 
     app = FastAPI()
-    events = db_connection["events"]
+    events = db_connection[event_manager_settings.collection_name]
 
     @app.get("/")
     @app.get("/info")

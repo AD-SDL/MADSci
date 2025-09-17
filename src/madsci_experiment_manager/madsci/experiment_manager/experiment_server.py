@@ -58,8 +58,8 @@ def create_experiment_server(  # noqa: C901, PLR0915
     # * DB Config
     if db_connection is None:
         db_client = MongoClient(experiment_manager_settings.db_url)
-        db_connection = db_client["experiment_manager"]
-    experiments = db_connection["experiments"]
+        db_connection = db_client[experiment_manager_settings.database_name]
+    experiments = db_connection[experiment_manager_settings.collection_name]
 
     app = FastAPI()
 

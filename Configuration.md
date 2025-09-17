@@ -88,7 +88,8 @@ Handles settings and configuration for the Event Manager.
 | `EVENT_SERVER_URL` \| `EVENT_SERVER_URL`                 | `AnyUrl` \| `NoneType`            | `"http://localhost:8001"`     | The URL of the Event Manager server.                        | `"http://localhost:8001"`     |
 | `EVENT_MANAGER_DEFINITION` \| `EVENT_MANAGER_DEFINITION` | `string` \| `Path`                | `"event.manager.yaml"`        | Path to the event manager definition file to use.           | `"event.manager.yaml"`        |
 | `EVENTS_DB_URL`                                          | `string`                          | `"mongodb://localhost:27017"` | The URL of the database used by the Event Manager.          | `"mongodb://localhost:27017"` |
-| `EVENTS_COLLECTION_NAME`                                 | `string`                          | `"madsci_events"`             | The name of the MongoDB collection where events are stored. | `"madsci_events"`             |
+| `EVENTS_DATABASE_NAME`                                   | `string`                          | `"madsci_events"`             | The name of the MongoDB database where events are stored.   | `"madsci_events"`             |
+| `EVENTS_COLLECTION_NAME`                                 | `string`                          | `"events"`                    | The name of the MongoDB collection where events are stored. | `"events"`                    |
 | `EVENTS_ALERT_LEVEL`                                     | `EventLogLevel`                   | `40`                          | The log level at which to send an alert.                    | `40`                          |
 | `EVENTS_EMAIL_ALERTS`                                    | `EmailAlertsConfig` \| `NoneType` | `null`                        | The configuration for sending email alerts.                 | `null`                        |
 
@@ -110,7 +111,9 @@ Settings for the MADSci Workcell Manager.
 | `WORKCELL_NODE_UPDATE_INTERVAL`                | `number`                         | `1.0`                                                    | The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval                                                      | `1.0`                                                    |
 | `WORKCELL_COLD_START_DELAY`                    | `integer`                        | `0`                                                      | How long the Workcell engine should sleep on startup                                                                                                               | `0`                                                      |
 | `WORKCELL_SCHEDULER`                           | `string`                         | `"madsci.workcell_manager.schedulers.default_scheduler"` | Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use                                                                       | `"madsci.workcell_manager.schedulers.default_scheduler"` |
-| `WORKCELL_MONGO_URL`                           | `string` \| `NoneType`           | `null`                                                   | The URL for the mongo database.                                                                                                                                    | `null`                                                   |
+| `WORKCELL_MONGO_URL`                           | `string` \| `NoneType`           | `"mongodb://localhost:27017"`                            | The URL for the mongo database.                                                                                                                                    | `"mongodb://localhost:27017"`                            |
+| `WORKCELL_DATABASE_NAME`                       | `string`                         | `"madsci_workcells"`                                     | The name of the MongoDB database where events are stored.                                                                                                          | `"madsci_workcells"`                                     |
+| `WORKCELL_COLLECTION_NAME`                     | `string`                         | `"archived_workflows"`                                   | The name of the MongoDB collection where events are stored.                                                                                                        | `"archived_workflows"`                                   |
 | `WORKCELL_GET_ACTION_RESULT_RETRIES`           | `integer`                        | `3`                                                      | Number of times to retry getting an action result                                                                                                                  | `3`                                                      |
 
 ## ExperimentManagerSettings
@@ -119,10 +122,12 @@ Settings for the MADSci Experiment Manager.
 
 **Environment Prefix**: `EXPERIMENTS_`
 
-| Name                                                               | Type               | Default                       | Description                                            | Example                       |
-|--------------------------------------------------------------------|--------------------|-------------------------------|--------------------------------------------------------|-------------------------------|
-| `EXPERIMENT_MANAGER_DEFINITION` \| `EXPERIMENT_MANAGER_DEFINITION` | `string` \| `Path` | `"experiment.manager.yaml"`   | Path to the experiment manager definition file to use. | `"experiment.manager.yaml"`   |
-| `EXPERIMENTS_DB_URL`                                               | `string`           | `"mongodb://localhost:27017"` | The URL of the database for the experiment manager.    | `"mongodb://localhost:27017"` |
+| Name                                                               | Type               | Default                       | Description                                                 | Example                       |
+|--------------------------------------------------------------------|--------------------|-------------------------------|-------------------------------------------------------------|-------------------------------|
+| `EXPERIMENT_MANAGER_DEFINITION` \| `EXPERIMENT_MANAGER_DEFINITION` | `string` \| `Path` | `"experiment.manager.yaml"`   | Path to the experiment manager definition file to use.      | `"experiment.manager.yaml"`   |
+| `EXPERIMENTS_DB_URL`                                               | `string`           | `"mongodb://localhost:27017"` | The URL of the database for the experiment manager.         | `"mongodb://localhost:27017"` |
+| `EXPERIMENTS_DATABASE_NAME`                                        | `string`           | `"madsci_experiments"`        | The name of the MongoDB database where events are stored.   | `"madsci_experiments"`        |
+| `EXPERIMENTS_COLLECTION_NAME`                                      | `string`           | `"experiments"`               | The name of the MongoDB collection where events are stored. | `"experiments"`               |
 
 ## ResourceManagerSettings
 

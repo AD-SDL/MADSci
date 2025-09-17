@@ -220,9 +220,19 @@ class WorkcellManagerSettings(
         description="Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use",
     )
     mongo_url: Optional[str] = Field(
-        default=None,
+        default="mongodb://localhost:27017",
         title="MongoDB URL",
         description="The URL for the mongo database.",
+    )
+    database_name: str = Field(
+        default="madsci_workcells",
+        title="Database Name",
+        description="The name of the MongoDB database where events are stored.",
+    )
+    collection_name: str = Field(
+        default="archived_workflows",
+        title="Collection Name",
+        description="The name of the MongoDB collection where events are stored.",
     )
     get_action_result_retries: int = Field(
         default=3,
