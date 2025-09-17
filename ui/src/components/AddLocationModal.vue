@@ -73,7 +73,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-import { urls } from '@/store';
+import { locations_url, urls } from '@/store';
 
 import { workcell_state } from '../store';
 
@@ -125,10 +125,12 @@ function removeField(index: any) {
     }
 function submitLocation() {
     var location: any = {}
-    location["location_name"] = location_name.value
+    location["name"] = location_name.value // Use 'name' instead of 'location_name' for new API
     var new_lookups: any  = {}
     Object.keys(lookups.value).forEach((key: string) => {new_lookups[key] = JSON.parse(lookups.value[key])})
-    location["lookup"] = new_lookups
+    location["lookup_values"] = new_lookups // Use 'lookup_values' instead of 'lookup'
+    location["coordinates"] = { x: 0.0, y: 0.0, z: 0.0 } // Add default coordinates
+    location["resource_ids"] = [] // Add empty resource_ids array
     var resource: any = {}
     formFields.value.forEach(function (field: any) {
       resource[field.label] = field.value
@@ -137,7 +139,13 @@ function submitLocation() {
     if(base_type.value != null) {
     location["resource_definition"] = resource
     }
-    fetch(urls.value.workcell_server_url.concat('location'), {
+
+    // Use LocationManager API if available, fallback to WorkcellManager
+    const api_url = locations_url.value ?
+      locations_url.value.replace('/locations', '/location') :
+      urls.value.workcell_server_url.concat('location');
+
+    fetch(api_url, {
     method: "POST",
     headers: {
     'Content-Type': 'application/json'

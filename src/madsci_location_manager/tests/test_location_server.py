@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.location_types import (
     Location,
+    LocationDefinition,
     LocationManagerDefinition,
     LocationManagerSettings,
 )
@@ -255,3 +256,62 @@ def test_location_state_persistence(client, sample_location):
     assert "test_robot" in location.lookup_values
     assert location.lookup_values["test_robot"] == lookup_values
     assert location.resource_id == resource_id
+
+
+def test_automatic_location_initialization_from_definition(redis_server: Redis):
+    """Test that locations are automatically initialized from definition."""
+
+    # Create a definition with locations
+    location_def1 = LocationDefinition(
+        location_name="auto_location_1",
+        location_id=new_ulid_str(),
+        description="Automatically initialized location 1",
+        lookup={"robot1": [1, 2, 3], "robot2": {"x": 10, "y": 20}},
+    )
+
+    location_def2 = LocationDefinition(
+        location_name="auto_location_2",
+        location_id=new_ulid_str(),
+        description="Automatically initialized location 2",
+        lookup={"robot1": [4, 5, 6]},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Test Auto Location Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_def1, location_def2],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_auto_location_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    # Create manager with definition (this should trigger automatic initialization)
+    manager = LocationManager(settings=settings, definition=definition)
+    client = TestClient(manager.create_server())
+
+    # Verify locations were automatically created
+    response = client.get("/locations")
+    assert response.status_code == 200
+
+    returned_locations = [Location.model_validate(loc) for loc in response.json()]
+    assert len(returned_locations) == 2
+
+    # Verify location details
+    location_ids = {loc.location_id for loc in returned_locations}
+    expected_ids = {location_def1.location_id, location_def2.location_id}
+    assert location_ids == expected_ids
+
+    # Verify lookup values were preserved
+    for location in returned_locations:
+        if location.location_id == location_def1.location_id:
+            assert location.name == "auto_location_1"
+            assert location.lookup_values == {
+                "robot1": [1, 2, 3],
+                "robot2": {"x": 10, "y": 20},
+            }
+        elif location.location_id == location_def2.location_id:
+            assert location.name == "auto_location_2"
+            assert location.lookup_values == {"robot1": [4, 5, 6]}

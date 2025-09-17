@@ -121,7 +121,7 @@ class AbstractManagerBase(
             raise NotImplementedError(
                 f"{self.__class__.__name__} must set DEFINITION_CLASS class attribute"
             )
-        return self.DEFINITION_CLASS()
+        return self.DEFINITION_CLASS(name=f"Default {self.__class__.__name__}")
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -133,8 +133,6 @@ class AbstractManagerBase(
         Args:
             **kwargs: Additional arguments from __init__
         """
-        # Base implementation does nothing, subclasses can override
-        _ = kwargs  # Mark kwargs as used to avoid lint warning
 
     def setup_logging(self) -> None:
         """Setup logging for the manager."""

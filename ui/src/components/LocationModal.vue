@@ -5,7 +5,7 @@
         <h2 class="title">Location: {{ location_name }}</h2>
         {{location.location_id}}
         <h3>Lookup Values:</h3>
-        <div v-for="value, key in location.lookup">
+        <div v-for="value, key in ((location as any).lookup_values || location.lookup)">
 
           {{ key }} : {{ value }}
 
@@ -54,6 +54,7 @@
 import { ref } from 'vue';
 
 import {
+  locations_url,
   resources,
   urls,
   workcell_state,
@@ -80,12 +81,17 @@ loc_text.value=props.location
 
 
 async function get_location(location_name: string): Promise<void>{
-  var loc_data = await ((await fetch(urls.value.workcell_manager.concat('admin/get_location/').concat(location_name))).json())
+  var loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(location_name))).json())
   add_lookup_value.value = JSON.stringify(loc_data[0].data)
 }
 
 async function submit_location_lookup(node_name: string): Promise<void>{
-  await ((await fetch(urls.value.workcell_manager.concat('location/').concat(props.location.location_id).concat("/add_lookup/").concat(node_name),
+  // Use LocationManager API if available, fallback to WorkcellManager
+  const api_url = locations_url.value ?
+    locations_url.value.replace('/locations', '/location/').concat(props.location.location_id || '').concat("/add_lookup/").concat(node_name) :
+    urls.value.workcell_server_url.concat('location/').concat(props.location.location_id || '').concat("/add_lookup/").concat(node_name);
+
+  await ((await fetch(api_url,
     {method: "POST",
     headers: {
     'Content-Type': 'application/json'

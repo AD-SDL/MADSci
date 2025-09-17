@@ -122,6 +122,16 @@ services:
     depends_on:
       - mongodb
       - event_manager
+
+  location_manager:
+    <<: *madsci-service
+    container_name: location_manager
+    command: python -m madsci.location_manager.location_server
+    depends_on:
+      - redis
+      - event_manager
+      - resource_manager
+
   workcell_manager:
     <<: *madsci-service
     container_name: workcell_manager
@@ -132,6 +142,7 @@ services:
       - resource_manager
       - event_manager
       - postgres
+      - location_manager
 
 
    # *Nodes

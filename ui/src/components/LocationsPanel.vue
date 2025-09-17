@@ -4,14 +4,14 @@
   <v-card class="pa-1 ma-1" col="3" title="Locations">
     <v-card-text>
       <v-data-table :headers="location_headers" hover
-      :items="location_items(workcell_state?.locations, resources)"
-      no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(workcell_state?.locations, resources).length <= 10">
+      :items="location_items(locations, resources)"
+      no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
       <template v-slot:item="{ item }: { item: any }">
-        <tr @click="set_modal(item.location_name, item)">
-          <td>{{ item.location_name }}</td>
+        <tr @click="set_modal(item.name || item.location_name, item)">
+          <td>{{ item.name || item.location_name }}</td>
           <td>{{ get_resource(resources, item) }}</td>
           <td>{{ item.location_id }}</td>
-          <td>{{ Object.keys(item.lookup) }}</td>
+          <td>{{ Object.keys(item.lookup_values || item.lookup || {}) }}</td>
         </tr>
       </template>
     </v-data-table>
@@ -28,6 +28,7 @@ import { ref } from 'vue';
 import { VDataTable } from 'vuetify/components';
 
 import {
+  locations,
   resources,
   workcell_state,
 } from '@/store';
@@ -42,7 +43,7 @@ const add_modal = ref(false)
 
 const sortBy: VDataTable['sortBy'] = [{ key: 'occupied', order: 'desc' }];
 const location_headers = [
-  { title: 'Name', key: 'location_name' },
+  { title: 'Name', key: 'name' },
   { title: 'Occupied', key: 'occupied', sort: (a: string, b: string) => occupied_compare(a, b) },
   { title: 'ID', key: 'location_id' },
   { title: 'Nodes', key: 'nodes' },
@@ -91,8 +92,9 @@ function get_resource (resources: any, location: any) {
 
 function location_items(locations: any, resources: any) {
   var new_locations: any = []
-  Object.values(locations).forEach((location: any) => {
+  Object.values(locations || {}).forEach((location: any) => {
     location["occupied"] = get_resource(resources, location);
+    location["name"] = location.name || location.location_name; // Ensure backwards compatibility
     new_locations.push(location);
   })
   return new_locations

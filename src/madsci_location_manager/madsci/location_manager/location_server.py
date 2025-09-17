@@ -41,6 +41,38 @@ class LocationManager(
         """Initialize manager-specific components."""
         self.state_handler = LocationStateHandler(self.settings)
 
+        # Initialize locations from definition
+        self._initialize_locations_from_definition()
+
+    def _initialize_locations_from_definition(self) -> None:
+        """Initialize locations from the definition, creating or updating them in the state handler."""
+        if not self.definition.locations:
+            return
+
+        for location_def in self.definition.locations:
+            # Convert LocationDefinition to Location
+            location = Location(
+                location_id=location_def.location_id,
+                name=location_def.location_name,
+                description=location_def.description,
+                lookup_values=location_def.lookup if location_def.lookup else None,
+                # Include resource_definition if needed - this would require integration
+                # with resource manager to actually create the resource
+            )
+
+            # Check if location already exists to avoid overwriting
+            existing_location = self.state_handler.get_location(location.location_id)
+            if existing_location is None:
+                # Location doesn't exist, create it
+                self.state_handler.set_location(location.location_id, location)
+            elif location.lookup_values != existing_location.lookup_values:
+                # Location exists, update only if definition is newer or has changes
+                # For now, we'll update the lookup_values if they're different
+                existing_location.lookup_values = location.lookup_values
+                self.state_handler.update_location(
+                    location.location_id, existing_location
+                )
+
     @get("/health", tags=["Status"])
     def health_endpoint(self) -> ManagerHealth:
         """Get the health status of the Location Manager."""
@@ -132,8 +164,10 @@ class LocationManager(
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage the application lifespan."""
+    # Future: Add startup/shutdown logic here if needed
+    _ = app  # Explicitly acknowledge app parameter
     yield
 
 

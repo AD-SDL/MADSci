@@ -182,3 +182,8 @@ class LocationManagerDefinition(ManagerDefinition):
         description="The type of manager",
         default=ManagerType.LOCATION_MANAGER,
     )
+    locations: list[LocationDefinition] = Field(
+        title="Locations",
+        description="The locations managed by this LocationManager.",
+        default_factory=list,
+    )

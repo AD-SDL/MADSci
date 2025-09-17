@@ -1,6 +1,6 @@
 [project]
 name = "madsci.location_manager"
-version = "0.1.0"
+version = "0.4.7"
 description = "The Modular Autonomous Discovery for Science (MADSci) Location Manager."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
