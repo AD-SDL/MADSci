@@ -80,14 +80,35 @@ class DatabaseMigrator:
             return Path.cwd()
 
     def _get_backup_directory(self) -> Path:
-        """Get the backup directory path in the current working directory."""
-        # Create backup directory in the current working directory where the command was run
-        current_dir = Path.cwd()
-        backup_dir = current_dir / ".madsci" / "postgres" / "backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
+        """Get the backup directory path that works consistently in both local and Docker environments."""
+        # Check if we're running in a Docker container
+        if self._is_running_in_docker():
+            # In Docker, use the mounted .madsci directory
+            backup_dir = Path("/home/madsci/.madsci/postgres/backups")
+        else:
+            # Local development - use current directory structure
+            current_dir = Path.cwd()
+            backup_dir = current_dir / ".madsci" / "postgres" / "backups"
 
+        backup_dir.mkdir(parents=True, exist_ok=True)
         self.logger.info(f"Using backup directory: {backup_dir}")
         return backup_dir
+
+    def _is_running_in_docker(self) -> bool:
+        """Detect if running inside a Docker container."""
+        try:
+            # Check for .dockerenv file
+            if Path("/.dockerenv").exists():
+                return True
+
+            # Check cgroup for docker
+            if Path("/proc/1/cgroup").exists():
+                with open("/proc/1/cgroup") as f:  # noqa
+                    return "docker" in f.read() or "containerd" in f.read()
+
+            return False
+        except Exception:
+            return False
 
     def _get_database_url_from_env(self) -> str:
         """Get database URL from environment variables as fallback."""
@@ -496,38 +517,15 @@ class DatabaseMigrator:
                 f"Current database version: {current_db_version or 'None'}"
             )
 
-            # Check if this is actually a downgrade scenario
-            if current_db_version and current_db_version != target_version:
-                # Check if we already have a record for the target version
-                existing_target_record = self._check_for_existing_version_record(
-                    target_version
-                )
-
-                if existing_target_record:
-                    self.logger.info(
-                        f"Found existing database record for version {target_version}"
-                    )
-                    self.logger.info(
-                        "This appears to be a downgrade - updating version tracking to match current MADSci version"
-                    )
-
-                    # Update the version record to mark the target version as current
-                    self._mark_version_as_current(target_version)
-
-                    self.logger.info(
-                        f"Version tracking updated to {target_version} (no schema changes needed)"
-                    )
-                    return
-
-            # Regular migration process for upgrades or first-time setups
-            # Create backup
+            # ALWAYS CREATE BACKUP FIRST - regardless of migration type
             backup_path = self.create_backup()
 
+            # ALWAYS apply schema migrations - check for changes and apply them
             try:
-                # Apply Alembic migrations
+                # Apply Alembic migrations (this will detect and apply any schema changes)
                 self.apply_schema_migrations()
 
-                # Record new version in our tracking system
+                # After successful migration, update version tracking
                 migration_notes = f"Alembic migration from {current_db_version or 'unversioned'} to {target_version}"
                 self.version_checker.record_version(target_version, migration_notes)
 
