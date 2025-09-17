@@ -23,9 +23,9 @@ venv:
 pipe: check tests build
 
 # Run ci plus start the example lab
-pipeup: ci up
+pipeup: pipe up
 
-pipeupd: ci up -d
+pipeupd: pipe upd
 
 # Run the pre-commit checks
 checks:
@@ -85,6 +85,9 @@ dcb: env
 # Start the example lab
 up *args: env
   @docker compose up {{args}}
+
+upd: env
+  @docker compose up -d
 
 # Stop the example lab and remove the containers
 down:
