@@ -1,5 +1,6 @@
 """MADSci Location Manager using AbstractManagerBase."""
 
+import heapq
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, AsyncGenerator, Optional
 
@@ -15,9 +16,12 @@ from madsci.common.types.location_types import (
     LocationManagerDefinition,
     LocationManagerHealth,
     LocationManagerSettings,
+    TransferGraphEdge,
+    TransferWorkflowTemplate,
 )
 from madsci.common.types.resource_types import Resource, ResourceDataModels
 from madsci.common.types.resource_types.definitions import ResourceDefinitions
+from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -50,6 +54,9 @@ class LocationManager(
 
         # Initialize locations from definition
         self._initialize_locations_from_definition()
+
+        # Initialize transfer graph
+        self._transfer_graph = self._build_transfer_graph()
 
     def _initialize_locations_from_definition(self) -> None:
         """Initialize locations from the definition, creating or updating them in the state handler."""
@@ -211,6 +218,147 @@ class LocationManager(
 
         return health
 
+    def _build_transfer_graph(self) -> dict[tuple[str, str], TransferGraphEdge]:
+        """
+        Build transfer graph based on location representations and transfer templates.
+
+        Returns:
+            Dict mapping (source_id, dest_id) tuples to TransferGraphEdge objects
+        """
+        transfer_graph = {}
+
+        if not self.definition.transfer_capabilities:
+            return transfer_graph
+
+        locations = self.state_handler.get_locations()
+
+        for template in self.definition.transfer_capabilities.transfer_templates:
+            # Find all location pairs that can use this transfer template
+            for source_location in locations:
+                for dest_location in locations:
+                    if source_location.location_id == dest_location.location_id:
+                        continue  # Skip self-transfers
+
+                    if self._can_transfer_between_locations(
+                        source_location, dest_location, template
+                    ):
+                        edge = TransferGraphEdge(
+                            source_location_id=source_location.location_id,
+                            destination_location_id=dest_location.location_id,
+                            transfer_template=template,
+                            cost=template.cost_weight or 1.0,
+                        )
+                        transfer_graph[
+                            (source_location.location_id, dest_location.location_id)
+                        ] = edge
+
+        return transfer_graph
+
+    def _can_transfer_between_locations(
+        self, source: Location, dest: Location, template: TransferWorkflowTemplate
+    ) -> bool:
+        """
+        Check if transfer is possible between two locations using a template.
+
+        Based on simple representation key matching: if both locations have
+        representations for the template's node_name, transfer is possible.
+        """
+        if not source.representations or not dest.representations:
+            return False
+
+        return (
+            template.node_name in source.representations
+            and template.node_name in dest.representations
+        )
+
+    def _find_shortest_transfer_path(
+        self, source_id: str, dest_id: str
+    ) -> Optional[list[TransferGraphEdge]]:
+        """
+        Find shortest path using Dijkstra's algorithm with edge weights.
+
+        Returns:
+            List of edges representing the transfer path, or None if no path exists
+        """
+        if source_id == dest_id:
+            return []  # No transfer needed
+
+        # Dijkstra's algorithm
+        distances = {source_id: 0}
+        previous = {}
+        unvisited = [(0, source_id)]
+        visited = set()
+
+        while unvisited:
+            current_distance, current_location = heapq.heappop(unvisited)
+
+            if current_location in visited:
+                continue
+
+            visited.add(current_location)
+
+            if current_location == dest_id:
+                # Reconstruct path
+                path = []
+                current = dest_id
+                while current != source_id:
+                    prev = previous[current]
+                    edge = self._transfer_graph[(prev, current)]
+                    path.insert(0, edge)
+                    current = prev
+                return path
+
+            # Check all neighbors
+            for (src, dst), edge in self._transfer_graph.items():
+                if src == current_location and dst not in visited:
+                    distance = current_distance + edge.cost
+
+                    if dst not in distances or distance < distances[dst]:
+                        distances[dst] = distance
+                        previous[dst] = current_location
+                        heapq.heappush(unvisited, (distance, dst))
+
+        return None  # No path found
+
+    def _composite_transfer_workflow(
+        self, path: list[TransferGraphEdge], resource_id: Optional[str] = None
+    ) -> WorkflowDefinition:
+        """
+        Create a single composite workflow from multiple transfer steps.
+
+        For multi-leg transfers, chains the workflows together with proper
+        parameter passing between steps.
+        """
+        if len(path) == 1:
+            # Single transfer - use the template directly
+            template = path[0].transfer_template.workflow_template
+            return self._customize_workflow_for_transfer(template, path[0], resource_id)
+
+        # Multi-leg transfer - composite workflow needed
+        # For now, return the first step's workflow as a placeholder
+        # TODO: Implement proper workflow composition for multi-leg transfers
+        template = path[0].transfer_template.workflow_template
+        return self._customize_workflow_for_transfer(template, path[0], resource_id)
+
+    def _customize_workflow_for_transfer(
+        self,
+        template: WorkflowDefinition,
+        edge: TransferGraphEdge,
+        resource_id: Optional[str] = None,  # noqa: ARG002
+    ) -> WorkflowDefinition:
+        """Customize a workflow template for a specific transfer."""
+        # Create a copy of the template
+        workflow_dict = template.model_dump()
+
+        # Update name to include transfer specifics
+        workflow_dict["name"] = (
+            f"transfer_{edge.source_location_id}_to_{edge.destination_location_id}"
+        )
+
+        # For now, return the workflow as-is
+        # TODO: Implement parameter substitution for location and resource IDs
+        return WorkflowDefinition.model_validate(workflow_dict)
+
     @get("/health", tags=["Status"])
     def health_endpoint(self) -> LocationManagerHealth:
         """Get the health status of the Location Manager."""
@@ -299,6 +447,102 @@ class LocationManager(
             location.resource_id = resource_id
 
             return self.state_handler.update_location(location_id, location)
+
+    @post("/transfer/plan", tags=["Transfer"])
+    def plan_transfer(
+        self,
+        source_location_id: str,
+        destination_location_id: str,
+        resource_id: Optional[str] = None,
+    ) -> WorkflowDefinition:
+        """
+        Plan a transfer workflow from source to destination.
+
+        Args:
+            source_location_id: Source location ID
+            destination_location_id: Destination location ID
+            resource_id: Optional resource ID for transfer tracking
+
+        Returns:
+            Composite workflow definition to execute the transfer
+
+        Raises:
+            HTTPException: If no transfer path exists
+        """
+        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+            # Validate that both locations exist
+            source_location = self.state_handler.get_location(source_location_id)
+            if source_location is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Source location {source_location_id} not found",
+                )
+
+            dest_location = self.state_handler.get_location(destination_location_id)
+            if dest_location is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Destination location {destination_location_id} not found",
+                )
+
+            # Find shortest transfer path
+            transfer_path = self._find_shortest_transfer_path(
+                source_location_id, destination_location_id
+            )
+            if transfer_path is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No transfer path exists between {source_location_id} and {destination_location_id}",
+                )
+
+            # Create composite workflow
+            return self._composite_transfer_workflow(transfer_path, resource_id)
+
+    @get("/transfer/graph", tags=["Transfer"])
+    def get_transfer_graph(self) -> dict[str, list[str]]:
+        """
+        Get the current transfer graph as adjacency list.
+
+        Returns:
+            Dict mapping location IDs to lists of reachable location IDs
+        """
+        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+            adjacency_list = {}
+
+            for source_id, dest_id in self._transfer_graph:
+                if source_id not in adjacency_list:
+                    adjacency_list[source_id] = []
+                adjacency_list[source_id].append(dest_id)
+
+            return adjacency_list
+
+    @get("/location/{location_id}/resources", tags=["Resources"])
+    def get_location_resources(self, location_id: str) -> list[str]:
+        """
+        Get all resource IDs currently at a specific location.
+
+        Args:
+            location_id: Location ID to query
+
+        Returns:
+            List of resource IDs at the location
+
+        Raises:
+            HTTPException: If location not found
+        """
+        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+            location = self.state_handler.get_location(location_id)
+            if location is None:
+                raise HTTPException(
+                    status_code=404, detail=f"Location {location_id} not found"
+                )
+
+            # For now, return empty list as placeholder
+            # TODO: Implement actual resource-location tracking
+            # This would involve querying the resource manager for resources
+            # that have this location as their parent or are contained within
+            # resources at this location
+            return []
 
 
 @asynccontextmanager

@@ -1,7 +1,7 @@
 """Location types for MADSci."""
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
@@ -16,6 +16,10 @@ from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import AnyUrl, Field
 from pydantic.functional_validators import field_validator
+
+# Avoid circular imports
+if TYPE_CHECKING:
+    from madsci.common.types.workflow_types import WorkflowDefinition
 
 
 class LocationArgument(MadsciBaseModel):
@@ -128,6 +132,52 @@ class LocationReservation(MadsciBaseModel):
         )
 
 
+class TransferWorkflowTemplate(MadsciBaseModel):
+    """Template for transfer workflows between compatible locations."""
+
+    node_name: str = Field(
+        title="Node Name", description="Name of the node that can perform this transfer"
+    )
+    workflow_template: "WorkflowDefinition" = Field(
+        title="Workflow Template",
+        description="Template workflow with source/destination parameters",
+    )
+    cost_weight: Optional[float] = Field(
+        title="Cost Weight",
+        description="Weight for shortest path calculation (default: 1.0)",
+        default=1.0,
+    )
+
+
+class TransferGraphEdge(MadsciBaseModel):
+    """Represents a transfer path between two locations."""
+
+    source_location_id: str = Field(
+        title="Source Location ID", description="ID of the source location"
+    )
+    destination_location_id: str = Field(
+        title="Destination Location ID", description="ID of the destination location"
+    )
+    transfer_template: TransferWorkflowTemplate = Field(
+        title="Transfer Template", description="Template for executing the transfer"
+    )
+    cost: float = Field(
+        title="Transfer Cost",
+        description="Cost/weight for shortest path calculation",
+        default=1.0,
+    )
+
+
+class LocationTransferCapabilities(MadsciBaseModel):
+    """Transfer capabilities for a location manager."""
+
+    transfer_templates: list[TransferWorkflowTemplate] = Field(
+        title="Transfer Templates",
+        description="Available transfer workflow templates",
+        default_factory=list,
+    )
+
+
 class LocationManagerSettings(
     ManagerSettings,
     env_prefix="LOCATION_",
@@ -188,6 +238,11 @@ class LocationManagerDefinition(ManagerDefinition):
         description="The locations managed by this LocationManager.",
         default_factory=list,
     )
+    transfer_capabilities: Optional[LocationTransferCapabilities] = Field(
+        title="Transfer Capabilities",
+        description="Transfer workflow templates and capabilities",
+        default=None,
+    )
 
 
 class LocationManagerHealth(ManagerHealth):
@@ -203,3 +258,14 @@ class LocationManagerHealth(ManagerHealth):
         description="The number of locations managed by the Location Manager.",
         default=0,
     )
+
+
+# Rebuild models to resolve forward references
+try:
+    from madsci.common.types.workflow_types import WorkflowDefinition
+
+    TransferWorkflowTemplate.model_rebuild()
+    LocationManagerDefinition.model_rebuild()
+except ImportError:
+    # WorkflowDefinition not available yet - will be rebuilt later
+    pass

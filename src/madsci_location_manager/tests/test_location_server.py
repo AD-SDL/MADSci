@@ -10,8 +10,11 @@ from madsci.common.types.location_types import (
     LocationManagerDefinition,
     LocationManagerHealth,
     LocationManagerSettings,
+    LocationTransferCapabilities,
+    TransferWorkflowTemplate,
 )
 from madsci.common.types.resource_types.definitions import SlotResourceDefinition
+from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
 from pytest_mock_resources import RedisConfig, create_redis_fixture
@@ -466,3 +469,426 @@ def test_resource_initialization_with_matching_existing_resource(redis_server: R
     locations = [Location.model_validate(loc) for loc in response.json()]
     assert len(locations) == 1
     assert locations[0].resource_id == "existing_resource_456"
+
+
+# Transfer Graph Tests
+
+
+@pytest.fixture
+def transfer_setup(redis_server: Redis):
+    """Create a location manager with transfer capabilities for testing."""
+    # Create sample transfer templates
+    transfer_template1 = TransferWorkflowTemplate(
+        node_name="robot_arm",
+        workflow_template=WorkflowDefinition(name="pick_and_place_workflow"),
+        cost_weight=1.0,
+    )
+
+    transfer_template2 = TransferWorkflowTemplate(
+        node_name="conveyor",
+        workflow_template=WorkflowDefinition(name="conveyor_transfer_workflow"),
+        cost_weight=2.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[transfer_template1, transfer_template2]
+    )
+
+    # Create locations with representations that match transfer templates
+    location1 = LocationDefinition(
+        location_name="pickup_station",
+        location_id=new_ulid_str(),
+        description="Pickup station with robot arm and conveyor access",
+        representations={
+            "robot_arm": {"position": [1, 2, 3], "gripper": "closed"},
+            "conveyor": {"belt_position": 0, "speed": 1.0},
+        },
+    )
+
+    location2 = LocationDefinition(
+        location_name="processing_station",
+        location_id=new_ulid_str(),
+        description="Processing station with robot arm access",
+        representations={"robot_arm": {"position": [4, 5, 6], "gripper": "open"}},
+    )
+
+    location3 = LocationDefinition(
+        location_name="storage_area",
+        location_id=new_ulid_str(),
+        description="Storage area with conveyor access",
+        representations={"conveyor": {"belt_position": 10, "speed": 0.5}},
+    )
+
+    location4 = LocationDefinition(
+        location_name="isolated_station",
+        location_id=new_ulid_str(),
+        description="Isolated station with no transfer connections",
+        representations={"other_device": {"status": "idle"}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Transfer Test Location Manager",
+        manager_id=new_ulid_str(),
+        locations=[location1, location2, location3, location4],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_transfer_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    return {
+        "client": client,
+        "manager": manager,
+        "locations": {
+            "pickup": location1.location_id,
+            "processing": location2.location_id,
+            "storage": location3.location_id,
+            "isolated": location4.location_id,
+        },
+    }
+
+
+def test_transfer_graph_construction(transfer_setup):
+    """Test that transfer graph is correctly constructed from location representations."""
+    manager = transfer_setup["manager"]
+
+    # Build the transfer graph
+    graph = manager._build_transfer_graph()
+
+    # Expected edges based on shared representations:
+    # pickup <-> processing (robot_arm)
+    # pickup <-> storage (conveyor)
+    # processing and storage should not be directly connected
+
+    expected_edges = {
+        (
+            transfer_setup["locations"]["pickup"],
+            transfer_setup["locations"]["processing"],
+        ),
+        (
+            transfer_setup["locations"]["processing"],
+            transfer_setup["locations"]["pickup"],
+        ),
+        (transfer_setup["locations"]["pickup"], transfer_setup["locations"]["storage"]),
+        (transfer_setup["locations"]["storage"], transfer_setup["locations"]["pickup"]),
+    }
+
+    actual_edges = set(graph.keys())
+    assert actual_edges == expected_edges
+
+    # Verify edge costs are set correctly
+    pickup_to_processing = graph[
+        (
+            transfer_setup["locations"]["pickup"],
+            transfer_setup["locations"]["processing"],
+        )
+    ]
+    assert pickup_to_processing.cost == 1.0  # robot_arm template cost
+
+    pickup_to_storage = graph[
+        (transfer_setup["locations"]["pickup"], transfer_setup["locations"]["storage"])
+    ]
+    assert pickup_to_storage.cost == 2.0  # conveyor template cost
+
+
+def test_can_transfer_between_locations(transfer_setup):
+    """Test the location compatibility checking logic."""
+    manager = transfer_setup["manager"]
+
+    # Get locations from state
+    pickup_location = manager.state_handler.get_location(
+        transfer_setup["locations"]["pickup"]
+    )
+    processing_location = manager.state_handler.get_location(
+        transfer_setup["locations"]["processing"]
+    )
+    storage_location = manager.state_handler.get_location(
+        transfer_setup["locations"]["storage"]
+    )
+    isolated_location = manager.state_handler.get_location(
+        transfer_setup["locations"]["isolated"]
+    )
+
+    # Create transfer template for testing
+    robot_template = TransferWorkflowTemplate(
+        node_name="robot_arm",
+        workflow_template=WorkflowDefinition(name="test_workflow"),
+        cost_weight=1.0,
+    )
+
+    conveyor_template = TransferWorkflowTemplate(
+        node_name="conveyor",
+        workflow_template=WorkflowDefinition(name="test_workflow"),
+        cost_weight=1.0,
+    )
+
+    nonexistent_template = TransferWorkflowTemplate(
+        node_name="nonexistent_device",
+        workflow_template=WorkflowDefinition(name="test_workflow"),
+        cost_weight=1.0,
+    )
+
+    # Test compatible transfers
+    assert manager._can_transfer_between_locations(
+        pickup_location, processing_location, robot_template
+    )
+    assert manager._can_transfer_between_locations(
+        pickup_location, storage_location, conveyor_template
+    )
+
+    # Test incompatible transfers
+    assert not manager._can_transfer_between_locations(
+        processing_location, storage_location, robot_template
+    )
+    assert not manager._can_transfer_between_locations(
+        pickup_location, isolated_location, robot_template
+    )
+    assert not manager._can_transfer_between_locations(
+        pickup_location, processing_location, nonexistent_template
+    )
+
+
+def test_shortest_transfer_path_direct(transfer_setup):
+    """Test shortest path finding for direct transfers."""
+    manager = transfer_setup["manager"]
+
+    # Test direct path between connected locations
+    path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
+    )
+
+    assert path is not None
+    assert len(path) == 1
+    assert path[0].source_location_id == transfer_setup["locations"]["pickup"]
+    assert path[0].destination_location_id == transfer_setup["locations"]["processing"]
+    assert path[0].transfer_template.node_name == "robot_arm"
+
+
+def test_shortest_transfer_path_no_connection(transfer_setup):
+    """Test shortest path finding when no path exists."""
+    manager = transfer_setup["manager"]
+
+    # Test path to isolated location (should return None)
+    path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["isolated"]
+    )
+
+    assert path is None
+
+
+def test_shortest_transfer_path_same_location(transfer_setup):
+    """Test shortest path finding for same source and destination."""
+    manager = transfer_setup["manager"]
+
+    # Test same location (should return empty path)
+    path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["pickup"]
+    )
+
+    assert path == []
+
+
+def test_shortest_transfer_path_multi_hop(transfer_setup):
+    """Test shortest path finding for multi-hop transfers."""
+    manager = transfer_setup["manager"]
+
+    # Add another location that creates a longer path
+    # This would test processing -> pickup -> storage route
+    path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["processing"],
+        transfer_setup["locations"]["storage"],
+    )
+
+    # Since processing and storage are not directly connected,
+    # the path should go through pickup
+    assert path is not None
+    assert len(path) == 2
+    assert path[0].source_location_id == transfer_setup["locations"]["processing"]
+    assert path[0].destination_location_id == transfer_setup["locations"]["pickup"]
+    assert path[1].source_location_id == transfer_setup["locations"]["pickup"]
+    assert path[1].destination_location_id == transfer_setup["locations"]["storage"]
+
+
+def test_composite_transfer_workflow(transfer_setup):
+    """Test creation of composite transfer workflows."""
+    manager = transfer_setup["manager"]
+
+    # Get a transfer path
+    path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
+    )
+
+    assert path is not None
+
+    # Create composite workflow
+    workflow = manager._composite_transfer_workflow(path, "test_resource_123")
+
+    assert isinstance(workflow, WorkflowDefinition)
+    assert "transfer_" in workflow.name
+    # TODO: Add more detailed workflow composition tests when implementation is enhanced
+
+
+def test_get_transfer_graph_endpoint(transfer_setup):
+    """Test the transfer graph API endpoint."""
+    client = transfer_setup["client"]
+
+    response = client.get("/transfer/graph")
+    assert response.status_code == 200
+
+    graph_data = response.json()
+    assert isinstance(graph_data, dict)
+
+    # Verify adjacency list structure
+    pickup_id = transfer_setup["locations"]["pickup"]
+    assert pickup_id in graph_data
+
+    # pickup should connect to both processing and storage
+    expected_connections = {
+        transfer_setup["locations"]["processing"],
+        transfer_setup["locations"]["storage"],
+    }
+    actual_connections = set(graph_data[pickup_id])
+    assert actual_connections == expected_connections
+
+
+def test_plan_transfer_endpoint_direct(transfer_setup):
+    """Test the transfer planning API endpoint for direct transfers."""
+    client = transfer_setup["client"]
+
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": transfer_setup["locations"]["pickup"],
+            "destination_location_id": transfer_setup["locations"]["processing"],
+            "resource_id": "test_resource_123",
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    assert isinstance(workflow_data, dict)
+
+    # Validate that a workflow definition is returned
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+    assert "transfer_" in workflow.name
+
+
+def test_plan_transfer_endpoint_no_path(transfer_setup):
+    """Test the transfer planning API endpoint when no path exists."""
+    client = transfer_setup["client"]
+
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": transfer_setup["locations"]["pickup"],
+            "destination_location_id": transfer_setup["locations"]["isolated"],
+        },
+    )
+
+    assert response.status_code == 404
+    error_data = response.json()
+    assert "No transfer path exists" in error_data["detail"]
+
+
+def test_plan_transfer_endpoint_invalid_location(transfer_setup):
+    """Test the transfer planning API endpoint with invalid location IDs."""
+    client = transfer_setup["client"]
+
+    # Test invalid source location
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": "invalid_location_id",
+            "destination_location_id": transfer_setup["locations"]["processing"],
+        },
+    )
+
+    assert response.status_code == 404
+    error_data = response.json()
+    assert (
+        "Source location" in error_data["detail"]
+        and "not found" in error_data["detail"]
+    )
+
+    # Test invalid destination location
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": transfer_setup["locations"]["pickup"],
+            "destination_location_id": "invalid_location_id",
+        },
+    )
+
+    assert response.status_code == 404
+    error_data = response.json()
+    assert (
+        "Destination location" in error_data["detail"]
+        and "not found" in error_data["detail"]
+    )
+
+
+def test_get_location_resources_endpoint(transfer_setup):
+    """Test the location resources API endpoint."""
+    client = transfer_setup["client"]
+
+    response = client.get(
+        f"/location/{transfer_setup['locations']['pickup']}/resources"
+    )
+    assert response.status_code == 200
+
+    resources = response.json()
+    assert isinstance(resources, list)
+    # Currently returns empty list as placeholder
+    assert len(resources) == 0
+
+
+def test_get_location_resources_endpoint_invalid_location(transfer_setup):
+    """Test the location resources API endpoint with invalid location ID."""
+    client = transfer_setup["client"]
+
+    response = client.get("/location/invalid_location_id/resources")
+    assert response.status_code == 404
+    error_data = response.json()
+    assert "not found" in error_data["detail"]
+
+
+def test_transfer_graph_without_transfer_capabilities(redis_server: Redis):
+    """Test transfer graph behavior when no transfer capabilities are defined."""
+    # Create a location manager without transfer capabilities
+    definition = LocationManagerDefinition(
+        name="No Transfer Location Manager",
+        manager_id=new_ulid_str(),
+        locations=[
+            LocationDefinition(
+                location_name="location1",
+                location_id=new_ulid_str(),
+                representations={"device": "config"},
+            )
+        ],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_no_transfer_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Transfer graph should be empty
+    graph = manager._build_transfer_graph()
+    assert len(graph) == 0
+
+    # API endpoint should return empty adjacency list
+    response = client.get("/transfer/graph")
+    assert response.status_code == 200
+    assert response.json() == {}
