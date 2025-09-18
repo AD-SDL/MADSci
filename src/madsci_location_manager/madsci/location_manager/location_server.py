@@ -21,7 +21,7 @@ from madsci.common.types.resource_types.definitions import ResourceDefinitions
 from madsci.location_manager.location_state_handler import LocationStateHandler
 
 # Module-level constants for Body() calls to avoid B008 linting errors
-REFERENCE_VAL_BODY = Body(...)
+REPRESENTATION_VAL_BODY = Body(...)
 
 
 class LocationManager(
@@ -67,7 +67,9 @@ class LocationManager(
                 location_id=location_def.location_id,
                 name=location_def.location_name,
                 description=location_def.description,
-                references=location_def.references if location_def.references else None,
+                representations=location_def.representations
+                if location_def.representations
+                else None,
                 resource_id=resource_id,  # Associate the resource with the location
             )
 
@@ -80,8 +82,8 @@ class LocationManager(
                 # Location exists, update if there are changes
                 needs_update = False
 
-                if location.references != existing_location.references:
-                    existing_location.references = location.references
+                if location.representations != existing_location.representations:
+                    existing_location.representations = location.representations
                     needs_update = True
 
                 if resource_id and resource_id != existing_location.resource_id:
@@ -258,14 +260,14 @@ class LocationManager(
                 )
             return {"message": f"Location {location_id} deleted successfully"}
 
-    @post("/location/{location_id}/set_reference/{node_name}", tags=["Locations"])
-    def set_references(
+    @post("/location/{location_id}/set_representation/{node_name}", tags=["Locations"])
+    def set_representations(
         self,
         location_id: str,
         node_name: str,
-        reference_val: Annotated[dict, REFERENCE_VAL_BODY],
+        representation_val: Annotated[dict, REPRESENTATION_VAL_BODY],
     ) -> Location:
-        """Set references for a location for a specific node."""
+        """Set representations for a location for a specific node."""
         with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
             location = self.state_handler.get_location(location_id)
             if location is None:
@@ -273,10 +275,10 @@ class LocationManager(
                     status_code=404, detail=f"Location {location_id} not found"
                 )
 
-            # Update the location with new references
-            if location.references is None:
-                location.references = {}
-            location.references[node_name] = reference_val
+            # Update the location with new representations
+            if location.representations is None:
+                location.representations = {}
+            location.representations[node_name] = representation_val
 
             return self.state_handler.update_location(location_id, location)
 

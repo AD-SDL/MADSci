@@ -9,8 +9,8 @@
         <v-text-field class="pt-5 mr-2 w-25" height="20px" v-model="location_name"
                           dense>
                         </v-text-field>
-        <h4>Reference Info:</h4>
-        <div v-for="(value, key) in references">
+        <h4>Representation Info:</h4>
+        <div v-for="(value, key) in representations">
           {{ key }} : {{ value}}
         </div>
         <div>
@@ -19,12 +19,12 @@
 
 
       </v-select>
-      <v-text-field v-model="add_reference_value"
+      <v-text-field v-model="add_representation_value"
                           dense>
                           <template #append>
 
                             <v-btn @click="get_location(node_to_add)">Get Current Location</v-btn>
-                            <v-btn @click="append_reference_to_location(node_to_add)">Add or Update Reference</v-btn>
+                            <v-btn @click="append_representation_to_location(node_to_add)">Add or Update Representation</v-btn>
 
                           </template>
       </v-text-field>
@@ -80,8 +80,8 @@ import { workcell_state } from '../store';
 const new_name = ref()
 const base_type = ref()
 const node_to_add = ref()
-const add_reference_value = ref()
-const references = ref()
+const add_representation_value = ref()
+const representations = ref()
 const location_name = ref()
 const add_resource = ref(false)
 const formFields =  ref([
@@ -104,7 +104,7 @@ const base_types = ref([
          "slot",
 
 ])
-references.value = {}
+representations.value = {}
 
 function addField() {
       formFields.value.push({ label: new_name.value, value: null, placeholder: 'Enter value' });
@@ -112,12 +112,12 @@ function addField() {
 
 async function get_location(node: string): Promise<any>{
   var loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(node))).json())
-  add_reference_value.value = JSON.stringify(loc_data[0].data)
+  add_representation_value.value = JSON.stringify(loc_data[0].data)
 }
 
 
-function append_reference_to_location(node: string) {
-      references.value[node] = add_reference_value.value
+function append_representation_to_location(node: string) {
+      representations.value[node] = add_representation_value.value
     }
 
 function removeField(index: any) {
@@ -126,9 +126,9 @@ function removeField(index: any) {
 function submitLocation() {
     var location: any = {}
     location["name"] = location_name.value // Use 'name' instead of 'location_name' for new API
-    var new_references: any  = {}
-    Object.keys(references.value).forEach((key: string) => {new_references[key] = JSON.parse(references.value[key])})
-    location["references"] = new_references // Use 'references' instead of 'lookup_values'
+    var new_representations: any  = {}
+    Object.keys(representations.value).forEach((key: string) => {new_representations[key] = JSON.parse(representations.value[key])})
+    location["representations"] = new_representations // Use 'representations' instead of 'references' or 'lookup_values'
     location["coordinates"] = { x: 0.0, y: 0.0, z: 0.0 } // Add default coordinates
     location["resource_ids"] = [] // Add empty resource_ids array
     var resource: any = {}

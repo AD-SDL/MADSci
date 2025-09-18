@@ -148,23 +148,23 @@ def test_delete_nonexistent_location(client):
     assert response.status_code == 404
 
 
-def test_set_references(client, sample_location):
-    """Test setting references for a location."""
+def test_set_representations(client, sample_location):
+    """Test setting representations for a location."""
     # First add the location
     client.post("/location", json=sample_location.model_dump())
 
-    # Set references
-    references = {"key1": "value1", "key2": "value2"}
+    # Set representations
+    representations = {"key1": "value1", "key2": "value2"}
     response = client.post(
-        f"/location/{sample_location.location_id}/set_reference/test_node",
-        json=references,
+        f"/location/{sample_location.location_id}/set_representation/test_node",
+        json=representations,
     )
     assert response.status_code == 200
 
     returned_location = Location.model_validate(response.json())
-    assert returned_location.references is not None
-    assert "test_node" in returned_location.references
-    assert returned_location.references["test_node"] == references
+    assert returned_location.representations is not None
+    assert "test_node" in returned_location.representations
+    assert returned_location.representations["test_node"] == representations
 
 
 def test_attach_resource(client, sample_location):
@@ -239,11 +239,11 @@ def test_location_state_persistence(client, sample_location):
     response = client.post("/location", json=sample_location.model_dump())
     assert response.status_code == 200
 
-    # Set references
-    references = {"position": [1, 2, 3], "config": "test_config"}
+    # Set representations
+    representations = {"position": [1, 2, 3], "config": "test_config"}
     response = client.post(
-        f"/location/{sample_location.location_id}/set_reference/test_robot",
-        json=references,
+        f"/location/{sample_location.location_id}/set_representation/test_robot",
+        json=representations,
     )
     assert response.status_code == 200
 
@@ -260,9 +260,9 @@ def test_location_state_persistence(client, sample_location):
     assert response.status_code == 200
 
     location = Location.model_validate(response.json())
-    assert location.references is not None
-    assert "test_robot" in location.references
-    assert location.references["test_robot"] == references
+    assert location.representations is not None
+    assert "test_robot" in location.representations
+    assert location.representations["test_robot"] == representations
     assert location.resource_id == resource_id
 
 
@@ -274,14 +274,14 @@ def test_automatic_location_initialization_from_definition(redis_server: Redis):
         location_name="auto_location_1",
         location_id=new_ulid_str(),
         description="Automatically initialized location 1",
-        references={"robot1": [1, 2, 3], "robot2": {"x": 10, "y": 20}},
+        representations={"robot1": [1, 2, 3], "robot2": {"x": 10, "y": 20}},
     )
 
     location_def2 = LocationDefinition(
         location_name="auto_location_2",
         location_id=new_ulid_str(),
         description="Automatically initialized location 2",
-        references={"robot1": [4, 5, 6]},
+        representations={"robot1": [4, 5, 6]},
     )
 
     definition = LocationManagerDefinition(
@@ -312,17 +312,17 @@ def test_automatic_location_initialization_from_definition(redis_server: Redis):
     expected_ids = {location_def1.location_id, location_def2.location_id}
     assert location_ids == expected_ids
 
-    # Verify references were preserved
+    # Verify representations were preserved
     for location in returned_locations:
         if location.location_id == location_def1.location_id:
             assert location.name == "auto_location_1"
-            assert location.references == {
+            assert location.representations == {
                 "robot1": [1, 2, 3],
                 "robot2": {"x": 10, "y": 20},
             }
         elif location.location_id == location_def2.location_id:
             assert location.name == "auto_location_2"
-            assert location.references == {"robot1": [4, 5, 6]}
+            assert location.representations == {"robot1": [4, 5, 6]}
 
 
 def test_resource_initialization_prevents_duplicates(redis_server: Redis):

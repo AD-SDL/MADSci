@@ -4,25 +4,25 @@
       <v-card-title>
         <h2 class="title">Location: {{ location_name }}</h2>
         {{location.location_id}}
-        <h3>References:</h3>
-        <div v-for="value, key in ((location as any).references || (location as any).lookup_values || location.reference || location.lookup)">
+        <h3>Representations:</h3>
+        <div v-for="value, key in ((location as any).representations || (location as any).references || (location as any).lookup_values || location.reference || location.lookup)">
 
           {{ key }} : {{ value }}
 
         </div>
-        <v-btn v-if="!add_reference_toggle" @click="add_reference_toggle = !add_reference_toggle">Add or Replace Reference</v-btn>
-      <div v-if="add_reference_toggle" >
+        <v-btn v-if="!add_representation_toggle" @click="add_representation_toggle = !add_representation_toggle">Add or Replace Representation</v-btn>
+      <div v-if="add_representation_toggle" >
         <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state?.nodes ?? {})"
                           dense>
 
 
     </v-select>
-    <v-text-field v-model="add_reference_value"
+    <v-text-field v-model="add_representation_value"
                           dense>
                           <template #append>
 
                             <v-btn @click="get_location(node_to_add)">Get Current Position</v-btn>
-                            <v-btn @click="submit_location_reference(node_to_add); add_reference_toggle = !add_reference_toggle">Submit</v-btn>
+                            <v-btn @click="submit_location_representation(node_to_add); add_representation_toggle = !add_representation_toggle">Submit</v-btn>
                           </template>
       </v-text-field>
       </div>
@@ -44,7 +44,7 @@
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
-        <v-btn flat @click="isActive.value = false; add_reference_toggle=false" class="primary--text">close</v-btn>
+        <v-btn flat @click="isActive.value = false; add_representation_toggle=false" class="primary--text">close</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -74,29 +74,29 @@ interface LocationModalProps {
 
 const props = defineProps<LocationModalProps>()
 const loc_text = ref(props.location)
-const add_reference_toggle = ref(false)
+const add_representation_toggle = ref(false)
 const node_to_add = ref()
-const add_reference_value = ref()
+const add_representation_value = ref()
 loc_text.value=props.location
 
 
 async function get_location(location_name: string): Promise<void>{
   var loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(location_name))).json())
-  add_reference_value.value = JSON.stringify(loc_data[0].data)
+  add_representation_value.value = JSON.stringify(loc_data[0].data)
 }
 
-async function submit_location_reference(node_name: string): Promise<void>{
+async function submit_location_representation(node_name: string): Promise<void>{
   // Use LocationManager API if available, fallback to WorkcellManager
   const api_url = locations_url.value ?
-    locations_url.value.replace('/locations', '/location/').concat(props.location.location_id || '').concat("/set_reference/").concat(node_name) :
-    urls.value.workcell_server_url.concat('location/').concat(props.location.location_id || '').concat("/set_reference/").concat(node_name);
+    locations_url.value.replace('/locations', '/location/').concat(props.location.location_id || '').concat("/set_representation/").concat(node_name) :
+    urls.value.workcell_server_url.concat('location/').concat(props.location.location_id || '').concat("/set_representation/").concat(node_name);
 
   await ((await fetch(api_url,
     {method: "POST",
     headers: {
     'Content-Type': 'application/json'
     },
-     body: JSON.stringify(JSON.parse(add_reference_value.value))
+     body: JSON.stringify(JSON.parse(add_representation_value.value))
   }
 
 )

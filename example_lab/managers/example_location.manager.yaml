@@ -7,7 +7,7 @@ locations:
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: Location 1 - Primary slot for experiments
-  references:
+  representations:
     robot_arm:
     - 1
     - 2
@@ -28,7 +28,7 @@ locations:
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: Location 2 - Secondary slot for experiments
-  references:
+  representations:
     robot_arm:
     - 5
     - 6

@@ -11,7 +11,7 @@ locations:
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: null
-  references: {}
+  representations: {}
   resource_definition:
     resource_name: slot_1
     resource_name_prefix: null
@@ -27,7 +27,7 @@ locations:
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
-  references: {}
+  representations: {}
   resource_definition:
     resource_name: slot_2
     resource_name_prefix: null

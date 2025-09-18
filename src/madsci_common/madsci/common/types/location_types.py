@@ -21,8 +21,8 @@ from pydantic.functional_validators import field_validator
 class LocationArgument(MadsciBaseModel):
     """Location Argument to be used by MADSCI nodes."""
 
-    location: Any
-    """Details about the Location relevant to this node"""
+    representation: Any
+    """Representation of the location specific to the node."""
     resource_id: Optional[str] = None
     """The ID of the corresponding resource, if any"""
     location_name: Optional[str] = None
@@ -48,7 +48,7 @@ class LocationDefinition(MadsciBaseModel):
         description="A description of the location.",
         default=None,
     )
-    references: dict[str, Any] = Field(
+    representations: dict[str, Any] = Field(
         title="Location Representation Map",
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
         default={},
@@ -80,9 +80,9 @@ class Location(MadsciBaseModel):
         description="A description of the location.",
         default=None,
     )
-    references: Optional[dict[str, Any]] = Field(
-        title="Location References",
-        description="A dictionary of node-specific references for the location.",
+    representations: Optional[dict[str, Any]] = Field(
+        title="Location Representations",
+        description="A dictionary of node-specific representations for the location.",
         default=None,
     )
     reservation: Optional["LocationReservation"] = Field(

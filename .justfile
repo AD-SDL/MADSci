@@ -21,11 +21,15 @@ venv:
 
 # Run the full check test and build pipeline
 pipe: check tests build
+pipeline: pipe
 
 # Run ci plus start the example lab
 pipeup: pipe up
+pipelineup: pipeup
 
+# Same as pipeup, but detached
 pipeupd: pipe upd
+pipelineupd: pipeupd
 
 # Run the pre-commit checks
 checks:

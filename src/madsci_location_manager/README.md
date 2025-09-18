@@ -6,7 +6,7 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 
 - **Location CRUD Operations**: Create, read, update, and delete locations
 - **Resource Attachment**: Attach resources to specific locations
-- **References**: Manage node-specific references for locations
+- **Representations**: Manage node-specific representations for locations
 - **Redis State Management**: Persistent state storage using Redis
 - **RESTful API**: Clean REST endpoints for all location operations
 
@@ -16,7 +16,7 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - `POST /location` - Create a new location
 - `GET /location/{location_id}` - Get a specific location
 - `DELETE /location/{location_id}` - Delete a location
-- `POST /location/{location_id}/set_reference/{node_name}` - Set references for a node
+- `POST /location/{location_id}/set_representation/{node_name}` - Set representations for a node
 - `POST /location/{location_id}/attach_resource` - Attach a resource to a location
 
 ## Configuration

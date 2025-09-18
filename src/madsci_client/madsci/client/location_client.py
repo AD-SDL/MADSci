@@ -200,15 +200,15 @@ class LocationClient:
         response.raise_for_status()
         return response.json()
 
-    def set_references(
+    def set_representations(
         self,
         location_id: str,
         node_name: str,
-        references: dict[str, Any],
+        representations: dict[str, Any],
         retry: Optional[bool] = None,
     ) -> Location:
         """
-        Set references for a location for a specific node.
+        Set representations for a location for a specific node.
 
         Parameters
         ----------
@@ -216,8 +216,8 @@ class LocationClient:
             The ID of the location.
         node_name : str
             The name of the node.
-        references : dict[str, Any]
-            The references to set.
+        representations : dict[str, Any]
+            The representations to set.
         retry : Optional[bool]
             Whether to use retry for this request. If None, uses instance default.
 
@@ -231,13 +231,27 @@ class LocationClient:
         session = self.session if retry else self.session_no_retry
 
         response = session.post(
-            f"{self.location_server_url}location/{location_id}/set_reference/{node_name}",
-            json=references,
+            f"{self.location_server_url}location/{location_id}/set_representation/{node_name}",
+            json=representations,
             headers=self._get_headers(),
             timeout=10,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
+
+    def set_references(
+        self,
+        location_id: str,
+        node_name: str,
+        references: dict[str, Any],
+        retry: Optional[bool] = None,
+    ) -> Location:
+        """
+        Set references for a location for a specific node.
+
+        This method is deprecated. Use set_representations instead.
+        """
+        return self.set_representations(location_id, node_name, references, retry)
 
     def attach_resource(
         self, location_id: str, resource_id: str, retry: Optional[bool] = None
