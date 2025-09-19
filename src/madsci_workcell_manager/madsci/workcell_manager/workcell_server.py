@@ -10,7 +10,6 @@ from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.params import Body
 from madsci.client.data_client import DataClient
 from madsci.client.location_client import LocationClient
-from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info, ownership_context
@@ -115,9 +114,7 @@ class WorkcellManager(
                 engine.spin()
             else:
                 with self.state_handler.wc_state_lock():
-                    self.state_handler.initialize_workcell_state(
-                        resource_client=ResourceClient()
-                    )
+                    self.state_handler.initialize_workcell_state()
             try:
                 yield
             finally:

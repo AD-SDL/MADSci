@@ -3,4 +3,93 @@ description: An example resource manager
 manager_id: 01K59J14NY7JGFJPJC4B0B9CPA
 manager_type: resource_manager
 resource_manager_id: 01JWVNE903BCECPSA9GE4XPKEM
-custom_types: {}
+default_templates:
+- template_name: robot_accessible_slot
+  description: Standard slot accessible by robot arm for manipulation tasks
+  base_resource:
+    resource_name: robot_slot_template
+    resource_name_prefix: null
+    resource_class: robot_accessible
+    base_type: slot
+    resource_description: Slot accessible by robot arm
+    owner: {}
+    custom_attributes: null
+    capacity: 1
+    default_children: null
+    default_child_template: null
+    default_child_quantity: null
+  required_overrides:
+  - resource_name
+  - resource_class
+  tags:
+  - robot
+  - slot
+  - manipulation
+  version: 1.0.0
+- template_name: liquid_accessible_slot
+  description: Standard slot accessible by liquid handler for pipetting tasks
+  base_resource:
+    resource_name: liquid_slot_template
+    resource_name_prefix: null
+    resource_class: liquid_accessible
+    base_type: slot
+    resource_description: Slot accessible by liquid handler
+    owner: {}
+    custom_attributes: null
+    capacity: 1
+    default_children: null
+    default_child_template: null
+    default_child_quantity: null
+  required_overrides:
+  - resource_name
+  - resource_class
+  tags:
+  - liquid
+  - slot
+  - pipetting
+  version: 1.0.0
+- template_name: multi_modal_slot
+  description: Multi-modal slot accessible by both robot arm and liquid handler
+  base_resource:
+    resource_name: multi_modal_slot_template
+    resource_name_prefix: null
+    resource_class: multi_modal
+    base_type: slot
+    resource_description: Slot accessible by multiple instruments
+    owner: {}
+    custom_attributes: null
+    capacity: 1
+    default_children: null
+    default_child_template: null
+    default_child_quantity: null
+  required_overrides:
+  - resource_name
+  - resource_class
+  tags:
+  - multi_modal
+  - slot
+  - robot
+  - liquid
+  version: 1.0.0
+- template_name: storage_stack
+  description: High-capacity storage stack for materials
+  base_resource:
+    resource_name: storage_stack_template
+    resource_name_prefix: null
+    resource_class: storage
+    base_type: stack
+    resource_description: High-capacity storage for materials
+    owner: {}
+    custom_attributes: null
+    capacity: 10
+    default_children: null
+    default_child_template: null
+    default_child_quantity: null
+  required_overrides:
+  - resource_name
+  - resource_class
+  tags:
+  - storage
+  - stack
+  - materials
+  version: 1.0.0

@@ -7,7 +7,6 @@ from typing import Any, Callable, Optional, Union
 
 import redis
 from fastapi import HTTPException
-from madsci.client.resource_client import ResourceClient
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import (
     WorkcellManagerDefinition,
@@ -58,9 +57,7 @@ class WorkcellStateHandler:
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
 
-    def initialize_workcell_state(
-        self, resource_client: Optional[ResourceClient] = None
-    ) -> None:
+    def initialize_workcell_state(self) -> None:
         """
         Initializes the state of the workcell from the workcell definition.
         """
@@ -70,29 +67,11 @@ class WorkcellStateHandler:
         # * Initialize Nodes
         for key, value in self.get_workcell_definition().nodes.items():
             self.set_node(key, Node(node_url=AnyUrl(value)))
-        # * Initialize Locations and Resources
-        self.initialize_locations_and_resources(resource_client)
-        # TODO: Update the workcell definition with the new locations and resources
+        # * Location initialization is now handled by LocationManager
         status = self.get_workcell_status()
         status.initializing = False
         self.set_workcell_status(status)
         self.mark_state_changed()
-
-    def initialize_locations_and_resources(
-        self, resource_client: Optional[ResourceClient] = None
-    ) -> None:
-        """Initialize resources based on the location definitions in the workcell.
-        Location initialization is now handled by the LocationManager service."""
-        workcell = self.get_workcell_definition()
-        for location_definition in workcell.locations:
-            if (
-                location_definition.resource_definition is not None
-                and resource_client is not None
-            ):
-                resource_client.init_resource(
-                    resource_definition=location_definition.resource_definition
-                )
-        # TODO: Integration with LocationManager for location initialization
 
     @property
     def _workcell_prefix(self) -> str:

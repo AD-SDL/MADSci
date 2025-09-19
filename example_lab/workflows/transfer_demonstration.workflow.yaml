@@ -1,0 +1,118 @@
+name: Transfer Demonstration Workflow
+
+metadata:
+  author: MADSci Transfer System
+  info: Demonstrates both transfer_resource and transfer_location_contents actions with multi-modal lab setup
+  version: 1.0
+
+parameters:
+  json_inputs:
+    - key: sample_plate_id
+      default: "sample_plate_001"
+      description: "ID of the sample plate to transfer"
+    - key: reagent_volume
+      default: 100
+      description: "Volume of reagent to transfer (µL)"
+
+steps:
+  # Step 1: Use transfer_resource to move a specific sample plate from storage to robot station
+  - name: Retrieve Sample Plate from Storage
+    key: retrieve_plate
+    action: transfer_resource
+    parameters:
+      args:
+        resource_id: sample_plate_id
+    args:
+      destination_location_id: "01JQCRA5HNG94DMQ9APVV5R1B1"  # robot_station_1
+    description: "Transfer specific sample plate from storage to robot station 1 for processing"
+
+  # Step 2: Use built-in wait action to simulate processing time
+  - name: Wait for Plate Preparation
+    key: wait_prep
+    action: wait
+    args:
+      seconds: 5
+    description: "Wait for plate preparation to complete"
+
+  # Step 3: Use transfer_resource to move the plate to the hybrid station for liquid handling
+  - name: Move Plate to Hybrid Station
+    key: move_to_hybrid
+    action: transfer_resource
+    parameters:
+      args:
+        resource_id: sample_plate_id
+    args:
+      destination_location_id: "01JR157336G2GXT79RQWZ1PE9C"  # hybrid_station
+    description: "Transfer the sample plate to hybrid station for liquid handling operations"
+
+  # Step 4: Simulate liquid handling operation (this would be a node-specific action in practice)
+  - name: Add Reagents
+    key: add_reagents
+    node: liquidhandler_1
+    action: dispense
+    parameters:
+      args:
+        volume: reagent_volume
+    args:
+      location_id: "01JR157336G2GXT79RQWZ1PE9C"  # hybrid_station
+    description: "Add reagents to the plate using liquid handler"
+
+  # Step 5: Use transfer_location_contents to move all contents from hybrid station to liquid station 1
+  - name: Transfer All Contents to Liquid Station
+    key: transfer_all_hybrid
+    action: transfer_location_contents
+    args:
+      source_location_id: "01JR157336G2GXT79RQWZ1PE9C"  # hybrid_station
+      destination_location_id: "01JR157336G2GXT79RQWZ1PE9A"  # liquid_station_1
+    description: "Transfer all contents from hybrid station to liquid station 1 for further processing"
+
+  # Step 6: Simulate liquid processing operations
+  - name: Process Samples
+    key: process_samples
+    node: liquidhandler_1
+    action: mix_and_incubate
+    args:
+      location_id: "01JR157336G2GXT79RQWZ1PE9A"  # liquid_station_1
+      mix_cycles: 5
+      incubation_time: 300
+    description: "Mix and incubate samples at liquid station 1"
+
+  # Step 7: Use transfer_location_contents to move everything to liquid station 2 for analysis
+  - name: Transfer to Analysis Station
+    key: transfer_to_analysis
+    action: transfer_location_contents
+    args:
+      source_location_id: "01JR157336G2GXT79RQWZ1PE9A"  # liquid_station_1
+      destination_location_id: "01JR157336G2GXT79RQWZ1PE9B"  # liquid_station_2
+    description: "Transfer all processed samples to liquid station 2 for analysis"
+
+  # Step 8: Simulate analysis operation
+  - name: Analyze Samples
+    key: analyze_samples
+    node: platereader_1
+    action: read_plate
+    args:
+      location_id: "01JR157336G2GXT79RQWZ1PE9B"  # liquid_station_2
+      read_type: "absorbance"
+      wavelength: 450
+    description: "Perform absorbance reading on processed samples"
+
+  # Step 9: Use transfer_resource to move the analyzed plate back to storage
+  - name: Return Plate to Storage
+    key: return_to_storage
+    action: transfer_resource
+    parameters:
+      args:
+        resource_id: sample_plate_id
+    args:
+      destination_location_id: "01JR157336G2GXT79RQWZ1PE9D"  # storage_rack
+    description: "Return the analyzed plate to storage for archival"
+
+  # Step 10: Use transfer_location_contents to clean up any remaining materials
+  - name: Cleanup Analysis Station
+    key: cleanup_analysis
+    action: transfer_location_contents
+    args:
+      source_location_id: "01JR157336G2GXT79RQWZ1PE9B"  # liquid_station_2
+      destination_location_id: "01JR157336G2GXT79RQWZ1PE9D"  # storage_rack
+    description: "Transfer any remaining materials from analysis station to storage"

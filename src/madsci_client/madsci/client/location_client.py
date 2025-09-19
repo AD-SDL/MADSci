@@ -6,6 +6,7 @@ import requests
 from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.location_types import Location
+from madsci.common.types.workflow_types import WorkflowDefinition
 from pydantic import AnyUrl
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -139,6 +140,37 @@ class LocationClient:
         response.raise_for_status()
         return Location.model_validate(response.json())
 
+    def get_location_by_name(
+        self, location_name: str, retry: Optional[bool] = None
+    ) -> Location:
+        """
+        Get a specific location by name.
+
+        Parameters
+        ----------
+        location_name : str
+            The name of the location to retrieve.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        Location
+            The requested location.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.get(
+            f"{self.location_server_url}location",
+            params={"name": location_name},
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
     def add_location(
         self, location: Location, retry: Optional[bool] = None
     ) -> Location:
@@ -239,20 +271,6 @@ class LocationClient:
         response.raise_for_status()
         return Location.model_validate(response.json())
 
-    def set_references(
-        self,
-        location_id: str,
-        node_name: str,
-        references: dict[str, Any],
-        retry: Optional[bool] = None,
-    ) -> Location:
-        """
-        Set references for a location for a specific node.
-
-        This method is deprecated. Use set_representations instead.
-        """
-        return self.set_representations(location_id, node_name, references, retry)
-
     def attach_resource(
         self, location_id: str, resource_id: str, retry: Optional[bool] = None
     ) -> Location:
@@ -285,3 +303,106 @@ class LocationClient:
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
+
+    def get_transfer_graph(self, retry: Optional[bool] = None) -> dict[str, list[str]]:
+        """
+        Get the current transfer graph as adjacency list.
+
+        Parameters
+        ----------
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        dict[str, list[str]]
+            Transfer graph as adjacency list mapping source location IDs to
+            lists of reachable destination location IDs.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.get(
+            f"{self.location_server_url}transfer/graph",
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def plan_transfer(
+        self,
+        source_location_id: str,
+        destination_location_id: str,
+        resource_id: Optional[str] = None,
+        retry: Optional[bool] = None,
+    ) -> dict[str, Any]:
+        """
+        Plan a transfer from source to destination location.
+
+        Parameters
+        ----------
+        source_location_id : str
+            ID of the source location.
+        destination_location_id : str
+            ID of the destination location.
+        resource_id : Optional[str]
+            ID of the resource to transfer (for transfer_resource actions).
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        WorkflowDefinition
+            A WorkflowDefinition including the necessary steps to transfer a resource between locations.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        params = {
+            "source_location_id": source_location_id,
+            "destination_location_id": destination_location_id,
+        }
+        if resource_id is not None:
+            params["resource_id"] = resource_id
+
+        response = session.post(
+            f"{self.location_server_url}transfer/plan",
+            params=params,
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return WorkflowDefinition.model_validate(response.json())
+
+    def get_location_resources(
+        self, location_id: str, retry: Optional[bool] = None
+    ) -> list[dict[str, Any]]:
+        """
+        Get all resources at a specific location.
+
+        Parameters
+        ----------
+        location_id : str
+            The ID of the location.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            List of resources at the location.
+        """
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.get(
+            f"{self.location_server_url}location/{location_id}/resources",
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()

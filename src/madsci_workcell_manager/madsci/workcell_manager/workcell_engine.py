@@ -67,9 +67,7 @@ class Engine:
         self.resource_client = ResourceClient()
         self.location_client = LocationClient()
         with state_handler.wc_state_lock():
-            state_handler.initialize_workcell_state(
-                self.resource_client,
-            )
+            state_handler.initialize_workcell_state()
         time.sleep(self.workcell_settings.cold_start_delay)
         self.logger.info("Engine initialized, waiting for workflows...")
 

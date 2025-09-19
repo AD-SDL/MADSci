@@ -17,11 +17,11 @@ from madsci.common.types.location_types import (
     LocationManagerHealth,
     LocationManagerSettings,
     TransferGraphEdge,
-    TransferWorkflowTemplate,
+    TransferStepTemplate,
 )
-from madsci.common.types.resource_types import Resource, ResourceDataModels
-from madsci.common.types.resource_types.definitions import ResourceDefinitions
-from madsci.common.types.workflow_types import WorkflowDefinition
+from madsci.common.types.parameter_types import ParameterInputJson
+from madsci.common.types.step_types import StepDefinition
+from madsci.common.types.workflow_types import WorkflowDefinition, WorkflowParameters
 from madsci.location_manager.location_state_handler import LocationStateHandler
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -47,7 +47,9 @@ class LocationManager(
 
     def initialize(self, **_kwargs: Any) -> None:
         """Initialize manager-specific components."""
-        self.state_handler = LocationStateHandler(self.settings)
+        self.state_handler = LocationStateHandler(
+            self.settings, manager_id=self.definition.manager_id
+        )
 
         # Initialize ResourceClient for creating/updating resources
         self.resource_client = ResourceClient()
@@ -64,10 +66,22 @@ class LocationManager(
             return
 
         for location_def in self.definition.locations:
-            # Handle resource creation/initialization if resource_definition is provided
+            # Check if location already exists
+            existing_location = self.state_handler.get_location(
+                location_def.location_id
+            )
+
+            # Handle resource creation/initialization if resource_template_name is provided
             resource_id = None
-            if location_def.resource_definition:
-                resource_id = self._initialize_location_resource(location_def)
+            if location_def.resource_template_name:
+                if existing_location and existing_location.resource_id:
+                    # Location exists and has a resource, validate it still exists and matches template
+                    resource_id = self._validate_or_recreate_location_resource(
+                        location_def, existing_location.resource_id
+                    )
+                else:
+                    # Location doesn't exist or has no resource, create new one
+                    resource_id = self._initialize_location_resource(location_def)
 
             # Convert LocationDefinition to Location
             location = Location(
@@ -80,8 +94,6 @@ class LocationManager(
                 resource_id=resource_id,  # Associate the resource with the location
             )
 
-            # Check if location already exists to avoid overwriting
-            existing_location = self.state_handler.get_location(location.location_id)
             if existing_location is None:
                 # Location doesn't exist, create it
                 self.state_handler.set_location(location.location_id, location)
@@ -93,7 +105,7 @@ class LocationManager(
                     existing_location.representations = location.representations
                     needs_update = True
 
-                if resource_id and resource_id != existing_location.resource_id:
+                if resource_id != existing_location.resource_id:
                     existing_location.resource_id = resource_id
                     needs_update = True
 
@@ -105,88 +117,83 @@ class LocationManager(
     def _initialize_location_resource(
         self, location_def: LocationDefinition
     ) -> Optional[str]:
-        """Initialize a resource for a location based on its resource_definition.
+        """Initialize a resource for a location based on its resource_template_name.
 
         Args:
-            location_def: LocationDefinition containing the resource_definition
+            location_def: LocationDefinition containing the resource_template_name and optional overrides
 
         Returns:
-            Optional[str]: The resource_id of the created/updated resource, or None if no resource created
+            Optional[str]: The resource_id of the created resource, or None if no resource created
         """
-        if not location_def.resource_definition:
+        if not location_def.resource_template_name:
             return None
 
         try:
-            # First, check if a resource with matching characteristics already exists
-            existing_resources = self.resource_client.query_resource(
-                resource_name=location_def.resource_definition.resource_name,
-                resource_class=location_def.resource_definition.resource_class,
-                base_type=location_def.resource_definition.base_type.value,
-                multiple=True,
+            # Generate a unique resource name for this location
+            # Use location name as base, with location ID as suffix for uniqueness
+            resource_name = (
+                f"{location_def.location_name}_{location_def.location_id[:8]}"
             )
 
-            # If we found existing resources, check if any exactly match our definition
-            if existing_resources:
-                for existing_resource in existing_resources:
-                    if self._resource_matches_definition(
-                        existing_resource, location_def.resource_definition
-                    ):
-                        # Found a matching resource, reuse it
-                        return existing_resource.resource_id
-
-            # No matching resource found, create a new one
-            resource_data = location_def.resource_definition.model_dump()
-
-            # Convert the resource definition to a Resource instance
-            resource = Resource.discriminate(resource_data)
-
-            # Create the resource
-            created_resource = self.resource_client.add_or_update_resource(resource)
+            # Create resource from template
+            created_resource = self.resource_client.create_resource_from_template(
+                template_name=location_def.resource_template_name,
+                resource_name=resource_name,
+                overrides=location_def.resource_template_overrides or {},
+                add_to_database=True,
+            )
 
             if created_resource:
                 return created_resource.resource_id
 
-        except Exception:
-            # If resource initialization fails, continue without the resource
-            # Locations can still function without associated resources
+        except Exception as e:
+            # Log the error but continue - locations can still function without associated resources
+            self.logger.warning(
+                f"Failed to create resource from template '{location_def.resource_template_name}' "
+                f"for location '{location_def.location_name}': {e}"
+            )
             return None
 
         return None
 
-    def _resource_matches_definition(
-        self, resource: ResourceDataModels, resource_definition: ResourceDefinitions
-    ) -> bool:
-        """Check if an existing resource matches the given resource definition.
+    def _validate_or_recreate_location_resource(
+        self, location_def: LocationDefinition, existing_resource_id: str
+    ) -> Optional[str]:
+        """Check if existing resource still exists. If so, reuse it. If not, create a new one.
 
         Args:
-            resource: Existing resource from the resource manager
-            resource_definition: ResourceDefinition to compare against
+            location_def: LocationDefinition containing the resource_template_name and overrides
+            existing_resource_id: The existing resource ID to validate
 
         Returns:
-            bool: True if the resource matches the definition
+            Optional[str]: The resource_id (existing or newly created), or None if failed
         """
+        if not location_def.resource_template_name:
+            return None
+
         try:
-            # Compare key characteristics that should match
-            if resource.resource_name != resource_definition.resource_name:
-                return False
+            # Simply check if the existing resource still exists in the resource manager
+            existing_resource = self.resource_client.get_resource(existing_resource_id)
 
-            if resource.resource_class != resource_definition.resource_class:
-                return False
-
-            if resource.base_type.value != resource_definition.base_type.value:
-                return False
-
-            # For container types, also check capacity if defined
-            return not (
-                hasattr(resource_definition, "capacity")
-                and hasattr(resource, "capacity")
-                and resource_definition.capacity is not None
-                and resource.capacity != resource_definition.capacity
+            if existing_resource:
+                # Resource exists, reuse it
+                self.logger.debug(
+                    f"Reusing existing resource '{existing_resource_id}' for location '{location_def.location_name}'"
+                )
+                return existing_resource_id
+            self.logger.info(
+                f"Existing resource '{existing_resource_id}' for location '{location_def.location_name}' "
+                f"no longer exists. Creating new resource."
             )
 
-        except Exception:
-            # If comparison fails, assume they don't match
-            return False
+        except Exception as e:
+            self.logger.info(
+                f"Failed to validate existing resource '{existing_resource_id}' for location '{location_def.location_name}': {e}. "
+                f"Creating new resource."
+            )
+
+        # Existing resource doesn't exist, create a new one
+        return self._initialize_location_resource(location_def)
 
     def get_health(self) -> LocationManagerHealth:
         """Get the health status of the Location Manager."""
@@ -255,7 +262,7 @@ class LocationManager(
         return transfer_graph
 
     def _can_transfer_between_locations(
-        self, source: Location, dest: Location, template: TransferWorkflowTemplate
+        self, source: Location, dest: Location, template: TransferStepTemplate
     ) -> bool:
         """
         Check if transfer is possible between two locations using a template.
@@ -321,43 +328,78 @@ class LocationManager(
         return None  # No path found
 
     def _composite_transfer_workflow(
-        self, path: list[TransferGraphEdge], resource_id: Optional[str] = None
+        self, path: list[TransferGraphEdge]
     ) -> WorkflowDefinition:
         """
         Create a single composite workflow from multiple transfer steps.
 
-        For multi-leg transfers, chains the workflows together with proper
-        parameter passing between steps.
+        Each step in the path becomes a step in the workflow with proper
+        source/target location parameters.
         """
-        if len(path) == 1:
-            # Single transfer - use the template directly
-            template = path[0].transfer_template.workflow_template
-            return self._customize_workflow_for_transfer(template, path[0], resource_id)
 
-        # Multi-leg transfer - composite workflow needed
-        # For now, return the first step's workflow as a placeholder
-        # TODO: Implement proper workflow composition for multi-leg transfers
-        template = path[0].transfer_template.workflow_template
-        return self._customize_workflow_for_transfer(template, path[0], resource_id)
+        # Create workflow with steps for each transfer edge
+        workflow_steps = []
+        workflow_parameters = WorkflowParameters()
 
-    def _customize_workflow_for_transfer(
-        self,
-        template: WorkflowDefinition,
-        edge: TransferGraphEdge,
-        resource_id: Optional[str] = None,  # noqa: ARG002
-    ) -> WorkflowDefinition:
-        """Customize a workflow template for a specific transfer."""
-        # Create a copy of the template
-        workflow_dict = template.model_dump()
+        for i, edge in enumerate(path):
+            # Create step from template
+            step_template = edge.transfer_template.step_template
+            step_dict = step_template.model_dump()
 
-        # Update name to include transfer specifics
-        workflow_dict["name"] = (
-            f"transfer_{edge.source_location_id}_to_{edge.destination_location_id}"
+            # Generate unique step name
+            step_dict["name"] = f"transfer_step_{i + 1}"
+            step_dict["key"] = f"transfer_step_{i + 1}"
+
+            # Add source and target location parameters to the step
+            if not step_dict.get("locations"):
+                step_dict["locations"] = {}
+
+            # Use parameter keys for source and target locations
+            source_param_key = f"source_location_{i + 1}"
+            target_param_key = f"target_location_{i + 1}"
+
+            step_dict["locations"]["source"] = source_param_key
+            step_dict["locations"]["target"] = target_param_key
+
+            # Add parameters to workflow for this step's locations
+            source_location = self.state_handler.get_location(edge.source_location_id)
+            target_location = self.state_handler.get_location(
+                edge.destination_location_id
+            )
+
+            if source_location:
+                source_repr = (source_location.representations or {}).get(
+                    edge.transfer_template.node_name, {}
+                )
+                source_param = ParameterInputJson(
+                    key=source_param_key,
+                    description=f"Source location for transfer step {i + 1}",
+                    default=source_repr,
+                )
+                workflow_parameters.json_inputs.append(source_param)
+
+            if target_location:
+                target_repr = (target_location.representations or {}).get(
+                    edge.transfer_template.node_name, {}
+                )
+                target_param = ParameterInputJson(
+                    key=target_param_key,
+                    description=f"Target location for transfer step {i + 1}",
+                    default=target_repr,
+                )
+                workflow_parameters.json_inputs.append(target_param)
+
+            workflow_steps.append(StepDefinition.model_validate(step_dict))
+
+        # Create the composite workflow
+        if path:
+            workflow_name = f"transfer_{path[0].source_location_id}_to_{path[-1].destination_location_id}"
+        else:
+            workflow_name = "transfer_same_location"
+
+        return WorkflowDefinition(
+            name=workflow_name, parameters=workflow_parameters, steps=workflow_steps
         )
-
-        # For now, return the workflow as-is
-        # TODO: Implement parameter substitution for location and resource IDs
-        return WorkflowDefinition.model_validate(workflow_dict)
 
     @get("/health", tags=["Status"])
     def health_endpoint(self) -> LocationManagerHealth:
@@ -386,8 +428,39 @@ class LocationManager(
         with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
             return self.state_handler.set_location(location.location_id, location)
 
+    @get("/location", tags=["Locations"])
+    def get_location_by_query(
+        self, location_id: Optional[str] = None, name: Optional[str] = None
+    ) -> Location:
+        """Get a specific location by ID or name."""
+        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+            # Exactly one of location_id or name must be provided
+            if (location_id is None) == (name is None):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Exactly one of 'location_id' or 'name' query parameter must be provided",
+                )
+
+            if location_id is not None:
+                # Search by ID
+                location = self.state_handler.get_location(location_id)
+                if location is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Location with ID '{location_id}' not found",
+                    )
+                return location
+            # Search by name
+            locations = self.state_handler.get_locations()
+            for location in locations:
+                if location.name == name:
+                    return location
+            raise HTTPException(
+                status_code=404, detail=f"Location with name '{name}' not found"
+            )
+
     @get("/location/{location_id}", tags=["Locations"])
-    def get_location(self, location_id: str) -> Location:
+    def get_location_by_id(self, location_id: str) -> Location:
         """Get a specific location by ID."""
         with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
             location = self.state_handler.get_location(location_id)
@@ -453,7 +526,6 @@ class LocationManager(
         self,
         source_location_id: str,
         destination_location_id: str,
-        resource_id: Optional[str] = None,
     ) -> WorkflowDefinition:
         """
         Plan a transfer workflow from source to destination.
@@ -461,7 +533,6 @@ class LocationManager(
         Args:
             source_location_id: Source location ID
             destination_location_id: Destination location ID
-            resource_id: Optional resource ID for transfer tracking
 
         Returns:
             Composite workflow definition to execute the transfer
@@ -496,7 +567,7 @@ class LocationManager(
                 )
 
             # Create composite workflow
-            return self._composite_transfer_workflow(transfer_path, resource_id)
+            return self._composite_transfer_workflow(transfer_path)
 
     @get("/transfer/graph", tags=["Transfer"])
     def get_transfer_graph(self) -> dict[str, list[str]]:

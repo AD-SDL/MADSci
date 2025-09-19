@@ -11,21 +11,26 @@ from madsci.common.types.manager_types import (
     ManagerSettings,
     ManagerType,
 )
-from madsci.common.types.resource_types.definitions import ResourceDefinitions
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
-from pydantic import AnyUrl, Field
+from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 
 # Avoid circular imports
 if TYPE_CHECKING:
-    from madsci.common.types.workflow_types import WorkflowDefinition
+    from madsci.common.types.step_types import StepDefinition
 
 
 class LocationArgument(MadsciBaseModel):
     """Location Argument to be used by MADSCI nodes."""
 
-    representation: Any
+    representation: Any = Field(
+        title="Location Representation",
+        description="The representation of the location specific to the node.",
+        alias=AliasChoices(
+            "representation", "location"
+        ),  # for backwards compatibility with older versions
+    )
     """Representation of the location specific to the node."""
     resource_id: Optional[str] = None
     """The ID of the corresponding resource, if any"""
@@ -57,11 +62,15 @@ class LocationDefinition(MadsciBaseModel):
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
         default={},
     )
-    resource_definition: Optional[ResourceDefinitions] = Field(
-        title="Resource",
-        description="Definition of the Resource to be associated with this location (if any) on location initialization.",
+    resource_template_name: Optional[str] = Field(
+        title="Resource Template Name",
+        description="Name of the Resource Template to be used for creating a resource associated with this location (if any) on location initialization.",
         default=None,
-        discriminator="base_type",
+    )
+    resource_template_overrides: Optional[dict[str, Any]] = Field(
+        title="Resource Template Overrides",
+        description="Optional overrides to apply when creating a resource from the template for this specific location.",
+        default=None,
     )
 
     is_ulid = field_validator("location_id")(ulid_validator)
@@ -132,15 +141,15 @@ class LocationReservation(MadsciBaseModel):
         )
 
 
-class TransferWorkflowTemplate(MadsciBaseModel):
-    """Template for transfer workflows between compatible locations."""
+class TransferStepTemplate(MadsciBaseModel):
+    """Template for transfer steps between compatible locations."""
 
     node_name: str = Field(
         title="Node Name", description="Name of the node that can perform this transfer"
     )
-    workflow_template: "WorkflowDefinition" = Field(
-        title="Workflow Template",
-        description="Template workflow with source/destination parameters",
+    step_template: "StepDefinition" = Field(
+        title="Step Template",
+        description="Template step definition with source/target location parameters",
     )
     cost_weight: Optional[float] = Field(
         title="Cost Weight",
@@ -158,7 +167,7 @@ class TransferGraphEdge(MadsciBaseModel):
     destination_location_id: str = Field(
         title="Destination Location ID", description="ID of the destination location"
     )
-    transfer_template: TransferWorkflowTemplate = Field(
+    transfer_template: TransferStepTemplate = Field(
         title="Transfer Template", description="Template for executing the transfer"
     )
     cost: float = Field(
@@ -171,9 +180,9 @@ class TransferGraphEdge(MadsciBaseModel):
 class LocationTransferCapabilities(MadsciBaseModel):
     """Transfer capabilities for a location manager."""
 
-    transfer_templates: list[TransferWorkflowTemplate] = Field(
+    transfer_templates: list[TransferStepTemplate] = Field(
         title="Transfer Templates",
-        description="Available transfer workflow templates",
+        description="Available transfer step templates",
         default_factory=list,
     )
 
@@ -262,10 +271,10 @@ class LocationManagerHealth(ManagerHealth):
 
 # Rebuild models to resolve forward references
 try:
-    from madsci.common.types.workflow_types import WorkflowDefinition
+    from madsci.common.types.step_types import StepDefinition
 
-    TransferWorkflowTemplate.model_rebuild()
+    TransferStepTemplate.model_rebuild()
     LocationManagerDefinition.model_rebuild()
 except ImportError:
-    # WorkflowDefinition not available yet - will be rebuilt later
+    # StepDefinition not available yet - will be rebuilt later
     pass

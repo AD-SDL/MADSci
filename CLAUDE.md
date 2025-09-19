@@ -150,3 +150,4 @@ src/madsci_common/
 - **IMPORTANT**: Use `yarn` for managing Node.js dependencies in the `ui/` directory, not npm
 - Ignore minor linting errors that will be fixed by autoformatting, such as "No newline at end of file"
 - Always use pydantic's `AnyUrl` to store URL's, and note that AnyUrl always ensures a trailing forward slash
+- Imports should generally be done at the top of the file, unless there are circular dependencies or other factors which require localized importing.

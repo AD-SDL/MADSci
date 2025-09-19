@@ -10,7 +10,6 @@ import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
-from madsci.common.types.location_types import LocationDefinition
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellManagerDefinition, WorkcellState
@@ -55,9 +54,7 @@ def workcell() -> WorkcellManagerDefinition:
     """Fixture for creating a WorkcellDefinition."""
     return WorkcellManagerDefinition(
         name="Test Workcell",
-        locations=[
-            LocationDefinition(location_name="test_location"),
-        ],
+        # Locations are now managed by the location manager, not the workcell manager
     )
 
 

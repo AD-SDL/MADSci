@@ -1,0 +1,47 @@
+name: Simple Transfer Test
+
+metadata:
+  author: MADSci Transfer System
+  info: Simple workflow to test basic transfer functionality
+  version: 1.0
+
+parameters:
+  json_inputs:
+    - key: test_resource_id
+      default: "test_plate_001"
+      description: "ID of the test resource to transfer"
+    - key: robot_station_1_id
+      default: "01JQCRA5HNG94DMQ9APVV5R1B1"
+      description: "Location ID for robot station 1"
+    - key: hybrid_station_id
+      default: "01JR157336G2GXT79RQWZ1PE9C"
+      description: "Location ID for hybrid station"
+
+steps:
+  # Step 1: Transfer a specific resource from one location to another
+  - name: Move Resource to Robot Station
+    key: move_resource
+    action: transfer_resource
+    parameters:
+      args:
+        resource_id: test_resource_id
+        destination_location_id: robot_station_1_id
+    description: "Transfer test resource to robot station 1"
+
+  # Step 2: Wait a moment
+  - name: Processing Delay
+    key: wait_step
+    action: wait
+    args:
+      seconds: 2
+    description: "Brief wait to simulate processing"
+
+  # Step 3: Transfer all contents from one location to another
+  - name: Move All Contents to Hybrid Station
+    key: move_contents
+    action: transfer_location_contents
+    parameters:
+      args:
+        source_location_id: robot_station_1_id
+        destination_location_id: hybrid_station_id
+    description: "Transfer all contents from robot station to hybrid station"

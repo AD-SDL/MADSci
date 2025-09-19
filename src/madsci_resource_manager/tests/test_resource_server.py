@@ -15,6 +15,9 @@ from madsci.common.types.resource_types import (
 from madsci.common.types.resource_types.definitions import (
     ResourceDefinition,
     ResourceManagerDefinition,
+    ResourceManagerSettings,
+    SlotResourceDefinition,
+    TemplateDefinition,
 )
 from madsci.common.types.resource_types.server_types import (
     ResourceGetQuery,
@@ -1096,3 +1099,48 @@ def test_health_endpoint(test_client: TestClient) -> None:
     assert health_data["db_connected"] is True
     assert isinstance(health_data["total_resources"], int)
     assert health_data["total_resources"] >= 0
+
+
+def test_default_template_initialization(interface: ResourceInterface) -> None:
+    """Test that default templates are initialized when ResourceManager starts up."""
+
+    # Create a ResourceManagerDefinition with default templates
+    slot_definition = SlotResourceDefinition(
+        resource_name="test_slot_template",
+        resource_class="test_slot",
+        capacity=1,
+    )
+
+    template_def = TemplateDefinition(
+        template_name="test_template",
+        description="Test template for initialization",
+        base_resource=slot_definition,
+        required_overrides=["resource_name"],
+        tags=["test"],
+        version="1.0.0",
+    )
+
+    definition = ResourceManagerDefinition(
+        name="Test Resource Manager with Templates",
+        resource_manager_id=new_ulid_str(),
+        default_templates=[template_def],
+    )
+
+    settings = ResourceManagerSettings()
+
+    # Create ResourceManager instance with interface - this should initialize templates
+    manager = ResourceManager(
+        settings=settings, definition=definition, resource_interface=interface
+    )
+
+    # Verify the template was created
+    templates = manager._resource_interface.list_templates()
+    template_names = [t.template_name for t in templates]
+
+    assert "test_template" in template_names
+
+    # Get the specific template and verify its properties
+    created_template = manager._resource_interface.get_template("test_template")
+    assert created_template is not None
+    assert created_template.template_name == "test_template"
+    assert created_template.description == "Test template for initialization"

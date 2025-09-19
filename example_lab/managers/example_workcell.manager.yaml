@@ -12,31 +12,11 @@ locations:
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
   description: null
   representations: {}
-  resource_definition:
-    resource_name: slot_1
-    resource_name_prefix: null
-    resource_class: ''
-    base_type: slot
-    resource_description: null
-    owner: {}
-    custom_attributes: null
-    capacity: 1
-    default_children: null
-    default_child_template: null
-    default_child_quantity: null
+  resource_template_name: null
+  resource_template_overrides: null
 - location_name: location_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
   description: null
   representations: {}
-  resource_definition:
-    resource_name: slot_2
-    resource_name_prefix: null
-    resource_class: ''
-    base_type: slot
-    resource_description: null
-    owner: {}
-    custom_attributes: null
-    capacity: 1
-    default_children: null
-    default_child_template: null
-    default_child_quantity: null
+  resource_template_name: null
+  resource_template_overrides: null

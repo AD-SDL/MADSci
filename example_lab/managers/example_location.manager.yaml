@@ -1,48 +1,161 @@
 name: Example Location Manager
 description: An example location manager for the example lab, managing locations for
-  the liquid handler, robot arm, and plate reader.
+  the liquid handler, robot arm, and plate reader with transfer capabilities.
 manager_id: 01JK7069DXAKAMWE0PDX6EY1PD
 manager_type: location_manager
 locations:
-- location_name: location_1
+- location_name: robot_station_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
-  description: Location 1 - Primary slot for experiments
+  description: Robot Station 1 - Primary manipulation location accessible by robot
+    arm
   representations:
     robot_arm:
-    - 1
-    - 2
-    - 3
-    - 4
-  resource_definition:
-    resource_name: slot_1
-    resource_name_prefix: null
-    resource_class: ''
-    base_type: slot
-    resource_description: null
-    owner: {}
-    custom_attributes: null
-    capacity: 1
-    default_children: null
-    default_child_template: null
-    default_child_quantity: null
-- location_name: location_2
+      position:
+      - 1
+      - 2
+      - 3
+      gripper_config: standard
+      max_payload: 5.0
+  resource_template_name: robot_accessible_slot
+  resource_template_overrides:
+    resource_class: robot_accessible
+    resource_description: Slot accessible by robot arm for manipulation tasks
+- location_name: robot_station_2
   location_id: 01JR157336G2GXT79RQWZ1PE9F
-  description: Location 2 - Secondary slot for experiments
+  description: Robot Station 2 - Secondary manipulation location accessible by robot
+    arm
   representations:
     robot_arm:
-    - 5
-    - 6
-    - 7
-    - 8
-  resource_definition:
-    resource_name: slot_2
-    resource_name_prefix: null
-    resource_class: ''
-    base_type: slot
-    resource_description: null
-    owner: {}
-    custom_attributes: null
-    capacity: 1
-    default_children: null
-    default_child_template: null
-    default_child_quantity: null
+      position:
+      - 5
+      - 6
+      - 7
+      gripper_config: standard
+      max_payload: 5.0
+  resource_template_name: robot_accessible_slot
+  resource_template_overrides:
+    resource_class: robot_accessible
+    resource_description: Slot accessible by robot arm for manipulation tasks
+- location_name: liquid_station_1
+  location_id: 01JR157336G2GXT79RQWZ1PE9A
+  description: Liquid Station 1 - Pipetting location accessible by liquid handler
+  representations:
+    liquidhandler:
+      tip_position:
+      - 10
+      - 20
+      - 30
+      well_format: 96_well
+      max_volume: 1000.0
+  resource_template_name: liquid_accessible_slot
+  resource_template_overrides:
+    resource_class: liquid_accessible
+    resource_description: Slot accessible by liquid handler for pipetting tasks
+- location_name: liquid_station_2
+  location_id: 01JR157336G2GXT79RQWZ1PE9B
+  description: Liquid Station 2 - Secondary pipetting location accessible by liquid
+    handler
+  representations:
+    liquidhandler:
+      tip_position:
+      - 15
+      - 25
+      - 35
+      well_format: 384_well
+      max_volume: 200.0
+  resource_template_name: liquid_accessible_slot
+  resource_template_overrides:
+    resource_class: liquid_accessible
+    resource_description: Slot accessible by liquid handler for pipetting tasks
+- location_name: hybrid_station
+  location_id: 01JR157336G2GXT79RQWZ1PE9C
+  description: Hybrid Station - Multi-modal location accessible by both robot arm
+    and liquid handler
+  representations:
+    robot_arm:
+      position:
+      - 8
+      - 9
+      - 10
+      gripper_config: precision
+      max_payload: 2.0
+    liquidhandler:
+      tip_position:
+      - 8
+      - 9
+      - 12
+      well_format: 96_well
+      max_volume: 500.0
+  resource_template_name: multi_modal_slot
+  resource_template_overrides:
+    resource_class: multi_modal
+    resource_description: Slot accessible by both robot arm and liquid handler
+- location_name: storage_rack
+  location_id: 01JR157336G2GXT79RQWZ1PE9D
+  description: Storage Rack - High-capacity storage accessible only by robot arm
+  representations:
+    robot_arm:
+      position:
+      - 20
+      - 21
+      - 22
+      gripper_config: wide
+      max_payload: 10.0
+  resource_template_name: storage_stack
+  resource_template_overrides:
+    resource_class: storage
+    resource_description: High-capacity storage slot for materials
+transfer_capabilities:
+  transfer_templates:
+  - node_name: robot_arm
+    workflow_template:
+      name: robot_arm_transfer
+      workflow_definition_id: 01K5F131Z9ST316VZQX6E3YYZY
+      definition_metadata:
+        author: null
+        description: null
+        version: ''
+        ownership_info: null
+      parameters:
+        json_inputs: []
+        file_inputs: []
+        feed_forward: []
+      steps:
+      - name: Pick and Place Transfer
+        key: null
+        description: null
+        action: transfer
+        node: robotarm_1
+        args: {}
+        files: {}
+        locations: {}
+        conditions: []
+        data_labels: {}
+        parameters: null
+    cost_weight: 1.0
+  - node_name: liquidhandler
+    workflow_template:
+      name: liquidhandler_transfer
+      workflow_definition_id: 01K5F131Z9ST316VZQX6E3YYZZ
+      definition_metadata:
+        author: null
+        description: null
+        version: ''
+        ownership_info: null
+      parameters:
+        json_inputs: []
+        file_inputs: []
+        feed_forward: []
+      steps:
+      - name: Pipette Transfer
+        key: null
+        description: null
+        action: transfer_liquid
+        node: liquidhandler_1
+        args: {}
+        files: {}
+        locations: {}
+        conditions: []
+        data_labels: {}
+        parameters: null
+    cost_weight: 2.0

@@ -11,9 +11,9 @@ from madsci.common.types.location_types import (
     LocationManagerHealth,
     LocationManagerSettings,
     LocationTransferCapabilities,
-    TransferWorkflowTemplate,
+    TransferStepTemplate,
 )
-from madsci.common.types.resource_types.definitions import SlotResourceDefinition
+from madsci.common.types.step_types import StepDefinition
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
@@ -329,21 +329,15 @@ def test_automatic_location_initialization_from_definition(redis_server: Redis):
 
 
 def test_resource_initialization_prevents_duplicates(redis_server: Redis):
-    """Test that resource initialization doesn't create duplicate resources on subsequent startups."""
+    """Test that resource initialization creates unique resources using templates."""
 
-    # Create a slot resource definition
-    slot_resource_def = SlotResourceDefinition(
-        resource_name="test_slot",
-        resource_class="test_slot_class",
-        capacity=1,
-    )
-
-    # Create a location definition with resource_definition
+    # Create a location definition with resource_template_name
     location_def = LocationDefinition(
         location_name="location_with_resource",
         location_id=new_ulid_str(),
         description="Location with associated resource",
-        resource_definition=slot_resource_def,
+        resource_template_name="test_slot_template",
+        resource_template_overrides={"resource_class": "test_slot_class"},
     )
 
     definition = LocationManagerDefinition(
@@ -362,65 +356,49 @@ def test_resource_initialization_prevents_duplicates(redis_server: Redis):
     mock_resource_client = MagicMock()
     mock_resource = Mock()
     mock_resource.resource_id = "test_resource_123"
-    mock_resource.resource_name = "test_slot"
-    mock_resource.resource_class = "test_slot_class"
-    mock_resource.base_type = Mock()
-    mock_resource.base_type.value = "slot"
-    mock_resource.capacity = 1
 
-    # First startup - should create resource
-    mock_resource_client.query_resource.return_value = []  # No existing resources
-    mock_resource_client.add_or_update_resource.return_value = mock_resource
+    # Mock create_resource_from_template to return a resource
+    mock_resource_client.create_resource_from_template.return_value = mock_resource
 
-    # Create first manager instance (simulating first startup)
-    manager1 = LocationManager(settings=settings, definition=definition)
-    manager1.resource_client = mock_resource_client
-    manager1.state_handler._redis_connection = redis_server
+    # Create manager instance
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.resource_client = mock_resource_client
+    manager.state_handler._redis_connection = redis_server
 
-    # Re-run initialization to simulate startup behavior
-    manager1._initialize_locations_from_definition()
+    # Run initialization to simulate startup behavior
+    manager._initialize_locations_from_definition()
 
-    # Verify resource was created once
-    assert mock_resource_client.add_or_update_resource.call_count == 1
+    # Verify that create_resource_from_template was called
+    assert mock_resource_client.create_resource_from_template.call_count == 1
 
-    # Second startup - should NOT create another resource
-    mock_resource_client.reset_mock()
-    mock_resource_client.query_resource.return_value = [
-        mock_resource
-    ]  # Resource exists now
-    mock_resource_client.add_or_update_resource.return_value = mock_resource
+    # Verify resource was created with correct parameters
+    call_args = mock_resource_client.create_resource_from_template.call_args
+    assert call_args[1]["template_name"] == "test_slot_template"
+    assert (
+        "location_with_resource" in call_args[1]["resource_name"]
+    )  # Should include location name
+    assert call_args[1]["overrides"]["resource_class"] == "test_slot_class"
+    assert call_args[1]["add_to_database"]
 
-    # Create second manager instance (simulating restart)
-    manager2 = LocationManager(settings=settings, definition=definition)
-    manager2.resource_client = mock_resource_client
-    manager2.state_handler._redis_connection = redis_server
+    # Verify location was created with correct resource_id
+    client = TestClient(manager.create_server())
+    response = client.get("/locations")
+    assert response.status_code == 200
 
-    # Re-run initialization to simulate startup behavior
-    manager2._initialize_locations_from_definition()
-
-    # Verify query_resource was called to check for existing resources
-    assert mock_resource_client.query_resource.call_count == 1
-
-    # Verify no new resource was created on second startup
-    # The implementation should detect existing resource and reuse it
-    assert mock_resource_client.add_or_update_resource.call_count == 0
+    locations = [Location.model_validate(loc) for loc in response.json()]
+    assert len(locations) == 1
+    assert locations[0].resource_id == "test_resource_123"
 
 
 def test_resource_initialization_with_matching_existing_resource(redis_server: Redis):
-    """Test that the system correctly identifies and reuses existing resources with same characteristics."""
-
-    # Create a slot resource definition
-    slot_resource_def = SlotResourceDefinition(
-        resource_name="shared_slot",
-        resource_class="shared_slot_class",
-        capacity=1,
-    )
+    """Test that the system creates resources from templates with proper error handling."""
 
     location_def = LocationDefinition(
         location_name="location_with_shared_resource",
         location_id=new_ulid_str(),
         description="Location sharing a resource",
-        resource_definition=slot_resource_def,
+        resource_template_name="shared_slot_template",
+        resource_template_overrides={"resource_class": "shared_slot_class"},
     )
 
     definition = LocationManagerDefinition(
@@ -437,16 +415,11 @@ def test_resource_initialization_with_matching_existing_resource(redis_server: R
 
     # Mock ResourceClient
     mock_resource_client = MagicMock()
-    existing_resource = Mock()
-    existing_resource.resource_id = "existing_resource_456"
-    existing_resource.resource_name = "shared_slot"
-    existing_resource.resource_class = "shared_slot_class"
-    existing_resource.base_type = Mock()
-    existing_resource.base_type.value = "slot"
-    existing_resource.capacity = 1
+    created_resource = Mock()
+    created_resource.resource_id = "new_resource_456"
 
-    # Simulate finding an existing resource that matches our definition
-    mock_resource_client.query_resource.return_value = [existing_resource]
+    # Mock template creation to succeed
+    mock_resource_client.create_resource_from_template.return_value = created_resource
 
     manager = LocationManager(settings=settings, definition=definition)
     manager.resource_client = mock_resource_client
@@ -455,20 +428,17 @@ def test_resource_initialization_with_matching_existing_resource(redis_server: R
     # Run initialization
     manager._initialize_locations_from_definition()
 
-    # Verify that query_resource was called to check for existing resources
-    assert mock_resource_client.query_resource.call_count >= 1
+    # Verify that create_resource_from_template was called
+    assert mock_resource_client.create_resource_from_template.call_count == 1
 
-    # Verify that add_or_update_resource was NOT called (since resource already exists)
-    assert mock_resource_client.add_or_update_resource.call_count == 0
-
-    # Verify the location was associated with the existing resource
+    # Verify the location was associated with the new resource
     client = TestClient(manager.create_server())
     response = client.get("/locations")
     assert response.status_code == 200
 
     locations = [Location.model_validate(loc) for loc in response.json()]
     assert len(locations) == 1
-    assert locations[0].resource_id == "existing_resource_456"
+    assert locations[0].resource_id == "new_resource_456"
 
 
 # Transfer Graph Tests
@@ -478,15 +448,29 @@ def test_resource_initialization_with_matching_existing_resource(redis_server: R
 def transfer_setup(redis_server: Redis):
     """Create a location manager with transfer capabilities for testing."""
     # Create sample transfer templates
-    transfer_template1 = TransferWorkflowTemplate(
+    step_def1 = StepDefinition(
+        name="pick_and_place_step",
+        action="transfer",
+        node="robot_arm",
+        locations={},  # Will be filled by workflow generation
+    )
+
+    transfer_template1 = TransferStepTemplate(
         node_name="robot_arm",
-        workflow_template=WorkflowDefinition(name="pick_and_place_workflow"),
+        step_template=step_def1,
         cost_weight=1.0,
     )
 
-    transfer_template2 = TransferWorkflowTemplate(
+    step_def2 = StepDefinition(
+        name="conveyor_transfer_step",
+        action="transfer",
+        node="conveyor",
+        locations={},  # Will be filled by workflow generation
+    )
+
+    transfer_template2 = TransferStepTemplate(
         node_name="conveyor",
-        workflow_template=WorkflowDefinition(name="conveyor_transfer_workflow"),
+        step_template=step_def2,
         cost_weight=2.0,
     )
 
@@ -617,21 +601,33 @@ def test_can_transfer_between_locations(transfer_setup):
     )
 
     # Create transfer template for testing
-    robot_template = TransferWorkflowTemplate(
+    robot_step = StepDefinition(
+        name="robot_test_step", action="transfer", node="robot_arm", locations={}
+    )
+    robot_template = TransferStepTemplate(
         node_name="robot_arm",
-        workflow_template=WorkflowDefinition(name="test_workflow"),
+        step_template=robot_step,
         cost_weight=1.0,
     )
 
-    conveyor_template = TransferWorkflowTemplate(
+    conveyor_step = StepDefinition(
+        name="conveyor_test_step", action="transfer", node="conveyor", locations={}
+    )
+    conveyor_template = TransferStepTemplate(
         node_name="conveyor",
-        workflow_template=WorkflowDefinition(name="test_workflow"),
+        step_template=conveyor_step,
         cost_weight=1.0,
     )
 
-    nonexistent_template = TransferWorkflowTemplate(
+    nonexistent_step = StepDefinition(
+        name="nonexistent_test_step",
+        action="transfer",
+        node="nonexistent_device",
+        locations={},
+    )
+    nonexistent_template = TransferStepTemplate(
         node_name="nonexistent_device",
-        workflow_template=WorkflowDefinition(name="test_workflow"),
+        step_template=nonexistent_step,
         cost_weight=1.0,
     )
 
@@ -716,23 +712,163 @@ def test_shortest_transfer_path_multi_hop(transfer_setup):
     assert path[1].destination_location_id == transfer_setup["locations"]["storage"]
 
 
-def test_composite_transfer_workflow(transfer_setup):
-    """Test creation of composite transfer workflows."""
+def test_multi_leg_transfer_workflow_step_count(transfer_setup):
+    """Test that multi-leg transfers generate workflows with correct number of steps."""
     manager = transfer_setup["manager"]
 
-    # Get a transfer path
-    path = manager._find_shortest_transfer_path(
+    # Test direct transfer (1 hop)
+    direct_path = manager._find_shortest_transfer_path(
         transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
+    )
+    assert direct_path is not None
+    assert len(direct_path) == 1
+
+    direct_workflow = manager._composite_transfer_workflow(direct_path)
+    assert isinstance(direct_workflow, WorkflowDefinition)
+    assert len(direct_workflow.steps) == 1, (
+        "Direct transfer should generate exactly 1 step"
+    )
+
+    # Test multi-hop transfer (2 hops: processing -> pickup -> storage)
+    multi_hop_path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["processing"],
+        transfer_setup["locations"]["storage"],
+    )
+    assert multi_hop_path is not None
+    assert len(multi_hop_path) == 2
+
+    multi_hop_workflow = manager._composite_transfer_workflow(multi_hop_path)
+    assert isinstance(multi_hop_workflow, WorkflowDefinition)
+    assert len(multi_hop_workflow.steps) == 2, (
+        "Multi-hop transfer should generate exactly 2 steps"
+    )
+
+
+def test_multi_leg_transfer_workflow_node_ordering(transfer_setup):
+    """Test that multi-leg transfers generate steps on correct nodes in correct order."""
+    manager = transfer_setup["manager"]
+
+    # Get multi-hop transfer path: processing -> pickup -> storage
+    # This should use: robot_arm (processing->pickup) then conveyor (pickup->storage)
+    path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["processing"],
+        transfer_setup["locations"]["storage"],
     )
 
     assert path is not None
+    assert len(path) == 2
 
-    # Create composite workflow
-    workflow = manager._composite_transfer_workflow(path, "test_resource_123")
+    # Verify path structure matches expected route
+    assert path[0].source_location_id == transfer_setup["locations"]["processing"]
+    assert path[0].destination_location_id == transfer_setup["locations"]["pickup"]
+    assert path[0].transfer_template.node_name == "robot_arm"
 
+    assert path[1].source_location_id == transfer_setup["locations"]["pickup"]
+    assert path[1].destination_location_id == transfer_setup["locations"]["storage"]
+    assert path[1].transfer_template.node_name == "conveyor"
+
+    # Generate workflow and verify step ordering
+    workflow = manager._composite_transfer_workflow(path)
     assert isinstance(workflow, WorkflowDefinition)
-    assert "transfer_" in workflow.name
-    # TODO: Add more detailed workflow composition tests when implementation is enhanced
+    assert len(workflow.steps) == 2
+
+    # First step should be robot_arm transfer from processing to pickup
+    step1 = workflow.steps[0]
+    assert step1.node == "robot_arm"
+    assert step1.name == "transfer_step_1"
+    assert step1.key == "transfer_step_1"
+    assert "source" in step1.locations
+    assert "target" in step1.locations
+    # Verify step uses parameter references
+    assert step1.locations["source"] == "source_location_1"
+    assert step1.locations["target"] == "target_location_1"
+
+    # Second step should be conveyor transfer from pickup to storage
+    step2 = workflow.steps[1]
+    assert step2.node == "conveyor"
+    assert step2.name == "transfer_step_2"
+    assert step2.key == "transfer_step_2"
+    assert "source" in step2.locations
+    assert "target" in step2.locations
+    # Verify step uses parameter references
+    assert step2.locations["source"] == "source_location_2"
+    assert step2.locations["target"] == "target_location_2"
+
+
+def test_multi_leg_transfer_workflow_parameters_injection(transfer_setup):
+    """Test that workflow parameters are correctly injected for multi-leg transfers."""
+    manager = transfer_setup["manager"]
+
+    # Get multi-hop transfer path
+    path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["processing"],
+        transfer_setup["locations"]["storage"],
+    )
+
+    assert path is not None
+    workflow = manager._composite_transfer_workflow(path)
+
+    # Verify workflow has parameters defined
+    assert workflow.parameters is not None
+    assert len(workflow.parameters.json_inputs) == 4  # 2 steps, 2 locations each
+
+    # Check that step-specific location parameters are defined
+    param_keys = {param.key for param in workflow.parameters.json_inputs}
+    expected_keys = {
+        "source_location_1",
+        "target_location_1",
+        "source_location_2",
+        "target_location_2",
+    }
+    assert param_keys == expected_keys
+
+    # Verify parameter descriptions are meaningful
+    for param in workflow.parameters.json_inputs:
+        assert (
+            "Source location for transfer step" in param.description
+            or "Target location for transfer step" in param.description
+        )
+        assert param.default is not None  # Should have representation data
+
+
+def test_workflow_generation_with_various_path_lengths(transfer_setup):
+    """Test workflow generation for different path lengths to ensure scalability."""
+    manager = transfer_setup["manager"]
+
+    # Test same location (0 hops)
+    same_location_path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["pickup"]
+    )
+    assert same_location_path == []
+
+    same_location_workflow = manager._composite_transfer_workflow(same_location_path)
+    assert isinstance(same_location_workflow, WorkflowDefinition)
+    assert len(same_location_workflow.steps) == 0, (
+        "Same location transfer should generate 0 steps"
+    )
+
+    # Test direct transfer (1 hop)
+    direct_path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
+    )
+    assert len(direct_path) == 1
+
+    direct_workflow = manager._composite_transfer_workflow(direct_path)
+    assert len(direct_workflow.steps) == 1
+
+    # Test multi-hop transfer (2 hops)
+    multi_hop_path = manager._find_shortest_transfer_path(
+        transfer_setup["locations"]["processing"],
+        transfer_setup["locations"]["storage"],
+    )
+    assert len(multi_hop_path) == 2
+
+    multi_hop_workflow = manager._composite_transfer_workflow(multi_hop_path)
+    assert len(multi_hop_workflow.steps) == 2
+
+    # Verify that each workflow step count matches path length
+    assert len(direct_workflow.steps) == len(direct_path)
+    assert len(multi_hop_workflow.steps) == len(multi_hop_path)
 
 
 def test_get_transfer_graph_endpoint(transfer_setup):
@@ -767,7 +903,6 @@ def test_plan_transfer_endpoint_direct(transfer_setup):
         params={
             "source_location_id": transfer_setup["locations"]["pickup"],
             "destination_location_id": transfer_setup["locations"]["processing"],
-            "resource_id": "test_resource_123",
         },
     )
 
@@ -778,6 +913,56 @@ def test_plan_transfer_endpoint_direct(transfer_setup):
     # Validate that a workflow definition is returned
     workflow = WorkflowDefinition.model_validate(workflow_data)
     assert "transfer_" in workflow.name
+
+    assert len(workflow.steps) == 1
+
+
+def test_plan_transfer_endpoint_multi_hop(transfer_setup):
+    """Test the transfer planning API endpoint for multi-hop transfers."""
+    client = transfer_setup["client"]
+
+    # Request multi-hop transfer: processing -> pickup -> storage
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": transfer_setup["locations"]["processing"],
+            "destination_location_id": transfer_setup["locations"]["storage"],
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    assert isinstance(workflow_data, dict)
+
+    # Validate workflow structure
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+    assert "transfer_" in workflow.name
+    assert len(workflow.steps) == 2, "Multi-hop transfer should generate 2 steps"
+
+    # Verify step sequence and nodes
+    step1 = workflow.steps[0]
+    assert step1.node == "robot_arm"
+    assert step1.name == "transfer_step_1"
+    assert step1.locations["source"] == "source_location_1"
+    assert step1.locations["target"] == "target_location_1"
+
+    step2 = workflow.steps[1]
+    assert step2.node == "conveyor"
+    assert step2.name == "transfer_step_2"
+    assert step2.locations["source"] == "source_location_2"
+    assert step2.locations["target"] == "target_location_2"
+
+    # Verify workflow parameters
+    assert workflow.parameters is not None
+    assert len(workflow.parameters.json_inputs) == 4  # 2 steps, 2 locations each
+    param_keys = {param.key for param in workflow.parameters.json_inputs}
+    expected_keys = {
+        "source_location_1",
+        "target_location_1",
+        "source_location_2",
+        "target_location_2",
+    }
+    assert param_keys == expected_keys
 
 
 def test_plan_transfer_endpoint_no_path(transfer_setup):
@@ -892,3 +1077,198 @@ def test_transfer_graph_without_transfer_capabilities(redis_server: Redis):
     response = client.get("/transfer/graph")
     assert response.status_code == 200
     assert response.json() == {}
+
+
+def test_get_location_by_name_endpoint(redis_server: Redis):
+    """Test the get location by name API endpoint."""
+    location_def = LocationDefinition(
+        location_name="test_location_by_name",
+        location_id=new_ulid_str(),
+        description="A test location for name-based lookup",
+    )
+
+    definition = LocationManagerDefinition(
+        name="Test Manager for Name Lookup",
+        manager_id=new_ulid_str(),
+        locations=[location_def],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_name_lookup_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Test successful lookup by name using query parameter
+    response = client.get("/location?name=test_location_by_name")
+    assert response.status_code == 200
+
+    location_data = response.json()
+    assert location_data["name"] == "test_location_by_name"
+    assert location_data["location_id"] == location_def.location_id
+    assert location_data["description"] == "A test location for name-based lookup"
+
+
+def test_get_location_by_name_endpoint_not_found(redis_server: Redis):
+    """Test the get location by name API endpoint when location doesn't exist."""
+    definition = LocationManagerDefinition(
+        name="Test Manager for Name Lookup",
+        manager_id=new_ulid_str(),
+        locations=[],  # No locations
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_name_lookup_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Test lookup of non-existent location using query parameter
+    response = client.get("/location?name=nonexistent_location")
+    assert response.status_code == 404
+
+    error_data = response.json()
+    assert "not found" in error_data["detail"].lower()
+    assert "nonexistent_location" in error_data["detail"]
+
+
+def test_get_location_by_name_endpoint_multiple_locations(redis_server: Redis):
+    """Test the get location by name API endpoint with multiple locations."""
+    location_def1 = LocationDefinition(
+        location_name="robot_station",
+        location_id=new_ulid_str(),
+        description="Robot workstation",
+    )
+
+    location_def2 = LocationDefinition(
+        location_name="liquid_station",
+        location_id=new_ulid_str(),
+        description="Liquid handling station",
+    )
+
+    location_def3 = LocationDefinition(
+        location_name="storage_rack",
+        location_id=new_ulid_str(),
+        description="Storage rack",
+    )
+
+    definition = LocationManagerDefinition(
+        name="Test Manager with Multiple Locations",
+        manager_id=new_ulid_str(),
+        locations=[location_def1, location_def2, location_def3],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_multiple_locations_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Test lookup of first location using query parameter
+    response = client.get("/location?name=robot_station")
+    assert response.status_code == 200
+    assert response.json()["name"] == "robot_station"
+    assert response.json()["location_id"] == location_def1.location_id
+
+    # Test lookup of second location using query parameter
+    response = client.get("/location?name=liquid_station")
+    assert response.status_code == 200
+    assert response.json()["name"] == "liquid_station"
+    assert response.json()["location_id"] == location_def2.location_id
+
+    # Test lookup of third location using query parameter
+    response = client.get("/location?name=storage_rack")
+    assert response.status_code == 200
+    assert response.json()["name"] == "storage_rack"
+    assert response.json()["location_id"] == location_def3.location_id
+
+    # Test lookup of non-existent location using query parameter
+    response = client.get("/location?name=nonexistent")
+    assert response.status_code == 404
+
+
+def test_get_location_query_parameter_validation(redis_server: Redis):
+    """Test query parameter validation for the new location endpoint."""
+    definition = LocationManagerDefinition(
+        name="Test Manager for Query Validation",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_query_validation_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Test missing both parameters
+    response = client.get("/location")
+    assert response.status_code == 400
+    error_data = response.json()
+    assert "exactly one" in error_data["detail"].lower()
+
+    # Test providing both parameters
+    response = client.get("/location?location_id=test_id&name=test_name")
+    assert response.status_code == 400
+    error_data = response.json()
+    assert "exactly one" in error_data["detail"].lower()
+
+
+def test_get_location_by_id_query_parameter(redis_server: Redis):
+    """Test lookup by location_id using query parameter."""
+    location_def = LocationDefinition(
+        location_name="test_location_by_id",
+        location_id=new_ulid_str(),
+        description="A test location for ID-based lookup via query parameter",
+    )
+
+    definition = LocationManagerDefinition(
+        name="Test Manager for ID Lookup via Query",
+        manager_id=new_ulid_str(),
+        locations=[location_def],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_id_lookup_query_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Test successful lookup by ID using query parameter
+    response = client.get(f"/location?location_id={location_def.location_id}")
+    assert response.status_code == 200
+
+    location_data = response.json()
+    assert location_data["name"] == "test_location_by_id"
+    assert location_data["location_id"] == location_def.location_id
+    assert (
+        location_data["description"]
+        == "A test location for ID-based lookup via query parameter"
+    )
+
+    # Test lookup of non-existent ID using query parameter
+    response = client.get("/location?location_id=nonexistent_id")
+    assert response.status_code == 404
+    error_data = response.json()
+    assert "not found" in error_data["detail"].lower()
+    assert "nonexistent_id" in error_data["detail"]

@@ -72,6 +72,9 @@ class ResourceManager(
         # Set up ownership middleware
         self._setup_ownership()
 
+        # Initialize default templates after everything is set up
+        self._initialize_default_templates()
+
     def _setup_resource_interface(self) -> None:
         """Setup the resource interface."""
         if not self._resource_interface:
@@ -90,6 +93,48 @@ class ResourceManager(
             getattr(self.definition, "manager_id", None),
         )
         global_ownership_info.manager_id = manager_id
+
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize manager-specific components."""
+        super().initialize(**kwargs)
+
+        # Template initialization is handled in __init__ after resource_interface is set up
+
+    def _initialize_default_templates(self) -> None:
+        """Create or update default templates defined in the manager definition."""
+        if not self.definition.default_templates:
+            return
+
+        self.logger.info(
+            f"Initializing {len(self.definition.default_templates)} default templates"
+        )
+
+        for template_def in self.definition.default_templates:
+            try:
+                # Convert the base resource definition to a Resource instance
+                base_resource = Resource.discriminate(template_def.base_resource)
+
+                # Create or update the template
+                self._resource_interface.create_template(
+                    resource=base_resource,
+                    template_name=template_def.template_name,
+                    description=template_def.description
+                    or f"Template for {template_def.template_name}",
+                    required_overrides=template_def.required_overrides,
+                    tags=template_def.tags,
+                    created_by=f"resource_manager_{self.definition.resource_manager_id}",
+                    version=template_def.version,
+                )
+
+                self.logger.info(
+                    f"Successfully initialized template '{template_def.template_name}'"
+                )
+
+            except Exception as e:
+                self.logger.error(
+                    f"Failed to initialize template '{template_def.template_name}': {e}"
+                )
+                # Continue with other templates even if one fails
 
     def create_server(self) -> fastapi.FastAPI:
         """Create and configure the FastAPI server with middleware."""
@@ -169,21 +214,9 @@ class ResourceManager(
                 unique=True,
             )
             if not resource:
-                if (
-                    resource_definition.resource_class
-                    and resource_definition.resource_class
-                    in self.definition.custom_types
-                ):
-                    custom_definition = self.definition.custom_types[
-                        resource_definition.resource_class
-                    ]
-                    resource = self._resource_interface.init_custom_resource(
-                        resource_definition, custom_definition
-                    )
-                else:
-                    resource = self._resource_interface.add_resource(
-                        Resource.discriminate(resource_definition)
-                    )
+                resource = self._resource_interface.add_resource(
+                    Resource.discriminate(resource_definition)
+                )
 
             return resource
         except Exception as e:
