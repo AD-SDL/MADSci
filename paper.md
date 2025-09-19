@@ -24,10 +24,10 @@ authors:
     affiliation: 1
   - name: Aileen Cleary
     orcid: 0000-0002-5336-9026
-    affiliation: 3
+    affiliation: 2
   - name: Ian T. Foster
     orcid: 0000-0003-2129-5269
-    affiliation: “1, 2”
+    affiliation: “1, 3”
   - name: Noah Paulson
     orcid: 0000-0002-3548-9120
     corresponding: true
@@ -35,10 +35,10 @@ authors:
 affiliations:
   - name: Argonne National Laboratory, United States
     index: 1
+  - name: Northwestern University, United States
+    index: 2
   - name: University of Chicago, United States
     index: 2
-  - name: Northwestern University, United States
-    index: 3
 date: 19 September 2025
 bibliography: paper.bib
 ---
