@@ -65,15 +65,19 @@ def validate_workcell_action_step(step: Step) -> tuple[bool, str]:
 def _validate_feedforward(
     step: Step, feedforward_parameters: dict[str, Any]
 ) -> Optional[tuple[bool, str]]:
-    if step.node is None and step.parameters and step.parameters.node is not None:
-        if step.parameters.node in [param.key for param in feedforward_parameters]:
+    if (
+        step.node is None
+        and step.use_parameters
+        and step.use_parameters.node is not None
+    ):
+        if step.use_parameters.node in [param.key for param in feedforward_parameters]:
             return (
                 True,
-                f"Waiting for value from feedforward parameter {step.parameters.node} before validating step {step.name}",
+                f"Waiting for value from feedforward parameter {step.use_parameters.node} before validating step {step.name}",
             )
         return (
             False,
-            f"Step '{step.name}': Feedforward parameter {step.parameters.node} not found",
+            f"Step '{step.name}': Feedforward parameter {step.use_parameters.node} not found",
         )
     return None
 
@@ -100,7 +104,7 @@ def _validate_node_action(
             for arg in action.args.values()
             if arg.required
             and arg.name not in step.args
-            and arg.name not in step.parameters.args
+            and arg.name not in step.use_parameters.args
         ),
         None,
     )
@@ -115,7 +119,7 @@ def _validate_node_action(
             for loc in action.locations.values()
             if loc.required
             and loc.name not in step.locations
-            and loc.name not in step.parameters.locations
+            and loc.name not in step.use_parameters.locations
         ),
         None,
     )
@@ -236,17 +240,17 @@ def create_workflow(
 
 def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
     """Replace parameter values in a provided step"""
-    if step.parameters is not None:
+    if step.use_parameters is not None:
         step_dict = step.model_dump()
-        for key, parameter_name in step.parameters.model_dump().items():
+        for key, parameter_name in step.use_parameters.model_dump().items():
             if type(parameter_name) is str and parameter_name in parameter_values:
                 step_dict[key] = parameter_values[parameter_name]
         step = Step.model_validate(step_dict)
 
-        for key, parameter_name in step.parameters.args.items():
+        for key, parameter_name in step.use_parameters.args.items():
             if parameter_name in parameter_values:
                 step.args[key] = parameter_values[parameter_name]
-        for key, parameter_name in step.parameters.locations.items():
+        for key, parameter_name in step.use_parameters.locations.items():
             if parameter_name in parameter_values:
                 step.locations[key] = parameter_values[parameter_name]
     return step
@@ -264,7 +268,7 @@ def prepare_workflow_step(
     """Prepares a step for execution by replacing locations and validating it"""
     parameter_values = workflow.parameter_values
     working_step = deepcopy(step)
-    if step.parameters is not None:
+    if step.use_parameters is not None:
         working_step = insert_parameters(working_step, parameter_values)
     replace_locations(workcell, working_step, location_client)
     valid, validation_string = validate_step(

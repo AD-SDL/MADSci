@@ -33,7 +33,7 @@ try:
     result = workcell_client.start_workflow(
         workflow_definition="workflows/simple_transfer.workflow.yaml",
         json_inputs={
-            "test_resource_id": demo_plate.resource_id,
+            "storage_rack_id": storage_rack.location_id,
             "robot_station_1_id": robot_station_1.location_id,
             "hybrid_station_id": hybrid_station.location_id,
         },

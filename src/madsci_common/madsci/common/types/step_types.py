@@ -13,7 +13,7 @@ from madsci.common.types.parameter_types import (
     ParameterJsonTypes,
 )
 from madsci.common.utils import new_ulid_str
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 
 
 class StepParameters(MadsciBaseModel):
@@ -98,16 +98,19 @@ class StepDefinition(MadsciBaseModel):
         description="Data labels for the results of the step. Maps from the names of the outputs of the action to the names of the data labels.",
         default_factory=dict,
     )
-    parameters: Optional[StepParameters] = Field(
-        title="Step Parameters",
-        description="Any parameterized values used in the step",
+    use_parameters: Optional[StepParameters] = Field(
+        title="Workflow Parameters in Step",
+        description="Parameters from the workflow to use in this step.",
         default=None,
+        alias=AliasChoices("use_parameters", "use_params", "params", "parameters"),
     )
 
     @model_validator(mode="after")
     def check_action_or_action_parameter(self) -> "StepDefinition":
         """Ensure that either an action or action parameter is provided."""
-        if not self.action and (not self.parameters or not self.parameters.action):
+        if not self.action and (
+            not self.use_parameters or not self.use_parameters.action
+        ):
             raise ValueError(
                 f"Step {self.name} ({self.key}) must have either an action or action parameter"
             )

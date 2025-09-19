@@ -154,7 +154,7 @@ def test_insert_parameter_values_basic() -> None:
         name="step1",
         node="node1",
         action="action1",
-        parameters=StepParameters(args={"param": "test_param"}),
+        use_parameters=StepParameters(args={"param": "test_param"}),
     )
 
     step = insert_parameters(step, {"test_param": "custom_value"})
