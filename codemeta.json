@@ -1,0 +1,64 @@
+{
+  "@context": "https://raw.githubusercontent.com/codemeta/codemeta/master/codemeta.jsonld",
+  "@type": "Code",
+  "author": [
+    {
+      "@id": "0000-0002-3000-2811",
+      "@type": "Person",
+      "name": "Ryan D. Lewis",
+      "affiliation": "Argonne National Laboratory, United States"
+    },
+    {
+      "@id": "0000-0001-5908-2782",
+      "@type": "Person",
+      "name": "Tobias S. Ginsburg",
+      "affiliation": "Argonne National Laboratory, United States"
+    },
+    {
+      "@id": "0000-0003-3653-4779",
+      "@type": "Person",
+      "name": "Doga Ozgulbas",
+      "affiliation": "Argonne National Laboratory, United States"
+    },
+    {
+      "@id": "0009-0006-9208-4046",
+      "@type": "Person",
+      "name": "Casey Stone",
+      "affiliation": "Argonne National Laboratory, United States"
+    },
+    {
+      "@id": "0009-0001-9448-1583",
+      "@type": "Person",
+      "name": "Abraham Stroka",
+      "affiliation": "Argonne National Laboratory, United States"
+    },
+    {
+      "@id": "0000-0002-5336-9026",
+      "@type": "Person",
+      "name": "Aileen Cleary",
+      "affiliation": "Argonne National Laboratory, United States; University of Chicago, United States"
+    },
+    {
+      "@id": "0000-0003-2129-5269",
+      "@type": "Person",
+      "name": "Ian T. Foster",
+      "affiliation": "Argonne National Laboratory, United States; Northwestern University, United States"
+    },
+    {
+      "@id": "0000-0002-3548-9120",
+      "@type": "Person",
+      "name": "Noah Paulson",
+      "affiliation": "Argonne National Laboratory, United States"
+    }
+  ],
+  "identifier": "",
+  "codeRepository": "https://github.com/AD-SDL/MADSci",
+  "datePublished": "2025-09-19",
+  "dateModified": "2025-09-19",
+  "dateCreated": "2025-09-19",
+  "description": "MADSci is a modular, adaptable, and scalable framework for lab automation and autonomous discovery.",
+  "keywords": "self driving labs, autonomous discovery, robotics, lab automation",
+  "license": "MIT",
+  "title": "Modular Autonomous Discovery for Science (MADSci)",
+  "version": "v0.4.7"
+}

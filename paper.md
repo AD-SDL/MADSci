@@ -22,6 +22,9 @@ authors:
   - name: Abraham Stroka
     orcid: 0009-0001-9448-1583
     affiliation: 1
+  - name: Aileen Cleary
+    orcid: 0000-0002-5336-9026
+    affiliation: 3
   - name: Ian T. Foster
     orcid: 0000-0003-2129-5269
     affiliation: “1, 2”
@@ -34,6 +37,8 @@ affiliations:
     index: 1
   - name: University of Chicago, United States
     index: 2
+  - name: Northwestern University, United States
+    index: 3
 date: XX Month 2025
 bibliography: paper.bib
 ---
