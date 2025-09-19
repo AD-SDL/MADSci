@@ -7,6 +7,7 @@ from typing import Any, Optional
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
+from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -80,7 +81,9 @@ class LiquidHandlerNode(RestNode):
         return ActionSucceeded()
 
     @action
-    def deck_transfer(self, source_location: str, target_location: str) -> ActionResult:
+    def deck_transfer(
+        self, source_location: LocationArgument, target_location: LocationArgument
+    ) -> ActionResult:
         """Transfer labware between deck locations on the liquid handler."""
         self.logger.log(
             f"Transferring labware from {source_location} to {target_location}"

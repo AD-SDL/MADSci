@@ -57,20 +57,20 @@ actions:
   deck_transfer:
     name: deck_transfer
     description: Transfer labware between deck locations on the liquid handler.
-    args:
+    args: {}
+    locations:
       source_location:
         name: source_location
         description: ''
-        argument_type: str
+        argument_type: location
         required: true
         default: null
       target_location:
         name: target_location
         description: ''
-        argument_type: str
+        argument_type: location
         required: true
         default: null
-    locations: {}
     files: {}
     results: {}
     blocking: false

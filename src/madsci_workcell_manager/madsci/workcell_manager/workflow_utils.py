@@ -104,7 +104,9 @@ def _validate_node_action(
             for arg in action.args.values()
             if arg.required
             and arg.name not in step.args
-            and arg.name not in step.use_parameters.args
+            and (
+                step.use_parameters is None or arg.name not in step.use_parameters.args
+            )
         ),
         None,
     )

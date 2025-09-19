@@ -93,6 +93,11 @@ up *args: env
 upd: env
   @docker compose up -d
 
+# Build + up
+bup: build up
+# Build + up detached
+bupd: build upd
+
 # Stop the example lab and remove the containers
 down:
   @docker compose down

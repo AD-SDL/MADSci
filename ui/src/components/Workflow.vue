@@ -7,8 +7,8 @@
       </v-expansion-panel-title>
       <v-expansion-panel-text>
         <b>Description</b>: {{ value.comment }} <br>
-        <b> Module</b>: {{ value.module }} <br>
-        <b>Module Action</b>: {{ value.action }} <br>
+        <b> Node</b>: {{ value.node }} <br>
+        <b>Node Action</b>: {{ value.action }} <br>
         <b>Args</b>: <v-list>
           <v-list-item v-for="(arg_value, arg_key) in value.args" :key="arg_key">
             <b>{{ arg_key }}</b>: {{ arg_value }}
