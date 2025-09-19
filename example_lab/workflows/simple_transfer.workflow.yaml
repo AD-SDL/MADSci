@@ -5,22 +5,12 @@ metadata:
   info: Simple workflow to test basic transfer functionality
   version: 1.0
 
-parameters:
-  json_inputs:
-    - key: storage_rack_id
-      description: "Location ID for the storage rack"
-    - key: robot_station_1_id
-      description: "Location ID for robot station 1"
-    - key: hybrid_station_id
-      description: "Location ID for hybrid station"
-
 steps:
   # Step 1: Transfer a specific resource from one location to another
   - name: Move Resource to Robot Station
     key: move_resource
     action: transfer
-    use_parameters:
-      args:
-        source_location_id: storage_rack_id
-        destination_location_id: robot_station_1_id
+    args:
+      source: storage_rack
+      destination: robot_station_1
     description: "Transfer resource from storage rack to robot station 1"

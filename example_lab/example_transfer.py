@@ -24,7 +24,7 @@ demo_plate = resource_client.add_resource(demo_plate)
 storage_rack = location_client.get_location_by_name("storage_rack")
 resource_client.push(storage_rack.resource_id, demo_plate.resource_id)
 
-# * Query location IDs dynamically
+# * Query locations dynamically
 robot_station_1 = location_client.get_location_by_name("robot_station_1")
 hybrid_station = location_client.get_location_by_name("hybrid_station")
 
@@ -32,11 +32,6 @@ hybrid_station = location_client.get_location_by_name("hybrid_station")
 try:
     result = workcell_client.start_workflow(
         workflow_definition="workflows/simple_transfer.workflow.yaml",
-        json_inputs={
-            "storage_rack_id": storage_rack.location_id,
-            "robot_station_1_id": robot_station_1.location_id,
-            "hybrid_station_id": hybrid_station.location_id,
-        },
         await_completion=True,
         prompt_on_error=False,
         raise_on_failed=True,

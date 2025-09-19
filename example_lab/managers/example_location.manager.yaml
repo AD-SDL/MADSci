@@ -9,7 +9,7 @@ locations:
   description: Robot Station 1 - Primary manipulation location accessible by robot
     arm
   representations:
-    robot_arm:
+    robotarm_1:
       position:
       - 1
       - 2
@@ -25,7 +25,7 @@ locations:
   description: Robot Station 2 - Secondary manipulation location accessible by robot
     arm
   representations:
-    robot_arm:
+    robotarm_1:
       position:
       - 5
       - 6
@@ -72,7 +72,7 @@ locations:
   description: Hybrid Station - Multi-modal location accessible by both robot arm
     and liquid handler
   representations:
-    robot_arm:
+    robotarm_1:
       position:
       - 8
       - 9
@@ -94,7 +94,7 @@ locations:
   location_id: 01JR157336G2GXT79RQWZ1PE9D
   description: Storage Rack - High-capacity storage accessible only by robot arm
   representations:
-    robot_arm:
+    robotarm_1:
       position:
       - 20
       - 21
@@ -107,55 +107,13 @@ locations:
     resource_description: High-capacity storage slot for materials
 transfer_capabilities:
   transfer_templates:
-  - node_name: robot_arm
-    workflow_template:
-      name: robot_arm_transfer
-      workflow_definition_id: 01K5F131Z9ST316VZQX6E3YYZY
-      definition_metadata:
-        author: null
-        description: null
-        version: ''
-        ownership_info: null
-      parameters:
-        json_inputs: []
-        file_inputs: []
-        feed_forward: []
-      steps:
-      - name: Pick and Place Transfer
-        key: null
-        description: null
-        action: transfer
-        node: robotarm_1
-        args: {}
-        files: {}
-        locations: {}
-        conditions: []
-        data_labels: {}
-        parameters: null
+  - node_name: robotarm_1
+    action: transfer
+    source_argument_name: source_location
+    target_argument_name: target_location
     cost_weight: 1.0
-  - node_name: liquidhandler
-    workflow_template:
-      name: liquidhandler_transfer
-      workflow_definition_id: 01K5F131Z9ST316VZQX6E3YYZZ
-      definition_metadata:
-        author: null
-        description: null
-        version: ''
-        ownership_info: null
-      parameters:
-        json_inputs: []
-        file_inputs: []
-        feed_forward: []
-      steps:
-      - name: Pipette Transfer
-        key: null
-        description: null
-        action: transfer_liquid
-        node: liquidhandler_1
-        args: {}
-        files: {}
-        locations: {}
-        conditions: []
-        data_labels: {}
-        parameters: null
+  - node_name: liquidhandler_1
+    action: transfer_liquid
+    source_argument_name: from_location
+    target_argument_name: to_location
     cost_weight: 2.0
