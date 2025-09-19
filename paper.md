@@ -39,7 +39,7 @@ affiliations:
     index: 2
   - name: Northwestern University, United States
     index: 3
-date: XX Month 2025
+date: 19 September 2025
 bibliography: paper.bib
 ---
 
