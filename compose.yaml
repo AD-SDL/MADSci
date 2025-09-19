@@ -146,26 +146,33 @@ services:
 
 
    # *Nodes
-  liquidhandler:
+  liquidhandler_1:
     <<: *madsci-service
-    container_name: liquidhandler
+    container_name: liquidhandler_1
     environment:
       - NODE_DEFINITION=node_definitions/liquidhandler_1.node.yaml
       - NODE_URL=http://localhost:2000
     command: python example_modules/liquidhandler.py
 
-  robotarm:
+  liquidhandler_2:
     <<: *madsci-service
-    container_name: robotarm
+    container_name: liquidhandler_2
+    environment:
+      - NODE_DEFINITION=node_definitions/liquidhandler_2.node.yaml
+      - NODE_URL=http://localhost:2003
+    command: python example_modules/liquidhandler.py
+
+  robotarm_1:
+    <<: *madsci-service
+    container_name: robotarm_1
     environment:
       - NODE_DEFINITION=node_definitions/robotarm_1.node.yaml
       - NODE_URL=http://localhost:2001
     command: python example_modules/robotarm.py
 
-
-  platereader:
+  platereader_1:
     <<: *madsci-service
-    container_name: platereader
+    container_name: platereader_1
     environment:
       - NODE_DEFINITION=node_definitions/platereader_1.node.yaml
       - NODE_URL=http://localhost:2002

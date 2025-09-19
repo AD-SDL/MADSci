@@ -1,10 +1,4 @@
-"""Run example transfer workflow with dynamic location querying.
-
-Creates a demo resource, places it in storage, and runs a workflow that:
-1. Transfers the resource to robot station 1
-2. Waits briefly for processing simulation
-3. Transfers all contents from robot station to hybrid station
-"""
+"""Run example transfer workflows to demonstrate the functionality."""
 
 from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
@@ -21,12 +15,8 @@ demo_plate = Resource(resource_name="Demo Plate")
 demo_plate = resource_client.add_resource(demo_plate)
 
 # * Add the resource to the storage_rack location
-storage_rack = location_client.get_location_by_name("storage_rack")
-resource_client.push(storage_rack.resource_id, demo_plate.resource_id)
-
-# * Query locations dynamically
-robot_station_1 = location_client.get_location_by_name("robot_station_1")
-hybrid_station = location_client.get_location_by_name("hybrid_station")
+l1_deck1 = location_client.get_location_by_name("liquidhandler_1.deck_1")
+resource_client.push(l1_deck1.resource_id, demo_plate.resource_id)
 
 # * Run the simple transfer workflow
 try:

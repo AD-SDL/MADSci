@@ -13,8 +13,7 @@ from madsci.common.types.location_types import (
     LocationTransferCapabilities,
     TransferStepTemplate,
 )
-from madsci.common.types.step_types import StepDefinition
-from madsci.common.types.workflow_types import WorkflowDefinition
+from madsci.common.types.workflow_types import WorkflowDefinition, WorkflowParameters
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
 from pytest_mock_resources import RedisConfig, create_redis_fixture
@@ -447,30 +446,20 @@ def test_resource_initialization_with_matching_existing_resource(redis_server: R
 @pytest.fixture
 def transfer_setup(redis_server: Redis):
     """Create a location manager with transfer capabilities for testing."""
-    # Create sample transfer templates
-    step_def1 = StepDefinition(
-        name="pick_and_place_step",
-        action="transfer",
-        node="robot_arm",
-        locations={},  # Will be filled by workflow generation
-    )
-
+    # Create sample transfer templates with simplified format
     transfer_template1 = TransferStepTemplate(
-        node_name="robot_arm",
-        step_template=step_def1,
-        cost_weight=1.0,
-    )
-
-    step_def2 = StepDefinition(
-        name="conveyor_transfer_step",
+        node_name="robotarm_1",
         action="transfer",
-        node="conveyor",
-        locations={},  # Will be filled by workflow generation
+        source_argument_name="source_location",
+        target_argument_name="target_location",
+        cost_weight=1.0,
     )
 
     transfer_template2 = TransferStepTemplate(
         node_name="conveyor",
-        step_template=step_def2,
+        action="transfer",
+        source_argument_name="from_location",
+        target_argument_name="to_location",
         cost_weight=2.0,
     )
 
@@ -484,7 +473,7 @@ def transfer_setup(redis_server: Redis):
         location_id=new_ulid_str(),
         description="Pickup station with robot arm and conveyor access",
         representations={
-            "robot_arm": {"position": [1, 2, 3], "gripper": "closed"},
+            "robotarm_1": {"position": [1, 2, 3], "gripper": "closed"},
             "conveyor": {"belt_position": 0, "speed": 1.0},
         },
     )
@@ -493,7 +482,7 @@ def transfer_setup(redis_server: Redis):
         location_name="processing_station",
         location_id=new_ulid_str(),
         description="Processing station with robot arm access",
-        representations={"robot_arm": {"position": [4, 5, 6], "gripper": "open"}},
+        representations={"robotarm_1": {"position": [4, 5, 6], "gripper": "open"}},
     )
 
     location3 = LocationDefinition(
@@ -547,7 +536,7 @@ def test_transfer_graph_construction(transfer_setup):
     graph = manager._build_transfer_graph()
 
     # Expected edges based on shared representations:
-    # pickup <-> processing (robot_arm)
+    # pickup <-> processing (robotarm_1)
     # pickup <-> storage (conveyor)
     # processing and storage should not be directly connected
 
@@ -574,7 +563,7 @@ def test_transfer_graph_construction(transfer_setup):
             transfer_setup["locations"]["processing"],
         )
     ]
-    assert pickup_to_processing.cost == 1.0  # robot_arm template cost
+    assert pickup_to_processing.cost == 1.0  # robotarm_1 template cost
 
     pickup_to_storage = graph[
         (transfer_setup["locations"]["pickup"], transfer_setup["locations"]["storage"])
@@ -600,34 +589,28 @@ def test_can_transfer_between_locations(transfer_setup):
         transfer_setup["locations"]["isolated"]
     )
 
-    # Create transfer template for testing
-    robot_step = StepDefinition(
-        name="robot_test_step", action="transfer", node="robot_arm", locations={}
-    )
+    # Create transfer templates for testing with simplified format
     robot_template = TransferStepTemplate(
-        node_name="robot_arm",
-        step_template=robot_step,
+        node_name="robotarm_1",
+        action="transfer",
+        source_argument_name="source_location",
+        target_argument_name="target_location",
         cost_weight=1.0,
     )
 
-    conveyor_step = StepDefinition(
-        name="conveyor_test_step", action="transfer", node="conveyor", locations={}
-    )
     conveyor_template = TransferStepTemplate(
         node_name="conveyor",
-        step_template=conveyor_step,
+        action="transfer",
+        source_argument_name="from_location",
+        target_argument_name="to_location",
         cost_weight=1.0,
     )
 
-    nonexistent_step = StepDefinition(
-        name="nonexistent_test_step",
-        action="transfer",
-        node="nonexistent_device",
-        locations={},
-    )
     nonexistent_template = TransferStepTemplate(
         node_name="nonexistent_device",
-        step_template=nonexistent_step,
+        action="transfer",
+        source_argument_name="source_location",
+        target_argument_name="target_location",
         cost_weight=1.0,
     )
 
@@ -664,7 +647,7 @@ def test_shortest_transfer_path_direct(transfer_setup):
     assert len(path) == 1
     assert path[0].source_location_id == transfer_setup["locations"]["pickup"]
     assert path[0].destination_location_id == transfer_setup["locations"]["processing"]
-    assert path[0].transfer_template.node_name == "robot_arm"
+    assert path[0].transfer_template.node_name == "robotarm_1"
 
 
 def test_shortest_transfer_path_no_connection(transfer_setup):
@@ -749,7 +732,7 @@ def test_multi_leg_transfer_workflow_node_ordering(transfer_setup):
     manager = transfer_setup["manager"]
 
     # Get multi-hop transfer path: processing -> pickup -> storage
-    # This should use: robot_arm (processing->pickup) then conveyor (pickup->storage)
+    # This should use: robotarm_1 (processing->pickup) then conveyor (pickup->storage)
     path = manager._find_shortest_transfer_path(
         transfer_setup["locations"]["processing"],
         transfer_setup["locations"]["storage"],
@@ -761,7 +744,7 @@ def test_multi_leg_transfer_workflow_node_ordering(transfer_setup):
     # Verify path structure matches expected route
     assert path[0].source_location_id == transfer_setup["locations"]["processing"]
     assert path[0].destination_location_id == transfer_setup["locations"]["pickup"]
-    assert path[0].transfer_template.node_name == "robot_arm"
+    assert path[0].transfer_template.node_name == "robotarm_1"
 
     assert path[1].source_location_id == transfer_setup["locations"]["pickup"]
     assert path[1].destination_location_id == transfer_setup["locations"]["storage"]
@@ -772,31 +755,31 @@ def test_multi_leg_transfer_workflow_node_ordering(transfer_setup):
     assert isinstance(workflow, WorkflowDefinition)
     assert len(workflow.steps) == 2
 
-    # First step should be robot_arm transfer from processing to pickup
+    # First step should be robotarm_1 transfer from processing to pickup
     step1 = workflow.steps[0]
-    assert step1.node == "robot_arm"
+    assert step1.node == "robotarm_1"
     assert step1.name == "transfer_step_1"
     assert step1.key == "transfer_step_1"
-    assert "source" in step1.locations
-    assert "target" in step1.locations
-    # Verify step uses parameter references
-    assert step1.locations["source"] == "source_location_1"
-    assert step1.locations["target"] == "target_location_1"
+    assert "source_location" in step1.locations
+    assert "target_location" in step1.locations
+    # Verify step uses direct location names
+    assert step1.locations["source_location"] == "processing_station"
+    assert step1.locations["target_location"] == "pickup_station"
 
     # Second step should be conveyor transfer from pickup to storage
     step2 = workflow.steps[1]
     assert step2.node == "conveyor"
     assert step2.name == "transfer_step_2"
     assert step2.key == "transfer_step_2"
-    assert "source" in step2.locations
-    assert "target" in step2.locations
-    # Verify step uses parameter references
-    assert step2.locations["source"] == "source_location_2"
-    assert step2.locations["target"] == "target_location_2"
+    assert "from_location" in step2.locations
+    assert "to_location" in step2.locations
+    # Verify step uses direct location names
+    assert step2.locations["from_location"] == "pickup_station"
+    assert step2.locations["to_location"] == "storage_area"
 
 
 def test_multi_leg_transfer_workflow_parameters_injection(transfer_setup):
-    """Test that workflow parameters are correctly injected for multi-leg transfers."""
+    """Test that workflow parameters are simplified for multi-leg transfers."""
     manager = transfer_setup["manager"]
 
     # Get multi-hop transfer path
@@ -808,27 +791,21 @@ def test_multi_leg_transfer_workflow_parameters_injection(transfer_setup):
     assert path is not None
     workflow = manager._composite_transfer_workflow(path)
 
-    # Verify workflow has parameters defined
+    # Verify workflow has simplified parameters (empty WorkflowParameters)
     assert workflow.parameters is not None
-    assert len(workflow.parameters.json_inputs) == 4  # 2 steps, 2 locations each
+    assert isinstance(workflow.parameters, WorkflowParameters)
+    # The simplified implementation should have no complex parameters
+    assert len(workflow.parameters.json_inputs) == 0
 
-    # Check that step-specific location parameters are defined
-    param_keys = {param.key for param in workflow.parameters.json_inputs}
-    expected_keys = {
-        "source_location_1",
-        "target_location_1",
-        "source_location_2",
-        "target_location_2",
-    }
-    assert param_keys == expected_keys
+    # Verify steps use direct location names instead of parameter references
+    step1 = workflow.steps[0]
+    step2 = workflow.steps[1]
 
-    # Verify parameter descriptions are meaningful
-    for param in workflow.parameters.json_inputs:
-        assert (
-            "Source location for transfer step" in param.description
-            or "Target location for transfer step" in param.description
-        )
-        assert param.default is not None  # Should have representation data
+    # Check that location names are directly assigned, not parameter references
+    assert step1.locations["source_location"] == "processing_station"
+    assert step1.locations["target_location"] == "pickup_station"
+    assert step2.locations["from_location"] == "pickup_station"
+    assert step2.locations["to_location"] == "storage_area"
 
 
 def test_workflow_generation_with_various_path_lengths(transfer_setup):
@@ -912,7 +889,7 @@ def test_plan_transfer_endpoint_direct(transfer_setup):
 
     # Validate that a workflow definition is returned
     workflow = WorkflowDefinition.model_validate(workflow_data)
-    assert "transfer_" in workflow.name
+    assert "Transfer:" in workflow.name
 
     assert len(workflow.steps) == 1
 
@@ -936,33 +913,27 @@ def test_plan_transfer_endpoint_multi_hop(transfer_setup):
 
     # Validate workflow structure
     workflow = WorkflowDefinition.model_validate(workflow_data)
-    assert "transfer_" in workflow.name
+    assert "Transfer:" in workflow.name
     assert len(workflow.steps) == 2, "Multi-hop transfer should generate 2 steps"
 
     # Verify step sequence and nodes
     step1 = workflow.steps[0]
-    assert step1.node == "robot_arm"
+    assert step1.node == "robotarm_1"
     assert step1.name == "transfer_step_1"
-    assert step1.locations["source"] == "source_location_1"
-    assert step1.locations["target"] == "target_location_1"
+    assert step1.locations["source_location"] == "processing_station"
+    assert step1.locations["target_location"] == "pickup_station"
 
     step2 = workflow.steps[1]
     assert step2.node == "conveyor"
     assert step2.name == "transfer_step_2"
-    assert step2.locations["source"] == "source_location_2"
-    assert step2.locations["target"] == "target_location_2"
+    assert step2.locations["from_location"] == "pickup_station"
+    assert step2.locations["to_location"] == "storage_area"
 
-    # Verify workflow parameters
+    # Verify workflow parameters are simplified (no complex parameter injection)
     assert workflow.parameters is not None
-    assert len(workflow.parameters.json_inputs) == 4  # 2 steps, 2 locations each
-    param_keys = {param.key for param in workflow.parameters.json_inputs}
-    expected_keys = {
-        "source_location_1",
-        "target_location_1",
-        "source_location_2",
-        "target_location_2",
-    }
-    assert param_keys == expected_keys
+    assert (
+        len(workflow.parameters.json_inputs) == 0
+    )  # Simplified approach uses direct names
 
 
 def test_plan_transfer_endpoint_no_path(transfer_setup):

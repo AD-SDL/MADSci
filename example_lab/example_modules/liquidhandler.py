@@ -80,6 +80,17 @@ class LiquidHandlerNode(RestNode):
         return ActionSucceeded()
 
     @action
+    def deck_transfer(self, source_location: str, target_location: str) -> ActionResult:
+        """Transfer labware between deck locations on the liquid handler."""
+        self.logger.log(
+            f"Transferring labware from {source_location} to {target_location}"
+        )
+        self.liquid_handler.run_command(
+            f"move_labware {source_location} {target_location}"
+        )
+        return ActionSucceeded()
+
+    @action
     def arg_type_test(self, x: bool, y: int, z: float, w: str) -> ActionResult:
         """Used to test that argument types are correctly passed to the node module."""
         if type(x) is bool and type(y) is int and type(z) is float and type(w) is str:

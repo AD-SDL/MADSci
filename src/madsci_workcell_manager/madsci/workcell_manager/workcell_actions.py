@@ -6,12 +6,12 @@ from typing import Union
 from madsci.client.location_client import LocationClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.exceptions import WorkflowCanceledError, WorkflowFailedError
+from madsci.common.exceptions import (
+    LocationNotFoundError,
+    WorkflowCanceledError,
+    WorkflowFailedError,
+)
 from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
-
-
-class LocationNotFoundError(Exception):
-    """Raised when a location cannot be found by ID or name."""
 
 
 def wait(seconds: Union[int, float]) -> ActionResult:
@@ -102,7 +102,7 @@ def transfer(  # noqa: C901
                     data={
                         "message": f"Transfer completed from {source} to {destination}",
                         "workflow_id": workflow.workflow_id,
-                        "execution_time": workflow.status.workflow_runtime,
+                        "execution_time": workflow.duration_seconds,
                         "source_location_id": source_location_id,
                         "destination_location_id": destination_location_id,
                     }

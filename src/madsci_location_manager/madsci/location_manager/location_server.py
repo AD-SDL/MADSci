@@ -19,9 +19,12 @@ from madsci.common.types.location_types import (
     TransferGraphEdge,
     TransferStepTemplate,
 )
-from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import StepDefinition
-from madsci.common.types.workflow_types import WorkflowDefinition, WorkflowParameters
+from madsci.common.types.workflow_types import (
+    WorkflowDefinition,
+    WorkflowMetadata,
+    WorkflowParameters,
+)
 from madsci.location_manager.location_state_handler import LocationStateHandler
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -342,63 +345,65 @@ class LocationManager(
         workflow_parameters = WorkflowParameters()
 
         for i, edge in enumerate(path):
-            # Create step from template
-            step_template = edge.transfer_template.step_template
-            step_dict = step_template.model_dump()
+            # Construct step dynamically from transfer template
+            template = edge.transfer_template
 
-            # Generate unique step name
-            step_dict["name"] = f"transfer_step_{i + 1}"
-            step_dict["key"] = f"transfer_step_{i + 1}"
+            # Generate unique step name and key
+            step_name = f"transfer_step_{i + 1}"
+            step_key = f"transfer_step_{i + 1}"
 
-            # Add source and target location parameters to the step
-            if not step_dict.get("locations"):
-                step_dict["locations"] = {}
+            # Create step definition with locations mapped to template argument names
+            step_locations = {
+                template.source_argument_name: self.state_handler.get_location(
+                    edge.source_location_id
+                ).name,
+                template.target_argument_name: self.state_handler.get_location(
+                    edge.destination_location_id
+                ).name,
+            }
 
-            # Use parameter keys for source and target locations
-            source_param_key = f"source_location_{i + 1}"
-            target_param_key = f"target_location_{i + 1}"
-
-            step_dict["locations"]["source"] = source_param_key
-            step_dict["locations"]["target"] = target_param_key
-
-            # Add parameters to workflow for this step's locations
-            source_location = self.state_handler.get_location(edge.source_location_id)
-            target_location = self.state_handler.get_location(
-                edge.destination_location_id
+            # Create the step definition
+            step = StepDefinition(
+                name=step_name,
+                key=step_key,
+                description=f"Transfer step {i + 1} using {template.node_name}",
+                action=template.action,
+                node=template.node_name,
+                args={},
+                files={},
+                locations=step_locations,
+                conditions=[],
+                data_labels={},
             )
 
-            if source_location:
-                source_repr = (source_location.representations or {}).get(
-                    edge.transfer_template.node_name, {}
-                )
-                source_param = ParameterInputJson(
-                    key=source_param_key,
-                    description=f"Source location for transfer step {i + 1}",
-                    default=source_repr,
-                )
-                workflow_parameters.json_inputs.append(source_param)
-
-            if target_location:
-                target_repr = (target_location.representations or {}).get(
-                    edge.transfer_template.node_name, {}
-                )
-                target_param = ParameterInputJson(
-                    key=target_param_key,
-                    description=f"Target location for transfer step {i + 1}",
-                    default=target_repr,
-                )
-                workflow_parameters.json_inputs.append(target_param)
-
-            workflow_steps.append(StepDefinition.model_validate(step_dict))
+            workflow_steps.append(step)
 
         # Create the composite workflow
         if path:
-            workflow_name = f"transfer_{path[0].source_location_id}_to_{path[-1].destination_location_id}"
+            # Get source and destination locations for names and IDs
+            source_location = self.state_handler.get_location(
+                path[0].source_location_id
+            )
+            dest_location = self.state_handler.get_location(
+                path[-1].destination_location_id
+            )
+
+            # Use location names in workflow name
+            workflow_name = (
+                f"Transfer: '{source_location.name}' -> '{dest_location.name}'"
+            )
+
+            # Create description with both names and IDs
+            description = f"Transfer from {source_location.name} ({path[0].source_location_id}) to {dest_location.name} ({path[-1].destination_location_id})"
         else:
-            workflow_name = "transfer_same_location"
+            workflow_name = "Transfer: Same location"
+            description = "Transfer within the same location"
 
         return WorkflowDefinition(
-            name=workflow_name, parameters=workflow_parameters, steps=workflow_steps
+            name=workflow_name,
+            parameters=workflow_parameters,
+            steps=workflow_steps,
+            definition_metadata=WorkflowMetadata(description=description),
         )
 
     @get("/health", tags=["Status"])

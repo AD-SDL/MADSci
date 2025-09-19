@@ -5,18 +5,43 @@ description: An example workcell, consisiting of a (fake) liquid handler, a (fak
   plate reader, and a (fake) robot arm.
 nodes:
   liquidhandler_1: http://localhost:2000/
+  liquidhandler_2: http://localhost:2003/
   robotarm_1: http://localhost:2001/
   platereader_1: http://localhost:2002/
 locations:
-- location_name: location_1
+- location_name: deck_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
-  description: null
+  description: Deck 1 on liquidhandler_1 - accessible by robotarm_1
   representations: {}
   resource_template_name: null
   resource_template_overrides: null
-- location_name: location_2
+- location_name: deck_2
+  location_id: 01JR157336G2GXT79RQWZ1PE9A
+  description: Deck 2 on liquidhandler_1 - liquid handler only
+  representations: {}
+  resource_template_name: null
+  resource_template_overrides: null
+- location_name: deck_3
+  location_id: 01JR157336G2GXT79RQWZ1PE9B
+  description: Deck 3 on liquidhandler_2 - accessible by robotarm_1
+  representations: {}
+  resource_template_name: null
+  resource_template_overrides: null
+- location_name: deck_4
+  location_id: 01JR157336G2GXT79RQWZ1PE9C
+  description: Deck 4 on liquidhandler_2 - liquid handler only
+  representations: {}
+  resource_template_name: null
+  resource_template_overrides: null
+- location_name: plate_carriage
   location_id: 01JR157336G2GXT79RQWZ1PE9F
-  description: null
+  description: Plate carriage - accessible by robotarm_1 for plate transport
+  representations: {}
+  resource_template_name: null
+  resource_template_overrides: null
+- location_name: storage_rack
+  location_id: 01JR157336G2GXT79RQWZ1PE9D
+  description: Storage Rack - High-capacity storage accessible only by robot arm
   representations: {}
   resource_template_name: null
   resource_template_overrides: null

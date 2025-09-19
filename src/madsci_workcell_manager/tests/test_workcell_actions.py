@@ -3,10 +3,10 @@
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from madsci.common.exceptions import LocationNotFoundError
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.context_types import MadsciContext
 from madsci.workcell_manager.workcell_actions import (
-    LocationNotFoundError,
     _resolve_location_identifier,
     transfer,
     wait,

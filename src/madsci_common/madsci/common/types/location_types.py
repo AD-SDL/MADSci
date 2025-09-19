@@ -18,7 +18,7 @@ from pydantic.functional_validators import field_validator
 
 # Avoid circular imports
 if TYPE_CHECKING:
-    from madsci.common.types.step_types import StepDefinition
+    pass
 
 
 class LocationArgument(MadsciBaseModel):
@@ -147,9 +147,19 @@ class TransferStepTemplate(MadsciBaseModel):
     node_name: str = Field(
         title="Node Name", description="Name of the node that can perform this transfer"
     )
-    step_template: "StepDefinition" = Field(
-        title="Step Template",
-        description="Template step definition with source/target location parameters",
+    action: str = Field(
+        title="Action Name",
+        description="Name of the action to perform for this transfer",
+    )
+    source_argument_name: str = Field(
+        title="Source Argument Name",
+        description="Name of the location argument for the source location",
+        default="source_location",
+    )
+    target_argument_name: str = Field(
+        title="Target Argument Name",
+        description="Name of the location argument for the target location",
+        default="target_location",
     )
     cost_weight: Optional[float] = Field(
         title="Cost Weight",
@@ -267,14 +277,3 @@ class LocationManagerHealth(ManagerHealth):
         description="The number of locations managed by the Location Manager.",
         default=0,
     )
-
-
-# Rebuild models to resolve forward references
-try:
-    from madsci.common.types.step_types import StepDefinition
-
-    TransferStepTemplate.model_rebuild()
-    LocationManagerDefinition.model_rebuild()
-except ImportError:
-    # StepDefinition not available yet - will be rebuilt later
-    pass

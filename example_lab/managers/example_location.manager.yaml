@@ -1,110 +1,165 @@
 name: Example Location Manager
-description: An example location manager for the example lab, managing locations for
-  the liquid handler, robot arm, and plate reader with transfer capabilities.
+description: An example location manager for the example lab, managing deck locations
+  for liquid handlers, robot arm accessible positions, plate carriage, and storage
+  rack.
 manager_id: 01JK7069DXAKAMWE0PDX6EY1PD
 manager_type: location_manager
 locations:
-- location_name: robot_station_1
-  location_id: 01JQCRA5HNG94DMQ9APVV5R1B1
-  description: Robot Station 1 - Primary manipulation location accessible by robot
-    arm
+- location_name: liquidhandler_1.deck_1
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKF
+  description: Deck 1 on liquidhandler_1 - accessible by robotarm_1
   representations:
+    liquidhandler_1:
+      deck_position: 1
+      deck_type: standard
+      max_plates: 1
     robotarm_1:
       position:
-      - 1
-      - 2
-      - 3
+      - 10
+      - 15
+      - 5
       gripper_config: standard
-      max_payload: 5.0
-  resource_template_name: robot_accessible_slot
+      max_payload: 2.0
+  resource_template_name: plate_nest
   resource_template_overrides:
-    resource_class: robot_accessible
-    resource_description: Slot accessible by robot arm for manipulation tasks
-- location_name: robot_station_2
-  location_id: 01JR157336G2GXT79RQWZ1PE9F
-  description: Robot Station 2 - Secondary manipulation location accessible by robot
-    arm
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler and robot arm
+- location_name: liquidhandler_1.deck_2
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKG
+  description: Deck 2 on liquidhandler_1 - liquid handler only
   representations:
+    liquidhandler_1:
+      deck_position: 2
+      deck_type: standard
+      max_plates: 1
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler only
+- location_name: liquidhandler_1.deck_3
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKH
+  description: Deck 3 on liquidhandler_1 - liquid handler only
+  representations:
+    liquidhandler_1:
+      deck_position: 3
+      deck_type: standard
+      max_plates: 1
+    robotarm_1:
+      position:
+      - 20
+      - 15
+      - 5
+      gripper_config: standard
+      max_payload: 2.0
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler and robot arm
+- location_name: liquidhandler_1.deck_4
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKJ
+  description: Deck 4 on liquidhandler_1 - liquid handler only
+  representations:
+    liquidhandler_1:
+      deck_position: 4
+      deck_type: standard
+      max_plates: 1
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler only
+- location_name: liquidhandler_2.deck_1
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKK
+  description: Deck 1 on liquidhandler_2 - accessible by robotarm_1
+  representations:
+    liquidhandler_2:
+      deck_position: 1
+      deck_type: standard
+      max_plates: 1
     robotarm_1:
       position:
       - 5
-      - 6
-      - 7
-      gripper_config: standard
-      max_payload: 5.0
-  resource_template_name: robot_accessible_slot
-  resource_template_overrides:
-    resource_class: robot_accessible
-    resource_description: Slot accessible by robot arm for manipulation tasks
-- location_name: liquid_station_1
-  location_id: 01JR157336G2GXT79RQWZ1PE9A
-  description: Liquid Station 1 - Pipetting location accessible by liquid handler
-  representations:
-    liquidhandler:
-      tip_position:
-      - 10
-      - 20
-      - 30
-      well_format: 96_well
-      max_volume: 1000.0
-  resource_template_name: liquid_accessible_slot
-  resource_template_overrides:
-    resource_class: liquid_accessible
-    resource_description: Slot accessible by liquid handler for pipetting tasks
-- location_name: liquid_station_2
-  location_id: 01JR157336G2GXT79RQWZ1PE9B
-  description: Liquid Station 2 - Secondary pipetting location accessible by liquid
-    handler
-  representations:
-    liquidhandler:
-      tip_position:
       - 15
-      - 25
-      - 35
-      well_format: 384_well
-      max_volume: 200.0
-  resource_template_name: liquid_accessible_slot
+      - 5
+      gripper_config: standard
+      max_payload: 2.0
+  resource_template_name: plate_nest
   resource_template_overrides:
-    resource_class: liquid_accessible
-    resource_description: Slot accessible by liquid handler for pipetting tasks
-- location_name: hybrid_station
-  location_id: 01JR157336G2GXT79RQWZ1PE9C
-  description: Hybrid Station - Multi-modal location accessible by both robot arm
-    and liquid handler
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler and robot arm
+- location_name: liquidhandler_2.deck_2
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKM
+  description: Deck 2 on liquidhandler_2 - liquid handler only
+  representations:
+    liquidhandler_2:
+      deck_position: 2
+      deck_type: standard
+      max_plates: 1
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler only
+- location_name: liquidhandler_2.deck_3
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKN
+  description: Deck 3 on liquidhandler_2 - accessible by robotarm_1
+  representations:
+    liquidhandler_2:
+      deck_position: 3
+      deck_type: standard
+      max_plates: 1
+    robotarm_1:
+      position:
+      - 25
+      - 15
+      - 5
+      gripper_config: standard
+      max_payload: 2.0
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler and robot arm
+- location_name: liquidhandler_2.deck_4
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKP
+  description: Deck 4 on liquidhandler_2 - liquid handler only
+  representations:
+    liquidhandler_2:
+      deck_position: 4
+      deck_type: standard
+      max_plates: 1
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler only
+- location_name: platereader_1.plate_carriage
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKQ
+  description: Plate carriage - accessible by robotarm_1 for plate transport
   representations:
     robotarm_1:
       position:
-      - 8
-      - 9
+      - 15
       - 10
-      gripper_config: precision
-      max_payload: 2.0
-    liquidhandler:
-      tip_position:
       - 8
-      - 9
-      - 12
-      well_format: 96_well
-      max_volume: 500.0
-  resource_template_name: multi_modal_slot
+      gripper_config: wide
+      max_payload: 3.0
+  resource_template_name: plate_nest
   resource_template_overrides:
-    resource_class: multi_modal
-    resource_description: Slot accessible by both robot arm and liquid handler
+    resource_class: plate_carriage
+    resource_description: Plate carriage for platereader_1
 - location_name: storage_rack
-  location_id: 01JR157336G2GXT79RQWZ1PE9D
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKR
   description: Storage Rack - High-capacity storage accessible only by robot arm
   representations:
     robotarm_1:
       position:
-      - 20
-      - 21
-      - 22
+      - 30
+      - 25
+      - 10
       gripper_config: wide
       max_payload: 10.0
   resource_template_name: storage_stack
   resource_template_overrides:
     resource_class: storage
-    resource_description: High-capacity storage slot for materials
+    resource_description: High-capacity storage stack for materials
+    capacity: 16
 transfer_capabilities:
   transfer_templates:
   - node_name: robotarm_1
@@ -113,7 +168,12 @@ transfer_capabilities:
     target_argument_name: target_location
     cost_weight: 1.0
   - node_name: liquidhandler_1
-    action: transfer_liquid
-    source_argument_name: from_location
-    target_argument_name: to_location
+    action: deck_transfer
+    source_argument_name: source_location
+    target_argument_name: target_location
+    cost_weight: 2.0
+  - node_name: liquidhandler_2
+    action: deck_transfer
+    source_argument_name: source_location
+    target_argument_name: target_location
     cost_weight: 2.0

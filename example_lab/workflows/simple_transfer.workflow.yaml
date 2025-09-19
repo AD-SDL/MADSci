@@ -11,6 +11,6 @@ steps:
     key: move_resource
     action: transfer
     args:
-      source: storage_rack
-      destination: robot_station_1
-    description: "Transfer resource from storage rack to robot station 1"
+      source: liquidhandler_1.deck_1
+      destination: liquidhandler_2.deck_1
+    description: "Transfer resource from liquidhandler_1.deck_1 to liquidhandler_2.deck_1"
