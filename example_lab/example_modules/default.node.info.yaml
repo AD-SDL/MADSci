@@ -1,8 +1,8 @@
-node_name: liquidhandler_1
-node_id: 01JYFEHVSV20D60Z88RVERJ75N
-node_description: A (fake) liquidhandler for testing purposes.
+node_name: default.node
+node_id: 01K52C4N6420DR92V1JDHD26AM
+node_description: null
 node_type: device
-module_name: liquidhandler
+module_name: liquid_handler_node
 module_version: 0.0.1
 capabilities:
   get_info: true
@@ -24,47 +24,34 @@ capabilities:
   - unlock
 node_url: null
 actions:
-  run_command:
-    name: run_command
-    description: Run a command on the liquid handler.
-    args:
-      command:
-        name: command
-        description: ''
-        argument_type: str
-        required: true
-        default: null
+  read_plate:
+    name: read_plate
+    description: Run a command on the plate reader.
+    args: {}
     locations: {}
     files: {}
     results: {}
     blocking: false
     asynchronous: true
-  run_protocol:
-    name: run_protocol
-    description: Run a protocol on the liquid handler
+  create_plate_file:
+    name: create_plate_file
+    description: Run a command on the plate reader.
     args: {}
     locations: {}
-    files:
-      protocol:
-        name: protocol
-        description: ''
-        argument_type: file
-        required: true
-        default: null
+    files: {}
     results: {}
     blocking: false
     asynchronous: true
 config:
-  node_definition: node_definitions/liquidhandler_1.node.yaml
+  node_definition: default.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://localhost:2000/
+  node_url: http://localhost:2002/
   uvicorn_kwargs: {}
-  device_number: 0
 config_schema:
-  description: Configuration for the liquid handler node module.
+  description: Default Configuration for a MADSci Node that communicates over REST.
   properties:
     node_definition:
       anyOf:
@@ -121,9 +108,5 @@ config_schema:
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-    device_number:
-      default: 0
-      title: Device Number
-      type: integer
-  title: LiquidHandlerConfig
+  title: RestNodeConfig
   type: object

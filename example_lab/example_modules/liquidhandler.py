@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionResult, ActionSucceeded
+from madsci.common.types.action_types import ActionResult, ActionSucceeded, ActionFiles, ActionJSON
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
@@ -65,9 +65,12 @@ class LiquidHandlerNode(RestNode):
             self.node_state = {
                 "liquid_handler_status_code": self.liquid_handler.status_code,
             }
-
+    class RunCommandJSONData(ActionJSON):
+        command: str
+    class RunCommandFileData(ActionFiles):
+        log_file: Path
     @action
-    def run_command(self, command: str) -> ActionResult:
+    def run_command(self, command: str) -> tuple[RunCommandJSONData, RunCommandFileData]:
         """Run a command on the liquid handler."""
         self.liquid_handler.run_command(command)
         return ActionSucceeded()

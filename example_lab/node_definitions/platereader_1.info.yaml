@@ -30,11 +30,7 @@ actions:
     args: {}
     locations: {}
     files: {}
-    results:
-      example_data:
-        result_label: example_data
-        description: null
-        result_type: json
+    results: {}
     blocking: false
     asynchronous: true
   create_plate_file:
@@ -43,11 +39,7 @@ actions:
     args: {}
     locations: {}
     files: {}
-    results:
-      example_file:
-        result_label: example_file
-        description: null
-        result_type: file
+    results: {}
     blocking: false
     asynchronous: true
 config:
