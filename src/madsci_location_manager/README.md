@@ -8,6 +8,7 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - **Resource Attachment**: Attach resources to specific locations with automatic resource creation from templates
 - **Node-Specific Representations**: Manage node-specific representations for locations to enable flexible integration
 - **Transfer Planning**: Plan multi-step transfers between locations using transfer templates and graph algorithms
+- **Non-Transfer Locations**: Support for locations that are excluded from transfer operations for safety or design requirements
 - **Resource Hierarchy Queries**: Query resource hierarchies for resources attached to locations
 - **Redis State Management**: Persistent state storage using Redis
 - **RESTful API**: Clean REST endpoints for all location operations
@@ -116,8 +117,28 @@ The Location Manager supports sophisticated transfer planning:
 2. **Transfer Graph**: Dynamic graph built from location representations and transfer capabilities
 3. **Path Finding**: Dijkstra's algorithm finds optimal transfer paths
 4. **Workflow Generation**: Creates executable workflows for complex multi-step transfers
+5. **Non-Transfer Location Support**: Locations can be marked as non-transferable to exclude them from transfer operations
 
-Transfer planning enables automatic resource movement between locations using the shortest available path.
+### Non-Transfer Locations
+
+Some locations may need to be excluded from transfer operations for safety, design, or operational reasons. The Location Manager supports this through the `allow_transfers` field:
+
+- **Location Definition**: Set `allow_transfers: false` when defining locations that should not participate in transfers
+- **Transfer Graph Exclusion**: Non-transfer locations are automatically excluded from the transfer graph
+- **Error Handling**: Attempting to plan transfers to/from non-transfer locations returns clear error messages
+- **Default Behavior**: All locations allow transfers by default (`allow_transfers: true`)
+
+Example non-transfer location definition:
+```yaml
+locations:
+  - location_name: "safety_zone"
+    description: "Critical safety area - no automated transfers allowed"
+    allow_transfers: false
+    representations:
+      sensor_array: {"zone": "restricted"}
+```
+
+Transfer planning enables automatic resource movement between locations using the shortest available path, while respecting transfer restrictions.
 
 ## Integration
 

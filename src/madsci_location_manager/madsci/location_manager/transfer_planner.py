@@ -57,6 +57,13 @@ class TransferPlanner:
                     if source_location.location_id == dest_location.location_id:
                         continue  # Skip self-transfers
 
+                    # Skip locations that don't allow transfers
+                    if (
+                        not source_location.allow_transfers
+                        or not dest_location.allow_transfers
+                    ):
+                        continue
+
                     if self._can_transfer_between_locations(
                         source_location, dest_location, template
                     ):
@@ -284,10 +291,22 @@ class TransferPlanner:
             Composite workflow definition to execute the transfer
 
         Raises:
-            ValueError: If locations don't exist or no transfer path exists
+            ValueError: If locations don't exist, don't allow transfers, or no transfer path exists
         """
         # Validate that both locations exist
-        self.validate_locations_exist(source_location_id, destination_location_id)
+        source_location, dest_location = self.validate_locations_exist(
+            source_location_id, destination_location_id
+        )
+
+        # Check if transfers are allowed for both locations
+        if not source_location.allow_transfers:
+            raise ValueError(
+                f"Source location '{source_location.name}' ({source_location_id}) does not allow transfers"
+            )
+        if not dest_location.allow_transfers:
+            raise ValueError(
+                f"Destination location '{dest_location.name}' ({destination_location_id}) does not allow transfers"
+            )
 
         # Find shortest transfer path
         transfer_path = self.find_shortest_transfer_path(

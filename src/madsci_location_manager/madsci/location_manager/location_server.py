@@ -90,6 +90,7 @@ class LocationManager(
                 if location_def.representations
                 else None,
                 resource_id=resource_id,  # Associate the resource with the location
+                allow_transfers=location_def.allow_transfers,
             )
 
             if existing_location is None:
@@ -372,9 +373,26 @@ class LocationManager(
                     source_location_id, destination_location_id
                 )
             except ValueError as e:
+                error_message = str(e)
+                # Check if this is a "does not allow transfers" error
+                if "does not allow transfers" in error_message:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=error_message,
+                    ) from e
+                # Check if this is a "not found" or "no transfer path" error
+                if (
+                    "not found" in error_message
+                    or "No transfer path exists" in error_message
+                ):
+                    raise HTTPException(
+                        status_code=404,
+                        detail=error_message,
+                    ) from e
+                # Default to 400 for other ValueError cases
                 raise HTTPException(
-                    status_code=404,
-                    detail=str(e),
+                    status_code=400,
+                    detail=error_message,
                 ) from e
 
     @get("/transfer/graph", tags=["Transfer"])

@@ -24,6 +24,7 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler and robot arm
+  allow_transfers: true
 - location_name: liquidhandler_1.deck_2
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKG
   description: Deck 2 on liquidhandler_1 - liquid handler only
@@ -36,6 +37,7 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler only
+  allow_transfers: true
 - location_name: liquidhandler_1.deck_3
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKH
   description: Deck 3 on liquidhandler_1 - liquid handler only
@@ -55,6 +57,7 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler and robot arm
+  allow_transfers: true
 - location_name: liquidhandler_1.deck_4
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKJ
   description: Deck 4 on liquidhandler_1 - liquid handler only
@@ -67,6 +70,7 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler only
+  allow_transfers: true
 - location_name: liquidhandler_2.deck_1
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKK
   description: Deck 1 on liquidhandler_2 - accessible by robotarm_1
@@ -86,6 +90,7 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler and robot arm
+  allow_transfers: true
 - location_name: liquidhandler_2.deck_2
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKM
   description: Deck 2 on liquidhandler_2 - liquid handler only
@@ -98,6 +103,7 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler only
+  allow_transfers: true
 - location_name: liquidhandler_2.deck_3
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKN
   description: Deck 3 on liquidhandler_2 - accessible by robotarm_1
@@ -117,6 +123,7 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler and robot arm
+  allow_transfers: true
 - location_name: liquidhandler_2.deck_4
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKP
   description: Deck 4 on liquidhandler_2 - liquid handler only
@@ -129,6 +136,7 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler only
+  allow_transfers: true
 - location_name: platereader_1.plate_carriage
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKQ
   description: Plate carriage - accessible by robotarm_1 for plate transport
@@ -144,6 +152,7 @@ locations:
   resource_template_overrides:
     resource_class: plate_carriage
     resource_description: Plate carriage for platereader_1
+  allow_transfers: true
 - location_name: storage_rack
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKR
   description: Storage Rack - High-capacity storage accessible only by robot arm
@@ -160,6 +169,7 @@ locations:
     resource_class: storage
     resource_description: High-capacity storage stack for materials
     capacity: 16
+  allow_transfers: true
 transfer_capabilities:
   transfer_templates:
   - node_name: robotarm_1

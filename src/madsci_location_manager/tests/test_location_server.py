@@ -1258,3 +1258,245 @@ def test_get_location_by_id_query_parameter(redis_server: Redis):
     error_data = response.json()
     assert "not found" in error_data["detail"].lower()
     assert "nonexistent_id" in error_data["detail"]
+
+
+# Non-transfer location tests
+def test_non_transfer_location_creation(redis_server: Redis):
+    """Test creating locations with allow_transfers=False."""
+    non_transfer_location = LocationDefinition(
+        location_name="non_transfer_station",
+        location_id=new_ulid_str(),
+        description="A station that doesn't allow transfers",
+        allow_transfers=False,
+    )
+
+    transfer_location = LocationDefinition(
+        location_name="transfer_station",
+        location_id=new_ulid_str(),
+        description="A station that allows transfers",
+        allow_transfers=True,
+    )
+
+    definition = LocationManagerDefinition(
+        name="Test Manager with Non-transfer Locations",
+        manager_id=new_ulid_str(),
+        locations=[non_transfer_location, transfer_location],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_non_transfer_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Check that locations are created with correct allow_transfers values
+    response = client.get(f"/location?location_id={non_transfer_location.location_id}")
+    assert response.status_code == 200
+    location_data = response.json()
+    assert location_data["allow_transfers"] is False
+
+    response = client.get(f"/location?location_id={transfer_location.location_id}")
+    assert response.status_code == 200
+    location_data = response.json()
+    assert location_data["allow_transfers"] is True
+
+
+def test_non_transfer_location_excluded_from_graph(redis_server: Redis):
+    """Test that non-transfer locations are excluded from transfer graph construction."""
+    # Create transfer templates
+    robot_template = TransferStepTemplate(
+        node_name="robot_arm",
+        action="transfer",
+        source_argument_name="source_location",
+        target_argument_name="target_location",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[robot_template]
+    )
+
+    # Create locations - some allow transfers, others don't
+    transfer_loc1 = LocationDefinition(
+        location_name="transfer_station_1",
+        location_id=new_ulid_str(),
+        representations={"robot_arm": {"position": [1, 0, 0]}},
+        allow_transfers=True,
+    )
+
+    transfer_loc2 = LocationDefinition(
+        location_name="transfer_station_2",
+        location_id=new_ulid_str(),
+        representations={"robot_arm": {"position": [2, 0, 0]}},
+        allow_transfers=True,
+    )
+
+    non_transfer_loc = LocationDefinition(
+        location_name="non_transfer_station",
+        location_id=new_ulid_str(),
+        representations={"robot_arm": {"position": [0, 1, 0]}},
+        allow_transfers=False,
+    )
+
+    definition = LocationManagerDefinition(
+        name="Test Manager with Non-transfer Graph",
+        manager_id=new_ulid_str(),
+        locations=[transfer_loc1, transfer_loc2, non_transfer_loc],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_non_transfer_graph_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Check the transfer graph
+    transfer_graph = manager.transfer_planner._transfer_graph
+
+    # Should have edge between transfer_loc1 and transfer_loc2 in both directions
+    assert (transfer_loc1.location_id, transfer_loc2.location_id) in transfer_graph
+    assert (transfer_loc2.location_id, transfer_loc1.location_id) in transfer_graph
+
+    # Should NOT have any edges involving non_transfer_loc
+    for src, dst in transfer_graph:
+        assert src != non_transfer_loc.location_id
+        assert dst != non_transfer_loc.location_id
+
+
+def test_non_transfer_location_plan_transfer_error(redis_server: Redis):
+    """Test that planning transfers to/from non-transfer locations raises appropriate errors."""
+    # Create transfer templates
+    robot_template = TransferStepTemplate(
+        node_name="robot_arm",
+        action="transfer",
+        source_argument_name="source_location",
+        target_argument_name="target_location",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[robot_template]
+    )
+
+    transfer_loc = LocationDefinition(
+        location_name="transfer_station",
+        location_id=new_ulid_str(),
+        representations={"robot_arm": {"position": [1, 0, 0]}},
+        allow_transfers=True,
+    )
+
+    non_transfer_loc = LocationDefinition(
+        location_name="non_transfer_station",
+        location_id=new_ulid_str(),
+        representations={"robot_arm": {"position": [0, 1, 0]}},
+        allow_transfers=False,
+    )
+
+    definition = LocationManagerDefinition(
+        name="Test Manager for Non-transfer Error Testing",
+        manager_id=new_ulid_str(),
+        locations=[transfer_loc, non_transfer_loc],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_non_transfer_error_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Test transfer FROM non-transfer location
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": non_transfer_loc.location_id,
+            "destination_location_id": transfer_loc.location_id,
+        },
+    )
+    assert response.status_code == 400
+    error_data = response.json()
+    assert "does not allow transfers" in error_data["detail"]
+    assert "non_transfer_station" in error_data["detail"]
+
+    # Test transfer TO non-transfer location
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": transfer_loc.location_id,
+            "destination_location_id": non_transfer_loc.location_id,
+        },
+    )
+    assert response.status_code == 400
+    error_data = response.json()
+    assert "does not allow transfers" in error_data["detail"]
+    assert "non_transfer_station" in error_data["detail"]
+
+
+def test_location_definition_allow_transfers_default():
+    """Test that LocationDefinition.allow_transfers defaults to True."""
+    # Create location without specifying allow_transfers
+    location_def = LocationDefinition(
+        location_name="default_location",
+        location_id=new_ulid_str(),
+    )
+
+    assert location_def.allow_transfers is True
+
+    # Create location explicitly setting allow_transfers=True
+    location_def_true = LocationDefinition(
+        location_name="explicit_true_location",
+        location_id=new_ulid_str(),
+        allow_transfers=True,
+    )
+
+    assert location_def_true.allow_transfers is True
+
+    # Create location explicitly setting allow_transfers=False
+    location_def_false = LocationDefinition(
+        location_name="explicit_false_location",
+        location_id=new_ulid_str(),
+        allow_transfers=False,
+    )
+
+    assert location_def_false.allow_transfers is False
+
+
+def test_location_allow_transfers_default():
+    """Test that Location.allow_transfers defaults to True."""
+    # Create location without specifying allow_transfers
+    location = Location(
+        location_name="default_location",
+        location_id=new_ulid_str(),
+    )
+
+    assert location.allow_transfers is True
+
+    # Create location explicitly setting allow_transfers=True
+    location_true = Location(
+        location_name="explicit_true_location",
+        location_id=new_ulid_str(),
+        allow_transfers=True,
+    )
+
+    assert location_true.allow_transfers is True
+
+    # Create location explicitly setting allow_transfers=False
+    location_false = Location(
+        location_name="explicit_false_location",
+        location_id=new_ulid_str(),
+        allow_transfers=False,
+    )
+
+    assert location_false.allow_transfers is False

@@ -83,6 +83,11 @@ class LocationDefinition(MadsciBaseModel):
         description="Optional overrides to apply when creating a resource from the template for this specific location.",
         default=None,
     )
+    allow_transfers: bool = Field(
+        title="Allow Transfers",
+        description="Whether this location can be used as a source or destination in transfers. Non-transfer locations are excluded from transfer graph construction.",
+        default=True,
+    )
 
     is_ulid = field_validator("location_id")(ulid_validator)
 
@@ -124,6 +129,11 @@ class Location(MadsciBaseModel):
         title="Resource ID",
         description="The ID of an existing Resource associated with the location, if any (deprecated, use resource_ids).",
         default=None,
+    )
+    allow_transfers: bool = Field(
+        title="Allow Transfers",
+        description="Whether this location can be used as a source or destination in transfers. Non-transfer locations are excluded from transfer graph construction.",
+        default=True,
     )
 
     is_ulid = field_validator("location_id")(ulid_validator)
