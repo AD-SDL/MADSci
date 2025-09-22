@@ -533,7 +533,7 @@ def test_transfer_graph_construction(transfer_setup):
     manager = transfer_setup["manager"]
 
     # Build the transfer graph
-    graph = manager._build_transfer_graph()
+    graph = manager.transfer_planner._transfer_graph
 
     # Expected edges based on shared representations:
     # pickup <-> processing (robotarm_1)
@@ -615,21 +615,21 @@ def test_can_transfer_between_locations(transfer_setup):
     )
 
     # Test compatible transfers
-    assert manager._can_transfer_between_locations(
+    assert manager.transfer_planner._can_transfer_between_locations(
         pickup_location, processing_location, robot_template
     )
-    assert manager._can_transfer_between_locations(
+    assert manager.transfer_planner._can_transfer_between_locations(
         pickup_location, storage_location, conveyor_template
     )
 
     # Test incompatible transfers
-    assert not manager._can_transfer_between_locations(
+    assert not manager.transfer_planner._can_transfer_between_locations(
         processing_location, storage_location, robot_template
     )
-    assert not manager._can_transfer_between_locations(
+    assert not manager.transfer_planner._can_transfer_between_locations(
         pickup_location, isolated_location, robot_template
     )
-    assert not manager._can_transfer_between_locations(
+    assert not manager.transfer_planner._can_transfer_between_locations(
         pickup_location, processing_location, nonexistent_template
     )
 
@@ -639,7 +639,7 @@ def test_shortest_transfer_path_direct(transfer_setup):
     manager = transfer_setup["manager"]
 
     # Test direct path between connected locations
-    path = manager._find_shortest_transfer_path(
+    path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
     )
 
@@ -655,7 +655,7 @@ def test_shortest_transfer_path_no_connection(transfer_setup):
     manager = transfer_setup["manager"]
 
     # Test path to isolated location (should return None)
-    path = manager._find_shortest_transfer_path(
+    path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["pickup"], transfer_setup["locations"]["isolated"]
     )
 
@@ -667,7 +667,7 @@ def test_shortest_transfer_path_same_location(transfer_setup):
     manager = transfer_setup["manager"]
 
     # Test same location (should return empty path)
-    path = manager._find_shortest_transfer_path(
+    path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["pickup"], transfer_setup["locations"]["pickup"]
     )
 
@@ -680,7 +680,7 @@ def test_shortest_transfer_path_multi_hop(transfer_setup):
 
     # Add another location that creates a longer path
     # This would test processing -> pickup -> storage route
-    path = manager._find_shortest_transfer_path(
+    path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["processing"],
         transfer_setup["locations"]["storage"],
     )
@@ -700,27 +700,31 @@ def test_multi_leg_transfer_workflow_step_count(transfer_setup):
     manager = transfer_setup["manager"]
 
     # Test direct transfer (1 hop)
-    direct_path = manager._find_shortest_transfer_path(
+    direct_path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
     )
     assert direct_path is not None
     assert len(direct_path) == 1
 
-    direct_workflow = manager._composite_transfer_workflow(direct_path)
+    direct_workflow = manager.transfer_planner.create_composite_transfer_workflow(
+        direct_path
+    )
     assert isinstance(direct_workflow, WorkflowDefinition)
     assert len(direct_workflow.steps) == 1, (
         "Direct transfer should generate exactly 1 step"
     )
 
     # Test multi-hop transfer (2 hops: processing -> pickup -> storage)
-    multi_hop_path = manager._find_shortest_transfer_path(
+    multi_hop_path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["processing"],
         transfer_setup["locations"]["storage"],
     )
     assert multi_hop_path is not None
     assert len(multi_hop_path) == 2
 
-    multi_hop_workflow = manager._composite_transfer_workflow(multi_hop_path)
+    multi_hop_workflow = manager.transfer_planner.create_composite_transfer_workflow(
+        multi_hop_path
+    )
     assert isinstance(multi_hop_workflow, WorkflowDefinition)
     assert len(multi_hop_workflow.steps) == 2, (
         "Multi-hop transfer should generate exactly 2 steps"
@@ -733,7 +737,7 @@ def test_multi_leg_transfer_workflow_node_ordering(transfer_setup):
 
     # Get multi-hop transfer path: processing -> pickup -> storage
     # This should use: robotarm_1 (processing->pickup) then conveyor (pickup->storage)
-    path = manager._find_shortest_transfer_path(
+    path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["processing"],
         transfer_setup["locations"]["storage"],
     )
@@ -751,7 +755,7 @@ def test_multi_leg_transfer_workflow_node_ordering(transfer_setup):
     assert path[1].transfer_template.node_name == "conveyor"
 
     # Generate workflow and verify step ordering
-    workflow = manager._composite_transfer_workflow(path)
+    workflow = manager.transfer_planner.create_composite_transfer_workflow(path)
     assert isinstance(workflow, WorkflowDefinition)
     assert len(workflow.steps) == 2
 
@@ -783,13 +787,13 @@ def test_multi_leg_transfer_workflow_parameters_injection(transfer_setup):
     manager = transfer_setup["manager"]
 
     # Get multi-hop transfer path
-    path = manager._find_shortest_transfer_path(
+    path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["processing"],
         transfer_setup["locations"]["storage"],
     )
 
     assert path is not None
-    workflow = manager._composite_transfer_workflow(path)
+    workflow = manager.transfer_planner.create_composite_transfer_workflow(path)
 
     # Verify workflow has simplified parameters (empty WorkflowParameters)
     assert workflow.parameters is not None
@@ -813,34 +817,40 @@ def test_workflow_generation_with_various_path_lengths(transfer_setup):
     manager = transfer_setup["manager"]
 
     # Test same location (0 hops)
-    same_location_path = manager._find_shortest_transfer_path(
+    same_location_path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["pickup"], transfer_setup["locations"]["pickup"]
     )
     assert same_location_path == []
 
-    same_location_workflow = manager._composite_transfer_workflow(same_location_path)
+    same_location_workflow = (
+        manager.transfer_planner.create_composite_transfer_workflow(same_location_path)
+    )
     assert isinstance(same_location_workflow, WorkflowDefinition)
     assert len(same_location_workflow.steps) == 0, (
         "Same location transfer should generate 0 steps"
     )
 
     # Test direct transfer (1 hop)
-    direct_path = manager._find_shortest_transfer_path(
+    direct_path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
     )
     assert len(direct_path) == 1
 
-    direct_workflow = manager._composite_transfer_workflow(direct_path)
+    direct_workflow = manager.transfer_planner.create_composite_transfer_workflow(
+        direct_path
+    )
     assert len(direct_workflow.steps) == 1
 
     # Test multi-hop transfer (2 hops)
-    multi_hop_path = manager._find_shortest_transfer_path(
+    multi_hop_path = manager.transfer_planner.find_shortest_transfer_path(
         transfer_setup["locations"]["processing"],
         transfer_setup["locations"]["storage"],
     )
     assert len(multi_hop_path) == 2
 
-    multi_hop_workflow = manager._composite_transfer_workflow(multi_hop_path)
+    multi_hop_workflow = manager.transfer_planner.create_composite_transfer_workflow(
+        multi_hop_path
+    )
     assert len(multi_hop_workflow.steps) == 2
 
     # Verify that each workflow step count matches path length
@@ -1041,7 +1051,7 @@ def test_transfer_graph_without_transfer_capabilities(redis_server: Redis):
     client = TestClient(manager.create_server())
 
     # Transfer graph should be empty
-    graph = manager._build_transfer_graph()
+    graph = manager.transfer_planner._transfer_graph
     assert len(graph) == 0
 
     # API endpoint should return empty adjacency list

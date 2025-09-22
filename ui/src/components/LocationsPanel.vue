@@ -1,7 +1,18 @@
 <template>
  <LocationModal :location="modal_text" :location_name="modal_title" v-model="modal" />
  <AddLocationModal v-model="add_modal" />
-  <v-card class="pa-1 ma-1" col="3" title="Locations">
+
+ <!-- Transfer Graph Section -->
+ <div class="mb-4">
+   <TransferGraph
+     :locations="locations"
+     :resources="resources"
+     @node-click="handleNodeClick"
+   />
+ </div>
+
+ <!-- Locations Table Section -->
+ <v-card class="pa-1 ma-1" col="3" title="Locations">
     <v-card-text>
       <v-data-table :headers="location_headers" hover
       :items="location_items(locations, resources)"
@@ -35,6 +46,7 @@ import {
 
 import AddLocationModal from './AddLocationModal.vue';
 import LocationModal from './LocationModal.vue';
+import TransferGraph from './TransferGraph.vue';
 
 const modal_title = ref()
 const modal_text = ref()
@@ -102,5 +114,10 @@ function location_items(locations: any, resources: any) {
 }
 function active_add() {
   add_modal.value=true
+}
+
+function handleNodeClick(node: any) {
+  // Open the location modal when a node is clicked in the transfer graph
+  set_modal(node.name, node.originalLocation);
 }
 </script>

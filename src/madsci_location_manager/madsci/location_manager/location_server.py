@@ -1,6 +1,5 @@
 """MADSci Location Manager using AbstractManagerBase."""
 
-import heapq
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, AsyncGenerator, Optional
 
@@ -16,16 +15,10 @@ from madsci.common.types.location_types import (
     LocationManagerDefinition,
     LocationManagerHealth,
     LocationManagerSettings,
-    TransferGraphEdge,
-    TransferStepTemplate,
 )
-from madsci.common.types.step_types import StepDefinition
-from madsci.common.types.workflow_types import (
-    WorkflowDefinition,
-    WorkflowMetadata,
-    WorkflowParameters,
-)
+from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
+from madsci.location_manager.transfer_planner import TransferPlanner
 
 # Module-level constants for Body() calls to avoid B008 linting errors
 REPRESENTATION_VAL_BODY = Body(...)
@@ -60,8 +53,8 @@ class LocationManager(
         # Initialize locations from definition
         self._initialize_locations_from_definition()
 
-        # Initialize transfer graph
-        self._transfer_graph = self._build_transfer_graph()
+        # Initialize transfer planner
+        self.transfer_planner = TransferPlanner(self.state_handler, self.definition)
 
     def _initialize_locations_from_definition(self) -> None:
         """Initialize locations from the definition, creating or updating them in the state handler."""
@@ -228,184 +221,6 @@ class LocationManager(
 
         return health
 
-    def _build_transfer_graph(self) -> dict[tuple[str, str], TransferGraphEdge]:
-        """
-        Build transfer graph based on location representations and transfer templates.
-
-        Returns:
-            Dict mapping (source_id, dest_id) tuples to TransferGraphEdge objects
-        """
-        transfer_graph = {}
-
-        if not self.definition.transfer_capabilities:
-            return transfer_graph
-
-        locations = self.state_handler.get_locations()
-
-        for template in self.definition.transfer_capabilities.transfer_templates:
-            # Find all location pairs that can use this transfer template
-            for source_location in locations:
-                for dest_location in locations:
-                    if source_location.location_id == dest_location.location_id:
-                        continue  # Skip self-transfers
-
-                    if self._can_transfer_between_locations(
-                        source_location, dest_location, template
-                    ):
-                        edge = TransferGraphEdge(
-                            source_location_id=source_location.location_id,
-                            destination_location_id=dest_location.location_id,
-                            transfer_template=template,
-                            cost=template.cost_weight or 1.0,
-                        )
-                        transfer_graph[
-                            (source_location.location_id, dest_location.location_id)
-                        ] = edge
-
-        return transfer_graph
-
-    def _can_transfer_between_locations(
-        self, source: Location, dest: Location, template: TransferStepTemplate
-    ) -> bool:
-        """
-        Check if transfer is possible between two locations using a template.
-
-        Based on simple representation key matching: if both locations have
-        representations for the template's node_name, transfer is possible.
-        """
-        if not source.representations or not dest.representations:
-            return False
-
-        return (
-            template.node_name in source.representations
-            and template.node_name in dest.representations
-        )
-
-    def _find_shortest_transfer_path(
-        self, source_id: str, dest_id: str
-    ) -> Optional[list[TransferGraphEdge]]:
-        """
-        Find shortest path using Dijkstra's algorithm with edge weights.
-
-        Returns:
-            List of edges representing the transfer path, or None if no path exists
-        """
-        if source_id == dest_id:
-            return []  # No transfer needed
-
-        # Dijkstra's algorithm
-        distances = {source_id: 0}
-        previous = {}
-        unvisited = [(0, source_id)]
-        visited = set()
-
-        while unvisited:
-            current_distance, current_location = heapq.heappop(unvisited)
-
-            if current_location in visited:
-                continue
-
-            visited.add(current_location)
-
-            if current_location == dest_id:
-                # Reconstruct path
-                path = []
-                current = dest_id
-                while current != source_id:
-                    prev = previous[current]
-                    edge = self._transfer_graph[(prev, current)]
-                    path.insert(0, edge)
-                    current = prev
-                return path
-
-            # Check all neighbors
-            for (src, dst), edge in self._transfer_graph.items():
-                if src == current_location and dst not in visited:
-                    distance = current_distance + edge.cost
-
-                    if dst not in distances or distance < distances[dst]:
-                        distances[dst] = distance
-                        previous[dst] = current_location
-                        heapq.heappush(unvisited, (distance, dst))
-
-        return None  # No path found
-
-    def _composite_transfer_workflow(
-        self, path: list[TransferGraphEdge]
-    ) -> WorkflowDefinition:
-        """
-        Create a single composite workflow from multiple transfer steps.
-
-        Each step in the path becomes a step in the workflow with proper
-        source/target location parameters.
-        """
-
-        # Create workflow with steps for each transfer edge
-        workflow_steps = []
-        workflow_parameters = WorkflowParameters()
-
-        for i, edge in enumerate(path):
-            # Construct step dynamically from transfer template
-            template = edge.transfer_template
-
-            # Generate unique step name and key
-            step_name = f"transfer_step_{i + 1}"
-            step_key = f"transfer_step_{i + 1}"
-
-            # Create step definition with locations mapped to template argument names
-            step_locations = {
-                template.source_argument_name: self.state_handler.get_location(
-                    edge.source_location_id
-                ).name,
-                template.target_argument_name: self.state_handler.get_location(
-                    edge.destination_location_id
-                ).name,
-            }
-
-            # Create the step definition
-            step = StepDefinition(
-                name=step_name,
-                key=step_key,
-                description=f"Transfer step {i + 1} using {template.node_name}",
-                action=template.action,
-                node=template.node_name,
-                args={},
-                files={},
-                locations=step_locations,
-                conditions=[],
-                data_labels={},
-            )
-
-            workflow_steps.append(step)
-
-        # Create the composite workflow
-        if path:
-            # Get source and destination locations for names and IDs
-            source_location = self.state_handler.get_location(
-                path[0].source_location_id
-            )
-            dest_location = self.state_handler.get_location(
-                path[-1].destination_location_id
-            )
-
-            # Use location names in workflow name
-            workflow_name = (
-                f"Transfer: '{source_location.name}' -> '{dest_location.name}'"
-            )
-
-            # Create description with both names and IDs
-            description = f"Transfer from {source_location.name} ({path[0].source_location_id}) to {dest_location.name} ({path[-1].destination_location_id})"
-        else:
-            workflow_name = "Transfer: Same location"
-            description = "Transfer within the same location"
-
-        return WorkflowDefinition(
-            name=workflow_name,
-            parameters=workflow_parameters,
-            steps=workflow_steps,
-            definition_metadata=WorkflowMetadata(description=description),
-        )
-
     @get("/health", tags=["Status"])
     def health_endpoint(self) -> LocationManagerHealth:
         """Get the health status of the Location Manager."""
@@ -431,7 +246,10 @@ class LocationManager(
     def add_location(self, location: Location) -> Location:
         """Add a new location."""
         with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
-            return self.state_handler.set_location(location.location_id, location)
+            result = self.state_handler.set_location(location.location_id, location)
+            # Rebuild transfer graph since new location may affect transfer capabilities
+            self.transfer_planner.rebuild_transfer_graph()
+            return result
 
     @get("/location", tags=["Locations"])
     def get_location_by_query(
@@ -484,6 +302,8 @@ class LocationManager(
                 raise HTTPException(
                     status_code=404, detail=f"Location {location_id} not found"
                 )
+            # Rebuild transfer graph since deleted location affects transfer capabilities
+            self.transfer_planner.rebuild_transfer_graph()
             return {"message": f"Location {location_id} deleted successfully"}
 
     @post("/location/{location_id}/set_representation/{node_name}", tags=["Locations"])
@@ -506,7 +326,10 @@ class LocationManager(
                 location.representations = {}
             location.representations[node_name] = representation_val
 
-            return self.state_handler.update_location(location_id, location)
+            result = self.state_handler.update_location(location_id, location)
+            # Rebuild transfer graph since representations affect transfer capabilities
+            self.transfer_planner.rebuild_transfer_graph()
+            return result
 
     @post("/location/{location_id}/attach_resource", tags=["Locations"])
     def attach_resource(
@@ -546,33 +369,15 @@ class LocationManager(
             HTTPException: If no transfer path exists
         """
         with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
-            # Validate that both locations exist
-            source_location = self.state_handler.get_location(source_location_id)
-            if source_location is None:
+            try:
+                return self.transfer_planner.plan_transfer(
+                    source_location_id, destination_location_id
+                )
+            except ValueError as e:
                 raise HTTPException(
                     status_code=404,
-                    detail=f"Source location {source_location_id} not found",
-                )
-
-            dest_location = self.state_handler.get_location(destination_location_id)
-            if dest_location is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Destination location {destination_location_id} not found",
-                )
-
-            # Find shortest transfer path
-            transfer_path = self._find_shortest_transfer_path(
-                source_location_id, destination_location_id
-            )
-            if transfer_path is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No transfer path exists between {source_location_id} and {destination_location_id}",
-                )
-
-            # Create composite workflow
-            return self._composite_transfer_workflow(transfer_path)
+                    detail=str(e),
+                ) from e
 
     @get("/transfer/graph", tags=["Transfer"])
     def get_transfer_graph(self) -> dict[str, list[str]]:
@@ -583,14 +388,7 @@ class LocationManager(
             Dict mapping location IDs to lists of reachable location IDs
         """
         with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
-            adjacency_list = {}
-
-            for source_id, dest_id in self._transfer_graph:
-                if source_id not in adjacency_list:
-                    adjacency_list[source_id] = []
-                adjacency_list[source_id].append(dest_id)
-
-            return adjacency_list
+            return self.transfer_planner.get_transfer_graph_adjacency_list()
 
     @get("/location/{location_id}/resources", tags=["Resources"])
     def get_location_resources(self, location_id: str) -> list[str]:
