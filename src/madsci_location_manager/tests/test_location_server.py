@@ -64,7 +64,7 @@ def sample_location():
     """Create a sample location for testing."""
     return Location(
         location_id=new_ulid_str(),
-        name="Test Location",
+        location_name="Test Location",
         description="A test location",
     )
 

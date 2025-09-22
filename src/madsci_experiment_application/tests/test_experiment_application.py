@@ -81,7 +81,7 @@ def mock_location() -> Location:
     """Create a mock location object."""
     return Location(
         location_id=new_ulid_str(),
-        name="test_location",
+        location_name="test_location",
         resource_id=new_ulid_str(),
     )
 
@@ -678,7 +678,7 @@ class TestConditionEvaluation:
         """Test getting location from condition by location_name."""
         condition = ResourceInLocationCondition(
             condition_name="test_condition",
-            location_name=mock_location.name,
+            location_name=mock_location.location_name,
         )
         experiment_app_with_mocks.location_client.get_locations.return_value = [
             mock_location
@@ -886,7 +886,7 @@ class TestClassMethods:
 
         mock_location = Location(
             location_id=new_ulid_str(),
-            name="test_location",
+            location_name="test_location",
             resource_id=new_ulid_str(),
         )
         mock_resource = Resource(

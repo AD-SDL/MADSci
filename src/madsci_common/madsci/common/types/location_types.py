@@ -39,6 +39,16 @@ class LocationArgument(MadsciBaseModel):
     reservation: Optional["LocationReservation"] = None
     """whether existing location is reserved"""
 
+    @property
+    def location(self) -> Any:
+        """Return the representation of the location."""
+        return self.representation
+
+    @property
+    def name(self) -> Optional[str]:
+        """Return the name of the location, if available."""
+        return self.location_name
+
 
 class LocationDefinition(MadsciBaseModel):
     """The Definition of a Location in a setup."""

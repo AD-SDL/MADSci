@@ -91,6 +91,10 @@ class LiquidHandlerNode(RestNode):
         self.liquid_handler.run_command(
             f"move_labware {source_location} {target_location}"
         )
+        self.resource_client.push(
+            target_location.resource_id,
+            self.resource_client.pop(source_location.resource_id)[0].resource_id,
+        )
         return ActionSucceeded()
 
     @action

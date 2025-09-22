@@ -331,7 +331,7 @@ class TestResolveLocationIdentifier:
         # Mock get_location_by_name to return matching location
         mock_location = Mock()
         mock_location.location_id = "resolved_id"
-        mock_location.name = "test_name"
+        mock_location.location_name = "test_name"
         mock_client.get_location_by_name.return_value = mock_location
 
         result = _resolve_location_identifier("test_name", mock_client)

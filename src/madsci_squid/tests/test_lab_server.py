@@ -1,17 +1,22 @@
 """Automated pytest unit tests for the madsci lab server."""
 
+import pytest
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.lab_types import LabManagerDefinition, LabManagerSettings
 from madsci.squid.lab_server import LabManager
 from starlette.testclient import TestClient
 
 
-def test_lab_manager_creation():
-    """Test that LabManager can be created with default settings."""
-    manager = LabManager()
-    assert manager is not None
-    assert isinstance(manager.settings, LabManagerSettings)
-    assert isinstance(manager.definition, LabManagerDefinition)
+@pytest.fixture
+def lab_manager_definition():
+    """Fixture providing a LabManagerDefinition instance for testing."""
+    return LabManagerDefinition(name="Test Lab Manager")
+
+
+@pytest.fixture
+def lab_manager(lab_manager_definition):
+    """Fixture providing a LabManager instance with a LabManagerDefinition."""
+    return LabManager(definition=lab_manager_definition)
 
 
 def test_lab_manager_with_custom_settings():
@@ -27,11 +32,11 @@ def test_lab_manager_with_custom_settings():
     assert manager.definition.name == "Custom Lab Manager"
 
 
-def test_lab_manager_server_creation():
+def test_lab_manager_server_creation(lab_manager_definition):
     """Test that the server can be created and has the expected endpoints."""
     # Disable dashboard files for this test to avoid static file conflicts
     settings = LabManagerSettings(dashboard_files_path=None)
-    manager = LabManager(settings=settings)
+    manager = LabManager(settings=settings, definition=lab_manager_definition)
     app = manager.create_server()
 
     assert app is not None
@@ -50,10 +55,10 @@ def test_lab_manager_server_creation():
         assert response.status_code == 200
 
 
-def test_lab_manager_dashboard_files_none():
+def test_lab_manager_dashboard_files_none(lab_manager_definition):
     """Test lab manager with dashboard files disabled."""
     settings = LabManagerSettings(dashboard_files_path=None)
-    manager = LabManager(settings=settings)
+    manager = LabManager(settings=settings, definition=lab_manager_definition)
     app = manager.create_server()
 
     # Should still create the app successfully
@@ -64,21 +69,19 @@ def test_lab_manager_dashboard_files_none():
         assert response.status_code == 200
 
 
-def test_lab_manager_ownership_setup():
+def test_lab_manager_ownership_setup(lab_manager_definition):
     """Test that ownership information is properly set up."""
 
-    definition = LabManagerDefinition(name="Ownership Test Lab")
-    _ = LabManager(definition=definition)
+    _ = LabManager(definition=lab_manager_definition)
 
     # Lab manager should set both manager_id and lab_id
-    assert global_ownership_info.manager_id == definition.manager_id
-    assert global_ownership_info.lab_id == definition.manager_id
+    assert global_ownership_info.manager_id == lab_manager_definition.manager_id
+    assert global_ownership_info.lab_id == lab_manager_definition.manager_id
 
 
-def test_health_endpoint():
+def test_health_endpoint(lab_manager):
     """Test the basic health endpoint of the Lab Manager."""
-    manager = LabManager()
-    app = manager.create_server()
+    app = lab_manager.create_server()
 
     with TestClient(app) as client:
         response = client.get("/health")
@@ -92,10 +95,9 @@ def test_health_endpoint():
         assert health_data["healthy"] is True
 
 
-def test_lab_health_endpoint():
+def test_lab_health_endpoint(lab_manager):
     """Test the lab health endpoint that checks all managers."""
-    manager = LabManager()
-    app = manager.create_server()
+    app = lab_manager.create_server()
 
     with TestClient(app) as client:
         response = client.get("/lab_health")

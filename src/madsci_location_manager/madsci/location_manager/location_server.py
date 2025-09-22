@@ -84,7 +84,7 @@ class LocationManager(
             # Convert LocationDefinition to Location
             location = Location(
                 location_id=location_def.location_id,
-                name=location_def.location_name,
+                location_name=location_def.location_name,
                 description=location_def.description,
                 representations=location_def.representations
                 if location_def.representations
