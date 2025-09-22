@@ -14,7 +14,6 @@ from madsci.client.event_client import EventClient
 from madsci.client.location_client import LocationClient
 from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.location_types import (
-    Location,
     LocationArgument,
 )
 from madsci.common.types.parameter_types import ParameterInputFile, ParameterTypes
@@ -355,21 +354,8 @@ def replace_locations(
     """Replaces the location names with the location objects"""
     locations = {}
     if location_client is not None:
-        try:
-            location_list = location_client.get_locations()
-            locations = {loc.location_id: loc for loc in location_list}
-        except Exception:
-            # If LocationManager is not available, fall back to using workcell definition
-
-            locations = {
-                loc.location_id: Location(
-                    location_id=loc.location_id,
-                    name=loc.location_name,
-                    description=loc.description,
-                    representations=loc.representations,
-                )
-                for loc in workcell.locations
-            }
+        location_list = location_client.get_locations()
+        locations = {loc.location_id: loc for loc in location_list}
     for location_arg, location_name_or_object in step.locations.items():
         # * No location provided, set to None
         if location_name_or_object is None:

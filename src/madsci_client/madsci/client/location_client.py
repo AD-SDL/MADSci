@@ -3,11 +3,13 @@
 from typing import Any, Optional, Union
 
 import requests
+from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.location_types import Location
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
+from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -21,6 +23,7 @@ class LocationClient:
     def __init__(
         self,
         location_server_url: Optional[Union[str, AnyUrl]] = None,
+        event_client: Optional[EventClient] = None,
         retry: bool = False,
         retry_total: int = 3,
         retry_backoff_factor: float = 0.3,
@@ -33,6 +36,8 @@ class LocationClient:
         ----------
         location_server_url : Optional[Union[str, AnyUrl]]
             The URL of the location server. If None, will try to get from context.
+        event_client : Optional[EventClient]
+            Event client for logging. If not provided, a new one will be created.
         retry : bool
             Whether to enable request retries.
         retry_total : int
@@ -53,6 +58,16 @@ class LocationClient:
         else:
             context = get_current_madsci_context()
             self.location_server_url = context.location_server_url
+
+        # Initialize logger
+        self.logger = event_client if event_client is not None else EventClient()
+
+        # Log warning if no URL is available
+        if self.location_server_url is None:
+            self.logger.warning(
+                "LocationClient initialized without a URL. Location operations will fail unless a location server URL is configured in the MADSci context.",
+                warning_category=MadsciLocalOnlyWarning,
+            )
 
         # Ensure URL ends with /
         if self.location_server_url and not str(self.location_server_url).endswith("/"):
@@ -76,6 +91,18 @@ class LocationClient:
             adapter = HTTPAdapter(max_retries=retry_strategy)
             self.session.mount("http://", adapter)
             self.session.mount("https://", adapter)
+
+    def _validate_server_url(self) -> None:
+        """
+        Validate that location server URL is configured.
+
+        Raises:
+            ValueError: If location server URL is None.
+        """
+        if self.location_server_url is None:
+            raise ValueError(
+                "Location server URL not configured. Cannot perform location operations without a server URL."
+            )
 
     def _get_headers(self) -> dict[str, str]:
         """Get headers for requests including ownership information."""
@@ -101,6 +128,7 @@ class LocationClient:
         list[Location]
             A list of all locations.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -129,6 +157,7 @@ class LocationClient:
         Location
             The location details.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -159,6 +188,7 @@ class LocationClient:
         Location
             The requested location.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -190,6 +220,7 @@ class LocationClient:
         Location
             The created location.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -221,6 +252,7 @@ class LocationClient:
         dict[str, str]
             A message confirming deletion.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -259,6 +291,7 @@ class LocationClient:
         Location
             The updated location.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -292,6 +325,7 @@ class LocationClient:
         Location
             The updated location.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -320,6 +354,7 @@ class LocationClient:
             Transfer graph as adjacency list mapping source location IDs to
             lists of reachable destination location IDs.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -358,6 +393,7 @@ class LocationClient:
         WorkflowDefinition
             A WorkflowDefinition including the necessary steps to transfer a resource between locations.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry
@@ -396,6 +432,7 @@ class LocationClient:
         ResourceHierarchy
             Hierarchy of resources at the location, or empty hierarchy if no attached resource.
         """
+        self._validate_server_url()
         if retry is None:
             retry = self.retry
         session = self.session if retry else self.session_no_retry

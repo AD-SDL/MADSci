@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellManagerDefinition, WorkcellState
@@ -54,7 +55,6 @@ def workcell() -> WorkcellManagerDefinition:
     """Fixture for creating a WorkcellDefinition."""
     return WorkcellManagerDefinition(
         name="Test Workcell",
-        # Locations are now managed by the location manager, not the workcell manager
     )
 
 
@@ -121,16 +121,37 @@ def test_client(
     workcell: WorkcellManagerDefinition, redis_server: Redis, mongo_server: Database
 ) -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
-    manager = WorkcellManager(
-        definition=workcell,
-        redis_connection=redis_server,
-        mongo_connection=mongo_server,
-        start_engine=False,
+    # Create a mock context with all required URLs
+    mock_context = MadsciContext(
+        lab_server_url="http://localhost:8000/",
+        event_server_url="http://localhost:8001/",
+        experiment_server_url="http://localhost:8002/",
+        data_server_url="http://localhost:8004/",
+        resource_server_url="http://localhost:8003/",
+        workcell_server_url="http://localhost:8005/",
+        location_server_url="http://localhost:8006/",
     )
-    app = manager.create_server()
-    client = TestClient(app)
-    with client:
-        yield client
+
+    with (
+        patch(
+            "madsci.workcell_manager.workcell_server.get_current_madsci_context",
+            return_value=mock_context,
+        ),
+        patch(
+            "madsci.client.location_client.get_current_madsci_context",
+            return_value=mock_context,
+        ),
+    ):
+        manager = WorkcellManager(
+            definition=workcell,
+            redis_connection=redis_server,
+            mongo_connection=mongo_server,
+            start_engine=False,
+        )
+        app = manager.create_server()
+        client = TestClient(app)
+        with client:
+            yield client
 
 
 @pytest.fixture

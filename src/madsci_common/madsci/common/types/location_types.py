@@ -46,6 +46,7 @@ class LocationDefinition(MadsciBaseModel):
     location_name: str = Field(
         title="Location Name",
         description="The name of the location.",
+        alias=AliasChoices("location_name", "name"),
     )
     location_id: str = Field(
         title="Location ID",
@@ -75,6 +76,11 @@ class LocationDefinition(MadsciBaseModel):
 
     is_ulid = field_validator("location_id")(ulid_validator)
 
+    @property
+    def name(self) -> str:
+        """Get the name of the location."""
+        return self.location_name
+
 
 class Location(MadsciBaseModel):
     """A location in the lab."""
@@ -84,9 +90,10 @@ class Location(MadsciBaseModel):
         description="The ID of the location.",
         default_factory=new_ulid_str,
     )
-    name: str = Field(
+    location_name: str = Field(
         title="Location Name",
         description="The name of the location.",
+        alias=AliasChoices("location_name", "name"),
     )
     description: Optional[str] = Field(
         title="Location Description",
@@ -110,6 +117,11 @@ class Location(MadsciBaseModel):
     )
 
     is_ulid = field_validator("location_id")(ulid_validator)
+
+    @property
+    def name(self) -> str:
+        """Get the name of the location."""
+        return self.location_name
 
 
 class LocationReservation(MadsciBaseModel):

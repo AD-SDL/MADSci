@@ -6,9 +6,12 @@ import pytest
 from madsci.common.exceptions import LocationNotFoundError
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.workcell_manager.workcell_actions import (
+    _find_resource_and_transfer,
     _resolve_location_identifier,
     transfer,
+    transfer_resource,
     wait,
 )
 
@@ -363,3 +366,284 @@ class TestResolveLocationIdentifier:
 
         # The function catches exceptions internally and raises "not found" instead of connection error
         assert "not found by ID or name" in str(exc_info.value)
+
+
+class TestTransferResourceAction:
+    """Test cases for the transfer_resource action."""
+
+    @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
+    def test_transfer_resource_missing_resource_server_url(self, mock_context):
+        """Test that transfer_resource fails when resource server URL is not configured."""
+        mock_context.return_value = MadsciContext(
+            location_server_url="http://localhost:8006/", resource_server_url=None
+        )
+
+        result = transfer_resource("resource_123", "dest_loc")
+
+        assert result.status == ActionStatus.FAILED
+        assert "Resource server URL not configured" in result.errors[0].message
+
+    @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
+    def test_transfer_resource_missing_location_server_url(self, mock_context):
+        """Test that transfer_resource fails when location server URL is not configured."""
+        mock_context.return_value = MadsciContext(
+            resource_server_url="http://localhost:8003/", location_server_url=None
+        )
+
+        result = transfer_resource("resource_123", "dest_loc")
+
+        assert result.status == ActionStatus.FAILED
+        assert "Location server URL not configured" in result.errors[0].message
+
+    @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
+    @patch("madsci.workcell_manager.workcell_actions._find_resource_and_transfer")
+    def test_transfer_resource_invalid_resource(
+        self, mock_find_and_transfer, mock_context
+    ):
+        """Test that transfer_resource fails when resource doesn't exist."""
+        mock_context.return_value = MadsciContext(
+            resource_server_url="http://localhost:8003/",
+            location_server_url="http://localhost:8006/",
+        )
+
+        # Mock helper function to return error message
+        mock_find_and_transfer.return_value = (
+            "Failed to verify resource 'invalid_resource': Resource not found"
+        )
+
+        result = transfer_resource("invalid_resource", "dest_loc")
+
+        assert result.status == ActionStatus.FAILED
+        assert "Failed to verify resource" in result.errors[0].message
+
+    @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
+    @patch("madsci.workcell_manager.workcell_actions._find_resource_and_transfer")
+    def test_transfer_resource_not_found_at_location(
+        self, mock_find_and_transfer, mock_context
+    ):
+        """Test that transfer_resource fails when resource is not found at any location."""
+        mock_context.return_value = MadsciContext(
+            resource_server_url="http://localhost:8003/",
+            location_server_url="http://localhost:8006/",
+        )
+
+        # Mock helper function to return error message
+        mock_find_and_transfer.return_value = (
+            "Resource 'resource_123' not found at any location"
+        )
+
+        result = transfer_resource("resource_123", "dest_loc")
+
+        assert result.status == ActionStatus.FAILED
+        assert (
+            "Resource 'resource_123' not found at any location"
+            in result.errors[0].message
+        )
+
+    @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
+    @patch("madsci.workcell_manager.workcell_actions._find_resource_and_transfer")
+    def test_transfer_resource_success(self, mock_find_and_transfer, mock_context):
+        """Test successful transfer_resource action."""
+        mock_context.return_value = MadsciContext(
+            resource_server_url="http://localhost:8003/",
+            location_server_url="http://localhost:8006/",
+        )
+
+        # Mock successful transfer result
+        mock_transfer_result = MagicMock()
+        mock_transfer_result.status = ActionStatus.SUCCEEDED
+        mock_transfer_result.data = {
+            "message": "Transfer completed",
+            "source_location_id": "source_location_id",
+            "destination_location_id": "dest_location_id",
+            "workflow_id": "workflow_123",
+        }
+        mock_find_and_transfer.return_value = mock_transfer_result
+
+        result = transfer_resource("resource_123", "dest_loc")
+
+        assert result.status == ActionStatus.SUCCEEDED
+        assert result.data["message"] == "Transfer completed"
+        mock_find_and_transfer.assert_called_once_with(
+            "resource_123", "dest_loc", True, mock_context.return_value
+        )
+
+    @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
+    @patch("madsci.workcell_manager.workcell_actions._find_resource_and_transfer")
+    def test_transfer_resource_transfer_failed(
+        self, mock_find_and_transfer, mock_context
+    ):
+        """Test transfer_resource when underlying transfer fails."""
+        mock_context.return_value = MadsciContext(
+            resource_server_url="http://localhost:8003/",
+            location_server_url="http://localhost:8006/",
+        )
+
+        # Mock failed transfer result
+        mock_transfer_result = MagicMock()
+        mock_transfer_result.status = ActionStatus.FAILED
+        mock_find_and_transfer.return_value = mock_transfer_result
+
+        result = transfer_resource("resource_123", "dest_loc")
+
+        assert result.status == ActionStatus.FAILED
+        mock_find_and_transfer.assert_called_once_with(
+            "resource_123", "dest_loc", True, mock_context.return_value
+        )
+
+    @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
+    @patch("madsci.workcell_manager.workcell_actions._find_resource_and_transfer")
+    def test_transfer_resource_async_execution(
+        self, mock_find_and_transfer, mock_context
+    ):
+        """Test transfer_resource with async execution (await_completion=False)."""
+        mock_context.return_value = MadsciContext(
+            resource_server_url="http://localhost:8003/",
+            location_server_url="http://localhost:8006/",
+        )
+
+        # Mock successful async transfer result
+        mock_transfer_result = MagicMock()
+        mock_transfer_result.status = ActionStatus.SUCCEEDED
+        mock_transfer_result.data = {
+            "message": "Transfer workflow enqueued",
+            "workflow_id": "workflow_123",
+        }
+        mock_find_and_transfer.return_value = mock_transfer_result
+
+        result = transfer_resource("resource_123", "dest_loc", await_completion=False)
+
+        assert result.status == ActionStatus.SUCCEEDED
+        assert result.data["message"] == "Transfer workflow enqueued"
+        mock_find_and_transfer.assert_called_once_with(
+            "resource_123", "dest_loc", False, mock_context.return_value
+        )
+
+
+class TestFindResourceAndTransferHelper:
+    """Test cases for the _find_resource_and_transfer helper function."""
+
+    @patch("madsci.workcell_manager.workcell_actions.LocationClient")
+    @patch("madsci.workcell_manager.workcell_actions.ResourceClient")
+    @patch("madsci.workcell_manager.workcell_actions.transfer")
+    def test_find_resource_and_transfer_success(
+        self, mock_transfer, mock_resource_client, mock_location_client
+    ):
+        """Test successful resource finding and transfer."""
+        # Create mock context
+        mock_context = MagicMock()
+        mock_context.location_server_url = "http://localhost:8006/"
+        mock_context.resource_server_url = "http://localhost:8003/"
+
+        # Mock resource client
+        mock_resource_instance = MagicMock()
+        mock_resource_client.return_value = mock_resource_instance
+        mock_resource_instance.get_resource.return_value = (
+            MagicMock()
+        )  # Resource exists
+
+        # Mock location client
+        mock_location_instance = MagicMock()
+        mock_location_client.return_value = mock_location_instance
+
+        # Mock locations
+        mock_location1 = Mock()
+        mock_location1.location_id = "loc_1"
+        mock_location2 = Mock()
+        mock_location2.location_id = "loc_2"
+        mock_location_instance.get_locations.return_value = [
+            mock_location1,
+            mock_location2,
+        ]
+
+        # Mock location resources - first location doesn't have resource, second does
+        empty_hierarchy = ResourceHierarchy(
+            ancestor_ids=[], resource_id="", descendant_ids={}
+        )
+        found_hierarchy = ResourceHierarchy(
+            ancestor_ids=[], resource_id="resource_123", descendant_ids={}
+        )
+        mock_location_instance.get_location_resources.side_effect = [
+            empty_hierarchy,
+            found_hierarchy,
+        ]
+
+        # Mock successful transfer
+        mock_transfer_result = MagicMock()
+        mock_transfer_result.status = ActionStatus.SUCCEEDED
+        mock_transfer.return_value = mock_transfer_result
+
+        result = _find_resource_and_transfer(
+            "resource_123", "dest_loc", True, mock_context
+        )
+
+        assert result == mock_transfer_result
+        mock_transfer.assert_called_once_with(
+            source="loc_2", destination="dest_loc", await_completion=True
+        )
+
+    @patch("madsci.workcell_manager.workcell_actions.LocationClient")
+    @patch("madsci.workcell_manager.workcell_actions.ResourceClient")
+    def test_find_resource_and_transfer_resource_not_found(
+        self, mock_resource_client, mock_location_client
+    ):
+        """Test when resource doesn't exist."""
+        # Create mock context
+        mock_context = MagicMock()
+        mock_context.location_server_url = "http://localhost:8006/"
+        mock_context.resource_server_url = "http://localhost:8003/"
+        _ = mock_location_client
+
+        # Mock resource client to raise exception
+        mock_resource_instance = MagicMock()
+        mock_resource_client.return_value = mock_resource_instance
+        mock_resource_instance.get_resource.side_effect = Exception(
+            "Resource not found"
+        )
+
+        result = _find_resource_and_transfer(
+            "invalid_resource", "dest_loc", True, mock_context
+        )
+
+        assert isinstance(result, str)
+        assert "Failed to verify resource" in result
+
+    @patch("madsci.workcell_manager.workcell_actions.LocationClient")
+    @patch("madsci.workcell_manager.workcell_actions.ResourceClient")
+    def test_find_resource_and_transfer_location_not_found(
+        self, mock_resource_client, mock_location_client
+    ):
+        """Test when resource is not found at any location."""
+        # Create mock context
+        mock_context = MagicMock()
+        mock_context.location_server_url = "http://localhost:8006/"
+        mock_context.resource_server_url = "http://localhost:8003/"
+
+        # Mock resource client
+        mock_resource_instance = MagicMock()
+        mock_resource_client.return_value = mock_resource_instance
+        mock_resource_instance.get_resource.return_value = (
+            MagicMock()
+        )  # Resource exists
+
+        # Mock location client
+        mock_location_instance = MagicMock()
+        mock_location_client.return_value = mock_location_instance
+
+        # Mock locations
+        mock_location1 = Mock()
+        mock_location1.location_id = "loc_1"
+        mock_location_instance.get_locations.return_value = [mock_location1]
+
+        # Mock location resources - location doesn't have the resource
+        empty_hierarchy = ResourceHierarchy(
+            ancestor_ids=[], resource_id="", descendant_ids={}
+        )
+        mock_location_instance.get_location_resources.return_value = empty_hierarchy
+
+        result = _find_resource_and_transfer(
+            "resource_123", "dest_loc", True, mock_context
+        )
+
+        assert isinstance(result, str)
+        assert "not found at any location" in result

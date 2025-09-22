@@ -8,7 +8,6 @@ from madsci.common.types.base_types import (
     MadsciBaseModel,
     PathLike,
 )
-from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.manager_types import (
     ManagerHealth,
     ManagerSettings,
@@ -51,13 +50,6 @@ class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
         default_factory=dict,
         title="Workcell Node URLs",
         description="The URL for each node in the workcell.",
-    )
-    # DEPRECATED: locations field is being moved to LocationManager
-    # TODO: Remove locations field in next major version
-    locations: list[LocationDefinition] = Field(
-        default_factory=list,
-        title="Workcell Locations (Deprecated)",
-        description="The Locations used in the workcell. DEPRECATED: Use LocationManager service instead.",
     )
 
     def get_workcell_directory(
@@ -163,13 +155,6 @@ class WorkcellState(MadsciBaseModel):
         default_factory=dict,
         title="Workcell Nodes",
         description="The nodes in the workcell.",
-    )
-    # DEPRECATED: locations field is being moved to LocationManager
-    # TODO: Remove locations field in next major version
-    locations: dict[str, Location] = Field(
-        default_factory=dict,
-        title="Workcell Locations (Deprecated)",
-        description="The locations in the workcell. DEPRECATED: Use LocationManager service instead.",
     )
 
 

@@ -67,7 +67,6 @@ class WorkcellStateHandler:
         # * Initialize Nodes
         for key, value in self.get_workcell_definition().nodes.items():
             self.set_node(key, Node(node_url=AnyUrl(value)))
-        # * Location initialization is now handled by LocationManager
         status = self.get_workcell_status()
         status.initializing = False
         self.set_workcell_status(status)
@@ -142,7 +141,6 @@ class WorkcellStateHandler:
             workflow_queue=self.get_workflow_queue(),
             workcell_definition=self.get_workcell_definition(),
             nodes=self.get_nodes(),
-            locations={},  # Locations are now managed by LocationManager
         )
 
     def get_workcell_status(self) -> WorkcellStatus:

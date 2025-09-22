@@ -1094,7 +1094,7 @@ def test_get_location_by_name_endpoint(redis_server: Redis):
     assert response.status_code == 200
 
     location_data = response.json()
-    assert location_data["name"] == "test_location_by_name"
+    assert location_data["location_name"] == "test_location_by_name"
     assert location_data["location_id"] == location_def.location_id
     assert location_data["description"] == "A test location for name-based lookup"
 
@@ -1165,19 +1165,19 @@ def test_get_location_by_name_endpoint_multiple_locations(redis_server: Redis):
     # Test lookup of first location using query parameter
     response = client.get("/location?name=robot_station")
     assert response.status_code == 200
-    assert response.json()["name"] == "robot_station"
+    assert response.json()["location_name"] == "robot_station"
     assert response.json()["location_id"] == location_def1.location_id
 
     # Test lookup of second location using query parameter
     response = client.get("/location?name=liquid_station")
     assert response.status_code == 200
-    assert response.json()["name"] == "liquid_station"
+    assert response.json()["location_name"] == "liquid_station"
     assert response.json()["location_id"] == location_def2.location_id
 
     # Test lookup of third location using query parameter
     response = client.get("/location?name=storage_rack")
     assert response.status_code == 200
-    assert response.json()["name"] == "storage_rack"
+    assert response.json()["location_name"] == "storage_rack"
     assert response.json()["location_id"] == location_def3.location_id
 
     # Test lookup of non-existent location using query parameter
@@ -1245,7 +1245,7 @@ def test_get_location_by_id_query_parameter(redis_server: Redis):
     assert response.status_code == 200
 
     location_data = response.json()
-    assert location_data["name"] == "test_location_by_id"
+    assert location_data["location_name"] == "test_location_by_id"
     assert location_data["location_id"] == location_def.location_id
     assert (
         location_data["description"]
