@@ -27,7 +27,7 @@ authors:
     affiliation: 2
   - name: Ian T. Foster
     orcid: 0000-0003-2129-5269
-    affiliation: “1, 3”
+    affiliation: '1, 3'
   - name: Noah Paulson
     orcid: 0000-0002-3548-9120
     corresponding: true
