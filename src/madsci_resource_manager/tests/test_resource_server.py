@@ -1144,3 +1144,139 @@ def test_default_template_initialization(interface: ResourceInterface) -> None:
     assert created_template is not None
     assert created_template.template_name == "test_template"
     assert created_template.description == "Test template for initialization"
+
+
+def test_query_resource_hierarchy_simple(test_client: TestClient) -> None:
+    """Test querying hierarchy for a resource with a simple parent-child relationship."""
+    # Create parent resource
+    parent = Container(
+        resource_name="Parent Container",
+        resource_class="container",
+    )
+    response = test_client.post("/resource/add", json=parent.model_dump(mode="json"))
+    assert response.status_code == 200
+    parent_data = response.json()
+    parent_id = parent_data["resource_id"]
+
+    # Create child resource
+    child = Resource(
+        resource_name="Child Resource",
+        resource_class="sample",
+        parent_id=parent_id,
+        key="child_key",
+    )
+    response = test_client.post("/resource/add", json=child.model_dump(mode="json"))
+    assert response.status_code == 200
+    child_data = response.json()
+    child_id = child_data["resource_id"]
+
+    # Create grandchild resource
+    grandchild = Resource(
+        resource_name="Grandchild Resource",
+        resource_class="sample",
+        parent_id=child_id,
+        key="grandchild_key",
+    )
+    response = test_client.post(
+        "/resource/add", json=grandchild.model_dump(mode="json")
+    )
+    assert response.status_code == 200
+    grandchild_data = response.json()
+    grandchild_id = grandchild_data["resource_id"]
+
+    # Test hierarchy query for child (should have parent and grandchild)
+    response = test_client.get(f"/resource/{child_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == child_id
+    assert hierarchy["ancestor_ids"] == [parent_id]
+    assert hierarchy["descendant_ids"] == {child_id: [grandchild_id]}
+
+    # Test hierarchy query for parent (should have child and grandchild as descendants)
+    response = test_client.get(f"/resource/{parent_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == parent_id
+    assert hierarchy["ancestor_ids"] == []
+    assert hierarchy["descendant_ids"] == {
+        parent_id: [child_id],
+        child_id: [grandchild_id],
+    }
+
+    # Test hierarchy query for grandchild (should have parent and child as ancestors)
+    response = test_client.get(f"/resource/{grandchild_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == grandchild_id
+    assert hierarchy["ancestor_ids"] == [child_id, parent_id]
+    assert hierarchy["descendant_ids"] == {}
+
+
+def test_query_resource_hierarchy_multiple_children(test_client: TestClient) -> None:
+    """Test querying hierarchy for a resource with multiple children."""
+    # Create parent resource
+    parent = Container(
+        resource_name="Parent Container",
+        resource_class="container",
+    )
+    response = test_client.post("/resource/add", json=parent.model_dump(mode="json"))
+    assert response.status_code == 200
+    parent_data = response.json()
+    parent_id = parent_data["resource_id"]
+
+    # Create multiple child resources
+    child_ids = []
+    for i in range(3):
+        child = Resource(
+            resource_name=f"Child Resource {i}",
+            resource_class="sample",
+            parent_id=parent_id,
+            key=f"child_key_{i}",
+        )
+        response = test_client.post("/resource/add", json=child.model_dump(mode="json"))
+        assert response.status_code == 200
+        child_data = response.json()
+        child_ids.append(child_data["resource_id"])
+
+    # Test hierarchy query for parent
+    response = test_client.get(f"/resource/{parent_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == parent_id
+    assert hierarchy["ancestor_ids"] == []
+    assert len(hierarchy["descendant_ids"][parent_id]) == 3
+    assert set(hierarchy["descendant_ids"][parent_id]) == set(child_ids)
+
+
+def test_query_resource_hierarchy_no_children(test_client: TestClient) -> None:
+    """Test querying hierarchy for a resource with no children."""
+    # Create standalone resource
+    resource = Resource(
+        resource_name="Standalone Resource",
+        resource_class="sample",
+    )
+    response = test_client.post("/resource/add", json=resource.model_dump(mode="json"))
+    assert response.status_code == 200
+    resource_data = response.json()
+    resource_id = resource_data["resource_id"]
+
+    # Test hierarchy query
+    response = test_client.get(f"/resource/{resource_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == resource_id
+    assert hierarchy["ancestor_ids"] == []
+    assert hierarchy["descendant_ids"] == {}
+
+
+def test_query_resource_hierarchy_nonexistent_resource(test_client: TestClient) -> None:
+    """Test querying hierarchy for a nonexistent resource returns 404."""
+    fake_id = new_ulid_str()
+    response = test_client.get(f"/resource/{fake_id}/hierarchy")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()

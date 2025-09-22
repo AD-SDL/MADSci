@@ -22,6 +22,7 @@ from madsci.common.types.resource_types.server_types import (
     PushResourceBody,
     RemoveChildBody,
     ResourceGetQuery,
+    ResourceHierarchy,
     ResourceHistoryGetQuery,
     SetChildBody,
     TemplateCreateBody,
@@ -1654,3 +1655,75 @@ class ResourceClient:
             self.logger.error(
                 f"Error refreshing resource before release: {refresh_error}"
             )
+
+    def query_resource_hierarchy(self, resource_id: str) -> ResourceHierarchy:
+        """
+        Query the hierarchical relationships of a resource.
+
+        Returns the ancestors (successive parent IDs from closest to furthest)
+        and descendants (direct children organized by parent) of the specified resource.
+
+        Args:
+            resource_id (str): The ID of the resource to query hierarchy for.
+
+        Returns:
+            ResourceHierarchy: Hierarchy information with ancestor_ids, resource_id, and descendant_ids.
+
+        Raises:
+            ValueError: If resource not found.
+            requests.HTTPError: If server request fails.
+        """
+        if self.resource_server_url:
+            response = requests.get(
+                f"{self.resource_server_url}resource/{resource_id}/hierarchy",
+                timeout=10,
+            )
+            response.raise_for_status()
+            return ResourceHierarchy.model_validate(response.json())
+
+        # Local implementation for when no server URL is configured
+        # This would only work if local_resources are being used
+        if resource_id not in self.local_resources:
+            raise ValueError(f"Resource with ID '{resource_id}' not found")
+
+        # Simple local implementation - find ancestors by walking up parent chain
+        # and descendants by checking all resources for children
+        ancestor_ids = []
+        current_resource = self.local_resources[resource_id]
+
+        # Walk up parent chain
+        while hasattr(current_resource, "parent_id") and current_resource.parent_id:
+            if current_resource.parent_id in self.local_resources:
+                ancestor_ids.append(current_resource.parent_id)
+                current_resource = self.local_resources[current_resource.parent_id]
+            else:
+                break
+
+        # Find direct children and their children
+        descendant_ids = {}
+
+        # Find direct children of the queried resource
+        direct_children = [
+            res.resource_id
+            for res in self.local_resources.values()
+            if hasattr(res, "parent_id") and res.parent_id == resource_id
+        ]
+
+        if direct_children:
+            descendant_ids[resource_id] = direct_children
+
+            # Find children of each direct child (grandchildren)
+            for child_id in direct_children:
+                grandchildren = [
+                    res.resource_id
+                    for res in self.local_resources.values()
+                    if hasattr(res, "parent_id") and res.parent_id == child_id
+                ]
+                if grandchildren:
+                    descendant_ids[child_id] = grandchildren
+
+        return ResourceHierarchy(
+            ancestor_ids=ancestor_ids,
+            resource_id=resource_id,
+            descendant_ids=descendant_ids,
+        )

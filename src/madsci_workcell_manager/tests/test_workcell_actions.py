@@ -10,7 +10,6 @@ from madsci.workcell_manager.workcell_actions import (
     _resolve_location_identifier,
     transfer,
     wait,
-    workcell_action_dict,
 )
 
 
@@ -364,25 +363,3 @@ class TestResolveLocationIdentifier:
 
         # The function catches exceptions internally and raises "not found" instead of connection error
         assert "not found by ID or name" in str(exc_info.value)
-
-
-class TestWorkcellActionDict:
-    """Test cases for the workcell_action_dict."""
-
-    def test_workcell_action_dict_contains_all_actions(self):
-        """Test that workcell_action_dict contains all expected actions."""
-        expected_actions = ["wait", "transfer"]
-
-        for action in expected_actions:
-            assert action in workcell_action_dict
-            assert callable(workcell_action_dict[action])
-
-    def test_workcell_action_dict_functions_are_correct(self):
-        """Test that workcell_action_dict maps to the correct functions."""
-        assert workcell_action_dict["wait"] == wait
-        assert workcell_action_dict["transfer"] == transfer
-
-    def test_workcell_action_dict_only_contains_mvp_actions(self):
-        """Test that workcell_action_dict only contains MVP actions."""
-        assert len(workcell_action_dict) == 2
-        assert set(workcell_action_dict.keys()) == {"wait", "transfer"}

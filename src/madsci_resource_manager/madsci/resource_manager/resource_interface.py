@@ -1551,3 +1551,85 @@ class ResourceInterface:
         except Exception as e:
             self.logger.error(f"Error checking lock status: {e}")
             return False, None
+
+    def query_resource_hierarchy(
+        self, resource_id: str, parent_session: Optional[Session] = None
+    ) -> dict[str, Any]:
+        """
+        Query the hierarchical relationships of a resource.
+
+        Returns the ancestors (successive parent IDs from closest to furthest)
+        and descendants (direct children organized by parent) of the specified resource.
+
+        Args:
+            resource_id (str): The ID of the resource to query hierarchy for.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            dict[str, Any]: ResourceHierarchy with ancestor_ids, resource_id, and descendant_ids.
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                # Check if the resource exists
+                resource_row = session.exec(
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource_id
+                    )
+                ).first()
+
+                if not resource_row:
+                    raise ValueError(f"Resource with ID '{resource_id}' not found")
+
+                # Get ancestors by walking up the parent chain
+                ancestor_ids = []
+                current_id = resource_row.parent_id
+                while current_id is not None:
+                    ancestor_ids.append(current_id)
+                    parent_row = session.exec(
+                        select(ResourceTable).where(
+                            ResourceTable.resource_id == current_id
+                        )
+                    ).first()
+                    if parent_row:
+                        current_id = parent_row.parent_id
+                    else:
+                        break
+
+                # Get direct descendants - children of this resource
+                # and all descendants organized by their parent
+                descendant_ids = {}
+
+                # Start with direct children of the queried resource
+                direct_children = session.exec(
+                    select(ResourceTable).where(ResourceTable.parent_id == resource_id)
+                ).all()
+
+                if direct_children:
+                    descendant_ids[resource_id] = [
+                        child.resource_id for child in direct_children
+                    ]
+
+                    # Get children of each direct child (grandchildren)
+                    for child in direct_children:
+                        grandchildren = session.exec(
+                            select(ResourceTable).where(
+                                ResourceTable.parent_id == child.resource_id
+                            )
+                        ).all()
+
+                        if grandchildren:
+                            descendant_ids[child.resource_id] = [
+                                grandchild.resource_id for grandchild in grandchildren
+                            ]
+
+                return {
+                    "ancestor_ids": ancestor_ids,
+                    "resource_id": resource_id,
+                    "descendant_ids": descendant_ids,
+                }
+
+        except Exception as e:
+            self.logger.error(
+                f"Error querying resource hierarchy: \n{traceback.format_exc()}"
+            )
+            raise e

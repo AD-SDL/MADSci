@@ -1,9 +1,10 @@
 """Built-in actions for the Workcell Manager, which don't require a node to be specified."""
 
 import time
-from typing import Union
+from typing import Any, Union
 
 from madsci.client.location_client import LocationClient
+from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.exceptions import (
@@ -167,7 +168,114 @@ def _resolve_location_identifier(
     raise LocationNotFoundError(f"Location '{identifier}' not found by ID or name")
 
 
+def transfer_resource(
+    resource_id: str, destination: str, await_completion: bool = True
+) -> ActionResult:
+    """
+    Transfer a specific resource from its current location to a destination.
+
+    This action finds the current location of a resource using the resource and location
+    clients, then uses the transfer action to move it to the specified destination.
+
+    Args:
+        resource_id: ID of the resource to transfer
+        destination: Destination location name or ID
+        await_completion: Whether to block until the transfer workflow completes
+
+    Returns:
+        ActionResult: Success if transfer workflow was executed successfully, failure otherwise
+    """
+    try:
+        context = get_current_madsci_context()
+
+        # Validate context configuration
+        if not context.location_server_url:
+            return ActionFailed(
+                errors=[
+                    "Location server URL not configured. Set location_server_url in context."
+                ]
+            )
+
+        if not context.resource_server_url:
+            return ActionFailed(
+                errors=[
+                    "Resource server URL not configured. Set resource_server_url in context."
+                ]
+            )
+
+        # Find resource and perform transfer
+        result = _find_resource_and_transfer(
+            resource_id, destination, await_completion, context
+        )
+
+        # If result is a string, it's an error message
+        if isinstance(result, str):
+            return ActionFailed(errors=[result])
+
+        # Otherwise it's an ActionResult from the transfer
+        return result
+
+    except Exception as e:
+        return ActionFailed(errors=[f"Unexpected error in transfer_resource: {e}"])
+
+
+def _find_resource_and_transfer(
+    resource_id: str, destination: str, await_completion: bool, context: Any
+) -> Union[str, ActionResult]:
+    """
+    Helper function to find resource location and perform transfer.
+
+    Returns:
+        str: Error message if validation fails
+        ActionResult: Transfer result if successful
+    """
+    # Get clients
+    location_client = LocationClient(str(context.location_server_url))
+    resource_client = ResourceClient(str(context.resource_server_url))
+
+    # Verify the resource exists
+    try:
+        resource = resource_client.get_resource(resource_id)
+        if not resource:
+            return f"Resource '{resource_id}' not found"
+    except Exception as e:
+        return f"Failed to verify resource '{resource_id}': {e}"
+
+    # Find the current location of the resource
+    try:
+        locations = location_client.get_locations()
+        source_location_id = None
+
+        for location in locations:
+            # Get the resource hierarchy for this location
+            location_resources = location_client.get_location_resources(
+                location.location_id
+            )
+
+            # Check if the resource is at this location (could be the main resource or a descendant)
+            if location_resources.resource_id == resource_id or any(
+                resource_id in descendants
+                for descendants in location_resources.descendant_ids.values()
+            ):
+                source_location_id = location.location_id
+                break
+
+        if not source_location_id:
+            return f"Resource '{resource_id}' not found at any location"
+
+        # Use the existing transfer action to perform the transfer
+        return transfer(
+            source=source_location_id,
+            destination=destination,
+            await_completion=await_completion,
+        )
+
+    except Exception as e:
+        return f"Failed to find location of resource '{resource_id}': {e}"
+
+
 workcell_action_dict = {
     "wait": wait,
     "transfer": transfer,
+    "transfer_resource": transfer_resource,
 }

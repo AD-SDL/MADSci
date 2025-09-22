@@ -27,6 +27,7 @@ from madsci.common.types.resource_types.server_types import (
     PushResourceBody,
     RemoveChildBody,
     ResourceGetQuery,
+    ResourceHierarchy,
     ResourceHistoryGetQuery,
     SetChildBody,
     TemplateCreateBody,
@@ -842,6 +843,31 @@ class ResourceManager(
                 "is_locked": is_locked,
                 "locked_by": locked_by,
             }
+        except Exception as e:
+            self.logger.error(e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @get("/resource/{resource_id}/hierarchy")
+    async def query_resource_hierarchy(self, resource_id: str) -> ResourceHierarchy:
+        """
+        Query the hierarchical relationships of a resource.
+
+        Returns the ancestors (successive parent IDs from closest to furthest)
+        and descendants (direct children organized by parent) of the specified resource.
+
+        Args:
+            resource_id (str): The ID of the resource to query hierarchy for.
+
+        Returns:
+            ResourceHierarchy: Hierarchy information with ancestor_ids, resource_id, and descendant_ids.
+        """
+        try:
+            hierarchy_data = self._resource_interface.query_resource_hierarchy(
+                resource_id=resource_id
+            )
+            return ResourceHierarchy.model_validate(hierarchy_data)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
         except Exception as e:
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e

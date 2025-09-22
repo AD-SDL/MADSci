@@ -13,6 +13,7 @@ from madsci.common.types.location_types import (
     LocationTransferCapabilities,
     TransferStepTemplate,
 )
+from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition, WorkflowParameters
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
@@ -1010,9 +1011,13 @@ def test_get_location_resources_endpoint(transfer_setup):
     assert response.status_code == 200
 
     resources = response.json()
-    assert isinstance(resources, list)
-    # Currently returns empty list as placeholder
-    assert len(resources) == 0
+    # Should return a ResourceHierarchy object
+    hierarchy = ResourceHierarchy.model_validate(resources)
+
+    # For location with no attached resource, should return empty hierarchy
+    assert hierarchy.ancestor_ids == []
+    assert hierarchy.resource_id == ""
+    assert hierarchy.descendant_ids == {}
 
 
 def test_get_location_resources_endpoint_invalid_location(transfer_setup):

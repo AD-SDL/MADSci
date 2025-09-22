@@ -7,8 +7,9 @@ from classy_fastapi import delete, get, post
 from fastapi import FastAPI, HTTPException
 from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
+from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.ownership import global_ownership_info, ownership_context
+from madsci.common.ownership import ownership_context
 from madsci.common.types.location_types import (
     Location,
     LocationDefinition,
@@ -16,6 +17,7 @@ from madsci.common.types.location_types import (
     LocationManagerHealth,
     LocationManagerSettings,
 )
+from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
 from madsci.location_manager.transfer_planner import TransferPlanner
@@ -32,6 +34,8 @@ class LocationManager(
     SETTINGS_CLASS = LocationManagerSettings
     DEFINITION_CLASS = LocationManagerDefinition
 
+    transfer_planner: Optional[TransferPlanner] = None
+
     def __init__(
         self,
         settings: Optional[LocationManagerSettings] = None,
@@ -43,23 +47,21 @@ class LocationManager(
 
     def initialize(self, **_kwargs: Any) -> None:
         """Initialize manager-specific components."""
+
         self.state_handler = LocationStateHandler(
             self.settings, manager_id=self.definition.manager_id
         )
 
-        # Initialize ResourceClient for creating/updating resources
-        self.resource_client = ResourceClient()
+        # Initialize resource client with resource server URL from context
+        context = get_current_madsci_context()
+        resource_server_url = context.resource_server_url
+        self.resource_client = ResourceClient(resource_server_url=resource_server_url)
 
-        # Initialize locations from definition
         self._initialize_locations_from_definition()
-
-        # Initialize transfer planner
         self.transfer_planner = TransferPlanner(self.state_handler, self.definition)
 
     def _initialize_locations_from_definition(self) -> None:
         """Initialize locations from the definition, creating or updating them in the state handler."""
-        if not self.definition.locations:
-            return
 
         for location_def in self.definition.locations:
             # Check if location already exists
@@ -125,11 +127,7 @@ class LocationManager(
             return None
 
         try:
-            # Generate a unique resource name for this location
-            # Use location name as base, with location ID as suffix for uniqueness
-            resource_name = (
-                f"{location_def.location_name}_{location_def.location_id[:8]}"
-            )
+            resource_name = location_def.location_name
 
             # Create resource from template
             created_resource = self.resource_client.create_resource_from_template(
@@ -239,13 +237,13 @@ class LocationManager(
     @get("/locations", tags=["Locations"])
     def get_locations(self) -> list[Location]:
         """Get all locations."""
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             return self.state_handler.get_locations()
 
     @post("/location", tags=["Locations"])
     def add_location(self, location: Location) -> Location:
         """Add a new location."""
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             result = self.state_handler.set_location(location.location_id, location)
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
@@ -256,7 +254,7 @@ class LocationManager(
         self, location_id: Optional[str] = None, name: Optional[str] = None
     ) -> Location:
         """Get a specific location by ID or name."""
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             # Exactly one of location_id or name must be provided
             if (location_id is None) == (name is None):
                 raise HTTPException(
@@ -285,7 +283,7 @@ class LocationManager(
     @get("/location/{location_id}", tags=["Locations"])
     def get_location_by_id(self, location_id: str) -> Location:
         """Get a specific location by ID."""
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             location = self.state_handler.get_location(location_id)
             if location is None:
                 raise HTTPException(
@@ -296,7 +294,7 @@ class LocationManager(
     @delete("/location/{location_id}", tags=["Locations"])
     def delete_location(self, location_id: str) -> dict[str, str]:
         """Delete a specific location by ID."""
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             success = self.state_handler.delete_location(location_id)
             if not success:
                 raise HTTPException(
@@ -314,7 +312,7 @@ class LocationManager(
         representation_val: Annotated[dict, REPRESENTATION_VAL_BODY],
     ) -> Location:
         """Set representations for a location for a specific node."""
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             location = self.state_handler.get_location(location_id)
             if location is None:
                 raise HTTPException(
@@ -338,7 +336,7 @@ class LocationManager(
         resource_id: str,
     ) -> Location:
         """Attach a resource to a location."""
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             location = self.state_handler.get_location(location_id)
             if location is None:
                 raise HTTPException(
@@ -368,7 +366,7 @@ class LocationManager(
         Raises:
             HTTPException: If no transfer path exists
         """
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             try:
                 return self.transfer_planner.plan_transfer(
                     source_location_id, destination_location_id
@@ -387,36 +385,52 @@ class LocationManager(
         Returns:
             Dict mapping location IDs to lists of reachable location IDs
         """
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             return self.transfer_planner.get_transfer_graph_adjacency_list()
 
     @get("/location/{location_id}/resources", tags=["Resources"])
-    def get_location_resources(self, location_id: str) -> list[str]:
+    def get_location_resources(self, location_id: str) -> ResourceHierarchy:
         """
-        Get all resource IDs currently at a specific location.
+        Get the resource hierarchy for resources currently at a specific location.
 
         Args:
             location_id: Location ID to query
 
         Returns:
-            List of resource IDs at the location
+            ResourceHierarchy: Hierarchy of resources at the location, or empty hierarchy if no attached resource
 
         Raises:
             HTTPException: If location not found
         """
-        with ownership_context(**global_ownership_info.model_dump(exclude_none=True)):
+        with ownership_context():
             location = self.state_handler.get_location(location_id)
             if location is None:
                 raise HTTPException(
                     status_code=404, detail=f"Location {location_id} not found"
                 )
 
-            # For now, return empty list as placeholder
-            # TODO: Implement actual resource-location tracking
-            # This would involve querying the resource manager for resources
-            # that have this location as their parent or are contained within
-            # resources at this location
-            return []
+            # If no resource is attached to this location, return empty hierarchy
+            if not location.resource_id:
+                return ResourceHierarchy(
+                    ancestor_ids=[], resource_id="", descendant_ids={}
+                )
+
+            try:
+                # Query the resource hierarchy for the attached resource
+                return self.resource_client.query_resource_hierarchy(
+                    location.resource_id
+                )
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to query resource hierarchy for location {location_id} "
+                    f"with resource_id {location.resource_id}: {e}"
+                )
+                # Return empty hierarchy if query fails
+                return ResourceHierarchy(
+                    ancestor_ids=[],
+                    resource_id=location.resource_id or "",
+                    descendant_ids={},
+                )
 
 
 @asynccontextmanager
