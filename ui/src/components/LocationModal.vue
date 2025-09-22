@@ -5,7 +5,7 @@
         <h2 class="title">Location: {{ location_name }}</h2>
         {{location.location_id}}
         <h3>Representations:</h3>
-        <div v-for="value, key in ((location as any).representations || (location as any).references || (location as any).lookup_values || location.reference || location.lookup)">
+        <div v-for="value, key in ((location as any).representations)">
 
           {{ key }} : {{ value }}
 

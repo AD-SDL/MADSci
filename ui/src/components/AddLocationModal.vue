@@ -128,7 +128,7 @@ function submitLocation() {
     location["name"] = location_name.value // Use 'name' instead of 'location_name' for new API
     var new_representations: any  = {}
     Object.keys(representations.value).forEach((key: string) => {new_representations[key] = JSON.parse(representations.value[key])})
-    location["representations"] = new_representations // Use 'representations' instead of 'references' or 'lookup_values'
+    location["representations"] = new_representations
     location["coordinates"] = { x: 0.0, y: 0.0, z: 0.0 } // Add default coordinates
     location["resource_ids"] = [] // Add empty resource_ids array
     var resource: any = {}

@@ -95,7 +95,7 @@ Each manager service follows this pattern:
 
 The `AbstractManagerBase` class provides:
 - Common functionality for all managers (settings, logging, CORS middleware)
-- Standard endpoints (info, health, definition)
+- Standard endpoints (definition, health)
 - FastAPI app configuration and server lifecycle management
 - Generic typing for settings and definition classes
 

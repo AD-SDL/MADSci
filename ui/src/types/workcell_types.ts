@@ -107,27 +107,9 @@ export interface Location {
   /**
    * A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).
    */
-  reference?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Node-specific references for the location (new field).
-   */
-  references?: {
+  representations?: {
     [k: string]: unknown;
   } | null;
-  /**
-   * Node-specific lookup values for the location (deprecated, use references).
-   */
-  lookup_values?: {
-    [k: string]: unknown;
-  } | null;
-  /**
-   * A dictionary of different representations of the location (deprecated, use reference).
-   */
-  lookup?: {
-    [k: string]: unknown;
-  };
   /**
    * Definition of the Resource to be associated with this location (if any) on location initialization.
    */

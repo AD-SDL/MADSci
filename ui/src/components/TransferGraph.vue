@@ -334,19 +334,8 @@ function getNodeColor(node: any): string {
 function getNodeRepresentations(location: any): string[] {
   const representations: string[] = [];
 
-  // Check all possible representation fields
-  const repFields = [
-    location.representations,
-    location.references,
-    location.lookup_values,
-    location.reference,
-    location.lookup
-  ];
-
-  for (const field of repFields) {
-    if (field && typeof field === 'object') {
-      representations.push(...Object.keys(field));
-    }
+  if (location.representations && typeof location.representations === 'object') {
+    representations.push(...Object.keys(location.representations));
   }
 
   // Remove duplicates and return

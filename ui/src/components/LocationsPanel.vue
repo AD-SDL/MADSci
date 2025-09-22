@@ -22,7 +22,7 @@
           <td>{{ item.name || item.location_name }}</td>
           <td>{{ get_resource(resources, item) }}</td>
           <td>{{ item.location_id }}</td>
-          <td>{{ Object.keys(item.representations || item.references || item.lookup_values || item.reference || item.lookup || {}) }}</td>
+          <td>{{ Object.keys(item.representations || {}) }}</td>
         </tr>
       </template>
     </v-data-table>
