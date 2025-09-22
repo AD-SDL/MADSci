@@ -299,7 +299,6 @@ def create_workcell_server(  # noqa: C901, PLR0915
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
-            # TODO: Validation
             return state_handler.save_workflow_definition(
                 workflow_definition=wf_def,
             )

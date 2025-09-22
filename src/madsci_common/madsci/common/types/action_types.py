@@ -1,15 +1,28 @@
 """Types for MADSci Actions."""
-
+from __future__ import annotations
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal, Optional, Union
+from pathlib import Path
+from typing import Any, Literal, Optional, TypeAlias, Union, List, Dict
+from typing_extensions import Self
+
 
 from madsci.common.types.base_types import Error, MadsciBaseModel, PathLike
 from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.utils import localnow, new_ulid_str
 from pydantic import Field
 from pydantic.functional_validators import field_validator, model_validator
+from typing_extensions import TypeAliasType
 
+from pydantic import TypeAdapter
+from ulid import ULID
+
+Json = TypeAliasType(
+    'Json',
+    'Union[dict[str, Json], list[Json], str, int, float, bool, None]',  
+)
+
+ta = TypeAdapter(Json)
 
 class ActionStatus(str, Enum):
     """Status for a step of a workflow"""
@@ -81,104 +94,144 @@ class ActionRequest(MadsciBaseModel):
 
     def succeeded(
         self,
-        data: dict[str, Any] = {},
-        files: dict[str, PathLike] = {},
+        json_data: Optional[Json | ActionJSON] = None,
+        files: Optional[PathLike | ActionFiles] = None,
         errors: Union[Error, list[Error], str] = [],
     ) -> "ActionSucceeded":
         """Create an ActionSucceeded response"""
         return ActionSucceeded(
             action_id=self.action_id,
             errors=errors,
-            data=data,
+            json_data=json_data,
             files=files,
         )
 
     def running(
         self,
-        data: dict[str, Any] = {},
-        files: dict[str, PathLike] = {},
+        json_data: Optional[Json | ActionJSON] = None,
+        files: Optional[PathLike | ActionFiles] = None,
         errors: Union[Error, list[Error], str] = [],
     ) -> "ActionRunning":
         """Create an ActionRunning response"""
         return ActionRunning(
             action_id=self.action_id,
             errors=errors,
-            data=data,
+            json_data=json_data,
             files=files,
         )
 
     def not_ready(
         self,
         errors: Union[Error, list[Error], str] = [],
-        data: dict[str, Any] = {},
-        files: dict[str, PathLike] = {},
+        json_data: Optional[Json | ActionJSON] = None,
+        files: Optional[PathLike | ActionFiles] = None
     ) -> "ActionNotReady":
         """Create an ActionNotReady response"""
         return ActionNotReady(
             action_id=self.action_id,
             errors=errors,
-            data=data,
+            json_data=json_data,
             files=files,
         )
 
     def cancelled(
         self,
         errors: Union[Error, list[Error], str] = [],
-        data: dict[str, Any] = {},
-        files: dict[str, PathLike] = {},
+        json_data: Optional[Json | ActionJSON] = None,
+        files: Optional[PathLike | ActionFiles] = None
     ) -> "ActionCancelled":
         """Create an ActionCancelled response"""
         return ActionCancelled(
             action_id=self.action_id,
             errors=errors,
-            data=data,
+            json_daa=json_data,
             files=files,
         )
 
     def paused(
         self,
         errors: Union[Error, list[Error], str] = [],
-        data: dict[str, Any] = {},
-        files: dict[str, PathLike] = {},
+        json_data: Optional[Json | ActionJSON] = None,
+        files: Optional[PathLike | ActionFiles] = None
     ) -> "ActionResult":
         """Create an ActionResult response"""
         return ActionResult(
             action_id=self.action_id,
             status=ActionStatus.PAUSED,
             errors=errors,
-            data=data,
+            data=json_data,
             files=files,
         )
 
     def not_started(
         self,
         errors: Union[Error, list[Error], str] = [],
-        data: dict[str, Any] = {},
-        files: dict[str, PathLike] = {},
+        json_data: Optional[Json | ActionJSON] = None,
+        files: Optional[PathLike | ActionFiles] = None
     ) -> "ActionResult":
         """Create an ActionResult response"""
         return ActionResult(
             action_id=self.action_id,
             status=ActionStatus.NOT_STARTED,
             errors=errors,
-            data=data,
+            json_data=json_data,
             files=files,
         )
 
     def unknown(
         self,
         errors: Union[Error, list[Error], str] = [],
-        data: dict[str, Any] = {},
-        files: dict[str, PathLike] = {},
+        json_data: Optional[Json | ActionJSON] = None,
+        files: Optional[PathLike | ActionFiles] = None
     ) -> "ActionResult":
         """Create an ActionResult response"""
         return ActionResult(
             action_id=self.action_id,
             status=ActionStatus.UNKNOWN,
             errors=errors,
-            data=data,
-            files=files,
+            json_data=json_data,
+            files=files
         )
+
+class ActionJSON(MadsciBaseModel, extra="allow"):
+    """Data returned from an action as JSON"""
+    type: Literal["json"] = Field(
+        title="Data Type",
+        description="The type of the data.",
+        default="json",
+    )
+@model_validator(mode="after")
+def ensure_json_serializable(cls, v: Any) -> Any:
+    """Ensure that the data is JSON serializable"""
+    for field_name, field_value in v.__dict__.items():
+        if field_name == "type":
+            if field_value != "json":
+                raise ValueError(f"Field 'type' must be 'json', not '{field_value}'")
+        try:
+            ta.validate_python(field_value)
+        except Exception as e:
+            raise ValueError(f"Field '{field_name}' is not JSON serializable: {e}")
+
+   
+class ActionFiles(MadsciBaseModel, extra="allow"):
+    """Files returned from an action"""
+@model_validator(mode="after")
+def ensure_files_are_pathlike(cls, v: Any) -> Any:
+    """Ensure that the files are PathLike"""
+    for key, value in v.__dict__.items():
+        if not isinstance(value, Path):
+            raise ValueError(f"File '{key}' is not a valid PathLike: {value}")
+    return v
+
+class ActionDatapoints(MadsciBaseModel, extra="allow"):
+    """Datapoints returned from an action"""
+    @model_validator(mode="after")
+    def ensure_datapoints_are_datapoint(cls, v: Any) -> Any:
+        """Ensure that the datapoints are DataPoints"""
+        for key, value in v.__dict__.items():
+            if not isinstance(value, DataPoint):
+                raise ValueError(f"Datapoint '{key}' is not a valid DataPoint: {value}")
+        return v
 
 
 class ActionResult(MadsciBaseModel):
@@ -198,20 +251,20 @@ class ActionResult(MadsciBaseModel):
         description="An error message(s) if the step failed.",
         default_factory=list,
     )
-    data: dict[str, Any] = Field(
+    json_data: Optional[Json | ActionJSON] = Field(
         title="Step Data",
         description="The data generated by the step.",
-        default_factory=dict,
+        default=None,
     )
-    files: dict[str, PathLike] = Field(
+    files: Optional[Path | ActionFiles] = Field(
         title="Step Files",
         description="A dictionary of files produced by the step.",
-        default_factory=dict,
+        default=None,
     )
-    datapoints: dict[str, DataPoint] = Field(
+    datapoints: Optional[ActionDatapoints] = Field(
         title="Data Points",
         description="A dictionary of datapoints sent to the data manager by the step.",
-        default_factory=dict,
+        default=None,
     )
     history_created_at: Optional[datetime] = Field(
         title="History Created At",

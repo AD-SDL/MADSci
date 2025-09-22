@@ -4,12 +4,17 @@ import inspect
 import json
 import re
 import tempfile
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 from typing import Any, Callable
 from zipfile import ZipFile
+import logging
+
 
 import regex
 from madsci.common.types.action_types import (
+    ActionDatapoints,
+    ActionFiles,
+    ActionJSON,
     ActionResult,
     ActionResultDefinition,
     DatapointActionResultDefinition,
@@ -17,7 +22,8 @@ from madsci.common.types.action_types import (
     JSONActionResultDefinition,
 )
 from starlette.responses import FileResponse
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def action(
     *args: Any,
@@ -138,30 +144,59 @@ def get_named_input(main_string: str, plural: str) -> list[str]:
 
 def parse_results(func: Callable) -> list[ActionResultDefinition]:
     """get the resulting data from an Action"""
-    source_code = inspect.getsource(func).replace(" ", "")
-    results = re.findall(r"ActionSucceeded\(.*\)", source_code)
-    result_list = []
-    for result in results:
-        for file in get_named_input(result, "files"):
-            result_list.append(FileActionResultDefinition(result_label=file))
-        for datum in get_named_input(result, "data"):
-            result_list.append(JSONActionResultDefinition(result_label=datum))
-        for datapoint in get_named_input(result, "datapoints"):
-            result_list.append(DatapointActionResultDefinition(result_label=datapoint))
-    return result_list
-
+    returned = inspect.signature(func).return_annotation
+    print(returned)
+    
+    if returned is inspect.Signature.empty:
+        return []
+    if returned is Path:
+        return [FileActionResultDefinition(result_label="file")]
+    if issubclass(returned, ActionFiles):
+        print(returned.__annotations__.items())
+        for key, value in returned.__annotations__.items():
+            if value is not Path:
+                raise ValueError(
+                    f"All fields in an ActionFiles subclass must be of type Path, but field {key} is of type {value}",
+                )
+        return [FileActionResultDefinition(result_label=key) for key in returned.__annotations__]
+    if issubclass(returned, ActionJSON):
+        for key, value in returned.__annotations__.items():
+            if value not in [str, int, float, bool, dict, list]:
+                raise ValueError(
+                    f"All fields in an ActionJSON subclass must be of type str, int, float, bool, dict, or list but field {key} is of type {value}",
+                )
+        return [JSONActionResultDefinition(result_label=key) for key in returned.__annotations__]
+    if issubclass(returned, ActionDatapoints):
+        for key, value in returned.__annotations__.items():
+            if value not in [str]:
+                raise ValueError(
+                    f"All fields in an ActionDatapoints subclass must be of type str, int, float, bool, dict, or list but field {key} is of type {value}",
+                )
+        return [DatapointActionResultDefinition(result_label=key) for key in returned.__annotations__]
+    if returned not in [str, int, float, bool, dict, list]:
+        raise ValueError(
+            f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, str, int, float, bool, dict, or list but got {returned}",
+        )
+    return [JSONActionResultDefinition(result_label="data", description=returned.__name__)]
 
 def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
     """Converts the response to a dictionary of headers"""
-    for key in action_response.files:
-        action_response.files[key] = str(action_response.files[key])
+    if isinstance(action_response.files, ActionFiles):
+        files_serializeable = action_response.files.model_dump(mode="json")
+        
+    if isinstance(action_response.files, Path):
+        files_serializeable =  str(action_response.files)
+    if isinstance(action_response.datapoints, ActionDatapoints):
+        action_response.datapoints = action_response.datapoints.model_dump(mode="json")
+    if isinstance(action_response.json_data, ActionJSON):
+        action_response.json_data = action_response.json_data.model_dump(mode="json")
     return {
         "x-madsci-action-id": action_response.action_id,
         "x-madsci-status": action_response.status.value,
         "x-madsci-datapoints": json.dumps(action_response.datapoints),
         "x-madsci-errors": json.dumps(action_response.errors),
-        "x-madsci-files": json.dumps(action_response.files),
-        "x-madsci-data": json.dumps(action_response.data),
+        "x-madsci-files": json.dumps(files_serializeable),
+        "x-madsci-json_data": json.dumps(action_response.json_data),
     }
 
 
@@ -171,26 +206,29 @@ class ActionResultWithFiles(FileResponse):
     @classmethod
     def from_action_response(cls, action_response: ActionResult) -> ActionResult:
         """Create an ActionResultWithFiles from an ActionResult."""
-        if len(action_response.files) == 1:
+        
+        if isinstance(action_response.files, Path):
             return ActionResultWithFiles(
-                path=next(iter(action_response.files.values())),
+                path=action_response.files,
                 headers=action_response_to_headers(action_response),
             )
-
+        action_response_dict = action_response.files.model_dump()
         with tempfile.NamedTemporaryFile(
             suffix=".zip",
             delete=False,
         ) as temp_zipfile_path:
             temp_zip = ZipFile(temp_zipfile_path.name, "w")
-            for file in action_response.files:
+            for file in action_response_dict:
                 temp_zip.write(
-                    action_response.files[file],
-                    PureWindowsPath(action_response.files[file]).name,
+                    action_response_dict[file],
+                    PureWindowsPath(action_response_dict[file]).name,
                 )
-                action_response.files[file] = str(
-                    PureWindowsPath(action_response.files[file]).name,
+                action_response_dict[file] = str(
+                    PureWindowsPath(action_response_dict[file]).name,
                 )
-
+            action_response.files = ActionFiles.model_validate(
+                action_response_dict,
+            )
             return ActionResultWithFiles(
                 path=temp_zipfile_path.name,
                 headers=action_response_to_headers(action_response),

@@ -30,7 +30,11 @@ actions:
     args: {}
     locations: {}
     files: {}
-    results: {}
+    results:
+      data:
+        result_label: data
+        description: int
+        result_type: json
     blocking: false
     asynchronous: true
   create_plate_file:
@@ -39,7 +43,28 @@ actions:
     args: {}
     locations: {}
     files: {}
-    results: {}
+    results:
+      file:
+        result_label: file
+        description: null
+        result_type: file
+    blocking: false
+    asynchronous: true
+  create_plate_files:
+    name: create_plate_files
+    description: Run a command on the plate reader.
+    args: {}
+    locations: {}
+    files: {}
+    results:
+      file_path_1:
+        result_label: file_path_1
+        description: null
+        result_type: file
+      file_path_2:
+        result_label: file_path_2
+        description: null
+        result_type: file
     blocking: false
     asynchronous: true
 config:

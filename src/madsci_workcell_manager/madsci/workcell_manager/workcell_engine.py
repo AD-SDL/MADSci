@@ -15,7 +15,7 @@ from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.ownership import ownership_context
-from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.action_types import ActionDatapoints, ActionFiles, ActionJSON, ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import (
     DataPoint,
@@ -371,24 +371,33 @@ class Engine:
                     isinstance(param.step, int)
                     and wf.status.current_step_index == param.step
                 )
-                or param.step is None
             ):
+                if step.result.datapoints:
+                    self.logger.log_warning(event=Event(event_data=str(step.result.datapoints)))
+                    datapoint_dict = step.result.datapoints.model_dump()
+                    for key in list(datapoint_dict.keys()):
+                        datapoint_dict[key] = DataPoint.model_validate(datapoint_dict[key])
+                else:
+                    raise ValueError(
+                        f"Feed-forward parameter {param.key} specified step {param.step} but step has no datapoints"
+                    )
                 if param.label is None:
-                    if len(step.result.datapoints) == 1:
-                        datapoint = next(iter(step.result.datapoints.values()))
+                    self.logger.log_warning(event=Event(event_data=str(datapoint_dict)))
+                    if len(datapoint_dict) == 1:
+                        datapoint = next(iter(datapoint_dict.values()))
                         wf = self.update_param_value_from_datapoint(
                             wf, datapoint, param
                         )
                     else:
                         raise ValueError(
-                            f"Ambiguous feed-forward parameter {param.key}: multiple possible matching labels: {step.result.datapoints.keys()}"
+                            f"Ambiguous feed-forward parameter {param.key}: multiple possible matching labels: {step.result.datapoints.model_dump().keys()}"
                         )
-                elif param.label in step.result.datapoints:
-                    datapoint = step.result.datapoints[param.label]
+                elif param.label in datapoint_dict:
+                    datapoint = datapoint_dict[param.label]
                     wf = self.update_param_value_from_datapoint(wf, datapoint, param)
                 elif param.step is not None:
                     raise ValueError(
-                        f"Feed-forward parameter {param.key}'s specified label {param.label} not found in step result datapoints: {step.result.datapoints.keys()}"
+                        f"Feed-forward parameter {param.key}'s specified label {param.label} not found in step result datapoints: {step.result.datapoints.model_dump().keys()}"
                     )
         return wf
 
@@ -467,49 +476,72 @@ class Engine:
         self, step: Step, wf: Workflow, response: ActionResult
     ) -> ActionResult:
         """create and save datapoints for data returned from step"""
-        labeled_data = {}
-        datapoints = response.datapoints
+        if response.datapoints:
+            datapoints = response.datapoints.model_dump(mode="json")
+        else:
+            datapoints = {}
         ownership_info = copy.deepcopy(wf.ownership_info)
         ownership_info.step_id = step.step_id
         ownership_info.node_id = self.state_handler.get_node(step.node).info.node_id
         ownership_info.workflow_id = wf.workflow_id
-        if response.data:
-            for data_key in response.data:
-                if step.data_labels is not None and data_key in step.data_labels:
-                    label = step.data_labels[data_key]
-                else:
-                    label = data_key
+        if response.json_data:
+            if isinstance(response.json_data, ActionJSON):
+                json_data = response.json_data.model_dump(mode="json")
+                for data_key in json_data:
+                    if not data_key == "type":
+                        datapoint = ValueDataPoint(
+                            label=data_key,
+                            ownership_info=ownership_info,
+                            value=json_data[data_key],
+                        )
+                        self.data_client.submit_datapoint(datapoint)
+                        datapoints[data_key] = datapoint
+            else:
+                json_data = response.json_data
+                if step.key:
+                    label = wf.workflow_id + "_" + step.key
+                else: 
+                    label = wf.workflow_id + "_step_" + str(wf.status.current_step_index)
                 datapoint = ValueDataPoint(
-                    label=label,
-                    ownership_info=ownership_info,
-                    value=response.data[data_key],
-                )
+                        label=label,
+                        ownership_info=ownership_info,
+                        value=json_data,
+                    )
                 self.data_client.submit_datapoint(datapoint)
-                labeled_data[label] = datapoint.datapoint_id
                 datapoints[label] = datapoint
+                
         if response.files:
-            for file_key in response.files:
-                if step.data_labels is not None and file_key in step.data_labels:
-                    label = step.data_labels[file_key]
-                else:
-                    label = file_key
+            if isinstance(response.files, ActionFiles):
+                response_files = response.files.model_dump(mode="json")
+                for file_key in response_files:
+                    datapoint = FileDataPoint(
+                        label=file_key,
+                        ownership_info=ownership_info,
+                        path=str(response_files[file_key]),
+                    )
+                    self.logger.log_debug(
+                        "Submitting datapoint: " + str(datapoint.datapoint_id)
+                    )
+                    self.data_client.submit_datapoint(datapoint)
+                    self.logger.log_debug(
+                        "Submitted datapoint: " + str(datapoint.datapoint_id)
+                    )
+
+                    datapoints[file_key] = datapoint
+            else:
+                if step.key:
+                    label = wf.workflow_id + "_" + step.key
+                else: 
+                    label = wf.workflow_id + "_step_" + str(wf.status.current_step_index)
                 datapoint = FileDataPoint(
                     label=label,
                     ownership_info=ownership_info,
-                    path=str(response.files[file_key]),
-                )
-                self.logger.log_debug(
-                    "Submitting datapoint: " + str(datapoint.datapoint_id)
+                    path=str(response.files),
                 )
                 self.data_client.submit_datapoint(datapoint)
-                self.logger.log_debug(
-                    "Submitted datapoint: " + str(datapoint.datapoint_id)
-                )
-
-                labeled_data[label] = datapoint.datapoint_id
                 datapoints[label] = datapoint
-        response.data = labeled_data
-        response.datapoints = datapoints
+        
+        response.datapoints = ActionDatapoints.model_validate(datapoints)
         return response
 
     def update_active_nodes(self, state_manager: WorkcellStateHandler) -> None:

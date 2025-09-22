@@ -12,7 +12,7 @@ from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
 )
-from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.action_types import ActionDatapoints, ActionFiles, ActionJSON, ActionRequest, ActionResult, ActionStatus
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
@@ -70,7 +70,7 @@ class RestNodeClient(AbstractNodeClient):
             serialized_args = action_request.model_dump(mode="json")["args"]
 
             rest_response = requests.post(
-                f"{self.url}/action",
+                f"{self.url}/action/{action_request.action_name}",
                 params={
                     "action_name": action_request.action_name,
                     "args": json.dumps(serialized_args),
@@ -190,40 +190,54 @@ class RestNodeClient(AbstractNodeClient):
 
 def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
     """Creates an ActionResult from the headers of a file response"""
+    files = json.loads(headers["x-madsci-files"])
+    if isinstance(files, dict):
+        files = ActionFiles.model_validate(files)
+    elif isinstance(files, str):
+        files = Path(files)
+    json_data = json.loads(headers["x-madsci-json_data"])
+    if isinstance(json_data, dict):
+        if "type" in json_data and json_data["type"] == "json":
+            json_data = ActionJSON.model_validate(json_data)
 
+    datapoints = json.loads(headers["x-madsci-datapoints"])
+    if isinstance(datapoints, dict):
+        datapoints = ActionDatapoints.model_validate(datapoints)
     return ActionResult(
         action_id=headers["x-madsci-action-id"],
         status=ActionStatus(headers["x-madsci-status"]),
         errors=json.loads(headers["x-madsci-errors"]),
-        files=json.loads(headers["x-madsci-files"]),
-        datapoints=json.loads(headers["x-madsci-datapoints"]),
-        data=json.loads(headers["x-madsci-data"]),
+        files=files,
+        datapoints=datapoints,
+        json_data=json_data,
     )
 
 
 def process_file_response(rest_response: requests.Response) -> ActionResult:
     """Process a file rest response, saving files and getting headers"""
     response = action_response_from_headers(rest_response.headers)
-    if response.files and len(response.files) == 1:
-        file_key = next(iter(response.files.keys()))
-        filename = response.files[file_key]
+    if response.files and isinstance(response.files, Path):
+        filename = response.files
         with tempfile.NamedTemporaryFile(
             suffix="".join(Path(filename).suffixes), delete=False
         ) as temp_file:
             temp_file.write(rest_response.content)
             temp_path = Path(temp_file.name)
-        response.files[file_key] = temp_path
-    elif response.files and len(response.files) > 1:
+        response.files = temp_path
+    elif response.files and isinstance(response.files, ActionFiles):
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_zip:
             temp_zip.write(rest_response.content)
             temp_zip_path = Path(temp_zip.name)
         with ZipFile(temp_zip_path) as zip_file:
-            for file_key in list(response.files.keys()):
-                filename = response.files[file_key]
+            files_dict = response.files.model_dump()
+            for file_key in list(files_dict.keys()):
+                filename = files_dict[file_key]
                 with tempfile.NamedTemporaryFile(
                     suffix="".join(Path(filename).suffixes), delete=False
                 ) as temp_file:
                     temp_file.write(zip_file.read(filename))
                     temp_path = Path(temp_file.name)
-                response.files[file_key] = temp_path
+                files_dict[file_key] = temp_path
+            response.files = ActionFiles.model_validate(files_dict)
     return response

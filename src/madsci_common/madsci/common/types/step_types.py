@@ -93,11 +93,6 @@ class StepDefinition(MadsciBaseModel):
         description="Conditions that must be met before running the step",
         default_factory=list,
     )
-    data_labels: dict[str, str] = Field(
-        title="Step Data Labels",
-        description="Data labels for the results of the step. Maps from the names of the outputs of the action to the names of the data labels.",
-        default_factory=dict,
-    )
     parameters: Optional[StepParameters] = Field(
         title="Step Parameters",
         description="Any parameterized values used in the step",

@@ -45,20 +45,12 @@ class ParameterFeedForwardJson(WorkflowParameter):
 
     parameter_type: Literal["feed_forward_json"] = "feed_forward_json"
     """The type of the parameter"""
-    step: Optional[Union[int, str]] = None
+    step: Union[int, str] = None
     """Index or key of the step to pull the parameter from."""
     label: Optional[str] = None
-    """This must match the label of a datapoint from the step with the matching name or index. If not specified, the first datapoint will be used."""
+    """This must match the label of a return value from the step with the matching name or index. If not specified, the full json result will be used"""
     data_type: Literal[DataPointTypeEnum.JSON] = DataPointTypeEnum.JSON
     """This specifies that the parameter expects JSON data."""
-
-    @model_validator(mode="after")
-    def validate_feed_forward(self) -> "ParameterFeedForwardJson":
-        """Validate that either 'step' or 'label' is provided."""
-        if self.step is None and self.label is None:
-            raise ValueError("Either 'step' or 'label' must be provided.")
-        return self
-
 
 class ParameterFeedForwardFile(WorkflowParameter):
     """Definition of a workflow parameter that is fed forward from a previous step (file).
@@ -73,7 +65,7 @@ class ParameterFeedForwardFile(WorkflowParameter):
 
     parameter_type: Literal["feed_forward_file"] = "feed_forward_file"
     """The type of the parameter"""
-    step: Optional[Union[int, str]] = None
+    step: Union[int, str] = None
     """Index or key of the step to pull the parameter from."""
     label: Optional[str] = None
     """This must match the label of a datapoint from the step with the matching name or index. If not specified, the first datapoint will be used."""
@@ -82,12 +74,6 @@ class ParameterFeedForwardFile(WorkflowParameter):
     )
     """This specifies that the parameter expects file or object storage data."""
 
-    @model_validator(mode="after")
-    def validate_feed_forward(self) -> "ParameterFeedForwardFile":
-        """Validate that either 'step' or 'label' is provided."""
-        if self.step is None and self.label is None:
-            raise ValueError("Either 'step' or 'label' must be provided.")
-        return self
 
 
 ParameterJsonTypes = Annotated[
