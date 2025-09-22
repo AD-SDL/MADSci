@@ -38,7 +38,7 @@ affiliations:
   - name: Northwestern University, United States
     index: 2
   - name: University of Chicago, United States
-    index: 2
+    index: 3
 date: 19 September 2025
 bibliography: paper.bib
 ---
