@@ -1,0 +1,24 @@
+name: Transfer Resource Test
+
+metadata:
+  author: Claude AI Assistant
+  info: Workflow to test the new transfer_resource functionality that automatically finds a resource by ID and transfers it
+  version: 1.0
+
+parameters:
+  json_inputs:
+    - key: resource_id
+      description: The ID of the resource to transfer (ULID str)
+    - key: destination
+      description: The destination location name or ID (str or ULID str)
+
+steps:
+  # Step 1: Transfer a specific resource by ID to a destination location
+  - name: Transfer Resource by ID
+    key: transfer_resource_by_id
+    action: transfer_resource
+    parameters:
+      args:
+        resource_id: resource_id
+        destination: destination
+    description: "Automatically find and transfer the specified resource to the destination"

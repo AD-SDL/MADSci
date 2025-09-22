@@ -6,6 +6,7 @@ import requests
 from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.location_types import Location
+from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from pydantic import AnyUrl
 from requests.adapters import HTTPAdapter
@@ -379,9 +380,9 @@ class LocationClient:
 
     def get_location_resources(
         self, location_id: str, retry: Optional[bool] = None
-    ) -> list[dict[str, Any]]:
+    ) -> ResourceHierarchy:
         """
-        Get all resources at a specific location.
+        Get the resource hierarchy for resources currently at a specific location.
 
         Parameters
         ----------
@@ -392,8 +393,8 @@ class LocationClient:
 
         Returns
         -------
-        list[dict[str, Any]]
-            List of resources at the location.
+        ResourceHierarchy
+            Hierarchy of resources at the location, or empty hierarchy if no attached resource.
         """
         if retry is None:
             retry = self.retry
@@ -405,4 +406,4 @@ class LocationClient:
             timeout=10,
         )
         response.raise_for_status()
-        return response.json()
+        return ResourceHierarchy.model_validate(response.json())
