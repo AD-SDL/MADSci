@@ -50,5 +50,5 @@ class MadsciContext(
     location_server_url: Optional[AnyUrl] = Field(
         title="Location Server URL",
         description="The URL of the location server.",
-        default="http://localhost:8006/",
+        default=None,
     )

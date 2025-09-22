@@ -68,4 +68,40 @@ finally:
     # * Cleanup the demo resource
     resource_client.remove(demo_plate_2.resource_id)
 
+print("\n=== Running Transfer Resource Workflow ===")
+
+# * Create a demo resource (a plate) for transfer_resource demonstration
+demo_plate_3 = Resource(resource_name="Demo Plate 3")
+demo_plate_3 = resource_client.add_resource(demo_plate_3)
+
+# * Add the resource to liquidhandler_1.deck_2 for transfer_resource test
+l1_deck2 = location_client.get_location_by_name("liquidhandler_1.deck_2")
+resource_client.push(l1_deck2.resource_id, demo_plate_3.resource_id)
+
+# * Run a workflow that uses the transfer_resource action
+try:
+    print(
+        f"Starting transfer_resource workflow for resource ID: {demo_plate_3.resource_id}"
+    )
+    result = workcell_client.start_workflow(
+        workflow_definition="workflows/transfer_resource.workflow.yaml",
+        await_completion=True,
+        prompt_on_error=False,
+        raise_on_failed=True,
+        json_inputs={
+            "resource_id": demo_plate_3.resource_id,
+            "destination": "platereader_1.plate_carriage",
+        },
+    )
+    print("Transfer resource workflow completed successfully!")
+    print(
+        f"Resource {demo_plate_3.resource_id} was automatically found at liquidhandler_1.deck_2 and transferred to platereader_1.plate_carriage"
+    )
+except Exception as e:
+    print(f"Transfer resource workflow failed: {e}")
+    raise
+finally:
+    # * Cleanup the demo resource
+    resource_client.remove(demo_plate_3.resource_id)
+
 print("\n=== All transfer workflows completed successfully! ===")

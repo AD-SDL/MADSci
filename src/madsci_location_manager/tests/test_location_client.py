@@ -7,6 +7,7 @@ import pytest
 import requests
 from madsci.client.location_client import LocationClient
 from madsci.common.types.location_types import Location
+from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.utils import new_ulid_str
 
 
@@ -143,3 +144,87 @@ def test_get_location_by_name_method_error_handling(mock_get, location_client):
     # Call the method and expect an exception
     with pytest.raises(requests.exceptions.HTTPError):
         location_client.get_location_by_name("nonexistent_location")
+
+
+@patch("madsci.client.location_client.requests.Session.get")
+def test_get_location_resources_empty_hierarchy(mock_get, location_client):
+    """Test get_location_resources returns empty hierarchy when no resources attached."""
+    # Mock successful response with empty hierarchy
+    mock_response = Mock()
+    mock_hierarchy_data = {
+        "ancestor_ids": [],
+        "resource_id": "",
+        "descendant_ids": {},
+    }
+    mock_response.json.return_value = mock_hierarchy_data
+    mock_response.raise_for_status.return_value = None
+    mock_get.return_value = mock_response
+
+    # Call the method
+    test_location_id = new_ulid_str()
+    result = location_client.get_location_resources(test_location_id)
+
+    # Verify the request was made correctly
+    mock_get.assert_called_once()
+    call_args = mock_get.call_args
+    assert call_args[0][0].endswith(f"/location/{test_location_id}/resources")
+
+    # Verify the result is a ResourceHierarchy object
+    assert isinstance(result, ResourceHierarchy)
+    assert result.ancestor_ids == []
+    assert result.resource_id == ""
+    assert result.descendant_ids == {}
+
+
+@patch("madsci.client.location_client.requests.Session.get")
+def test_get_location_resources_with_resource(mock_get, location_client):
+    """Test get_location_resources returns proper hierarchy with attached resource."""
+    # Mock successful response with resource hierarchy
+    test_resource_id = new_ulid_str()
+    test_child_id = new_ulid_str()
+    mock_response = Mock()
+    mock_hierarchy_data = {
+        "ancestor_ids": [],
+        "resource_id": test_resource_id,
+        "descendant_ids": {test_resource_id: [test_child_id]},
+    }
+    mock_response.json.return_value = mock_hierarchy_data
+    mock_response.raise_for_status.return_value = None
+    mock_get.return_value = mock_response
+
+    # Call the method
+    test_location_id = new_ulid_str()
+    result = location_client.get_location_resources(test_location_id)
+
+    # Verify the request was made correctly
+    mock_get.assert_called_once()
+    call_args = mock_get.call_args
+    assert call_args[0][0].endswith(f"/location/{test_location_id}/resources")
+
+    # Verify the result is a ResourceHierarchy object with correct data
+    assert isinstance(result, ResourceHierarchy)
+    assert result.ancestor_ids == []
+    assert result.resource_id == test_resource_id
+    assert result.descendant_ids == {test_resource_id: [test_child_id]}
+
+
+@patch("madsci.client.location_client.requests.Session.get")
+def test_get_location_resources_error_handling(mock_get, location_client):
+    """Test that get_location_resources handles errors correctly."""
+    # Mock 404 response
+    mock_response = Mock()
+    mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "404 Not Found"
+    )
+    mock_get.return_value = mock_response
+
+    # Call the method and expect an exception
+    test_location_id = new_ulid_str()
+    with pytest.raises(requests.exceptions.HTTPError):
+        location_client.get_location_resources(test_location_id)
+
+
+def test_get_location_resources_return_type_annotation(location_client):
+    """Test that get_location_resources has correct return type annotation."""
+    sig = inspect.signature(location_client.get_location_resources)
+    assert sig.return_annotation == ResourceHierarchy
