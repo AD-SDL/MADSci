@@ -33,12 +33,12 @@ authors:
     corresponding: true
     affiliation: 1
 affiliations:
-  - name: Argonne National Laboratory, United States
-    index: 1
-  - name: Northwestern University, United States
-    index: 2
-  - name: University of Chicago, United States
-    index: 3
+  - index: 1
+    name: Argonne National Laboratory, United States
+  - index: 2
+    name: Northwestern University, United States
+  - index: 3
+    name: University of Chicago, United States
 date: 19 September 2025
 bibliography: paper.bib
 ---
