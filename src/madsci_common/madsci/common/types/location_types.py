@@ -1,7 +1,7 @@
 """Location types for MADSci."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
@@ -15,10 +15,6 @@ from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
-
-# Avoid circular imports
-if TYPE_CHECKING:
-    pass
 
 
 class LocationArgument(MadsciBaseModel):
@@ -198,6 +194,16 @@ class TransferStepTemplate(MadsciBaseModel):
         description="Weight for shortest path calculation (default: 1.0)",
         default=1.0,
     )
+    additional_args: dict[str, Any] = Field(
+        title="Additional Standard Arguments",
+        description="Additional standard arguments to include in the transfer step",
+        default_factory=dict,
+    )
+    additional_location_args: dict[str, str] = Field(
+        title="Additional Location Arguments",
+        description="Additional location arguments to include in the transfer step. Key is argument name, value is location name to use.",
+        default_factory=dict,
+    )
 
 
 class TransferGraphEdge(MadsciBaseModel):
@@ -239,6 +245,42 @@ class TransferTemplateOverrides(MadsciBaseModel):
     )
 
 
+class CapacityCostConfig(MadsciBaseModel):
+    """Configuration for capacity-aware cost adjustments."""
+
+    enabled: bool = Field(
+        title="Capacity Cost Enabled",
+        description="Whether to enable capacity-aware cost adjustments",
+        default=False,
+    )
+    high_capacity_threshold: float = Field(
+        title="High Capacity Threshold",
+        description="Utilization ratio (quantity/capacity) above which to apply high capacity multiplier",
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+    )
+    full_capacity_threshold: float = Field(
+        title="Full Capacity Threshold",
+        description="Utilization ratio (quantity/capacity) above which to apply full capacity multiplier",
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+    )
+    high_capacity_multiplier: float = Field(
+        title="High Capacity Cost Multiplier",
+        description="Cost multiplier when destination resource capacity utilization is high",
+        default=2.0,
+        ge=1.0,
+    )
+    full_capacity_multiplier: float = Field(
+        title="Full Capacity Cost Multiplier",
+        description="Cost multiplier when destination resource capacity is at or above capacity",
+        default=10.0,
+        ge=1.0,
+    )
+
+
 class LocationTransferCapabilities(MadsciBaseModel):
     """Transfer capabilities for a location manager."""
 
@@ -250,6 +292,11 @@ class LocationTransferCapabilities(MadsciBaseModel):
     override_transfer_templates: Optional[TransferTemplateOverrides] = Field(
         title="Override Transfer Templates",
         description="Override transfer templates for specific source, destination, or (source, destination) pairs",
+        default=None,
+    )
+    capacity_cost_config: Optional[CapacityCostConfig] = Field(
+        title="Capacity Cost Configuration",
+        description="Configuration for capacity-aware cost adjustments when planning transfers",
         default=None,
     )
 

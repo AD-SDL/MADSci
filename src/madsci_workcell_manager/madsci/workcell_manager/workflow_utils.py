@@ -120,7 +120,10 @@ def _validate_node_action(
             for loc in action.locations.values()
             if loc.required
             and loc.name not in step.locations
-            and loc.name not in step.use_parameters.locations
+            and (
+                step.use_parameters is None
+                or loc.name not in step.use_parameters.locations
+            )
         ),
         None,
     )

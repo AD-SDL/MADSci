@@ -8,6 +8,7 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - **Resource Attachment**: Attach resources to specific locations with automatic resource creation from templates
 - **Node-Specific Representations**: Manage node-specific representations for locations to enable flexible integration
 - **Transfer Planning**: Plan multi-step transfers between locations using transfer templates and graph algorithms
+- **Capacity-Aware Routing**: Intelligent transfer planning that avoids congested resources by adjusting costs based on utilization
 - **Non-Transfer Locations**: Support for locations that are excluded from transfer operations for safety or design requirements
 - **Resource Hierarchy Queries**: Query resource hierarchies for resources attached to locations
 - **Redis State Management**: Persistent state storage using Redis
@@ -108,6 +109,7 @@ Advanced transfer planning system that:
 - Uses Dijkstra's algorithm for shortest path finding
 - Creates composite workflows for multi-step transfers
 - Supports cost-weighted transfer edges
+- Includes capacity-aware cost adjustments for intelligent routing optimization
 
 ## Transfer Capabilities
 
@@ -207,6 +209,74 @@ Override transfer templates enable:
 - **Automatic Fallback**: Gracefully falls back to default templates when overrides don't apply
 
 Transfer planning enables automatic resource movement between locations using the shortest available path, while respecting transfer restrictions and applying specialized behaviors when configured.
+
+### Capacity-Aware Transfer Planning
+
+The Location Manager includes capacity-aware transfer planning that dynamically adjusts transfer costs based on destination resource utilization. This helps optimize transfer routes by avoiding congested or full resources.
+
+#### How It Works
+
+When enabled, the transfer planner checks each destination location's attached resource for current quantity and capacity:
+
+1. **Resource Check**: For each transfer edge, check if the destination location has an attached resource
+2. **Utilization Calculation**: Calculate the utilization ratio (quantity/capacity) for consumable resources
+3. **Cost Adjustment**: Apply cost multipliers based on configurable utilization thresholds
+4. **Path Optimization**: The shortest path algorithm automatically favors less congested destinations
+
+#### Configuration
+
+Capacity-aware cost adjustments are configured through the `capacity_cost_config` section:
+
+```yaml
+transfer_capabilities:
+  # Standard transfer templates
+  transfer_templates:
+    - node_name: robotarm_1
+      action: transfer
+      cost_weight: 1.0
+
+  # Capacity-aware cost configuration
+  capacity_cost_config:
+    enabled: true                      # Enable capacity-aware adjustments
+    high_capacity_threshold: 0.8       # Apply multiplier above 80% utilization
+    full_capacity_threshold: 1.0       # Apply higher multiplier at/above 100%
+    high_capacity_multiplier: 2.0      # 2x cost for high capacity destinations
+    full_capacity_multiplier: 10.0     # 10x cost for full/over capacity destinations
+```
+
+#### Cost Multiplier Logic
+
+- **Low utilization** (below `high_capacity_threshold`): No cost adjustment (1x multiplier)
+- **High utilization** (≥ `high_capacity_threshold`): Apply `high_capacity_multiplier`
+- **Full/over capacity** (≥ `full_capacity_threshold`): Apply `full_capacity_multiplier`
+
+#### Example Scenarios
+
+With a 10-unit capacity resource:
+
+- **5 units used (50%)**: Base transfer cost (no penalty)
+- **8 units used (80%)**: 2x transfer cost (high capacity penalty)
+- **10+ units used (100%+)**: 10x transfer cost (full capacity penalty)
+
+#### Benefits
+
+- **Congestion Avoidance**: Automatically routes around full or nearly full resources
+- **Load Balancing**: Distributes transfers across available capacity
+- **Predictable Behavior**: Clear, configurable thresholds for cost adjustments
+- **Graceful Degradation**: Falls back to base costs when resource data unavailable
+- **Error Resilience**: Continues operation even if resource client errors occur
+
+#### Configuration Options
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `false` | Enable/disable capacity-aware cost adjustments |
+| `high_capacity_threshold` | `0.8` | Utilization ratio for high capacity penalty (0.0-1.0) |
+| `full_capacity_threshold` | `1.0` | Utilization ratio for full capacity penalty (0.0-1.0) |
+| `high_capacity_multiplier` | `2.0` | Cost multiplier for high capacity destinations (≥1.0) |
+| `full_capacity_multiplier` | `10.0` | Cost multiplier for full capacity destinations (≥1.0) |
+
+Capacity-aware transfer planning works seamlessly with existing transfer templates and override configurations, providing an additional layer of intelligent routing optimization.
 
 ## Integration
 

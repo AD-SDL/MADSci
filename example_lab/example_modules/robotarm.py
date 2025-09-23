@@ -12,6 +12,7 @@ from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types.definitions import SlotResourceDefinition
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
+from pydantic import Field
 
 
 class RobotArmConfig(RestNodeConfig):
@@ -19,6 +20,8 @@ class RobotArmConfig(RestNodeConfig):
 
     device_number: int = 0
     """The device number of the robot arm."""
+    speed: Optional[float] = Field(default=50.0, ge=1.0, le=100.0)
+    """The speed of the robot arm, in mm/s."""
 
 
 class RobotArmInterface:
@@ -26,8 +29,6 @@ class RobotArmInterface:
 
     status_code: int = 0
     device_number: int = 0
-    config: RobotArmConfig = RobotArmConfig()
-    config_model = RobotArmConfig
 
     def __init__(
         self, device_number: int = 0, logger: Optional[EventClient] = None
@@ -48,6 +49,7 @@ class RobotArmNode(RestNode):
     """A fake robot arm node module for testing."""
 
     robot_arm: RobotArmInterface = None
+    config: RobotArmConfig = RobotArmConfig()
     config_model = RobotArmConfig
 
     def startup_handler(self) -> None:
@@ -73,13 +75,16 @@ class RobotArmNode(RestNode):
     @action
     def transfer(
         self,
-        source: Annotated[LocationArgument, "The source location"] = None,
-        target: Annotated[LocationArgument, "the target location"] = None,
+        source: Annotated[LocationArgument, "The source location"],
+        target: Annotated[LocationArgument, "the target location"],
+        speed: Annotated[
+            Optional[float], "The speed of the transfer, in 1-100 mm/s"
+        ] = None,
     ) -> ActionResult:
-        """Run a command on the robot arm."""
-        if not source or not target:
-            time.sleep(3)
-            return ActionSucceeded()
+        """Transfer a plate from one location to another, at the specified speed."""
+        if not speed:
+            speed = self.config.speed
+        speed = max(1.0, min(100.0, speed))  # Clamp speed to 1-100 mm/s
 
         if self.resource_client:
             try:
@@ -90,7 +95,7 @@ class RobotArmNode(RestNode):
                 resource=self.gripper.resource_id, child=popped_plate
             )
 
-            time.sleep(1)
+            time.sleep(100 / speed)  # Simulate time taken to move
 
             popped_plate, _ = self.resource_client.pop(
                 resource=self.gripper.resource_id

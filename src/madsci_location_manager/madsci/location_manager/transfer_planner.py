@@ -3,6 +3,8 @@
 import heapq
 from typing import Optional
 
+from madsci.client.event_client import EventClient
+from madsci.client.resource_client import ResourceClient
 from madsci.common.types.location_types import (
     Location,
     LocationManagerDefinition,
@@ -26,15 +28,18 @@ class TransferPlanner:
         self,
         state_handler: LocationStateHandler,
         definition: LocationManagerDefinition,
+        resource_client: Optional[ResourceClient] = None,
     ) -> None:
         """Initialize the TransferPlanner.
 
         Args:
             state_handler: LocationStateHandler instance for accessing location data
             definition: LocationManagerDefinition containing transfer capabilities
+            resource_client: ResourceClient for capacity-aware transfer planning (optional)
         """
         self.state_handler = state_handler
         self.definition = definition
+        self.resource_client = resource_client
         self._transfer_graph = self._build_transfer_graph()
 
     def _build_transfer_graph(self) -> dict[tuple[str, str], TransferGraphEdge]:
@@ -77,11 +82,18 @@ class TransferPlanner:
                     if self._can_transfer_between_locations(
                         source_location, dest_location, template
                     ):
+                        base_cost = template.cost_weight or 1.0
+
+                        # Apply capacity-based cost adjustments if enabled
+                        adjusted_cost = self._apply_capacity_cost_adjustment(
+                            base_cost, dest_location
+                        )
+
                         edge = TransferGraphEdge(
                             source_location_id=source_location.location_id,
                             destination_location_id=dest_location.location_id,
                             transfer_template=template,
-                            cost=template.cost_weight or 1.0,
+                            cost=adjusted_cost,
                         )
 
                         # Keep the edge with the lowest cost
@@ -201,6 +213,64 @@ class TransferPlanner:
                 return overrides.destination_overrides[key]
         return None
 
+    def _apply_capacity_cost_adjustment(
+        self, base_cost: float, destination_location: Location
+    ) -> float:
+        """
+        Apply capacity-based cost adjustments to the base transfer cost.
+
+        Args:
+            base_cost: Base cost of the transfer
+            destination_location: Destination location to check for capacity
+
+        Returns:
+            Adjusted cost based on destination resource capacity utilization
+        """
+        # Check if capacity cost adjustments are not enabled, resource client is unavailable, or destination has no resource
+        if (
+            not self.definition.transfer_capabilities
+            or not self.definition.transfer_capabilities.capacity_cost_config
+            or not self.definition.transfer_capabilities.capacity_cost_config.enabled
+            or not self.resource_client
+            or not destination_location.resource_id
+        ):
+            return base_cost
+
+        try:
+            # Get the destination resource
+            resource = self.resource_client.get_resource(
+                destination_location.resource_id
+            )
+
+            # Check if resource has capacity and quantity fields (consumable resources)
+            if (
+                not hasattr(resource, "capacity")
+                or not hasattr(resource, "quantity")
+                or resource.capacity is None
+                or resource.capacity <= 0
+            ):
+                return base_cost
+
+            # Calculate utilization ratio
+            utilization_ratio = float(resource.quantity) / float(resource.capacity)
+
+            # Get capacity configuration
+            config = self.definition.transfer_capabilities.capacity_cost_config
+
+            # Apply multipliers based on utilization thresholds
+            if utilization_ratio >= config.full_capacity_threshold:
+                return base_cost * config.full_capacity_multiplier
+            if utilization_ratio >= config.high_capacity_threshold:
+                return base_cost * config.high_capacity_multiplier
+            return base_cost
+
+        except Exception:
+            # Log warning but don't fail - just return base cost
+            EventClient().warning(
+                f"Failure during capacity check for resource {destination_location.resource_id}. Using base transfer cost."
+            )
+            return base_cost
+
     def _can_transfer_between_locations(
         self, source: Location, dest: Location, template: TransferStepTemplate
     ) -> bool:
@@ -309,6 +379,13 @@ class TransferPlanner:
                 ).name,
             }
 
+            # Add additional location arguments from template
+            for arg_name, location_name in template.additional_location_args.items():
+                step_locations[arg_name] = location_name
+
+            # Start with additional standard arguments from template
+            step_args = template.additional_args.copy()
+
             # Create the step definition
             step = StepDefinition(
                 name=step_name,
@@ -316,7 +393,7 @@ class TransferPlanner:
                 description=f"Transfer step {i + 1} using {template.node_name}",
                 action=template.action,
                 node=template.node_name,
-                args={},
+                args=step_args,
                 files={},
                 locations=step_locations,
                 conditions=[],

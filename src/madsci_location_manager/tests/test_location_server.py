@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.location_types import (
+    CapacityCostConfig,
     Location,
     LocationDefinition,
     LocationManagerDefinition,
@@ -2013,3 +2014,1063 @@ def test_empty_override_templates(redis_server: Redis):
     for edge in graph.values():
         assert edge.transfer_template.node_name == "standard_robot"
         assert edge.transfer_template.action == "standard_transfer"
+
+
+# Capacity-Aware Transfer Planning Tests
+
+
+@pytest.fixture
+def mock_resource():
+    """Mock resource for capacity testing."""
+
+    class MockResource:
+        def __init__(self, quantity=0, capacity=None):
+            self.quantity = quantity
+            self.capacity = capacity
+            self.resource_id = new_ulid_str()
+
+    return MockResource
+
+
+def test_capacity_cost_adjustment_disabled(redis_server: Redis):
+    """Test that capacity cost adjustments are not applied when disabled."""
+    # Create basic setup without capacity config
+    template = TransferStepTemplate(
+        node_name="robot",
+        action="transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[template],
+        # No capacity_cost_config - defaults to disabled
+    )
+
+    location_a = LocationDefinition(
+        location_name="location_a",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [0, 0, 0]}},
+    )
+
+    location_b = LocationDefinition(
+        location_name="location_b",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Capacity Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_a, location_b],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_capacity_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    # Create manager without resource client to test disabled path
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Transfer planner should not have resource client
+    assert (
+        manager.transfer_planner.resource_client is not None
+    )  # Has resource client by default
+
+    # Check that costs are not adjusted (should be base cost)
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (location_a.location_id, location_b.location_id)
+    assert edge_key in graph
+    edge = graph[edge_key]
+    assert edge.cost == 1.0  # Should be base cost without adjustments
+
+
+def test_capacity_cost_adjustment_enabled_no_resource(redis_server: Redis):
+    """Test capacity cost adjustment when enabled but destination has no resource."""
+    # Create setup with capacity config enabled
+    capacity_config = CapacityCostConfig(
+        enabled=True,
+        high_capacity_threshold=0.8,
+        full_capacity_threshold=1.0,
+        high_capacity_multiplier=2.0,
+        full_capacity_multiplier=10.0,
+    )
+
+    template = TransferStepTemplate(
+        node_name="robot",
+        action="transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[template],
+        capacity_cost_config=capacity_config,
+    )
+
+    location_a = LocationDefinition(
+        location_name="location_a",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [0, 0, 0]}},
+    )
+
+    location_b = LocationDefinition(
+        location_name="location_b",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [1, 0, 0]}},
+        # No resource_id attached
+    )
+
+    definition = LocationManagerDefinition(
+        name="Capacity Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_a, location_b],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_capacity_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Check that costs are not adjusted when no resource attached
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (location_a.location_id, location_b.location_id)
+    assert edge_key in graph
+    edge = graph[edge_key]
+    assert edge.cost == 1.0  # Should be base cost without adjustments
+
+
+def test_capacity_cost_adjustment_with_mock_resource(
+    redis_server: Redis, mock_resource
+):
+    """Test capacity cost adjustments with various capacity levels."""
+    # Create setup with capacity config enabled
+    capacity_config = CapacityCostConfig(
+        enabled=True,
+        high_capacity_threshold=0.8,
+        full_capacity_threshold=1.0,
+        high_capacity_multiplier=2.0,
+        full_capacity_multiplier=10.0,
+    )
+
+    template = TransferStepTemplate(
+        node_name="robot",
+        action="transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[template],
+        capacity_cost_config=capacity_config,
+    )
+
+    location_a = LocationDefinition(
+        location_name="location_a",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [0, 0, 0]}},
+    )
+
+    location_b = LocationDefinition(
+        location_name="location_b",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Capacity Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_a, location_b],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_capacity_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Test different capacity scenarios by mocking the resource client
+    original_get_resource = manager.transfer_planner.resource_client.get_resource
+
+    # Test 1: Low capacity utilization (no multiplier)
+    def mock_get_resource_low_capacity(resource_id):  # noqa: ARG001
+        return mock_resource(quantity=5, capacity=10)  # 50% utilization
+
+    manager.transfer_planner.resource_client.get_resource = (
+        mock_get_resource_low_capacity
+    )
+
+    # Attach a resource to location_b
+    location_b_state = manager.state_handler.get_location(location_b.location_id)
+    location_b_state.resource_id = "test_resource_id"
+    manager.state_handler.update_location(location_b.location_id, location_b_state)
+
+    # Rebuild graph to test capacity adjustments
+    manager.transfer_planner._transfer_graph = (
+        manager.transfer_planner._build_transfer_graph()
+    )
+
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (location_a.location_id, location_b.location_id)
+    assert edge_key in graph
+    edge = graph[edge_key]
+    assert edge.cost == 1.0  # No multiplier for 50% utilization
+
+    # Test 2: High capacity utilization (2x multiplier)
+    def mock_get_resource_high_capacity(resource_id):  # noqa: ARG001
+        return mock_resource(quantity=9, capacity=10)  # 90% utilization
+
+    manager.transfer_planner.resource_client.get_resource = (
+        mock_get_resource_high_capacity
+    )
+    manager.transfer_planner._transfer_graph = (
+        manager.transfer_planner._build_transfer_graph()
+    )
+
+    graph = manager.transfer_planner._transfer_graph
+    edge = graph[edge_key]
+    assert edge.cost == 2.0  # 2x multiplier for high capacity
+
+    # Test 3: Full capacity utilization (10x multiplier)
+    def mock_get_resource_full_capacity(resource_id):  # noqa: ARG001
+        return mock_resource(quantity=10, capacity=10)  # 100% utilization
+
+    manager.transfer_planner.resource_client.get_resource = (
+        mock_get_resource_full_capacity
+    )
+    manager.transfer_planner._transfer_graph = (
+        manager.transfer_planner._build_transfer_graph()
+    )
+
+    graph = manager.transfer_planner._transfer_graph
+    edge = graph[edge_key]
+    assert edge.cost == 10.0  # 10x multiplier for full capacity
+
+    # Test 4: Over capacity (10x multiplier)
+    def mock_get_resource_over_capacity(resource_id):  # noqa: ARG001
+        return mock_resource(quantity=12, capacity=10)  # 120% utilization
+
+    manager.transfer_planner.resource_client.get_resource = (
+        mock_get_resource_over_capacity
+    )
+    manager.transfer_planner._transfer_graph = (
+        manager.transfer_planner._build_transfer_graph()
+    )
+
+    graph = manager.transfer_planner._transfer_graph
+    edge = graph[edge_key]
+    assert edge.cost == 10.0  # 10x multiplier for over capacity
+
+    # Restore original method
+    manager.transfer_planner.resource_client.get_resource = original_get_resource
+
+
+def test_capacity_cost_adjustment_with_no_capacity_set(
+    redis_server: Redis, mock_resource
+):
+    """Test that no adjustment is applied when resource has no capacity set."""
+    capacity_config = CapacityCostConfig(
+        enabled=True,
+        high_capacity_threshold=0.8,
+        full_capacity_threshold=1.0,
+        high_capacity_multiplier=2.0,
+        full_capacity_multiplier=10.0,
+    )
+
+    template = TransferStepTemplate(
+        node_name="robot",
+        action="transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[template],
+        capacity_cost_config=capacity_config,
+    )
+
+    location_a = LocationDefinition(
+        location_name="location_a",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [0, 0, 0]}},
+    )
+
+    location_b = LocationDefinition(
+        location_name="location_b",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Capacity Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_a, location_b],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_capacity_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Mock resource with no capacity set
+    def mock_get_resource_no_capacity(resource_id):  # noqa: ARG001
+        return mock_resource(quantity=5, capacity=None)  # No capacity
+
+    manager.transfer_planner.resource_client.get_resource = (
+        mock_get_resource_no_capacity
+    )
+
+    # Attach a resource to location_b
+    location_b_state = manager.state_handler.get_location(location_b.location_id)
+    location_b_state.resource_id = "test_resource_id"
+    manager.state_handler.update_location(location_b.location_id, location_b_state)
+
+    # Rebuild graph to test capacity adjustments
+    manager.transfer_planner._transfer_graph = (
+        manager.transfer_planner._build_transfer_graph()
+    )
+
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (location_a.location_id, location_b.location_id)
+    assert edge_key in graph
+    edge = graph[edge_key]
+    assert edge.cost == 1.0  # No multiplier when capacity is None
+
+
+def test_capacity_cost_adjustment_resource_client_error(redis_server: Redis):
+    """Test that base cost is returned when resource client throws error."""
+    capacity_config = CapacityCostConfig(
+        enabled=True,
+        high_capacity_threshold=0.8,
+        full_capacity_threshold=1.0,
+        high_capacity_multiplier=2.0,
+        full_capacity_multiplier=10.0,
+    )
+
+    template = TransferStepTemplate(
+        node_name="robot",
+        action="transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[template],
+        capacity_cost_config=capacity_config,
+    )
+
+    location_a = LocationDefinition(
+        location_name="location_a",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [0, 0, 0]}},
+    )
+
+    location_b = LocationDefinition(
+        location_name="location_b",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Capacity Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_a, location_b],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_capacity_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Mock resource client to throw error
+    def mock_get_resource_error(resource_id):  # noqa: ARG001
+        raise Exception("Resource not found")
+
+    manager.transfer_planner.resource_client.get_resource = mock_get_resource_error
+
+    # Attach a resource to location_b
+    location_b_state = manager.state_handler.get_location(location_b.location_id)
+    location_b_state.resource_id = "test_resource_id"
+    manager.state_handler.update_location(location_b.location_id, location_b_state)
+
+    # Rebuild graph to test capacity adjustments
+    manager.transfer_planner._transfer_graph = (
+        manager.transfer_planner._build_transfer_graph()
+    )
+
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (location_a.location_id, location_b.location_id)
+    assert edge_key in graph
+    edge = graph[edge_key]
+    assert edge.cost == 1.0  # Should fallback to base cost on error
+
+
+def test_transfer_planning_with_capacity_constraints(
+    redis_server: Redis, mock_resource
+):
+    """Test that transfer planning chooses paths with lower capacity utilization."""
+    capacity_config = CapacityCostConfig(
+        enabled=True,
+        high_capacity_threshold=0.8,
+        full_capacity_threshold=1.0,
+        high_capacity_multiplier=5.0,
+        full_capacity_multiplier=20.0,
+    )
+
+    # Create two paths with same base cost
+    template = TransferStepTemplate(
+        node_name="robot",
+        action="transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[template],
+        capacity_cost_config=capacity_config,
+    )
+
+    # Create three locations: A -> B (low capacity) or A -> C (high capacity)
+    location_a = LocationDefinition(
+        location_name="location_a",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [0, 0, 0]}},
+    )
+
+    location_b = LocationDefinition(
+        location_name="location_b",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [1, 0, 0]}},
+    )
+
+    location_c = LocationDefinition(
+        location_name="location_c",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [2, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Capacity Planning Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_a, location_b, location_c],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_capacity_planning_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Mock different capacity levels for each location
+    def mock_get_resource_by_id(resource_id):
+        if resource_id == "resource_b":
+            return mock_resource(quantity=3, capacity=10)  # 30% utilization (low)
+        if resource_id == "resource_c":
+            return mock_resource(quantity=9, capacity=10)  # 90% utilization (high)
+        return mock_resource(quantity=0, capacity=10)  # Default
+
+    manager.transfer_planner.resource_client.get_resource = mock_get_resource_by_id
+
+    # Attach resources to locations
+    location_b_state = manager.state_handler.get_location(location_b.location_id)
+    location_b_state.resource_id = "resource_b"
+    manager.state_handler.update_location(location_b.location_id, location_b_state)
+
+    location_c_state = manager.state_handler.get_location(location_c.location_id)
+    location_c_state.resource_id = "resource_c"
+    manager.state_handler.update_location(location_c.location_id, location_c_state)
+
+    # Rebuild graph to test capacity adjustments
+    manager.transfer_planner._transfer_graph = (
+        manager.transfer_planner._build_transfer_graph()
+    )
+
+    graph = manager.transfer_planner._transfer_graph
+
+    # Check that location B (low capacity) has lower cost than location C (high capacity)
+    edge_a_to_b = graph[(location_a.location_id, location_b.location_id)]
+    edge_a_to_c = graph[(location_a.location_id, location_c.location_id)]
+
+    assert edge_a_to_b.cost == 1.0  # Base cost for 30% utilization
+    assert edge_a_to_c.cost == 5.0  # 5x multiplier for 90% utilization
+
+    # Transfer planning should prefer the low-capacity path
+    assert edge_a_to_b.cost < edge_a_to_c.cost
+
+
+# Additional Arguments in Transfer Templates Tests
+
+
+def test_transfer_template_with_additional_standard_args(redis_server: Redis):
+    """Test that transfer templates with additional standard arguments are handled correctly."""
+    # Create transfer template with additional standard arguments
+    template_with_args = TransferStepTemplate(
+        node_name="robot_with_args",
+        action="parameterized_transfer",
+        source_argument_name="source_location",
+        target_argument_name="target_location",
+        cost_weight=1.0,
+        additional_args={
+            "speed": 50,
+            "force": "gentle",
+            "retry_count": 3,
+            "use_vision": True,
+        },
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[template_with_args]
+    )
+
+    # Create locations
+    location_a = LocationDefinition(
+        location_name="station_alpha",
+        location_id=new_ulid_str(),
+        representations={"robot_with_args": {"position": [0, 0, 0]}},
+    )
+
+    location_b = LocationDefinition(
+        location_name="station_beta",
+        location_id=new_ulid_str(),
+        representations={"robot_with_args": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Additional Args Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_a, location_b],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_additional_args_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Plan a transfer and verify additional arguments are included
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": location_a.location_id,
+            "destination_location_id": location_b.location_id,
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+
+    assert len(workflow.steps) == 1
+    step = workflow.steps[0]
+
+    # Verify the step includes all additional arguments
+    assert step.args["speed"] == 50
+    assert step.args["force"] == "gentle"
+    assert step.args["retry_count"] == 3
+    assert step.args["use_vision"] is True
+
+    # Verify standard location arguments are still present
+    assert step.locations["source_location"] == "station_alpha"
+    assert step.locations["target_location"] == "station_beta"
+
+    # Verify other fields are correct
+    assert step.node == "robot_with_args"
+    assert step.action == "parameterized_transfer"
+
+
+def test_transfer_template_with_additional_location_args(redis_server: Redis):
+    """Test that transfer templates with additional location arguments are handled correctly."""
+    # Create transfer template with additional location arguments
+    template_with_locations = TransferStepTemplate(
+        node_name="multi_location_robot",
+        action="multi_point_transfer",
+        source_argument_name="pickup_location",
+        target_argument_name="dropoff_location",
+        cost_weight=1.0,
+        additional_location_args={
+            "staging_location": "intermediate_station",
+            "calibration_location": "calibration_point",
+        },
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[template_with_locations]
+    )
+
+    # Create locations
+    location_a = LocationDefinition(
+        location_name="start_station",
+        location_id=new_ulid_str(),
+        representations={"multi_location_robot": {"position": [0, 0, 0]}},
+    )
+
+    location_b = LocationDefinition(
+        location_name="end_station",
+        location_id=new_ulid_str(),
+        representations={"multi_location_robot": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Additional Location Args Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_a, location_b],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_additional_location_args_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Plan a transfer and verify additional location arguments are included
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": location_a.location_id,
+            "destination_location_id": location_b.location_id,
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+
+    assert len(workflow.steps) == 1
+    step = workflow.steps[0]
+
+    # Verify the step includes all location arguments
+    assert step.locations["pickup_location"] == "start_station"
+    assert step.locations["dropoff_location"] == "end_station"
+    assert step.locations["staging_location"] == "intermediate_station"
+    assert step.locations["calibration_location"] == "calibration_point"
+
+    # Verify no additional standard arguments since none were specified
+    assert len(step.args) == 0
+
+    # Verify other fields are correct
+    assert step.node == "multi_location_robot"
+    assert step.action == "multi_point_transfer"
+
+
+def test_transfer_template_with_both_additional_args_types(redis_server: Redis):
+    """Test that transfer templates with both additional standard and location arguments work correctly."""
+    # Create transfer template with both types of additional arguments
+    comprehensive_template = TransferStepTemplate(
+        node_name="comprehensive_robot",
+        action="comprehensive_transfer",
+        source_argument_name="from_location",
+        target_argument_name="to_location",
+        cost_weight=1.5,
+        additional_args={
+            "precision": "high",
+            "timeout": 30,
+            "enable_logging": True,
+        },
+        additional_location_args={
+            "reference_location": "reference_point",
+            "emergency_location": "safety_zone",
+        },
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[comprehensive_template]
+    )
+
+    # Create locations
+    location_x = LocationDefinition(
+        location_name="complex_station_x",
+        location_id=new_ulid_str(),
+        representations={"comprehensive_robot": {"config": "advanced"}},
+    )
+
+    location_y = LocationDefinition(
+        location_name="complex_station_y",
+        location_id=new_ulid_str(),
+        representations={"comprehensive_robot": {"config": "standard"}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Comprehensive Args Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_x, location_y],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_comprehensive_args_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Plan a transfer and verify both types of additional arguments are included
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": location_x.location_id,
+            "destination_location_id": location_y.location_id,
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+
+    assert len(workflow.steps) == 1
+    step = workflow.steps[0]
+
+    # Verify standard arguments
+    assert step.args["precision"] == "high"
+    assert step.args["timeout"] == 30
+    assert step.args["enable_logging"] is True
+
+    # Verify location arguments (both standard and additional)
+    assert step.locations["from_location"] == "complex_station_x"
+    assert step.locations["to_location"] == "complex_station_y"
+    assert step.locations["reference_location"] == "reference_point"
+    assert step.locations["emergency_location"] == "safety_zone"
+
+    # Verify other fields
+    assert step.node == "comprehensive_robot"
+    assert step.action == "comprehensive_transfer"
+
+
+def test_override_templates_with_additional_args(redis_server: Redis):
+    """Test that override templates with additional arguments work correctly."""
+    # Create default template with minimal arguments
+    default_template = TransferStepTemplate(
+        node_name="basic_robot",
+        action="basic_transfer",
+        cost_weight=5.0,
+    )
+
+    # Create override template with additional arguments
+    enhanced_override_template = TransferStepTemplate(
+        node_name="enhanced_robot",
+        action="enhanced_transfer",
+        cost_weight=1.0,
+        additional_args={
+            "enhanced_mode": True,
+            "optimization_level": "maximum",
+        },
+        additional_location_args={
+            "checkpoint_location": "checkpoint_station",
+        },
+    )
+
+    # Create override configuration
+    overrides = TransferTemplateOverrides(
+        source_overrides={
+            "enhanced_source_station": [enhanced_override_template],
+        },
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[default_template],
+        override_transfer_templates=overrides,
+    )
+
+    # Create locations
+    enhanced_source = LocationDefinition(
+        location_name="enhanced_source_station",
+        location_id=new_ulid_str(),
+        representations={
+            "basic_robot": {"position": [0, 0, 0]},
+            "enhanced_robot": {"position": [0, 0, 0]},
+        },
+    )
+
+    normal_destination = LocationDefinition(
+        location_name="normal_destination_station",
+        location_id=new_ulid_str(),
+        representations={
+            "basic_robot": {"position": [1, 0, 0]},
+            "enhanced_robot": {"position": [1, 0, 0]},
+        },
+    )
+
+    regular_source = LocationDefinition(
+        location_name="regular_source_station",
+        location_id=new_ulid_str(),
+        representations={
+            "basic_robot": {"position": [2, 0, 0]},
+            "enhanced_robot": {"position": [2, 0, 0]},
+        },
+    )
+
+    definition = LocationManagerDefinition(
+        name="Override Args Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[enhanced_source, normal_destination, regular_source],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_override_args_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Test transfer FROM enhanced source (should use override with additional args)
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": enhanced_source.location_id,
+            "destination_location_id": normal_destination.location_id,
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+
+    assert len(workflow.steps) == 1
+    step = workflow.steps[0]
+
+    # Verify override template was used with additional arguments
+    assert step.node == "enhanced_robot"
+    assert step.action == "enhanced_transfer"
+    assert step.args["enhanced_mode"] is True
+    assert step.args["optimization_level"] == "maximum"
+    assert step.locations["checkpoint_location"] == "checkpoint_station"
+
+    # Test transfer FROM regular source (should use default template without additional args)
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": regular_source.location_id,
+            "destination_location_id": normal_destination.location_id,
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+
+    assert len(workflow.steps) == 1
+    step = workflow.steps[0]
+
+    # Verify default template was used without additional arguments
+    assert step.node == "basic_robot"
+    assert step.action == "basic_transfer"
+    assert len(step.args) == 0  # No additional args in default template
+    assert "checkpoint_location" not in step.locations  # No additional location args
+
+
+def test_multi_step_transfer_with_additional_args(redis_server: Redis):
+    """Test that multi-step transfers preserve additional arguments for each step."""
+    # Create templates with different additional arguments
+    robot_template = TransferStepTemplate(
+        node_name="precision_robot",
+        action="precision_transfer",
+        cost_weight=1.0,
+        additional_args={
+            "precision_level": "ultra_high",
+            "scan_before_pickup": True,
+        },
+    )
+
+    conveyor_template = TransferStepTemplate(
+        node_name="smart_conveyor",
+        action="conveyor_move",
+        source_argument_name="belt_source",
+        target_argument_name="belt_target",
+        cost_weight=2.0,
+        additional_args={
+            "belt_speed": "variable",
+            "item_tracking": True,
+        },
+        additional_location_args={
+            "sensor_location": "belt_sensor_point",
+        },
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[robot_template, conveyor_template]
+    )
+
+    # Create locations that form a multi-hop path
+    station_a = LocationDefinition(
+        location_name="multi_station_a",
+        location_id=new_ulid_str(),
+        representations={
+            "precision_robot": {"position": [0, 0, 0]},
+        },
+    )
+
+    station_b = LocationDefinition(
+        location_name="multi_station_b",
+        location_id=new_ulid_str(),
+        representations={
+            "precision_robot": {"position": [1, 0, 0]},
+            "smart_conveyor": {"belt_position": 0},
+        },
+    )
+
+    station_c = LocationDefinition(
+        location_name="multi_station_c",
+        location_id=new_ulid_str(),
+        representations={
+            "smart_conveyor": {"belt_position": 1},
+        },
+    )
+
+    definition = LocationManagerDefinition(
+        name="Multi-step Args Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[station_a, station_b, station_c],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_multistep_args_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Plan a multi-step transfer (A -> B -> C)
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": station_a.location_id,
+            "destination_location_id": station_c.location_id,
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+
+    assert len(workflow.steps) == 2
+
+    # Verify first step (robot transfer A -> B)
+    step1 = workflow.steps[0]
+    assert step1.node == "precision_robot"
+    assert step1.action == "precision_transfer"
+    assert step1.args["precision_level"] == "ultra_high"
+    assert step1.args["scan_before_pickup"] is True
+    assert step1.locations["source_location"] == "multi_station_a"
+    assert step1.locations["target_location"] == "multi_station_b"
+
+    # Verify second step (conveyor transfer B -> C)
+    step2 = workflow.steps[1]
+    assert step2.node == "smart_conveyor"
+    assert step2.action == "conveyor_move"
+    assert step2.args["belt_speed"] == "variable"
+    assert step2.args["item_tracking"] is True
+    assert step2.locations["belt_source"] == "multi_station_b"
+    assert step2.locations["belt_target"] == "multi_station_c"
+    assert step2.locations["sensor_location"] == "belt_sensor_point"
+
+
+def test_empty_additional_args_default_behavior(redis_server: Redis):
+    """Test that templates without additional arguments work exactly as before."""
+    # Create template without any additional arguments (should behave exactly as before)
+    traditional_template = TransferStepTemplate(
+        node_name="traditional_robot",
+        action="traditional_transfer",
+        source_argument_name="source_location",
+        target_argument_name="target_location",
+        cost_weight=1.0,
+        # additional_args and additional_location_args will default to empty dicts
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[traditional_template]
+    )
+
+    # Create locations
+    location_1 = LocationDefinition(
+        location_name="traditional_station_1",
+        location_id=new_ulid_str(),
+        representations={"traditional_robot": {"position": [0, 0, 0]}},
+    )
+
+    location_2 = LocationDefinition(
+        location_name="traditional_station_2",
+        location_id=new_ulid_str(),
+        representations={"traditional_robot": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Traditional Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[location_1, location_2],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_traditional_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Plan a transfer
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": location_1.location_id,
+            "destination_location_id": location_2.location_id,
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+
+    assert len(workflow.steps) == 1
+    step = workflow.steps[0]
+
+    # Verify exactly the same behavior as before additional arguments were added
+    assert step.node == "traditional_robot"
+    assert step.action == "traditional_transfer"
+    assert len(step.args) == 0  # No additional args
+    assert len(step.locations) == 2  # Only source and target
+    assert step.locations["source_location"] == "traditional_station_1"
+    assert step.locations["target_location"] == "traditional_station_2"

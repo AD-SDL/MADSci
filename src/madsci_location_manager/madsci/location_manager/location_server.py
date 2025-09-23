@@ -58,7 +58,9 @@ class LocationManager(
         self.resource_client = ResourceClient(resource_server_url=resource_server_url)
 
         self._initialize_locations_from_definition()
-        self.transfer_planner = TransferPlanner(self.state_handler, self.definition)
+        self.transfer_planner = TransferPlanner(
+            self.state_handler, self.definition, self.resource_client
+        )
 
     def _initialize_locations_from_definition(self) -> None:
         """Initialize locations from the definition, creating or updating them in the state handler."""
