@@ -544,3 +544,8 @@ class JSONActionResultDefinition(ActionResultDefinition):
         description="The type of the result.",
         default="json",
     )
+    data_type: Optional[str] = Field(
+        title="Data Type",
+        description="The type of the data.",
+        default=None,
+    )

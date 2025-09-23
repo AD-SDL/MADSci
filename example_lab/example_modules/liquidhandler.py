@@ -10,7 +10,10 @@ from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
-
+class RunCommandJSONData(ActionJSON):
+        command: str
+class RunCommandFileData(ActionFiles):
+        log_file: Path
 
 class LiquidHandlerConfig(RestNodeConfig):
     """Configuration for the liquid handler node module."""
@@ -65,22 +68,22 @@ class LiquidHandlerNode(RestNode):
             self.node_state = {
                 "liquid_handler_status_code": self.liquid_handler.status_code,
             }
-    class RunCommandJSONData(ActionJSON):
-        command: str
-    class RunCommandFileData(ActionFiles):
-        log_file: Path
+    
     @action
     def run_command(self, command: str) -> tuple[RunCommandJSONData, RunCommandFileData]:
-        """Run a command on the liquid handler."""
+        """Run a command on the liquid handler. Shows returning both JSON and file data."""
         self.liquid_handler.run_command(command)
-        return ActionSucceeded()
-
+        return RunCommandJSONData(command=command), RunCommandFileData(log_file=Path("/tmp/fake_log.txt"))
     @action
-    def run_protocol(self, protocol: Path) -> ActionResult:
+    def run_protocol(self, protocol: Path) -> Path:
         """Run a protocol on the liquid handler"""
         self.logger.log(protocol)
         self.liquid_handler.run_command("run_protocol")
-        return ActionSucceeded()
+        return protocol
+    @action
+    def quick_action(self) -> None:
+        """A quick action that returns nothing"""
+        self.liquid_handler.run_command("quick_action")
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the liquid handler"""

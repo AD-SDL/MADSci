@@ -75,7 +75,7 @@ class RobotArmNode(RestNode):
         self,
         source: Annotated[LocationArgument, "The source location"] = None,
         target: Annotated[LocationArgument, "the target location"] = None,
-    ) -> ActionResult:
+    ) -> None:
         """Run a command on the robot arm."""
         if not source or not target:
             time.sleep(3)
@@ -96,8 +96,6 @@ class RobotArmNode(RestNode):
                 resource=self.gripper.resource_id
             )
             self.resource_client.push(resource=target.resource_id, child=popped_plate)
-
-        return ActionSucceeded()
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the robot arm"""

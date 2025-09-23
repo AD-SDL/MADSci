@@ -26,7 +26,8 @@ node_url: null
 actions:
   run_command:
     name: run_command
-    description: Run a command on the liquid handler.
+    description: Run a command on the liquid handler. Shows returning both JSON and
+      file data.
     args:
       command:
         name: command
@@ -36,7 +37,15 @@ actions:
         default: null
     locations: {}
     files: {}
-    results: {}
+    results:
+      command:
+        result_label: command
+        description: null
+        result_type: json
+      log_file:
+        result_label: log_file
+        description: null
+        result_type: file
     blocking: false
     asynchronous: true
   run_protocol:
@@ -51,6 +60,19 @@ actions:
         argument_type: file
         required: true
         default: null
+    results:
+      file:
+        result_label: file
+        description: null
+        result_type: file
+    blocking: false
+    asynchronous: true
+  quick_action:
+    name: quick_action
+    description: A quick action that returns nothing
+    args: {}
+    locations: {}
+    files: {}
     results: {}
     blocking: false
     asynchronous: true

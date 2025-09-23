@@ -24,25 +24,42 @@ capabilities:
   - unlock
 node_url: null
 actions:
-  read_plate:
-    name: read_plate
-    description: Run a command on the plate reader.
-    args: {}
+  run_command:
+    name: run_command
+    description: Run a command on the liquid handler. Shows returning both JSON and
+      file data.
+    args:
+      command:
+        name: command
+        description: ''
+        argument_type: str
+        required: true
+        default: null
     locations: {}
     files: {}
     results:
-      data:
-        result_label: data
-        description: int
+      command:
+        result_label: command
+        description: null
         result_type: json
+      log_file:
+        result_label: log_file
+        description: null
+        result_type: file
     blocking: false
     asynchronous: true
-  create_plate_file:
-    name: create_plate_file
-    description: Run a command on the plate reader.
+  run_protocol:
+    name: run_protocol
+    description: Run a protocol on the liquid handler
     args: {}
     locations: {}
-    files: {}
+    files:
+      protocol:
+        name: protocol
+        description: ''
+        argument_type: file
+        required: true
+        default: null
     results:
       file:
         result_label: file
@@ -50,21 +67,13 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
-  create_plate_files:
-    name: create_plate_files
-    description: Run a command on the plate reader.
+  quick_action:
+    name: quick_action
+    description: A quick action that returns nothing
     args: {}
     locations: {}
     files: {}
-    results:
-      file_path_1:
-        result_label: file_path_1
-        description: null
-        result_type: file
-      file_path_2:
-        result_label: file_path_2
-        description: null
-        result_type: file
+    results: {}
     blocking: false
     asynchronous: true
 config:
@@ -73,10 +82,11 @@ config:
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://localhost:2002/
+  node_url: http://localhost:2000/
   uvicorn_kwargs: {}
+  device_number: 0
 config_schema:
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: Configuration for the liquid handler node module.
   properties:
     node_definition:
       anyOf:
@@ -133,5 +143,9 @@ config_schema:
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-  title: RestNodeConfig
+    device_number:
+      default: 0
+      title: Device Number
+      type: integer
+  title: LiquidHandlerConfig
   type: object
