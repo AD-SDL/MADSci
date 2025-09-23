@@ -1280,3 +1280,164 @@ def test_query_resource_hierarchy_nonexistent_resource(test_client: TestClient) 
     response = test_client.get(f"/resource/{fake_id}/hierarchy")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+def test_query_resource_hierarchy_deep_nesting(test_client: TestClient) -> None:
+    """Test querying hierarchy with deep nesting (5 levels) to ensure complete traversal."""
+    # Create a 5-level hierarchy: root -> level1 -> level2 -> level3 -> level4
+    resource_ids = []
+
+    # Create root resource
+    root = Container(
+        resource_name="Root Container",
+        resource_class="container",
+    )
+    response = test_client.post("/resource/add", json=root.model_dump(mode="json"))
+    assert response.status_code == 200
+    root_id = response.json()["resource_id"]
+    resource_ids.append(root_id)
+
+    # Create nested hierarchy
+    current_parent_id = root_id
+    for level in range(1, 5):  # levels 1-4
+        resource = Container(
+            resource_name=f"Level {level} Container",
+            resource_class="container",
+            parent_id=current_parent_id,
+            key=f"level_{level}_key",
+        )
+        response = test_client.post(
+            "/resource/add", json=resource.model_dump(mode="json")
+        )
+        assert response.status_code == 200
+        current_id = response.json()["resource_id"]
+        resource_ids.append(current_id)
+        current_parent_id = current_id
+
+    # Test hierarchy query from root (should see all descendants)
+    response = test_client.get(f"/resource/{root_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == root_id
+    assert hierarchy["ancestor_ids"] == []
+    # Should have descendant mappings for all levels
+    assert (
+        len(hierarchy["descendant_ids"]) == 4
+    )  # root -> level1, level1 -> level2, etc.
+    assert root_id in hierarchy["descendant_ids"]
+    assert resource_ids[1] in hierarchy["descendant_ids"]  # level1
+    assert resource_ids[2] in hierarchy["descendant_ids"]  # level2
+    assert resource_ids[3] in hierarchy["descendant_ids"]  # level3
+
+    # Test hierarchy query from middle level (level 2)
+    level2_id = resource_ids[2]
+    response = test_client.get(f"/resource/{level2_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == level2_id
+    # Should have 2 ancestors: level1 and root
+    assert hierarchy["ancestor_ids"] == [resource_ids[1], root_id]
+    # Should have 2 descendant mappings: level2 -> level3, level3 -> level4
+    assert len(hierarchy["descendant_ids"]) == 2
+    assert level2_id in hierarchy["descendant_ids"]
+    assert resource_ids[3] in hierarchy["descendant_ids"]  # level3
+
+    # Test hierarchy query from deepest level (level 4)
+    level4_id = resource_ids[4]
+    response = test_client.get(f"/resource/{level4_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == level4_id
+    # Should have 4 ancestors: level3, level2, level1, root
+    assert hierarchy["ancestor_ids"] == [
+        resource_ids[3],
+        resource_ids[2],
+        resource_ids[1],
+        root_id,
+    ]
+    # Should have no descendants
+    assert hierarchy["descendant_ids"] == {}
+
+
+def test_query_resource_hierarchy_complex_tree(test_client: TestClient) -> None:
+    """Test querying hierarchy with complex tree structure (multiple branches)."""
+    # Create root container
+    root = Container(
+        resource_name="Root Container",
+        resource_class="container",
+    )
+    response = test_client.post("/resource/add", json=root.model_dump(mode="json"))
+    assert response.status_code == 200
+    root_id = response.json()["resource_id"]
+
+    # Create two branches from root
+    branch_ids = []
+    for branch in range(2):
+        branch_container = Container(
+            resource_name=f"Branch {branch} Container",
+            resource_class="container",
+            parent_id=root_id,
+            key=f"branch_{branch}",
+        )
+        response = test_client.post(
+            "/resource/add", json=branch_container.model_dump(mode="json")
+        )
+        assert response.status_code == 200
+        branch_id = response.json()["resource_id"]
+        branch_ids.append(branch_id)
+
+        # Create sub-branches for each branch
+        for sub_branch in range(2):
+            sub_container = Container(
+                resource_name=f"Branch {branch}.{sub_branch} Container",
+                resource_class="container",
+                parent_id=branch_id,
+                key=f"sub_{sub_branch}",
+            )
+            response = test_client.post(
+                "/resource/add", json=sub_container.model_dump(mode="json")
+            )
+            assert response.status_code == 200
+            sub_id = response.json()["resource_id"]
+
+            # Add leaf resources to sub-branches
+            leaf = Resource(
+                resource_name=f"Leaf {branch}.{sub_branch}",
+                resource_class="sample",
+                parent_id=sub_id,
+                key="leaf",
+            )
+            response = test_client.post(
+                "/resource/add", json=leaf.model_dump(mode="json")
+            )
+            assert response.status_code == 200
+
+    # Test hierarchy from root - should see all descendants across all branches
+    response = test_client.get(f"/resource/{root_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == root_id
+    assert hierarchy["ancestor_ids"] == []
+    # Should have multiple levels of descendants
+    assert root_id in hierarchy["descendant_ids"]
+    assert len(hierarchy["descendant_ids"][root_id]) == 2  # Two branches
+    # Should have descendants at multiple levels (root -> branches -> sub-branches -> leaves)
+    assert (
+        len(hierarchy["descendant_ids"]) >= 6
+    )  # At least: root, 2 branches, 4 sub-branches
+
+    # Test hierarchy from first branch - should see only its descendants
+    branch0_id = branch_ids[0]
+    response = test_client.get(f"/resource/{branch0_id}/hierarchy")
+    assert response.status_code == 200
+    hierarchy = response.json()
+
+    assert hierarchy["resource_id"] == branch0_id
+    assert hierarchy["ancestor_ids"] == [root_id]
+    # Should have descendants but not from other branches
+    assert branch0_id in hierarchy["descendant_ids"]
+    assert len(hierarchy["descendant_ids"][branch0_id]) == 2  # Two sub-branches

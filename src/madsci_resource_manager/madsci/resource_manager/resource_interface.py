@@ -1559,14 +1559,18 @@ class ResourceInterface:
         Query the hierarchical relationships of a resource.
 
         Returns the ancestors (successive parent IDs from closest to furthest)
-        and descendants (direct children organized by parent) of the specified resource.
+        and descendants (all children recursively, organized by parent) of the specified resource.
 
         Args:
             resource_id (str): The ID of the resource to query hierarchy for.
             parent_session (Optional[Session]): Optional parent session.
 
         Returns:
-            dict[str, Any]: ResourceHierarchy with ancestor_ids, resource_id, and descendant_ids.
+            dict[str, Any]: ResourceHierarchy with:
+                - ancestor_ids: List of all direct ancestors (parent, grandparent, etc.)
+                - resource_id: The ID of the queried resource
+                - descendant_ids: Dict mapping parent IDs to their direct child IDs,
+                  recursively including all descendant generations (children, grandchildren, etc.)
         """
         try:
             with self.get_session(parent_session) as session:
@@ -1595,32 +1599,28 @@ class ResourceInterface:
                     else:
                         break
 
-                # Get direct descendants - children of this resource
-                # and all descendants organized by their parent
+                # Get all descendants recursively - organized by their parent
                 descendant_ids = {}
 
-                # Start with direct children of the queried resource
-                direct_children = session.exec(
-                    select(ResourceTable).where(ResourceTable.parent_id == resource_id)
-                ).all()
+                def _collect_descendants(parent_id: str) -> None:
+                    """Recursively collect all descendants of a given parent."""
+                    children = session.exec(
+                        select(ResourceTable).where(
+                            ResourceTable.parent_id == parent_id
+                        )
+                    ).all()
 
-                if direct_children:
-                    descendant_ids[resource_id] = [
-                        child.resource_id for child in direct_children
-                    ]
+                    if children:
+                        descendant_ids[parent_id] = [
+                            child.resource_id for child in children
+                        ]
 
-                    # Get children of each direct child (grandchildren)
-                    for child in direct_children:
-                        grandchildren = session.exec(
-                            select(ResourceTable).where(
-                                ResourceTable.parent_id == child.resource_id
-                            )
-                        ).all()
+                        # Recursively collect descendants of each child
+                        for child in children:
+                            _collect_descendants(child.resource_id)
 
-                        if grandchildren:
-                            descendant_ids[child.resource_id] = [
-                                grandchild.resource_id for grandchild in grandchildren
-                            ]
+                # Start collecting descendants from the queried resource
+                _collect_descendants(resource_id)
 
                 return {
                     "ancestor_ids": ancestor_ids,

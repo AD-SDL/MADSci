@@ -152,8 +152,8 @@ class ResourceHierarchy(MadsciBaseModel):
     """Represents the hierarchical relationships of a resource."""
 
     ancestor_ids: list[str]
-    """List of successive parent IDs from closest to furthest relative to the queried resource."""
+    """List of all direct ancestors from closest to furthest (parent, grandparent, great-grandparent, etc.)."""
     resource_id: str
     """The ID of the queried resource."""
     descendant_ids: dict[str, list[str]]
-    """Dictionary mapping parent IDs to their direct child IDs."""
+    """Dictionary mapping parent IDs to their direct child IDs, recursively including all descendant generations (children, grandchildren, great-grandchildren, etc.)."""

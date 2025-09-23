@@ -853,13 +853,17 @@ class ResourceManager(
         Query the hierarchical relationships of a resource.
 
         Returns the ancestors (successive parent IDs from closest to furthest)
-        and descendants (direct children organized by parent) of the specified resource.
+        and descendants (all children recursively, organized by parent) of the specified resource.
 
         Args:
             resource_id (str): The ID of the resource to query hierarchy for.
 
         Returns:
-            ResourceHierarchy: Hierarchy information with ancestor_ids, resource_id, and descendant_ids.
+            ResourceHierarchy: Hierarchy information with:
+                - ancestor_ids: List of all direct ancestors (parent, grandparent, etc.)
+                - resource_id: The ID of the queried resource
+                - descendant_ids: Dict mapping parent IDs to their direct child IDs,
+                  recursively including all descendant generations (children, grandchildren, etc.)
         """
         try:
             hierarchy_data = self._resource_interface.query_resource_hierarchy(

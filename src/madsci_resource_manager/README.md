@@ -654,6 +654,7 @@ The `query_resource_hierarchy` method returns a `ResourceHierarchy` object with:
 - **`resource_id`**: The ID of the queried resource
 
 - **`descendant_ids`**: Dictionary mapping parent IDs to their direct child IDs
+  - Recursively includes all descendant generations (children, grandchildren, great-grandchildren, etc.)
   - Only includes direct parent-child relationships (no "uncle" or "cousin" resources)
   - Key: parent resource ID, Value: list of direct child resource IDs
   - Empty dictionary if no descendants exist
@@ -718,9 +719,9 @@ build_resource_tree(root_container_id, client)
 
 ### Performance Considerations
 
-- Hierarchy queries are optimized to fetch only direct relationships
+- Hierarchy queries are optimized to fetch only direct parent-child relationships
 - For deep hierarchies, consider caching results if querying frequently
-- The query returns only direct ancestors and descendants, not the entire tree
-- Use recursive queries sparingly for very large resource trees
+- The query returns all direct ancestors and recursively traverses all descendants
+- Use sparingly for very large resource trees with many nested levels
 
 **Examples**: See [example_lab/](../../example_lab/) for complete resource management workflows integrated with laboratory operations.
