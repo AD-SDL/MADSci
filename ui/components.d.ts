@@ -33,6 +33,7 @@ declare module 'vue' {
     Slot: typeof import('./src/components/ResourceComponents/Slot.vue')['default']
     Stack: typeof import('./src/components/ResourceComponents/Stack.vue')['default']
     Step: typeof import('./src/components/Step.vue')['default']
+    TransferGraph: typeof import('./src/components/TransferGraph.vue')['default']
     WorkcellPanel: typeof import('./src/components/WorkcellPanel.vue')['default']
     Workflow: typeof import('./src/components/Workflow.vue')['default']
     WorkflowModal: typeof import('./src/components/WorkflowModal.vue')['default']

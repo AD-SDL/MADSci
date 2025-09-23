@@ -3074,3 +3074,334 @@ def test_empty_additional_args_default_behavior(redis_server: Redis):
     assert len(step.locations) == 2  # Only source and target
     assert step.locations["source_location"] == "traditional_station_1"
     assert step.locations["target_location"] == "traditional_station_2"
+
+
+# Remove Representation and Detach Resource Tests
+
+
+def test_remove_representation_success(redis_server: Redis):
+    """Test successful removal of a representation from a location."""
+    location_id = new_ulid_str()
+    location = Location(
+        location_id=location_id,
+        location_name="test_location",
+        representations={
+            "robot_1": {"position": [0, 0, 0]},
+            "robot_2": {"position": [1, 1, 1]},
+        },
+    )
+
+    definition = LocationManagerDefinition(
+        name="Remove Representation Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_remove_representation_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Add the location first
+    response = client.post("/location", json=location.model_dump())
+    assert response.status_code == 200
+
+    # Remove representation for robot_1
+    response = client.delete(f"/location/{location_id}/remove_representation/robot_1")
+    assert response.status_code == 200
+
+    updated_location = Location.model_validate(response.json())
+    assert updated_location.representations is not None
+    assert "robot_1" not in updated_location.representations
+    assert "robot_2" in updated_location.representations
+    assert updated_location.representations["robot_2"] == {"position": [1, 1, 1]}
+
+
+def test_remove_representation_location_not_found(redis_server: Redis):
+    """Test removing representation from non-existent location."""
+    definition = LocationManagerDefinition(
+        name="Remove Representation Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_remove_representation_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    non_existent_id = new_ulid_str()
+    response = client.delete(
+        f"/location/{non_existent_id}/remove_representation/robot_1"
+    )
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+def test_remove_representation_node_not_found(redis_server: Redis):
+    """Test removing non-existent representation from a location."""
+    location_id = new_ulid_str()
+    location = Location(
+        location_id=location_id,
+        location_name="test_location",
+        representations={"robot_1": {"position": [0, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Remove Representation Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_remove_representation_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Add the location first
+    response = client.post("/location", json=location.model_dump())
+    assert response.status_code == 200
+
+    # Try to remove non-existent representation
+    response = client.delete(f"/location/{location_id}/remove_representation/robot_2")
+    assert response.status_code == 404
+    assert "Representation for node 'robot_2' not found" in response.json()["detail"]
+
+
+def test_remove_representation_no_representations(redis_server: Redis):
+    """Test removing representation from location with no representations."""
+    location_id = new_ulid_str()
+    location = Location(
+        location_id=location_id,
+        location_name="test_location",
+        representations=None,
+    )
+
+    definition = LocationManagerDefinition(
+        name="Remove Representation Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_remove_representation_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Add the location first
+    response = client.post("/location", json=location.model_dump())
+    assert response.status_code == 200
+
+    # Try to remove representation from location with no representations
+    response = client.delete(f"/location/{location_id}/remove_representation/robot_1")
+    assert response.status_code == 404
+    assert "Representation for node 'robot_1' not found" in response.json()["detail"]
+
+
+def test_remove_last_representation(redis_server: Redis):
+    """Test removing the last representation from a location."""
+    location_id = new_ulid_str()
+    location = Location(
+        location_id=location_id,
+        location_name="test_location",
+        representations={"robot_1": {"position": [0, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Remove Representation Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_remove_representation_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Add the location first
+    response = client.post("/location", json=location.model_dump())
+    assert response.status_code == 200
+
+    # Remove the only representation
+    response = client.delete(f"/location/{location_id}/remove_representation/robot_1")
+    assert response.status_code == 200
+
+    updated_location = Location.model_validate(response.json())
+    # Should have empty dict when no representations remain
+    assert updated_location.representations == {}
+
+
+def test_detach_resource_success(redis_server: Redis):
+    """Test successful detachment of a resource from a location."""
+    location_id = new_ulid_str()
+    resource_id = new_ulid_str()
+    location = Location(
+        location_id=location_id,
+        location_name="test_location",
+        resource_id=resource_id,
+    )
+
+    definition = LocationManagerDefinition(
+        name="Detach Resource Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_detach_resource_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Add the location first
+    response = client.post("/location", json=location.model_dump())
+    assert response.status_code == 200
+
+    # Detach the resource
+    response = client.delete(f"/location/{location_id}/detach_resource")
+    assert response.status_code == 200
+
+    updated_location = Location.model_validate(response.json())
+    assert updated_location.resource_id is None
+
+
+def test_detach_resource_location_not_found(redis_server: Redis):
+    """Test detaching resource from non-existent location."""
+    definition = LocationManagerDefinition(
+        name="Detach Resource Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_detach_resource_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    non_existent_id = new_ulid_str()
+    response = client.delete(f"/location/{non_existent_id}/detach_resource")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+def test_detach_resource_no_resource_attached(redis_server: Redis):
+    """Test detaching resource from location with no resource attached."""
+    location_id = new_ulid_str()
+    location = Location(
+        location_id=location_id,
+        location_name="test_location",
+        resource_id=None,
+    )
+
+    definition = LocationManagerDefinition(
+        name="Detach Resource Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_detach_resource_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Add the location first
+    response = client.post("/location", json=location.model_dump())
+    assert response.status_code == 200
+
+    # Try to detach resource when none is attached
+    response = client.delete(f"/location/{location_id}/detach_resource")
+    assert response.status_code == 404
+    assert "No resource attached" in response.json()["detail"]
+
+
+def test_remove_representation_rebuilds_transfer_graph(redis_server: Redis):
+    """Test that removing representation rebuilds the transfer graph."""
+    # Create template with transfer capabilities
+    template = TransferStepTemplate(
+        node_name="test_robot",
+        action="transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(transfer_templates=[template])
+
+    location_id = new_ulid_str()
+    location = Location(
+        location_id=location_id,
+        location_name="test_location",
+        representations={"test_robot": {"position": [0, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Transfer Graph Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_transfer_graph_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    # Add the location first
+    response = client.post("/location", json=location.model_dump())
+    assert response.status_code == 200
+
+    # Get initial transfer graph
+    response = client.get("/transfer/graph")
+    assert response.status_code == 200
+
+    # Remove representation (should rebuild graph)
+    response = client.delete(
+        f"/location/{location_id}/remove_representation/test_robot"
+    )
+    assert response.status_code == 200
+
+    # Get transfer graph after removal (verifies graph rebuild was successful)
+    response = client.get("/transfer/graph")
+    assert response.status_code == 200

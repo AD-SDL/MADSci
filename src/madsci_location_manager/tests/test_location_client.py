@@ -228,3 +228,133 @@ def test_get_location_resources_return_type_annotation(location_client):
     """Test that get_location_resources has correct return type annotation."""
     sig = inspect.signature(location_client.get_location_resources)
     assert sig.return_annotation == ResourceHierarchy
+
+
+def test_remove_representation_method_exists(location_client):
+    """Test that remove_representation method exists and is callable."""
+    assert hasattr(location_client, "remove_representation")
+    assert callable(location_client.remove_representation)
+
+
+def test_remove_representation_method_signature(location_client):
+    """Test that remove_representation method has correct signature."""
+    sig = inspect.signature(location_client.remove_representation)
+    params = list(sig.parameters.keys())
+    assert "location_id" in params
+    assert "node_name" in params
+    assert "retry" in params
+
+    # Check return type annotation
+    assert sig.return_annotation.__name__ == "Location"
+
+
+@patch("madsci.client.location_client.requests.Session.delete")
+def test_remove_representation_method_request(mock_delete, location_client):
+    """Test that remove_representation makes correct HTTP request."""
+    # Mock successful response
+    mock_response = Mock()
+    test_location_id = new_ulid_str()
+    mock_location_data = {
+        "location_id": test_location_id,
+        "name": "test_location",
+        "description": "Test location",
+        "representations": {"robot_2": {"position": [1, 1, 1]}},
+    }
+    mock_response.json.return_value = mock_location_data
+    mock_response.raise_for_status.return_value = None
+    mock_delete.return_value = mock_response
+
+    # Call the method
+    result = location_client.remove_representation(test_location_id, "robot_1")
+
+    # Verify the request was made correctly
+    mock_delete.assert_called_once()
+    call_args = mock_delete.call_args
+    assert call_args[0][0].endswith(
+        f"/location/{test_location_id}/remove_representation/robot_1"
+    )
+
+    # Verify the result is a Location object
+    assert isinstance(result, Location)
+    assert result.location_id == test_location_id
+    assert "robot_1" not in result.representations
+    assert "robot_2" in result.representations
+
+
+@patch("madsci.client.location_client.requests.Session.delete")
+def test_remove_representation_error_handling(mock_delete, location_client):
+    """Test that remove_representation handles errors correctly."""
+    # Mock 404 response
+    mock_response = Mock()
+    mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "404 Not Found"
+    )
+    mock_delete.return_value = mock_response
+
+    # Call the method and expect an exception
+    test_location_id = new_ulid_str()
+    with pytest.raises(requests.exceptions.HTTPError):
+        location_client.remove_representation(test_location_id, "nonexistent_node")
+
+
+def test_detach_resource_method_exists(location_client):
+    """Test that detach_resource method exists and is callable."""
+    assert hasattr(location_client, "detach_resource")
+    assert callable(location_client.detach_resource)
+
+
+def test_detach_resource_method_signature(location_client):
+    """Test that detach_resource method has correct signature."""
+    sig = inspect.signature(location_client.detach_resource)
+    params = list(sig.parameters.keys())
+    assert "location_id" in params
+    assert "retry" in params
+
+    # Check return type annotation
+    assert sig.return_annotation.__name__ == "Location"
+
+
+@patch("madsci.client.location_client.requests.Session.delete")
+def test_detach_resource_method_request(mock_delete, location_client):
+    """Test that detach_resource makes correct HTTP request."""
+    # Mock successful response
+    mock_response = Mock()
+    test_location_id = new_ulid_str()
+    mock_location_data = {
+        "location_id": test_location_id,
+        "name": "test_location",
+        "description": "Test location",
+        "resource_id": None,
+    }
+    mock_response.json.return_value = mock_location_data
+    mock_response.raise_for_status.return_value = None
+    mock_delete.return_value = mock_response
+
+    # Call the method
+    result = location_client.detach_resource(test_location_id)
+
+    # Verify the request was made correctly
+    mock_delete.assert_called_once()
+    call_args = mock_delete.call_args
+    assert call_args[0][0].endswith(f"/location/{test_location_id}/detach_resource")
+
+    # Verify the result is a Location object
+    assert isinstance(result, Location)
+    assert result.location_id == test_location_id
+    assert result.resource_id is None
+
+
+@patch("madsci.client.location_client.requests.Session.delete")
+def test_detach_resource_error_handling(mock_delete, location_client):
+    """Test that detach_resource handles errors correctly."""
+    # Mock 404 response
+    mock_response = Mock()
+    mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "404 Not Found"
+    )
+    mock_delete.return_value = mock_response
+
+    # Call the method and expect an exception
+    test_location_id = new_ulid_str()
+    with pytest.raises(requests.exceptions.HTTPError):
+        location_client.detach_resource(test_location_id)

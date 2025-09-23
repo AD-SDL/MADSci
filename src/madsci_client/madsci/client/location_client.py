@@ -305,6 +305,42 @@ class LocationClient:
         response.raise_for_status()
         return Location.model_validate(response.json())
 
+    def remove_representation(
+        self,
+        location_id: str,
+        node_name: str,
+        retry: Optional[bool] = None,
+    ) -> Location:
+        """
+        Remove representations for a location for a specific node.
+
+        Parameters
+        ----------
+        location_id : str
+            The ID of the location.
+        node_name : str
+            The name of the node.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        Location
+            The updated location.
+        """
+        self._validate_server_url()
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.delete(
+            f"{self.location_server_url}location/{location_id}/remove_representation/{node_name}",
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
     def attach_resource(
         self, location_id: str, resource_id: str, retry: Optional[bool] = None
     ) -> Location:
@@ -333,6 +369,37 @@ class LocationClient:
         response = session.post(
             f"{self.location_server_url}location/{location_id}/attach_resource",
             params={"resource_id": resource_id},
+            headers=self._get_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    def detach_resource(
+        self, location_id: str, retry: Optional[bool] = None
+    ) -> Location:
+        """
+        Detach the resource from a location.
+
+        Parameters
+        ----------
+        location_id : str
+            The ID of the location.
+        retry : Optional[bool]
+            Whether to use retry for this request. If None, uses instance default.
+
+        Returns
+        -------
+        Location
+            The updated location.
+        """
+        self._validate_server_url()
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+
+        response = session.delete(
+            f"{self.location_server_url}location/{location_id}/detach_resource",
             headers=self._get_headers(),
             timeout=10,
         )

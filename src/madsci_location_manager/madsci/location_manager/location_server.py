@@ -332,6 +332,44 @@ class LocationManager(
             self.transfer_planner.rebuild_transfer_graph()
             return result
 
+    @delete(
+        "/location/{location_id}/remove_representation/{node_name}", tags=["Locations"]
+    )
+    def remove_representation(
+        self,
+        location_id: str,
+        node_name: str,
+    ) -> Location:
+        """Remove representations for a location for a specific node."""
+        with ownership_context():
+            location = self.state_handler.get_location(location_id)
+            if location is None:
+                raise HTTPException(
+                    status_code=404, detail=f"Location {location_id} not found"
+                )
+
+            # Check if representations exist and if the node_name exists
+            if (
+                location.representations is None
+                or node_name not in location.representations
+            ):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Representation for node '{node_name}' not found in location {location_id}",
+                )
+
+            # Remove the representation for the specified node
+            del location.representations[node_name]
+
+            # If no representations remain, set to empty dict (consistent with existing behavior)
+            if not location.representations:
+                location.representations = {}
+
+            result = self.state_handler.update_location(location_id, location)
+            # Rebuild transfer graph since representations affect transfer capabilities
+            self.transfer_planner.rebuild_transfer_graph()
+            return result
+
     @post("/location/{location_id}/attach_resource", tags=["Locations"])
     def attach_resource(
         self,
@@ -347,6 +385,31 @@ class LocationManager(
                 )
 
             location.resource_id = resource_id
+
+            return self.state_handler.update_location(location_id, location)
+
+    @delete("/location/{location_id}/detach_resource", tags=["Locations"])
+    def detach_resource(
+        self,
+        location_id: str,
+    ) -> Location:
+        """Detach the resource from a location."""
+        with ownership_context():
+            location = self.state_handler.get_location(location_id)
+            if location is None:
+                raise HTTPException(
+                    status_code=404, detail=f"Location {location_id} not found"
+                )
+
+            # Check if location has a resource attached
+            if location.resource_id is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No resource attached to location {location_id}",
+                )
+
+            # Detach the resource
+            location.resource_id = None
 
             return self.state_handler.update_location(location_id, location)
 

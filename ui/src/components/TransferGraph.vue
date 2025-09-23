@@ -473,8 +473,9 @@ onMounted(() => {
   const container = svgElement.value?.parentElement;
   if (container) {
     const resizeObserver = new ResizeObserver(() => {
-      const newWidth = Math.max(600, container.clientWidth - 32);
-      const newHeight = Math.max(400, newWidth * 0.6);
+      // More responsive sizing - adjust for smaller containers
+      const newWidth = Math.max(400, container.clientWidth - 32);
+      const newHeight = Math.max(300, newWidth * 0.6);
 
       // Only trigger layout recalculation if size changed significantly
       if (Math.abs(newWidth - svgWidth.value) > 50 || Math.abs(newHeight - svgHeight.value) > 30) {

@@ -39,11 +39,13 @@ class StepParameters(MadsciBaseModel):
         title="Step Arguments",
         description="Arguments for the step action.",
         default_factory=dict,
+        alias=AliasChoices("args", "arguments"),
     )
     locations: dict[str, Union[str, ParameterJsonTypes]] = Field(
         title="Step Location Arguments",
         description="Locations to be used in the step. Key is the name of the argument, value is the name of the location, or a Location object.",
         default_factory=dict,
+        alias=AliasChoices("locations", "location_args", "location_arguments"),
     )
 
 
@@ -77,6 +79,7 @@ class StepDefinition(MadsciBaseModel):
         title="Step Arguments",
         description="Arguments for the step action.",
         default_factory=dict,
+        alias=AliasChoices("args", "arguments"),
     )
     files: dict[str, Union[ParameterInputFileTypes, str]] = Field(
         title="Step File Arguments",
@@ -87,6 +90,7 @@ class StepDefinition(MadsciBaseModel):
         title="Step Location Arguments",
         description="Locations to be used in the step. Key is the name of the argument, value is the name of the location, or a Location object.",
         default_factory=dict,
+        alias=AliasChoices("locations", "location_args", "location_arguments"),
     )
     conditions: list[Conditions] = Field(
         title="Step Conditions",
