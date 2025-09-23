@@ -13,6 +13,7 @@ from madsci.client.location_client import LocationClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info, ownership_context
+from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import Node
@@ -247,15 +248,17 @@ class WorkcellManager(
         return responses
 
     @post("/admin/{command}/{node}")
-    def send_admin_command_to_node(self, command: str, node: str) -> list:
+    def send_admin_command_to_node(
+        self, command: str, node: str
+    ) -> AdminCommandResponse:
         """Send admin command to a node."""
-        responses = []
         node = self.state_handler.get_node(node)
         if command in node.info.capabilities.admin_commands:
             client = find_node_client(node.node_url)
-            response = client.send_admin_command(command)
-            responses.append(response)
-        return responses
+            return client.send_admin_command(command)
+        raise HTTPException(
+            status_code=400, detail="Node cannot perform that admin command"
+        )
 
     @get("/workflows/active")
     def get_active_workflows(self) -> dict[str, Workflow]:

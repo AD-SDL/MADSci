@@ -154,22 +154,45 @@ def test_delete_nonexistent_location(client):
 
 
 def test_set_representations(client, sample_location):
-    """Test setting representations for a location."""
+    """Test setting a representation for a location."""
     # First add the location
     client.post("/location", json=sample_location.model_dump())
 
-    # Set representations
-    representations = {"key1": "value1", "key2": "value2"}
+    # Test setting a dictionary representation
+    dict_representation = {"key1": "value1", "key2": "value2"}
     response = client.post(
         f"/location/{sample_location.location_id}/set_representation/test_node",
-        json=representations,
+        json=dict_representation,
     )
     assert response.status_code == 200
-
     returned_location = Location.model_validate(response.json())
     assert returned_location.representations is not None
     assert "test_node" in returned_location.representations
-    assert returned_location.representations["test_node"] == representations
+    assert returned_location.representations["test_node"] == dict_representation
+
+    # Test setting a string representation
+    string_representation = "simple_string_location"
+    response = client.post(
+        f"/location/{sample_location.location_id}/set_representation/test_node_2",
+        json=string_representation,
+    )
+    assert response.status_code == 200
+    returned_location = Location.model_validate(response.json())
+    assert returned_location.representations is not None
+    assert "test_node_2" in returned_location.representations
+    assert returned_location.representations["test_node_2"] == string_representation
+
+    # Test setting a list representation
+    list_representation = [1, 2, 3, 4]
+    response = client.post(
+        f"/location/{sample_location.location_id}/set_representation/test_node_3",
+        json=list_representation,
+    )
+    assert response.status_code == 200
+    returned_location = Location.model_validate(response.json())
+    assert returned_location.representations is not None
+    assert "test_node_3" in returned_location.representations
+    assert returned_location.representations["test_node_3"] == list_representation
 
 
 def test_attach_resource(client, sample_location):
@@ -244,11 +267,11 @@ def test_location_state_persistence(client, sample_location):
     response = client.post("/location", json=sample_location.model_dump())
     assert response.status_code == 200
 
-    # Set representations
-    representations = {"position": [1, 2, 3], "config": "test_config"}
+    # Set representation (dictionary is stored as the representation for test_robot node)
+    representation = {"position": [1, 2, 3], "config": "test_config"}
     response = client.post(
         f"/location/{sample_location.location_id}/set_representation/test_robot",
-        json=representations,
+        json=representation,
     )
     assert response.status_code == 200
 
@@ -267,7 +290,7 @@ def test_location_state_persistence(client, sample_location):
     location = Location.model_validate(response.json())
     assert location.representations is not None
     assert "test_robot" in location.representations
-    assert location.representations["test_robot"] == representations
+    assert location.representations["test_robot"] == representation
     assert location.resource_id == resource_id
 
 

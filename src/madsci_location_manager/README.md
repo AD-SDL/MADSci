@@ -22,7 +22,7 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - `GET /location` - Get a location by query parameters (location_id or name)
 - `GET /location/{location_id}` - Get a specific location by ID
 - `DELETE /location/{location_id}` - Delete a location
-- `POST /location/{location_id}/set_representation/{node_name}` - Set representations for a location and node
+- `POST /location/{location_id}/set_representation/{node_name}` - Set a node-specific representation for a location (accepts any JSON-serializable value)
 - `POST /location/{location_id}/attach_resource` - Attach a resource to a location
 
 ### Transfer Planning
@@ -81,8 +81,10 @@ resources = client.get_location_resources("location_id")
 transfer_graph = client.get_transfer_graph()
 workflow = client.plan_transfer("source_id", "dest_id")
 
-# Node representations
-client.set_representations("location_id", "node_name", {"key": "value"})
+# Node representations (any type can be stored)
+client.set_representations("location_id", "node_name", {"key": "value"})  # dict
+client.set_representations("location_id", "robot_arm", [1, 2, 3])        # list
+client.set_representations("location_id", "sensor", "position_A")         # string
 ```
 
 ## Key Components

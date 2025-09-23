@@ -269,11 +269,11 @@ class LocationClient:
         self,
         location_id: str,
         node_name: str,
-        representations: dict[str, Any],
+        representation: Any,
         retry: Optional[bool] = None,
     ) -> Location:
         """
-        Set representations for a location for a specific node.
+        Set a representation for a location for a specific node.
 
         Parameters
         ----------
@@ -281,8 +281,8 @@ class LocationClient:
             The ID of the location.
         node_name : str
             The name of the node.
-        representations : dict[str, Any]
-            The representations to set.
+        representation : Any
+            The representation to set for the specified node.
         retry : Optional[bool]
             Whether to use retry for this request. If None, uses instance default.
 
@@ -298,7 +298,7 @@ class LocationClient:
 
         response = session.post(
             f"{self.location_server_url}location/{location_id}/set_representation/{node_name}",
-            json=representations,
+            json=representation,
             headers=self._get_headers(),
             timeout=10,
         )

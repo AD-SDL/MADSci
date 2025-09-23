@@ -312,7 +312,7 @@ class LocationManager(
         self,
         location_id: str,
         node_name: str,
-        representation_val: Annotated[dict, REPRESENTATION_VAL_BODY],
+        representation_val: Annotated[Any, REPRESENTATION_VAL_BODY],
     ) -> Location:
         """Set representations for a location for a specific node."""
         with ownership_context():

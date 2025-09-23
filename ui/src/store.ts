@@ -149,6 +149,18 @@ async function refreshLabInfo() {
     }
 }
 
+async function refreshLocations() {
+    if (locations_url.value) {
+        try {
+            locations.value = await ((await fetch(locations_url.value)).json());
+        } catch (error) {
+            console.error("Failed to fetch locations from LocationManager:", error);
+            // Fallback to workcell state locations if LocationManager is not available
+            locations.value = workcell_state.value?.locations || {};
+        }
+    }
+}
+
 function get_status(value: any) {
     if(value["errored"] === true)  {
         return "errored"
@@ -190,6 +202,7 @@ export {
   locations_url,
   main_url,
   refreshLabInfo,
+  refreshLocations,
   resources,
   state_url,
   urls,

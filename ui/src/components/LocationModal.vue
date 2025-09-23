@@ -251,6 +251,7 @@ import { ref } from 'vue';
 
 import {
   locations_url,
+  refreshLocations,
   resources,
   urls,
   workcell_state,
@@ -295,11 +296,12 @@ function resetToggles() {
   detachConfirmDialog.value = false
 }
 
-// Get current location from workcell
-async function get_location(location_name: string): Promise<void>{
+// Get the current location representation from a node
+async function get_location(node_name: string): Promise<void>{
   try {
-    const loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(location_name))).json())
-    add_representation_value.value = JSON.stringify(loc_data[0].data)
+    const loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(node_name), {method: 'POST'})).json())
+    console.log(loc_data)
+    add_representation_value.value = JSON.stringify(loc_data.data)
   } catch (error) {
     console.error('Failed to get location position:', error)
   }
@@ -320,8 +322,8 @@ async function submit_location_representation(node_name: string): Promise<void>{
       body: JSON.stringify(JSON.parse(add_representation_value.value))
     })
 
-    // Refresh the page or emit an event to refresh locations
-    location.reload()
+    // Refresh locations data
+    await refreshLocations()
   } catch (error) {
     console.error('Failed to submit representation:', error)
     alert('Failed to submit representation. Please try again.')
@@ -358,8 +360,8 @@ async function removeRepresentation(): Promise<void> {
     }
 
     removeRepConfirmDialog.value = false
-    // Refresh the page or emit an event to refresh locations
-    location.reload()
+    // Refresh locations data
+    await refreshLocations()
   } catch (error) {
     console.error('Failed to remove representation:', error)
     alert('Failed to remove representation. Please try again.')
@@ -397,8 +399,8 @@ async function deleteLocation(): Promise<void> {
     }
 
     deleteConfirmDialog.value = false
-    // Refresh the page or emit an event to refresh locations
-    location.reload()
+    // Refresh locations data
+    await refreshLocations()
   } catch (error) {
     console.error('Failed to delete location:', error)
     alert('Failed to delete location. Please try again.')
@@ -436,8 +438,8 @@ async function detachResource(): Promise<void> {
     }
 
     detachConfirmDialog.value = false
-    // Refresh the page or emit an event to refresh locations
-    location.reload()
+    // Refresh locations data
+    await refreshLocations()
   } catch (error) {
     console.error('Failed to detach resource:', error)
     alert('Failed to detach resource. Please try again.')
@@ -474,8 +476,8 @@ async function submit_attach_resource(): Promise<void> {
     }
 
     resource_to_attach.value = ''
-    // Refresh the page or emit an event to refresh locations
-    location.reload()
+    // Refresh locations data
+    await refreshLocations()
   } catch (error) {
     console.error('Failed to attach resource:', error)
     alert('Failed to attach resource. Please try again.')
