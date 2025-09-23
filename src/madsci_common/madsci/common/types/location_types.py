@@ -219,6 +219,26 @@ class TransferGraphEdge(MadsciBaseModel):
     )
 
 
+class TransferTemplateOverrides(MadsciBaseModel):
+    """Override transfer templates for specific source/destination patterns."""
+
+    source_overrides: Optional[dict[str, list[TransferStepTemplate]]] = Field(
+        title="Source Location Overrides",
+        description="Override templates for specific source locations. Key is location_name or location_id.",
+        default=None,
+    )
+    destination_overrides: Optional[dict[str, list[TransferStepTemplate]]] = Field(
+        title="Destination Location Overrides",
+        description="Override templates for specific destination locations. Key is location_name or location_id.",
+        default=None,
+    )
+    pair_overrides: Optional[dict[str, dict[str, list[TransferStepTemplate]]]] = Field(
+        title="Source-Destination Pair Overrides",
+        description="Override templates for specific (source, destination) pairs. Outer key is source location_name or location_id, inner key is destination location_name or location_id.",
+        default=None,
+    )
+
+
 class LocationTransferCapabilities(MadsciBaseModel):
     """Transfer capabilities for a location manager."""
 
@@ -226,6 +246,11 @@ class LocationTransferCapabilities(MadsciBaseModel):
         title="Transfer Templates",
         description="Available transfer step templates",
         default_factory=list,
+    )
+    override_transfer_templates: Optional[TransferTemplateOverrides] = Field(
+        title="Override Transfer Templates",
+        description="Override transfer templates for specific source, destination, or (source, destination) pairs",
+        default=None,
     )
 
 

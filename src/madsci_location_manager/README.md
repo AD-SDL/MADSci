@@ -114,10 +114,11 @@ Advanced transfer planning system that:
 The Location Manager supports sophisticated transfer planning:
 
 1. **Transfer Templates**: Define how transfers work between locations for specific nodes
-2. **Transfer Graph**: Dynamic graph built from location representations and transfer capabilities
-3. **Path Finding**: Dijkstra's algorithm finds optimal transfer paths
-4. **Workflow Generation**: Creates executable workflows for complex multi-step transfers
-5. **Non-Transfer Location Support**: Locations can be marked as non-transferable to exclude them from transfer operations
+2. **Override Transfer Templates**: Specify custom transfer templates for specific sources, destinations, or (source, destination) pairs
+3. **Transfer Graph**: Dynamic graph built from location representations and transfer capabilities
+4. **Path Finding**: Dijkstra's algorithm finds optimal transfer paths
+5. **Workflow Generation**: Creates executable workflows for complex multi-step transfers
+6. **Non-Transfer Location Support**: Locations can be marked as non-transferable to exclude them from transfer operations
 
 ### Non-Transfer Locations
 
@@ -138,7 +139,74 @@ locations:
       sensor_array: {"zone": "restricted"}
 ```
 
-Transfer planning enables automatic resource movement between locations using the shortest available path, while respecting transfer restrictions.
+### Override Transfer Templates
+
+Lab operators often need specialized transfer behaviors for specific scenarios. The Location Manager supports override transfer templates that provide custom transfer logic for specific sources, destinations, or (source, destination) pairs.
+
+#### Override Precedence
+
+Override templates follow a strict precedence order:
+
+1. **Pair-specific overrides** (highest priority): Custom templates for specific (source, destination) combinations
+2. **Source-specific overrides**: Custom templates when transferring FROM specific locations
+3. **Destination-specific overrides**: Custom templates when transferring TO specific locations
+4. **Default templates** (lowest priority): Standard templates used when no overrides apply
+
+#### Configuration
+
+Override templates are configured in the `transfer_capabilities` section using location names or IDs as keys:
+
+```yaml
+transfer_capabilities:
+  # Standard default templates
+  transfer_templates:
+    - node_name: robotarm_1
+      action: transfer
+      cost_weight: 1.0
+
+  # Override templates for specific scenarios
+  override_transfer_templates:
+    # Source-specific: special behavior when transferring FROM these locations
+    source_overrides:
+      storage_rack:  # location name
+        - node_name: robotarm_1
+          action: heavy_transfer  # specialized action for heavy loads
+          cost_weight: 0.8
+
+    # Destination-specific: special behavior when transferring TO these locations
+    destination_overrides:
+      "01K5HDZZCF27YHD2WDGSXFPPKQ":  # location ID
+        - node_name: robotarm_1
+          action: gentle_transfer  # careful handling for sensitive equipment
+          cost_weight: 1.2
+
+    # Pair-specific: special behavior for specific transfer routes
+    pair_overrides:
+      liquidhandler_1.deck_1:  # source location
+        liquidhandler_2.deck_1:  # destination location
+          - node_name: liquidhandler_1
+            action: direct_liquid_transfer  # bypass robot arm
+            cost_weight: 0.5
+```
+
+#### Use Cases
+
+Override transfer templates enable:
+
+- **Safety protocols**: Gentle handling when transferring to sensitive equipment
+- **Performance optimization**: Direct transfers that bypass intermediate nodes
+- **Equipment specialization**: Heavy-duty modes for transfers from storage areas
+- **Route-specific logic**: Custom behaviors for frequently used transfer paths
+- **Cost optimization**: Lower costs for preferred transfer methods
+
+#### Key Features
+
+- **Flexible Keys**: Use either location names or location IDs as override keys
+- **Multiple Templates**: Each override can specify multiple alternative templates
+- **Cost-Based Selection**: When multiple templates apply, the lowest cost template is selected
+- **Automatic Fallback**: Gracefully falls back to default templates when overrides don't apply
+
+Transfer planning enables automatic resource movement between locations using the shortest available path, while respecting transfer restrictions and applying specialized behaviors when configured.
 
 ## Integration
 

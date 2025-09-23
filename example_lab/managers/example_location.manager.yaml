@@ -187,3 +187,35 @@ transfer_capabilities:
     source_argument_name: source_location
     target_argument_name: target_location
     cost_weight: 2.0
+  # Example override transfer templates - these override the default templates for specific scenarios
+  override_transfer_templates:
+    # Source-specific overrides: use special templates when transferring FROM specific locations
+    source_overrides:
+      # Use high-speed robot mode when transferring FROM storage_rack (heavy lifting)
+      storage_rack:
+      - node_name: robotarm_1
+        action: heavy_transfer
+        source_argument_name: source_location
+        target_argument_name: target_location
+        cost_weight: 0.8  # Lower cost = preferred over default
+
+    # Destination-specific overrides: use special templates when transferring TO specific locations
+    destination_overrides:
+      # Use gentle mode when transferring TO platereader (fragile equipment)
+      platereader_1.plate_carriage:
+      - node_name: robotarm_1
+        action: gentle_transfer
+        source_argument_name: source_location
+        target_argument_name: target_location
+        cost_weight: 1.2  # Slightly higher cost but safer
+
+    # Pair-specific overrides: use special templates for specific (source, destination) pairs
+    pair_overrides:
+      # Special direct liquid transfer between liquid handlers (bypass robot arm)
+      liquidhandler_1.deck_1:
+        liquidhandler_2.deck_1:
+        - node_name: liquidhandler_1
+          action: direct_liquid_transfer
+          source_argument_name: source_location
+          target_argument_name: target_location
+          cost_weight: 0.5  # Much faster than robot arm transfer

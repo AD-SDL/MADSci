@@ -8,6 +8,7 @@ from madsci.common.types.location_types import (
     LocationManagerDefinition,
     TransferGraphEdge,
     TransferStepTemplate,
+    TransferTemplateOverrides,
 )
 from madsci.common.types.step_types import StepDefinition
 from madsci.common.types.workflow_types import (
@@ -40,6 +41,8 @@ class TransferPlanner:
         """
         Build transfer graph based on location representations and transfer templates.
 
+        When multiple templates are available for a location pair, chooses the one with lowest cost.
+
         Returns:
             Dict mapping (source_id, dest_id) tuples to TransferGraphEdge objects
         """
@@ -50,20 +53,27 @@ class TransferPlanner:
 
         locations = self.state_handler.get_locations()
 
-        for template in self.definition.transfer_capabilities.transfer_templates:
-            # Find all location pairs that can use this transfer template
-            for source_location in locations:
-                for dest_location in locations:
-                    if source_location.location_id == dest_location.location_id:
-                        continue  # Skip self-transfers
+        # Process all location pairs
+        for source_location in locations:
+            for dest_location in locations:
+                if source_location.location_id == dest_location.location_id:
+                    continue  # Skip self-transfers
 
-                    # Skip locations that don't allow transfers
-                    if (
-                        not source_location.allow_transfers
-                        or not dest_location.allow_transfers
-                    ):
-                        continue
+                # Skip locations that don't allow transfers
+                if (
+                    not source_location.allow_transfers
+                    or not dest_location.allow_transfers
+                ):
+                    continue
 
+                # Get applicable templates for this location pair
+                applicable_templates = self._get_applicable_templates(
+                    source_location, dest_location
+                )
+
+                # Find the best (lowest cost) template for this location pair
+                best_edge = None
+                for template in applicable_templates:
                     if self._can_transfer_between_locations(
                         source_location, dest_location, template
                     ):
@@ -73,11 +83,123 @@ class TransferPlanner:
                             transfer_template=template,
                             cost=template.cost_weight or 1.0,
                         )
-                        transfer_graph[
-                            (source_location.location_id, dest_location.location_id)
-                        ] = edge
+
+                        # Keep the edge with the lowest cost
+                        if best_edge is None or edge.cost < best_edge.cost:
+                            best_edge = edge
+
+                # Add the best edge to the graph
+                if best_edge is not None:
+                    transfer_graph[
+                        (source_location.location_id, dest_location.location_id)
+                    ] = best_edge
 
         return transfer_graph
+
+    def _get_applicable_templates(
+        self, source_location: Location, dest_location: Location
+    ) -> list[TransferStepTemplate]:
+        """
+        Get applicable transfer templates for a specific location pair.
+
+        Precedence order:
+        1. Pair-specific overrides (highest priority)
+        2. Source-specific overrides
+        3. Destination-specific overrides
+        4. Default templates (lowest priority)
+
+        Args:
+            source_location: Source location
+            dest_location: Destination location
+
+        Returns:
+            List of applicable transfer templates in priority order
+        """
+        templates = []
+
+        # Check if override templates are configured
+        overrides = (
+            self.definition.transfer_capabilities.override_transfer_templates
+            if self.definition.transfer_capabilities
+            else None
+        )
+
+        if overrides:
+            # 1. Check for pair-specific overrides (highest priority)
+            pair_templates = self._get_pair_override_templates(
+                source_location, dest_location, overrides
+            )
+            if pair_templates:
+                return pair_templates
+
+            # 2. Check for source-specific overrides
+            source_templates = self._get_source_override_templates(
+                source_location, overrides
+            )
+            if source_templates:
+                return source_templates
+
+            # 3. Check for destination-specific overrides
+            dest_templates = self._get_destination_override_templates(
+                dest_location, overrides
+            )
+            if dest_templates:
+                return dest_templates
+
+        # 4. If no overrides found, use default templates
+        if not templates and self.definition.transfer_capabilities:
+            templates = self.definition.transfer_capabilities.transfer_templates
+
+        return templates
+
+    def _get_pair_override_templates(
+        self,
+        source_location: Location,
+        dest_location: Location,
+        overrides: TransferTemplateOverrides,
+    ) -> Optional[list[TransferStepTemplate]]:
+        """Get override templates for a specific (source, destination) pair."""
+        if not overrides.pair_overrides:
+            return None
+
+        # Check both location_id and location_name for source
+        for source_key in [source_location.location_id, source_location.location_name]:
+            if source_key in overrides.pair_overrides:
+                dest_overrides = overrides.pair_overrides[source_key]
+                # Check both location_id and location_name for destination
+                for dest_key in [
+                    dest_location.location_id,
+                    dest_location.location_name,
+                ]:
+                    if dest_key in dest_overrides:
+                        return dest_overrides[dest_key]
+        return None
+
+    def _get_source_override_templates(
+        self, source_location: Location, overrides: TransferTemplateOverrides
+    ) -> Optional[list[TransferStepTemplate]]:
+        """Get override templates for a specific source location."""
+        if not overrides.source_overrides:
+            return None
+
+        # Check both location_id and location_name
+        for key in [source_location.location_id, source_location.location_name]:
+            if key in overrides.source_overrides:
+                return overrides.source_overrides[key]
+        return None
+
+    def _get_destination_override_templates(
+        self, dest_location: Location, overrides: TransferTemplateOverrides
+    ) -> Optional[list[TransferStepTemplate]]:
+        """Get override templates for a specific destination location."""
+        if not overrides.destination_overrides:
+            return None
+
+        # Check both location_id and location_name
+        for key in [dest_location.location_id, dest_location.location_name]:
+            if key in overrides.destination_overrides:
+                return overrides.destination_overrides[key]
+        return None
 
     def _can_transfer_between_locations(
         self, source: Location, dest: Location, template: TransferStepTemplate

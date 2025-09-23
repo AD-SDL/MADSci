@@ -12,6 +12,7 @@ from madsci.common.types.location_types import (
     LocationManagerSettings,
     LocationTransferCapabilities,
     TransferStepTemplate,
+    TransferTemplateOverrides,
 )
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition, WorkflowParameters
@@ -1500,3 +1501,515 @@ def test_location_allow_transfers_default():
     )
 
     assert location_false.allow_transfers is False
+
+
+# Override Transfer Template Tests
+
+
+@pytest.fixture
+def override_transfer_setup(redis_server: Redis):
+    """Create a location manager with override transfer templates for testing."""
+    # Create standard transfer templates
+    default_robot_template = TransferStepTemplate(
+        node_name="robot_default",
+        action="transfer",
+        source_argument_name="source_location",
+        target_argument_name="target_location",
+        cost_weight=5.0,
+    )
+
+    default_conveyor_template = TransferStepTemplate(
+        node_name="conveyor_default",
+        action="move",
+        source_argument_name="from_location",
+        target_argument_name="to_location",
+        cost_weight=3.0,
+    )
+
+    # Create override templates
+    special_robot_template = TransferStepTemplate(
+        node_name="robot_special",
+        action="special_transfer",
+        source_argument_name="source_location",
+        target_argument_name="target_location",
+        cost_weight=1.0,
+    )
+
+    fast_conveyor_template = TransferStepTemplate(
+        node_name="conveyor_fast",
+        action="fast_move",
+        source_argument_name="from_location",
+        target_argument_name="to_location",
+        cost_weight=0.5,
+    )
+
+    # Create override configuration
+    overrides = TransferTemplateOverrides(
+        source_overrides={
+            "station_a": [special_robot_template],
+        },
+        destination_overrides={
+            "station_c": [fast_conveyor_template],
+        },
+        pair_overrides={
+            "station_a": {
+                "station_b": [special_robot_template, fast_conveyor_template],
+            },
+        },
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[default_robot_template, default_conveyor_template],
+        override_transfer_templates=overrides,
+    )
+
+    # Create locations with representations that support all templates
+    station_a = LocationDefinition(
+        location_name="station_a",
+        location_id=new_ulid_str(),
+        description="Station A with all device access",
+        representations={
+            "robot_default": {"position": [1, 0, 0]},
+            "robot_special": {"position": [1, 0, 0]},
+            "conveyor_default": {"belt_position": 0},
+            "conveyor_fast": {"belt_position": 0},
+        },
+    )
+
+    station_b = LocationDefinition(
+        location_name="station_b",
+        location_id=new_ulid_str(),
+        description="Station B with all device access",
+        representations={
+            "robot_default": {"position": [2, 0, 0]},
+            "robot_special": {"position": [2, 0, 0]},
+            "conveyor_default": {"belt_position": 1},
+            "conveyor_fast": {"belt_position": 1},
+        },
+    )
+
+    station_c = LocationDefinition(
+        location_name="station_c",
+        location_id=new_ulid_str(),
+        description="Station C with all device access",
+        representations={
+            "robot_default": {"position": [3, 0, 0]},
+            "robot_special": {"position": [3, 0, 0]},
+            "conveyor_default": {"belt_position": 2},
+            "conveyor_fast": {"belt_position": 2},
+        },
+    )
+
+    station_d = LocationDefinition(
+        location_name="station_d",
+        location_id=new_ulid_str(),
+        description="Station D with all device access",
+        representations={
+            "robot_default": {"position": [4, 0, 0]},
+            "robot_special": {"position": [4, 0, 0]},
+            "conveyor_default": {"belt_position": 3},
+            "conveyor_fast": {"belt_position": 3},
+        },
+    )
+
+    definition = LocationManagerDefinition(
+        name="Override Transfer Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[station_a, station_b, station_c, station_d],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_override_transfer_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+    client = TestClient(manager.create_server())
+
+    return {
+        "client": client,
+        "manager": manager,
+        "locations": {
+            "station_a": station_a.location_id,
+            "station_b": station_b.location_id,
+            "station_c": station_c.location_id,
+            "station_d": station_d.location_id,
+        },
+    }
+
+
+def test_pair_override_templates_highest_priority(override_transfer_setup):
+    """Test that pair-specific overrides have highest priority."""
+    manager = override_transfer_setup["manager"]
+
+    # Get edge from station_a to station_b - should use pair override
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (
+        override_transfer_setup["locations"]["station_a"],
+        override_transfer_setup["locations"]["station_b"],
+    )
+
+    # Should have exactly one edge (the best one from the pair override)
+    assert edge_key in graph
+    edge = graph[edge_key]
+
+    # Should use the lowest cost template from pair override (conveyor_fast with cost 0.5)
+    assert edge.transfer_template.node_name == "conveyor_fast"
+    assert edge.transfer_template.action == "fast_move"
+    assert edge.cost == 0.5
+
+    # Should NOT use default templates for this pair
+    assert edge.transfer_template.node_name != "robot_default"
+    assert edge.transfer_template.node_name != "conveyor_default"
+
+
+def test_source_override_templates(override_transfer_setup):
+    """Test that source-specific overrides are used when no pair override exists."""
+    manager = override_transfer_setup["manager"]
+
+    # Get edge FROM station_a to station_c (no pair override, but source override exists)
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (
+        override_transfer_setup["locations"]["station_a"],
+        override_transfer_setup["locations"]["station_c"],
+    )
+
+    # Should have exactly one edge using source override
+    assert edge_key in graph
+    edge = graph[edge_key]
+
+    # Should use source override (special_robot_template with cost 1.0)
+    assert edge.transfer_template.node_name == "robot_special"
+    assert edge.transfer_template.action == "special_transfer"
+    assert edge.cost == 1.0
+
+    # Should NOT use default robot template for this source
+    assert edge.transfer_template.node_name != "robot_default"
+
+
+def test_destination_override_templates(override_transfer_setup):
+    """Test that destination-specific overrides are used when no pair or source override exists."""
+    manager = override_transfer_setup["manager"]
+
+    # Get edge TO station_c from station_d (no pair override, no source override from station_d)
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (
+        override_transfer_setup["locations"]["station_d"],
+        override_transfer_setup["locations"]["station_c"],
+    )
+
+    # Should have exactly one edge using destination override
+    assert edge_key in graph
+    edge = graph[edge_key]
+
+    # Should use destination override (fast_conveyor_template with cost 0.5)
+    assert edge.transfer_template.node_name == "conveyor_fast"
+    assert edge.transfer_template.action == "fast_move"
+    assert edge.cost == 0.5
+
+    # Should NOT use default conveyor template for this destination
+    assert edge.transfer_template.node_name != "conveyor_default"
+
+
+def test_default_templates_when_no_overrides(override_transfer_setup):
+    """Test that default templates are used when no overrides apply."""
+    manager = override_transfer_setup["manager"]
+
+    # Get edge from station_d to station_b (no overrides apply)
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (
+        override_transfer_setup["locations"]["station_d"],
+        override_transfer_setup["locations"]["station_b"],
+    )
+
+    # Should have exactly one edge using default templates
+    assert edge_key in graph
+    edge = graph[edge_key]
+
+    # Should use the best default template (conveyor_default with cost 3.0 vs robot_default with cost 5.0)
+    assert edge.transfer_template.node_name == "conveyor_default"
+    assert edge.transfer_template.action == "move"
+    assert edge.cost == 3.0
+
+    # Should NOT use override templates
+    assert edge.transfer_template.node_name != "robot_special"
+    assert edge.transfer_template.node_name != "conveyor_fast"
+
+
+def test_override_templates_with_location_ids(redis_server: Redis):
+    """Test that override templates work with location IDs instead of names."""
+    # Create locations
+    station_x = LocationDefinition(
+        location_name="station_x",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [1, 0, 0]}},
+    )
+
+    station_y = LocationDefinition(
+        location_name="station_y",
+        location_id=new_ulid_str(),
+        representations={"robot": {"position": [2, 0, 0]}},
+    )
+
+    # Create override using location IDs
+    special_template = TransferStepTemplate(
+        node_name="robot",
+        action="special_transfer",
+        cost_weight=0.1,
+    )
+
+    overrides = TransferTemplateOverrides(
+        pair_overrides={
+            station_x.location_id: {  # Use location_id instead of name
+                station_y.location_id: [special_template],
+            },
+        },
+    )
+
+    default_template = TransferStepTemplate(
+        node_name="robot",
+        action="default_transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[default_template],
+        override_transfer_templates=overrides,
+    )
+
+    definition = LocationManagerDefinition(
+        name="ID Override Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[station_x, station_y],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_id_override_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Check that override is applied based on location ID
+    graph = manager.transfer_planner._transfer_graph
+    edge_key = (station_x.location_id, station_y.location_id)
+
+    assert edge_key in graph
+    edge = graph[edge_key]
+    assert edge.transfer_template.action == "special_transfer"
+    assert edge.cost == 0.1
+
+
+def test_override_templates_with_mixed_keys(redis_server: Redis):
+    """Test that override templates work with mixed location names and IDs."""
+    # Create locations
+    station_1 = LocationDefinition(
+        location_name="mixed_station_1",
+        location_id=new_ulid_str(),
+        representations={"device": {"config": "a"}},
+    )
+
+    station_2 = LocationDefinition(
+        location_name="mixed_station_2",
+        location_id=new_ulid_str(),
+        representations={"device": {"config": "b"}},
+    )
+
+    # Create overrides using mixed keys
+    override_template = TransferStepTemplate(
+        node_name="device",
+        action="override_action",
+        cost_weight=0.5,
+    )
+
+    overrides = TransferTemplateOverrides(
+        source_overrides={
+            "mixed_station_1": [override_template],  # Use name
+        },
+        destination_overrides={
+            station_1.location_id: [
+                override_template
+            ],  # Use ID for station_1 as destination
+        },
+    )
+
+    default_template = TransferStepTemplate(
+        node_name="device",
+        action="default_action",
+        cost_weight=2.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[default_template],
+        override_transfer_templates=overrides,
+    )
+
+    definition = LocationManagerDefinition(
+        name="Mixed Keys Test Manager",
+        manager_id=new_ulid_str(),
+        locations=[station_1, station_2],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_mixed_keys_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    graph = manager.transfer_planner._transfer_graph
+
+    # Test source override by name (station_1 -> station_2: source override from station_1)
+    edge_key_1to2 = (station_1.location_id, station_2.location_id)
+    assert edge_key_1to2 in graph
+    edge_1to2 = graph[edge_key_1to2]
+    assert edge_1to2.transfer_template.action == "override_action"
+
+    # Test destination override by ID (station_2 -> station_1: destination override to station_1)
+    edge_key_2to1 = (station_2.location_id, station_1.location_id)
+    assert edge_key_2to1 in graph
+    edge_2to1 = graph[edge_key_2to1]
+    assert edge_2to1.transfer_template.action == "override_action"
+
+
+def test_plan_transfer_with_overrides(override_transfer_setup):
+    """Test that transfer planning uses override templates correctly."""
+    client = override_transfer_setup["client"]
+
+    # Test transfer that should use pair override (station_a -> station_b)
+    response = client.post(
+        "/transfer/plan",
+        params={
+            "source_location_id": override_transfer_setup["locations"]["station_a"],
+            "destination_location_id": override_transfer_setup["locations"][
+                "station_b"
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    workflow_data = response.json()
+    workflow = WorkflowDefinition.model_validate(workflow_data)
+
+    # Should create a workflow with minimum cost path using override templates
+    assert len(workflow.steps) == 1
+
+    # The step should use one of the pair override templates (robot_special or conveyor_fast)
+    step = workflow.steps[0]
+    assert step.node in ["robot_special", "conveyor_fast"]
+    assert step.action in ["special_transfer", "fast_move"]
+
+
+def test_no_override_templates_defined(redis_server: Redis):
+    """Test that system works correctly when no override templates are defined."""
+    # Create basic transfer capabilities without overrides
+    default_template = TransferStepTemplate(
+        node_name="basic_robot",
+        action="basic_transfer",
+        cost_weight=1.0,
+    )
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[default_template],
+        # No override_transfer_templates defined
+    )
+
+    station_1 = LocationDefinition(
+        location_name="basic_station_1",
+        location_id=new_ulid_str(),
+        representations={"basic_robot": {"position": [0, 0, 0]}},
+    )
+
+    station_2 = LocationDefinition(
+        location_name="basic_station_2",
+        location_id=new_ulid_str(),
+        representations={"basic_robot": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Basic Transfer Manager",
+        manager_id=new_ulid_str(),
+        locations=[station_1, station_2],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_basic_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Should work normally with default templates
+    graph = manager.transfer_planner._transfer_graph
+    assert len(graph) == 2  # Bidirectional edge
+
+    # Verify templates are the default ones
+    for edge in graph.values():
+        assert edge.transfer_template.node_name == "basic_robot"
+        assert edge.transfer_template.action == "basic_transfer"
+
+
+def test_empty_override_templates(redis_server: Redis):
+    """Test that system works correctly when override templates are defined but empty."""
+    # Create transfer capabilities with empty overrides
+    default_template = TransferStepTemplate(
+        node_name="standard_robot",
+        action="standard_transfer",
+        cost_weight=1.0,
+    )
+
+    empty_overrides = TransferTemplateOverrides()  # All fields will be None
+
+    transfer_capabilities = LocationTransferCapabilities(
+        transfer_templates=[default_template],
+        override_transfer_templates=empty_overrides,
+    )
+
+    station_1 = LocationDefinition(
+        location_name="empty_override_station_1",
+        location_id=new_ulid_str(),
+        representations={"standard_robot": {"position": [0, 0, 0]}},
+    )
+
+    station_2 = LocationDefinition(
+        location_name="empty_override_station_2",
+        location_id=new_ulid_str(),
+        representations={"standard_robot": {"position": [1, 0, 0]}},
+    )
+
+    definition = LocationManagerDefinition(
+        name="Empty Override Manager",
+        manager_id=new_ulid_str(),
+        locations=[station_1, station_2],
+        transfer_capabilities=transfer_capabilities,
+    )
+
+    settings = LocationManagerSettings(
+        manager_id="test_empty_override_manager",
+        redis_host=redis_server.connection_pool.connection_kwargs["host"],
+        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+    )
+
+    manager = LocationManager(settings=settings, definition=definition)
+    manager.state_handler._redis_connection = redis_server
+
+    # Should work normally with default templates
+    graph = manager.transfer_planner._transfer_graph
+    assert len(graph) == 2  # Bidirectional edge
+
+    # Verify templates are the default ones
+    for edge in graph.values():
+        assert edge.transfer_template.node_name == "standard_robot"
+        assert edge.transfer_template.action == "standard_transfer"
