@@ -401,9 +401,17 @@ class Engine:
                 else "Duration: Unknown"
             )
 
+            author = "Unknown"
+            if (
+                "definition_metadata" in event_data
+                and event_data["definition_metadata"]
+                and "author" in event_data["definition_metadata"]
+            ):
+                author = event_data["definition_metadata"]["author"] or "Unknown"
+
             self.logger.info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {event_data['status']}, Author: {event_data['workflow_definition_metadata']['author'] or 'Unknown'}, "
+                f"Status: {event_data['status']}, Author: {author}, "
                 f"{duration_text}"
             )
         except Exception as e:

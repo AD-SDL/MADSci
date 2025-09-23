@@ -141,7 +141,22 @@ def test_client(
             "madsci.client.location_client.get_current_madsci_context",
             return_value=mock_context,
         ),
+        patch(
+            "madsci.workcell_manager.workcell_server.LocationClient"
+        ) as mock_location_client,
+        patch(
+            "madsci.workcell_manager.workcell_engine.LocationClient"
+        ) as mock_engine_location_client,
     ):
+        # Configure the mock location clients to return empty location lists
+        mock_location_client_instance = MagicMock()
+        mock_location_client_instance.get_locations.return_value = []
+        mock_location_client.return_value = mock_location_client_instance
+
+        mock_engine_location_client_instance = MagicMock()
+        mock_engine_location_client_instance.get_locations.return_value = []
+        mock_engine_location_client.return_value = mock_engine_location_client_instance
+
         manager = WorkcellManager(
             definition=workcell,
             redis_connection=redis_server,

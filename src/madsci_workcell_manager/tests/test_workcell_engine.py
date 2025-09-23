@@ -2,7 +2,7 @@
 
 import copy
 import warnings
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from madsci.client.data_client import DataClient
@@ -97,7 +97,15 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
             "madsci.client.location_client.get_current_madsci_context",
             return_value=mock_context,
         ),
+        patch(
+            "madsci.workcell_manager.workcell_engine.LocationClient"
+        ) as mock_location_client,
     ):
+        # Configure the mock location client to return empty location lists
+        mock_location_client_instance = MagicMock()
+        mock_location_client_instance.get_locations.return_value = []
+        mock_location_client.return_value = mock_location_client_instance
+
         warnings.simplefilter("ignore", UserWarning)
         return Engine(state_handler=state_handler, data_client=DataClient())
 
