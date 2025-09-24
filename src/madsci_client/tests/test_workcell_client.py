@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
-from madsci.common.types.location_types import Location, LocationDefinition
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import WorkcellManagerDefinition, WorkcellState
@@ -55,9 +55,6 @@ def workcell() -> WorkcellManagerDefinition:
     """Fixture for creating a WorkcellDefinition."""
     return WorkcellManagerDefinition(
         name="Test Workcell",
-        locations=[
-            LocationDefinition(location_name="test_location"),
-        ],
     )
 
 
@@ -124,16 +121,52 @@ def test_client(
     workcell: WorkcellManagerDefinition, redis_server: Redis, mongo_server: Database
 ) -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
-    manager = WorkcellManager(
-        definition=workcell,
-        redis_connection=redis_server,
-        mongo_connection=mongo_server,
-        start_engine=False,
+    # Create a mock context with all required URLs
+    mock_context = MadsciContext(
+        lab_server_url="http://localhost:8000/",
+        event_server_url="http://localhost:8001/",
+        experiment_server_url="http://localhost:8002/",
+        data_server_url="http://localhost:8004/",
+        resource_server_url="http://localhost:8003/",
+        workcell_server_url="http://localhost:8005/",
+        location_server_url="http://localhost:8006/",
     )
-    app = manager.create_server()
-    client = TestClient(app)
-    with client:
-        yield client
+
+    with (
+        patch(
+            "madsci.workcell_manager.workcell_server.get_current_madsci_context",
+            return_value=mock_context,
+        ),
+        patch(
+            "madsci.client.location_client.get_current_madsci_context",
+            return_value=mock_context,
+        ),
+        patch(
+            "madsci.workcell_manager.workcell_server.LocationClient"
+        ) as mock_location_client,
+        patch(
+            "madsci.workcell_manager.workcell_engine.LocationClient"
+        ) as mock_engine_location_client,
+    ):
+        # Configure the mock location clients to return empty location lists
+        mock_location_client_instance = MagicMock()
+        mock_location_client_instance.get_locations.return_value = []
+        mock_location_client.return_value = mock_location_client_instance
+
+        mock_engine_location_client_instance = MagicMock()
+        mock_engine_location_client_instance.get_locations.return_value = []
+        mock_engine_location_client.return_value = mock_engine_location_client_instance
+
+        manager = WorkcellManager(
+            definition=workcell,
+            redis_connection=redis_server,
+            mongo_connection=mongo_server,
+            start_engine=False,
+        )
+        app = manager.create_server()
+        client = TestClient(app)
+        with client:
+            yield client
 
 
 @pytest.fixture
@@ -275,54 +308,6 @@ def test_cancel_workflow(client: WorkcellClient) -> None:
     )
     canceled_workflow = client.cancel_workflow(workflow.workflow_id)
     assert canceled_workflow.status.cancelled is True
-
-
-def test_get_locations(client: WorkcellClient) -> None:
-    """Test retrieving locations."""
-    locations = client.get_locations()
-    assert isinstance(locations, list)
-    assert len(locations) == 1
-    assert locations[0].location_name == "test_location"
-
-
-def test_get_location(client: WorkcellClient) -> None:
-    """Test retrieving a specific location."""
-    location_id = client.get_locations()[0].location_id
-    fetched_location = client.get_location(location_id)
-    assert fetched_location.location_id == location_id
-
-
-def test_add_location(client: WorkcellClient) -> None:
-    """Test adding a location."""
-    location = Location(location_name="test_location2")
-    added_location = client.add_location(location, permanent=False)
-    assert added_location.location_id == location.location_id
-    assert added_location.location_name == location.location_name
-
-
-def test_add_location_permanent(client: WorkcellClient) -> None:
-    """Test adding a permanent location."""
-    location = Location(location_name="permanent_location")
-    added_location = client.add_location(location, permanent=True)
-    assert added_location.location_name == location.location_name
-
-
-def test_attach_resource_to_location(client: WorkcellClient) -> None:
-    """Test attaching a resource to a location."""
-    location = Location(location_name="test_location3")
-    client.add_location(location, permanent=False)
-    mock_resource_id = new_ulid_str()
-    updated_location = client.attach_resource_to_location(
-        location.location_id, mock_resource_id
-    )
-    assert updated_location.resource_id == mock_resource_id
-
-
-def test_delete_location(client: WorkcellClient) -> None:
-    """Test deleting a location."""
-    location = Location(location_name="temp_location")
-    added_location = client.add_location(location, permanent=False)
-    client.delete_location(added_location.location_id)
 
 
 # Additional Workflow Tests
@@ -660,22 +645,3 @@ def test_add_node_error_handling(client: WorkcellClient) -> None:
     # Get the node to verify it exists
     retrieved_node = client.get_node("test_node")
     assert retrieved_node["node_url"] == "http://test_node/"
-
-
-def test_location_edge_cases(client: WorkcellClient) -> None:
-    """Test location methods with edge cases."""
-    # Get all locations initially
-    initial_locations = client.get_locations()
-    initial_count = len(initial_locations)
-
-    # Add a new location
-    location = Location(location_name="edge_case_location")
-    added_location = client.add_location(location, permanent=False)
-
-    # Verify it was added
-    all_locations = client.get_locations()
-    assert len(all_locations) == initial_count + 1
-
-    # Get the specific location
-    retrieved_location = client.get_location(added_location.location_id)
-    assert retrieved_location.location_name == "edge_case_location"

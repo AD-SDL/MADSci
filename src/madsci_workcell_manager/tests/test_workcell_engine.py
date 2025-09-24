@@ -2,7 +2,7 @@
 
 import copy
 import warnings
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from madsci.client.data_client import DataClient
@@ -13,6 +13,7 @@ from madsci.common.types.action_types import (
     ActionStatus,
     ActionSucceeded,
 )
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     FileDataPoint,
     ObjectStorageDataPoint,
@@ -79,7 +80,32 @@ def state_handler(redis_server: Redis) -> WorkcellStateHandler:
 @pytest.fixture
 def engine(state_handler: WorkcellStateHandler) -> Engine:
     """Fixture for creating an Engine instance."""
-    with warnings.catch_warnings():
+    # Create a mock context with all required URLs for LocationClient
+    mock_context = MadsciContext(
+        lab_server_url="http://localhost:8000/",
+        event_server_url="http://localhost:8001/",
+        experiment_server_url="http://localhost:8002/",
+        data_server_url="http://localhost:8004/",
+        resource_server_url="http://localhost:8003/",
+        workcell_server_url="http://localhost:8005/",
+        location_server_url="http://localhost:8006/",
+    )
+
+    with (
+        warnings.catch_warnings(),
+        patch(
+            "madsci.client.location_client.get_current_madsci_context",
+            return_value=mock_context,
+        ),
+        patch(
+            "madsci.workcell_manager.workcell_engine.LocationClient"
+        ) as mock_location_client,
+    ):
+        # Configure the mock location client to return empty location lists
+        mock_location_client_instance = MagicMock()
+        mock_location_client_instance.get_locations.return_value = []
+        mock_location_client.return_value = mock_location_client_instance
+
         warnings.simplefilter("ignore", UserWarning)
         return Engine(state_handler=state_handler, data_client=DataClient())
 
@@ -154,7 +180,7 @@ def test_insert_parameter_values_basic() -> None:
         name="step1",
         node="node1",
         action="action1",
-        parameters=StepParameters(args={"param": "test_param"}),
+        use_parameters=StepParameters(args={"param": "test_param"}),
     )
 
     step = insert_parameters(step, {"test_param": "custom_value"})

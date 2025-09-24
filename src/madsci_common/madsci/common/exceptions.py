@@ -47,3 +47,12 @@ class ExperimentFailedError(Exception):
         """Initializes the exception"""
         super().__init__(message)
         self.message = message
+
+
+class LocationNotFoundError(Exception):
+    """Raised when a location cannot be found by name or ID"""
+
+    def __init__(self, message: str) -> "LocationNotFoundError":
+        """Initializes the exception"""
+        super().__init__(message)
+        self.message = message

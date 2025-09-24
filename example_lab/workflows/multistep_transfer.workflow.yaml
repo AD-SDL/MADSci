@@ -1,0 +1,34 @@
+name: Multistep Transfer Test
+
+metadata:
+  author: Ryan D. Lewis
+  info: Multistep workflow to test complex transfer functionality across multiple instruments
+  version: 1.0
+
+steps:
+  # Step 1: Transfer from storage rack to liquid handler deck
+  - name: Move Resource to Liquid Handler
+    key: storage_to_liquidhandler
+    action: transfer
+    args:
+      source: storage_rack
+      target: liquidhandler_1.deck_2
+    description: "Transfer resource from storage_rack to liquidhandler_1.deck_2"
+
+  # Step 2: Transfer from liquid handler to plate reader carriage
+  - name: Move Resource to Plate Reader
+    key: liquidhandler_to_platereader
+    action: transfer
+    args:
+      source: liquidhandler_1.deck_2
+      target: platereader_1.plate_carriage
+    description: "Transfer resource from liquidhandler_1.deck_2 to platereader_1.plate_carriage"
+
+  # Step 3: Return resource to storage rack
+  - name: Return Resource to Storage
+    key: platereader_to_storage
+    action: transfer
+    args:
+      source: platereader_1.plate_carriage
+      target: storage_rack
+    description: "Transfer resource from platereader_1.plate_carriage back to storage_rack"

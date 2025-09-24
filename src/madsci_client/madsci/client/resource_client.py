@@ -22,6 +22,7 @@ from madsci.common.types.resource_types.server_types import (
     PushResourceBody,
     RemoveChildBody,
     ResourceGetQuery,
+    ResourceHierarchy,
     ResourceHistoryGetQuery,
     SetChildBody,
     TemplateCreateBody,
@@ -232,7 +233,7 @@ class ResourceClient:
         self.local_resources = {}
         self.logger = event_client if event_client is not None else EventClient()
         if self.resource_server_url is None:
-            self.logger.log_warning(
+            self.logger.warning(
                 "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
                 warning_category=MadsciLocalOnlyWarning,
             )
@@ -305,7 +306,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_warning(
+            self.logger.warning(
                 "Local-only mode does not check to see if an existing resource match already exists."
             )
             resource = Resource.discriminate(resource_definition)
@@ -395,7 +396,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_warning(
+            self.logger.warning(
                 "Local-only mode does not currently search through child resources to get children."
             )
             resource = self.local_resources.get(resource_id)
@@ -460,9 +461,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_error(
-                "Local-only mode does not currently support querying."
-            )
+            self.logger.error("Local-only mode does not currently support querying.")
             raise NotImplementedError(
                 "Local-only mode does not currently support querying."
             )
@@ -523,7 +522,7 @@ class ResourceClient:
             )
             response.raise_for_status()
         else:
-            self.logger.log_error(
+            self.logger.error(
                 "Local-only mode does not currently support querying history."
             )
             raise NotImplementedError(
@@ -549,7 +548,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_error(
+            self.logger.error(
                 "Local-only mode does not currently support restoring resources."
             )
             raise NotImplementedError(
@@ -1329,26 +1328,24 @@ class ResourceClient:
                     f"{self.resource_server_url}resource/{locked_resource.resource_id}"
                 )
 
-                self.logger.log_info(
+                self.logger.info(
                     f"Acquired lock on resource {resource_id} for client {locked_resource.locked_by}"
                 )
                 return self._wrap_resource(locked_resource)
-            self.logger.log_warning(
+            self.logger.warning(
                 f"Failed to acquire lock on resource {resource_id} for client {self._client_id}"
             )
             return None
         # Local-only mode implementation
         if resource_id not in self.local_resources:
-            self.logger.log_warning(
-                f"Resource {resource_id} not found in local resources"
-            )
+            self.logger.warning(f"Resource {resource_id} not found in local resources")
             return None
 
         # Simple local locking - just mark as locked
         local_resource = self.local_resources[resource_id]
         try:
             if local_resource.locked_by and local_resource.locked_by != self._client_id:
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Resource {resource_id} already locked by {local_resource.locked_by}"
                 )
                 return None
@@ -1360,7 +1357,7 @@ class ResourceClient:
         local_resource.locked_by = self._client_id
         local_resource.locked_until = datetime.now() + timedelta(seconds=lock_duration)
 
-        self.logger.log_info(f"Acquired local lock on resource {resource_id}")
+        self.logger.info(f"Acquired local lock on resource {resource_id}")
         return self._wrap_resource(local_resource)
 
     def release_lock(
@@ -1398,23 +1395,23 @@ class ResourceClient:
                     unlocked_resource = Resource.discriminate(unlocked_resource_data)
                     unlocked_resource.resource_url = f"{self.resource_server_url}resource/{unlocked_resource.resource_id}"
 
-                    self.logger.log_info(
+                    self.logger.info(
                         f"Released lock on resource {resource_id} for client {self._client_id}"
                     )
                     return self._wrap_resource(unlocked_resource)
 
             except requests.HTTPError as e:
                 if e.response.status_code == 403:
-                    self.logger.log_warning(
+                    self.logger.warning(
                         f"Access denied: {e.response.json().get('detail', str(e))}"
                     )
                     return None
-                self.logger.log_error(f"Error releasing lock: {e}")
+                self.logger.error(f"Error releasing lock: {e}")
                 raise e
         else:
             # Local-only mode implementation
             if resource_id not in self.local_resources:
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Resource {resource_id} not found in local resources"
                 )
                 return None
@@ -1428,7 +1425,7 @@ class ResourceClient:
                     and self._client_id
                     and local_resource.locked_by != self._client_id
                 ):
-                    self.logger.log_warning(
+                    self.logger.warning(
                         f"Cannot release lock on {resource_id}: not owned by {self._client_id}"
                     )
                     return None
@@ -1440,7 +1437,7 @@ class ResourceClient:
             local_resource.locked_by = None
             local_resource.locked_until = None
 
-            self.logger.log_info(f"Released local lock on resource {resource_id}")
+            self.logger.info(f"Released local lock on resource {resource_id}")
             return self._wrap_resource(local_resource)
 
     def is_locked(
@@ -1658,3 +1655,75 @@ class ResourceClient:
             self.logger.error(
                 f"Error refreshing resource before release: {refresh_error}"
             )
+
+    def query_resource_hierarchy(self, resource_id: str) -> ResourceHierarchy:
+        """
+        Query the hierarchical relationships of a resource.
+
+        Returns the ancestors (successive parent IDs from closest to furthest)
+        and descendants (direct children organized by parent) of the specified resource.
+
+        Args:
+            resource_id (str): The ID of the resource to query hierarchy for.
+
+        Returns:
+            ResourceHierarchy: Hierarchy information with ancestor_ids, resource_id, and descendant_ids.
+
+        Raises:
+            ValueError: If resource not found.
+            requests.HTTPError: If server request fails.
+        """
+        if self.resource_server_url:
+            response = requests.get(
+                f"{self.resource_server_url}resource/{resource_id}/hierarchy",
+                timeout=10,
+            )
+            response.raise_for_status()
+            return ResourceHierarchy.model_validate(response.json())
+
+        # Local implementation for when no server URL is configured
+        # This would only work if local_resources are being used
+        if resource_id not in self.local_resources:
+            raise ValueError(f"Resource with ID '{resource_id}' not found")
+
+        # Simple local implementation - find ancestors by walking up parent chain
+        # and descendants by checking all resources for children
+        ancestor_ids = []
+        current_resource = self.local_resources[resource_id]
+
+        # Walk up parent chain
+        while hasattr(current_resource, "parent_id") and current_resource.parent_id:
+            if current_resource.parent_id in self.local_resources:
+                ancestor_ids.append(current_resource.parent_id)
+                current_resource = self.local_resources[current_resource.parent_id]
+            else:
+                break
+
+        # Find direct children and their children
+        descendant_ids = {}
+
+        # Find direct children of the queried resource
+        direct_children = [
+            res.resource_id
+            for res in self.local_resources.values()
+            if hasattr(res, "parent_id") and res.parent_id == resource_id
+        ]
+
+        if direct_children:
+            descendant_ids[resource_id] = direct_children
+
+            # Find children of each direct child (grandchildren)
+            for child_id in direct_children:
+                grandchildren = [
+                    res.resource_id
+                    for res in self.local_resources.values()
+                    if hasattr(res, "parent_id") and res.parent_id == child_id
+                ]
+                if grandchildren:
+                    descendant_ids[child_id] = grandchildren
+
+        return ResourceHierarchy(
+            ancestor_ids=ancestor_ids,
+            resource_id=resource_id,
+            descendant_ids=descendant_ids,
+        )

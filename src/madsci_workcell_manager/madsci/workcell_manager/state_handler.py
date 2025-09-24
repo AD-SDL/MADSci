@@ -7,8 +7,6 @@ from typing import Any, Callable, Optional, Union
 
 import redis
 from fastapi import HTTPException
-from madsci.client.resource_client import ResourceClient
-from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import (
     WorkcellManagerDefinition,
@@ -59,9 +57,7 @@ class WorkcellStateHandler:
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
 
-    def initialize_workcell_state(
-        self, resource_client: Optional[ResourceClient] = None
-    ) -> None:
+    def initialize_workcell_state(self) -> None:
         """
         Initializes the state of the workcell from the workcell definition.
         """
@@ -71,32 +67,10 @@ class WorkcellStateHandler:
         # * Initialize Nodes
         for key, value in self.get_workcell_definition().nodes.items():
             self.set_node(key, Node(node_url=AnyUrl(value)))
-        # * Initialize Locations and Resources
-        self.initialize_locations_and_resources(resource_client)
-        # TODO: Update the workcell definition with the new locations and resources
         status = self.get_workcell_status()
         status.initializing = False
         self.set_workcell_status(status)
         self.mark_state_changed()
-
-    def initialize_locations_and_resources(
-        self, resource_client: Optional[ResourceClient] = None
-    ) -> None:
-        """Set the workcell's location based on the location definitions in the workcell, and create resources if necessary/possible"""
-        workcell = self.get_workcell_definition()
-        for location_definition in workcell.locations:
-            resource = None
-            if (
-                location_definition.resource_definition is not None
-                and resource_client is not None
-            ):
-                resource = resource_client.init_resource(
-                    resource_definition=location_definition.resource_definition
-                )
-            location = Location.model_validate(location_definition.model_dump())
-            if resource:
-                location.resource_id = resource.resource_id
-            self.set_location(location)
 
     @property
     def _workcell_prefix(self) -> str:
@@ -127,12 +101,6 @@ class WorkcellStateHandler:
     @property
     def _nodes(self) -> RedisDict:
         return RedisDict(key=f"{self._workcell_prefix}:nodes", redis=self._redis_client)
-
-    @property
-    def _locations(self) -> RedisDict:
-        return RedisDict(
-            key=f"{self._workcell_prefix}:locations", redis=self._redis_client
-        )
 
     @property
     def _workflow_queue(self) -> RedisList:
@@ -173,7 +141,6 @@ class WorkcellStateHandler:
             workflow_queue=self.get_workflow_queue(),
             workcell_definition=self.get_workcell_definition(),
             nodes=self.get_nodes(),
-            locations=self.get_locations(),
         )
 
     def get_workcell_status(self) -> WorkcellStatus:
@@ -452,49 +419,3 @@ class WorkcellStateHandler:
         Updates the state of a node.
         """
         self.set_node(node_name, func(self.get_node(node_name), *args, **kwargs))
-
-    def get_location(self, location_id: str) -> Location:
-        """
-        Returns a location by ID
-        """
-        return Location.model_validate(self._locations[location_id])
-
-    def get_locations(self) -> dict[str, Location]:
-        """
-        Returns all locations
-        """
-        valid_locations = {}
-        for location in self._locations:
-            try:
-                valid_locations[location] = Location.model_validate(
-                    self._locations[location]
-                )
-            except ValidationError:
-                continue
-        return valid_locations
-
-    def set_location(self, location: Union[Location, dict[str, Any]]) -> None:
-        """
-        Sets a location by ID
-        """
-        if isinstance(location, Location):
-            location_dump = location.model_dump(mode="json")
-        else:
-            location_dump = Location.model_validate(location).model_dump(mode="json")
-        self._locations[location_dump["location_id"]] = location_dump
-        self.mark_state_changed()
-
-    def delete_location(self, location_id: str) -> None:
-        """
-        Deletes a location by ID
-        """
-        del self._locations[location_id]
-        self.mark_state_changed()
-
-    def update_location(
-        self, location_id: str, func: Callable[..., Any], *args: Any, **kwargs: Any
-    ) -> None:
-        """
-        Updates the state of a location.
-        """
-        self.set_location(func(self.get_location(location_id), *args, **kwargs))

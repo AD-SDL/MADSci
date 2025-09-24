@@ -48,17 +48,20 @@ def mock_scheduler() -> Generator[Scheduler, None, None]:
             module_name="test_module",
         ),
     )
-    mock_state_handler.get_locations.return_value = [
+    scheduler = Scheduler(mock_workcell_definition, mock_state_handler)
+
+    # Mock the LocationClient
+    scheduler.location_client = MagicMock()
+    scheduler.location_client.get_locations.return_value = [
         Location(
-            location_name="loc1",
+            name="loc1",
             resource_id=None,
         ),
         Location(
-            location_name="loc2",
+            name="loc2",
             resource_id=None,
         ),
     ]
-    scheduler = Scheduler(mock_workcell_definition, mock_state_handler)
     yield scheduler
 
 
@@ -151,10 +154,10 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
     mock_scheduler.resource_client = MagicMock()
     test_slot = Slot()
     mock_scheduler.resource_client.get_resource.return_value = test_slot
-    mock_scheduler.state_handler.get_locations.return_value[
+    mock_scheduler.location_client.get_locations.return_value[
         0
     ].resource_id = test_slot.resource_id
-    mock_scheduler.state_handler.get_locations.return_value[
+    mock_scheduler.location_client.get_locations.return_value[
         1
     ].resource_id = test_slot.resource_id
 

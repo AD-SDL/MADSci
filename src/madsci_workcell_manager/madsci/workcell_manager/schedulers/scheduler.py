@@ -3,6 +3,7 @@
 from typing import ClassVar, Optional
 
 from madsci.client.event_client import EventClient
+from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.types.workcell_types import WorkcellManagerDefinition
 from madsci.common.types.workflow_types import SchedulerMetadata, Workflow
@@ -27,6 +28,7 @@ class AbstractScheduler:
     state_handler: WorkcellStateHandler
     logger: Optional[EventClient]
     resource_client: Optional[ResourceClient]
+    location_client: Optional[LocationClient]
 
     def __init__(
         self,
@@ -39,6 +41,7 @@ class AbstractScheduler:
         self.running = True
         self.logger = EventClient()
         self.resource_client = ResourceClient()
+        self.location_client = LocationClient()
 
     def run_iteration(self, workflows: list[Workflow]) -> dict[str, SchedulerMetadata]:
         """Run an iteration of the scheduler and return a mapping of workflow IDs to SchedulerMetadata"""

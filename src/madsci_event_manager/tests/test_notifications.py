@@ -79,7 +79,7 @@ def test_send_email_failure(mock_smtp: MagicMock, email_alerts: EmailAlerts) -> 
     mock_server.sendmail.side_effect = Exception("SMTP error")
     mock_smtp.return_value = mock_server
 
-    with patch.object(email_alerts.logger, "log_error") as mock_log_error:
+    with patch.object(email_alerts.logger, "error") as mock_log_error:
         result: bool = email_alerts.send_email(
             subject="Test Subject",
             email_address="recipient@test.com",

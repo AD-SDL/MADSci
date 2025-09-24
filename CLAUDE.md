@@ -23,6 +23,7 @@ The system follows a microservices architecture with the following main componen
 - **madsci_resource_manager**: Laboratory resource and inventory tracking (Port 8003)
 - **madsci_data_manager**: Data capture, storage, and querying (Port 8004)
 - **madsci_workcell_manager**: Workflow coordination and scheduling (Port 8005)
+- **madsci_location_manager**: Laboratory location management, resource attachments, and node-specific references (Port 8006)
 
 ### Frontend
 - **ui/**: Vue 3 + Vuetify dashboard for lab management and monitoring
@@ -62,8 +63,8 @@ just down                    # Stop services and remove containers
 ### Frontend Development
 ```bash
 cd ui/
-npm run dev                  # Start Vue development server
-npm run build                # Build for production
+yarn dev                     # Start Vue development server
+yarn build                   # Build for production
 ```
 
 ### Python Package Management
@@ -78,7 +79,7 @@ pdm build                    # Build python packages
 Configuration is handled through environment variables with a hierarchical precedence system. See `Configuration.md` for comprehensive configuration options.
 
 Key configuration patterns:
-- Each manager has its own settings class with environment prefix (e.g., `WORKCELL_`, `EVENT_`)
+- Each manager has its own settings class with environment prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
 - Server URLs default to localhost with specific ports
 - Database connections default to MongoDB/PostgreSQL on localhost
 - File storage paths default to `~/.madsci/` subdirectories
@@ -88,9 +89,15 @@ Key configuration patterns:
 ### Manager Implementation
 Each manager service follows this pattern:
 1. Settings class inheriting from `MadsciBaseSettings`
-2. Server class with FastAPI endpoints
+2. Server class inheriting from `AbstractManagerBase` with FastAPI endpoints
 3. Client class for programmatic interaction
 4. Database models (SQLModel for PostgreSQL, Pydantic for MongoDB)
+
+The `AbstractManagerBase` class provides:
+- Common functionality for all managers (settings, logging, CORS middleware)
+- Standard endpoints (definition, health)
+- FastAPI app configuration and server lifecycle management
+- Generic typing for settings and definition classes
 
 ### Type System
 - All types are defined in `madsci_common/types/`
@@ -140,5 +147,7 @@ src/madsci_common/
 - The project is currently in beta with potential breaking changes
 - Each package can be used independently or composed together
 - Use PDM virtual environments for development isolation
+- **IMPORTANT**: Use `yarn` for managing Node.js dependencies in the `ui/` directory, not npm
 - Ignore minor linting errors that will be fixed by autoformatting, such as "No newline at end of file"
 - Always use pydantic's `AnyUrl` to store URL's, and note that AnyUrl always ensures a trailing forward slash
+- Imports should generally be done at the top of the file, unless there are circular dependencies or other factors which require localized importing.

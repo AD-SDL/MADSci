@@ -4,6 +4,7 @@ from collections.abc import Generator
 from typing import Any
 from unittest.mock import patch
 
+import httpx
 import pytest
 from madsci.client.resource_client import ResourceClient, ResourceWrapper
 from madsci.common.types.auth_types import OwnershipInfo
@@ -985,3 +986,124 @@ def test_client_id_handling_in_locks(client: ResourceClient) -> None:
     # Release with the same client_id
     released = client.release_lock(locked_resource, client_id=explicit_client_id)
     assert released is not None
+
+
+def test_query_resource_hierarchy_with_server(
+    client: ResourceClient,
+) -> None:
+    """Test querying resource hierarchy using the resource client with server."""
+    # Create parent resource
+    parent = Container(
+        resource_name="Parent Container",
+        resource_class="container",
+    )
+    parent_resource = client.add_resource(parent)
+
+    # Create child resource
+    child = Resource(
+        resource_name="Child Resource",
+        resource_class="sample",
+        parent_id=parent_resource.resource_id,
+        key="child_key",
+    )
+    child_resource = client.add_resource(child)
+
+    # Create grandchild resource
+    grandchild = Resource(
+        resource_name="Grandchild Resource",
+        resource_class="sample",
+        parent_id=child_resource.resource_id,
+        key="grandchild_key",
+    )
+    grandchild_resource = client.add_resource(grandchild)
+
+    # Test hierarchy query for child
+    hierarchy = client.query_resource_hierarchy(child_resource.resource_id)
+
+    assert hierarchy.resource_id == child_resource.resource_id
+    assert hierarchy.ancestor_ids == [parent_resource.resource_id]
+    assert hierarchy.descendant_ids == {
+        child_resource.resource_id: [grandchild_resource.resource_id]
+    }
+
+    # Test hierarchy query for parent
+    hierarchy = client.query_resource_hierarchy(parent_resource.resource_id)
+
+    assert hierarchy.resource_id == parent_resource.resource_id
+    assert hierarchy.ancestor_ids == []
+    assert hierarchy.descendant_ids == {
+        parent_resource.resource_id: [child_resource.resource_id],
+        child_resource.resource_id: [grandchild_resource.resource_id],
+    }
+
+    # Test hierarchy query for grandchild
+    hierarchy = client.query_resource_hierarchy(grandchild_resource.resource_id)
+
+    assert hierarchy.resource_id == grandchild_resource.resource_id
+    assert hierarchy.ancestor_ids == [
+        child_resource.resource_id,
+        parent_resource.resource_id,
+    ]
+    assert hierarchy.descendant_ids == {}
+
+
+def test_query_resource_hierarchy_local_client() -> None:
+    """Test querying resource hierarchy using local client without server."""
+    # Since the client fixture in this file mocks requests and hits the server,
+    # we need to create a truly local client without a server URL
+    local_client = ResourceClient()  # No server URL - truly local
+
+    # Create parent resource
+    parent = Container(
+        resource_name="Parent Container",
+        resource_class="container",
+    )
+    parent_resource = local_client.add_resource(parent)
+
+    # Create child resource
+    child = Resource(
+        resource_name="Child Resource",
+        resource_class="sample",
+        parent_id=parent_resource.resource_id,
+        key="child_key",
+    )
+    child_resource = local_client.add_resource(child)
+
+    # Test hierarchy query for child
+    hierarchy = local_client.query_resource_hierarchy(child_resource.resource_id)
+
+    assert hierarchy.resource_id == child_resource.resource_id
+    assert hierarchy.ancestor_ids == [parent_resource.resource_id]
+    # Local implementation only includes descendants if they exist
+    assert hierarchy.descendant_ids == {}
+
+
+def test_query_resource_hierarchy_nonexistent_resource(
+    client: ResourceClient,
+) -> None:
+    """Test querying hierarchy for a nonexistent resource raises appropriate error."""
+    fake_id = new_ulid_str()
+
+    with pytest.raises(
+        httpx.HTTPStatusError
+    ):  # Should raise HTTPStatusError for nonexistent resource (404)
+        client.query_resource_hierarchy(fake_id)
+
+
+def test_query_resource_hierarchy_standalone_resource(
+    client: ResourceClient,
+) -> None:
+    """Test querying hierarchy for a resource with no parents or children."""
+    # Create standalone resource
+    resource = Resource(
+        resource_name="Standalone Resource",
+        resource_class="sample",
+    )
+    standalone_resource = client.add_resource(resource)
+
+    # Test hierarchy query
+    hierarchy = client.query_resource_hierarchy(standalone_resource.resource_id)
+
+    assert hierarchy.resource_id == standalone_resource.resource_id
+    assert hierarchy.ancestor_ids == []
+    assert hierarchy.descendant_ids == {}

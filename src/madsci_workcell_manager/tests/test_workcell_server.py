@@ -252,7 +252,7 @@ def test_check_parameter_missing() -> None:
                 name="step1",
                 node="node1",
                 action="action1",
-                parameters={
+                use_parameters={
                     "args": {"param": "required_param"},
                 },
             )
@@ -280,7 +280,7 @@ def test_check_parameter_conflict() -> None:
                 key="step1",
                 node="node1",
                 action="action1",
-                parameters={
+                use_parameters={
                     "args": {"param": "conflict_param"},
                 },
             )

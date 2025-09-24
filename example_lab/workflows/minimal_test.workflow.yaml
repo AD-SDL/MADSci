@@ -1,0 +1,17 @@
+name: Minimal Test Workflow
+
+metadata:
+  author: MADSci Test
+  info: Minimal workflow for testing
+  version: 1.0
+
+parameters:
+  json_inputs: []
+
+steps:
+  - name: Simple Wait
+    key: wait_test
+    action: wait
+    args:
+      seconds: 1
+    description: "Simple wait step"

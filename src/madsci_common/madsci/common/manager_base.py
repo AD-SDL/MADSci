@@ -78,9 +78,9 @@ class AbstractManagerBase(
 
         # Setup logging
         self.setup_logging()
-        self.logger.log_info(self._settings)
-        self.logger.log_info(self._definition)
-        self.logger.log_info(get_current_madsci_context())
+        self.logger.info(self._settings)
+        self.logger.info(self._definition)
+        self.logger.info(get_current_madsci_context())
 
         # Setup ownership context
         self.setup_ownership()
@@ -121,7 +121,7 @@ class AbstractManagerBase(
             raise NotImplementedError(
                 f"{self.__class__.__name__} must set DEFINITION_CLASS class attribute"
             )
-        return self.DEFINITION_CLASS()
+        return self.DEFINITION_CLASS(name=f"Default {self.__class__.__name__}")
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -133,8 +133,6 @@ class AbstractManagerBase(
         Args:
             **kwargs: Additional arguments from __init__
         """
-        # Base implementation does nothing, subclasses can override
-        _ = kwargs  # Mark kwargs as used to avoid lint warning
 
     def setup_logging(self) -> None:
         """Setup logging for the manager."""
@@ -160,7 +158,7 @@ class AbstractManagerBase(
             # the manager is at least partially functional
             return ManagerHealth(
                 healthy=True,
-                description="Manager is running and responding to requests",
+                description="Manager is running normally.",
             )
         except Exception as e:
             return ManagerHealth(
@@ -181,7 +179,7 @@ class AbstractManagerBase(
 
         # Only log if logger is initialized
         if hasattr(self, "_logger"):
-            self.logger.log_info(f"Writing to definition file: {def_path}")
+            self.logger.info(f"Writing to definition file: {def_path}")
         definition.to_yaml(def_path)
         return definition
 

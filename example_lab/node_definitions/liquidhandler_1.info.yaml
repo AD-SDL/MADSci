@@ -54,6 +54,27 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+  deck_transfer:
+    name: deck_transfer
+    description: Transfer labware between deck locations on the liquid handler.
+    args: {}
+    locations:
+      source_location:
+        name: source_location
+        description: ''
+        argument_type: location
+        required: true
+        default: null
+      target_location:
+        name: target_location
+        description: ''
+        argument_type: location
+        required: true
+        default: null
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
   arg_type_test:
     name: arg_type_test
     description: Used to test that argument types are correctly passed to the node
