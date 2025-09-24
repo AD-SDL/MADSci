@@ -24,6 +24,7 @@ from madsci.common.types.workflow_types import (
 )
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_actions import workcell_action_dict
+from sqlalchemy import Null, null
 
 
 def validate_node_names(
@@ -422,6 +423,10 @@ def get_workflow_inputs_directory(
 def cancel_workflow(wf: Workflow, state_handler: WorkcellStateHandler) -> None:
     """Cancels the workflow run"""
     wf.status.cancelled = True
+    # if not wf.start_time:
+    #     wf.start_time = datetime.now()
+    # if not wf.end_time:
+    #     wf.end_time = datetime.now()
     with state_handler.wc_state_lock():
         state_handler.set_active_workflow(wf)
     return wf
