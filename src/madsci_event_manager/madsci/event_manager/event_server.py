@@ -192,7 +192,7 @@ def create_event_server(  # noqa: C901, PLR0915
         - csv_format=True, save_to_file=False: CSV download
         - csv_format=True, save_to_file=True: JSON with file path info
         """
-
+        logger.info("Getting session utilization...")
         analyzer = _get_session_analyzer()
         if analyzer is None:
             return {"error": "Failed to create session analyzer"}
@@ -252,7 +252,7 @@ def create_event_server(  # noqa: C901, PLR0915
         ] = None,
     ) -> Union[Dict[str, Any], Response]:
         """Get time-series utilization analysis with periodic breakdowns."""
-
+        logger.info("Getting utilization periods...")
         # Setup analyzer
         analyzer = _get_session_analyzer()
         if analyzer is None:
@@ -326,7 +326,7 @@ def create_event_server(  # noqa: C901, PLR0915
         - save_to_file: If True, saves CSV to server filesystem (requires output_path)
         - output_path: Server path where CSV files should be saved
         """
-
+        logger.info("Getting user utilization report...")
         analyzer = _get_session_analyzer()
         if analyzer is None:
             return {"error": "Failed to create session analyzer"}
