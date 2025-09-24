@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_e737abc18bc6611a_resource_interface_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.10.6">coverage.py v7.10.6</a>,
-            created at 2025-09-16 22:22 +0000
+            created at 2025-09-24 20:28 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -149,7 +149,7 @@
     <p class="run"><span class="n"><a id="t67" href="#t67">67</a></span><span class="t">        <span class="nam">global_ownership_info</span><span class="op">.</span><span class="nam">node_id</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">node_definition</span><span class="op">.</span><span class="nam">node_id</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t68" href="#t68">68</a></span><span class="t">        <span class="nam">url</span> <span class="op">=</span> <span class="nam">AnyUrl</span><span class="op">(</span><span class="nam">getattr</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">config</span><span class="op">,</span> <span class="str">"node_url"</span><span class="op">,</span> <span class="str">"http://127.0.0.1:2000"</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t69" href="#t69">69</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="nam">testing</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_debug</span><span class="op">(</span><span class="str">"Running node in production mode"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">debug</span><span class="op">(</span><span class="str">"Running node in production mode"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">            <span class="key">import</span> <span class="nam">uvicorn</span>  <span class="com"># noqa: PLC0415</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t73" href="#t73">73</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">rest_api</span> <span class="op">=</span> <span class="nam">FastAPI</span><span class="op">(</span><span class="nam">lifespan</span><span class="op">=</span><span class="nam">self</span><span class="op">.</span><span class="nam">_lifespan</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -170,7 +170,7 @@
     <p class="mis mis2 show_mis"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">                <span class="op">**</span><span class="nam">getattr</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">config</span><span class="op">,</span> <span class="str">"uvicorn_kwargs"</span><span class="op">,</span> <span class="op">{</span><span class="op">}</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">        <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_debug</span><span class="op">(</span><span class="str">"Running node in test mode"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">debug</span><span class="op">(</span><span class="str">"Running node in test mode"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">rest_api</span> <span class="op">=</span> <span class="nam">FastAPI</span><span class="op">(</span><span class="nam">lifespan</span><span class="op">=</span><span class="nam">self</span><span class="op">.</span><span class="nam">_lifespan</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">_configure_routes</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t94" href="#t94">94</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -365,7 +365,7 @@
             <a class="nav" href="z_e737abc18bc6611a_resource_interface_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.10.6">coverage.py v7.10.6</a>,
-            created at 2025-09-16 22:22 +0000
+            created at 2025-09-24 20:28 +0000
         </p>
     </div>
 </footer>
