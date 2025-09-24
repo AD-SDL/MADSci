@@ -159,3 +159,11 @@ services:
       - NODE_DEFINITION=node_definitions/platereader_1.node.yaml
       - NODE_URL=http://localhost:2002
     command: python example_modules/platereader.py
+
+  advanced_example_node:
+    <<: *madsci-service
+    container_name: advanced_example_node
+    environment:
+      - NODE_DEFINITION=node_definitions/advanced_example_node.node.yaml
+      - NODE_URL=http://localhost:2003
+    command: python example_modules/advanced_example_module.py

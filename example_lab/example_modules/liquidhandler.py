@@ -80,10 +80,7 @@ class LiquidHandlerNode(RestNode):
         self.logger.log(protocol)
         self.liquid_handler.run_command("run_protocol")
         return protocol
-    @action
-    def quick_action(self) -> None:
-        """A quick action that returns nothing"""
-        self.liquid_handler.run_command("quick_action")
+   
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the liquid handler"""

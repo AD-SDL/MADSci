@@ -7,6 +7,7 @@ nodes:
   liquidhandler_1: http://localhost:2000/
   robotarm_1: http://localhost:2001/
   platereader_1: http://localhost:2002/
+  advanced_example_node: http://localhost:2003/
 locations:
 - location_name: location_1
   location_id: 01JQCRA5HNG94DMQ9APVV5R1B1

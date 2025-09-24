@@ -146,7 +146,6 @@ def parse_result(returned: Any):
     if returned is Path:
         return [FileActionResultDefinition(result_label="file")]
     if issubclass(returned, ActionFiles):
-        print(returned.__annotations__.items())
         for key, value in returned.__annotations__.items():
             if value is not Path:
                 raise ValueError(
@@ -159,7 +158,7 @@ def parse_result(returned: Any):
                 raise ValueError(
                     f"All fields in an ActionJSON subclass must be of type str, int, float, bool, dict, or list but field {key} is of type {value}",
                 )
-        return [JSONActionResultDefinition(result_label=key) for key in returned.__annotations__]
+        return [JSONActionResultDefinition(result_label=key, data_type=value.__name__) for key in returned.__annotations__]
     if issubclass(returned, ActionDatapoints):
         for key, value in returned.__annotations__.items():
             if value not in [FileDataPoint, ValueDataPoint, ObjectStorageDataPoint]:
@@ -171,6 +170,7 @@ def parse_result(returned: Any):
         raise ValueError(
             f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, str, int, float, bool, dict, or list but got {returned}",
         )
+    
     return [JSONActionResultDefinition(result_label="data", data_type=returned.__name__)]
 
 
@@ -180,8 +180,6 @@ def parse_results(func: Callable) -> list[ActionResultDefinition]:
     
     if returned is inspect.Signature.empty or returned is None:
         return []
-    print(f"Parsing return type: {returned}")
-    print(returned is tuple)
     if getattr(returned, "__origin__", None) is tuple:
         result_definitions = []
         for result in returned.__args__:

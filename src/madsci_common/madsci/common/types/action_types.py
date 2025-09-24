@@ -4,7 +4,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Optional, TypeAlias, Union, List, Dict
-from typing_extensions import Self
+from typing_extensions import Annotated, Self
+from pydantic.types import Discriminator, Tag
 
 
 from madsci.common.types.base_types import Error, MadsciBaseModel, PathLike
@@ -383,8 +384,8 @@ class ActionDefinition(MadsciBaseModel):
         default_factory=dict,
     )
     results: Union[
-        dict[str, "ActionResultDefinition"],
-        list["ActionResultDefinition"],
+        dict[str, "ActionResultDefinitions"],
+        list["ActionResultDefinitions"],
     ] = Field(
         title="Action Results",
         description="The results of the action.",
@@ -549,3 +550,12 @@ class JSONActionResultDefinition(ActionResultDefinition):
         description="The type of the data.",
         default=None,
     )
+
+ActionResultDefinitions = Annotated[
+    Union[
+        Annotated[FileActionResultDefinition, Tag("file")],
+        Annotated[DatapointActionResultDefinition, Tag("datapoint")],
+        Annotated[JSONActionResultDefinition, Tag("json")],
+    ],
+    Discriminator("result_type"),
+]
