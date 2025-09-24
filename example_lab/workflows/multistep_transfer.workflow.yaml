@@ -12,7 +12,7 @@ steps:
     action: transfer
     args:
       source: storage_rack
-      destination: liquidhandler_1.deck_2
+      target: liquidhandler_1.deck_2
     description: "Transfer resource from storage_rack to liquidhandler_1.deck_2"
 
   # Step 2: Transfer from liquid handler to plate reader carriage
@@ -21,7 +21,7 @@ steps:
     action: transfer
     args:
       source: liquidhandler_1.deck_2
-      destination: platereader_1.plate_carriage
+      target: platereader_1.plate_carriage
     description: "Transfer resource from liquidhandler_1.deck_2 to platereader_1.plate_carriage"
 
   # Step 3: Return resource to storage rack
@@ -30,5 +30,5 @@ steps:
     action: transfer
     args:
       source: platereader_1.plate_carriage
-      destination: storage_rack
+      target: storage_rack
     description: "Transfer resource from platereader_1.plate_carriage back to storage_rack"

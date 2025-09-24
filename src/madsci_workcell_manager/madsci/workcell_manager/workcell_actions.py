@@ -22,18 +22,18 @@ def wait(seconds: Union[int, float]) -> ActionResult:
 
 
 def transfer(  # noqa: C901
-    source: str, destination: str, await_completion: bool = True
+    source: str, target: str, await_completion: bool = True
 ) -> ActionResult:
     """
     Transfer a single discrete object between locations.
 
-    This action takes a source and destination (either location name or ID),
+    This action takes a source and target (either location name or ID),
     asks the location manager to generate a workflow to accomplish the transfer,
     submits that workflow to the workcell manager, and optionally waits for completion.
 
     Args:
         source: Source location name or ID
-        destination: Destination location name or ID
+        target: Target location name or ID
         await_completion: Whether to block until the transfer workflow completes
 
     Returns:
@@ -62,14 +62,12 @@ def transfer(  # noqa: C901
 
         # Resolve location names to IDs if needed
         source_location_id = _resolve_location_identifier(source, location_client)
-        destination_location_id = _resolve_location_identifier(
-            destination, location_client
-        )
+        target_location_id = _resolve_location_identifier(target, location_client)
 
         # Plan the transfer using the location client
         workflow_definition = location_client.plan_transfer(
             source_location_id=source_location_id,
-            destination_location_id=destination_location_id,
+            target_location_id=target_location_id,
         )
 
         # Submit workflow to workcell manager
@@ -90,10 +88,10 @@ def transfer(  # noqa: C901
                 # Return immediately after successful enqueueing
                 result = ActionSucceeded(
                     data={
-                        "message": f"Transfer workflow enqueued from {source} to {destination}",
+                        "message": f"Transfer workflow enqueued from {source} to {target}",
                         "workflow_id": workflow.workflow_id,
                         "source_location_id": source_location_id,
-                        "destination_location_id": destination_location_id,
+                        "target_location_id": target_location_id,
                     }
                 )
 
@@ -101,11 +99,11 @@ def transfer(  # noqa: C901
             elif workflow.status.completed:
                 result = ActionSucceeded(
                     data={
-                        "message": f"Transfer completed from {source} to {destination}",
+                        "message": f"Transfer completed from {source} to {target}",
                         "workflow_id": workflow.workflow_id,
                         "execution_time": workflow.duration_seconds,
                         "source_location_id": source_location_id,
-                        "destination_location_id": destination_location_id,
+                        "target_location_id": target_location_id,
                     }
                 )
             elif workflow.status.failed:
@@ -169,17 +167,17 @@ def _resolve_location_identifier(
 
 
 def transfer_resource(
-    resource_id: str, destination: str, await_completion: bool = True
+    resource_id: str, target: str, await_completion: bool = True
 ) -> ActionResult:
     """
-    Transfer a specific resource from its current location to a destination.
+    Transfer a specific resource from its current location to a target.
 
     This action finds the current location of a resource using the resource and location
-    clients, then uses the transfer action to move it to the specified destination.
+    clients, then uses the transfer action to move it to the specified target.
 
     Args:
         resource_id: ID of the resource to transfer
-        destination: Destination location name or ID
+        target: Target location name or ID
         await_completion: Whether to block until the transfer workflow completes
 
     Returns:
@@ -205,7 +203,7 @@ def transfer_resource(
 
         # Find resource and perform transfer
         result = _find_resource_and_transfer(
-            resource_id, destination, await_completion, context
+            resource_id, target, await_completion, context
         )
 
         # If result is a string, it's an error message
@@ -220,7 +218,7 @@ def transfer_resource(
 
 
 def _find_resource_and_transfer(
-    resource_id: str, destination: str, await_completion: bool, context: Any
+    resource_id: str, target: str, await_completion: bool, context: Any
 ) -> Union[str, ActionResult]:
     """
     Helper function to find resource location and perform transfer.
@@ -266,7 +264,7 @@ def _find_resource_and_transfer(
         # Use the existing transfer action to perform the transfer
         return transfer(
             source=source_location_id,
-            destination=destination,
+            target=target,
             await_completion=await_completion,
         )
 

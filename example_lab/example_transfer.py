@@ -90,7 +90,7 @@ try:
         raise_on_failed=True,
         json_inputs={
             "resource_id": demo_plate_3.resource_id,
-            "destination": "platereader_1.plate_carriage",
+            "target": "platereader_1.plate_carriage",
         },
     )
     print("Transfer resource workflow completed successfully!")

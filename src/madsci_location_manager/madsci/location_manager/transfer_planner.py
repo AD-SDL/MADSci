@@ -91,7 +91,7 @@ class TransferPlanner:
 
                         edge = TransferGraphEdge(
                             source_location_id=source_location.location_id,
-                            destination_location_id=dest_location.location_id,
+                            target_location_id=dest_location.location_id,
                             transfer_template=template,
                             cost=adjusted_cost,
                         )
@@ -151,8 +151,8 @@ class TransferPlanner:
             if source_templates:
                 return source_templates
 
-            # 3. Check for destination-specific overrides
-            dest_templates = self._get_destination_override_templates(
+            # 3. Check for target-specific overrides
+            dest_templates = self._get_target_override_templates(
                 dest_location, overrides
             )
             if dest_templates:
@@ -170,7 +170,7 @@ class TransferPlanner:
         dest_location: Location,
         overrides: TransferTemplateOverrides,
     ) -> Optional[list[TransferStepTemplate]]:
-        """Get override templates for a specific (source, destination) pair."""
+        """Get override templates for a specific (source, target) pair."""
         if not overrides.pair_overrides:
             return None
 
@@ -178,7 +178,7 @@ class TransferPlanner:
         for source_key in [source_location.location_id, source_location.location_name]:
             if source_key in overrides.pair_overrides:
                 dest_overrides = overrides.pair_overrides[source_key]
-                # Check both location_id and location_name for destination
+                # Check both location_id and location_name for target
                 for dest_key in [
                     dest_location.location_id,
                     dest_location.location_name,
@@ -200,31 +200,31 @@ class TransferPlanner:
                 return overrides.source_overrides[key]
         return None
 
-    def _get_destination_override_templates(
+    def _get_target_override_templates(
         self, dest_location: Location, overrides: TransferTemplateOverrides
     ) -> Optional[list[TransferStepTemplate]]:
-        """Get override templates for a specific destination location."""
-        if not overrides.destination_overrides:
+        """Get override templates for a specific target location."""
+        if not overrides.target_overrides:
             return None
 
         # Check both location_id and location_name
         for key in [dest_location.location_id, dest_location.location_name]:
-            if key in overrides.destination_overrides:
-                return overrides.destination_overrides[key]
+            if key in overrides.target_overrides:
+                return overrides.target_overrides[key]
         return None
 
     def _apply_capacity_cost_adjustment(
-        self, base_cost: float, destination_location: Location
+        self, base_cost: float, target_location: Location
     ) -> float:
         """
         Apply capacity-based cost adjustments to the base transfer cost.
 
         Args:
             base_cost: Base cost of the transfer
-            destination_location: Destination location to check for capacity
+            target_location: Target location to check for capacity
 
         Returns:
-            Adjusted cost based on destination resource capacity utilization
+            Adjusted cost based on target resource capacity utilization
         """
         # Check if capacity cost adjustments are not enabled, resource client is unavailable, or destination has no resource
         if (
@@ -232,15 +232,13 @@ class TransferPlanner:
             or not self.definition.transfer_capabilities.capacity_cost_config
             or not self.definition.transfer_capabilities.capacity_cost_config.enabled
             or not self.resource_client
-            or not destination_location.resource_id
+            or not target_location.resource_id
         ):
             return base_cost
 
         try:
-            # Get the destination resource
-            resource = self.resource_client.get_resource(
-                destination_location.resource_id
-            )
+            # Get the target resource
+            resource = self.resource_client.get_resource(target_location.resource_id)
 
             # Check if resource has capacity and quantity fields (consumable resources)
             if (
@@ -267,7 +265,7 @@ class TransferPlanner:
         except Exception:
             # Log warning but don't fail - just return base cost
             EventClient().warning(
-                f"Failure during capacity check for resource {destination_location.resource_id}. Using base transfer cost."
+                f"Failure during capacity check for resource {target_location.resource_id}. Using base transfer cost."
             )
             return base_cost
 
@@ -375,7 +373,7 @@ class TransferPlanner:
                     edge.source_location_id
                 ).name,
                 template.target_argument_name: self.state_handler.get_location(
-                    edge.destination_location_id
+                    edge.target_location_id
                 ).name,
             }
 
@@ -408,9 +406,7 @@ class TransferPlanner:
             source_location = self.state_handler.get_location(
                 path[0].source_location_id
             )
-            dest_location = self.state_handler.get_location(
-                path[-1].destination_location_id
-            )
+            dest_location = self.state_handler.get_location(path[-1].target_location_id)
 
             # Use location names in workflow name
             workflow_name = (
@@ -418,7 +414,7 @@ class TransferPlanner:
             )
 
             # Create description with both names and IDs
-            description = f"Transfer from {source_location.name} ({path[0].source_location_id}) to {dest_location.name} ({path[-1].destination_location_id})"
+            description = f"Transfer from {source_location.name} ({path[0].source_location_id}) to {dest_location.name} ({path[-1].target_location_id})"
         else:
             workflow_name = "Transfer: Same location"
             description = "Transfer within the same location"
@@ -454,11 +450,11 @@ class TransferPlanner:
         self, source_id: str, dest_id: str
     ) -> tuple[Location, Location]:
         """
-        Validate that both source and destination locations exist.
+        Validate that both source and target locations exist.
 
         Args:
             source_id: Source location ID
-            dest_id: Destination location ID
+            dest_id: Target location ID
 
         Returns:
             Tuple of (source_location, dest_location)
@@ -472,19 +468,19 @@ class TransferPlanner:
 
         dest_location = self.state_handler.get_location(dest_id)
         if dest_location is None:
-            raise ValueError(f"Destination location {dest_id} not found")
+            raise ValueError(f"Target location {dest_id} not found")
 
         return source_location, dest_location
 
     def plan_transfer(
-        self, source_location_id: str, destination_location_id: str
+        self, source_location_id: str, target_location_id: str
     ) -> WorkflowDefinition:
         """
-        Plan a transfer workflow from source to destination.
+        Plan a transfer workflow from source to target.
 
         Args:
             source_location_id: Source location ID
-            destination_location_id: Destination location ID
+            target_location_id: Target location ID
 
         Returns:
             Composite workflow definition to execute the transfer
@@ -494,7 +490,7 @@ class TransferPlanner:
         """
         # Validate that both locations exist
         source_location, dest_location = self.validate_locations_exist(
-            source_location_id, destination_location_id
+            source_location_id, target_location_id
         )
 
         # Check if transfers are allowed for both locations
@@ -504,16 +500,16 @@ class TransferPlanner:
             )
         if not dest_location.allow_transfers:
             raise ValueError(
-                f"Destination location '{dest_location.name}' ({destination_location_id}) does not allow transfers"
+                f"Target location '{dest_location.name}' ({target_location_id}) does not allow transfers"
             )
 
         # Find shortest transfer path
         transfer_path = self.find_shortest_transfer_path(
-            source_location_id, destination_location_id
+            source_location_id, target_location_id
         )
         if transfer_path is None:
             raise ValueError(
-                f"No transfer path exists between {source_location_id} and {destination_location_id}"
+                f"No transfer path exists between {source_location_id} and {target_location_id}"
             )
 
         # Create composite workflow

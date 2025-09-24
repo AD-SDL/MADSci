@@ -12,5 +12,5 @@ steps:
     action: transfer
     args:
       source: liquidhandler_1.deck_1
-      destination: liquidhandler_2.deck_1
+      target: liquidhandler_2.deck_1
     description: "Transfer resource from liquidhandler_1.deck_1 to liquidhandler_2.deck_1"

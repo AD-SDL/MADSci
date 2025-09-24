@@ -437,19 +437,19 @@ class LocationClient:
     def plan_transfer(
         self,
         source_location_id: str,
-        destination_location_id: str,
+        target_location_id: str,
         resource_id: Optional[str] = None,
         retry: Optional[bool] = None,
     ) -> dict[str, Any]:
         """
-        Plan a transfer from source to destination location.
+        Plan a transfer from source to target location.
 
         Parameters
         ----------
         source_location_id : str
             ID of the source location.
-        destination_location_id : str
-            ID of the destination location.
+        target_location_id : str
+            ID of the target location.
         resource_id : Optional[str]
             ID of the resource to transfer (for transfer_resource actions).
         retry : Optional[bool]
@@ -467,7 +467,7 @@ class LocationClient:
 
         params = {
             "source_location_id": source_location_id,
-            "destination_location_id": destination_location_id,
+            "target_location_id": target_location_id,
         }
         if resource_id is not None:
             params["resource_id"] = resource_id

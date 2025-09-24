@@ -70,7 +70,7 @@ def test_transfer_method_signatures(location_client):
     sig = inspect.signature(location_client.plan_transfer)
     params = list(sig.parameters.keys())
     assert "source_location_id" in params
-    assert "destination_location_id" in params
+    assert "target_location_id" in params
     assert "resource_id" in params
     assert "retry" in params
 

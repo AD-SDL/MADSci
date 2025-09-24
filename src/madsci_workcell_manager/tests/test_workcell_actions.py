@@ -154,7 +154,7 @@ class TestTransferAction:
             assert result.status == ActionStatus.SUCCEEDED
             assert "Transfer completed" in result.data["message"]
             assert result.data["source_location_id"] == "source_id"
-            assert result.data["destination_location_id"] == "dest_id"
+            assert result.data["target_location_id"] == "dest_id"
             assert result.data["workflow_id"] == "test_workflow_123"
 
     @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
@@ -455,7 +455,7 @@ class TestTransferResourceAction:
         mock_transfer_result.data = {
             "message": "Transfer completed",
             "source_location_id": "source_location_id",
-            "destination_location_id": "dest_location_id",
+            "target_location_id": "dest_location_id",
             "workflow_id": "workflow_123",
         }
         mock_find_and_transfer.return_value = mock_transfer_result
@@ -579,7 +579,7 @@ class TestFindResourceAndTransferHelper:
 
         assert result == mock_transfer_result
         mock_transfer.assert_called_once_with(
-            source="loc_2", destination="dest_loc", await_completion=True
+            source="loc_2", target="dest_loc", await_completion=True
         )
 
     @patch("madsci.workcell_manager.workcell_actions.LocationClient")

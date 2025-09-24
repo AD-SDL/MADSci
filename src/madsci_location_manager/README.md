@@ -26,7 +26,7 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - `POST /location/{location_id}/attach_resource` - Attach a resource to a location
 
 ### Transfer Planning
-- `POST /transfer/plan` - Plan a transfer workflow from source to destination location
+- `POST /transfer/plan` - Plan a transfer workflow from source to target location
 - `GET /transfer/graph` - Get the current transfer graph as adjacency list
 
 ### Resource Queries
@@ -79,7 +79,7 @@ resources = client.get_location_resources("location_id")
 
 # Transfer planning
 transfer_graph = client.get_transfer_graph()
-workflow = client.plan_transfer("source_id", "dest_id")
+workflow = client.plan_transfer("source_id", "target_id")
 
 # Node representations (any type can be stored)
 client.set_representations("location_id", "node_name", {"key": "value"})  # dict
@@ -118,7 +118,7 @@ Advanced transfer planning system that:
 The Location Manager supports sophisticated transfer planning:
 
 1. **Transfer Templates**: Define how transfers work between locations for specific nodes
-2. **Override Transfer Templates**: Specify custom transfer templates for specific sources, destinations, or (source, destination) pairs
+2. **Override Transfer Templates**: Specify custom transfer templates for specific sources, targets, or (source, target) pairs
 3. **Transfer Graph**: Dynamic graph built from location representations and transfer capabilities
 4. **Path Finding**: Dijkstra's algorithm finds optimal transfer paths
 5. **Workflow Generation**: Creates executable workflows for complex multi-step transfers
@@ -145,15 +145,15 @@ locations:
 
 ### Override Transfer Templates
 
-Lab operators often need specialized transfer behaviors for specific scenarios. The Location Manager supports override transfer templates that provide custom transfer logic for specific sources, destinations, or (source, destination) pairs.
+Lab operators often need specialized transfer behaviors for specific scenarios. The Location Manager supports override transfer templates that provide custom transfer logic for specific sources, targets, or (source, target) pairs.
 
 #### Override Precedence
 
 Override templates follow a strict precedence order:
 
-1. **Pair-specific overrides** (highest priority): Custom templates for specific (source, destination) combinations
+1. **Pair-specific overrides** (highest priority): Custom templates for specific (source, target) combinations
 2. **Source-specific overrides**: Custom templates when transferring FROM specific locations
-3. **Destination-specific overrides**: Custom templates when transferring TO specific locations
+3. **Target-specific overrides**: Custom templates when transferring TO specific locations
 4. **Default templates** (lowest priority): Standard templates used when no overrides apply
 
 #### Configuration
@@ -177,8 +177,8 @@ transfer_capabilities:
           action: heavy_transfer  # specialized action for heavy loads
           cost_weight: 0.8
 
-    # Destination-specific: special behavior when transferring TO these locations
-    destination_overrides:
+    # Target-specific: special behavior when transferring TO these locations
+    target_overrides:
       "01K5HDZZCF27YHD2WDGSXFPPKQ":  # location ID
         - node_name: robotarm_1
           action: gentle_transfer  # careful handling for sensitive equipment
@@ -187,7 +187,7 @@ transfer_capabilities:
     # Pair-specific: special behavior for specific transfer routes
     pair_overrides:
       liquidhandler_1.deck_1:  # source location
-        liquidhandler_2.deck_1:  # destination location
+        liquidhandler_2.deck_1:  # target location
           - node_name: liquidhandler_1
             action: direct_liquid_transfer  # bypass robot arm
             cost_weight: 0.5
@@ -214,16 +214,16 @@ Transfer planning enables automatic resource movement between locations using th
 
 ### Capacity-Aware Transfer Planning
 
-The Location Manager includes capacity-aware transfer planning that dynamically adjusts transfer costs based on destination resource utilization. This helps optimize transfer routes by avoiding congested or full resources.
+The Location Manager includes capacity-aware transfer planning that dynamically adjusts transfer costs based on target resource utilization. This helps optimize transfer routes by avoiding congested or full resources.
 
 #### How It Works
 
-When enabled, the transfer planner checks each destination location's attached resource for current quantity and capacity:
+When enabled, the transfer planner checks each target location's attached resource for current quantity and capacity:
 
-1. **Resource Check**: For each transfer edge, check if the destination location has an attached resource
+1. **Resource Check**: For each transfer edge, check if the target location has an attached resource
 2. **Utilization Calculation**: Calculate the utilization ratio (quantity/capacity) for consumable resources
 3. **Cost Adjustment**: Apply cost multipliers based on configurable utilization thresholds
-4. **Path Optimization**: The shortest path algorithm automatically favors less congested destinations
+4. **Path Optimization**: The shortest path algorithm automatically favors less congested targets
 
 #### Configuration
 
@@ -242,8 +242,8 @@ transfer_capabilities:
     enabled: true                      # Enable capacity-aware adjustments
     high_capacity_threshold: 0.8       # Apply multiplier above 80% utilization
     full_capacity_threshold: 1.0       # Apply higher multiplier at/above 100%
-    high_capacity_multiplier: 2.0      # 2x cost for high capacity destinations
-    full_capacity_multiplier: 10.0     # 10x cost for full/over capacity destinations
+    high_capacity_multiplier: 2.0      # 2x cost for high capacity targets
+    full_capacity_multiplier: 10.0     # 10x cost for full/over capacity targets
 ```
 
 #### Cost Multiplier Logic
@@ -275,8 +275,8 @@ With a 10-unit capacity resource:
 | `enabled` | `false` | Enable/disable capacity-aware cost adjustments |
 | `high_capacity_threshold` | `0.8` | Utilization ratio for high capacity penalty (0.0-1.0) |
 | `full_capacity_threshold` | `1.0` | Utilization ratio for full capacity penalty (0.0-1.0) |
-| `high_capacity_multiplier` | `2.0` | Cost multiplier for high capacity destinations (≥1.0) |
-| `full_capacity_multiplier` | `10.0` | Cost multiplier for full capacity destinations (≥1.0) |
+| `high_capacity_multiplier` | `2.0` | Cost multiplier for high capacity targets (≥1.0) |
+| `full_capacity_multiplier` | `10.0` | Cost multiplier for full capacity targets (≥1.0) |
 
 Capacity-aware transfer planning works seamlessly with existing transfer templates and override configurations, providing an additional layer of intelligent routing optimization.
 

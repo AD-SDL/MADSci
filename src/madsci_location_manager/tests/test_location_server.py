@@ -672,7 +672,7 @@ def test_shortest_transfer_path_direct(transfer_setup):
     assert path is not None
     assert len(path) == 1
     assert path[0].source_location_id == transfer_setup["locations"]["pickup"]
-    assert path[0].destination_location_id == transfer_setup["locations"]["processing"]
+    assert path[0].target_location_id == transfer_setup["locations"]["processing"]
     assert path[0].transfer_template.node_name == "robotarm_1"
 
 
@@ -716,9 +716,9 @@ def test_shortest_transfer_path_multi_hop(transfer_setup):
     assert path is not None
     assert len(path) == 2
     assert path[0].source_location_id == transfer_setup["locations"]["processing"]
-    assert path[0].destination_location_id == transfer_setup["locations"]["pickup"]
+    assert path[0].target_location_id == transfer_setup["locations"]["pickup"]
     assert path[1].source_location_id == transfer_setup["locations"]["pickup"]
-    assert path[1].destination_location_id == transfer_setup["locations"]["storage"]
+    assert path[1].target_location_id == transfer_setup["locations"]["storage"]
 
 
 def test_multi_leg_transfer_workflow_step_count(transfer_setup):
@@ -773,11 +773,11 @@ def test_multi_leg_transfer_workflow_node_ordering(transfer_setup):
 
     # Verify path structure matches expected route
     assert path[0].source_location_id == transfer_setup["locations"]["processing"]
-    assert path[0].destination_location_id == transfer_setup["locations"]["pickup"]
+    assert path[0].target_location_id == transfer_setup["locations"]["pickup"]
     assert path[0].transfer_template.node_name == "robotarm_1"
 
     assert path[1].source_location_id == transfer_setup["locations"]["pickup"]
-    assert path[1].destination_location_id == transfer_setup["locations"]["storage"]
+    assert path[1].target_location_id == transfer_setup["locations"]["storage"]
     assert path[1].transfer_template.node_name == "conveyor"
 
     # Generate workflow and verify step ordering
@@ -915,7 +915,7 @@ def test_plan_transfer_endpoint_direct(transfer_setup):
         "/transfer/plan",
         params={
             "source_location_id": transfer_setup["locations"]["pickup"],
-            "destination_location_id": transfer_setup["locations"]["processing"],
+            "target_location_id": transfer_setup["locations"]["processing"],
         },
     )
 
@@ -939,7 +939,7 @@ def test_plan_transfer_endpoint_multi_hop(transfer_setup):
         "/transfer/plan",
         params={
             "source_location_id": transfer_setup["locations"]["processing"],
-            "destination_location_id": transfer_setup["locations"]["storage"],
+            "target_location_id": transfer_setup["locations"]["storage"],
         },
     )
 
@@ -980,7 +980,7 @@ def test_plan_transfer_endpoint_no_path(transfer_setup):
         "/transfer/plan",
         params={
             "source_location_id": transfer_setup["locations"]["pickup"],
-            "destination_location_id": transfer_setup["locations"]["isolated"],
+            "target_location_id": transfer_setup["locations"]["isolated"],
         },
     )
 
@@ -998,7 +998,7 @@ def test_plan_transfer_endpoint_invalid_location(transfer_setup):
         "/transfer/plan",
         params={
             "source_location_id": "invalid_location_id",
-            "destination_location_id": transfer_setup["locations"]["processing"],
+            "target_location_id": transfer_setup["locations"]["processing"],
         },
     )
 
@@ -1014,14 +1014,14 @@ def test_plan_transfer_endpoint_invalid_location(transfer_setup):
         "/transfer/plan",
         params={
             "source_location_id": transfer_setup["locations"]["pickup"],
-            "destination_location_id": "invalid_location_id",
+            "target_location_id": "invalid_location_id",
         },
     )
 
     assert response.status_code == 404
     error_data = response.json()
     assert (
-        "Destination location" in error_data["detail"]
+        "Target location" in error_data["detail"]
         and "not found" in error_data["detail"]
     )
 
@@ -1447,7 +1447,7 @@ def test_non_transfer_location_plan_transfer_error(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": non_transfer_loc.location_id,
-            "destination_location_id": transfer_loc.location_id,
+            "target_location_id": transfer_loc.location_id,
         },
     )
     assert response.status_code == 400
@@ -1460,7 +1460,7 @@ def test_non_transfer_location_plan_transfer_error(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": transfer_loc.location_id,
-            "destination_location_id": non_transfer_loc.location_id,
+            "target_location_id": non_transfer_loc.location_id,
         },
     )
     assert response.status_code == 400
@@ -1572,7 +1572,7 @@ def override_transfer_setup(redis_server: Redis):
         source_overrides={
             "station_a": [special_robot_template],
         },
-        destination_overrides={
+        target_overrides={
             "station_c": [fast_conveyor_template],
         },
         pair_overrides={
@@ -1856,10 +1856,10 @@ def test_override_templates_with_mixed_keys(redis_server: Redis):
         source_overrides={
             "mixed_station_1": [override_template],  # Use name
         },
-        destination_overrides={
+        target_overrides={
             station_1.location_id: [
                 override_template
-            ],  # Use ID for station_1 as destination
+            ],  # Use ID for station_1 as target
         },
     )
 
@@ -1914,9 +1914,7 @@ def test_plan_transfer_with_overrides(override_transfer_setup):
         "/transfer/plan",
         params={
             "source_location_id": override_transfer_setup["locations"]["station_a"],
-            "destination_location_id": override_transfer_setup["locations"][
-                "station_b"
-            ],
+            "target_location_id": override_transfer_setup["locations"]["station_b"],
         },
     )
 
@@ -2601,7 +2599,7 @@ def test_transfer_template_with_additional_standard_args(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": location_a.location_id,
-            "destination_location_id": location_b.location_id,
+            "target_location_id": location_b.location_id,
         },
     )
 
@@ -2681,7 +2679,7 @@ def test_transfer_template_with_additional_location_args(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": location_a.location_id,
-            "destination_location_id": location_b.location_id,
+            "target_location_id": location_b.location_id,
         },
     )
 
@@ -2765,7 +2763,7 @@ def test_transfer_template_with_both_additional_args_types(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": location_x.location_id,
-            "destination_location_id": location_y.location_id,
+            "target_location_id": location_y.location_id,
         },
     )
 
@@ -2877,7 +2875,7 @@ def test_override_templates_with_additional_args(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": enhanced_source.location_id,
-            "destination_location_id": normal_destination.location_id,
+            "target_location_id": normal_destination.location_id,
         },
     )
 
@@ -2900,7 +2898,7 @@ def test_override_templates_with_additional_args(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": regular_source.location_id,
-            "destination_location_id": normal_destination.location_id,
+            "target_location_id": normal_destination.location_id,
         },
     )
 
@@ -2998,7 +2996,7 @@ def test_multi_step_transfer_with_additional_args(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": station_a.location_id,
-            "destination_location_id": station_c.location_id,
+            "target_location_id": station_c.location_id,
         },
     )
 
@@ -3079,7 +3077,7 @@ def test_empty_additional_args_default_behavior(redis_server: Redis):
         "/transfer/plan",
         params={
             "source_location_id": location_1.location_id,
-            "destination_location_id": location_2.location_id,
+            "target_location_id": location_2.location_id,
         },
     )
 

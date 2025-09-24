@@ -203,7 +203,7 @@ transfer_capabilities:
         cost_weight: 0.8
         additional_args: {}
         additional_location_args: {}
-    destination_overrides:
+    target_overrides:
       platereader_1.plate_carriage:
       - node_name: robotarm_1
         action: transfer

@@ -417,14 +417,14 @@ class LocationManager(
     def plan_transfer(
         self,
         source_location_id: str,
-        destination_location_id: str,
+        target_location_id: str,
     ) -> WorkflowDefinition:
         """
-        Plan a transfer workflow from source to destination.
+        Plan a transfer workflow from source to target.
 
         Args:
             source_location_id: Source location ID
-            destination_location_id: Destination location ID
+            target_location_id: Target location ID
 
         Returns:
             Composite workflow definition to execute the transfer
@@ -435,7 +435,7 @@ class LocationManager(
         with ownership_context():
             try:
                 return self.transfer_planner.plan_transfer(
-                    source_location_id, destination_location_id
+                    source_location_id, target_location_id
                 )
             except ValueError as e:
                 error_message = str(e)

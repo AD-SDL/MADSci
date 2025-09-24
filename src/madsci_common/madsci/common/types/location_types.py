@@ -81,7 +81,7 @@ class LocationDefinition(MadsciBaseModel):
     )
     allow_transfers: bool = Field(
         title="Allow Transfers",
-        description="Whether this location can be used as a source or destination in transfers. Non-transfer locations are excluded from transfer graph construction.",
+        description="Whether this location can be used as a source or target in transfers. Non-transfer locations are excluded from transfer graph construction.",
         default=True,
     )
 
@@ -128,7 +128,7 @@ class Location(MadsciBaseModel):
     )
     allow_transfers: bool = Field(
         title="Allow Transfers",
-        description="Whether this location can be used as a source or destination in transfers. Non-transfer locations are excluded from transfer graph construction.",
+        description="Whether this location can be used as a source or target in transfers. Non-transfer locations are excluded from transfer graph construction.",
         default=True,
     )
 
@@ -212,8 +212,8 @@ class TransferGraphEdge(MadsciBaseModel):
     source_location_id: str = Field(
         title="Source Location ID", description="ID of the source location"
     )
-    destination_location_id: str = Field(
-        title="Destination Location ID", description="ID of the destination location"
+    target_location_id: str = Field(
+        title="Target Location ID", description="ID of the target location"
     )
     transfer_template: TransferStepTemplate = Field(
         title="Transfer Template", description="Template for executing the transfer"
@@ -233,14 +233,14 @@ class TransferTemplateOverrides(MadsciBaseModel):
         description="Override templates for specific source locations. Key is location_name or location_id.",
         default=None,
     )
-    destination_overrides: Optional[dict[str, list[TransferStepTemplate]]] = Field(
-        title="Destination Location Overrides",
-        description="Override templates for specific destination locations. Key is location_name or location_id.",
+    target_overrides: Optional[dict[str, list[TransferStepTemplate]]] = Field(
+        title="Target Location Overrides",
+        description="Override templates for specific target locations. Key is location_name or location_id.",
         default=None,
     )
     pair_overrides: Optional[dict[str, dict[str, list[TransferStepTemplate]]]] = Field(
-        title="Source-Destination Pair Overrides",
-        description="Override templates for specific (source, destination) pairs. Outer key is source location_name or location_id, inner key is destination location_name or location_id.",
+        title="Source-Target Pair Overrides",
+        description="Override templates for specific (source, target) pairs. Outer key is source location_name or location_id, inner key is target location_name or location_id.",
         default=None,
     )
 
