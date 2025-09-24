@@ -23,7 +23,8 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - `GET /location/{location_id}` - Get a specific location by ID
 - `DELETE /location/{location_id}` - Delete a location
 - `POST /location/{location_id}/set_representation/{node_name}` - Set a node-specific representation for a location (accepts any JSON-serializable value)
-- `POST /location/{location_id}/attach_resource` - Attach a resource to a location
+- `POST /location/{location_id}/attach_resource` - Attach a container resource to a location
+- `DELETE /location/{location_id}/detach_resource` - Detach a container resource from a location
 
 ### Transfer Planning
 - `POST /transfer/plan` - Plan a transfer workflow from source to target location
@@ -123,6 +124,113 @@ The Location Manager supports sophisticated transfer planning:
 4. **Path Finding**: Dijkstra's algorithm finds optimal transfer paths
 5. **Workflow Generation**: Creates executable workflows for complex multi-step transfers
 6. **Non-Transfer Location Support**: Locations can be marked as non-transferable to exclude them from transfer operations
+
+### Transfer Templates
+
+Transfer templates define how resources can be moved between locations using specific laboratory equipment (nodes). Each template specifies the action to perform, which node to use, and various configuration parameters.
+
+#### Basic Transfer Template Configuration
+
+Transfer templates are configured in the `transfer_capabilities` section of your location manager definition:
+
+```yaml
+transfer_capabilities:
+  transfer_templates:
+    - node_name: "robotarm_1"                    # Node that performs the transfer
+      action: "transfer"                         # Action to execute on the node
+      source_argument_name: "source_location"   # Parameter name for source location
+      target_argument_name: "target_location"   # Parameter name for target location
+      cost_weight: 1.0                          # Cost weight for path finding (optional)
+      additional_args: {}                       # Extra static arguments (optional)
+      additional_location_args: {}              # Extra location arguments (optional)
+
+    - node_name: "conveyor_belt"
+      action: "move"
+      source_argument_name: "from_station"
+      target_argument_name: "to_station"
+      cost_weight: 0.5                          # Lower cost = preferred path
+```
+
+#### Template Fields
+
+- **`node_name`**: The name of the laboratory equipment/node that will perform the transfer
+- **`action`**: The specific action/method to call on that node
+- **`source_argument_name`**: Parameter name the node expects for the source location
+- **`target_argument_name`**: Parameter name the node expects for the target location
+- **`cost_weight`** (optional): Relative cost for path finding (default: 1.0). The transfer planning algorithm will use this weighting to determine the most efficient way to transfer a resource in the system. The transfer planner prioritizes lower weights over higher ones.
+- **`additional_args`** (optional): Static arguments to pass to the action
+- **`additional_location_args`** (optional): Additional location parameters to include
+
+#### Advanced Template Features
+
+**Static Arguments**: Add constant parameters to every transfer action:
+
+```yaml
+- node_name: "precision_arm"
+  action: "careful_transfer"
+  source_argument_name: "pickup_location"
+  target_argument_name: "dropoff_location"
+  additional_args:
+    grip_force: "gentle"
+    speed: "slow"
+    vibration_dampening: true
+```
+
+**Multiple Location Arguments**: Include additional locations in the transfer:
+
+```yaml
+- node_name: "dual_arm_robot"
+  action: "coordinated_transfer"
+  source_argument_name: "source"
+  target_argument_name: "target"
+  additional_location_args:
+    staging_area: "intermediate_platform"
+    tool_rack: "gripper_storage"
+```
+
+#### How Transfer Templates Work
+
+1. **Graph Building**: The system examines all locations and their representations
+2. **Template Matching**: For each location pair, it finds templates where both locations have representations for the template's `node_name`
+3. **Cost Calculation**: Multiple templates for the same pair are compared by cost weight
+4. **Path Finding**: Dijkstra's algorithm finds the lowest-cost path using these templates
+5. **Workflow Generation**: Selected templates become steps in the final transfer workflow
+
+#### Example: Multi-Node Laboratory
+
+```yaml
+# Define multiple transfer options for different equipment
+transfer_capabilities:
+  transfer_templates:
+    # Robot arm - precise but slow
+    - node_name: "kuka_robot"
+      action: "transfer_sample"
+      source_argument_name: "pickup_location"
+      target_argument_name: "dropoff_location"
+      cost_weight: 2.0
+      additional_args:
+        safety_check: true
+
+    # Conveyor belt - fast but limited paths
+    - node_name: "main_conveyor"
+      action: "belt_transfer"
+      source_argument_name: "origin"
+      target_argument_name: "destination"
+      cost_weight: 0.8
+      additional_args:
+        speed: "medium"
+
+    # Direct liquid transfer - specialized
+    - node_name: "liquid_handler"
+      action: "aspirate_dispense"
+      source_argument_name: "source_well"
+      target_argument_name: "target_well"
+      cost_weight: 0.3                        # Preferred when available
+      additional_location_args:
+        waste_location: "liquid_waste_container"
+```
+
+This configuration allows the system to automatically choose the best transfer method based on available equipment at each location and the relative costs of different approaches.
 
 ### Non-Transfer Locations
 
