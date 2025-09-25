@@ -40,7 +40,7 @@
 | src/madsci\_common/madsci/common/types/resource\_types/resource\_enums.py                     |       37 |        4 |     89% |38, 41, 45, 50 |
 | src/madsci\_common/madsci/common/types/resource\_types/server\_types.py                       |      101 |       29 |     71% |30, 32, 34, 36, 38, 40, 42, 44, 53, 55, 57, 59, 61, 63, 72, 74, 91, 107, 109, 111, 113, 115, 117, 126, 128, 144, 146, 155, 157 |
 | src/madsci\_common/madsci/common/types/step\_types.py                                         |       46 |        3 |     93% |118, 159, 161 |
-| src/madsci\_common/madsci/common/types/workcell\_types.py                                     |       71 |       10 |     86% |63-65, 123, 125, 127, 130-133 |
+| src/madsci\_common/madsci/common/types/workcell\_types.py                                     |       67 |        7 |     90% |111, 113, 115, 118-121 |
 | src/madsci\_common/madsci/common/types/workflow\_types.py                                     |      309 |       82 |     73% |7, 11-18, 43, 45, 47, 49, 51, 53, 55, 113, 123, 128, 140, 142, 144, 153, 155, 157, 164, 167, 178, 183, 192-206, 214, 314, 318, 344, 372, 382, 384, 393, 395, 397, 399, 401, 403, 405, 407, 409, 411, 413, 415, 417, 419, 421, 425-428, 432-435, 439-444, 448-456, 463, 473 |
 | src/madsci\_common/madsci/common/utils.py                                                     |      192 |       52 |     73% |25, 77-78, 88-89, 95, 128-133, 138-140, 262-266, 276-279, 296-339, 359, 365, 371, 373, 375, 428-433, 442 |
 | src/madsci\_common/madsci/common/validators.py                                                |       27 |        0 |    100% |           |
@@ -80,7 +80,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                    |      250 |       56 |     78% |71-72, 114-115, 162, 174-178, 191, 213-214, 226, 234, 244-247, 255-259, 290, 305, 319, 333, 339, 368-370, 375-380, 405-407, 444-446, 461, 468-472, 504-509, 516-517 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                     |        9 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                     |      198 |       79 |     60% |40-41, 48-58, 72-77, 95, 113, 131, 144, 160, 165-176, 251, 258-259, 276, 287, 305-311, 319, 336-348, 364-386, 398, 401-413, 424-431, 438, 443-446, 452-453 |
-|                                                                                     **TOTAL** | **9365** | **2667** | **72%** |           |
+|                                                                                     **TOTAL** | **9361** | **2664** | **72%** |           |
 
 
 ## Setup coverage badge
