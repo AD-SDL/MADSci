@@ -3,7 +3,6 @@
 from typing import Annotated, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -81,10 +80,8 @@ class TestNode(RestNode):
             f"Test action with param {test_param}."
         )
         if result:
-            return ActionSucceeded()
-        return ActionFailed(
-            errors=f"`run_command` returned '{result}'. Expected 'True'."
-        )
+            return None
+        raise ValueError(f"`run_command` returned '{result}'. Expected 'True'.")
 
     @action(name="test_fail", description="A test action that fails.")
     def test_action_fail(self, test_param: int) -> bool:
@@ -93,10 +90,8 @@ class TestNode(RestNode):
             f"Test action with param {test_param}.", fail=True
         )
         if result:
-            return ActionSucceeded()
-        return ActionFailed(
-            errors=f"`run_command` returned '{result}'. Expected 'True'."
-        )
+            return None
+        raise ValueError(f"`run_command` returned '{result}'. Expected 'True'.")
 
     def pause(self) -> None:
         """Pause the node."""
@@ -141,13 +136,13 @@ class TestNode(RestNode):
     @action
     def test_optional_param_action(
         self, test_param: int, optional_param: Optional[str] = ""
-    ) -> bool:
+    ) -> None:
         """A test action with an optional parameter."""
         result = self.test_interface.run_command(
             f"Test action with param {test_param}."
         )
         if not result:
-            return ActionFailed(
+            raise ValueError(
                 errors=f"`run_command` returned '{result}'. Expected 'True'."
             )
         if optional_param:
@@ -155,10 +150,8 @@ class TestNode(RestNode):
                 f"Test action with optional param {optional_param}."
             )
         if result:
-            return ActionSucceeded()
-        return ActionFailed(
-            errors=f"`run_command` returned '{result}'. Expected 'True'."
-        )
+            return
+        raise ValueError(errors=f"`run_command` returned '{result}'. Expected 'True'.")
 
     @action
     def test_annotation_action(
@@ -166,12 +159,11 @@ class TestNode(RestNode):
         test_param: Annotated[int, "Description"] = 1,
         test_param_2: Optional[Annotated[int, "Description 2"]] = 2,
         test_param_3: Annotated[Optional[int], "Description 3"] = 3,
-    ) -> ActionResult:
+    ) -> None:
         """A no-op action to test argument parsing"""
         self.logger.log(
             f"Test annotation action with params {test_param}, {test_param_2}, {test_param_3}"
         )
-        return ActionSucceeded()
 
 
 if __name__ == "__main__":
