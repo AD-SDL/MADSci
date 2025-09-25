@@ -38,14 +38,11 @@ actions:
     locations: {}
     files: {}
     results:
-      command:
-        result_label: command
+      data:
+        result_label: data
         description: null
         result_type: json
-      log_file:
-        result_label: log_file
-        description: null
-        result_type: file
+        data_type: str
     blocking: false
     asynchronous: true
   run_protocol:

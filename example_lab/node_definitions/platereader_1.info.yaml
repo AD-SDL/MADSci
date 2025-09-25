@@ -35,6 +35,7 @@ actions:
         result_label: data
         description: null
         result_type: json
+        data_type: int
     blocking: false
     asynchronous: true
   create_plate_file:

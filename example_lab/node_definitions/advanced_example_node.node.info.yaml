@@ -44,6 +44,7 @@ actions:
         result_label: data
         description: null
         result_type: json
+        data_type: int
     blocking: false
     asynchronous: true
   return_dict:
@@ -57,6 +58,7 @@ actions:
         result_label: data
         description: null
         result_type: json
+        data_type: dict
     blocking: false
     asynchronous: true
   return_file:
@@ -83,6 +85,7 @@ actions:
         result_label: data
         description: null
         result_type: json
+        data_type: int
       file:
         result_label: file
         description: null
@@ -100,10 +103,12 @@ actions:
         result_label: example_value_1
         description: null
         result_type: json
+        data_type: int
       example_value_2:
         result_label: example_value_2
         description: null
         result_type: json
+        data_type: int
     blocking: false
     asynchronous: true
   return_labeled_file_values:
@@ -134,10 +139,12 @@ actions:
         result_label: example_value_1
         description: null
         result_type: json
+        data_type: int
       example_value_2:
         result_label: example_value_2
         description: null
         result_type: json
+        data_type: int
       log_file_1:
         result_label: log_file_1
         description: null

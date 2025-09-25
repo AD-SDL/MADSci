@@ -210,6 +210,7 @@ class Engine:
                 )
                 action_id = request.action_id
                 self.add_pending_action(step, action_id)
+                self.logger.log_info(f"Added Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}")
                 try:
                     response = client.send_action(request, await_result=False)
                 except Exception as e:
@@ -221,6 +222,7 @@ class Engine:
                     else:
                         response.errors.append(Error.from_exception(e))
                 finally:
+                    self.logger.log_info(f"Removed Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}")
                     self.remove_pending_action(step)
                 response = self.handle_response(wf, step, response)
                 action_id = response.action_id
@@ -360,6 +362,7 @@ class Engine:
             self.state_handler.set_active_workflow(wf)
 
             if wf.status.terminal:
+                self.logger.log_info(str(wf))
                 self._log_completion_event(wf)
 
     def _feed_data_forward(self, step: Step, wf: Workflow) -> Workflow:
@@ -417,7 +420,7 @@ class Engine:
 
             self.logger.log_info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {event_data['status']}, Author: {event_data['workflow_definition_metadata']['author'] or 'Unknown'}, "
+                f"Status: {event_data['status']}, Author: {event_data['definition_metadata']['author'] or 'Unknown'}, "
                 f"{duration_text}"
             )
         except Exception as e:
@@ -498,10 +501,7 @@ class Engine:
                         datapoints[data_key] = datapoint
             else:
                 json_data = response.json_data
-                if step.key:
-                    label = wf.workflow_id + "_" + step.key
-                else: 
-                    label = wf.workflow_id + "_step_" + str(wf.status.current_step_index)
+                label = "json_data"
                 datapoint = ValueDataPoint(
                         label=label,
                         ownership_info=ownership_info,
@@ -529,10 +529,7 @@ class Engine:
 
                     datapoints[file_key] = datapoint
             else:
-                if step.key:
-                    label = wf.workflow_id + "_" + step.key
-                else: 
-                    label = wf.workflow_id + "_step_" + str(wf.status.current_step_index)
+                label = "file"
                 datapoint = FileDataPoint(
                     label=label,
                     ownership_info=ownership_info,

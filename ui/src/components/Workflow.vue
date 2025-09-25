@@ -19,8 +19,8 @@
         <div v-if="!(value.end_time == '') && !(value.end_time == null)"><b>End Time</b>: {{ value.end_time }}</div>
         <div v-if="!(value.result == '') && !(value.result == null)"><b>Status</b>: {{
           value.result.status }} <br>
-          <div v-if="!(value.result.data == null)"> <b>Data:</b><br>
-            <v-data-table :headers="data_headers" :items="Object.values(test[value.step_id])">
+          <div v-if="!(Object.values(value.result.datapoints).length == 0)"> <b>Datapoints:</b><br>
+            <v-data-table :headers="data_headers" :items="Object.values(value.result.datapoints)">
               <template v-slot:item="{ item }: { item: any }">
                 <tr>
                   <td>{{ item.label }}</td>
@@ -60,17 +60,7 @@ const data_headers = [
 
 
 ]
-props.steps.forEach((step: any) => {
-  console.log(step); test.value[step.step_id] = {}; if (step.result && step.result.data) {
-    Object.keys(step.result.data).forEach(async (key: string) => {
 
-      let val = await ((await fetch(urls.value["data_server_url"].concat("datapoint/").concat(step.result.data[key]))).json())
-      test.value[step.step_id][val.datapoint_id] = val;
-      console.log(test.value)
-    })
-
-  }
-});
 
 const forceFileDownload = (val: any, title: any) => {
   console.log(title)

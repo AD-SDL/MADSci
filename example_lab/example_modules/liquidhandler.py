@@ -70,17 +70,16 @@ class LiquidHandlerNode(RestNode):
             }
     
     @action
-    def run_command(self, command: str) -> tuple[RunCommandJSONData, RunCommandFileData]:
+    def run_command(self, command: str) -> str:
         """Run a command on the liquid handler. Shows returning both JSON and file data."""
         self.liquid_handler.run_command(command)
-        return RunCommandJSONData(command=command), RunCommandFileData(log_file=Path("/tmp/fake_log.txt"))
+        return command
     @action
     def run_protocol(self, protocol: Path) -> Path:
         """Run a protocol on the liquid handler"""
         self.logger.log(protocol)
         self.liquid_handler.run_command("run_protocol")
         return protocol
-   
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the liquid handler"""
