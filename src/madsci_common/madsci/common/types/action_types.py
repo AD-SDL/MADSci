@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Any, Literal, Optional, Union
 
-from madsci.common.types.base_types import Error, MadsciBaseModel, PathLike
+from madsci.common.types.base_types import Error, MadsciBaseModel
 from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.utils import localnow, new_ulid_str
 from pydantic import Field, TypeAdapter
@@ -65,7 +65,7 @@ class ActionRequest(MadsciBaseModel):
         default_factory=dict,
     )
     """Arguments for the action"""
-    files: dict[str, PathLike] = Field(
+    files: dict[str, Path] = Field(
         title="Action Files",
         description="Files sent along with the action.",
         default_factory=dict,
@@ -74,9 +74,9 @@ class ActionRequest(MadsciBaseModel):
 
     def failed(
         self,
-        errors: Error | list[Error] | str = [],
+        errors: Union[Error, list[Error], str] = [],
         data: dict[str, Any] = {},
-        files: dict[str, PathLike] = {},
+        files: dict[str, Path] = {},
     ) -> ActionFailed:
         """Create an ActionFailed response"""
         # * Convert errors to a list of errors if they are a single error or a string
@@ -93,9 +93,9 @@ class ActionRequest(MadsciBaseModel):
 
     def succeeded(
         self,
-        json_data: Json | ActionJSON | None = None,
-        files: PathLike | ActionFiles | None = None,
-        errors: Error | list[Error] | str = [],
+        json_data: Optional[Union[Json, ActionJSON]] = None,
+        files: Optional[Union[Path, ActionFiles]] = None,
+        errors: Union[Error, list[Error], str] = [],
     ) -> ActionSucceeded:
         """Create an ActionSucceeded response"""
         return ActionSucceeded(
@@ -107,9 +107,9 @@ class ActionRequest(MadsciBaseModel):
 
     def running(
         self,
-        json_data: Json | ActionJSON | None = None,
-        files: PathLike | ActionFiles | None = None,
-        errors: Error | list[Error] | str = [],
+        json_data: Optional[Union[Json, ActionJSON]] = None,
+        files: Optional[Union[Path, ActionFiles]] = None,
+        errors: Union[Error, list[Error], str] = [],
     ) -> ActionRunning:
         """Create an ActionRunning response"""
         return ActionRunning(
@@ -121,9 +121,9 @@ class ActionRequest(MadsciBaseModel):
 
     def not_ready(
         self,
-        errors: Error | list[Error] | str = [],
-        json_data: Json | ActionJSON | None = None,
-        files: PathLike | ActionFiles | None = None,
+        errors: Union[Error, list[Error], str] = [],
+        json_data: Optional[Union[Json, ActionJSON]] = None,
+        files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionNotReady:
         """Create an ActionNotReady response"""
         return ActionNotReady(
@@ -135,9 +135,9 @@ class ActionRequest(MadsciBaseModel):
 
     def cancelled(
         self,
-        errors: Error | list[Error] | str = [],
-        json_data: Json | ActionJSON | None = None,
-        files: PathLike | ActionFiles | None = None,
+        errors: Union[Error, list[Error], str] = [],
+        json_data: Optional[Union[Json, ActionJSON]] = None,
+        files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionCancelled:
         """Create an ActionCancelled response"""
         return ActionCancelled(
@@ -149,9 +149,9 @@ class ActionRequest(MadsciBaseModel):
 
     def paused(
         self,
-        errors: Error | list[Error] | str = [],
-        json_data: Json | ActionJSON | None = None,
-        files: PathLike | ActionFiles | None = None,
+        errors: Union[Error, list[Error], str] = [],
+        json_data: Optional[Union[Json, ActionJSON]] = None,
+        files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionResult:
         """Create an ActionResult response"""
         return ActionResult(
@@ -164,9 +164,9 @@ class ActionRequest(MadsciBaseModel):
 
     def not_started(
         self,
-        errors: Error | list[Error] | str = [],
-        json_data: Json | ActionJSON | None = None,
-        files: PathLike | ActionFiles | None = None,
+        errors: Union[Error, list[Error], str] = [],
+        json_data: Optional[Union[Json, ActionJSON]] = None,
+        files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionResult:
         """Create an ActionResult response"""
         return ActionResult(
@@ -179,9 +179,9 @@ class ActionRequest(MadsciBaseModel):
 
     def unknown(
         self,
-        errors: Error | list[Error] | str = [],
-        json_data: Json | ActionJSON | None = None,
-        files: PathLike | ActionFiles | None = None,
+        errors: Union[Error, list[Error], str] = [],
+        json_data: Optional[Union[Json, ActionJSON]] = None,
+        files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionResult:
         """Create an ActionResult response"""
         return ActionResult(
@@ -220,11 +220,11 @@ class ActionFiles(MadsciBaseModel, extra="allow"):
 
     @model_validator(mode="after")
     @classmethod
-    def ensure_files_are_pathlike(cls: Any, v: Any) -> Any:
-        """Ensure that the files are PathLike"""
+    def ensure_files_are_path(cls: Any, v: Any) -> Any:
+        """Ensure that the files are Path"""
         for key, value in v.__dict__.items():
             if not isinstance(value, Path):
-                raise ValueError(f"File '{key}' is not a valid PathLike: {value}")
+                raise ValueError(f"File '{key}' is not a valid Path: {value}")
         return v
 
 
@@ -258,7 +258,7 @@ class ActionResult(MadsciBaseModel):
         description="An error message(s) if the step failed.",
         default_factory=list,
     )
-    json_data: Json | ActionJSON | None = Field(
+    json_data: Optional[Union[Json, ActionJSON]] = Field(
         title="Step Data",
         description="The data generated by the step.",
         default=None,
