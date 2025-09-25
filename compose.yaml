@@ -50,6 +50,7 @@ services:
       - 6379:6379
     volumes:
       - ${REPO_PATH:-.}/.madsci/redis:/data
+    command: redis-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
   postgres:
     container_name: postgres
     image: postgres:17
