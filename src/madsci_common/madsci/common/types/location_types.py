@@ -40,6 +40,11 @@ class LocationArgument(MadsciBaseModel):
         """Return the representation of the location."""
         return self.representation
 
+    @location.setter
+    def location_setter(self, value: Any) -> None:
+        """Set the representation of the location."""
+        self.representation = value
+
     @property
     def name(self) -> Optional[str]:
         """Return the name of the location, if available."""
