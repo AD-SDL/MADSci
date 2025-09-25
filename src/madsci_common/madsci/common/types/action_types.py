@@ -1,29 +1,27 @@
 """Types for MADSci Actions."""
+
 from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional, TypeAlias, Union, List, Dict
-from typing_extensions import Annotated, Self
-from pydantic.types import Discriminator, Tag
-
+from typing import Any, Literal, Union
 
 from madsci.common.types.base_types import Error, MadsciBaseModel, PathLike
 from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.utils import localnow, new_ulid_str
-from pydantic import Field
+from pydantic import Field, TypeAdapter
 from pydantic.functional_validators import field_validator, model_validator
-from typing_extensions import TypeAliasType
-
-from pydantic import TypeAdapter
-from ulid import ULID
+from pydantic.types import Discriminator, Tag
+from typing_extensions import Annotated, TypeAliasType
 
 Json = TypeAliasType(
-    'Json',
-    'Union[dict[str, Json], list[Json], str, int, float, bool, None]',  
+    "Json",
+    "Union[dict[str, Json], list[Json], str, int, float, bool, None]",
 )
 
 ta = TypeAdapter(Json)
+
 
 class ActionStatus(str, Enum):
     """Status for a step of a workflow"""
@@ -61,7 +59,7 @@ class ActionRequest(MadsciBaseModel):
         description="The name of the action to perform.",
     )
     """Name of the action to perform"""
-    args: Optional[dict[str, Any]] = Field(
+    args: dict[str, Any] | None = Field(
         title="Action Arguments",
         description="Arguments for the action.",
         default_factory=dict,
@@ -76,10 +74,10 @@ class ActionRequest(MadsciBaseModel):
 
     def failed(
         self,
-        errors: Union[Error, list[Error], str] = [],
+        errors: Error | list[Error] | str = [],
         data: dict[str, Any] = {},
         files: dict[str, PathLike] = {},
-    ) -> "ActionFailed":
+    ) -> ActionFailed:
         """Create an ActionFailed response"""
         # * Convert errors to a list of errors if they are a single error or a string
         if isinstance(errors, str):
@@ -95,10 +93,10 @@ class ActionRequest(MadsciBaseModel):
 
     def succeeded(
         self,
-        json_data: Optional[Json | ActionJSON] = None,
-        files: Optional[PathLike | ActionFiles] = None,
-        errors: Union[Error, list[Error], str] = [],
-    ) -> "ActionSucceeded":
+        json_data: Json | ActionJSON | None = None,
+        files: PathLike | ActionFiles | None = None,
+        errors: Error | list[Error] | str = [],
+    ) -> ActionSucceeded:
         """Create an ActionSucceeded response"""
         return ActionSucceeded(
             action_id=self.action_id,
@@ -109,10 +107,10 @@ class ActionRequest(MadsciBaseModel):
 
     def running(
         self,
-        json_data: Optional[Json | ActionJSON] = None,
-        files: Optional[PathLike | ActionFiles] = None,
-        errors: Union[Error, list[Error], str] = [],
-    ) -> "ActionRunning":
+        json_data: Json | ActionJSON | None = None,
+        files: PathLike | ActionFiles | None = None,
+        errors: Error | list[Error] | str = [],
+    ) -> ActionRunning:
         """Create an ActionRunning response"""
         return ActionRunning(
             action_id=self.action_id,
@@ -123,10 +121,10 @@ class ActionRequest(MadsciBaseModel):
 
     def not_ready(
         self,
-        errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Json | ActionJSON] = None,
-        files: Optional[PathLike | ActionFiles] = None
-    ) -> "ActionNotReady":
+        errors: Error | list[Error] | str = [],
+        json_data: Json | ActionJSON | None = None,
+        files: PathLike | ActionFiles | None = None,
+    ) -> ActionNotReady:
         """Create an ActionNotReady response"""
         return ActionNotReady(
             action_id=self.action_id,
@@ -137,10 +135,10 @@ class ActionRequest(MadsciBaseModel):
 
     def cancelled(
         self,
-        errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Json | ActionJSON] = None,
-        files: Optional[PathLike | ActionFiles] = None
-    ) -> "ActionCancelled":
+        errors: Error | list[Error] | str = [],
+        json_data: Json | ActionJSON | None = None,
+        files: PathLike | ActionFiles | None = None,
+    ) -> ActionCancelled:
         """Create an ActionCancelled response"""
         return ActionCancelled(
             action_id=self.action_id,
@@ -151,10 +149,10 @@ class ActionRequest(MadsciBaseModel):
 
     def paused(
         self,
-        errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Json | ActionJSON] = None,
-        files: Optional[PathLike | ActionFiles] = None
-    ) -> "ActionResult":
+        errors: Error | list[Error] | str = [],
+        json_data: Json | ActionJSON | None = None,
+        files: PathLike | ActionFiles | None = None,
+    ) -> ActionResult:
         """Create an ActionResult response"""
         return ActionResult(
             action_id=self.action_id,
@@ -166,10 +164,10 @@ class ActionRequest(MadsciBaseModel):
 
     def not_started(
         self,
-        errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Json | ActionJSON] = None,
-        files: Optional[PathLike | ActionFiles] = None
-    ) -> "ActionResult":
+        errors: Error | list[Error] | str = [],
+        json_data: Json | ActionJSON | None = None,
+        files: PathLike | ActionFiles | None = None,
+    ) -> ActionResult:
         """Create an ActionResult response"""
         return ActionResult(
             action_id=self.action_id,
@@ -181,53 +179,61 @@ class ActionRequest(MadsciBaseModel):
 
     def unknown(
         self,
-        errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Json | ActionJSON] = None,
-        files: Optional[PathLike | ActionFiles] = None
-    ) -> "ActionResult":
+        errors: Error | list[Error] | str = [],
+        json_data: Json | ActionJSON | None = None,
+        files: PathLike | ActionFiles | None = None,
+    ) -> ActionResult:
         """Create an ActionResult response"""
         return ActionResult(
             action_id=self.action_id,
             status=ActionStatus.UNKNOWN,
             errors=errors,
             json_data=json_data,
-            files=files
+            files=files,
         )
+
 
 class ActionJSON(MadsciBaseModel, extra="allow"):
     """Data returned from an action as JSON"""
+
     type: Literal["json"] = Field(
         title="Data Type",
         description="The type of the data.",
         default="json",
     )
-@model_validator(mode="after")
-def ensure_json_serializable(cls, v: Any) -> Any:
-    """Ensure that the data is JSON serializable"""
-    for field_name, field_value in v.__dict__.items():
-        if field_name == "type":
-            if field_value != "json":
-                raise ValueError(f"Field 'type' must be 'json', not '{field_value}'")
-        try:
-            ta.validate_python(field_value)
-        except Exception as e:
-            raise ValueError(f"Field '{field_name}' is not JSON serializable: {e}")
 
-   
+    @model_validator(mode="after")
+    @classmethod
+    def ensure_json_serializable(cls: Any, v: Any) -> Any:
+        """Ensure that the data is JSON serializable"""
+        for field_name, field_value in v.__dict__.items():
+            try:
+                ta.validate_python(field_value)
+            except Exception as e:
+                raise ValueError(
+                    f"Field '{field_name}' is not JSON serializable: {e}"
+                ) from None
+
+
 class ActionFiles(MadsciBaseModel, extra="allow"):
     """Files returned from an action"""
-@model_validator(mode="after")
-def ensure_files_are_pathlike(cls, v: Any) -> Any:
-    """Ensure that the files are PathLike"""
-    for key, value in v.__dict__.items():
-        if not isinstance(value, Path):
-            raise ValueError(f"File '{key}' is not a valid PathLike: {value}")
-    return v
+
+    @model_validator(mode="after")
+    @classmethod
+    def ensure_files_are_pathlike(cls: Any, v: Any) -> Any:
+        """Ensure that the files are PathLike"""
+        for key, value in v.__dict__.items():
+            if not isinstance(value, Path):
+                raise ValueError(f"File '{key}' is not a valid PathLike: {value}")
+        return v
+
 
 class ActionDatapoints(MadsciBaseModel, extra="allow"):
     """Datapoints returned from an action"""
+
     @model_validator(mode="after")
-    def ensure_datapoints_are_datapoint(cls, v: Any) -> Any:
+    @classmethod
+    def ensure_datapoints_are_datapoint(cls: Any, v: Any) -> Any:
         """Ensure that the datapoints are DataPoints"""
         for key, value in v.__dict__.items():
             if not isinstance(value, DataPoint):
@@ -252,22 +258,22 @@ class ActionResult(MadsciBaseModel):
         description="An error message(s) if the step failed.",
         default_factory=list,
     )
-    json_data: Optional[Json | ActionJSON] = Field(
+    json_data: Json | ActionJSON | None = Field(
         title="Step Data",
         description="The data generated by the step.",
         default=None,
     )
-    files: Optional[Path | ActionFiles] = Field(
+    files: Path | ActionFiles | None = Field(
         title="Step Files",
         description="A dictionary of files produced by the step.",
         default=None,
     )
-    datapoints: Optional[ActionDatapoints] = Field(
+    datapoints: ActionDatapoints | None = Field(
         title="Data Points",
         description="A dictionary of datapoints sent to the data manager by the step.",
         default=None,
     )
-    history_created_at: Optional[datetime] = Field(
+    history_created_at: datetime | None = Field(
         title="History Created At",
         description="The time the history was updated.",
         default_factory=localnow,
@@ -275,7 +281,7 @@ class ActionResult(MadsciBaseModel):
 
     @field_validator("errors", mode="before")
     @classmethod
-    def ensure_list_of_errors(cls, v: Any) -> Any:
+    def ensure_list_of_errors(cls: Any, v: Any) -> Any:
         """Ensure that errors is a list of MADSci Errors"""
         if isinstance(v, str):
             return [Error(message=v)]
@@ -361,32 +367,24 @@ class ActionDefinition(MadsciBaseModel):
             return ""
         return v
 
-    args: Union[
-        dict[str, "ArgumentDefinition"],
-        list["ArgumentDefinition"],
-    ] = Field(
+    args: dict[str, ArgumentDefinition] | list[ArgumentDefinition] = Field(
         title="Action Arguments",
         description="The arguments of the action.",
         default_factory=dict,
     )
-    locations: Union[
-        dict[str, "LocationArgumentDefinition"], list["LocationArgumentDefinition"]
-    ] = Field(
+    locations: (
+        dict[str, LocationArgumentDefinition] | list[LocationArgumentDefinition]
+    ) = Field(
         title="Action Location Arguments",
         description="The location arguments of the action.",
         default_factory=dict,
     )
-    files: Union[
-        dict[str, "FileArgumentDefinition"], list["FileArgumentDefinition"]
-    ] = Field(
+    files: dict[str, FileArgumentDefinition] | list[FileArgumentDefinition] = Field(
         title="Action File Arguments",
         description="The file arguments of the action.",
         default_factory=dict,
     )
-    results: Union[
-        dict[str, "ActionResultDefinitions"],
-        list["ActionResultDefinitions"],
-    ] = Field(
+    results: dict[str, ActionResultDefinitions] | list[ActionResultDefinitions] = Field(
         title="Action Results",
         description="The results of the action.",
         default_factory=dict,
@@ -404,7 +402,7 @@ class ActionDefinition(MadsciBaseModel):
 
     @field_validator("args", mode="after")
     @classmethod
-    def ensure_args_are_dict(cls, v: Any) -> Any:
+    def ensure_args_are_dict(cls: Any, v: Any) -> Any:
         """Ensure that the args are a dictionary"""
         if isinstance(v, list):
             return {arg.name: arg for arg in v}
@@ -412,7 +410,7 @@ class ActionDefinition(MadsciBaseModel):
 
     @field_validator("files", mode="after")
     @classmethod
-    def ensure_files_are_dict(cls, v: Any) -> Any:
+    def ensure_files_are_dict(cls: Any, v: Any) -> Any:
         """Ensure that the files are a dictionary"""
         if isinstance(v, list):
             return {file.name: file for file in v}
@@ -420,7 +418,7 @@ class ActionDefinition(MadsciBaseModel):
 
     @field_validator("locations", mode="after")
     @classmethod
-    def ensure_locations_are_dict(cls, v: Any) -> Any:
+    def ensure_locations_are_dict(cls: Any, v: Any) -> Any:
         """Ensure that the locations are a dictionary"""
         if isinstance(v, list):
             return {location.name: location for location in v}
@@ -428,7 +426,7 @@ class ActionDefinition(MadsciBaseModel):
 
     @field_validator("results", mode="after")
     @classmethod
-    def ensure_results_are_dict(cls, v: Any) -> Any:
+    def ensure_results_are_dict(cls: Any, v: Any) -> Any:
         """Ensure that the results are a dictionary"""
         if isinstance(v, list):
             return {result.result_label: result for result in v}
@@ -436,7 +434,7 @@ class ActionDefinition(MadsciBaseModel):
 
     @model_validator(mode="after")
     @classmethod
-    def ensure_name_uniqueness(cls, v: Any) -> Any:
+    def ensure_name_uniqueness(cls: Any, v: Any) -> Any:
         """Ensure that the names of the arguments and files are unique"""
         names = set()
         for arg in v.args.values():
@@ -472,7 +470,7 @@ class ArgumentDefinition(MadsciBaseModel):
         title="Argument Required",
         description="Whether the argument is required.",
     )
-    default: Optional[Any] = Field(
+    default: Any | None = Field(
         title="Argument Default",
         description="The default value of the argument.",
         default=None,
@@ -506,7 +504,7 @@ class ActionResultDefinition(MadsciBaseModel):
         title="Result Label",
         description="The label of the result.",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         title="Result Description",
         description="A description of the result.",
         default=None,
@@ -545,11 +543,12 @@ class JSONActionResultDefinition(ActionResultDefinition):
         description="The type of the result.",
         default="json",
     )
-    data_type: Optional[str] = Field(
+    data_type: str | None = Field(
         title="Data Type",
         description="The type of the data.",
         default=None,
     )
+
 
 ActionResultDefinitions = Annotated[
     Union[

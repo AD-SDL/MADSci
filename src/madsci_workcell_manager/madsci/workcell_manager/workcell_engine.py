@@ -16,7 +16,14 @@ from madsci.client.location_client import LocationClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.ownership import ownership_context
-from madsci.common.types.action_types import ActionDatapoints, ActionFiles, ActionJSON, ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.action_types import (
+    ActionDatapoints,
+    ActionFiles,
+    ActionJSON,
+    ActionRequest,
+    ActionResult,
+    ActionStatus,
+)
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import (
     DataPoint,
@@ -207,7 +214,9 @@ class Engine:
                 )
                 action_id = request.action_id
                 self.add_pending_action(step, action_id)
-                self.logger.log_info(f"Added Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}")
+                self.logger.log_info(
+                    f"Added Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}"
+                )
                 try:
                     response = client.send_action(request, await_result=False)
                 except Exception as e:
@@ -219,7 +228,9 @@ class Engine:
                     else:
                         response.errors.append(Error.from_exception(e))
                 finally:
-                    self.logger.log_info(f"Removed Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}")
+                    self.logger.log_info(
+                        f"Removed Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}"
+                    )
                     self.remove_pending_action(step)
                 response = self.handle_response(wf, step, response)
                 action_id = response.action_id
@@ -363,18 +374,19 @@ class Engine:
     def _feed_data_forward(self, step: Step, wf: Workflow) -> Workflow:
         """Feed data forward from the completed step to the workflow parameters"""
         for param in wf.parameters.feed_forward:
-            if (
-                (isinstance(param.step, str) and param.step == step.key)
-                or (
-                    isinstance(param.step, int)
-                    and wf.status.current_step_index == param.step
-                )
+            if (isinstance(param.step, str) and param.step == step.key) or (
+                isinstance(param.step, int)
+                and wf.status.current_step_index == param.step
             ):
                 if step.result.datapoints:
-                    self.logger.log_warning(event=Event(event_data=str(step.result.datapoints)))
+                    self.logger.log_warning(
+                        event=Event(event_data=str(step.result.datapoints))
+                    )
                     datapoint_dict = step.result.datapoints.model_dump()
                     for key in list(datapoint_dict.keys()):
-                        datapoint_dict[key] = DataPoint.model_validate(datapoint_dict[key])
+                        datapoint_dict[key] = DataPoint.model_validate(
+                            datapoint_dict[key]
+                        )
                 else:
                     raise ValueError(
                         f"Feed-forward parameter {param.key} specified step {param.step} but step has no datapoints"
@@ -412,14 +424,6 @@ class Engine:
                 if event_data["duration_seconds"]
                 else "Duration: Unknown"
             )
-
-            author = "Unknown"
-            if (
-                "definition_metadata" in event_data
-                and event_data["definition_metadata"]
-                and "author" in event_data["definition_metadata"]
-            ):
-                author = event_data["definition_metadata"]["author"] or "Unknown"
 
             self.logger.info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
@@ -494,7 +498,7 @@ class Engine:
             if isinstance(response.json_data, ActionJSON):
                 json_data = response.json_data.model_dump(mode="json")
                 for data_key in json_data:
-                    if not data_key == "type":
+                    if data_key != "type":
                         datapoint = ValueDataPoint(
                             label=data_key,
                             ownership_info=ownership_info,
@@ -506,13 +510,13 @@ class Engine:
                 json_data = response.json_data
                 label = "json_data"
                 datapoint = ValueDataPoint(
-                        label=label,
-                        ownership_info=ownership_info,
-                        value=json_data,
-                    )
+                    label=label,
+                    ownership_info=ownership_info,
+                    value=json_data,
+                )
                 self.data_client.submit_datapoint(datapoint)
                 datapoints[label] = datapoint
-                
+
         if response.files:
             if isinstance(response.files, ActionFiles):
                 response_files = response.files.model_dump(mode="json")
@@ -540,7 +544,7 @@ class Engine:
                 )
                 self.data_client.submit_datapoint(datapoint)
                 datapoints[label] = datapoint
-        
+
         response.datapoints = ActionDatapoints.model_validate(datapoints)
         return response
 

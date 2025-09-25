@@ -12,7 +12,14 @@ from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
 )
-from madsci.common.types.action_types import ActionDatapoints, ActionFiles, ActionJSON, ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.action_types import (
+    ActionDatapoints,
+    ActionFiles,
+    ActionJSON,
+    ActionRequest,
+    ActionResult,
+    ActionStatus,
+)
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
@@ -196,9 +203,12 @@ def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
     elif isinstance(files, str):
         files = Path(files)
     json_data = json.loads(headers["x-madsci-json_data"])
-    if isinstance(json_data, dict):
-        if "type" in json_data and json_data["type"] == "json":
-            json_data = ActionJSON.model_validate(json_data)
+    if (
+        isinstance(json_data, dict)
+        and "type" in json_data
+        and json_data["type"] == "json"
+    ):
+        json_data = ActionJSON.model_validate(json_data)
 
     datapoints = json.loads(headers["x-madsci-datapoints"])
     if isinstance(datapoints, dict):
@@ -225,7 +235,6 @@ def process_file_response(rest_response: requests.Response) -> ActionResult:
             temp_path = Path(temp_file.name)
         response.files = temp_path
     elif response.files and isinstance(response.files, ActionFiles):
-        
         with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_zip:
             temp_zip.write(rest_response.content)
             temp_zip_path = Path(temp_zip.name)

@@ -2,15 +2,12 @@
 
 import inspect
 import json
-import re
+import logging
 import tempfile
 from pathlib import Path, PureWindowsPath
 from typing import Any, Callable
 from zipfile import ZipFile
-import logging
 
-
-from madsci.common.types.datapoint_types import FileDataPoint, ObjectStorageDataPoint, ValueDataPoint
 import regex
 from madsci.common.types.action_types import (
     ActionDatapoints,
@@ -22,9 +19,16 @@ from madsci.common.types.action_types import (
     FileActionResultDefinition,
     JSONActionResultDefinition,
 )
+from madsci.common.types.datapoint_types import (
+    FileDataPoint,
+    ObjectStorageDataPoint,
+    ValueDataPoint,
+)
 from starlette.responses import FileResponse
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def action(
     *args: Any,
@@ -142,61 +146,69 @@ def get_named_input(main_string: str, plural: str) -> list[str]:
                     raise ValueError(string1.capitalize() + string2)
     return result_list
 
-def parse_result(returned: Any):
-    if returned is Path:
-        return [FileActionResultDefinition(result_label="file")]
+
+def parse_result(returned: Any) -> list[ActionResultDefinition]:
+    """Parse a single result from an Action"""
+
     if issubclass(returned, ActionFiles):
         for key, value in returned.__annotations__.items():
             if value is not Path:
                 raise ValueError(
                     f"All fields in an ActionFiles subclass must be of type Path, but field {key} is of type {value}",
                 )
-        return [FileActionResultDefinition(result_label=key) for key in returned.__annotations__]
+        return [
+            FileActionResultDefinition(result_label=key)
+            for key in returned.__annotations__
+        ]
     if issubclass(returned, ActionJSON):
-        for key, value in returned.__annotations__.items():
-            if value not in [str, int, float, bool, dict, list]:
-                raise ValueError(
-                    f"All fields in an ActionJSON subclass must be of type str, int, float, bool, dict, or list but field {key} is of type {value}",
-                )
-        return [JSONActionResultDefinition(result_label=key, data_type=value.__name__) for key in returned.__annotations__]
+        return [
+            JSONActionResultDefinition(result_label=key, data_type=value.__name__)
+            for key, value in returned.__annotations__.items()
+        ]
     if issubclass(returned, ActionDatapoints):
         for key, value in returned.__annotations__.items():
             if value not in [FileDataPoint, ValueDataPoint, ObjectStorageDataPoint]:
                 raise ValueError(
                     f"All fields in an ActionDatapoints subclass must be datapoints but field {key} is of type {value}",
                 )
-        return [DatapointActionResultDefinition(result_label=key) for key in returned.__annotations__]
+        return [
+            DatapointActionResultDefinition(result_label=key)
+            for key in returned.__annotations__
+        ]
     if returned not in [str, int, float, bool, dict, list]:
         raise ValueError(
             f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, str, int, float, bool, dict, or list but got {returned}",
         )
-    
-    return [JSONActionResultDefinition(result_label="data", data_type=returned.__name__)]
+
+    return [
+        JSONActionResultDefinition(result_label="data", data_type=returned.__name__)
+    ]
 
 
 def parse_results(func: Callable) -> list[ActionResultDefinition]:
     """get the resulting data from an Action"""
     returned = inspect.signature(func).return_annotation
-    
+
     if returned is inspect.Signature.empty or returned is None:
         return []
     if getattr(returned, "__origin__", None) is tuple:
         result_definitions = []
         for result in returned.__args__:
             result_definitions.extend(parse_result(result))
+    elif returned is Path:
+        result_definitions = [FileActionResultDefinition(result_label="file")]
     else:
         result_definitions = parse_result(returned)
     return result_definitions
-            
-    
+
 
 def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
     """Converts the response to a dictionary of headers"""
     if isinstance(action_response.files, ActionFiles):
         files_serializeable = action_response.files.model_dump(mode="json")
-        
+
     if isinstance(action_response.files, Path):
-        files_serializeable =  str(action_response.files)
+        files_serializeable = str(action_response.files)
     if isinstance(action_response.datapoints, ActionDatapoints):
         action_response.datapoints = action_response.datapoints.model_dump(mode="json")
     if isinstance(action_response.json_data, ActionJSON):
@@ -215,9 +227,9 @@ class ActionResultWithFiles(FileResponse):
     """Action response from a REST-based node."""
 
     @classmethod
-    def from_action_response(cls, action_response: ActionResult) -> ActionResult:
+    def from_action_response(cls: Any, action_response: ActionResult) -> ActionResult:
         """Create an ActionResultWithFiles from an ActionResult."""
-        
+
         if isinstance(action_response.files, Path):
             return ActionResultWithFiles(
                 path=action_response.files,

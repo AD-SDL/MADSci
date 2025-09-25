@@ -4,9 +4,7 @@ import time
 from typing import Annotated, Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.base_types import Error
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types.definitions import SlotResourceDefinition
@@ -80,7 +78,7 @@ class RobotArmNode(RestNode):
         speed: Annotated[
             Optional[float], "The speed of the transfer, in 1-100 mm/s"
         ] = None,
-    ) ->  None:
+    ) -> None:
         """Transfer a plate from one location to another, at the specified speed."""
         if not speed:
             speed = self.config.speed
@@ -89,7 +87,7 @@ class RobotArmNode(RestNode):
             try:
                 popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
             except Exception:
-                raise ValueError("No plate in source!")
+                raise ValueError("No plate in source!") from None
             self.resource_client.push(
                 resource=self.gripper.resource_id, child=popped_plate
             )

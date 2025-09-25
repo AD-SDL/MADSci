@@ -172,7 +172,6 @@ class WorkflowDefinition(MadsciBaseModel):
     @classmethod
     def ensure_step_key_uniqueness(cls, v: Any) -> Any:
         """Ensure that the names of the data labels are unique"""
-        labels = []
         keys = []
         for step in v:
             if step.key:
@@ -423,12 +422,15 @@ class Workflow(WorkflowDefinition):
             if step.name == name:
                 return step
         raise KeyError(f"Step {name} not found in workflow run {self.workflow_id}")
+
     def get_step_by_key(self, key: str) -> Step:
         """Return the step object by its name"""
         for step in self.steps:
             if step.key == key:
                 return step
-        raise KeyError(f"Step with key {key} not found in workflow run {self.workflow_id}")
+        raise KeyError(
+            f"Step with key {key} not found in workflow run {self.workflow_id}"
+        )
 
     def get_step_by_id(self, id: str) -> Step:
         """Return the step object indexed by its id"""
@@ -454,10 +456,11 @@ class Workflow(WorkflowDefinition):
                     )
                 if label in datapoints:
                     return datapoints[label]["datapoint_id"]
-                else:
-                    raise KeyError(f"Label {label} not found in step {step_key} of workflow run {self.workflow_id}")
+                raise KeyError(
+                    f"Label {label} not found in step {step_key} of workflow run {self.workflow_id}"
+                )
         raise KeyError(f"Datapoint ID not found in workflow run {self.workflow_id}")
-    
+
     def get_datapoint(self, step_key: str, label: Optional[str] = None) -> str:
         """Return the ID of the first datapoint with the given label in a workflow run"""
         for step in self.steps:
@@ -475,10 +478,10 @@ class Workflow(WorkflowDefinition):
                     )
                 if label in datapoints:
                     return DataPoint.discriminate(datapoints[label])
-                else:
-                    raise KeyError(f"Label {label} not found in step {step_key} of workflow run {self.workflow_id}")
+                raise KeyError(
+                    f"Label {label} not found in step {step_key} of workflow run {self.workflow_id}"
+                )
         raise KeyError(f"Datapoint not found in workflow run {self.workflow_id}")
-
 
     @computed_field
     @property

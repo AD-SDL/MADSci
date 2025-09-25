@@ -2,6 +2,7 @@
 
 import contextlib
 import inspect
+import logging
 import threading
 import traceback
 from pathlib import Path
@@ -30,13 +31,13 @@ from madsci.common.ownership import global_ownership_info
 from madsci.common.types.action_types import (
     ActionDatapoints,
     ActionDefinition,
+    ActionFiles,
+    ActionJSON,
     ActionRequest,
     ActionResult,
     ActionStatus,
     ArgumentDefinition,
     FileArgumentDefinition,
-    ActionFiles,
-    ActionJSON,
     LocationArgumentDefinition,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
@@ -64,7 +65,7 @@ from madsci.common.utils import (
 )
 from pydantic import ValidationError
 from semver import Version
-import logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -592,9 +593,8 @@ class AbstractNode:
                         f"Invalid LocationArgument for parameter '{name}': {e}"
                     ) from e
         return arg_dict
-    def process_result(
-        self, result: Any, action_id: str
-    ) -> ActionResult:
+
+    def process_result(self, result: Any, action_id: str) -> ActionResult:
         """Process the result of an action and convert it to an ActionResult if necessary."""
         datapoints = None
         json = None
@@ -602,7 +602,7 @@ class AbstractNode:
         if isinstance(result, ActionResult):
             result.action_id = action_id
             return result
-        elif isinstance(result, tuple):
+        if isinstance(result, tuple):
             if len(result) == 3:
                 json, files, datapoints = result
             elif len(result) == 2:
@@ -617,7 +617,13 @@ class AbstractNode:
             files = result
         else:
             json = result
-        return ActionResult(status=ActionStatus.SUCCEEDED, action_id=action_id, json_data=json, files=files, datapoints=datapoints)
+        return ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            action_id=action_id,
+            json_data=json,
+            files=files,
+            datapoints=datapoints,
+        )
 
     @threaded_daemon
     def _action_thread(
@@ -646,7 +652,7 @@ class AbstractNode:
             self.node_status.running_actions.discard(action_request.action_id)
         try:
             action_result = self.process_result(result, action_request.action_id)
-            
+
         except ValidationError:
             action_result = action_request.unknown(
                 errors=Error(

@@ -25,8 +25,8 @@ class ExampleApp(ExperimentApplication):
             json_inputs={"test_command_1": "test"},
             file_inputs={"test_file_2": "./test.txt"},
         )
-        print(workflow.get_datapoint_id("generate"))
-        print(workflow.get_datapoint("generate"))
+        workflow.get_datapoint_id("generate")
+        workflow.get_datapoint("generate")
         return "test"
 
 

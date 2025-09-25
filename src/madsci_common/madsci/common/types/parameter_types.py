@@ -4,7 +4,7 @@ from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import Annotated, MadsciBaseModel
 from madsci.common.types.datapoint_types import DataPointTypeEnum
-from pydantic import Discriminator, model_validator
+from pydantic import Discriminator
 
 
 class WorkflowParameter(MadsciBaseModel):
@@ -52,6 +52,7 @@ class ParameterFeedForwardJson(WorkflowParameter):
     data_type: Literal[DataPointTypeEnum.JSON] = DataPointTypeEnum.JSON
     """This specifies that the parameter expects JSON data."""
 
+
 class ParameterFeedForwardFile(WorkflowParameter):
     """Definition of a workflow parameter that is fed forward from a previous step (file).
 
@@ -73,7 +74,6 @@ class ParameterFeedForwardFile(WorkflowParameter):
         DataPointTypeEnum.FILE
     )
     """This specifies that the parameter expects file or object storage data."""
-
 
 
 ParameterJsonTypes = Annotated[

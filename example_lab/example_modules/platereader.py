@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionFiles, ActionResult, ActionSucceeded
+from madsci.common.types.action_types import ActionFiles
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
@@ -41,9 +41,14 @@ class PlateReaderInterface:
         )
         time.sleep(2)  # Simulate command execution
 
+
 class PlateFiles(ActionFiles):
-        file_path_1: Path
-        file_path_2: Path
+    """Example of returned files with labeled values"""
+
+    file_path_1: Path
+    file_path_2: Path
+
+
 class PlateReaderNode(RestNode):
     """A fake plate reader node module for testing."""
 
@@ -83,10 +88,9 @@ class PlateReaderNode(RestNode):
 
         with (Path.home() / "test.txt").open("w") as f:
             self.logger.log_info(f.write("test"))
-        path = Path.home() / "test.txt"
 
-        return path
-    
+        return Path.home() / "test.txt"
+
     @action
     def create_plate_files(
         self,
@@ -99,8 +103,7 @@ class PlateReaderNode(RestNode):
         with (Path.home() / "test2.txt").open("w") as f:
             self.logger.log_info(f.write("test2"))
         path2 = Path.home() / "test2.txt"
-    
-    
+
         return PlateFiles(file_path_1=path1, file_path_2=path2)
 
     def get_location(self) -> AdminCommandResponse:
