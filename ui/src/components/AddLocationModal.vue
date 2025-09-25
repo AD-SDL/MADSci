@@ -9,22 +9,22 @@
         <v-text-field class="pt-5 mr-2 w-25" height="20px" v-model="location_name"
                           dense>
                         </v-text-field>
-        <h4>Lookup Info:</h4>
-        <div v-for="(value, key) in lookups">
+        <h4>Representation Info:</h4>
+        <div v-for="(value, key) in representations">
           {{ key }} : {{ value}}
         </div>
         <div>
-        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state.nodes)"
+        <v-select class="w-25" height="20px" v-model="node_to_add" :items="Object.keys(workcell_state?.nodes ?? {})"
                           dense>
 
 
       </v-select>
-      <v-text-field v-model="add_lookup_value"
+      <v-text-field v-model="add_representation_value"
                           dense>
                           <template #append>
 
                             <v-btn @click="get_location(node_to_add)">Get Current Location</v-btn>
-                            <v-btn @click="append_location(node_to_add)">Add or Update Lookup</v-btn>
+                            <v-btn @click="append_representation_to_location(node_to_add)">Add or Update Representation</v-btn>
 
                           </template>
       </v-text-field>
@@ -72,14 +72,16 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { urls  } from "@/store";
-import { workcell_state  } from "../store";
+
+import { locations_url, urls } from '@/store';
+
+import { workcell_state } from '../store';
 
 const new_name = ref()
 const base_type = ref()
 const node_to_add = ref()
-const add_lookup_value = ref()
-const lookups = ref()
+const add_representation_value = ref()
+const representations = ref()
 const location_name = ref()
 const add_resource = ref(false)
 const formFields =  ref([
@@ -102,7 +104,7 @@ const base_types = ref([
          "slot",
 
 ])
-lookups.value = {}
+representations.value = {}
 
 function addField() {
       formFields.value.push({ label: new_name.value, value: null, placeholder: 'Enter value' });
@@ -110,12 +112,12 @@ function addField() {
 
 async function get_location(node: string): Promise<any>{
   var loc_data = await ((await fetch(urls.value.workcell_server_url.concat('admin/get_location/').concat(node))).json())
-  add_lookup_value.value = JSON.stringify(loc_data[0].data)
+  add_representation_value.value = JSON.stringify(loc_data[0].data)
 }
 
 
-function append_location(node: string) {
-      lookups.value[node] = add_lookup_value.value
+function append_representation_to_location(node: string) {
+      representations.value[node] = add_representation_value.value
     }
 
 function removeField(index: any) {
@@ -123,10 +125,12 @@ function removeField(index: any) {
     }
 function submitLocation() {
     var location: any = {}
-    location["location_name"] = location_name.value
-    var new_lookups: any  = {}
-    Object.keys(lookups.value).forEach((key: string) => {new_lookups[key] = JSON.parse(lookups.value[key])})
-    location["lookup"] = new_lookups
+    location["name"] = location_name.value // Use 'name' instead of 'location_name' for new API
+    var new_representations: any  = {}
+    Object.keys(representations.value).forEach((key: string) => {new_representations[key] = JSON.parse(representations.value[key])})
+    location["representations"] = new_representations
+    location["coordinates"] = { x: 0.0, y: 0.0, z: 0.0 } // Add default coordinates
+    location["resource_ids"] = [] // Add empty resource_ids array
     var resource: any = {}
     formFields.value.forEach(function (field: any) {
       resource[field.label] = field.value
@@ -135,7 +139,13 @@ function submitLocation() {
     if(base_type.value != null) {
     location["resource_definition"] = resource
     }
-    fetch(urls.value.workcell_server_url.concat('location'), {
+
+    // Use LocationManager API if available, fallback to WorkcellManager
+    const api_url = locations_url.value ?
+      locations_url.value.replace('/locations', '/location') :
+      urls.value.workcell_server_url.concat('location');
+
+    fetch(api_url, {
     method: "POST",
     headers: {
     'Content-Type': 'application/json'

@@ -12,6 +12,9 @@
         <div v-else-if="modal_text.base_type=='slot'">
           <Slot :resource="modal_text" />
         </div>
+        <div v-else-if="['consumable', 'discrete_consumable', 'continuous_consumable'].includes(modal_text.base_type)">
+          <Consumable :resource="modal_text" />
+        </div>
         <div v-else>
           <Resource :resource="modal_text" />
       </div>
@@ -30,6 +33,7 @@ import { ref } from 'vue';
 import Stack from "./ResourceComponents/Stack.vue";
 import Slot from "./ResourceComponents/Slot.vue";
 import Resource from "./ResourceComponents/Resource.vue";
+import Consumable from "./ResourceComponents/Consumable.vue";
 const props = defineProps(['modal_title', 'modal_text'])
 const flowdef = ref(false)
 import { urls } from "@/store";

@@ -9,7 +9,7 @@ The MADSci Workcell Manager handles the operation of a **Workcell**, a collectio
 See the main [README](../../README.md#installation) for installation options. This package is available as:
 - PyPI: `pip install madsci.workcell_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
-- **Example configuration**: See [example_lab/managers/example_workcell.yaml](../../example_lab/managers/example_workcell.yaml)
+- **Example configuration**: See [example_lab/managers/example_workcell.manager.yaml](../../example_lab/managers/example_workcell.manager.yaml)
 
 **Dependencies**: MongoDB and Redis (see [example docker-compose](./workcell_manager.compose.yaml) or [example_lab](../../example_lab/))
 
@@ -37,7 +37,7 @@ For custom deployments:
 madsci workcell create
 ```
 
-See [example_workcell.yaml](../../example_lab/managers/example_workcell.yaml) for configuration options.
+See [example_workcell.manager.yaml](../../example_lab/managers/example_workcell.manager.yaml) for configuration options.
 
 ### Workcell Client
 
@@ -91,7 +91,7 @@ In the workcell definition files `nodes` section, you can specify each node avai
 You can define important locations in your workcell, optionally linking them to container resources, using the `locations` list. This top-level element of the `WorkcellDefinition` allows you to provide a list of `LocationDefinition` objects, which have the following important properties:
 
 - A `location_name` and `location_id` to idenitfy the location
-- A `lookup` dictionary, which maps node names to representations of the location relevant to that node.
+- A `reference` dictionary, which maps node names to representations of the location relevant to that node.
 - Optionally, a `resource_id` or `resource_definition` for the container resource that you want the location to be attached to.
 
 ## Defining Workflows
@@ -112,7 +112,7 @@ A step has the following important properties:
 - `action`: the name of the action to be performed (must match an action provided by the node)
 - `args`: a dictionary of argument names and values to pass to the node when executing the action
 - `files`: a dictionary of file argument names and paths to upload to the node when executing the action
-- `locations`: any locations to be passed to the node as arguments. Note that this will send _just the representation relevant to that node_, so the workcell's `LocationDefinition` must include a lookup value matching the node name.
+- `locations`: any locations to be passed to the node as arguments. Note that this will send _just the representation relevant to that node_, so the workcell's `LocationDefinition` must include a reference value matching the node name.
 - `conditions`: a list of user-specified conditions that must be met before this step can be run.
 - `data_labels`: allows you to attach unique labels to datapoints returned as part of the action results.
 

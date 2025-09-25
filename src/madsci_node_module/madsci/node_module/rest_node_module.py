@@ -106,7 +106,7 @@ class RestNode(AbstractNode):
         global_ownership_info.node_id = self.node_definition.node_id
         url = AnyUrl(getattr(self.config, "node_url", "http://127.0.0.1:2000"))
         if not testing:
-            self.logger.log_debug("Running node in production mode")
+            self.logger.debug("Running node in production mode")
             import uvicorn  # noqa: PLC0415
 
             self.rest_api = FastAPI(lifespan=self._lifespan)
@@ -158,7 +158,7 @@ class RestNode(AbstractNode):
                 **getattr(self.config, "uvicorn_kwargs", {}),
             )
         else:
-            self.logger.log_debug("Running node in test mode")
+            self.logger.debug("Running node in test mode")
             self.rest_api = FastAPI(lifespan=self._lifespan)
             self._configure_routes()
 

@@ -9,10 +9,16 @@
       Workflows
     </v-tab>
     <v-tab :value="3">
-      Resources
+      Locations
     </v-tab>
     <v-tab :value="4">
+      Resources
+    </v-tab>
+    <v-tab :value="5">
       Experiments
+    </v-tab>
+    <v-tab :value="6">
+      Lab
     </v-tab>
 
   </v-tabs>
@@ -41,6 +47,18 @@
       <v-container class="pa-1 ma-1 justify-center" fluid>
         <v-card>
           <v-card-title class="text-center">
+            <h2>Locations</h2>
+          </v-card-title>
+          <v-card-text>
+            <LocationsPanel />
+          </v-card-text>
+        </v-card>
+      </v-container>
+    </v-window-item>
+    <v-window-item :key="4" :value="4">
+      <v-container class="pa-1 ma-1 justify-center" fluid>
+        <v-card>
+          <v-card-title class="text-center">
             <h2>Resources</h2>
           </v-card-title>
           <v-card-text>
@@ -49,13 +67,18 @@
         </v-card>
       </v-container>
     </v-window-item>
-    <v-window-item :key="4" :value="4">
+    <v-window-item :key="5" :value="5">
       <v-container class="pa-1 ma-1 justify-center" fluid>
         <v-card>
           <v-card-text>
             <Experiments />
           </v-card-text>
         </v-card>
+      </v-container>
+    </v-window-item>
+    <v-window-item :key="6" :value="6">
+      <v-container class="pa-1 ma-1 justify-center" fluid>
+        <LabPanel />
       </v-container>
     </v-window-item>
   </v-window>
@@ -65,10 +88,12 @@
 import { ref } from 'vue';
 import 'vue-json-pretty/lib/styles.css';
 import Experiments from './Experiments.vue';
+import LabPanel from './LabPanel.vue';
 import { resources, active_workflows, archived_workflows } from "@/store";
 import WorkcellPanel from './WorkcellPanel.vue';
 import CreaetWorkcellPanel from './CreateWorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
+import LocationsPanel from './LocationsPanel.vue';
 import ResourcesPanel from './ResourcesPanel.vue';
 const tab = ref(1)
 

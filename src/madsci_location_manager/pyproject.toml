@@ -1,0 +1,33 @@
+[project]
+name = "madsci.location_manager"
+version = "0.4.7"
+description = "The Modular Autonomous Discovery for Science (MADSci) Location Manager."
+authors = [
+    {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
+    {name = "Ryan D. Lewis", email = "ryan.lewis@anl.gov"},
+    {name = "Casey Stone", email = "cstone@anl.gov"},
+    {name = "Doga Ozgulbas", email = "dozgulbas@anl.gov"},
+]
+requires-python = ">=3.9.1"
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = [
+  "madsci.common",
+  "redis",
+  "pottery",
+]
+
+[project.urls]
+Homepage = "https://github.com/AD-SDL/MADSci"
+
+
+######################
+# Build Info + Tools #
+######################
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.build]
+includes = ["madsci/"]

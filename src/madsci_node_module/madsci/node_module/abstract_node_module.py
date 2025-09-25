@@ -119,7 +119,7 @@ class AbstractNode:
                 self.config, "node_definition", "default.node.yaml"
             )
             if not Path(node_definition_path).exists():
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Node definition file '{node_definition_path}' not found, using default node definition."
                 )
                 module_name = to_snake_case(self.__class__.__name__)
@@ -139,7 +139,7 @@ class AbstractNode:
             )
             < 0
         ):
-            self.logger.log_warning(
+            self.logger.warning(
                 "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
             )
 
@@ -178,7 +178,7 @@ class AbstractNode:
         self._configure_clients()
 
         # * Log startup info
-        self.logger.log_debug(f"{self.node_definition=}")
+        self.logger.debug(f"{self.node_definition=}")
 
         # * Kick off the startup logic in a separate thread
         # * This allows implementations to start servers, listeners, etc.
@@ -360,13 +360,13 @@ class AbstractNode:
     def lock(self) -> bool:
         """Admin command to lock the node."""
         self.node_status.locked = True
-        self.logger.log_info("Node locked")
+        self.logger.info("Node locked")
         return True
 
     def unlock(self) -> bool:
         """Admin command to unlock the node."""
         self.node_status.locked = False
-        self.logger.log_info("Node unlocked")
+        self.logger.info("Node unlocked")
         return True
 
     """------------------------------------------------------------------------------------------------"""
@@ -415,7 +415,7 @@ class AbstractNode:
                 func,
                 include_extras=True,
             ).items():
-                self.logger.log_debug(
+                self.logger.debug(
                     f"Adding parameter {parameter_name} of type {parameter_type} to action {action_name}",
                 )
                 if parameter_name == "return":
@@ -664,10 +664,10 @@ class AbstractNode:
         self.node_status.errors.append(madsci_error)
         if len(self.node_status.errors) > 100:
             self.node_status.errors = self.node_status.errors[1:]
-        self.logger.log_error(
+        self.logger.error(
             Event(event_type=EventType.NODE_ERROR, event_data=madsci_error)
         )
-        self.logger.log_error(traceback.format_exc())
+        self.logger.error(traceback.format_exc())
 
     def _update_status(self) -> None:
         """Update the node status."""
@@ -716,7 +716,7 @@ class AbstractNode:
                 )
             self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
         except Exception as e:
-            self.logger.log_warning(
+            self.logger.warning(
                 f"Failed to update node info file: {e}",
             )
 
@@ -758,7 +758,7 @@ class AbstractNode:
             self._exception_handler(exception)
             self.node_status.errored = True
         else:
-            self.logger.log_info(
+            self.logger.info(
                 Event(
                     event_type=EventType.NODE_START,
                     event_data=self.node_definition.model_dump(mode="json"),
@@ -775,7 +775,7 @@ class AbstractNode:
             self.action_history[action_result.action_id] = [action_result]
         else:
             self.action_history[action_result.action_id].append(action_result)
-        self.logger.log_info(
+        self.logger.info(
             Event(
                 event_type=EventType.ACTION_STATUS_CHANGE,
                 event_data=action_result,

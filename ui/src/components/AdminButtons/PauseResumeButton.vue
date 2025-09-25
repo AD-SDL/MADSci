@@ -24,12 +24,19 @@
   </template>
 
 <script lang="ts" setup>
-import { urls, workcell_state } from "@/store";
-import { ref, watchEffect } from 'vue';
+import {
+  ref,
+  watchEffect,
+} from 'vue';
+
+import {
+  urls,
+  workcell_state,
+} from '@/store';
 
 const props = defineProps<{
-    module?: string;
-    module_status?: any;
+    node?: string;
+    node_status?: any;
 }>();
 
 const pause_url = ref('')
@@ -40,10 +47,10 @@ const hoverText = ref('')
 
 // Format pause and resume urls
 watchEffect(() => {
-    if (props.module) {
-        pause_url.value = urls.value.workcell_server_url.concat('admin/pause/'.concat(props.module))
-        resume_url.value = urls.value.workcell_server_url.concat('admin/resume/'.concat(props.module))
-        hoverText.value = "Module"
+    if (props.node) {
+        pause_url.value = urls.value.workcell_server_url.concat('admin/pause/'.concat(props.node))
+        resume_url.value = urls.value.workcell_server_url.concat('admin/resume/'.concat(props.node))
+        hoverText.value = "Node"
     }
     else {
         pause_url.value = urls.value.workcell_server_url.concat('admin/pause')
@@ -53,16 +60,16 @@ watchEffect(() => {
 })
 
 watchEffect(() => {
-    if (props.module) {
+    if (props.node) {
         // Determine if pressing pause/resume button should be allowed
-        if (props.module_status["BUSY"] == true || props.module_status["PAUSED"] == true) {
+        if (props.node_status["BUSY"] == true || props.node_status["PAUSED"] == true) {
             allowButton.value = true
         } else {
             allowButton.value = false
         }
 
-        // Determine if the module is already paused
-        if (props.module_status["PAUSED"] == true) {
+        // Determine if the node is already paused
+        if (props.node_status["PAUSED"] == true) {
             isPaused.value = true
         } else {
             isPaused.value = false
@@ -70,7 +77,7 @@ watchEffect(() => {
     }
     else {
         if (workcell_state.value) {
-            isPaused.value = workcell_state.value.paused
+            isPaused.value = !!workcell_state.value.status?.paused
         } else {
             isPaused.value = false
         }

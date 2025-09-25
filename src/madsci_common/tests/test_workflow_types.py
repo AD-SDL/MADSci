@@ -24,7 +24,7 @@ def test_promote_inline_step_parameters_args():
                 name="test_step",
                 action="test_action",
                 node="test_node",
-                parameters=StepParameters(args={"arg1": inline_param}),
+                use_parameters=StepParameters(args={"arg1": inline_param}),
             )
         ],
     )
@@ -35,7 +35,7 @@ def test_promote_inline_step_parameters_args():
     assert workflow_def.parameters.json_inputs[0].default == "default_value"
 
     # The step parameter should now be a string key
-    assert workflow_def.steps[0].parameters.args["arg1"] == "inline_param"
+    assert workflow_def.steps[0].use_parameters.args["arg1"] == "inline_param"
 
 
 def test_promote_inline_step_parameters_locations():
@@ -52,14 +52,14 @@ def test_promote_inline_step_parameters_locations():
                 name="test_step",
                 action="test_action",
                 node="test_node",
-                parameters=StepParameters(locations={"deck": inline_param}),
+                use_parameters=StepParameters(locations={"deck": inline_param}),
             )
         ],
     )
 
     assert len(workflow_def.parameters.json_inputs) == 1
     assert workflow_def.parameters.json_inputs[0].key == "location_param"
-    assert workflow_def.steps[0].parameters.locations["deck"] == "location_param"
+    assert workflow_def.steps[0].use_parameters.locations["deck"] == "location_param"
 
 
 def test_promote_inline_step_parameters_step_fields():
@@ -75,14 +75,14 @@ def test_promote_inline_step_parameters_step_fields():
             StepDefinition(
                 name="test_step",
                 node="test_node",
-                parameters=StepParameters(action=inline_param),
+                use_parameters=StepParameters(action=inline_param),
             )
         ],
     )
 
     assert len(workflow_def.parameters.json_inputs) == 1
     assert workflow_def.parameters.json_inputs[0].key == "action_param"
-    assert workflow_def.steps[0].parameters.action == "action_param"
+    assert workflow_def.steps[0].use_parameters.action == "action_param"
 
 
 def test_promote_inline_file_parameters():
@@ -126,14 +126,14 @@ def test_promote_inline_feed_forward_parameters():
                 name="test_step",
                 action="test_action",
                 node="test_node",
-                parameters=StepParameters(args={"data_input": inline_ff_param}),
+                use_parameters=StepParameters(args={"data_input": inline_ff_param}),
             )
         ],
     )
 
     assert len(workflow_def.parameters.feed_forward) == 1
     assert workflow_def.parameters.feed_forward[0].key == "ff_param"
-    assert workflow_def.steps[0].parameters.args["data_input"] == "ff_param"
+    assert workflow_def.steps[0].use_parameters.args["data_input"] == "ff_param"
 
 
 def test_promote_multiple_inline_parameters():
@@ -150,14 +150,14 @@ def test_promote_multiple_inline_parameters():
                 name="step1",
                 action="action1",
                 node="node1",
-                parameters=StepParameters(args={"arg1": input_param}),
+                use_parameters=StepParameters(args={"arg1": input_param}),
                 files={"file1": file_param},
             ),
             StepDefinition(
                 name="step2",
                 action="action2",
                 node="node2",
-                parameters=StepParameters(args={"data": ff_param}),
+                use_parameters=StepParameters(args={"data": ff_param}),
             ),
         ],
     )
@@ -170,9 +170,9 @@ def test_promote_multiple_inline_parameters():
     assert workflow_def.parameters.file_inputs[0].key == "file1"
     assert workflow_def.parameters.feed_forward[0].key == "ff1"
 
-    assert workflow_def.steps[0].parameters.args["arg1"] == "input1"
+    assert workflow_def.steps[0].use_parameters.args["arg1"] == "input1"
     assert workflow_def.steps[0].files["file1"] == "file1"
-    assert workflow_def.steps[1].parameters.args["data"] == "ff1"
+    assert workflow_def.steps[1].use_parameters.args["data"] == "ff1"
 
 
 def test_no_inline_parameters():
@@ -187,7 +187,7 @@ def test_no_inline_parameters():
                 name="test_step",
                 action="test_action",
                 node="test_node",
-                parameters=StepParameters(
+                use_parameters=StepParameters(
                     args={"arg1": "existing_param"}  # String reference, not inline
                 ),
             )
@@ -197,7 +197,7 @@ def test_no_inline_parameters():
     # Should preserve existing parameters without adding new ones
     assert len(workflow_def.parameters.json_inputs) == 1
     assert workflow_def.parameters.json_inputs[0].key == "existing_param"
-    assert workflow_def.steps[0].parameters.args["arg1"] == "existing_param"
+    assert workflow_def.steps[0].use_parameters.args["arg1"] == "existing_param"
 
 
 def test_parameter_key_uniqueness_validation():

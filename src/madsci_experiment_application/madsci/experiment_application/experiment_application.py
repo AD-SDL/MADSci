@@ -9,6 +9,7 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
+from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
@@ -105,6 +106,7 @@ class ExperimentApplication(RestNode):
             experiment_server_url=experiment_server_url
         )
         self.workcell_client = WorkcellClient()
+        self.location_client = LocationClient()
         self.data_client = DataClient()
         self.resource_client = ResourceClient()
         self.event_client = self.logger = EventClient()
@@ -146,7 +148,7 @@ class ExperimentApplication(RestNode):
             run_name=run_name,
             run_description=run_description,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Started run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
         passed_checks = False
@@ -167,7 +169,7 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id,
             status=status,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Ended run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -176,7 +178,7 @@ class ExperimentApplication(RestNode):
         self.experiment = self.experiment_client.pause_experiment(
             experiment_id=self.experiment.experiment_id
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Paused run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -185,7 +187,7 @@ class ExperimentApplication(RestNode):
         self.experiment = self.experiment_client.cancel_experiment(
             experiment_id=self.experiment.experiment_id
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Cancelled run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -195,13 +197,13 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
     def handle_exception(self, exception: Exception) -> None:
         """Exception handler that makes experiment fail by default, can be overwritten"""
-        self.logger.log_info(
+        self.logger.info(
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}' with exception {exception!s}"
         )
         self.end_experiment(ExperimentStatus.FAILED)
@@ -241,7 +243,7 @@ class ExperimentApplication(RestNode):
         )
         exception = None
         if self.experiment.status == ExperimentStatus.PAUSED:
-            self.logger.log_warning(
+            self.logger.warning(
                 f"Experiment '{self.experiment.experiment_design.experiment_name}' has been paused."
             )
             while True:
@@ -261,7 +263,7 @@ class ExperimentApplication(RestNode):
             )
 
         if exception:
-            self.logger.log_error(exception.message)
+            self.logger.error(exception.message)
             raise exception
 
     def get_resource_from_condition(self, condition: Condition) -> Optional[Resource]:
@@ -295,13 +297,17 @@ class ExperimentApplication(RestNode):
         """get the location referenced by a condition"""
         location = None
         if condition.location_name:
+            locations = self.location_client.get_locations()
             location = next(
-                location
-                for location in self.workcell_client.get_locations()
-                if location.location_name == condition.location_name
+                (
+                    location
+                    for location in locations
+                    if location.name == condition.location_name
+                ),
+                None,
             )
         elif condition.location_id:
-            location = self.workcell_client.get_location(condition.location_id)
+            location = self.location_client.get_location(condition.location_id)
         if location is None:
             raise (Exception("Invalid Identifier for Location"))
         return location

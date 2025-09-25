@@ -7,8 +7,8 @@
       </v-expansion-panel-title>
       <v-expansion-panel-text>
         <b>Description</b>: {{ value.comment }} <br>
-        <b> Module</b>: {{ value.module }} <br>
-        <b>Module Action</b>: {{ value.action }} <br>
+        <b> Node</b>: {{ value.node }} <br>
+        <b>Node Action</b>: {{ value.action }} <br>
         <b>Args</b>: <v-list>
           <v-list-item v-for="(arg_value, arg_key) in value.args" :key="arg_key">
             <b>{{ arg_key }}</b>: {{ arg_value }}
@@ -25,7 +25,7 @@
                 <tr>
                   <td>{{ item.label }}</td>
                   <td>{{ item.data_type }}</td>
-                  <td v-if="item.data_type == 'file'"><v-btn @click="trydownload(item.datapoint_id, item.label)">Download</v-btn>
+                  <td v-if="item.data_type == 'file'"><v-btn @click="trydownload(item._id, item.label)">Download</v-btn>
                   </td>
                   <td v-if="item.data_type == 'json'">
                     <VueJsonPretty :data="item.value" />
@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import VueJsonPretty from 'vue-json-pretty';
 import { VDataTable } from 'vuetify/components';
 const props = defineProps(['steps', 'wf'])
@@ -75,7 +75,5 @@ const forceFileDownload = (val: any, title: any) => {
 async function trydownload(id: string, label: string) {
   let val = await (await fetch(urls.value["data_server_url"].concat('datapoint/').concat(id).concat('/value'))).blob()
   forceFileDownload(val, label)
-
-
 }
 </script>

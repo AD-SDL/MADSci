@@ -86,9 +86,17 @@
                       <td>{{ item.required }}</td>
                       <td>{{ item.default }}</td>
                       <td>{{ item.description }}</td>
-                      <td><v-text-field @vue:updated="set_text(action)" height="20px" v-model="item.value"
-                          dense>
-                        </v-text-field></td>
+                      <td>
+                        <template v-if="item.argument_type === 'bool'">
+                          <v-checkbox v-model="item.value" :true-value="true" :false-value="false" :value="item.value ?? false" hide-details density="compact"/>
+                        </template>
+                        <template v-else-if="['int', 'float'].includes(item.argument_type)">
+                          <v-text-field v-model.number="item.value" type="number" density="compact" hide-details/>
+                        </template>
+                        <template v-else>
+                          <v-text-field @vue:updated="set_text(action)" height="20px" v-model="item.value"/>
+                        </template>
+                      </td>
                     </tr>
                   </template>
                   <template #bottom></template>
@@ -210,8 +218,9 @@ function set_text(action: any) {
 
     if (arg.value === undefined) {
       args[arg.name] = arg.default
-    }
-    else {
+    } else if (typeof arg.value === "boolean") {
+      args[arg.name] = arg.value
+    } else {
       try {
         args[arg.name] = JSON.parse(arg.value)
       } catch (e) {

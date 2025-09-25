@@ -243,7 +243,7 @@ class TestEventClientLogging:
 
         # These should be filtered out
         client.log_debug("Debug message")
-        client.log_info("Info message")
+        client.info("Info message")
 
         # These should go through
         client.log_warning("Warning message")
@@ -264,7 +264,10 @@ class TestEventClientLogging:
         client = EventClient(config=config_with_server)
 
         # Should not raise an exception, should buffer the event
-        client.log_info("Test message")
+        client.info("Test message gets queued 1")
+        client.info(
+            "Test message gets queued 2"
+        )  # * Need a second event so there's at least one in the queue while the other is being retried
 
         time.sleep(0.1)
 

@@ -19,6 +19,17 @@ env:
 venv:
   @$(pdm venv activate)
 
+# Run the full check test and build pipeline
+pipe: check tests build
+pipeline: pipe
+
+# Run ci plus start the example lab
+pipeup: pipe up
+pipelineup: pipeup
+
+# Same as pipeup, but detached
+pipeupd: pipe upd
+pipelineupd: pipeupd
 
 # Run the pre-commit checks
 checks:
@@ -78,6 +89,14 @@ dcb: env
 # Start the example lab
 up *args: env
   @docker compose up {{args}}
+
+upd: env
+  @docker compose up -d
+
+# Build + up
+bup: build up
+# Build + up detached
+bupd: build upd
 
 # Stop the example lab and remove the containers
 down:

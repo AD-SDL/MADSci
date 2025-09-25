@@ -158,7 +158,10 @@ class WorkflowDefinition(MadsciBaseModel):
     definition_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
     """Information about the flow"""
     parameters: Union[WorkflowParameters, list[ParameterTypes]] = Field(
-        default_factory=WorkflowParameters
+        default_factory=WorkflowParameters,
+        alias=AliasChoices(
+            "parameters", "params", "workflow_params", "workflow_parameters"
+        ),
     )
     """Parameters used in the workflow"""
 
@@ -223,7 +226,7 @@ class WorkflowDefinition(MadsciBaseModel):
                     promoted_params[param_key] = file_value
                     step.files[file_key] = param_key
 
-            if step.parameters:
+            if step.use_parameters:
                 self._extract_inline_params_from_step_fields(step, promoted_params)
                 self._extract_inline_params_from_step_dicts(step, promoted_params)
 
@@ -244,15 +247,15 @@ class WorkflowDefinition(MadsciBaseModel):
         )
 
         for field_name, field_value in [
-            ("name", step.parameters.name),
-            ("description", step.parameters.description),
-            ("action", step.parameters.action),
-            ("node", step.parameters.node),
+            ("name", step.use_parameters.name),
+            ("description", step.use_parameters.description),
+            ("action", step.use_parameters.action),
+            ("node", step.use_parameters.node),
         ]:
             if isinstance(field_value, param_types):
                 param_key = field_value.key
                 promoted_params[param_key] = field_value
-                setattr(step.parameters, field_name, param_key)
+                setattr(step.use_parameters, field_name, param_key)
 
     def _extract_inline_params_from_step_dicts(
         self, step: StepDefinition, promoted_params: dict[str, ParameterTypes]
@@ -266,18 +269,18 @@ class WorkflowDefinition(MadsciBaseModel):
         )
 
         # Check args dict
-        for arg_key, arg_value in list(step.parameters.args.items()):
+        for arg_key, arg_value in list(step.use_parameters.args.items()):
             if isinstance(arg_value, param_types):
                 param_key = arg_value.key
                 promoted_params[param_key] = arg_value
-                step.parameters.args[arg_key] = param_key
+                step.use_parameters.args[arg_key] = param_key
 
         # Check locations dict
-        for loc_key, loc_value in list(step.parameters.locations.items()):
+        for loc_key, loc_value in list(step.use_parameters.locations.items()):
             if isinstance(loc_value, param_types):
                 param_key = loc_value.key
                 promoted_params[param_key] = loc_value
-                step.parameters.locations[loc_key] = param_key
+                step.use_parameters.locations[loc_key] = param_key
 
     def _add_promoted_params_to_workflow(
         self, promoted_params: dict[str, ParameterTypes]
@@ -345,22 +348,22 @@ class WorkflowDefinition(MadsciBaseModel):
                     "Step {step}: File Parameter {key} not found in workflow parameters",
                 )
 
-            if step.parameters is not None:
+            if step.use_parameters is not None:
                 validate_keys(
-                    step.parameters.args.values(),
+                    step.use_parameters.args.values(),
                     json_param_keys,
                     "Step {step}: Argument Parameter {key} not found in workflow parameters",
                 )
                 validate_keys(
-                    step.parameters.locations.values(),
+                    step.use_parameters.locations.values(),
                     json_param_keys,
                     "Step {step}: Location Parameter {key} not found in workflow parameters",
                 )
                 for field_name, field_value in [
-                    ("name", step.parameters.name),
-                    ("description", step.parameters.description),
-                    ("action", step.parameters.action),
-                    ("node", step.parameters.node),
+                    ("name", step.use_parameters.name),
+                    ("description", step.use_parameters.description),
+                    ("action", step.use_parameters.action),
+                    ("node", step.use_parameters.node),
                 ]:
                     if field_value is not None and field_value not in json_param_keys:
                         raise ValueError(

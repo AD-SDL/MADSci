@@ -2,7 +2,7 @@
 
 import copy
 import warnings
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from madsci.client.data_client import DataClient
@@ -13,6 +13,7 @@ from madsci.common.types.action_types import (
     ActionStatus,
     ActionSucceeded,
 )
+from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.datapoint_types import (
     FileDataPoint,
     ObjectStorageDataPoint,
@@ -24,7 +25,7 @@ from madsci.common.types.parameter_types import (
     ParameterFeedForwardJson,
 )
 from madsci.common.types.step_types import Step, StepParameters
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellManagerDefinition
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -68,8 +69,8 @@ test_node = Node(
 @pytest.fixture
 def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
-    workcell_def = WorkcellDefinition(
-        workcell_name="Test Workcell",
+    workcell_def = WorkcellManagerDefinition(
+        name="Test Workcell",
     )
     return WorkcellStateHandler(
         workcell_definition=workcell_def, redis_connection=redis_server
@@ -79,7 +80,32 @@ def state_handler(redis_server: Redis) -> WorkcellStateHandler:
 @pytest.fixture
 def engine(state_handler: WorkcellStateHandler) -> Engine:
     """Fixture for creating an Engine instance."""
-    with warnings.catch_warnings():
+    # Create a mock context with all required URLs for LocationClient
+    mock_context = MadsciContext(
+        lab_server_url="http://localhost:8000/",
+        event_server_url="http://localhost:8001/",
+        experiment_server_url="http://localhost:8002/",
+        data_server_url="http://localhost:8004/",
+        resource_server_url="http://localhost:8003/",
+        workcell_server_url="http://localhost:8005/",
+        location_server_url="http://localhost:8006/",
+    )
+
+    with (
+        warnings.catch_warnings(),
+        patch(
+            "madsci.client.location_client.get_current_madsci_context",
+            return_value=mock_context,
+        ),
+        patch(
+            "madsci.workcell_manager.workcell_engine.LocationClient"
+        ) as mock_location_client,
+    ):
+        # Configure the mock location client to return empty location lists
+        mock_location_client_instance = MagicMock()
+        mock_location_client_instance.get_locations.return_value = []
+        mock_location_client.return_value = mock_location_client_instance
+
         warnings.simplefilter("ignore", UserWarning)
         return Engine(state_handler=state_handler, data_client=DataClient())
 
@@ -87,7 +113,7 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
 def test_engine_initialization(engine: Engine) -> None:
     """Test the initialization of the Engine."""
     assert engine.state_handler is not None
-    assert engine.workcell_definition.workcell_name == "Test Workcell"
+    assert engine.workcell_definition.name == "Test Workcell"
 
 
 def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
@@ -154,7 +180,7 @@ def test_insert_parameter_values_basic() -> None:
         name="step1",
         node="node1",
         action="action1",
-        parameters=StepParameters(args={"param": "test_param"}),
+        use_parameters=StepParameters(args={"param": "test_param"}),
     )
 
     step = insert_parameters(step, {"test_param": "custom_value"})
