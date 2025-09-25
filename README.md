@@ -31,7 +31,7 @@
 | src/madsci\_common/madsci/common/types/event\_types.py                                        |      136 |        9 |     93% |39-42, 240-244 |
 | src/madsci\_common/madsci/common/types/experiment\_types.py                                   |       73 |        6 |     92% |108, 125, 127, 129, 131, 133 |
 | src/madsci\_common/madsci/common/types/lab\_types.py                                          |       20 |        0 |    100% |           |
-| src/madsci\_common/madsci/common/types/location\_types.py                                     |       97 |        8 |     92% |30, 32, 34, 36, 41, 46, 93, 165 |
+| src/madsci\_common/madsci/common/types/location\_types.py                                     |      100 |        9 |     91% |30, 32, 34, 36, 41, 46, 51, 98, 170 |
 | src/madsci\_common/madsci/common/types/manager\_types.py                                      |       36 |        5 |     86% |     27-31 |
 | src/madsci\_common/madsci/common/types/node\_types.py                                         |      138 |        7 |     95% |362, 370, 374, 383, 389, 393, 423 |
 | src/madsci\_common/madsci/common/types/parameter\_types.py                                    |       48 |       12 |     75% |14, 23, 47, 49, 51, 53, 59, 75, 77, 79, 83, 89 |
@@ -80,7 +80,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                    |      250 |       56 |     78% |71-72, 114-115, 162, 174-178, 191, 213-214, 226, 234, 244-247, 255-259, 290, 305, 319, 333, 339, 368-370, 375-380, 405-407, 444-446, 461, 468-472, 504-509, 516-517 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                     |        9 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                     |      198 |       79 |     60% |40-41, 48-58, 72-77, 95, 113, 131, 144, 160, 165-176, 251, 258-259, 276, 287, 305-311, 319, 336-348, 364-386, 398, 401-413, 424-431, 438, 443-446, 452-453 |
-|                                                                                     **TOTAL** | **9361** | **2664** | **72%** |           |
+|                                                                                     **TOTAL** | **9364** | **2665** | **72%** |           |
 
 
 ## Setup coverage badge
