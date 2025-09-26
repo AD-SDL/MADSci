@@ -602,21 +602,19 @@ class AbstractNode:
         if isinstance(result, ActionResult):
             result.action_id = action_id
             return result
-        if isinstance(result, tuple):
-            if len(result) == 3:
-                json, files, datapoints = result
-            elif len(result) == 2:
-                json, files = result
-        elif isinstance(result, ActionJSON):
-            json = result
-        elif isinstance(result, ActionFiles):
-            files = result
-        elif isinstance(result, ActionDatapoints):
-            datapoints = result
-        elif isinstance(result, Path):
-            files = result
-        else:
-            json = result
+        if not isinstance(result, tuple):
+            result = (result,)
+        for value in result:
+            if isinstance(value, ActionJSON):
+                json = value
+            elif isinstance(value, ActionFiles):
+                files = value
+            elif isinstance(value, ActionDatapoints):
+                datapoints = value
+            elif isinstance(value, Path):
+                files = value
+            else:
+                json = value
         return ActionResult(
             status=ActionStatus.SUCCEEDED,
             action_id=action_id,
