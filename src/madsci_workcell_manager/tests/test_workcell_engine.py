@@ -10,6 +10,7 @@ from madsci.client.data_client import DataClient
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionFailed,
+    ActionJSON,
     ActionResult,
     ActionStatus,
     ActionSucceeded,
@@ -189,7 +190,7 @@ def test_insert_parameter_values_basic() -> None:
     assert step.args["param"] == "custom_value"
 
 
-class UpdateParamJSON:
+class UpdateParamJSON(ActionJSON):
     test: str
 
 
