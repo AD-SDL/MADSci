@@ -10,7 +10,7 @@ import tempfile
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Callable, Optional, ParamSpec, TypeVar, Union
+from typing import Any, Callable, Optional, Union
 
 from fastapi import Request, Response
 from fastapi.applications import FastAPI
@@ -46,9 +46,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 class RestNode(AbstractNode):
