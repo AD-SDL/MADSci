@@ -42,6 +42,7 @@ from madsci.node_module.abstract_node_module import (
 )
 from madsci.node_module.helpers import ActionResultWithFiles
 from pydantic import AnyUrl
+from starlette.middleware.base import BaseHTTPMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -112,7 +113,8 @@ class RestNode(AbstractNode):
     ) -> tuple[bool, ActionRequest]:
         """Check if action is run from swaggerdocs or the client"""
         if "action_name" in json_data:
-            json_data["args"] = json.loads(json_data["args"])
+            if "args" in json_data:
+                json_data["args"] = json.loads(json_data["args"])
             action_request = ActionRequest(**json_data)
             pure_return = False
         else:
@@ -120,6 +122,52 @@ class RestNode(AbstractNode):
             pure_return = True
             action_request = ActionRequest(action_name=action_name, args=json_data)
         return pure_return, action_request
+
+    class ActionMiddleware(BaseHTTPMiddleware):
+        """Middleware to handle action requests. allows use both through client and Swaggerdocs"""
+
+        rest_node_module: Optional["RestNode"] = None
+
+        async def dispatch(self, request: Request, call_next: Callable) -> Any:
+            """Middleware function to handle action requests."""
+            if "action" in str(request.url) and request.method == "POST":
+                files = []
+                json_data = request.query_params.__dict__["_dict"]
+                pure_return, action_request = self.rest_node_module.check_action_mode(
+                    request, json_data
+                )
+                files = await self.rest_node_module.get_request_files(request)
+                response = self.rest_node_module.run_action(
+                    action_request.action_name,
+                    json.dumps(action_request.args),
+                    files,
+                    action_request.action_id,
+                )
+                if pure_return:
+                    while (
+                        not isinstance(response, ActionResultWithFiles)
+                        and not response.status.is_terminal
+                    ):
+                        if not isinstance(response, ActionResult):
+                            raise ValueError("Response is not an ActionResult")
+                        await asyncio.sleep(0.1)
+                        response = self.rest_node_module.get_action_result(
+                            response.action_id
+                        )
+                if isinstance(response, ActionResultWithFiles):
+                    return response
+                if pure_return:
+                    return self.rest_node_module.handle_pure_return(response)
+                return Response(
+                    content=response.model_dump_json(),
+                    headers={"content-type": "application/json"},
+                )
+            return await call_next(request)
+
+    def return_action_middleware_class(self) -> Any:
+        """Return the action middleware class with the node instance set."""
+        self.ActionMiddleware.rest_node_module = self
+        return self.ActionMiddleware
 
     def start_node(self, testing: bool = False) -> None:
         """Start the node."""
@@ -139,41 +187,7 @@ class RestNode(AbstractNode):
                 global_ownership_info.node_id = self.node_definition.node_id
                 return await call_next(request)
 
-            @self.rest_api.middleware("http")
-            async def action_middleware(
-                request: Request, call_next: Callable
-            ) -> Response:
-                if "action" in str(request.url) and request.method == "POST":
-                    files = []
-                    json_data = request.query_params.__dict__["_dict"]
-                    pure_return, action_request = self.check_action_mode(
-                        request, json_data
-                    )
-                    files = await self.get_request_files(request)
-                    response = self.run_action(
-                        action_request.action_name,
-                        json.dumps(action_request.args),
-                        files,
-                        action_request.action_id,
-                    )
-                    if pure_return:
-                        while (
-                            not isinstance(response, ActionResultWithFiles)
-                            and not response.status.is_terminal
-                        ):
-                            if not isinstance(response, ActionResult):
-                                raise ValueError("Response is not an ActionResult")
-                            await asyncio.sleep(0.1)
-                            response = self.get_action_result(response.action_id)
-                    if isinstance(response, ActionResultWithFiles):
-                        return response
-                    if pure_return:
-                        return self.handle_pure_return(response)
-                    return Response(
-                        content=response.model_dump_json(),
-                        headers={"content-type": "application/json"},
-                    )
-                return await call_next(request)
+            self.rest_api.add_middleware(self.return_action_middleware_class())
 
             self._configure_routes()
             uvicorn.run(
@@ -185,6 +199,7 @@ class RestNode(AbstractNode):
         else:
             self.logger.debug("Running node in test mode")
             self.rest_api = FastAPI(lifespan=self._lifespan)
+            self.rest_api.add_middleware(self.return_action_middleware_class())
             self._configure_routes()
 
     """------------------------------------------------------------------------------------------------"""
@@ -226,7 +241,8 @@ class RestNode(AbstractNode):
             ),
         )
         # * Return a file response if there are files to be returned
-        if response.files:
+        logger.error(str(response))
+        if response.files is not None:
             return ActionResultWithFiles.from_action_response(
                 action_response=response,
             )

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import Error, MadsciBaseModel
-from madsci.common.types.datapoint_types import DataPoint, DataPointDataModels
+from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.utils import localnow, new_ulid_str
 from pydantic import Field, TypeAdapter
 from pydantic.functional_validators import field_validator, model_validator
@@ -75,8 +75,8 @@ class ActionRequest(MadsciBaseModel):
     def failed(
         self,
         errors: Union[Error, list[Error], str] = [],
-        data: dict[str, Any] = {},
-        files: dict[str, Path] = {},
+        data: Optional[dict[str, Any]] = None,
+        files: Optional[dict[str, Path]] = None,
     ) -> ActionFailed:
         """Create an ActionFailed response"""
         # * Convert errors to a list of errors if they are a single error or a string
@@ -93,9 +93,9 @@ class ActionRequest(MadsciBaseModel):
 
     def succeeded(
         self,
+        errors: Union[Error, list[Error], str] = [],
         json_data: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
-        errors: Union[Error, list[Error], str] = [],
     ) -> ActionSucceeded:
         """Create an ActionSucceeded response"""
         return ActionSucceeded(
@@ -107,9 +107,9 @@ class ActionRequest(MadsciBaseModel):
 
     def running(
         self,
+        errors: Union[Error, list[Error], str] = [],
         json_data: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
-        errors: Union[Error, list[Error], str] = [],
     ) -> ActionRunning:
         """Create an ActionRunning response"""
         return ActionRunning(
@@ -229,7 +229,9 @@ class ActionFiles(MadsciBaseModel, extra="allow"):
                 try:
                     v[key] = Path(value)
                 except Exception:
-                    raise ValueError(f"File '{key}' is not a valid Path: {value}") from None
+                    raise ValueError(
+                        f"File '{key}' is not a valid Path: {value}"
+                    ) from None
         return v
 
 
@@ -245,7 +247,9 @@ class ActionDatapoints(MadsciBaseModel, extra="allow"):
                 try:
                     v[key] = DataPoint.discriminate(value)
                 except Exception:
-                    raise ValueError(f"Datapoint '{key}' is not a valid DataPoint: {value}") from None
+                    raise ValueError(
+                        f"Datapoint '{key}' is not a valid DataPoint: {value}"
+                    ) from None
         return v
 
 

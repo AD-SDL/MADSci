@@ -14,6 +14,7 @@ from madsci.client.node.rest_node_client import (
     process_file_response,
 )
 from madsci.common.types.action_types import (
+    ActionFiles,
     ActionRequest,
     ActionResult,
     ActionRunning,
@@ -528,7 +529,7 @@ def test_action_response_from_headers():
     assert len(result.errors) == 2
     assert result.errors[0].message == "error1"
     assert result.errors[1].message == "error2"
-    assert result.files.output ==  Path("result.txt")
+    assert result.files.output == Path("result.txt")
     assert result.datapoints.temp.label == "temp"
     assert result.datapoints.temp.value == 25.0
     assert result.json_data == {"key": "value"}
@@ -555,7 +556,7 @@ def test_process_file_response_single_file():
 
         assert result.action_id == action_id
         assert result.status == ActionStatus.SUCCEEDED
-        assert result.files== Path("/tmp/test_file.txt")  # noqa: S108
+        assert result.files == Path("/tmp/test_file.txt")  # noqa: S108
 
 
 def test_process_file_response_multiple_files():
@@ -638,7 +639,7 @@ def test_process_file_response_no_files():
 
     assert result.action_id == action_id
     assert result.status == ActionStatus.SUCCEEDED
-    assert result.files == {}
+    assert result.files == ActionFiles()
 
 
 def test_client_capabilities():

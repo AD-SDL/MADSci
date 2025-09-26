@@ -197,7 +197,11 @@ class RestNodeClient(AbstractNodeClient):
 
 def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
     """Creates an ActionResult from the headers of a file response"""
-    files = json.loads(headers["x-madsci-files"])
+    try:
+        files = json.loads(headers["x-madsci-files"])
+    except json.JSONDecodeError:
+        files = str(headers["x-madsci-files"])
+
     if isinstance(files, dict):
         files = ActionFiles.model_validate(files)
     elif isinstance(files, str):
@@ -211,10 +215,9 @@ def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
         json_data = ActionJSON.model_validate(json_data)
 
     datapoints = json.loads(headers["x-madsci-datapoints"])
-    print(datapoints)
     if isinstance(datapoints, dict):
         datapoints = ActionDatapoints.model_validate(datapoints)
-        print(datapoints)
+
     return ActionResult(
         action_id=headers["x-madsci-action-id"],
         status=ActionStatus(headers["x-madsci-status"]),
@@ -236,12 +239,16 @@ def process_file_response(rest_response: requests.Response) -> ActionResult:
             temp_file.write(rest_response.content)
             temp_path = Path(temp_file.name)
         response.files = temp_path
-    elif response.files and isinstance(response.files, ActionFiles):
+    elif (
+        response.files
+        and isinstance(response.files, ActionFiles)
+        and len(response.files.model_dump()) > 0
+    ):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_zip:
             temp_zip.write(rest_response.content)
             temp_zip_path = Path(temp_zip.name)
         with ZipFile(temp_zip_path) as zip_file:
-            files_dict = response.files.model_dump()
+            files_dict = response.files.model_dump(mode="json")
             for file_key in list(files_dict.keys()):
                 filename = files_dict[file_key]
                 with tempfile.NamedTemporaryFile(

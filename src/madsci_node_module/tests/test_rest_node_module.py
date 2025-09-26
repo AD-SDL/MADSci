@@ -12,6 +12,7 @@ from madsci.common.types.action_types import (
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import NodeDefinition, NodeInfo, NodeStatus
+from ulid import ULID
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
 
@@ -157,11 +158,13 @@ def test_run_action(test_client: TestClient) -> None:
     """Test the test_action command."""
     with test_client as client:
         time.sleep(0.5)
+
         response = client.post(
-            "/action",
+            "/action/test_action",
             params={
                 "action_name": "test_action",
                 "args": json.dumps({"test_param": 1}),
+                "action_id": str(ULID()),
             },
         )
         assert response.status_code == 200
@@ -177,7 +180,9 @@ def test_run_action(test_client: TestClient) -> None:
             == ActionStatus.SUCCEEDED
         )
 
-        response = client.post("/action", params={"action_name": "test_action"})
+        response = client.post(
+            "/action/test_action", params={"action_name": "test_action"}
+        )
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
         assert result.status == ActionStatus.FAILED
@@ -191,7 +196,7 @@ def test_run_action_fail(test_client: TestClient) -> None:
     with test_client as client:
         time.sleep(0.5)
         response = client.post(
-            "/action",
+            "/action/test_fail",
             params={"action_name": "test_fail", "args": json.dumps({"test_param": 1})},
         )
         assert ActionResult.model_validate(response.json()).status in [
@@ -317,7 +322,7 @@ def test_get_action_result(test_client: TestClient) -> None:
     with test_client as client:
         time.sleep(0.5)
         response = client.post(
-            "/action",
+            "/action/test_action",
             params={
                 "action_name": "test_action",
                 "args": json.dumps({"test_param": 1}),
@@ -350,7 +355,7 @@ def test_get_action_history(test_client: TestClient) -> None:
         existing_history_length = len(action_history)
 
         response = client.post(
-            "/action",
+            "/action/test_action",
             params={
                 "action_name": "test_action",
                 "args": json.dumps({"test_param": 1}),
@@ -367,7 +372,7 @@ def test_get_action_history(test_client: TestClient) -> None:
         ]
 
         response = client.post(
-            "/action",
+            "/action/test_action",
             params={
                 "action_name": "test_action",
                 "args": json.dumps({"test_param": 1}),
@@ -423,7 +428,7 @@ def test_get_log(test_client: TestClient) -> None:
     with test_client as client:
         time.sleep(0.5)
         response = client.post(
-            "/action",
+            "/action/test_action",
             params={
                 "action_name": "test_action",
                 "args": json.dumps({"test_param": 1}),
@@ -445,7 +450,7 @@ def test_optional_param_action_with_optional_param(test_client: TestClient) -> N
     with test_client as client:
         time.sleep(0.5)
         response = client.post(
-            "/action",
+            "/action/test_optional_param_action",
             params={
                 "action_name": "test_optional_param_action",
                 "args": json.dumps({"test_param": 1, "optional_param": "test_value"}),
@@ -461,7 +466,7 @@ def test_optional_param_action_without_optional_param(test_client: TestClient) -
     with test_client as client:
         time.sleep(0.5)
         response = client.post(
-            "/action",
+            "/action/test_optional_param_action",
             params={
                 "action_name": "test_optional_param_action",
                 "args": json.dumps({"test_param": 1}),

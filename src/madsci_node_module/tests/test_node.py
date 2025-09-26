@@ -74,23 +74,23 @@ class TestNode(RestNode):
             }
 
     @action
-    def test_action(self, test_param: int) -> bool:
+    def test_action(self, test_param: int) -> None:
         """A test action."""
         result = self.test_interface.run_command(
             f"Test action with param {test_param}."
         )
         if result:
-            return None
+            return
         raise ValueError(f"`run_command` returned '{result}'. Expected 'True'.")
 
     @action(name="test_fail", description="A test action that fails.")
-    def test_action_fail(self, test_param: int) -> bool:
+    def test_action_fail(self, test_param: int) -> None:
         """A doc string, but not the actual description of the action."""
         result = self.test_interface.run_command(
             f"Test action with param {test_param}.", fail=True
         )
         if result:
-            return None
+            return
         raise ValueError(f"`run_command` returned '{result}'. Expected 'True'.")
 
     def pause(self) -> None:
