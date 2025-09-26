@@ -12,18 +12,37 @@ from madsci.common.exceptions import (
     WorkflowCanceledError,
     WorkflowFailedError,
 )
-from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
+from madsci.common.types.action_types import (
+    ActionFailed,
+    ActionJSON,
+    ActionResult,
+    ActionSucceeded,
+)
 
 
-def wait(seconds: Union[int, float]) -> ActionResult:
+def wait(seconds: Union[int, float]) -> None:
     """Waits for a specified number of seconds"""
     time.sleep(seconds)
-    return ActionSucceeded()
+
+
+class WorkcellTransferJSON(ActionJSON):
+    """JSON response model for transfer action"""
+
+    message: str
+    """A message describing the result of the transfer."""
+    workflow_id: str
+    """The ID of the workflow that was executed."""
+    source_location_id: str
+    """The ID of the source location."""
+    target_location_id: str
+    """The ID of the target location."""
+    execution_time: float | None = None
+    """The time taken to execute the transfer, in seconds. Only present if await_completion is True."""
 
 
 def transfer(  # noqa: C901
     source: str, target: str, await_completion: bool = True
-) -> ActionResult:
+) -> ActionJSON:
     """
     Transfer a single discrete object between locations.
 
@@ -87,24 +106,28 @@ def transfer(  # noqa: C901
             if not await_completion:
                 # Return immediately after successful enqueueing
                 result = ActionSucceeded(
-                    data={
-                        "message": f"Transfer workflow enqueued from {source} to {target}",
-                        "workflow_id": workflow.workflow_id,
-                        "source_location_id": source_location_id,
-                        "target_location_id": target_location_id,
-                    }
+                    json_data=WorkcellTransferJSON.model_validate(
+                        {
+                            "message": f"Transfer workflow enqueued from {source} to {target}",
+                            "workflow_id": workflow.workflow_id,
+                            "source_location_id": source_location_id,
+                            "target_location_id": target_location_id,
+                        }
+                    )
                 )
 
             # Check final workflow status after completion
             elif workflow.status.completed:
                 result = ActionSucceeded(
-                    data={
-                        "message": f"Transfer completed from {source} to {target}",
-                        "workflow_id": workflow.workflow_id,
-                        "execution_time": workflow.duration_seconds,
-                        "source_location_id": source_location_id,
-                        "target_location_id": target_location_id,
-                    }
+                    data=WorkcellTransferJSON.model_validate(
+                        {
+                            "message": f"Transfer completed from {source} to {target}",
+                            "workflow_id": workflow.workflow_id,
+                            "execution_time": workflow.duration_seconds,
+                            "source_location_id": source_location_id,
+                            "target_location_id": target_location_id,
+                        }
+                    )
                 )
             elif workflow.status.failed:
                 step_info = (
@@ -113,19 +136,15 @@ def transfer(  # noqa: C901
                     else ""
                 )
                 description = workflow.status.description or "Unknown error"
-                result = ActionFailed(
-                    errors=[f"Transfer workflow failed{step_info}: {description}"]
-                )
+                raise Exception(f"Transfer workflow failed{step_info}: {description}")
             elif workflow.status.cancelled:
-                result = ActionFailed(errors=["Transfer workflow was cancelled"])
+                raise Exception("Transfer workflow was cancelled")
             else:
-                result = ActionFailed(
-                    errors=[
-                        f"Transfer workflow ended in unexpected state: {workflow.status.model_dump()}"
-                    ]
+                raise Exception(
+                    f"Transfer workflow ended in unexpected state: {workflow.status.model_dump()}"
                 )
     except Exception as e:
-        result = ActionFailed(errors=[f"Unexpected error in transfer: {e}"])
+        raise Exception(f"Unexpected error in transfer: {e}") from None
     return result
 
 
@@ -168,7 +187,7 @@ def _resolve_location_identifier(
 
 def transfer_resource(
     resource_id: str, target: str, await_completion: bool = True
-) -> ActionResult:
+) -> WorkcellTransferJSON:
     """
     Transfer a specific resource from its current location to a target.
 
@@ -188,17 +207,13 @@ def transfer_resource(
 
         # Validate context configuration
         if not context.location_server_url:
-            return ActionFailed(
-                errors=[
-                    "Location server URL not configured. Set location_server_url in context."
-                ]
+            raise Exception(
+                "Location server URL not configured. Set location_server_url in context."
             )
 
         if not context.resource_server_url:
-            return ActionFailed(
-                errors=[
-                    "Resource server URL not configured. Set resource_server_url in context."
-                ]
+            raise Exception(
+                "Resource server URL not configured. Set resource_server_url in context."
             )
 
         # Find resource and perform transfer
@@ -208,13 +223,13 @@ def transfer_resource(
 
         # If result is a string, it's an error message
         if isinstance(result, str):
-            return ActionFailed(errors=[result])
+            raise Exception(result)
 
         # Otherwise it's an ActionResult from the transfer
         return result
 
     except Exception as e:
-        return ActionFailed(errors=[f"Unexpected error in transfer_resource: {e}"])
+        raise Exception(f"Unexpected error in transfer_resource: {e}") from None
 
 
 def _find_resource_and_transfer(
