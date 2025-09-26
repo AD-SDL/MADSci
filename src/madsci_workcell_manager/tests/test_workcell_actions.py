@@ -21,7 +21,7 @@ class TestWaitAction:
 
     def test_wait_action_succeeds(self):
         """Test that wait action returns success after sleeping."""
-        with patch("time.sleep") as mock_sleep:
+        with patch("asyncio.sleep") as mock_sleep:
             result = wait(5)
 
             mock_sleep.assert_called_once_with(5)
@@ -152,10 +152,10 @@ class TestTransferAction:
             result = transfer("source_loc", "dest_loc")
 
             assert result.status == ActionStatus.SUCCEEDED
-            assert "Transfer completed" in result.json_data["message"]
-            assert result.json_data["source_location_id"] == "source_id"
-            assert result.json_data["target_location_id"] == "dest_id"
-            assert result.json_data["workflow_id"] == "test_workflow_123"
+            assert "Transfer completed" in result.json_data.message
+            assert result.json_data.source_location_id == "source_id"
+            assert result.json_data.target_location_id == "dest_id"
+            assert result.json_data.workflow_id == "test_workflow_123"
 
     @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
     @patch("madsci.workcell_manager.workcell_actions.LocationClient")
