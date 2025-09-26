@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import Error, MadsciBaseModel
-from madsci.common.types.datapoint_types import DataPoint
+from madsci.common.types.datapoint_types import DataPoint, DataPointDataModels
 from madsci.common.utils import localnow, new_ulid_str
 from pydantic import Field, TypeAdapter
 from pydantic.functional_validators import field_validator, model_validator
@@ -206,38 +206,46 @@ class ActionJSON(MadsciBaseModel, extra="allow"):
     @classmethod
     def ensure_json_serializable(cls: Any, v: Any) -> Any:
         """Ensure that the data is JSON serializable"""
-        for field_name, field_value in v.__dict__.items():
+        self_dict = v.model_dump(mode="python")
+        for field_name, field_value in self_dict.items():
             try:
                 ta.validate_python(field_value)
             except Exception as e:
                 raise ValueError(
                     f"Field '{field_name}' is not JSON serializable: {e}"
                 ) from None
+        return v
 
 
 class ActionFiles(MadsciBaseModel, extra="allow"):
     """Files returned from an action"""
 
-    @model_validator(mode="after")
+    @model_validator(mode="before")
     @classmethod
     def ensure_files_are_path(cls: Any, v: Any) -> Any:
         """Ensure that the files are Path"""
-        for key, value in v.__dict__.items():
+        for key, value in v.items():
             if not isinstance(value, Path):
-                raise ValueError(f"File '{key}' is not a valid Path: {value}")
+                try:
+                    v[key] = Path(value)
+                except Exception:
+                    raise ValueError(f"File '{key}' is not a valid Path: {value}") from None
         return v
 
 
 class ActionDatapoints(MadsciBaseModel, extra="allow"):
     """Datapoints returned from an action"""
 
-    @model_validator(mode="after")
+    @model_validator(mode="before")
     @classmethod
     def ensure_datapoints_are_datapoint(cls: Any, v: Any) -> Any:
         """Ensure that the datapoints are DataPoints"""
-        for key, value in v.__dict__.items():
+        for key, value in v.items():
             if not isinstance(value, DataPoint):
-                raise ValueError(f"Datapoint '{key}' is not a valid DataPoint: {value}")
+                try:
+                    v[key] = DataPoint.discriminate(value)
+                except Exception:
+                    raise ValueError(f"Datapoint '{key}' is not a valid DataPoint: {value}") from None
         return v
 
 

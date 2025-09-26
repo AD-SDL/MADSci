@@ -79,7 +79,7 @@ def test_send_action_no_await(
     assert result.status == ActionStatus.SUCCEEDED
     assert result.action_id == mock_response.json.return_value["action_id"]
     mock_post.assert_called_once_with(
-        "http://localhost:2000/action",
+        "http://localhost:2000/action/test_action",
         params={
             "action_name": "test_action",
             "args": json.dumps({}),
@@ -113,7 +113,7 @@ def test_send_action_await(
     assert result.status == ActionStatus.SUCCEEDED
     assert result.action_id == mock_post_response.json.return_value["action_id"]
     mock_post.assert_called_once_with(
-        "http://localhost:2000/action",
+        "http://localhost:2000/action/test_action",
         params={
             "action_name": "test_action",
             "args": json.dumps({}),
@@ -516,9 +516,9 @@ def test_action_response_from_headers():
         "x-madsci-action-id": action_id,
         "x-madsci-status": "succeeded",
         "x-madsci-errors": '["error1", "error2"]',
-        "x-madsci-files": '{"output.txt": "result.txt"}',
+        "x-madsci-files": '{"output": "result.txt"}',
         "x-madsci-datapoints": '{"temp": {"label": "temp", "data_type": "json", "value": 25.0}}',
-        "x-madsci-data": '{"key": "value"}',
+        "x-madsci-json_data": '{"key": "value"}',
     }
 
     result = action_response_from_headers(headers)
@@ -528,10 +528,10 @@ def test_action_response_from_headers():
     assert len(result.errors) == 2
     assert result.errors[0].message == "error1"
     assert result.errors[1].message == "error2"
-    assert result.files == {"output.txt": "result.txt"}
-    assert result.datapoints["temp"].label == "temp"
-    assert result.datapoints["temp"].value == 25.0
-    assert result.data == {"key": "value"}
+    assert result.files.output ==  Path("result.txt")
+    assert result.datapoints.temp.label == "temp"
+    assert result.datapoints.temp.value == 25.0
+    assert result.json_data == {"key": "value"}
 
 
 def test_process_file_response_single_file():
@@ -542,9 +542,9 @@ def test_process_file_response_single_file():
         "x-madsci-action-id": action_id,
         "x-madsci-status": "succeeded",
         "x-madsci-errors": "[]",
-        "x-madsci-files": '{"output": "result.txt"}',
+        "x-madsci-files": "result.txt",
         "x-madsci-datapoints": "{}",
-        "x-madsci-data": "{}",
+        "x-madsci-json_data": "{}",
     }
     mock_response.content = b"test file content"
 
@@ -555,8 +555,7 @@ def test_process_file_response_single_file():
 
         assert result.action_id == action_id
         assert result.status == ActionStatus.SUCCEEDED
-        assert "output" in result.files
-        assert result.files["output"] == Path("/tmp/test_file.txt")  # noqa: S108
+        assert result.files== Path("/tmp/test_file.txt")  # noqa: S108
 
 
 def test_process_file_response_multiple_files():
@@ -569,7 +568,7 @@ def test_process_file_response_multiple_files():
         "x-madsci-errors": "[]",
         "x-madsci-files": '{"file1": "output1.txt", "file2": "output2.txt"}',
         "x-madsci-datapoints": "{}",
-        "x-madsci-data": "{}",
+        "x-madsci-json_data": "{}",
     }
     mock_response.content = b"fake zip content"
 
@@ -614,8 +613,8 @@ def test_process_file_response_multiple_files():
 
             assert result.action_id == action_id
             assert result.status == ActionStatus.SUCCEEDED
-            assert "file1" in result.files
-            assert "file2" in result.files
+            assert result.files.file1 == Path("/tmp/file1.txt")  # noqa: S108
+            assert result.files.file2 == Path("/tmp/file2.txt")  # noqa: S108
     finally:
         # Clean up
         temp_zip_path.unlink(missing_ok=True)
@@ -631,7 +630,7 @@ def test_process_file_response_no_files():
         "x-madsci-errors": "[]",
         "x-madsci-files": "{}",
         "x-madsci-datapoints": "{}",
-        "x-madsci-data": "{}",
+        "x-madsci-json_data": "{}",
     }
     mock_response.content = b""
 

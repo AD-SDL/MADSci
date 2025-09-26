@@ -211,8 +211,10 @@ def action_response_from_headers(headers: dict[str, Any]) -> ActionResult:
         json_data = ActionJSON.model_validate(json_data)
 
     datapoints = json.loads(headers["x-madsci-datapoints"])
+    print(datapoints)
     if isinstance(datapoints, dict):
         datapoints = ActionDatapoints.model_validate(datapoints)
+        print(datapoints)
     return ActionResult(
         action_id=headers["x-madsci-action-id"],
         status=ActionStatus(headers["x-madsci-status"]),
