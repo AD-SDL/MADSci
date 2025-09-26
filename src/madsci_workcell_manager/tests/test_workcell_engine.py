@@ -188,6 +188,10 @@ def test_insert_parameter_values_basic() -> None:
     assert step.args["param"] == "custom_value"
 
 
+class UpdateParamJSON:
+    test: str
+
+
 def test_run_single_step_with_update_parameters(
     engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
@@ -218,7 +222,8 @@ def test_run_single_step_with_update_parameters(
         "madsci.workcell_manager.workcell_engine.find_node_client"
     ) as mock_client:
         mock_client.return_value.send_action.return_value = ActionResult(
-            status=ActionStatus.SUCCEEDED, data={"test": "test_value"}
+            status=ActionStatus.SUCCEEDED,
+            json_data=UpdateParamJSON.model_validate({"test": "test_value"}),
         )
         thread = engine.run_step(workflow.workflow_id)
         thread.join()
