@@ -318,7 +318,6 @@ def test_handle_data_and_files_with_data(
         action="test_action",
         node="node1",
         args={},
-        data_labels={"key1": "label1"},
     )
     workflow = Workflow(
         name="Test Workflow",
@@ -333,7 +332,7 @@ def test_handle_data_and_files_with_data(
 
     with patch.object(engine.data_client, "submit_datapoint") as mock_submit:
         updated_result = engine.handle_data_and_files(step, workflow, action_result)
-        assert "json_data" in updated_result.datapoints.model_dump()
+        assert "data" in updated_result.datapoints.model_dump()
         mock_submit.assert_called_once()
         submitted_datapoint = mock_submit.call_args[0][0]
         assert isinstance(submitted_datapoint, ValueDataPoint)
