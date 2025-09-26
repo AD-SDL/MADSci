@@ -107,7 +107,7 @@ def transfer(  # noqa: C901
             if not await_completion:
                 # Return immediately after successful enqueueing
                 result = ActionSucceeded(
-                    data=WorkcellTransferJSON.model_validate(
+                    json_data=WorkcellTransferJSON.model_validate(
                         {
                             "message": f"Transfer workflow enqueued from {source} to {target}",
                             "workflow_id": workflow.workflow_id,

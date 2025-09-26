@@ -240,8 +240,8 @@ class TestTransferAction:
             result = transfer("source_loc", "dest_loc", await_completion=False)
 
             assert result.status == ActionStatus.SUCCEEDED
-            assert "Transfer workflow enqueued" in result.json_data["message"]
-            assert result.json_data["workflow_id"] == "test_workflow_123"
+            assert "Transfer workflow enqueued" in result.json_data.message
+            assert result.json_data.workflow_id == "test_workflow_123"
 
     @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
     @patch("madsci.workcell_manager.workcell_actions.LocationClient")
