@@ -1,7 +1,7 @@
 """Built-in actions for the Workcell Manager, which don't require a node to be specified."""
 
 import time
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
@@ -36,7 +36,7 @@ class WorkcellTransferJSON(ActionJSON):
     """The ID of the source location."""
     target_location_id: str
     """The ID of the target location."""
-    execution_time: float | None = None
+    execution_time: Optional[float] = None
     """The time taken to execute the transfer, in seconds. Only present if await_completion is True."""
 
 
