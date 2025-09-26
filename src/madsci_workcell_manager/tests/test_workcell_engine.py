@@ -336,7 +336,7 @@ def test_handle_data_and_files_with_data(
         mock_submit.assert_called_once()
         submitted_datapoint = mock_submit.call_args[0][0]
         assert isinstance(submitted_datapoint, ValueDataPoint)
-        assert submitted_datapoint.label == "data"
+        assert submitted_datapoint.label == "json_data"
         assert submitted_datapoint.value == 42
 
 
