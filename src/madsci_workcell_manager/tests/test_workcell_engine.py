@@ -2,6 +2,7 @@
 
 import copy
 import warnings
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -336,15 +337,15 @@ def test_handle_data_and_files_with_data(
         node_name="node1",
         node=test_node,
     )
-    action_result = ActionSucceeded(data={"key1": 42})
+    action_result = ActionSucceeded(json_data=42)
 
     with patch.object(engine.data_client, "submit_datapoint") as mock_submit:
         updated_result = engine.handle_data_and_files(step, workflow, action_result)
-        assert "label1" in updated_result.data
+        assert "data" in updated_result.datapoints
         mock_submit.assert_called_once()
         submitted_datapoint = mock_submit.call_args[0][0]
         assert isinstance(submitted_datapoint, ValueDataPoint)
-        assert submitted_datapoint.label == "label1"
+        assert submitted_datapoint.label == "data"
         assert submitted_datapoint.value == 42
 
 
@@ -368,18 +369,18 @@ def test_handle_data_and_files_with_files(
         node_name="node1",
         node=test_node,
     )
-    action_result = ActionSucceeded(files={"file1": "/path/to/file"})
+    action_result = ActionSucceeded(files=Path("/path/to/file"))
 
     with (
         patch.object(engine.data_client, "submit_datapoint") as mock_submit,
         patch("pathlib.Path.exists", return_value=True),
     ):
         updated_result = engine.handle_data_and_files(step, workflow, action_result)
-        assert "label1" in updated_result.data
+        assert "files" in updated_result.datapoints
         mock_submit.assert_called_once()
         submitted_datapoint = mock_submit.call_args[0][0]
         assert isinstance(submitted_datapoint, FileDataPoint)
-        assert submitted_datapoint.label == "label1"
+        assert submitted_datapoint.label == "files"
         assert submitted_datapoint.path == "/path/to/file"
 
 

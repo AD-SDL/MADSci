@@ -1,6 +1,6 @@
 """Built-in actions for the Workcell Manager, which don't require a node to be specified."""
 
-import asyncio
+import time
 from typing import Any, Optional, Union
 
 from madsci.client.location_client import LocationClient
@@ -20,9 +20,9 @@ from madsci.common.types.action_types import (
 )
 
 
-async def wait(seconds: Union[int, float]) -> ActionResult:
+def wait(seconds: Union[int, float]) -> ActionResult:
     """Waits for a specified number of seconds"""
-    await asyncio.sleep(seconds)
+    time.sleep(seconds)
     return ActionSucceeded()
 
 
