@@ -52,18 +52,6 @@ class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
         description="The URL for each node in the workcell.",
     )
 
-    def get_workcell_directory(
-        self, workcells_directory: Optional[PathLike] = None
-    ) -> Path:
-        """Get the directory for the workcell.
-
-        Args:
-            workcells_directory: Optional directory path. If not provided, defaults to ~/.madsci/workcells
-        """
-        if workcells_directory is None:
-            workcells_directory = Path("~") / ".madsci" / "workcells"
-        return Path(workcells_directory) / self.name
-
     is_ulid = field_validator("manager_id")(ulid_validator)
 
 
