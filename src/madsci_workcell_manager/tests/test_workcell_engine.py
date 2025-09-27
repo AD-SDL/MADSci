@@ -2,6 +2,7 @@
 
 import copy
 import warnings
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ from madsci.client.data_client import DataClient
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionFailed,
+    ActionJSON,
     ActionResult,
     ActionStatus,
     ActionSucceeded,
@@ -188,23 +190,19 @@ def test_insert_parameter_values_basic() -> None:
     assert step.args["param"] == "custom_value"
 
 
+class UpdateParamJSON(ActionJSON):
+    test: str
+
+
 def test_run_single_step_with_update_parameters(
     engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
     """Test running a step in a workflow."""
-    step = Step(
-        name="Test Step 1",
-        action="test_action",
-        node="node1",
-        args={},
-        data_labels={"test": "test_label"},
-    )
+    step = Step(name="Test Step 1", action="test_action", node="node1", args={})
     workflow = Workflow(
         name="Test Workflow",
         parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardJson(key="test_param", step=0, label="test_label")
-            ]
+            feed_forward=[ParameterFeedForwardJson(key="test_param", step=0)]
         ),
         steps=[step],
         status=WorkflowStatus(running=True),
@@ -218,7 +216,7 @@ def test_run_single_step_with_update_parameters(
         "madsci.workcell_manager.workcell_engine.find_node_client"
     ) as mock_client:
         mock_client.return_value.send_action.return_value = ActionResult(
-            status=ActionStatus.SUCCEEDED, data={"test": "test_value"}
+            status=ActionStatus.SUCCEEDED, json_data="test_value"
         )
         thread = engine.run_step(workflow.workflow_id)
         thread.join()
@@ -320,7 +318,6 @@ def test_handle_data_and_files_with_data(
         action="test_action",
         node="node1",
         args={},
-        data_labels={"key1": "label1"},
     )
     workflow = Workflow(
         name="Test Workflow",
@@ -331,15 +328,15 @@ def test_handle_data_and_files_with_data(
         node_name="node1",
         node=test_node,
     )
-    action_result = ActionSucceeded(data={"key1": 42})
+    action_result = ActionSucceeded(json_data=42)
 
     with patch.object(engine.data_client, "submit_datapoint") as mock_submit:
         updated_result = engine.handle_data_and_files(step, workflow, action_result)
-        assert "label1" in updated_result.data
+        assert "json_data" in updated_result.datapoints.model_dump()
         mock_submit.assert_called_once()
         submitted_datapoint = mock_submit.call_args[0][0]
         assert isinstance(submitted_datapoint, ValueDataPoint)
-        assert submitted_datapoint.label == "label1"
+        assert submitted_datapoint.label == "json_data"
         assert submitted_datapoint.value == 42
 
 
@@ -363,18 +360,18 @@ def test_handle_data_and_files_with_files(
         node_name="node1",
         node=test_node,
     )
-    action_result = ActionSucceeded(files={"file1": "/path/to/file"})
+    action_result = ActionSucceeded(files=Path("/path/to/file"))
 
     with (
         patch.object(engine.data_client, "submit_datapoint") as mock_submit,
         patch("pathlib.Path.exists", return_value=True),
     ):
         updated_result = engine.handle_data_and_files(step, workflow, action_result)
-        assert "label1" in updated_result.data
+        assert "file" in updated_result.datapoints.model_dump()
         mock_submit.assert_called_once()
         submitted_datapoint = mock_submit.call_args[0][0]
         assert isinstance(submitted_datapoint, FileDataPoint)
-        assert submitted_datapoint.label == "label1"
+        assert submitted_datapoint.label == "file"
         assert submitted_datapoint.path == "/path/to/file"
 
 

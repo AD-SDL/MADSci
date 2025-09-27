@@ -100,6 +100,8 @@ ignore = [
     "PLR0913", # Allow for a reasonable number of arguments
     "PLR2004", # Magic value used in comparison
     "UP006", # Ignoring errors for typing types such as Dict or List
+    "UP045", # Ignoring errors for Unions
+    "UP007", # Ignoring errors for Optional
     "UP035", # Ignoring errors for typing types such as Dict or List
 ]
 

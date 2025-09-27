@@ -2,6 +2,7 @@
 
 import contextlib
 import inspect
+import logging
 import threading
 import traceback
 from pathlib import Path
@@ -28,7 +29,10 @@ from madsci.common.exceptions import (
 )
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.action_types import (
+    ActionDatapoints,
     ActionDefinition,
+    ActionFiles,
+    ActionJSON,
     ActionRequest,
     ActionResult,
     ActionStatus,
@@ -61,6 +65,9 @@ from madsci.common.utils import (
 )
 from pydantic import ValidationError
 from semver import Version
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class AbstractNode:
@@ -259,7 +266,6 @@ class AbstractNode:
                         action_request.failed(errors=Error.from_exception(e))
                     )
                     self.node_status.running_actions.discard(action_request.action_id)
-
         return self.get_action_result(action_request.action_id)
 
     def get_action_result(self, action_id: str) -> ActionResult:
@@ -588,6 +594,35 @@ class AbstractNode:
                     ) from e
         return arg_dict
 
+    def process_result(self, result: Any, action_id: str) -> ActionResult:
+        """Process the result of an action and convert it to an ActionResult if necessary."""
+        datapoints = None
+        json = None
+        files = None
+        if isinstance(result, ActionResult):
+            result.action_id = action_id
+            return result
+        if not isinstance(result, tuple):
+            result = (result,)
+        for value in result:
+            if isinstance(value, ActionJSON):
+                json = value
+            elif isinstance(value, ActionFiles):
+                files = value
+            elif isinstance(value, ActionDatapoints):
+                datapoints = value
+            elif isinstance(value, Path):
+                files = value
+            else:
+                json = value
+        return ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            action_id=action_id,
+            json_data=json,
+            files=files,
+            datapoints=datapoints,
+        )
+
     @threaded_daemon
     def _action_thread(
         self,
@@ -613,20 +648,16 @@ class AbstractNode:
                         self.node_status.busy = False
         finally:
             self.node_status.running_actions.discard(action_request.action_id)
-        if isinstance(result, ActionResult):
-            # * Make sure the action ID is set correctly on the result
-            result.action_id = action_request.action_id
-        else:
-            try:
-                result = ActionResult.model_validate(result)
-                result.action_id = action_request.action_id
-            except ValidationError:
-                result = action_request.unknown(
-                    errors=Error(
-                        message=f"Action '{action_request.action_name}' returned an unexpected value: {result}. Expected an ActionResult.",
-                    ),
-                )
-        self._extend_action_history(result)
+        try:
+            action_result = self.process_result(result, action_request.action_id)
+
+        except ValidationError:
+            action_result = action_request.unknown(
+                errors=Error(
+                    message=f"Action '{action_request.action_name}' returned an unexpected value: {result}.",
+                ),
+            )
+        self._extend_action_history(action_result)
 
     def _exception_handler(self, e: Exception, set_node_errored: bool = True) -> None:
         """Handle an exception."""
