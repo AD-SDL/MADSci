@@ -1,4 +1,4 @@
-"""A fake liquid handler module for testing."""
+"""A module for testing advanced features of MADSci."""
 
 from pathlib import Path
 
@@ -27,14 +27,14 @@ class ExampleFileData(ActionFiles):
 
 
 class AdvancedExampleConfig(RestNodeConfig):
-    """Configuration for the liquid handler node module."""
+    """Configuration for the advanced example node module."""
 
     device_number: int = 0
-    """The device number of the liquid handler."""
+    """The device number of the advanced example node."""
 
 
 class AdvancedExampleNode(RestNode):
-    """A fake liquid handler node module for testing."""
+    """A fake advanced example node module for testing."""
 
     config: AdvancedExampleConfig = AdvancedExampleConfig()
     config_model = AdvancedExampleConfig
@@ -117,10 +117,10 @@ class AdvancedExampleNode(RestNode):
         ), ExampleFileData(log_file_1=path1, log_file_2=path2)
 
     def get_location(self) -> AdminCommandResponse:
-        """Get location for the liquid handler"""
+        """Get location for the advanced example node"""
         return AdminCommandResponse(data=[0, 0, 0, 0])
 
 
 if __name__ == "__main__":
-    liquid_handler_node = AdvancedExampleNode()
-    liquid_handler_node.start_node()
+    advanced_example_node = AdvancedExampleNode()
+    advanced_example_node.start_node()
