@@ -3,7 +3,6 @@
 import asyncio
 import inspect
 import json
-import logging
 import os
 import signal
 import tempfile
@@ -44,9 +43,6 @@ from madsci.node_module.helpers import ActionResultWithFiles
 from pydantic import AnyUrl
 from starlette.middleware.base import BaseHTTPMiddleware
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 
 class RestNode(AbstractNode):
     """REST-based node implementation and helper class. Inherit from this class to create a new REST-based node class."""
@@ -71,7 +67,7 @@ class RestNode(AbstractNode):
         super().__init__(*args, **kwargs)
         self.node_info.node_url = getattr(self.config, "node_url", None)
 
-    async def get_request_files(self, request: Request) -> list[UploadFile]:
+    async def _get_request_files(self, request: Request) -> list[UploadFile]:
         """Extract uploaded files from a request."""
         form = await request.form()
 
@@ -89,7 +85,7 @@ class RestNode(AbstractNode):
 
         return upload_files
 
-    def handle_pure_return(self, response: ActionResult) -> Response:
+    def _handle_pure_return(self, response: ActionResult) -> Response:
         """Handle pure return values from actions."""
         if isinstance(response.json_data, ActionJSON):
             response.json_data = response.json_data.model_dump(mode="json")
@@ -133,7 +129,7 @@ class RestNode(AbstractNode):
                 pure_return, action_request = self.rest_node_module.check_action_mode(
                     request, json_data
                 )
-                files = await self.rest_node_module.get_request_files(request)
+                files = await self.rest_node_module._get_request_files(request)
                 response = self.rest_node_module.run_action(
                     action_request.action_name,
                     json.dumps(action_request.args),
@@ -154,7 +150,7 @@ class RestNode(AbstractNode):
                 if isinstance(response, ActionResultWithFiles):
                     return response
                 if pure_return:
-                    return self.rest_node_module.handle_pure_return(response)
+                    return self.rest_node_module._handle_pure_return(response)
                 return Response(
                     content=response.model_dump_json(),
                     headers={"content-type": "application/json"},
@@ -238,7 +234,7 @@ class RestNode(AbstractNode):
             ),
         )
         # * Return a file response if there are files to be returned
-        logger.error(str(response))
+        self.logger.error(str(response))
         if response.files is not None:
             return ActionResultWithFiles.from_action_response(
                 action_response=response,

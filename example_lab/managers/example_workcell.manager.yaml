@@ -8,3 +8,4 @@ nodes:
   liquidhandler_2: http://localhost:2003/
   robotarm_1: http://localhost:2001/
   platereader_1: http://localhost:2002/
+  advanced_example_node: http://localhost:2003/

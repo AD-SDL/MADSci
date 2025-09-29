@@ -71,7 +71,7 @@ class AdvancedExampleNode(RestNode):
     def return_file_and_json(
         self,
     ) -> tuple[int, Path]:
-        """Return a file"""
+        """Return data and a file"""
 
         with (Path.home() / "test.txt").open("w") as f:
             self.logger.log_info(f.write("test"))

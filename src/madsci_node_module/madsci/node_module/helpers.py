@@ -2,7 +2,6 @@
 
 import inspect
 import json
-import logging
 import tempfile
 from pathlib import Path, PureWindowsPath
 from typing import Any, Callable
@@ -25,9 +24,6 @@ from madsci.common.types.datapoint_types import (
     ValueDataPoint,
 )
 from starlette.responses import FileResponse
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def action(
@@ -186,7 +182,7 @@ def parse_result(returned: Any) -> list[ActionResultDefinition]:
 
 
 def parse_results(func: Callable) -> list[ActionResultDefinition]:
-    """get the resulting data from an Action"""
+    """Get the resulting data from an Action"""
     returned = inspect.signature(func).return_annotation
 
     if returned is inspect.Signature.empty or returned is None:

@@ -143,7 +143,7 @@ class ActionRequest(MadsciBaseModel):
         return ActionCancelled(
             action_id=self.action_id,
             errors=errors,
-            json_daa=json_data,
+            json_data=json_data,
             files=files,
         )
 

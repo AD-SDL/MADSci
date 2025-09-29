@@ -86,8 +86,8 @@ class RobotArmNode(RestNode):
         if self.resource_client:
             try:
                 popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
-            except Exception:
-                raise ValueError("No plate in source!") from None
+            except Exception as e:
+                raise ValueError("No plate in source!") from e
             self.resource_client.push(
                 resource=self.gripper.resource_id, child=popped_plate
             )

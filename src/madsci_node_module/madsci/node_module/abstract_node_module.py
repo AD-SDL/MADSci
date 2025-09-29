@@ -2,7 +2,6 @@
 
 import contextlib
 import inspect
-import logging
 import threading
 import traceback
 from pathlib import Path
@@ -65,9 +64,6 @@ from madsci.common.utils import (
 )
 from pydantic import ValidationError
 from semver import Version
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class AbstractNode:
@@ -594,7 +590,7 @@ class AbstractNode:
                     ) from e
         return arg_dict
 
-    def process_result(self, result: Any, action_id: str) -> ActionResult:
+    def _process_result(self, result: Any, action_id: str) -> ActionResult:
         """Process the result of an action and convert it to an ActionResult if necessary."""
         datapoints = None
         json = None
@@ -649,7 +645,7 @@ class AbstractNode:
         finally:
             self.node_status.running_actions.discard(action_request.action_id)
         try:
-            action_result = self.process_result(result, action_request.action_id)
+            action_result = self._process_result(result, action_request.action_id)
 
         except ValidationError:
             action_result = action_request.unknown(
