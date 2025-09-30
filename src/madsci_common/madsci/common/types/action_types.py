@@ -76,19 +76,14 @@ class ActionRequest(MadsciBaseModel):
     def failed(
         self,
         errors: Union[Error, list[Error], str] = [],
-        data: Optional[dict[str, Any]] = None,
+        json_data: Optional[dict[str, Any]] = None,
         files: Optional[dict[str, Path]] = None,
     ) -> ActionFailed:
         """Create an ActionFailed response"""
-        # * Convert errors to a list of errors if they are a single error or a string
-        if isinstance(errors, str):
-            errors = [Error(message=errors)]
-        elif isinstance(errors, Error):
-            errors = [errors]
         return ActionFailed(
             action_id=self.action_id,
             errors=errors,
-            data=data,
+            json_data=json_data,
             files=files,
         )
 

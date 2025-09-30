@@ -2,7 +2,7 @@
 
 import inspect
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Type
 
 import regex
 from madsci.common.types.action_types import (
@@ -19,6 +19,7 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageDataPoint,
     ValueDataPoint,
 )
+from pydantic import BaseModel, create_model
 
 
 def action(
@@ -227,3 +228,41 @@ def parse_results(func: Callable) -> list[ActionResultDefinition]:
     else:
         result_definitions = parse_result(returned)
     return result_definitions
+
+
+def create_dynamic_model(
+    type_hint: Type[Any],
+    field_name: str = "data",
+    model_name: str = "DynamicModel",
+) -> Type[BaseModel]:
+    """
+    Create a dynamic Pydantic model from a Python type hint.
+
+    This function takes a Python type hint and creates a Pydantic model class
+    that can validate data of that type. It supports basic types, generic types,
+    Optional types, Union types, and existing Pydantic models.
+
+    Args:
+        type_hint: The Python type hint to create a model for
+        field_name: The name of the field in the generated model (default: "data")
+        model_name: The name of the generated model class (default: "DynamicModel")
+
+    Returns:
+        A Pydantic model class that validates the specified type
+
+    Examples:
+        >>> IntModel = create_dynamic_model(int)
+        >>> instance = IntModel(data=42)
+        >>> instance.data
+        42
+
+        >>> ListModel = create_dynamic_model(List[str], field_name="items")
+        >>> instance = ListModel(items=["a", "b", "c"])
+        >>> instance.items
+        ['a', 'b', 'c']
+    """
+    # Create the model with a single field of the specified type
+    field_definition = (type_hint, ...)
+
+    # Use Pydantic's create_model to dynamically create the model class
+    return create_model(model_name, **{field_name: field_definition})

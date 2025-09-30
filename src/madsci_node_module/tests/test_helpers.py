@@ -1,6 +1,7 @@
 """Tests for the helpers module."""
 
 from pathlib import Path
+from typing import Dict, List, Optional, Union
 
 import pytest
 from madsci.common.types.action_types import (
@@ -9,7 +10,8 @@ from madsci.common.types.action_types import (
     FileActionResultDefinition,
     JSONActionResultDefinition,
 )
-from madsci.node_module.helpers import parse_result, parse_results
+from madsci.node_module.helpers import create_dynamic_model, parse_result, parse_results
+from pydantic import BaseModel, ValidationError
 
 
 class ExampleJSONData(ActionJSON):
@@ -180,3 +182,130 @@ def test_parse_results_with_action_tuple():
 
     assert len(json_results) == 2
     assert len(file_results) == 2
+
+
+def test_create_dynamic_model_basic_types():
+    """Test create_dynamic_model with basic types."""
+    # Test int
+    model_class = create_dynamic_model(int)
+    assert issubclass(model_class, BaseModel)
+    instance = model_class(data=42)
+    assert instance.data == 42
+
+    # Test str
+    model_class = create_dynamic_model(str)
+    instance = model_class(data="test")
+    assert instance.data == "test"
+
+    # Test dict
+    model_class = create_dynamic_model(dict)
+    instance = model_class(data={"key": "value"})
+    assert instance.data == {"key": "value"}
+
+
+def test_create_dynamic_model_optional_types():
+    """Test create_dynamic_model with Optional types."""
+    model_class = create_dynamic_model(Optional[int])
+
+    # Test with value
+    instance = model_class(data=42)
+    assert instance.data == 42
+
+    # Test with None
+    instance = model_class(data=None)
+    assert instance.data is None
+
+
+def test_create_dynamic_model_list_types():
+    """Test create_dynamic_model with List types."""
+    model_class = create_dynamic_model(List[int])
+    instance = model_class(data=[1, 2, 3])
+    assert instance.data == [1, 2, 3]
+
+
+def test_create_dynamic_model_dict_types():
+    """Test create_dynamic_model with Dict types."""
+    model_class = create_dynamic_model(Dict[str, int])
+    instance = model_class(data={"a": 1, "b": 2})
+    assert instance.data == {"a": 1, "b": 2}
+
+
+def test_create_dynamic_model_union_types():
+    """Test create_dynamic_model with Union types."""
+    model_class = create_dynamic_model(Union[int, str])
+
+    # Test with int
+    instance = model_class(data=42)
+    assert instance.data == 42
+
+    # Test with str
+    instance = model_class(data="test")
+    assert instance.data == "test"
+
+
+def test_create_dynamic_model_tuple_types():
+    """Test create_dynamic_model with tuple types."""
+    model_class = create_dynamic_model(tuple[int, str, bool])
+    instance = model_class(data=(42, "test", True))
+    assert instance.data == (42, "test", True)
+
+
+def test_create_dynamic_model_nested_types():
+    """Test create_dynamic_model with nested generic types."""
+    model_class = create_dynamic_model(List[Dict[str, int]])
+    instance = model_class(data=[{"a": 1}, {"b": 2}])
+    assert instance.data == [{"a": 1}, {"b": 2}]
+
+
+def test_create_dynamic_model_custom_pydantic_model():
+    """Test create_dynamic_model with custom Pydantic model."""
+
+    class CustomModel(BaseModel):
+        name: str
+        age: int
+
+    model_class = create_dynamic_model(CustomModel)
+    instance = model_class(data=CustomModel(name="John", age=30))
+    assert instance.data.name == "John"
+    assert instance.data.age == 30
+
+
+def test_create_dynamic_model_with_custom_field_name():
+    """Test create_dynamic_model with custom field name."""
+    model_class = create_dynamic_model(int, field_name="value")
+    instance = model_class(value=42)
+    assert instance.value == 42
+
+
+def test_create_dynamic_model_with_custom_model_name():
+    """Test create_dynamic_model with custom model name."""
+    model_class = create_dynamic_model(str, model_name="CustomStringModel")
+    assert model_class.__name__ == "CustomStringModel"
+
+
+def test_create_dynamic_model_validation():
+    """Test that the dynamic model performs proper validation."""
+    model_class = create_dynamic_model(int)
+
+    # Valid data should work
+    instance = model_class(data=42)
+    assert instance.data == 42
+
+    # Invalid data should raise validation error
+    with pytest.raises(ValidationError):  # Pydantic validation error
+        model_class(data="not an int")
+
+
+def test_create_dynamic_model_complex_example():
+    """Test create_dynamic_model with a complex real-world example."""
+    complex_type = Dict[str, List[Union[int, str]]]
+    model_class = create_dynamic_model(complex_type)
+
+    test_data = {
+        "numbers": [1, 2, 3],
+        "mixed": [1, "two", 3, "four"],
+        "strings": ["a", "b", "c"],
+    }
+
+    instance = model_class(data=test_data)
+    assert instance.data == test_data
