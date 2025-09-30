@@ -1,6 +1,6 @@
 """Automated pytest unit tests for the RestNode class."""
 
-import json
+import io
 import time
 
 import pytest
@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from madsci.common.types.action_types import (
     ActionResult,
     ActionStatus,
+    extract_file_parameters,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
@@ -154,62 +155,57 @@ def test_shutdown(test_node: TestNode) -> None:
         assert test_node.shutdown_has_run
 
 
-def test_run_action(test_client: TestClient) -> None:
-    """Test the test_action command."""
+def test_create_action(test_client: TestClient) -> None:
+    """Test creating a new action."""
     with test_client as client:
         time.sleep(0.5)
 
-        response = client.post(
-            "/action/test_action",
-            params={
-                "action_name": "test_action",
-                "args": json.dumps({"test_param": 1}),
-                "action_id": str(ULID()),
-            },
-        )
+        # Create action
+        response = client.post("/action/test_action", json={"test_param": 1})
         assert response.status_code == 200
-        assert ActionResult.model_validate(response.json()).status in [
-            ActionStatus.RUNNING,
-            ActionStatus.SUCCEEDED,
-        ]
-        time.sleep(0.1)
-        response = client.get(f"/action/{response.json()['action_id']}")
-        assert response.status_code == 200
-        assert (
-            ActionResult.model_validate(response.json()).status
-            == ActionStatus.SUCCEEDED
-        )
+        result = response.json()
+        assert "action_id" in result
+        action_id = result["action_id"]
+        assert ULID.from_str(action_id)  # Validate it's a valid ULID
 
-        response = client.post(
-            "/action/test_action", params={"action_name": "test_action"}
-        )
+
+def test_start_action(test_client: TestClient) -> None:
+    """Test starting an action."""
+    with test_client as client:
+        time.sleep(0.5)
+
+        # Create action
+        response = client.post("/action/test_action", json={"test_param": 1})
+        assert response.status_code == 200
+        action_id = response.json()["action_id"]
+
+        # Start action
+        response = client.post(f"/action/test_action/{action_id}/start")
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
-        assert result.status == ActionStatus.FAILED
-        assert "Missing required arguments" in result.errors[0].message
-        assert result.errors[0].error_type == "ValueError"
+        assert result.action_id == action_id
+        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
 
 
 def test_run_action_fail(test_client: TestClient) -> None:
-    """Test the test_action_fail command."""
-
+    """Test an action that is designed to fail."""
     with test_client as client:
         time.sleep(0.5)
-        response = client.post(
-            "/action/test_fail",
-            params={"action_name": "test_fail", "args": json.dumps({"test_param": 1})},
-        )
-        assert ActionResult.model_validate(response.json()).status in [
-            ActionStatus.FAILED,
-            ActionStatus.RUNNING,
-        ]
-        time.sleep(0.1)
-        response = client.get(f"/action/{response.json()['action_id']}")
+
+        # Create and start failing action
+        response = client.post("/action/test_fail", json={"test_param": 1})
+        action_id = response.json()["action_id"]
+
+        response = client.post(f"/action/test_fail/{action_id}/start")
         assert response.status_code == 200
-        action_result = ActionResult.model_validate(response.json())
-        assert action_result.status == ActionStatus.FAILED
-        assert len(action_result.errors) == 1
-        assert "returned 'False'" in action_result.errors[0].message
+
+        # Check that it fails
+        time.sleep(0.1)
+        response = client.get(f"/action/test_fail/{action_id}/result")
+        assert response.status_code == 200
+        result = ActionResult.model_validate(response.json())
+        assert result.status == ActionStatus.FAILED
+        assert "returned 'False'" in result.errors[0].message
 
 
 def test_get_status(test_client: TestClient) -> None:
@@ -239,7 +235,7 @@ def test_get_info(test_client: TestClient) -> None:
         node_info = NodeInfo.model_validate(response.json())
         assert node_info.node_name == "Test Node 1"
         assert node_info.module_name == "test_node"
-        assert len(node_info.actions) == 4
+        assert len(node_info.actions) == 7
         assert node_info.actions["test_action"].description == "A test action."
         assert node_info.actions["test_action"].args["test_param"].required
         assert (
@@ -317,29 +313,56 @@ def test_get_info(test_client: TestClient) -> None:
         )
 
 
-def test_get_action_result(test_client: TestClient) -> None:
-    """Test the get_action_result command."""
+def test_get_action_result_by_name(test_client: TestClient) -> None:
+    """Test getting action result by action name."""
     with test_client as client:
         time.sleep(0.5)
-        response = client.post(
-            "/action/test_action",
-            params={
-                "action_name": "test_action",
-                "args": json.dumps({"test_param": 1}),
-            },
-        )
+
+        # Create and start action
+        response = client.post("/action/test_action", json={"test_param": 1})
+        action_id = response.json()["action_id"]
+
+        response = client.post(f"/action/test_action/{action_id}/start")
+        assert response.status_code == 200
+
+        # Get action result
+        time.sleep(0.1)  # Give action time to complete
+        response = client.get(f"/action/test_action/{action_id}/result")
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
-        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
+        assert result.action_id == action_id
+        assert result.status == ActionStatus.SUCCEEDED
 
-        time.sleep(0.1)
-        response = client.get(f"/action/{result.action_id}")
+
+def test_get_action_result(test_client: TestClient) -> None:
+    """Test getting action result."""
+    with test_client as client:
+        time.sleep(0.5)
+
+        # Create and start action
+        response = client.post("/action/test_action", json={"test_param": 1})
+        action_id = response.json()["action_id"]
+
+        response = client.post(f"/action/test_action/{action_id}/start")
         assert response.status_code == 200
-        fetched_result = ActionResult.model_validate(response.json())
-        assert fetched_result.status == ActionStatus.SUCCEEDED
-        assert fetched_result.action_id == result.action_id
 
-        response = client.get("/action/not_a_valid_id")
+        # Get action result
+        time.sleep(0.1)  # Give action time to complete
+        response = client.get(f"/action/test_action/{action_id}/result")
+        assert response.status_code == 200
+        result = ActionResult.model_validate(response.json())
+        assert result.action_id == action_id
+        assert result.status == ActionStatus.SUCCEEDED
+
+
+def test_get_nonexistent_action(test_client: TestClient) -> None:
+    """Test getting status of a nonexistent action."""
+    with test_client as client:
+        time.sleep(0.5)
+
+        # Try to get status of nonexistent action
+        invalid_id = str(ULID())
+        response = client.get(f"/action/test_action/{invalid_id}/result")
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
         assert result.status == ActionStatus.UNKNOWN
@@ -354,71 +377,63 @@ def test_get_action_history(test_client: TestClient) -> None:
         action_history = response.json()
         existing_history_length = len(action_history)
 
-        response = client.post(
-            "/action/test_action",
-            params={
-                "action_name": "test_action",
-                "args": json.dumps({"test_param": 1}),
-            },
-        )
-        assert response.status_code == 200
-        result = ActionResult.model_validate(response.json())
-        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
-        response = client.get(f"/action/{response.json()['action_id']}")
-        assert response.status_code == 200
-        assert ActionResult.model_validate(response.json()).status in [
-            ActionStatus.RUNNING,
-            ActionStatus.SUCCEEDED,
-        ]
+        # Create and start an action
+        response = client.post("/action/test_action", json={"test_param": 1})
+        action_id = response.json()["action_id"]
 
-        response = client.post(
-            "/action/test_action",
-            params={
-                "action_name": "test_action",
-                "args": json.dumps({"test_param": 1}),
-            },
-        )
+        response = client.post(f"/action/test_action/{action_id}/start")
         assert response.status_code == 200
-        result2 = ActionResult.model_validate(response.json())
-        assert result2.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
+
+        # Wait for completion
+        time.sleep(0.1)
+
+        # Create and start another action
+        response = client.post("/action/test_action", json={"test_param": 1})
+        action_id2 = response.json()["action_id"]
+
+        response = client.post(f"/action/test_action/{action_id2}/start")
+        assert response.status_code == 200
+
+        # Wait for completion
+        time.sleep(0.1)
 
         response = client.get("/action")
         assert response.status_code == 200
         action_history = response.json()
         assert len(action_history) - existing_history_length == 2
-        assert result.action_id in action_history
-        assert result2.action_id in action_history
-        assert len(action_history[result.action_id]) == 3
+        assert action_id in action_history
+        assert action_id2 in action_history
+        assert len(action_history[action_id]) == 3
         assert (
-            ActionResult.model_validate(action_history[result.action_id][0]).status
+            ActionResult.model_validate(action_history[action_id][0]).status
             == ActionStatus.NOT_STARTED
         )
         assert (
-            ActionResult.model_validate(action_history[result.action_id][1]).status
+            ActionResult.model_validate(action_history[action_id][1]).status
             == ActionStatus.RUNNING
         )
         assert (
-            ActionResult.model_validate(action_history[result.action_id][2]).status
+            ActionResult.model_validate(action_history[action_id][2]).status
             == ActionStatus.SUCCEEDED
         )
 
-        response = client.get("/action", params={"action_id": result2.action_id})
+        response = client.get("/action", params={"action_id": action_id2})
         assert response.status_code == 200
         action_history = response.json()
         assert len(action_history) == 1
-        assert result.action_id not in action_history
-        assert result2.action_id in action_history
-        assert len(action_history[result2.action_id]) == 3
+        assert action_id not in action_history
+        assert action_id2 in action_history
+        assert len(action_history[action_id2]) == 3
         assert (
-            ActionResult.model_validate(action_history[result2.action_id][0]).status
+            ActionResult.model_validate(action_history[action_id2][0]).status
             == ActionStatus.NOT_STARTED
         )
         assert (
-            ActionResult.model_validate(action_history[result2.action_id][1]).status
+            ActionResult.model_validate(action_history[action_id2][1]).status
             == ActionStatus.RUNNING
         )
         assert (
-            ActionResult.model_validate(action_history[result2.action_id][2]).status
+            ActionResult.model_validate(action_history[action_id2][2]).status
             == ActionStatus.SUCCEEDED
         )
 
@@ -427,13 +442,13 @@ def test_get_log(test_client: TestClient) -> None:
     """Test the get_log command."""
     with test_client as client:
         time.sleep(0.5)
-        response = client.post(
-            "/action/test_action",
-            params={
-                "action_name": "test_action",
-                "args": json.dumps({"test_param": 1}),
-            },
-        )
+
+        # Create and start an action to generate log entries
+        response = client.post("/action/test_action", json={"test_param": 1})
+        assert response.status_code == 200
+        action_id = response.json()["action_id"]
+
+        response = client.post(f"/action/test_action/{action_id}/start")
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
         assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
@@ -445,33 +460,205 @@ def test_get_log(test_client: TestClient) -> None:
             Event.model_validate(entry)
 
 
-def test_optional_param_action_with_optional_param(test_client: TestClient) -> None:
-    """Test the test_optional_param_action command with the optional parameter."""
+def test_optional_param_action(test_client: TestClient) -> None:
+    """Test an action with optional parameters."""
     with test_client as client:
         time.sleep(0.5)
+
+        # Test with optional parameter
         response = client.post(
             "/action/test_optional_param_action",
-            params={
-                "action_name": "test_optional_param_action",
-                "args": json.dumps({"test_param": 1, "optional_param": "test_value"}),
-            },
+            json={"test_param": 1, "optional_param": "test_value"},
         )
+        action_id = response.json()["action_id"]
+
+        response = client.post(f"/action/test_optional_param_action/{action_id}/start")
+        assert response.status_code == 200
+        result = ActionResult.model_validate(response.json())
+        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
+
+        # Test without optional parameter
+        response = client.post(
+            "/action/test_optional_param_action", json={"test_param": 1}
+        )
+        action_id = response.json()["action_id"]
+
+        response = client.post(f"/action/test_optional_param_action/{action_id}/start")
         assert response.status_code == 200
         result = ActionResult.model_validate(response.json())
         assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
 
 
-def test_optional_param_action_without_optional_param(test_client: TestClient) -> None:
-    """Test the test_optional_param_action command without the optional parameter."""
+def test_action_with_missing_params(test_client: TestClient) -> None:
+    """Test creating an action with missing required parameters."""
     with test_client as client:
         time.sleep(0.5)
+
+        # Create action without required parameter - should fail validation
         response = client.post(
-            "/action/test_optional_param_action",
-            params={
-                "action_name": "test_optional_param_action",
-                "args": json.dumps({"test_param": 1}),
-            },
+            "/action/test_action",
+            json={},  # Missing test_param
+        )
+        # FastAPI validation should reject this with 422
+        assert response.status_code == 422
+        validation_error = response.json()
+        assert "detail" in validation_error
+        # Verify the validation error mentions the missing field
+        error_details = validation_error["detail"]
+        assert any("test_param" in str(error).lower() for error in error_details)
+
+
+def test_invalid_action_id(test_client: TestClient) -> None:
+    """Test starting an action with an invalid action_id."""
+    with test_client as client:
+        time.sleep(0.5)
+
+        # Try to start action with invalid ID
+        invalid_id = str(ULID())
+        response = client.post(f"/action/test_action/{invalid_id}/start")
+        assert response.status_code == 200  # Should return 200 with failed status
+        result = ActionResult.model_validate(response.json())
+        assert result.status == ActionStatus.FAILED
+        assert "not found" in result.errors[0].message
+
+
+def test_file_parameter_extraction(test_node: TestNode) -> None:
+    """Test that file parameters are correctly extracted from action functions."""
+    # Test the file_action method which has file parameters
+    file_action_func = test_node.action_handlers.get("file_action")
+    assert file_action_func is not None
+
+    file_params = extract_file_parameters(file_action_func)
+
+    # The file_action should have file parameters
+    assert "config_file" in file_params
+    assert file_params["config_file"]["required"] is True
+    assert (
+        "config_file: A required configuration file"
+        in file_params["config_file"]["description"]
+    )
+
+    # Test optional file parameter
+    assert "optional_file" in file_params
+    assert file_params["optional_file"]["required"] is False
+    assert (
+        "optional_file: An optional file parameter"
+        in file_params["optional_file"]["description"]
+    )
+
+
+def test_openapi_file_documentation(test_client: TestClient) -> None:
+    """Test that file upload endpoints include proper documentation in OpenAPI schema."""
+    with test_client as client:
+        # Get the OpenAPI schema
+        response = client.get("/openapi.json")
+        assert response.status_code == 200
+        openapi_schema = response.json()
+
+        # Check for specific file parameter endpoints
+        config_file_path = "/action/file_action/{action_id}/upload/config_file"
+        optional_file_path = "/action/file_action/{action_id}/upload/optional_file"
+
+        assert config_file_path in openapi_schema["paths"]
+        assert optional_file_path in openapi_schema["paths"]
+
+        # Test required file endpoint
+        config_endpoint = openapi_schema["paths"][config_file_path]["post"]
+        assert "summary" in config_endpoint
+        assert "config_file" in config_endpoint["summary"]
+        assert "description" in config_endpoint
+        assert "Required" in config_endpoint["description"]
+        assert "file_action" in config_endpoint["tags"]
+
+        # Test optional file endpoint
+        optional_endpoint = openapi_schema["paths"][optional_file_path]["post"]
+        assert "summary" in optional_endpoint
+        assert "optional_file" in optional_endpoint["summary"]
+        assert "description" in optional_endpoint
+        assert "Optional" in optional_endpoint["description"]
+        assert "file_action" in optional_endpoint["tags"]
+
+        # Verify that old generic endpoint patterns no longer exist
+        old_generic_path = "/action/file_action/{action_id}/files/{file_arg}"
+        old_upload_pattern = "/action/file_action/{action_id}/upload_config_file"
+        assert old_generic_path not in openapi_schema["paths"]
+        assert old_upload_pattern not in openapi_schema["paths"]
+
+
+def test_specific_file_upload_endpoints(test_client: TestClient) -> None:
+    """Test that specific file upload endpoints work correctly."""
+    with test_client as client:
+        # Create an action first
+        response = client.post("/action/file_action", json={})
+        assert response.status_code == 200
+        action_id = response.json()["action_id"]
+
+        # Test uploading to specific config_file endpoint
+        config_content = b"config content"
+        response = client.post(
+            f"/action/file_action/{action_id}/upload/config_file",
+            files={"file": ("config.txt", io.BytesIO(config_content))},
         )
         assert response.status_code == 200
-        result = ActionResult.model_validate(response.json())
-        assert result.status in [ActionStatus.RUNNING, ActionStatus.SUCCEEDED]
+        result = response.json()
+        assert result["status"] == "uploaded"
+        assert result["file_arg"] == "config_file"
+
+        # Test uploading to specific optional_file endpoint
+        optional_content = b"optional content"
+        response = client.post(
+            f"/action/file_action/{action_id}/upload/optional_file",
+            files={"file": ("optional.txt", io.BytesIO(optional_content))},
+        )
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "uploaded"
+        assert result["file_arg"] == "optional_file"
+
+
+def test_file_download_routes(test_client: TestClient) -> None:
+    """Test that file download routes are created for actions that return files."""
+    with test_client as client:
+        # Get the OpenAPI schema
+        response = client.get("/openapi.json")
+        assert response.status_code == 200
+        openapi_schema = response.json()
+
+        # Check for single file result action
+        file_result_path = "/action/file_result_action/{action_id}/download/file"
+        assert file_result_path in openapi_schema["paths"]
+
+        file_endpoint = openapi_schema["paths"][file_result_path]["get"]
+        assert "summary" in file_endpoint
+        assert "download" in file_endpoint["summary"].lower()
+        assert "file_result_action" in file_endpoint["tags"]
+
+        # Check for multiple file result action
+        output_file_path = (
+            "/action/multiple_file_result_action/{action_id}/download/output_file"
+        )
+        log_file_path = (
+            "/action/multiple_file_result_action/{action_id}/download/log_file"
+        )
+        all_files_path = "/action/multiple_file_result_action/{action_id}/download"
+
+        assert output_file_path in openapi_schema["paths"]
+        assert log_file_path in openapi_schema["paths"]
+        assert all_files_path in openapi_schema["paths"]
+
+        # All should use the same tag for grouping
+        output_endpoint = openapi_schema["paths"][output_file_path]["get"]
+        log_endpoint = openapi_schema["paths"][log_file_path]["get"]
+        all_files_endpoint = openapi_schema["paths"][all_files_path]["get"]
+
+        assert "multiple_file_result_action" in output_endpoint["tags"]
+        assert "multiple_file_result_action" in log_endpoint["tags"]
+        assert "multiple_file_result_action" in all_files_endpoint["tags"]
+
+        # Verify actions without file results don't have download endpoints
+        test_action_paths = [
+            path
+            for path in openapi_schema["paths"]
+            if "test_action" in path and "download" in path
+        ]
+        assert len(test_action_paths) == 0

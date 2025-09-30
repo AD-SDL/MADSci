@@ -1,20 +1,15 @@
 """Comprehensive unit tests for the RestNodeClient class."""
 
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
-from zipfile import ZipFile
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 from madsci.client.node.rest_node_client import (
     RestNodeClient,
-    action_response_from_headers,
-    process_file_response,
 )
 from madsci.common.types.action_types import (
-    ActionFiles,
     ActionRequest,
     ActionResult,
     ActionRunning,
@@ -69,25 +64,42 @@ def test_send_action_no_await(
     mock_post: MagicMock, rest_node_client: RestNodeClient
 ) -> None:
     """Test the send_action method without awaiting."""
-    mock_response = MagicMock()
-    mock_response.ok = True
-    mock_response.json.return_value = ActionSucceeded().model_dump(mode="json")
-    mock_post.return_value = mock_response
+    action_id = new_ulid_str()
+
+    # Mock create_action response
+    create_response = MagicMock()
+    create_response.ok = True
+    create_response.json.return_value = {"action_id": action_id}
+
+    # Mock start_action response
+    start_response = MagicMock()
+    start_response.ok = True
+    start_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
+        mode="json"
+    )
+
+    mock_post.side_effect = [create_response, start_response]
 
     action_request = ActionRequest(action_name="test_action", args={}, files={})
     result = rest_node_client.send_action(action_request, await_result=False)
+
     assert isinstance(result, ActionResult)
     assert result.status == ActionStatus.SUCCEEDED
-    assert result.action_id == mock_response.json.return_value["action_id"]
-    mock_post.assert_called_once_with(
-        "http://localhost:2000/action/test_action",
-        params={
-            "action_name": "test_action",
-            "args": json.dumps({}),
-            "action_id": action_request.action_id,
-        },
-        files=[],
-        timeout=60,
+    assert result.action_id == action_id
+
+    # Verify the calls: create_action then start_action
+    assert mock_post.call_count == 2
+
+    # First call: create action
+    create_call = mock_post.call_args_list[0]
+    assert create_call[0][0] == "http://localhost:2000/action/test_action"
+    assert "json" in create_call[1]
+
+    # Second call: start action
+    start_call = mock_post.call_args_list[1]
+    assert (
+        start_call[0][0]
+        == f"http://localhost:2000/action/test_action/{action_id}/start"
     )
 
 
@@ -97,36 +109,56 @@ def test_send_action_await(
     mock_get: MagicMock, mock_post: MagicMock, rest_node_client: RestNodeClient
 ) -> None:
     """Test the send_action method with awaiting."""
-    mock_post_response = MagicMock()
-    mock_post_response.ok = True
-    mock_post_response.json.return_value = ActionRunning().model_dump(mode="json")
-    mock_post.return_value = mock_post_response
-    mock_get_response = MagicMock()
-    mock_get_response.ok = True
-    mock_get_response.json.return_value = ActionSucceeded(
-        action_id=mock_post_response.json.return_value["action_id"]
+    action_id = new_ulid_str()
+
+    # Mock create_action response
+    create_response = MagicMock()
+    create_response.ok = True
+    create_response.json.return_value = {"action_id": action_id}
+
+    # Mock start_action response (returns running status)
+    start_response = MagicMock()
+    start_response.ok = True
+    start_response.json.return_value = ActionRunning(action_id=action_id).model_dump(
+        mode="json"
+    )
+
+    mock_post.side_effect = [create_response, start_response]
+
+    # Mock status check (first running, then completed)
+    running_response = MagicMock()
+    running_response.ok = True
+    running_response.json.return_value = ActionStatus.RUNNING.value
+
+    completed_response = MagicMock()
+    completed_response.ok = True
+    completed_response.json.return_value = ActionStatus.SUCCEEDED.value
+
+    # Mock result data response (when action completes successfully)
+    result_data_response = MagicMock()
+    result_data_response.ok = True
+    result_data_response.json.return_value = ActionSucceeded(
+        action_id=action_id
     ).model_dump(mode="json")
-    mock_get.return_value = mock_get_response
+
+    mock_get.side_effect = [running_response, completed_response, result_data_response]
 
     action_request = ActionRequest(action_name="test_action", args={}, files={})
     result = rest_node_client.send_action(action_request)
+
     assert isinstance(result, ActionResult)
     assert result.status == ActionStatus.SUCCEEDED
-    assert result.action_id == mock_post_response.json.return_value["action_id"]
-    mock_post.assert_called_once_with(
-        "http://localhost:2000/action/test_action",
-        params={
-            "action_name": "test_action",
-            "args": json.dumps({}),
-            "action_id": action_request.action_id,
-        },
-        files=[],
-        timeout=60,
-    )
-    mock_get.assert_called_with(
-        f"http://localhost:2000/action/{mock_get_response.json.return_value['action_id']}",
-        timeout=10,
-    )
+    assert result.action_id == action_id
+
+    # Verify the calls
+    assert mock_post.call_count == 2  # create + start
+    assert mock_get.call_count == 3  # status check + completed status + result data
+
+    # Verify status endpoint was called
+    status_calls = [
+        call for call in mock_get.call_args_list if "/action/test_action/" in call[0][0]
+    ]
+    assert len(status_calls) >= 2
 
 
 @patch("requests.get")
@@ -146,7 +178,7 @@ def test_get_action_result(
     assert result.status == ActionStatus.SUCCEEDED
     assert result.action_id == mock_response.json.return_value["action_id"]
     mock_get.assert_called_once_with(
-        f"http://localhost:2000/action/{mock_response.json.return_value['action_id']}",
+        f"http://localhost:2000/action/{mock_response.json.return_value['action_id']}/result",
         timeout=10,
     )
 
@@ -304,11 +336,13 @@ def test_get_resources_not_implemented(rest_node_client: RestNodeClient) -> None
 def test_send_action_http_error(
     mock_post: MagicMock, rest_node_client: RestNodeClient
 ) -> None:
-    """Test send_action method with HTTP error."""
+    """Test send_action method with HTTP error during create_action."""
     mock_response = MagicMock()
     mock_response.status_code = 500
     mock_response.text = "Internal Server Error"
-    mock_response.raise_for_status.side_effect = requests.HTTPError("500 Server Error")
+    http_error = requests.HTTPError("500 Server Error")
+    http_error.response = mock_response  # Add the response attribute
+    mock_response.raise_for_status.side_effect = http_error
     mock_post.return_value = mock_response
 
     action_request = ActionRequest(action_name="test_action", args={}, files={})
@@ -322,11 +356,32 @@ def test_send_action_with_files(
     mock_post: MagicMock, rest_node_client: RestNodeClient
 ) -> None:
     """Test send_action method with file uploads."""
-    mock_response = MagicMock()
-    mock_response.ok = True
-    mock_response.headers = {}  # No x-madsci-status header
-    mock_response.json.return_value = ActionSucceeded().model_dump(mode="json")
-    mock_post.return_value = mock_response
+    action_id = new_ulid_str()
+
+    # Mock create_action response
+    create_response = MagicMock()
+    create_response.ok = True
+    create_response.json.return_value = {"action_id": action_id}
+
+    # Mock file upload responses
+    upload_response1 = MagicMock()
+    upload_response1.ok = True
+    upload_response2 = MagicMock()
+    upload_response2.ok = True
+
+    # Mock start_action response
+    start_response = MagicMock()
+    start_response.ok = True
+    start_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
+        mode="json"
+    )
+
+    mock_post.side_effect = [
+        create_response,
+        upload_response1,
+        upload_response2,
+        start_response,
+    ]
 
     # Create temporary files for testing
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file1:
@@ -347,12 +402,33 @@ def test_send_action_with_files(
         result = rest_node_client.send_action(action_request, await_result=False)
         assert isinstance(result, ActionResult)
         assert result.status == ActionStatus.SUCCEEDED
+        assert result.action_id == action_id
 
-        # Verify files were passed correctly
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args
-        assert "files" in call_args.kwargs
-        assert len(call_args.kwargs["files"]) == 2
+        # Verify the sequence of calls: create + 2 file uploads + start
+        assert mock_post.call_count == 4
+
+        # First call: create action
+        create_call = mock_post.call_args_list[0]
+        assert create_call[0][0] == "http://localhost:2000/action/test_action"
+
+        # File upload calls
+        upload_calls = mock_post.call_args_list[1:3]
+        upload_urls = [call[0][0] for call in upload_calls]
+        assert (
+            f"http://localhost:2000/action/test_action/{action_id}/upload/file1"
+            in upload_urls
+        )
+        assert (
+            f"http://localhost:2000/action/test_action/{action_id}/upload/file2"
+            in upload_urls
+        )
+
+        # Start action call
+        start_call = mock_post.call_args_list[3]
+        assert (
+            start_call[0][0]
+            == f"http://localhost:2000/action/test_action/{action_id}/start"
+        )
 
     finally:
         # Clean up temporary files
@@ -364,34 +440,30 @@ def test_send_action_with_files(
 def test_send_action_file_response(
     mock_post: MagicMock, rest_node_client: RestNodeClient
 ) -> None:
-    """Test send_action method with file response."""
-    mock_response = MagicMock()
-    mock_response.ok = True
-    mock_response.headers = {
-        "x-madsci-status": "succeeded",
-        "x-madsci-action-id": new_ulid_str(),
-        "x-madsci-errors": "[]",
-        "x-madsci-files": '{"output.txt": "result.txt"}',
-        "x-madsci-datapoints": "{}",
-        "x-madsci-data": "{}",
-    }
-    mock_response.content = b"test file content"
-    mock_post.return_value = mock_response
+    """Test send_action method."""
+    action_id = new_ulid_str()
+
+    # Mock create_action response
+    create_response = MagicMock()
+    create_response.ok = True
+    create_response.json.return_value = {"action_id": action_id}
+
+    # Mock start_action response
+    start_response = MagicMock()
+    start_response.ok = True
+    start_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
+        mode="json"
+    )
+
+    mock_post.side_effect = [create_response, start_response]
 
     action_request = ActionRequest(action_name="test_action", args={}, files={})
 
-    with patch(
-        "madsci.client.node.rest_node_client.process_file_response"
-    ) as mock_process:
-        mock_result = ActionResult(
-            action_id=mock_response.headers["x-madsci-action-id"],
-            status=ActionStatus.SUCCEEDED,
-        )
-        mock_process.return_value = mock_result
+    result = rest_node_client.send_action(action_request, await_result=False)
 
-        result = rest_node_client.send_action(action_request, await_result=False)
-        assert result == mock_result
-        mock_process.assert_called_once_with(mock_response)
+    assert isinstance(result, ActionResult)
+    assert result.status == ActionStatus.SUCCEEDED
+    assert result.action_id == action_id
 
 
 @patch("time.sleep")
@@ -408,9 +480,7 @@ def test_await_action_result_timeout(
     mock_response = MagicMock()
     mock_response.ok = True
     mock_response.headers = {}
-    mock_response.json.return_value = ActionRunning(action_id=action_id).model_dump(
-        mode="json"
-    )
+    mock_response.json.return_value = ActionStatus.RUNNING.value
     mock_get.return_value = mock_response
 
     with pytest.raises(TimeoutError, match="Timed out waiting for action to complete"):
@@ -425,22 +495,30 @@ def test_await_action_result_exponential_backoff(
     """Test await_action_result with exponential backoff."""
     action_id = new_ulid_str()
 
-    # Mock responses: running -> running -> succeeded
-    running_response = MagicMock()
-    running_response.ok = True
-    running_response.headers = {}
-    running_response.json.return_value = ActionRunning(action_id=action_id).model_dump(
+    # Mock responses: running status -> running status -> succeeded status -> result
+    running_status_response = MagicMock()
+    running_status_response.ok = True
+    running_status_response.headers = {}
+    running_status_response.json.return_value = ActionStatus.RUNNING.value
+
+    succeeded_status_response = MagicMock()
+    succeeded_status_response.ok = True
+    succeeded_status_response.headers = {}
+    succeeded_status_response.json.return_value = ActionStatus.SUCCEEDED.value
+
+    result_response = MagicMock()
+    result_response.ok = True
+    result_response.headers = {}
+    result_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
         mode="json"
     )
 
-    succeeded_response = MagicMock()
-    succeeded_response.ok = True
-    succeeded_response.headers = {}
-    succeeded_response.json.return_value = ActionSucceeded(
-        action_id=action_id
-    ).model_dump(mode="json")
-
-    mock_get.side_effect = [running_response, running_response, succeeded_response]
+    mock_get.side_effect = [
+        running_status_response,
+        running_status_response,
+        succeeded_status_response,
+        result_response,
+    ]
 
     result = rest_node_client.await_action_result(action_id)
     assert result.status == ActionStatus.SUCCEEDED
@@ -451,37 +529,6 @@ def test_await_action_result_exponential_backoff(
     # First sleep: 0.25, second sleep: 0.25 * 1.5 = 0.375
     mock_sleep.assert_any_call(0.25)
     mock_sleep.assert_any_call(0.375)
-
-
-@patch("requests.get")
-def test_get_action_result_file_response(
-    mock_get: MagicMock, rest_node_client: RestNodeClient
-) -> None:
-    """Test get_action_result with file response."""
-    action_id = new_ulid_str()
-
-    mock_response = MagicMock()
-    mock_response.ok = True
-    mock_response.headers = {
-        "x-madsci-status": "succeeded",
-        "x-madsci-action-id": action_id,
-        "x-madsci-errors": "[]",
-        "x-madsci-files": '{"output.txt": "result.txt"}',
-        "x-madsci-datapoints": "{}",
-        "x-madsci-data": "{}",
-    }
-    mock_response.content = b"test file content"
-    mock_get.return_value = mock_response
-
-    with patch(
-        "madsci.client.node.rest_node_client.process_file_response"
-    ) as mock_process:
-        mock_result = ActionResult(action_id=action_id, status=ActionStatus.SUCCEEDED)
-        mock_process.return_value = mock_result
-
-        result = rest_node_client.get_action_result(action_id)
-        assert result == mock_result
-        mock_process.assert_called_once_with(mock_response)
 
 
 @patch("requests.get")
@@ -510,138 +557,6 @@ def test_http_error_handling(
         rest_node_client.get_log()
 
 
-def test_action_response_from_headers():
-    """Test action_response_from_headers function."""
-    action_id = new_ulid_str()
-    headers = {
-        "x-madsci-action-id": action_id,
-        "x-madsci-status": "succeeded",
-        "x-madsci-errors": '["error1", "error2"]',
-        "x-madsci-files": '{"output": "result.txt"}',
-        "x-madsci-datapoints": '{"temp": {"label": "temp", "data_type": "json", "value": 25.0}}',
-        "x-madsci-json_data": '{"key": "value"}',
-    }
-
-    result = action_response_from_headers(headers)
-
-    assert result.action_id == action_id
-    assert result.status == ActionStatus.SUCCEEDED
-    assert len(result.errors) == 2
-    assert result.errors[0].message == "error1"
-    assert result.errors[1].message == "error2"
-    assert result.files.output == Path("result.txt")
-    assert result.datapoints.temp.label == "temp"
-    assert result.datapoints.temp.value == 25.0
-    assert result.json_data == {"key": "value"}
-
-
-def test_process_file_response_single_file():
-    """Test process_file_response with single file."""
-    action_id = new_ulid_str()
-    mock_response = MagicMock()
-    mock_response.headers = {
-        "x-madsci-action-id": action_id,
-        "x-madsci-status": "succeeded",
-        "x-madsci-errors": "[]",
-        "x-madsci-files": "result.txt",
-        "x-madsci-datapoints": "{}",
-        "x-madsci-json_data": "{}",
-    }
-    mock_response.content = b"test file content"
-
-    with patch("tempfile.NamedTemporaryFile", mock_open()) as mock_temp:
-        mock_temp.return_value.__enter__.return_value.name = "/tmp/test_file.txt"  # noqa: S108
-
-        result = process_file_response(mock_response)
-
-        assert result.action_id == action_id
-        assert result.status == ActionStatus.SUCCEEDED
-        assert result.files == Path("/tmp/test_file.txt")  # noqa: S108
-
-
-def test_process_file_response_multiple_files():
-    """Test process_file_response with multiple files in zip."""
-    action_id = new_ulid_str()
-    mock_response = MagicMock()
-    mock_response.headers = {
-        "x-madsci-action-id": action_id,
-        "x-madsci-status": "succeeded",
-        "x-madsci-errors": "[]",
-        "x-madsci-files": '{"file1": "output1.txt", "file2": "output2.txt"}',
-        "x-madsci-datapoints": "{}",
-        "x-madsci-json_data": "{}",
-    }
-    mock_response.content = b"fake zip content"
-
-    # Create a real temporary zip file for testing
-    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip_file:
-        temp_zip_path = Path(temp_zip_file.name)
-
-        # Create a valid zip file with test content
-        with ZipFile(temp_zip_path, "w") as zip_file:
-            zip_file.writestr("output1.txt", "content1")
-            zip_file.writestr("output2.txt", "content2")
-
-    try:
-        with patch("tempfile.NamedTemporaryFile") as mock_temp_file:
-            # Mock the zip file creation
-            mock_zip_temp = MagicMock()
-            mock_zip_temp.name = str(temp_zip_path)
-            mock_zip_temp.write = MagicMock()
-
-            # Mock individual temp files
-            mock_temp1 = MagicMock()
-            mock_temp1.name = "/tmp/file1.txt"  # noqa: S108
-            mock_temp2 = MagicMock()
-            mock_temp2.name = "/tmp/file2.txt"  # noqa: S108
-
-            mock_temp_file.side_effect = [
-                MagicMock(
-                    __enter__=lambda self: mock_zip_temp,  # noqa: ARG005
-                    __exit__=lambda *args: None,  # noqa: ARG005
-                ),
-                MagicMock(
-                    __enter__=lambda self: mock_temp1,  # noqa: ARG005
-                    __exit__=lambda *args: None,  # noqa: ARG005
-                ),
-                MagicMock(
-                    __enter__=lambda self: mock_temp2,  # noqa: ARG005
-                    __exit__=lambda *args: None,  # noqa: ARG005
-                ),
-            ]
-
-            result = process_file_response(mock_response)
-
-            assert result.action_id == action_id
-            assert result.status == ActionStatus.SUCCEEDED
-            assert result.files.file1 == Path("/tmp/file1.txt")  # noqa: S108
-            assert result.files.file2 == Path("/tmp/file2.txt")  # noqa: S108
-    finally:
-        # Clean up
-        temp_zip_path.unlink(missing_ok=True)
-
-
-def test_process_file_response_no_files():
-    """Test process_file_response with no files."""
-    action_id = new_ulid_str()
-    mock_response = MagicMock()
-    mock_response.headers = {
-        "x-madsci-action-id": action_id,
-        "x-madsci-status": "succeeded",
-        "x-madsci-errors": "[]",
-        "x-madsci-files": "{}",
-        "x-madsci-datapoints": "{}",
-        "x-madsci-json_data": "{}",
-    }
-    mock_response.content = b""
-
-    result = process_file_response(mock_response)
-
-    assert result.action_id == action_id
-    assert result.status == ActionStatus.SUCCEEDED
-    assert result.files == ActionFiles()
-
-
 def test_client_capabilities():
     """Test that client has correct capabilities."""
     client = RestNodeClient(url="http://localhost:2000")
@@ -668,3 +583,168 @@ def test_url_protocols():
     """Test supported URL protocols."""
     assert "http" in RestNodeClient.url_protocols
     assert "https" in RestNodeClient.url_protocols
+
+
+@patch("requests.post")
+def test_create_action(mock_post: MagicMock, rest_node_client: RestNodeClient) -> None:
+    """Test create_action method."""
+    action_id = new_ulid_str()
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.json.return_value = {"action_id": action_id}
+    mock_post.return_value = mock_response
+
+    action_request = ActionRequest(
+        action_name="test_action", args={"param": "value"}, files={}
+    )
+    result_action_id = rest_node_client._create_action(action_request)
+
+    assert result_action_id == action_id
+    mock_post.assert_called_once_with(
+        "http://localhost:2000/action/test_action",
+        json=action_request.model_dump(mode="json"),
+        timeout=60,
+    )
+
+
+@patch("requests.post")
+def test_upload_action_files(
+    mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test upload_action_files method."""
+    action_id = new_ulid_str()
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_post.return_value = mock_response
+
+    # Create temporary files for testing
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+        temp_file.write("test content")
+        temp_file_path = temp_file.name
+
+    try:
+        rest_node_client._upload_action_files(
+            "test_action", action_id, {"input_file": temp_file_path}
+        )
+
+        mock_post.assert_called_once_with(
+            f"http://localhost:2000/action/test_action/{action_id}/upload/input_file",
+            files={"file": mock_post.call_args[1]["files"]["file"]},
+            timeout=60,
+        )
+
+    finally:
+        Path(temp_file_path).unlink(missing_ok=True)
+
+
+@patch("requests.post")
+def test_start_action(mock_post: MagicMock, rest_node_client: RestNodeClient) -> None:
+    """Test start_action method."""
+    action_id = new_ulid_str()
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.json.return_value = ActionRunning(action_id=action_id).model_dump(
+        mode="json"
+    )
+    mock_post.return_value = mock_response
+
+    result = rest_node_client._start_action("test_action", action_id)
+
+    assert isinstance(result, ActionResult)
+    assert result.status == ActionStatus.RUNNING
+    assert result.action_id == action_id
+    mock_post.assert_called_once_with(
+        f"http://localhost:2000/action/test_action/{action_id}/start",
+        timeout=60,
+    )
+
+
+@patch("requests.get")
+def test_get_action_status(
+    mock_get: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test get_action_status method."""
+    action_id = new_ulid_str()
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.json.return_value = ActionStatus.RUNNING.value
+    mock_get.return_value = mock_response
+
+    result = rest_node_client.get_action_status(action_id)
+
+    assert isinstance(result, ActionStatus)
+    assert result == ActionStatus.RUNNING
+    mock_get.assert_called_once_with(
+        f"http://localhost:2000/action/{action_id}/status",
+        timeout=10,
+    )
+
+
+@patch("requests.get")
+def test_get_action_result_data(
+    mock_get: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test get_action_result_data method."""
+    action_id = new_ulid_str()
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
+        mode="json"
+    )
+    mock_get.return_value = mock_response
+
+    result = rest_node_client.get_action_result_by_name("test_action", action_id)
+
+    assert isinstance(result, ActionResult)
+    assert result.status == ActionStatus.SUCCEEDED
+    assert result.action_id == action_id
+    mock_get.assert_called_once_with(
+        f"http://localhost:2000/action/test_action/{action_id}/result",
+        timeout=10,
+    )
+
+
+@patch("requests.get")
+def test_get_action_file(mock_get: MagicMock, rest_node_client: RestNodeClient) -> None:
+    """Test get_action_file method."""
+    action_id = new_ulid_str()
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.content = b"test file content"
+    mock_get.return_value = mock_response
+
+    with patch("tempfile.NamedTemporaryFile") as mock_temp:
+        mock_temp.return_value.__enter__.return_value.name = "/tmp/test_file.txt"  # noqa: S108
+
+        result = rest_node_client._get_action_file(
+            "test_action", action_id, "output_file"
+        )
+
+        assert result == Path("/tmp/test_file.txt")  # noqa: S108
+        mock_get.assert_called_once_with(
+            f"http://localhost:2000/action/test_action/{action_id}/download/output_file",
+            timeout=60,
+        )
+
+
+@patch("requests.get")
+def test_get_action_files_zip(
+    mock_get: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test get_action_files_zip method."""
+    action_id = new_ulid_str()
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.content = b"fake zip content"
+    mock_get.return_value = mock_response
+
+    with patch("tempfile.NamedTemporaryFile") as mock_temp:
+        mock_temp.return_value.__enter__.return_value.name = "/tmp/test_files.zip"  # noqa: S108
+
+        result = rest_node_client._get_action_files_zip("test_action", action_id)
+
+        assert result == Path("/tmp/test_files.zip")  # noqa: S108
+        mock_get.assert_called_once_with(
+            f"http://localhost:2000/action/test_action/{action_id}/download",
+            timeout=60,
+        )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import Any, Literal, Optional, Union
 from madsci.common.types.base_types import Error, MadsciBaseModel
 from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.utils import localnow, new_ulid_str
-from pydantic import Field, TypeAdapter
+from pydantic import Field, TypeAdapter, create_model
 from pydantic.functional_validators import field_validator, model_validator
 from pydantic.types import Discriminator, Tag
 from typing_extensions import Annotated, TypeAliasType
@@ -574,3 +575,215 @@ ActionResultDefinitions = Annotated[
     ],
     Discriminator("result_type"),
 ]
+
+
+def create_action_request_model(action_function: Any) -> type[MadsciBaseModel]:
+    """Create a dynamic action request model based on function signature."""
+    signature = inspect.signature(action_function)
+    fields = {}
+
+    for param_name, param in signature.parameters.items():
+        if param_name == "self":
+            continue
+
+        # Determine field type and default
+        field_type = (
+            param.annotation if param.annotation != inspect.Parameter.empty else Any
+        )
+
+        # Handle file parameters by converting Path to UploadFile for documentation
+        if field_type == Path:
+            # For file parameters, we'll handle them separately in the API
+            continue
+
+        # Set up default value and description
+        if param.default != inspect.Parameter.empty:
+            default_value = param.default
+        elif param_name in ["args", "kwargs"]:
+            # Skip *args and **kwargs
+            continue
+        else:
+            default_value = ... if field_type != Optional[Any] else None
+
+        # Create a descriptive field with title and description
+        field_title = param_name.replace("_", " ").title()
+        field_description = f"Parameter: {param_name}"
+
+        # Try to extract parameter description from docstring
+        if action_function.__doc__:
+            doc_lines = action_function.__doc__.strip().split("\n")
+            for line in doc_lines:
+                if param_name in line.lower() and ":" in line:
+                    field_description = line.strip()
+                    break
+
+        fields[param_name] = (
+            field_type,
+            Field(
+                default=default_value, title=field_title, description=field_description
+            ),
+        )
+
+    # Create the dynamic model with a descriptive docstring
+    model_name = f"{action_function.__name__.title()}Request"
+    model_docstring = f"Request parameters for the {action_function.__name__} action."
+    if action_function.__doc__:
+        model_docstring = f"{model_docstring}\n\n{action_function.__doc__.strip()}"
+
+    return create_model(
+        model_name, __base__=MadsciBaseModel, __doc__=model_docstring, **fields
+    )
+
+
+def create_action_result_model(action_function: Any) -> type[ActionResult]:
+    """Create a dynamic ActionResult model based on function return type."""
+    # Parse the return type to determine what fields should be documented
+    fields = {}
+
+    # Get result definitions from the function metadata
+    if hasattr(action_function, "__madsci_action_result_definitions__"):
+        result_definitions = action_function.__madsci_action_result_definitions__
+
+        if result_definitions:
+            fields.update(_create_result_fields(action_function, result_definitions))
+
+    # Add documentation from the function
+    model_description = f"Result for {action_function.__name__} action"
+    if action_function.__doc__:
+        model_description = f"{model_description}: {action_function.__doc__.strip()}"
+
+    # Create the dynamic model
+    model_name = f"{action_function.__name__.title()}ActionResult"
+
+    # Create model with specific fields or base ActionResult
+    return create_model(
+        model_name,
+        __base__=ActionResult,
+        __module__=action_function.__module__,
+        **fields,
+    )
+
+
+def extract_file_parameters(action_function: Any) -> dict[str, dict[str, Any]]:
+    """Extract file parameter information from action function signature.
+
+    Returns:
+        Dictionary mapping parameter names to their metadata including:
+        - required: bool indicating if the parameter is required
+        - description: str describing the parameter
+        - annotation: type annotation of the parameter
+    """
+    signature = inspect.signature(action_function)
+    file_parameters = {}
+
+    for param_name, param in signature.parameters.items():
+        if param_name == "self":
+            continue
+
+        # Check if this is a file parameter (Path type)
+        if param.annotation == Path or (
+            hasattr(param.annotation, "__origin__")
+            and param.annotation.__origin__ is Union
+            and Path in param.annotation.__args__
+        ):
+            is_required = param.default == inspect.Parameter.empty
+
+            # Extract description from docstring if available
+            description = f"File parameter: {param_name}"
+            if action_function.__doc__:
+                # Simple docstring parsing - could be enhanced later
+                doc_lines = action_function.__doc__.strip().split("\n")
+                for line in doc_lines:
+                    if param_name in line.lower() and ":" in line:
+                        description = line.strip()
+                        break
+
+            file_parameters[param_name] = {
+                "required": is_required,
+                "description": description,
+                "annotation": param.annotation,
+                "default": param.default
+                if param.default != inspect.Parameter.empty
+                else None,
+            }
+
+    return file_parameters
+
+
+def extract_file_result_definitions(action_function: Any) -> dict[str, str]:
+    """Extract file result information from action function metadata.
+
+    Returns:
+        Dictionary mapping result labels to their descriptions for file results
+    """
+    file_results = {}
+
+    if hasattr(action_function, "__madsci_action_result_definitions__"):
+        result_definitions = action_function.__madsci_action_result_definitions__
+
+        for result_def in result_definitions:
+            if hasattr(result_def, "result_type") and result_def.result_type == "file":
+                description = f"File result: {result_def.result_label}"
+                if hasattr(result_def, "description") and result_def.description:
+                    description = f"File result: {result_def.description}"
+
+                file_results[result_def.result_label] = description
+
+    return file_results
+
+
+def _create_result_fields(action_function: Any, result_definitions: list) -> dict:
+    """Create fields for dynamic result models based on result definitions."""
+    fields = {}
+    json_data_fields = {}
+    files_fields = {}
+    datapoints_fields = {}
+
+    for result_def in result_definitions:
+        if isinstance(result_def, FileActionResultDefinition):
+            files_fields[result_def.result_label] = (
+                str,
+                Field(description=f"File: {result_def.result_label}"),
+            )
+        elif isinstance(result_def, JSONActionResultDefinition):
+            json_data_fields[result_def.result_label] = (
+                str,  # Will be the actual data type
+                Field(
+                    description=f"JSON data: {result_def.result_label} ({result_def.data_type})"
+                ),
+            )
+        elif isinstance(result_def, DatapointActionResultDefinition):
+            datapoints_fields[result_def.result_label] = (
+                str,  # Will be the datapoint
+                Field(description=f"Datapoint: {result_def.result_label}"),
+            )
+
+    # If we have specific result types, create custom fields
+    if json_data_fields:
+        json_data_model = create_model(
+            f"{action_function.__name__.title()}JsonData", **json_data_fields
+        )
+        fields["json_data"] = (
+            Optional[json_data_model],
+            Field(description="JSON data returned by the action"),
+        )
+
+    if files_fields:
+        files_model = create_model(
+            f"{action_function.__name__.title()}Files", **files_fields
+        )
+        fields["files"] = (
+            Optional[files_model],
+            Field(description="Files returned by the action"),
+        )
+
+    if datapoints_fields:
+        datapoints_model = create_model(
+            f"{action_function.__name__.title()}Datapoints", **datapoints_fields
+        )
+        fields["datapoints"] = (
+            Optional[datapoints_model],
+            Field(description="Datapoints returned by the action"),
+        )
+
+    return fields

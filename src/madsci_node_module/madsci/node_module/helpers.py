@@ -1,18 +1,14 @@
 """Helper methods used by the MADSci node module implementations."""
 
 import inspect
-import json
-import tempfile
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Any, Callable
-from zipfile import ZipFile
 
 import regex
 from madsci.common.types.action_types import (
     ActionDatapoints,
     ActionFiles,
     ActionJSON,
-    ActionResult,
     ActionResultDefinition,
     DatapointActionResultDefinition,
     FileActionResultDefinition,
@@ -23,7 +19,6 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageDataPoint,
     ValueDataPoint,
 )
-from starlette.responses import FileResponse
 
 
 def action(
@@ -143,41 +138,77 @@ def get_named_input(main_string: str, plural: str) -> list[str]:
     return result_list
 
 
+def _parse_action_files(returned: Any) -> list[ActionResultDefinition]:
+    """Parse ActionFiles subclass into result definitions."""
+    for key, value in returned.__annotations__.items():
+        if value is not Path:
+            raise ValueError(
+                f"All fields in an ActionFiles subclass must be of type Path, but field {key} is of type {value}",
+            )
+    return [
+        FileActionResultDefinition(result_label=key) for key in returned.__annotations__
+    ]
+
+
+def _parse_action_json(returned: Any) -> list[ActionResultDefinition]:
+    """Parse ActionJSON subclass into result definitions."""
+    return [
+        JSONActionResultDefinition(
+            result_label=key, data_type=getattr(value, "__name__", str(value))
+        )
+        for key, value in returned.__annotations__.items()
+    ]
+
+
+def _parse_action_datapoints(returned: Any) -> list[ActionResultDefinition]:
+    """Parse ActionDatapoints subclass into result definitions."""
+    for key, value in returned.__annotations__.items():
+        if value not in [FileDataPoint, ValueDataPoint, ObjectStorageDataPoint]:
+            raise ValueError(
+                f"All fields in an ActionDatapoints subclass must be datapoints but field {key} is of type {value}",
+            )
+    return [
+        DatapointActionResultDefinition(result_label=key)
+        for key in returned.__annotations__
+    ]
+
+
 def parse_result(returned: Any) -> list[ActionResultDefinition]:
     """Parse a single result from an Action"""
 
-    if issubclass(returned, ActionFiles):
-        for key, value in returned.__annotations__.items():
-            if value is not Path:
-                raise ValueError(
-                    f"All fields in an ActionFiles subclass must be of type Path, but field {key} is of type {value}",
-                )
-        return [
-            FileActionResultDefinition(result_label=key)
-            for key in returned.__annotations__
-        ]
-    if issubclass(returned, ActionJSON):
-        return [
-            JSONActionResultDefinition(result_label=key, data_type=value.__name__)
-            for key, value in returned.__annotations__.items()
-        ]
-    if issubclass(returned, ActionDatapoints):
-        for key, value in returned.__annotations__.items():
-            if value not in [FileDataPoint, ValueDataPoint, ObjectStorageDataPoint]:
-                raise ValueError(
-                    f"All fields in an ActionDatapoints subclass must be datapoints but field {key} is of type {value}",
-                )
-        return [
-            DatapointActionResultDefinition(result_label=key)
-            for key in returned.__annotations__
-        ]
+    # Handle tuple types by recursively parsing each element
+    if getattr(returned, "__origin__", None) is tuple:
+        result_definitions = []
+        for result in returned.__args__:
+            result_definitions.extend(parse_result(result))
+        return result_definitions
+
+    # Handle Path type specifically
+    if returned is Path:
+        return [FileActionResultDefinition(result_label="file")]
+
+    # Handle ActionFiles, ActionJSON, ActionDatapoints subclasses
+    try:
+        if issubclass(returned, ActionFiles):
+            return _parse_action_files(returned)
+        if issubclass(returned, ActionJSON):
+            return _parse_action_json(returned)
+        if issubclass(returned, ActionDatapoints):
+            return _parse_action_datapoints(returned)
+    except TypeError:
+        # issubclass() raises TypeError if returned is not a class
+        pass
+
+    # Handle basic types
     if returned not in [str, int, float, bool, dict, list]:
         raise ValueError(
             f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, str, int, float, bool, dict, or list but got {returned}",
         )
 
     return [
-        JSONActionResultDefinition(result_label="data", data_type=returned.__name__)
+        JSONActionResultDefinition(
+            result_label="data", data_type=getattr(returned, "__name__", str(returned))
+        )
     ]
 
 
@@ -196,59 +227,3 @@ def parse_results(func: Callable) -> list[ActionResultDefinition]:
     else:
         result_definitions = parse_result(returned)
     return result_definitions
-
-
-def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
-    """Converts the response to a dictionary of headers"""
-    if isinstance(action_response.files, ActionFiles):
-        files_serializeable = action_response.files.model_dump(mode="json")
-
-    if isinstance(action_response.files, Path):
-        files_serializeable = str(action_response.files)
-    if isinstance(action_response.datapoints, ActionDatapoints):
-        action_response.datapoints = action_response.datapoints.model_dump(mode="json")
-    if isinstance(action_response.json_data, ActionJSON):
-        action_response.json_data = action_response.json_data.model_dump(mode="json")
-    return {
-        "x-madsci-action-id": action_response.action_id,
-        "x-madsci-status": action_response.status.value,
-        "x-madsci-datapoints": json.dumps(action_response.datapoints),
-        "x-madsci-errors": json.dumps(action_response.errors),
-        "x-madsci-files": json.dumps(files_serializeable),
-        "x-madsci-json_data": json.dumps(action_response.json_data),
-    }
-
-
-class ActionResultWithFiles(FileResponse):
-    """Action response from a REST-based node."""
-
-    @classmethod
-    def from_action_response(cls: Any, action_response: ActionResult) -> ActionResult:
-        """Create an ActionResultWithFiles from an ActionResult."""
-
-        if isinstance(action_response.files, Path):
-            return ActionResultWithFiles(
-                path=action_response.files,
-                headers=action_response_to_headers(action_response),
-            )
-        action_response_dict = action_response.files.model_dump()
-        with tempfile.NamedTemporaryFile(
-            suffix=".zip",
-            delete=False,
-        ) as temp_zipfile_path:
-            temp_zip = ZipFile(temp_zipfile_path.name, "w")
-            for file in action_response_dict:
-                temp_zip.write(
-                    action_response_dict[file],
-                    PureWindowsPath(action_response_dict[file]).name,
-                )
-                action_response_dict[file] = str(
-                    PureWindowsPath(action_response_dict[file]).name,
-                )
-            action_response.files = ActionFiles.model_validate(
-                action_response_dict,
-            )
-            return ActionResultWithFiles(
-                path=temp_zipfile_path.name,
-                headers=action_response_to_headers(action_response),
-            )

@@ -264,6 +264,12 @@ class AbstractNode:
                     self.node_status.running_actions.discard(action_request.action_id)
         return self.get_action_result(action_request.action_id)
 
+    def get_action_status(self, action_id: str) -> ActionStatus:
+        """Get the status of an action on the node."""
+        if action_id in self.action_history and len(self.action_history[action_id]) > 0:
+            return self.action_history[action_id][-1].status
+        return ActionStatus.UNKNOWN
+
     def get_action_result(self, action_id: str) -> ActionResult:
         """Get the most up-to-date result of an action on the node."""
         if action_id in self.action_history and len(self.action_history[action_id]) > 0:
@@ -590,13 +596,15 @@ class AbstractNode:
                     ) from e
         return arg_dict
 
-    def _process_result(self, result: Any, action_id: str) -> ActionResult:
+    def _process_result(
+        self, result: Any, action_request: ActionRequest
+    ) -> ActionResult:
         """Process the result of an action and convert it to an ActionResult if necessary."""
         datapoints = None
         json = None
         files = None
         if isinstance(result, ActionResult):
-            result.action_id = action_id
+            result.action_id = action_request.action_id
             return result
         if not isinstance(result, tuple):
             result = (result,)
@@ -610,10 +618,31 @@ class AbstractNode:
             elif isinstance(value, Path):
                 files = value
             else:
-                json = value
+                # For simple return values, check if we need to structure them
+                # according to the action's result definitions
+                action_handler = self.action_handlers.get(action_request.action_name)
+                if action_handler and hasattr(
+                    action_handler, "__madsci_action_result_definitions__"
+                ):
+                    result_definitions = (
+                        action_handler.__madsci_action_result_definitions__
+                    )
+                    # If there's exactly one JSON result definition with label "data", wrap the value
+                    if (
+                        len(result_definitions) == 1
+                        and hasattr(result_definitions[0], "result_type")
+                        and result_definitions[0].result_type == "json"
+                        and result_definitions[0].result_label == "data"
+                    ):
+                        # Create a dictionary with the expected structure that will validate
+                        json = {"data": value}
+                    else:
+                        json = value
+                else:
+                    json = value
         return ActionResult(
             status=ActionStatus.SUCCEEDED,
-            action_id=action_id,
+            action_id=action_request.action_id,
             json_data=json,
             files=files,
             datapoints=datapoints,
@@ -645,7 +674,7 @@ class AbstractNode:
         finally:
             self.node_status.running_actions.discard(action_request.action_id)
         try:
-            action_result = self._process_result(result, action_request.action_id)
+            action_result = self._process_result(result, action_request)
 
         except ValidationError:
             action_result = action_request.unknown(

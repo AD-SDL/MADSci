@@ -1,8 +1,11 @@
 """A Node implementation to use in automated tests."""
 
+import tempfile
+from pathlib import Path
 from typing import Annotated, Optional
 
 from madsci.client.event_client import EventClient
+from madsci.common.types.action_types import ActionFiles
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -164,6 +167,76 @@ class TestNode(RestNode):
         self.logger.log(
             f"Test annotation action with params {test_param}, {test_param_2}, {test_param_3}"
         )
+
+    @action
+    def file_action(
+        self, config_file: Path, optional_file: Optional[Path] = None
+    ) -> str:
+        """Test action that requires a file parameter.
+
+        Args:
+            config_file: A required configuration file
+            optional_file: An optional file parameter
+        """
+        self.logger.log(f"Processing file action with config_file: {config_file}")
+        if optional_file:
+            self.logger.log(f"Also processing optional_file: {optional_file}")
+
+        # Simple file processing - just return the file name
+        return config_file.name if config_file else "no_file"
+
+    @action
+    def file_result_action(self, data: str = "test") -> Path:
+        """Test action that returns a single file.
+
+        Args:
+            data: Data to write to the result file
+
+        Returns:
+            Path: A temporary file containing the data
+        """
+        self.logger.log(f"Creating file result with data: {data}")
+
+        # Create a temporary file with the data
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".txt"
+        ) as temp_file:
+            temp_file.write(f"Result data: {data}")
+            return Path(temp_file.name)
+
+    class FileResults(ActionFiles):
+        """Multiple file results for testing."""
+
+        output_file: Path
+        log_file: Path
+
+    @action
+    def multiple_file_result_action(self, data: str = "test") -> FileResults:
+        """Test action that returns multiple files.
+
+        Args:
+            data: Data to write to the result files
+
+        Returns:
+            FileResults: Multiple files containing the processed data
+        """
+        self.logger.log(f"Creating multiple file results with data: {data}")
+
+        # Create output file
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".out"
+        ) as output_file:
+            output_file.write(f"Output: {data}")
+            output_path = Path(output_file.name)
+
+        # Create log file
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".log"
+        ) as log_file:
+            log_file.write(f"Log: Processing {data}")
+            log_path = Path(log_file.name)
+
+        return self.FileResults(output_file=output_path, log_file=log_path)
 
 
 if __name__ == "__main__":

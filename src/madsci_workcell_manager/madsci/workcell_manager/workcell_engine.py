@@ -276,9 +276,14 @@ class Engine:
         interval = 0.25
         retry_count = 0
         while not response.status.is_terminal:
-            if node.info.capabilities.get_action_result is False or (
+            if (
+                node.info.capabilities.get_action_result is False
+                and node.info.capabilities.get_action_status is False
+            ) or (
                 node.info.capabilities.get_action_result is None
+                and node.info.capabilities.get_action_status is None
                 and client.supported_capabilities.get_action_result is False
+                and client.supported_capabilities.get_action_status is False
             ):
                 self.logger.warning(
                     f"While running Step {step.step_id} of workflow {wf.workflow_id}, send_action returned a non-terminal response {response}. However, node {step.node} does not support querying an action result."

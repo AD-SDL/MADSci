@@ -9,6 +9,7 @@ capabilities:
   get_state: true
   get_status: true
   send_action: true
+  get_action_status: true
   get_action_result: true
   get_action_history: true
   action_files: true
@@ -76,7 +77,7 @@ actions:
     asynchronous: true
   return_file_and_json:
     name: return_file_and_json
-    description: Return a file
+    description: Return data and a file
     args: {}
     locations: {}
     files: {}
@@ -103,7 +104,7 @@ actions:
         result_label: example_value_1
         description: null
         result_type: json
-        data_type: int
+        data_type: str
       example_value_2:
         result_label: example_value_2
         description: null
@@ -139,7 +140,7 @@ actions:
         result_label: example_value_1
         description: null
         result_type: json
-        data_type: int
+        data_type: str
       example_value_2:
         result_label: example_value_2
         description: null
@@ -165,7 +166,7 @@ config:
   uvicorn_kwargs: {}
   device_number: 0
 config_schema:
-  description: Configuration for the liquid handler node module.
+  description: Configuration for the advanced example node module.
   properties:
     node_definition:
       anyOf:

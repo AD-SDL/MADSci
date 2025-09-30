@@ -136,7 +136,7 @@ services:
   workcell_manager:
     <<: *madsci-service
     container_name: workcell_manager
-    command: python -m madsci.workcell_manager --cold_start_delay 0
+    command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 0
     depends_on:
       - redis
       - mongodb
