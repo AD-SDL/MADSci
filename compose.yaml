@@ -160,7 +160,7 @@ services:
     container_name: liquidhandler_2
     environment:
       - NODE_DEFINITION=node_definitions/liquidhandler_2.node.yaml
-      - NODE_URL=http://localhost:2003
+      - NODE_URL=http://localhost:2001
     command: python example_modules/liquidhandler.py
 
   robotarm_1:
@@ -168,7 +168,7 @@ services:
     container_name: robotarm_1
     environment:
       - NODE_DEFINITION=node_definitions/robotarm_1.node.yaml
-      - NODE_URL=http://localhost:2001
+      - NODE_URL=http://localhost:2002
     command: python example_modules/robotarm.py
 
   platereader_1:
@@ -176,7 +176,7 @@ services:
     container_name: platereader_1
     environment:
       - NODE_DEFINITION=node_definitions/platereader_1.node.yaml
-      - NODE_URL=http://localhost:2002
+      - NODE_URL=http://localhost:2003
     command: python example_modules/platereader.py
 
   advanced_example_node:
@@ -184,5 +184,5 @@ services:
     container_name: advanced_example_node
     environment:
       - NODE_DEFINITION=node_definitions/advanced_example_node.node.yaml
-      - NODE_URL=http://localhost:2003
+      - NODE_URL=http://localhost:2004
     command: python example_modules/advanced_example_module.py

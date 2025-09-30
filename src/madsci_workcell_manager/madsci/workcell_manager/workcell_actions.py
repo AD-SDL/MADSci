@@ -107,28 +107,23 @@ def transfer(  # noqa: C901
             if not await_completion:
                 # Return immediately after successful enqueueing
                 result = ActionSucceeded(
-                    json_data=WorkcellTransferJSON.model_validate(
-                        {
-                            "message": f"Transfer workflow enqueued from {source} to {target}",
-                            "workflow_id": workflow.workflow_id,
-                            "source_location_id": source_location_id,
-                            "target_location_id": target_location_id,
-                        }
-                    )
+                    json_result={
+                        "message": f"Transfer workflow enqueued from {source} to {target}",
+                        "workflow_id": workflow.workflow_id,
+                        "source_location_id": source_location_id,
+                        "target_location_id": target_location_id,
+                    }
                 )
-
             # Check final workflow status after completion
             elif workflow.status.completed:
                 result = ActionSucceeded(
-                    json_data=WorkcellTransferJSON.model_validate(
-                        {
-                            "message": f"Transfer completed from {source} to {target}",
-                            "workflow_id": workflow.workflow_id,
-                            "execution_time": workflow.duration_seconds,
-                            "source_location_id": source_location_id,
-                            "target_location_id": target_location_id,
-                        }
-                    )
+                    json_result={
+                        "message": f"Transfer completed from {source} to {target}",
+                        "workflow_id": workflow.workflow_id,
+                        "execution_time": workflow.duration_seconds,
+                        "source_location_id": source_location_id,
+                        "target_location_id": target_location_id,
+                    }
                 )
             elif workflow.status.failed:
                 step_info = (

@@ -3,7 +3,6 @@ Engine Class and associated helpers and data
 """
 
 import concurrent
-import copy
 import importlib
 import time
 import traceback
@@ -19,7 +18,6 @@ from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import (
     ActionDatapoints,
     ActionFiles,
-    ActionJSON,
     ActionRequest,
     ActionResult,
     ActionStatus,
@@ -387,11 +385,12 @@ class Engine:
                     self.logger.log_warning(
                         event=Event(event_data=str(step.result.datapoints))
                     )
-                    datapoint_dict = step.result.datapoints.model_dump()
-                    for key in list(datapoint_dict.keys()):
-                        datapoint_dict[key] = DataPoint.model_validate(
-                            datapoint_dict[key]
-                        )
+                    datapoint_ids = step.result.datapoints.model_dump()
+                    # Fetch actual DataPoint objects from data manager using the IDs
+                    datapoint_dict = {}
+                    for key, datapoint_id in datapoint_ids.items():
+                        datapoint = self.data_client.get_datapoint(datapoint_id)
+                        datapoint_dict[key] = datapoint
                 else:
                     raise ValueError(
                         f"Feed-forward parameter {param.key} specified step {param.step} but step has no datapoints"
@@ -492,66 +491,54 @@ class Engine:
     ) -> ActionResult:
         """create and save datapoints for data returned from step"""
         if response.datapoints:
-            datapoints = response.datapoints.model_dump(mode="json")
+            datapoint_ids = response.datapoints.model_dump(mode="json")
         else:
-            datapoints = {}
-        ownership_info = copy.deepcopy(wf.ownership_info)
-        ownership_info.step_id = step.step_id
-        ownership_info.node_id = self.state_handler.get_node(step.node).info.node_id
-        ownership_info.workflow_id = wf.workflow_id
-        if response.json_data:
-            if isinstance(response.json_data, ActionJSON):
-                json_data = response.json_data.model_dump(mode="json")
-                for data_key in json_data:
-                    if data_key != "type":
-                        datapoint = ValueDataPoint(
-                            label=data_key,
-                            ownership_info=ownership_info,
-                            value=json_data[data_key],
-                        )
-                        self.data_client.submit_datapoint(datapoint)
-                        datapoints[data_key] = datapoint
-            else:
-                json_data = response.json_data
-                label = "json_data"
+            datapoint_ids = {}
+        with ownership_context(
+            workcell_id=self.workcell_definition.manager_id,
+            workflow_id=wf.workflow_id,
+            node_id=self.state_handler.get_node(step.node).info.node_id,
+            step_id=step.step_id,
+        ):
+            if response.json_result:
                 datapoint = ValueDataPoint(
-                    label=label,
-                    ownership_info=ownership_info,
-                    value=json_data,
+                    label="json_result",
+                    value=response.json_result,
                 )
-                self.data_client.submit_datapoint(datapoint)
-                datapoints[label] = datapoint
+                submitted_datapoint = self.data_client.submit_datapoint(datapoint)
+                datapoint_ids["json_result"] = submitted_datapoint.datapoint_id
 
-        if response.files:
-            if isinstance(response.files, ActionFiles):
-                response_files = response.files.model_dump(mode="json")
-                for file_key in response_files:
+            if response.files:
+                if isinstance(response.files, ActionFiles):
+                    response_files = response.files.model_dump(mode="json")
+                    for file_key in response_files:
+                        datapoint = FileDataPoint(
+                            label=file_key,
+                            path=str(response_files[file_key]),
+                        )
+                        self.logger.log_debug(
+                            "Submitting datapoint: " + str(datapoint.datapoint_id)
+                        )
+                        submitted_datapoint = self.data_client.submit_datapoint(
+                            datapoint
+                        )
+                        self.logger.log_debug(
+                            "Submitted datapoint: "
+                            + str(submitted_datapoint.datapoint_id)
+                        )
+
+                        datapoint_ids[file_key] = submitted_datapoint.datapoint_id
+                else:
+                    label = "file"
                     datapoint = FileDataPoint(
-                        label=file_key,
-                        ownership_info=ownership_info,
-                        path=str(response_files[file_key]),
+                        label=label,
+                        path=str(response.files),
                     )
-                    self.logger.log_debug(
-                        "Submitting datapoint: " + str(datapoint.datapoint_id)
-                    )
-                    self.data_client.submit_datapoint(datapoint)
-                    self.logger.log_debug(
-                        "Submitted datapoint: " + str(datapoint.datapoint_id)
-                    )
+                    submitted_datapoint = self.data_client.submit_datapoint(datapoint)
+                    datapoint_ids[label] = submitted_datapoint.datapoint_id
 
-                    datapoints[file_key] = datapoint
-            else:
-                label = "file"
-                datapoint = FileDataPoint(
-                    label=label,
-                    ownership_info=ownership_info,
-                    path=str(response.files),
-                )
-                self.data_client.submit_datapoint(datapoint)
-                datapoints[label] = datapoint
-
-        response.datapoints = ActionDatapoints.model_validate(datapoints)
-        return response
+            response.datapoints = ActionDatapoints.model_validate(datapoint_ids)
+            return response
 
     def update_active_nodes(self, state_manager: WorkcellStateHandler) -> None:
         """Update all active nodes in the workcell."""

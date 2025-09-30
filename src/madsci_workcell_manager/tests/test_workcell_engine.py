@@ -216,7 +216,7 @@ def test_run_single_step_with_update_parameters(
         "madsci.workcell_manager.workcell_engine.find_node_client"
     ) as mock_client:
         mock_client.return_value.send_action.return_value = ActionResult(
-            status=ActionStatus.SUCCEEDED, json_data="test_value"
+            status=ActionStatus.SUCCEEDED, json_result="test_value"
         )
         thread = engine.run_step(workflow.workflow_id)
         thread.join()
@@ -328,16 +328,27 @@ def test_handle_data_and_files_with_data(
         node_name="node1",
         node=test_node,
     )
-    action_result = ActionSucceeded(json_data=42)
+    action_result = ActionSucceeded(json_result=42)
 
-    with patch.object(engine.data_client, "submit_datapoint") as mock_submit:
+    # Create a mock datapoint that will be returned by submit_datapoint
+    mock_returned_datapoint = ValueDataPoint(label="json_result", value=42)
+
+    with patch.object(
+        engine.data_client, "submit_datapoint", return_value=mock_returned_datapoint
+    ) as mock_submit:
         updated_result = engine.handle_data_and_files(step, workflow, action_result)
-        assert "json_data" in updated_result.datapoints.model_dump()
+        assert "json_result" in updated_result.datapoints.model_dump()
         mock_submit.assert_called_once()
         submitted_datapoint = mock_submit.call_args[0][0]
         assert isinstance(submitted_datapoint, ValueDataPoint)
-        assert submitted_datapoint.label == "json_data"
+        assert submitted_datapoint.label == "json_result"
         assert submitted_datapoint.value == 42
+
+        # Verify the returned datapoint ID was added to the result
+        assert (
+            updated_result.datapoints.model_dump()["json_result"]
+            == mock_returned_datapoint.datapoint_id
+        )
 
 
 def test_handle_data_and_files_with_files(
@@ -455,132 +466,150 @@ def test_feed_data_forward_value_by_label(engine: Engine) -> None:
     """Test feed forward with value datapoint matched by label."""
     value_datapoint = ValueDataPoint(label="output_label", value="test_value")
 
-    step = Step(
-        name="Test Step",
-        key="step1",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED, datapoints={"output_label": value_datapoint}
-        ),
-    )
+    # Mock the data client to return the datapoint when requested
+    with patch.object(
+        engine.data_client, "get_datapoint", return_value=value_datapoint
+    ):
+        step = Step(
+            name="Test Step",
+            key="step1",
+            action="test_action",
+            node="node1",
+            result=ActionResult(
+                status=ActionStatus.SUCCEEDED,
+                datapoints={"output_label": value_datapoint.datapoint_id},
+            ),
+        )
 
-    workflow = Workflow(
-        name="Test Workflow",
-        parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardJson(
-                    key="param1", step="step1", label="output_label"
-                )
-            ]
-        ),
-        steps=[step],
-        parameter_values={},
-        file_input_ids={},
-    )
+        workflow = Workflow(
+            name="Test Workflow",
+            parameters=WorkflowParameters(
+                feed_forward=[
+                    ParameterFeedForwardJson(
+                        key="param1", step="step1", label="output_label"
+                    )
+                ]
+            ),
+            steps=[step],
+            parameter_values={},
+            file_input_ids={},
+        )
 
-    updated_wf = engine._feed_data_forward(step, workflow)
-    assert updated_wf.parameter_values["param1"] == "test_value"
+        updated_wf = engine._feed_data_forward(step, workflow)
+        assert updated_wf.parameter_values["param1"] == "test_value"
 
 
 def test_feed_data_forward_file_by_label(engine: Engine) -> None:
     """Test feed forward with file datapoint matched by label."""
     file_datapoint = FileDataPoint(label="output_file", path="/path/to/file.txt")
 
-    step = Step(
-        name="Test Step",
-        key="step1",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED, datapoints={"output_file": file_datapoint}
-        ),
-    )
+    # Mock the data client to return the datapoint when requested
+    with patch.object(engine.data_client, "get_datapoint", return_value=file_datapoint):
+        step = Step(
+            name="Test Step",
+            key="step1",
+            action="test_action",
+            node="node1",
+            result=ActionResult(
+                status=ActionStatus.SUCCEEDED,
+                datapoints={"output_file": file_datapoint.datapoint_id},
+            ),
+        )
 
-    workflow = Workflow(
-        name="Test Workflow",
-        parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardFile(
-                    key="file_param", step="step1", label="output_file"
-                )
-            ]
-        ),
-        steps=[step],
-        parameter_values={},
-        file_input_ids={},
-    )
+        workflow = Workflow(
+            name="Test Workflow",
+            parameters=WorkflowParameters(
+                feed_forward=[
+                    ParameterFeedForwardFile(
+                        key="file_param", step="step1", label="output_file"
+                    )
+                ]
+            ),
+            steps=[step],
+            parameter_values={},
+            file_input_ids={},
+        )
 
-    updated_wf = engine._feed_data_forward(step, workflow)
-    assert updated_wf.file_input_ids["file_param"] == file_datapoint.datapoint_id
+        updated_wf = engine._feed_data_forward(step, workflow)
+        assert updated_wf.file_input_ids["file_param"] == file_datapoint.datapoint_id
 
 
 def test_feed_data_forward_by_step_index(engine: Engine) -> None:
     """Test feed forward matched by step index."""
     value_datapoint = ValueDataPoint(label="output", value=42)
 
-    step = Step(
-        name="Test Step",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED, datapoints={"output": value_datapoint}
-        ),
-    )
+    # Mock the data client to return the datapoint when requested
+    with patch.object(
+        engine.data_client, "get_datapoint", return_value=value_datapoint
+    ):
+        step = Step(
+            name="Test Step",
+            action="test_action",
+            node="node1",
+            result=ActionResult(
+                status=ActionStatus.SUCCEEDED,
+                datapoints={"output": value_datapoint.datapoint_id},
+            ),
+        )
 
-    workflow = Workflow(
-        name="Test Workflow",
-        parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardJson(
-                    key="param_by_index",
-                    step=0,  # Match by step index
-                    label="output",
-                )
-            ]
-        ),
-        steps=[step],
-        status=WorkflowStatus(current_step_index=0),
-        parameter_values={},
-        file_input_ids={},
-    )
+        workflow = Workflow(
+            name="Test Workflow",
+            parameters=WorkflowParameters(
+                feed_forward=[
+                    ParameterFeedForwardJson(
+                        key="param_by_index",
+                        step=0,  # Match by step index
+                        label="output",
+                    )
+                ]
+            ),
+            steps=[step],
+            status=WorkflowStatus(current_step_index=0),
+            parameter_values={},
+            file_input_ids={},
+        )
 
-    updated_wf = engine._feed_data_forward(step, workflow)
-    assert updated_wf.parameter_values["param_by_index"] == 42
+        updated_wf = engine._feed_data_forward(step, workflow)
+        assert updated_wf.parameter_values["param_by_index"] == 42
 
 
 def test_feed_data_forward_no_step_single_datapoint(engine: Engine) -> None:
     """Test feed forward with no step specified and single datapoint."""
     value_datapoint = ValueDataPoint(label="only_output", value="single_value")
 
-    step = Step(
-        name="Test Step",
-        key="step1",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED, datapoints={"only_output": value_datapoint}
-        ),
-    )
+    # Mock the data client to return the datapoint when requested
+    with patch.object(
+        engine.data_client, "get_datapoint", return_value=value_datapoint
+    ):
+        step = Step(
+            name="Test Step",
+            key="step1",
+            action="test_action",
+            node="node1",
+            result=ActionResult(
+                status=ActionStatus.SUCCEEDED,
+                datapoints={"only_output": value_datapoint.datapoint_id},
+            ),
+        )
 
-    workflow = Workflow(
-        name="Test Workflow",
-        parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardJson(
-                    key="auto_param",
-                    step="step1",  # Match by step, no label specified
-                    label=None,
-                )
-            ]
-        ),
-        steps=[step],
-        parameter_values={},
-        file_input_ids={},
-    )
+        workflow = Workflow(
+            name="Test Workflow",
+            parameters=WorkflowParameters(
+                feed_forward=[
+                    ParameterFeedForwardJson(
+                        key="auto_param",
+                        step="step1",  # Match by step, no label specified
+                        label=None,
+                    )
+                ]
+            ),
+            steps=[step],
+            parameter_values={},
+            file_input_ids={},
+        )
 
-    updated_wf = engine._feed_data_forward(step, workflow)
-    assert updated_wf.parameter_values["auto_param"] == "single_value"
+        updated_wf = engine._feed_data_forward(step, workflow)
+        assert updated_wf.parameter_values["auto_param"] == "single_value"
 
 
 def test_feed_data_forward_no_step_multiple_datapoints_error(engine: Engine) -> None:
@@ -588,68 +617,88 @@ def test_feed_data_forward_no_step_multiple_datapoints_error(engine: Engine) -> 
     value_datapoint1 = ValueDataPoint(label="output1", value="value1")
     value_datapoint2 = ValueDataPoint(label="output2", value="value2")
 
-    step = Step(
-        name="Test Step",
-        key="step1",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED,
-            datapoints={"output1": value_datapoint1, "output2": value_datapoint2},
-        ),
-    )
+    # Mock the data client to return the datapoints when requested
+    def mock_get_datapoint(datapoint_id):
+        if datapoint_id == value_datapoint1.datapoint_id:
+            return value_datapoint1
+        if datapoint_id == value_datapoint2.datapoint_id:
+            return value_datapoint2
+        return None
 
-    workflow = Workflow(
-        name="Test Workflow",
-        parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardJson(
-                    key="ambiguous_param",
-                    step="step1",  # Match by step, no label specified
-                    label=None,
-                )
-            ]
-        ),
-        steps=[step],
-        parameter_values={},
-        file_input_ids={},
-    )
+    with patch.object(
+        engine.data_client, "get_datapoint", side_effect=mock_get_datapoint
+    ):
+        step = Step(
+            name="Test Step",
+            key="step1",
+            action="test_action",
+            node="node1",
+            result=ActionResult(
+                status=ActionStatus.SUCCEEDED,
+                datapoints={
+                    "output1": value_datapoint1.datapoint_id,
+                    "output2": value_datapoint2.datapoint_id,
+                },
+            ),
+        )
 
-    with pytest.raises(ValueError, match="Ambiguous feed-forward parameter"):
-        engine._feed_data_forward(step, workflow)
+        workflow = Workflow(
+            name="Test Workflow",
+            parameters=WorkflowParameters(
+                feed_forward=[
+                    ParameterFeedForwardJson(
+                        key="ambiguous_param",
+                        step="step1",  # Match by step, no label specified
+                        label=None,
+                    )
+                ]
+            ),
+            steps=[step],
+            parameter_values={},
+            file_input_ids={},
+        )
+
+        with pytest.raises(ValueError, match="Ambiguous feed-forward parameter"):
+            engine._feed_data_forward(step, workflow)
 
 
 def test_feed_data_forward_label_not_found_error(engine: Engine) -> None:
     """Test feed forward error when specified label is not found."""
     value_datapoint = ValueDataPoint(label="existing_output", value="value")
 
-    step = Step(
-        name="Test Step",
-        key="step1",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED,
-            datapoints={"existing_output": value_datapoint},
-        ),
-    )
+    # Mock the data client to return the datapoint when requested
+    with patch.object(
+        engine.data_client, "get_datapoint", return_value=value_datapoint
+    ):
+        step = Step(
+            name="Test Step",
+            key="step1",
+            action="test_action",
+            node="node1",
+            result=ActionResult(
+                status=ActionStatus.SUCCEEDED,
+                datapoints={"existing_output": value_datapoint.datapoint_id},
+            ),
+        )
 
-    workflow = Workflow(
-        name="Test Workflow",
-        parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardJson(
-                    key="missing_param", step="step1", label="nonexistent_label"
-                )
-            ]
-        ),
-        steps=[step],
-        parameter_values={},
-        file_input_ids={},
-    )
+        workflow = Workflow(
+            name="Test Workflow",
+            parameters=WorkflowParameters(
+                feed_forward=[
+                    ParameterFeedForwardJson(
+                        key="missing_param", step="step1", label="nonexistent_label"
+                    )
+                ]
+            ),
+            steps=[step],
+            parameter_values={},
+            file_input_ids={},
+        )
 
-    with pytest.raises(ValueError, match="specified label nonexistent_label not found"):
-        engine._feed_data_forward(step, workflow)
+        with pytest.raises(
+            ValueError, match="specified label nonexistent_label not found"
+        ):
+            engine._feed_data_forward(step, workflow)
 
 
 def test_feed_data_forward_step_name_no_match(engine: Engine) -> None:
@@ -727,37 +776,51 @@ def test_feed_data_forward_multiple_parameters(engine: Engine) -> None:
     value_datapoint = ValueDataPoint(label="value_output", value="test_value")
     file_datapoint = FileDataPoint(label="file_output", path="/test/file.txt")
 
-    step = Step(
-        name="Test Step",
-        key="step1",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED,
-            datapoints={"value_output": value_datapoint, "file_output": file_datapoint},
-        ),
-    )
+    # Mock the data client to return the appropriate datapoint when requested
+    def mock_get_datapoint(datapoint_id):
+        if datapoint_id == value_datapoint.datapoint_id:
+            return value_datapoint
+        if datapoint_id == file_datapoint.datapoint_id:
+            return file_datapoint
+        return None
 
-    workflow = Workflow(
-        name="Test Workflow",
-        parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardJson(
-                    key="value_param", step="step1", label="value_output"
-                ),
-                ParameterFeedForwardFile(
-                    key="file_param", step="step1", label="file_output"
-                ),
-            ]
-        ),
-        steps=[step],
-        parameter_values={},
-        file_input_ids={},
-    )
+    with patch.object(
+        engine.data_client, "get_datapoint", side_effect=mock_get_datapoint
+    ):
+        step = Step(
+            name="Test Step",
+            key="step1",
+            action="test_action",
+            node="node1",
+            result=ActionResult(
+                status=ActionStatus.SUCCEEDED,
+                datapoints={
+                    "value_output": value_datapoint.datapoint_id,
+                    "file_output": file_datapoint.datapoint_id,
+                },
+            ),
+        )
 
-    updated_wf = engine._feed_data_forward(step, workflow)
-    assert updated_wf.parameter_values["value_param"] == "test_value"
-    assert updated_wf.file_input_ids["file_param"] == file_datapoint.datapoint_id
+        workflow = Workflow(
+            name="Test Workflow",
+            parameters=WorkflowParameters(
+                feed_forward=[
+                    ParameterFeedForwardJson(
+                        key="value_param", step="step1", label="value_output"
+                    ),
+                    ParameterFeedForwardFile(
+                        key="file_param", step="step1", label="file_output"
+                    ),
+                ]
+            ),
+            steps=[step],
+            parameter_values={},
+            file_input_ids={},
+        )
+
+        updated_wf = engine._feed_data_forward(step, workflow)
+        assert updated_wf.parameter_values["value_param"] == "test_value"
+        assert updated_wf.file_input_ids["file_param"] == file_datapoint.datapoint_id
 
 
 def test_feed_data_forward_object_storage_by_label(engine: Engine) -> None:
@@ -770,36 +833,40 @@ def test_feed_data_forward_object_storage_by_label(engine: Engine) -> None:
         object_name="data/file.dat",
     )
 
-    step = Step(
-        name="Test Step",
-        key="step1",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED,
-            datapoints={"s3_output": object_storage_datapoint},
-        ),
-    )
+    # Mock the data client to return the datapoint when requested
+    with patch.object(
+        engine.data_client, "get_datapoint", return_value=object_storage_datapoint
+    ):
+        step = Step(
+            name="Test Step",
+            key="step1",
+            action="test_action",
+            node="node1",
+            result=ActionResult(
+                status=ActionStatus.SUCCEEDED,
+                datapoints={"s3_output": object_storage_datapoint.datapoint_id},
+            ),
+        )
 
-    workflow = Workflow(
-        name="Test Workflow",
-        parameters=WorkflowParameters(
-            feed_forward=[
-                ParameterFeedForwardFile(
-                    key="storage_param", step="step1", label="s3_output"
-                )
-            ]
-        ),
-        steps=[step],
-        parameter_values={},
-        file_input_ids={},
-    )
+        workflow = Workflow(
+            name="Test Workflow",
+            parameters=WorkflowParameters(
+                feed_forward=[
+                    ParameterFeedForwardFile(
+                        key="storage_param", step="step1", label="s3_output"
+                    )
+                ]
+            ),
+            steps=[step],
+            parameter_values={},
+            file_input_ids={},
+        )
 
-    updated_wf = engine._feed_data_forward(step, workflow)
-    assert (
-        updated_wf.file_input_ids["storage_param"]
-        == object_storage_datapoint.datapoint_id
-    )
+        updated_wf = engine._feed_data_forward(step, workflow)
+        assert (
+            updated_wf.file_input_ids["storage_param"]
+            == object_storage_datapoint.datapoint_id
+        )
 
 
 def test_feed_data_forward_no_matching_parameters(engine: Engine) -> None:

@@ -39,11 +39,19 @@ actions:
     locations: {}
     files: {}
     results:
-      data:
-        result_label: data
+      json_result:
+        result_label: json_result
         description: null
         result_type: json
-        data_type: str
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: string
+          required:
+          - data
+          title: strModel
+          type: object
     blocking: false
     asynchronous: true
   run_protocol:

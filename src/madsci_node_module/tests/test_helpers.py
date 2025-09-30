@@ -28,28 +28,46 @@ class ExampleFileData(ActionFiles):
     file2: Path
 
 
+class CustomPydanticModel(BaseModel):
+    """Example custom pydantic model for testing."""
+
+    name: str
+    value: int
+    metadata: dict[str, str] = {}
+
+
+class ComplexPydanticModel(BaseModel):
+    """Complex custom pydantic model for testing."""
+
+    id: str
+    data: list[float]
+    config: dict[str, Union[str, int]]
+    nested: Optional[CustomPydanticModel] = None
+
+
 def test_parse_result_basic_types():
     """Test parse_result with basic types."""
     # Test int
     result = parse_result(int)
     assert len(result) == 1
     assert isinstance(result[0], JSONActionResultDefinition)
-    assert result[0].result_label == "data"
-    assert result[0].data_type == "int"
+    assert result[0].result_label == "json_result"
+    assert result[0].json_schema is not None
+    assert "properties" in result[0].json_schema
 
     # Test str
     result = parse_result(str)
     assert len(result) == 1
     assert isinstance(result[0], JSONActionResultDefinition)
-    assert result[0].result_label == "data"
-    assert result[0].data_type == "str"
+    assert result[0].result_label == "json_result"
+    assert result[0].json_schema is not None
 
     # Test dict
     result = parse_result(dict)
     assert len(result) == 1
     assert isinstance(result[0], JSONActionResultDefinition)
-    assert result[0].result_label == "data"
-    assert result[0].data_type == "dict"
+    assert result[0].result_label == "json_result"
+    assert result[0].json_schema is not None
 
 
 def test_parse_result_path():
@@ -63,16 +81,17 @@ def test_parse_result_path():
 def test_parse_result_action_json():
     """Test parse_result with ActionJSON subclass."""
     result = parse_result(ExampleJSONData)
-    assert len(result) == 2
+    assert len(result) == 1
 
-    # Check that both fields are present
-    labels = [r.result_label for r in result]
-    assert "value1" in labels
-    assert "value2" in labels
+    # Check that we get a single json_result with schema
+    assert result[0].result_label == "json_result"
+    assert isinstance(result[0], JSONActionResultDefinition)
+    assert result[0].json_schema is not None
 
-    # Check that they're all JSON result definitions
-    for r in result:
-        assert isinstance(r, JSONActionResultDefinition)
+    # Check that the schema includes the fields from the ActionJSON subclass
+    schema = result[0].json_schema
+    assert "properties" in schema
+    assert "data" in schema["properties"]
 
 
 def test_parse_result_action_files():
@@ -95,13 +114,10 @@ def test_parse_result_tuple_basic_types():
     result = parse_result(tuple[int, str])
     assert len(result) == 2
 
-    # Should get two JSON result definitions
+    # Should get two JSON result definitions with schemas
     assert all(isinstance(r, JSONActionResultDefinition) for r in result)
-
-    # Check data types
-    data_types = [r.data_type for r in result]
-    assert "int" in data_types
-    assert "str" in data_types
+    assert all(r.result_label == "json_result" for r in result)
+    assert all(r.json_schema is not None for r in result)
 
 
 def test_parse_result_tuple_mixed_types():
@@ -118,14 +134,14 @@ def test_parse_result_tuple_mixed_types():
 def test_parse_result_tuple_action_types():
     """Test parse_result with tuple of ActionJSON and ActionFiles."""
     result = parse_result(tuple[ExampleJSONData, ExampleFileData])
-    assert len(result) == 4  # 2 JSON fields + 2 file fields
+    assert len(result) == 3  # 1 JSON result + 2 file fields
 
     # Check that we get the right mix of result types
     json_results = [r for r in result if isinstance(r, JSONActionResultDefinition)]
     file_results = [r for r in result if isinstance(r, FileActionResultDefinition)]
 
-    assert len(json_results) == 2
-    assert len(file_results) == 2
+    assert len(json_results) == 1  # Single json_result with schema
+    assert len(file_results) == 2  # file1 and file2
 
 
 def test_parse_result_nested_tuple():
@@ -174,14 +190,14 @@ def test_parse_results_with_tuple():
 def test_parse_results_with_action_tuple():
     """Test parse_results function with tuple of action types."""
     result = parse_results(dummy_function_with_action_tuple)
-    assert len(result) == 4  # 2 JSON fields + 2 file fields
+    assert len(result) == 3  # 1 JSON result + 2 file fields
 
     # Check that we get the right mix of result types
     json_results = [r for r in result if isinstance(r, JSONActionResultDefinition)]
     file_results = [r for r in result if isinstance(r, FileActionResultDefinition)]
 
-    assert len(json_results) == 2
-    assert len(file_results) == 2
+    assert len(json_results) == 1  # Single json_result with schema
+    assert len(file_results) == 2  # file1 and file2
 
 
 def test_create_dynamic_model_basic_types():
@@ -309,3 +325,98 @@ def test_create_dynamic_model_complex_example():
 
     instance = model_class(data=test_data)
     assert instance.data == test_data
+
+
+def test_parse_result_custom_pydantic_model():
+    """Test parse_result with custom pydantic model."""
+    result = parse_result(CustomPydanticModel)
+    assert len(result) == 1
+    assert isinstance(result[0], JSONActionResultDefinition)
+    assert result[0].result_label == "json_result"
+    assert result[0].json_schema is not None
+
+    # Check that the schema includes the fields from the custom model
+    schema = result[0].json_schema
+    assert "properties" in schema
+    assert "name" in schema["properties"]
+    assert "value" in schema["properties"]
+    assert "metadata" in schema["properties"]
+
+
+def test_parse_result_complex_pydantic_model():
+    """Test parse_result with complex custom pydantic model."""
+    result = parse_result(ComplexPydanticModel)
+    assert len(result) == 1
+    assert isinstance(result[0], JSONActionResultDefinition)
+    assert result[0].result_label == "json_result"
+    assert result[0].json_schema is not None
+
+    # Check that the schema includes all fields
+    schema = result[0].json_schema
+    assert "properties" in schema
+    assert "id" in schema["properties"]
+    assert "data" in schema["properties"]
+    assert "config" in schema["properties"]
+    assert "nested" in schema["properties"]
+
+
+def test_parse_result_tuple_with_custom_pydantic():
+    """Test parse_result with tuple containing custom pydantic model."""
+    result = parse_result(tuple[CustomPydanticModel, Path])
+    assert len(result) == 2
+
+    # Should get one JSON result definition and one file result definition
+    result_types = [type(r) for r in result]
+    assert JSONActionResultDefinition in result_types
+    assert FileActionResultDefinition in result_types
+
+    # Check the JSON result has the schema
+    json_result = next(r for r in result if isinstance(r, JSONActionResultDefinition))
+    assert json_result.result_label == "json_result"
+    assert json_result.json_schema is not None
+
+
+def test_parse_result_tuple_mixed_custom_pydantic():
+    """Test parse_result with tuple containing multiple custom models."""
+    result = parse_result(tuple[CustomPydanticModel, ComplexPydanticModel])
+    assert len(result) == 2
+
+    # Should get two JSON result definitions
+    assert all(isinstance(r, JSONActionResultDefinition) for r in result)
+    assert all(r.result_label == "json_result" for r in result)
+    assert all(r.json_schema is not None for r in result)
+
+
+def dummy_function_with_custom_pydantic() -> CustomPydanticModel:
+    """Dummy function for testing parse_results with custom pydantic model."""
+    return CustomPydanticModel(name="test", value=42)
+
+
+def dummy_function_with_mixed_custom() -> tuple[CustomPydanticModel, ExampleFileData]:
+    """Dummy function for testing parse_results with mixed custom types."""
+    return (
+        CustomPydanticModel(name="test", value=42),
+        ExampleFileData(file1=Path("/test1"), file2=Path("/test2")),
+    )
+
+
+def test_parse_results_with_custom_pydantic():
+    """Test parse_results function with custom pydantic model return annotation."""
+    result = parse_results(dummy_function_with_custom_pydantic)
+    assert len(result) == 1
+    assert isinstance(result[0], JSONActionResultDefinition)
+    assert result[0].result_label == "json_result"
+    assert result[0].json_schema is not None
+
+
+def test_parse_results_with_mixed_custom_types():
+    """Test parse_results function with tuple of custom model and ActionFiles."""
+    result = parse_results(dummy_function_with_mixed_custom)
+    assert len(result) == 3  # 1 JSON result + 2 file fields
+
+    # Check that we get the right mix of result types
+    json_results = [r for r in result if isinstance(r, JSONActionResultDefinition)]
+    file_results = [r for r in result if isinstance(r, FileActionResultDefinition)]
+
+    assert len(json_results) == 1  # Single json_result with schema
+    assert len(file_results) == 2  # file1 and file2

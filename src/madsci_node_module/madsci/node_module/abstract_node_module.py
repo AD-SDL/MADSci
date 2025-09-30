@@ -601,52 +601,55 @@ class AbstractNode:
     ) -> ActionResult:
         """Process the result of an action and convert it to an ActionResult if necessary."""
         datapoints = None
-        json = None
+        json_result = None
         files = None
         if isinstance(result, ActionResult):
             result.action_id = action_request.action_id
             return result
         if not isinstance(result, tuple):
             result = (result,)
+
+        # Parse the result tuple into separate components
+        json_data_dict, files, datapoints = self._parse_result_components(result)
+
+        # Set json_result to the combined dictionary, or None if empty
+        json_result = json_data_dict if json_data_dict else None
+
+        return ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            action_id=action_request.action_id,
+            json_result=json_result,
+            files=files,
+            datapoints=datapoints,
+        )
+
+    def _parse_result_components(self, result: tuple) -> tuple[dict, Any, Any]:
+        """Parse result tuple into JSON data, files, and datapoints."""
+        json_data_dict = {}
+        files = None
+        datapoints = None
+
         for value in result:
             if isinstance(value, ActionJSON):
-                json = value
+                # Extract all fields from ActionJSON subclass
+                json_data = value.model_dump(mode="json")
+                for key, val in json_data.items():
+                    if key != "type":  # Skip the type field
+                        json_data_dict[key] = val
             elif isinstance(value, ActionFiles):
                 files = value
             elif isinstance(value, ActionDatapoints):
                 datapoints = value
             elif isinstance(value, Path):
                 files = value
+            elif hasattr(value, "model_dump") and hasattr(value, "model_json_schema"):
+                # Handle custom pydantic models - serialize them as JSON
+                json_data_dict = value.model_dump(mode="json")
             else:
-                # For simple return values, check if we need to structure them
-                # according to the action's result definitions
-                action_handler = self.action_handlers.get(action_request.action_name)
-                if action_handler and hasattr(
-                    action_handler, "__madsci_action_result_definitions__"
-                ):
-                    result_definitions = (
-                        action_handler.__madsci_action_result_definitions__
-                    )
-                    # If there's exactly one JSON result definition with label "data", wrap the value
-                    if (
-                        len(result_definitions) == 1
-                        and hasattr(result_definitions[0], "result_type")
-                        and result_definitions[0].result_type == "json"
-                        and result_definitions[0].result_label == "data"
-                    ):
-                        # Create a dictionary with the expected structure that will validate
-                        json = {"data": value}
-                    else:
-                        json = value
-                else:
-                    json = value
-        return ActionResult(
-            status=ActionStatus.SUCCEEDED,
-            action_id=action_request.action_id,
-            json_data=json,
-            files=files,
-            datapoints=datapoints,
-        )
+                # For simple return values, add them to the combined result
+                json_data_dict["data"] = value
+
+        return json_data_dict, files, datapoints
 
     @threaded_daemon
     def _action_thread(

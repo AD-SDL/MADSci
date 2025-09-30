@@ -14,11 +14,6 @@ from madsci.common.types.action_types import (
     FileActionResultDefinition,
     JSONActionResultDefinition,
 )
-from madsci.common.types.datapoint_types import (
-    FileDataPoint,
-    ObjectStorageDataPoint,
-    ValueDataPoint,
-)
 from pydantic import BaseModel, create_model
 
 
@@ -153,24 +148,33 @@ def _parse_action_files(returned: Any) -> list[ActionResultDefinition]:
 
 def _parse_action_json(returned: Any) -> list[ActionResultDefinition]:
     """Parse ActionJSON subclass into result definitions."""
+    model = create_dynamic_model(
+        returned, field_name="data", model_name=returned.__name__
+    )
+    json_schema = model.model_json_schema()
     return [
-        JSONActionResultDefinition(
-            result_label=key, data_type=getattr(value, "__name__", str(value))
-        )
-        for key, value in returned.__annotations__.items()
+        JSONActionResultDefinition(result_label="json_result", json_schema=json_schema)
     ]
 
 
 def _parse_action_datapoints(returned: Any) -> list[ActionResultDefinition]:
     """Parse ActionDatapoints subclass into result definitions."""
     for key, value in returned.__annotations__.items():
-        if value not in [FileDataPoint, ValueDataPoint, ObjectStorageDataPoint]:
+        if value is not str:
             raise ValueError(
-                f"All fields in an ActionDatapoints subclass must be datapoints but field {key} is of type {value}",
+                f"All fields in an ActionDatapoints subclass must be str (datapoint IDs) but field {key} is of type {value}",
             )
     return [
         DatapointActionResultDefinition(result_label=key)
         for key in returned.__annotations__
+    ]
+
+
+def _parse_custom_pydantic_model(returned: Any) -> list[ActionResultDefinition]:
+    """Parse custom pydantic model into result definitions."""
+    json_schema = returned.model_json_schema()
+    return [
+        JSONActionResultDefinition(result_label="json_result", json_schema=json_schema)
     ]
 
 
@@ -188,28 +192,46 @@ def parse_result(returned: Any) -> list[ActionResultDefinition]:
     if returned is Path:
         return [FileActionResultDefinition(result_label="file")]
 
-    # Handle ActionFiles, ActionJSON, ActionDatapoints subclasses
+    # Handle ActionFiles, ActionJSON, ActionDatapoints, and custom pydantic subclasses
     try:
-        if issubclass(returned, ActionFiles):
-            return _parse_action_files(returned)
-        if issubclass(returned, ActionJSON):
-            return _parse_action_json(returned)
-        if issubclass(returned, ActionDatapoints):
-            return _parse_action_datapoints(returned)
+        return _parse_pydantic_class(returned)
     except TypeError:
         # issubclass() raises TypeError if returned is not a class
         pass
 
     # Handle basic types
+    return _parse_basic_type(returned)
+
+
+def _parse_pydantic_class(returned: Any) -> list[ActionResultDefinition]:
+    """Parse pydantic classes (ActionFiles, ActionJSON, ActionDatapoints, custom models)."""
+    if issubclass(returned, ActionFiles):
+        return _parse_action_files(returned)
+    if issubclass(returned, ActionJSON):
+        return _parse_action_json(returned)
+    if issubclass(returned, ActionDatapoints):
+        return _parse_action_datapoints(returned)
+    # Handle custom pydantic models
+    if issubclass(returned, BaseModel):
+        return _parse_custom_pydantic_model(returned)
+
+    # If none of the above, fall through to basic type handling
+    raise TypeError("Not a recognized pydantic class")
+
+
+def _parse_basic_type(returned: Any) -> list[ActionResultDefinition]:
+    """Parse basic Python types."""
     if returned not in [str, int, float, bool, dict, list]:
         raise ValueError(
-            f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, str, int, float, bool, dict, or list but got {returned}",
+            f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, a Pydantic BaseModel, str, int, float, bool, dict, or list but got {returned}",
         )
 
+    model = create_dynamic_model(
+        returned, field_name="data", model_name=f"{returned.__name__}Model"
+    )
+    json_schema = model.model_json_schema()
     return [
-        JSONActionResultDefinition(
-            result_label="data", data_type=getattr(returned, "__name__", str(returned))
-        )
+        JSONActionResultDefinition(result_label="json_result", json_schema=json_schema)
     ]
 
 

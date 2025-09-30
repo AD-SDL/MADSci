@@ -2,10 +2,12 @@
 
 import io
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.action_types import (
+    ActionRequest,
     ActionResult,
     ActionStatus,
     extract_file_parameters,
@@ -235,7 +237,7 @@ def test_get_info(test_client: TestClient) -> None:
         node_info = NodeInfo.model_validate(response.json())
         assert node_info.node_name == "Test Node 1"
         assert node_info.module_name == "test_node"
-        assert len(node_info.actions) == 7
+        assert len(node_info.actions) == 9
         assert node_info.actions["test_action"].description == "A test action."
         assert node_info.actions["test_action"].args["test_param"].required
         assert (
@@ -662,3 +664,104 @@ def test_file_download_routes(test_client: TestClient) -> None:
             if "test_action" in path and "download" in path
         ]
         assert len(test_action_paths) == 0
+
+
+def test_custom_pydantic_result_processing(test_node: TestNode) -> None:
+    """Test that custom pydantic models are properly processed and serialized."""
+    # Start the node for testing
+    test_node.start_node(testing=True)
+
+    # Use test client to properly wait for node to be ready
+    with TestClient(test_node.rest_api):
+        time.sleep(0.5)  # Give the node time to initialize
+
+        # Create an action request for the custom pydantic result action
+        action_request = ActionRequest(
+            action_name="custom_pydantic_result_action",
+            args={"test_id": "custom_test_123"},
+        )
+
+        # Run the action
+        result = test_node.run_action(action_request)
+
+        # Action might be running asynchronously, so wait for completion
+        action_id = result.action_id
+        max_wait_seconds = 5.0
+        wait_time = 0.0
+        while result.status == ActionStatus.RUNNING and wait_time < max_wait_seconds:
+            time.sleep(0.1)
+            wait_time += 0.1
+            # Get the latest action history
+            history = test_node.get_action_history(action_id)
+            if history and action_id in history:
+                latest_result = history[action_id][-1]  # Get the most recent result
+                result = latest_result
+
+        # Check that the result is successful
+        assert result.status == ActionStatus.SUCCEEDED
+        assert result.json_result is not None
+
+        # Check that the custom pydantic model was properly serialized to JSON
+        json_result = result.json_result
+        assert isinstance(json_result, dict)
+        assert json_result["test_id"] == "custom_test_123"
+        assert json_result["value"] == 42.5
+        assert json_result["status"] == "completed"
+        assert json_result["metadata"]["instrument"] == "test_instrument"
+        assert json_result["metadata"]["operator"] == "test_user"
+
+
+def test_mixed_pydantic_and_file_result_processing(test_node: TestNode) -> None:
+    """Test that mixed returns (pydantic model + file) are properly processed."""
+    # Start the node for testing
+    test_node.start_node(testing=True)
+
+    # Use test client to properly wait for node to be ready
+    with TestClient(test_node.rest_api):
+        time.sleep(0.5)  # Give the node time to initialize
+
+        # Create an action request for the mixed result action
+        action_request = ActionRequest(
+            action_name="mixed_pydantic_and_file_action",
+            args={"test_id": "mixed_test_456"},
+        )
+
+        # Run the action
+        result = test_node.run_action(action_request)
+
+        # Action might be running asynchronously, so wait for completion
+        action_id = result.action_id
+        max_wait_seconds = 5.0
+        wait_time = 0.0
+        while result.status == ActionStatus.RUNNING and wait_time < max_wait_seconds:
+            time.sleep(0.1)
+            wait_time += 0.1
+            # Get the latest action history
+            history = test_node.get_action_history(action_id)
+            if history and action_id in history:
+                latest_result = history[action_id][-1]  # Get the most recent result
+                result = latest_result
+
+        # Check that the result is successful
+        assert result.status == ActionStatus.SUCCEEDED
+
+        # Check that the custom pydantic model was properly serialized to JSON
+        assert result.json_result is not None
+        json_result = result.json_result
+        assert isinstance(json_result, dict)
+        assert json_result["test_id"] == "mixed_test_456"
+        assert json_result["value"] == 123.45
+        assert json_result["status"] == "completed"
+        assert json_result["metadata"]["type"] == "mixed_return"
+        assert json_result["metadata"]["file_created"] is True
+
+        # Check that the file was also processed
+        assert result.files is not None
+        # The file should be a Path object
+        assert isinstance(result.files, Path)
+        assert result.files.suffix == ".json"
+        # Verify the file exists and contains expected content
+        assert result.files.exists()
+        content = result.files.read_text()
+        assert "mixed_test_456" in content
+        assert "raw_data" in content

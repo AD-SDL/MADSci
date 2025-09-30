@@ -1,6 +1,7 @@
 node_name: advanced_example_node.node
 node_id: 01K5W0W665KJNT9RC6JD9N4BEN
-node_description: null
+node_description: Advanced example node demonstrating various action types and result
+  formats
 node_type: device
 module_name: advanced_example_node
 module_version: 0.0.1
@@ -41,11 +42,19 @@ actions:
     locations: {}
     files: {}
     results:
-      data:
-        result_label: data
+      json_result:
+        result_label: json_result
         description: null
         result_type: json
-        data_type: int
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: integer
+          required:
+          - data
+          title: intModel
+          type: object
     blocking: false
     asynchronous: true
   return_dict:
@@ -55,11 +64,20 @@ actions:
     locations: {}
     files: {}
     results:
-      data:
-        result_label: data
+      json_result:
+        result_label: json_result
         description: null
         result_type: json
-        data_type: dict
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
     blocking: false
     asynchronous: true
   return_file:
@@ -82,11 +100,19 @@ actions:
     locations: {}
     files: {}
     results:
-      data:
-        result_label: data
+      json_result:
+        result_label: json_result
         description: null
         result_type: json
-        data_type: int
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: integer
+          required:
+          - data
+          title: intModel
+          type: object
       file:
         result_label: file
         description: null
@@ -100,16 +126,20 @@ actions:
     locations: {}
     files: {}
     results:
-      example_value_1:
-        result_label: example_value_1
+      json_result:
+        result_label: json_result
         description: null
         result_type: json
-        data_type: str
-      example_value_2:
-        result_label: example_value_2
-        description: null
-        result_type: json
-        data_type: int
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
     blocking: false
     asynchronous: true
   return_labeled_file_values:
@@ -136,16 +166,20 @@ actions:
     locations: {}
     files: {}
     results:
-      example_value_1:
-        result_label: example_value_1
+      json_result:
+        result_label: json_result
         description: null
         result_type: json
-        data_type: str
-      example_value_2:
-        result_label: example_value_2
-        description: null
-        result_type: json
-        data_type: int
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
       log_file_1:
         result_label: log_file_1
         description: null
@@ -156,13 +190,192 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+  return_analysis_result:
+    name: return_analysis_result
+    description: Return a custom pydantic model with analysis results
+    args:
+      sample_id:
+        name: sample_id
+        description: ''
+        argument_type: str
+        required: false
+        default: SAMPLE_001
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          description: Example custom pydantic model for analysis results
+          properties:
+            sample_id:
+              description: Unique identifier for the sample
+              title: Sample Id
+              type: string
+            concentration:
+              description: Measured concentration in mg/mL
+              title: Concentration
+              type: number
+            ph_level:
+              description: pH level of the sample
+              title: Ph Level
+              type: number
+            temperature:
+              description: Temperature in Celsius during measurement
+              title: Temperature
+              type: number
+            quality_score:
+              description: Quality score from 0-100
+              maximum: 100
+              minimum: 0
+              title: Quality Score
+              type: integer
+            notes:
+              default: ''
+              description: Additional notes about the analysis
+              title: Notes
+              type: string
+          required:
+          - sample_id
+          - concentration
+          - ph_level
+          - temperature
+          - quality_score
+          title: AnalysisResult
+          type: object
+    blocking: false
+    asynchronous: true
+  return_experiment_metadata:
+    name: return_experiment_metadata
+    description: Return complex experiment metadata as a custom pydantic model
+    args:
+      experiment_id:
+        name: experiment_id
+        description: ''
+        argument_type: str
+        required: false
+        default: EXP_001
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          description: Example complex pydantic model with nested data
+          properties:
+            experiment_id:
+              description: Unique experiment identifier
+              title: Experiment Id
+              type: string
+            start_time:
+              description: ISO timestamp when experiment started
+              title: Start Time
+              type: string
+            conditions:
+              additionalProperties:
+                type: number
+              description: Experimental conditions
+              title: Conditions
+              type: object
+            parameters:
+              description: List of measured parameters
+              items:
+                type: string
+              title: Parameters
+              type: array
+            status:
+              description: Current experiment status
+              title: Status
+              type: string
+            results_summary:
+              additionalProperties:
+                type: integer
+              description: Summary of results count
+              title: Results Summary
+              type: object
+          required:
+          - experiment_id
+          - start_time
+          - conditions
+          - parameters
+          - status
+          - results_summary
+          title: ExperimentMetadata
+          type: object
+    blocking: false
+    asynchronous: true
+  return_mixed_custom_and_files:
+    name: return_mixed_custom_and_files
+    description: Return a custom pydantic model and a file
+    args:
+      sample_id:
+        name: sample_id
+        description: ''
+        argument_type: str
+        required: false
+        default: SAMPLE_002
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          description: Example custom pydantic model for analysis results
+          properties:
+            sample_id:
+              description: Unique identifier for the sample
+              title: Sample Id
+              type: string
+            concentration:
+              description: Measured concentration in mg/mL
+              title: Concentration
+              type: number
+            ph_level:
+              description: pH level of the sample
+              title: Ph Level
+              type: number
+            temperature:
+              description: Temperature in Celsius during measurement
+              title: Temperature
+              type: number
+            quality_score:
+              description: Quality score from 0-100
+              maximum: 100
+              minimum: 0
+              title: Quality Score
+              type: integer
+            notes:
+              default: ''
+              description: Additional notes about the analysis
+              title: Notes
+              type: string
+          required:
+          - sample_id
+          - concentration
+          - ph_level
+          - temperature
+          - quality_score
+          title: AnalysisResult
+          type: object
+      file:
+        result_label: file
+        description: null
+        result_type: file
+    blocking: false
+    asynchronous: true
 config:
   node_definition: node_definitions/advanced_example_node.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://localhost:2003/
+  node_url: http://localhost:2004/
   uvicorn_kwargs: {}
   device_number: 0
 config_schema:

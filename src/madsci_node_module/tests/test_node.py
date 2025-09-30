@@ -2,13 +2,14 @@
 
 import tempfile
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Union
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionFiles
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
+from pydantic import BaseModel, Field
 
 
 class TestNodeConfig(RestNodeConfig):
@@ -23,6 +24,17 @@ class TestNodeConfig(RestNodeConfig):
     test_default_param: int = 42
     """A parameter with a default value."""
     update_node_files: bool = False
+
+
+class TestResults(BaseModel):
+    """Test custom pydantic model for results"""
+
+    test_id: str = Field(description="Test identifier")
+    value: float = Field(description="Test measurement value")
+    status: str = Field(description="Test status")
+    metadata: dict[str, Union[str, bool, int]] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
 
 
 class TestNodeInterface:
@@ -237,6 +249,56 @@ class TestNode(RestNode):
             log_path = Path(log_file.name)
 
         return self.FileResults(output_file=output_path, log_file=log_path)
+
+    @action
+    def custom_pydantic_result_action(self, test_id: str = "test_001") -> TestResults:
+        """Test action that returns a custom pydantic model.
+
+        Args:
+            test_id: Identifier for the test
+
+        Returns:
+            TestResults: Custom pydantic model with test results
+        """
+        self.logger.log(f"Creating custom pydantic result for test: {test_id}")
+
+        return TestResults(
+            test_id=test_id,
+            value=42.5,
+            status="completed",
+            metadata={"instrument": "test_instrument", "operator": "test_user"},
+        )
+
+    @action
+    def mixed_pydantic_and_file_action(
+        self, test_id: str = "mixed_001"
+    ) -> tuple[TestResults, Path]:
+        """Test action that returns both a custom pydantic model and a file.
+
+        Args:
+            test_id: Identifier for the test
+
+        Returns:
+            tuple[TestResults, Path]: Custom model and a file
+        """
+        self.logger.log(f"Creating mixed result for test: {test_id}")
+
+        # Create the file
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".json"
+        ) as temp_file:
+            temp_file.write(f'{{"test_id": "{test_id}", "raw_data": [1.0, 2.0, 3.0]}}')
+            file_path = Path(temp_file.name)
+
+        # Create the pydantic model
+        result = TestResults(
+            test_id=test_id,
+            value=123.45,
+            status="completed",
+            metadata={"type": "mixed_return", "file_created": True},
+        )
+
+        return result, file_path
 
 
 if __name__ == "__main__":

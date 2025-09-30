@@ -32,11 +32,19 @@ actions:
     locations: {}
     files: {}
     results:
-      data:
-        result_label: data
+      json_result:
+        result_label: json_result
         description: null
         result_type: json
-        data_type: int
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: integer
+          required:
+          - data
+          title: intModel
+          type: object
     blocking: false
     asynchronous: true
   create_plate_file:
@@ -75,7 +83,7 @@ config:
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://localhost:2002/
+  node_url: http://localhost:2003/
   uvicorn_kwargs: {}
 config_schema:
   description: Default Configuration for a MADSci Node that communicates over REST.

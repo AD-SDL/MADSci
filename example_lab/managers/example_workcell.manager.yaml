@@ -5,7 +5,7 @@ description: An example workcell, consisiting of a two liquid handlers, a plate 
   and a robot arm.
 nodes:
   liquidhandler_1: http://localhost:2000/
-  liquidhandler_2: http://localhost:2003/
-  robotarm_1: http://localhost:2001/
-  platereader_1: http://localhost:2002/
-  advanced_example_node: http://localhost:2003/
+  liquidhandler_2: http://localhost:2001/
+  robotarm_1: http://localhost:2002/
+  platereader_1: http://localhost:2003/
+  advanced_example_node: http://localhost:2004/

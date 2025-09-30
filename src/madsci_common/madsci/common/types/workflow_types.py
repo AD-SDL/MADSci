@@ -3,8 +3,6 @@
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Optional, Union
 
-from madsci.common.types.datapoint_types import DataPoint
-
 if TYPE_CHECKING:
     from madsci.client.data_client import DataPointTypeEnum
 else:
@@ -447,37 +445,43 @@ class Workflow(WorkflowDefinition):
                     raise KeyError(
                         f"No datapoints found in step {step_key} of workflow run {self.workflow_id}"
                     )
-                datapoints = step.result.datapoints.model_dump()
-                if len(datapoints) == 1:
-                    return next(iter(datapoints.values()))["datapoint_id"]
+                datapoint_ids = step.result.datapoints.model_dump()
+                if len(datapoint_ids) == 1:
+                    return next(iter(datapoint_ids.values()))
                 if label is None:
                     raise ValueError(
                         f"Step {step_key} has multiple datapoints, label must be specified"
                     )
-                if label in datapoints:
-                    return datapoints[label]["datapoint_id"]
+                if label in datapoint_ids:
+                    return datapoint_ids[label]
                 raise KeyError(
                     f"Label {label} not found in step {step_key} of workflow run {self.workflow_id}"
                 )
         raise KeyError(f"Datapoint ID not found in workflow run {self.workflow_id}")
 
-    def get_datapoint(self, step_key: str, label: Optional[str] = None) -> str:
-        """Return the ID of the first datapoint with the given label in a workflow run"""
+    def get_datapoint_id_by_label(
+        self, step_key: str, label: Optional[str] = None
+    ) -> str:
+        """Return the ID of the datapoint with the given label in a workflow run.
+
+        Note: This method returns datapoint IDs only. To get the actual DataPoint objects,
+        use a DataClient to fetch the datapoint using the returned ID.
+        """
         for step in self.steps:
             if step.key == step_key:
                 if not step.result.datapoints:
                     raise KeyError(
                         f"No datapoints found in step {step_key} of workflow run {self.workflow_id}"
                     )
-                datapoints = step.result.datapoints.model_dump()
-                if len(datapoints) == 1:
-                    return DataPoint.discriminate(next(iter(datapoints.values())))
+                datapoint_ids = step.result.datapoints.model_dump()
+                if len(datapoint_ids) == 1:
+                    return next(iter(datapoint_ids.values()))
                 if label is None:
                     raise ValueError(
                         f"Step {step_key} has multiple datapoints, label must be specified"
                     )
-                if label in datapoints:
-                    return DataPoint.discriminate(datapoints[label])
+                if label in datapoint_ids:
+                    return datapoint_ids[label]
                 raise KeyError(
                     f"Label {label} not found in step {step_key} of workflow run {self.workflow_id}"
                 )

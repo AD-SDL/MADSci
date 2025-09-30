@@ -90,11 +90,15 @@ class RestNode(AbstractNode):
         """Start the node."""
         global_ownership_info.node_id = self.node_definition.node_id
         url = AnyUrl(getattr(self.config, "node_url", "http://127.0.0.1:2000"))
+
+        # Create FastAPI app metadata from node info
+        app_metadata = self._create_fastapi_metadata()
+
         if not testing:
             self.logger.debug("Running node in production mode")
             import uvicorn  # noqa: PLC0415
 
-            self.rest_api = FastAPI(lifespan=self._lifespan)
+            self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
 
             # Middleware to set ownership context for each request
             @self.rest_api.middleware("http")
@@ -113,7 +117,7 @@ class RestNode(AbstractNode):
             )
         else:
             self.logger.debug("Running node in test mode")
-            self.rest_api = FastAPI(lifespan=self._lifespan)
+            self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
             self._configure_routes()
 
     """------------------------------------------------------------------------------------------------"""
@@ -206,6 +210,50 @@ class RestNode(AbstractNode):
     """------------------------------------------------------------------------------------------------"""
     """Internal and Private Methods"""
     """------------------------------------------------------------------------------------------------"""
+
+    def _create_fastapi_metadata(self) -> dict[str, Any]:
+        """Create FastAPI app metadata from node info."""
+        metadata = {}
+
+        # Set title from node name
+        if hasattr(self, "node_info") and self.node_info:
+            metadata["title"] = self.node_info.node_name or "MADSci Node"
+
+            # Set description from node description
+            if self.node_info.node_description:
+                metadata["description"] = self.node_info.node_description
+
+            # Set version from module version
+            if (
+                hasattr(self.node_info, "module_version")
+                and self.node_info.module_version
+            ):
+                metadata["version"] = str(self.node_info.module_version)
+        elif hasattr(self, "node_definition") and self.node_definition:
+            # Fallback to node definition if node_info is not available yet
+            metadata["title"] = self.node_definition.node_name or "MADSci Node"
+
+            if self.node_definition.node_description:
+                metadata["description"] = self.node_definition.node_description
+
+            if (
+                hasattr(self.node_definition, "module_version")
+                and self.node_definition.module_version
+            ):
+                metadata["version"] = str(self.node_definition.module_version)
+        else:
+            # Ultimate fallback
+            metadata["title"] = "MADSci Node"
+
+        # Set default values if not provided
+        if "version" not in metadata:
+            metadata["version"] = getattr(self, "module_version", "0.0.1")
+
+        # Add default description if none provided
+        if "description" not in metadata:
+            metadata["description"] = f"REST API for {metadata['title']}"
+
+        return metadata
 
     @asynccontextmanager
     async def _lifespan(self, app: FastAPI):  # noqa: ANN202, ARG002

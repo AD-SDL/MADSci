@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
 from madsci.common.types.base_types import Error, MadsciBaseModel
-from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.utils import localnow, new_ulid_str
 from pydantic import Field, TypeAdapter, create_model
 from pydantic.functional_validators import field_validator, model_validator
@@ -76,77 +75,77 @@ class ActionRequest(MadsciBaseModel):
     def failed(
         self,
         errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[dict[str, Any]] = None,
+        json_result: Optional[dict[str, Any]] = None,
         files: Optional[dict[str, Path]] = None,
     ) -> ActionFailed:
         """Create an ActionFailed response"""
         return ActionFailed(
             action_id=self.action_id,
             errors=errors,
-            json_data=json_data,
+            json_result=json_result,
             files=files,
         )
 
     def succeeded(
         self,
         errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Union[Json, ActionJSON]] = None,
+        json_result: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionSucceeded:
         """Create an ActionSucceeded response"""
         return ActionSucceeded(
             action_id=self.action_id,
             errors=errors,
-            json_data=json_data,
+            json_result=json_result,
             files=files,
         )
 
     def running(
         self,
         errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Union[Json, ActionJSON]] = None,
+        json_result: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionRunning:
         """Create an ActionRunning response"""
         return ActionRunning(
             action_id=self.action_id,
             errors=errors,
-            json_data=json_data,
+            json_result=json_result,
             files=files,
         )
 
     def not_ready(
         self,
         errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Union[Json, ActionJSON]] = None,
+        json_result: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionNotReady:
         """Create an ActionNotReady response"""
         return ActionNotReady(
             action_id=self.action_id,
             errors=errors,
-            json_data=json_data,
+            json_result=json_result,
             files=files,
         )
 
     def cancelled(
         self,
         errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Union[Json, ActionJSON]] = None,
+        json_result: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionCancelled:
         """Create an ActionCancelled response"""
         return ActionCancelled(
             action_id=self.action_id,
             errors=errors,
-            json_data=json_data,
+            json_result=json_result,
             files=files,
         )
 
     def paused(
         self,
         errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Union[Json, ActionJSON]] = None,
+        json_result: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionResult:
         """Create an ActionResult response"""
@@ -154,14 +153,14 @@ class ActionRequest(MadsciBaseModel):
             action_id=self.action_id,
             status=ActionStatus.PAUSED,
             errors=errors,
-            data=json_data,
+            json_result=json_result,
             files=files,
         )
 
     def not_started(
         self,
         errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Union[Json, ActionJSON]] = None,
+        json_result: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionResult:
         """Create an ActionResult response"""
@@ -169,14 +168,14 @@ class ActionRequest(MadsciBaseModel):
             action_id=self.action_id,
             status=ActionStatus.NOT_STARTED,
             errors=errors,
-            json_data=json_data,
+            json_result=json_result,
             files=files,
         )
 
     def unknown(
         self,
         errors: Union[Error, list[Error], str] = [],
-        json_data: Optional[Union[Json, ActionJSON]] = None,
+        json_result: Optional[Union[Json, ActionJSON]] = None,
         files: Optional[Union[Path, ActionFiles]] = None,
     ) -> ActionResult:
         """Create an ActionResult response"""
@@ -184,7 +183,7 @@ class ActionRequest(MadsciBaseModel):
             action_id=self.action_id,
             status=ActionStatus.UNKNOWN,
             errors=errors,
-            json_data=json_data,
+            json_result=json_result,
             files=files,
         )
 
@@ -232,20 +231,26 @@ class ActionFiles(MadsciBaseModel, extra="allow"):
 
 
 class ActionDatapoints(MadsciBaseModel, extra="allow"):
-    """Datapoints returned from an action"""
+    """Datapoint IDs returned from an action"""
 
     @model_validator(mode="before")
     @classmethod
-    def ensure_datapoints_are_datapoint(cls: Any, v: Any) -> Any:
-        """Ensure that the datapoints are DataPoints"""
+    def ensure_datapoints_are_strings(cls: Any, v: Any) -> Any:
+        """Ensure that the datapoints are ULID strings"""
         for key, value in v.items():
-            if not isinstance(value, DataPoint):
-                try:
-                    v[key] = DataPoint.discriminate(value)
-                except Exception:
-                    raise ValueError(
-                        f"Datapoint '{key}' is not a valid DataPoint: {value}"
-                    ) from None
+            if isinstance(value, str):
+                # Already a string ID, keep as is
+                continue
+            if hasattr(value, "datapoint_id"):
+                # DataPoint object, extract the ID
+                v[key] = value.datapoint_id
+            elif isinstance(value, dict) and "datapoint_id" in value:
+                # Dict representation of DataPoint, extract the ID
+                v[key] = value["datapoint_id"]
+            else:
+                raise ValueError(
+                    f"Datapoint '{key}' must be a ULID string or DataPoint object with datapoint_id, got: {type(value).__name__}"
+                ) from None
         return v
 
 
@@ -266,9 +271,9 @@ class ActionResult(MadsciBaseModel):
         description="An error message(s) if the step failed.",
         default_factory=list,
     )
-    json_data: Optional[Union[Json, ActionJSON]] = Field(
+    json_result: Optional[Union[Json, ActionJSON]] = Field(
         title="Step Data",
-        description="The data generated by the step.",
+        description="The combined JSON-serializable data generated by the step.",
         default=None,
     )
     files: Optional[Union[Path, ActionFiles]] = Field(
@@ -277,8 +282,8 @@ class ActionResult(MadsciBaseModel):
         default=None,
     )
     datapoints: Optional[ActionDatapoints] = Field(
-        title="Data Points",
-        description="A dictionary of datapoints sent to the data manager by the step.",
+        title="Data Point IDs",
+        description="A dictionary of datapoint IDs (ULID strings) for datapoints sent to the data manager by the step.",
         default=None,
     )
     history_created_at: Optional[datetime] = Field(
@@ -555,9 +560,9 @@ class JSONActionResultDefinition(ActionResultDefinition):
         description="The type of the result.",
         default="json",
     )
-    data_type: Optional[str] = Field(
-        title="Data Type",
-        description="The type of the data.",
+    json_schema: Optional[dict[str, Any]] = Field(
+        title="JSON Schema",
+        description="The JSON schema that validates the result data.",
         default=None,
     )
 
@@ -743,14 +748,12 @@ def _create_result_fields(action_function: Any, result_definitions: list) -> dic
         elif isinstance(result_def, JSONActionResultDefinition):
             json_data_fields[result_def.result_label] = (
                 str,  # Will be the actual data type
-                Field(
-                    description=f"JSON data: {result_def.result_label} ({result_def.data_type})"
-                ),
+                Field(description=f"JSON data: {result_def.result_label}"),
             )
         elif isinstance(result_def, DatapointActionResultDefinition):
             datapoints_fields[result_def.result_label] = (
-                str,  # Will be the datapoint
-                Field(description=f"Datapoint: {result_def.result_label}"),
+                str,  # Will be the datapoint ID (ULID string)
+                Field(description=f"Datapoint ID: {result_def.result_label}"),
             )
 
     # If we have specific result types, create custom fields
@@ -758,7 +761,7 @@ def _create_result_fields(action_function: Any, result_definitions: list) -> dic
         json_data_model = create_model(
             f"{action_function.__name__.title()}JsonData", **json_data_fields
         )
-        fields["json_data"] = (
+        fields["json_result"] = (
             Optional[json_data_model],
             Field(description="JSON data returned by the action"),
         )
@@ -778,7 +781,7 @@ def _create_result_fields(action_function: Any, result_definitions: list) -> dic
         )
         fields["datapoints"] = (
             Optional[datapoints_model],
-            Field(description="Datapoints returned by the action"),
+            Field(description="Datapoint IDs returned by the action"),
         )
 
     return fields
