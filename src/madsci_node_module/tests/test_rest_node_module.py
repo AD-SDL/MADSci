@@ -1,12 +1,14 @@
 """Automated pytest unit tests for the RestNode class."""
 
 import io
+import tempfile
 import time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.action_types import (
+    ActionFiles,
     ActionRequest,
     ActionResult,
     ActionStatus,
@@ -15,6 +17,8 @@ from madsci.common.types.action_types import (
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import NodeDefinition, NodeInfo, NodeStatus
+from madsci.node_module.helpers import action
+from pydantic import BaseModel, Field
 from ulid import ULID
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
@@ -765,3 +769,457 @@ def test_mixed_pydantic_and_file_result_processing(test_node: TestNode) -> None:
         content = result.files.read_text()
         assert "mixed_test_456" in content
         assert "raw_data" in content
+
+
+# Additional tests for enhanced OpenAPI documentation and result handling features
+
+
+class TestActionFiles(ActionFiles):
+    """Test ActionFiles subclass for testing labeled file returns."""
+
+    log_file: Path
+    data_file: Path
+
+
+class TestResultModel(BaseModel):
+    """Test Pydantic model for testing custom return types."""
+
+    sample_id: str = Field(description="Sample identifier")
+    value: float = Field(description="Measured value")
+    status: str = Field(description="Processing status")
+
+
+class EnhancedTestNode(TestNode):
+    """Extended test node for validating enhanced REST endpoint generation."""
+
+    @action
+    def return_int(self) -> int:
+        """Returns a simple integer."""
+        return 42
+
+    @action
+    def return_dict(self) -> dict:
+        """Returns a dictionary."""
+        return {"key": "value", "number": 123}
+
+    @action
+    def return_file(self) -> Path:
+        """Returns a single file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("test content")
+            return Path(f.name)
+
+    @action
+    def return_labeled_files(self) -> TestActionFiles:
+        """Returns multiple labeled files."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("log content")
+            log_file = Path(f.name)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write("data content")
+            data_file = Path(f.name)
+        return TestActionFiles(log_file=log_file, data_file=data_file)
+
+    @action
+    def return_custom_model(self) -> TestResultModel:
+        """Returns a custom Pydantic model."""
+        return TestResultModel(sample_id="SAMPLE_001", value=15.75, status="completed")
+
+    @action
+    def return_mixed(self) -> tuple[dict, Path]:
+        """Returns both JSON data and a file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("mixed content")
+            return {"result": "success"}, Path(f.name)
+
+    @action
+    def take_file_input(self, input_file: Path, param: str = "default") -> dict:
+        """Action that takes a file input."""
+        return {"processed": param, "file_size": input_file.stat().st_size}
+
+
+@pytest.fixture
+def enhanced_test_node():
+    """Create an enhanced test node instance."""
+    node_definition = NodeDefinition(
+        node_name="Enhanced Test Node",
+        module_name="enhanced_test_node",
+        description="An enhanced test node module for automated testing.",
+    )
+
+    node = EnhancedTestNode(
+        node_definition=node_definition,
+        node_config=TestNodeConfig(
+            test_required_param=1,
+        ),
+    )
+    node.start_node(testing=True)
+    return node
+
+
+@pytest.fixture
+def enhanced_client(enhanced_test_node):
+    """Create a test client for the enhanced node."""
+    return TestClient(enhanced_test_node.rest_api)
+
+
+class TestActionDefinitionGeneration:
+    """Test that actions generate correct ActionDefinitions with proper result definitions."""
+
+    def test_action_result_definitions_generated(self, enhanced_test_node):
+        """Test that @action decorator generates correct result definitions."""
+        # Check that result definitions are attached to functions
+        return_int_func = enhanced_test_node.action_handlers["return_int"]
+        assert hasattr(return_int_func, "__madsci_action_result_definitions__")
+
+        result_defs = return_int_func.__madsci_action_result_definitions__
+        assert len(result_defs) == 1
+        assert result_defs[0].result_type == "json"
+        assert result_defs[0].result_label == "json_result"
+
+    def test_file_result_definitions(self, enhanced_test_node):
+        """Test file return types generate correct file result definitions."""
+        return_file_func = enhanced_test_node.action_handlers["return_file"]
+        result_defs = return_file_func.__madsci_action_result_definitions__
+
+        assert len(result_defs) == 1
+        assert result_defs[0].result_type == "file"
+        assert result_defs[0].result_label == "file"
+
+    def test_labeled_files_result_definitions(self, enhanced_test_node):
+        """Test ActionFiles subclass generates correct labeled file definitions."""
+        func = enhanced_test_node.action_handlers["return_labeled_files"]
+        result_defs = func.__madsci_action_result_definitions__
+
+        assert len(result_defs) == 2
+        file_labels = [rd.result_label for rd in result_defs]
+        assert "log_file" in file_labels
+        assert "data_file" in file_labels
+        assert all(rd.result_type == "file" for rd in result_defs)
+
+    def test_custom_model_result_definitions(self, enhanced_test_node):
+        """Test custom Pydantic model generates correct JSON result definition."""
+        func = enhanced_test_node.action_handlers["return_custom_model"]
+        result_defs = func.__madsci_action_result_definitions__
+
+        assert len(result_defs) == 1
+        assert result_defs[0].result_type == "json"
+        assert result_defs[0].json_schema is not None
+        # Should include the TestResultModel schema
+        schema = result_defs[0].json_schema
+        assert "properties" in schema
+        assert "sample_id" in schema["properties"]
+
+    def test_mixed_return_result_definitions(self, enhanced_test_node):
+        """Test tuple return generates multiple result definitions."""
+        func = enhanced_test_node.action_handlers["return_mixed"]
+        result_defs = func.__madsci_action_result_definitions__
+
+        assert len(result_defs) == 2
+        result_types = [rd.result_type for rd in result_defs]
+        assert "json" in result_types
+        assert "file" in result_types
+
+
+class TestEnhancedOpenAPIDocumentationGeneration:
+    """Test that OpenAPI/Swagger documentation is correctly generated."""
+
+    def test_openapi_schema_generated(self, enhanced_client):
+        """Test that OpenAPI schema is available."""
+        response = enhanced_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+        assert "openapi" in schema
+        assert "paths" in schema
+
+    def test_action_specific_response_models(self, enhanced_client):
+        """Test that each action has its own response model in OpenAPI."""
+        response = enhanced_client.get("/openapi.json")
+        schema = response.json()
+
+        # Check that action-specific result endpoints exist
+        paths = schema["paths"]
+        assert "/action/return_int/{action_id}/result" in paths
+        assert "/action/return_custom_model/{action_id}/result" in paths
+
+        # Check response models are action-specific, not generic ActionResult
+        int_result_path = paths["/action/return_int/{action_id}/result"]["get"]
+        responses = int_result_path["responses"]["200"]
+        content_schema = responses["content"]["application/json"]["schema"]
+
+        # Should reference a specific model, not generic ActionResult
+        if "$ref" in content_schema:
+            model_name = content_schema["$ref"].split("/")[-1]
+            assert "ReturnInt" in model_name or "return_int" in model_name.lower()
+
+    def test_file_download_documentation(self, enhanced_client):
+        """Test that file download endpoints are properly documented."""
+        response = enhanced_client.get("/openapi.json")
+        schema = response.json()
+
+        paths = schema["paths"]
+        # Should have file download endpoint for single file action
+        file_download_path = "/action/return_file/{action_id}/download/file"
+        assert file_download_path in paths
+
+        endpoint = paths[file_download_path]["get"]
+        assert "responses" in endpoint
+        # Should have proper file response documentation
+        assert "200" in endpoint["responses"]
+        response_200 = endpoint["responses"]["200"]
+        assert "content" in response_200
+        # Should specify file content type
+        assert any(
+            "application/octet-stream" in ct or "binary" in str(ct)
+            for ct in response_200["content"]
+        )
+
+    def test_labeled_file_download_endpoints(self, enhanced_client):
+        """Test that labeled files get individual download endpoints."""
+        response = enhanced_client.get("/openapi.json")
+        schema = response.json()
+
+        paths = schema["paths"]
+        # Should have individual endpoints for each labeled file
+        assert "/action/return_labeled_files/{action_id}/download/log_file" in paths
+        assert "/action/return_labeled_files/{action_id}/download/data_file" in paths
+
+        # Should also have combined zip download endpoint
+        assert "/action/return_labeled_files/{action_id}/download" in paths
+
+    def test_file_upload_documentation(self, enhanced_client):
+        """Test that file upload endpoints are properly documented."""
+        response = enhanced_client.get("/openapi.json")
+        schema = response.json()
+
+        paths = schema["paths"]
+        # Should have file upload endpoint
+        upload_path = "/action/take_file_input/{action_id}/upload/input_file"
+        assert upload_path in paths
+
+        endpoint = paths[upload_path]["post"]
+        # Should have proper file upload documentation
+        assert "requestBody" in endpoint
+        request_body = endpoint["requestBody"]
+        assert "content" in request_body
+        assert "multipart/form-data" in request_body["content"]
+
+    def test_request_model_documentation(self, enhanced_client):
+        """Test that request models are properly documented."""
+        response = enhanced_client.get("/openapi.json")
+        schema = response.json()
+
+        # Should have components section with request models
+        assert "components" in schema
+        assert "schemas" in schema["components"]
+
+        schemas = schema["components"]["schemas"]
+        # Should have action-specific request models
+        request_model_names = [name for name in schemas if "Request" in name]
+        assert len(request_model_names) > 0
+
+        # Check a specific request model
+        take_file_input_models = [
+            name
+            for name in request_model_names
+            if "take_file_input" in name.lower() or "TakeFileInput" in name
+        ]
+        assert len(take_file_input_models) > 0
+
+
+class TestEnhancedEndpointBehavior:
+    """Test the actual behavior of generated endpoints."""
+
+    def test_simple_action_execution_flow(self, enhanced_client):
+        """Test the full flow of executing a simple action."""
+        # 1. Create action
+        response = enhanced_client.post("/action/return_int", json={})
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+        assert action_id
+
+        # 2. Start action (no files to upload)
+        response = enhanced_client.post(f"/action/return_int/{action_id}/start")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["data"] == 42
+
+    def test_file_action_execution_flow(self, enhanced_client, tmp_path):
+        """Test executing an action that takes a file input."""
+        # 1. Create action
+        response = enhanced_client.post(
+            "/action/take_file_input", json={"param": "test_value"}
+        )
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+
+        # 2. Upload file
+        test_file = tmp_path / "input.txt"
+        test_file.write_text("test file content")
+
+        with test_file.open("rb") as f:
+            response = enhanced_client.post(
+                f"/action/take_file_input/{action_id}/upload/input_file",
+                files={"file": ("input.txt", f, "text/plain")},
+            )
+        assert response.status_code == 200
+
+        # 3. Start action
+        response = enhanced_client.post(f"/action/take_file_input/{action_id}/start")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["data"]["processed"] == "test_value"
+        assert result["json_result"]["data"]["file_size"] > 0
+
+    def test_file_download_endpoint(self, enhanced_client):
+        """Test downloading files from completed actions."""
+        # Execute action that returns a file
+        response = enhanced_client.post("/action/return_file", json={})
+        action_id = response.json()["action_id"]
+
+        response = enhanced_client.post(f"/action/return_file/{action_id}/start")
+        assert response.status_code == 200
+
+        # Download the file
+        response = enhanced_client.get(f"/action/return_file/{action_id}/download/file")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/octet-stream"
+        assert b"test content" in response.content
+
+    def test_labeled_file_downloads(self, enhanced_client):
+        """Test downloading individual labeled files."""
+        # Execute action that returns labeled files
+        response = enhanced_client.post("/action/return_labeled_files", json={})
+        action_id = response.json()["action_id"]
+
+        response = enhanced_client.post(
+            f"/action/return_labeled_files/{action_id}/start"
+        )
+        assert response.status_code == 200
+
+        # Download individual files
+        response = enhanced_client.get(
+            f"/action/return_labeled_files/{action_id}/download/log_file"
+        )
+        assert response.status_code == 200
+        assert b"log content" in response.content
+
+        response = enhanced_client.get(
+            f"/action/return_labeled_files/{action_id}/download/data_file"
+        )
+        assert response.status_code == 200
+        assert b"data content" in response.content
+
+        # Download combined zip
+        response = enhanced_client.get(
+            f"/action/return_labeled_files/{action_id}/download"
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+
+
+class TestEnhancedActionResultTypeMapping:
+    """Test that action return types correctly map to API responses."""
+
+    def test_int_return_maps_to_json_result(self, enhanced_client):
+        """Test that int return becomes json_result in API response."""
+        response = enhanced_client.post("/action/return_int", json={})
+        action_id = response.json()["action_id"]
+
+        response = enhanced_client.post(f"/action/return_int/{action_id}/start")
+        result = response.json()
+
+        assert "json_result" in result
+        assert result["json_result"]["data"] == 42
+        assert result["files"] is None
+
+    def test_custom_model_return_maps_to_json_result(self, enhanced_client):
+        """Test that custom Pydantic model becomes structured json_result."""
+        response = enhanced_client.post("/action/return_custom_model", json={})
+        action_id = response.json()["action_id"]
+
+        response = enhanced_client.post(
+            f"/action/return_custom_model/{action_id}/start"
+        )
+        result = response.json()
+
+        assert "json_result" in result
+        json_result = result["json_result"]
+        assert json_result["sample_id"] == "SAMPLE_001"
+        assert json_result["value"] == 15.75
+        assert json_result["status"] == "completed"
+
+    def test_file_return_maps_to_files_field(self, enhanced_client):
+        """Test that Path return becomes files field in API response."""
+        response = enhanced_client.post("/action/return_file", json={})
+        action_id = response.json()["action_id"]
+
+        response = enhanced_client.post(f"/action/return_file/{action_id}/start")
+        result = response.json()
+
+        assert "files" in result
+        assert result["files"] is not None
+        assert result["json_result"] is None
+
+    def test_labeled_files_return_structure(self, enhanced_client):
+        """Test that ActionFiles subclass creates proper files structure."""
+        response = enhanced_client.post("/action/return_labeled_files", json={})
+        action_id = response.json()["action_id"]
+
+        response = enhanced_client.post(
+            f"/action/return_labeled_files/{action_id}/start"
+        )
+        result = response.json()
+
+        assert "files" in result
+        files = result["files"]
+        assert "log_file" in files
+        assert "data_file" in files
+        assert files["log_file"].endswith(".txt")
+        assert files["data_file"].endswith(".csv")
+
+    def test_mixed_return_maps_to_both_fields(self, enhanced_client):
+        """Test that tuple return populates both json_result and files."""
+        response = enhanced_client.post("/action/return_mixed", json={})
+        action_id = response.json()["action_id"]
+
+        response = enhanced_client.post(f"/action/return_mixed/{action_id}/start")
+        result = response.json()
+
+        assert "json_result" in result
+        assert "files" in result
+        assert result["json_result"]["data"]["result"] == "success"
+        assert result["files"] is not None
+
+
+class TestEnhancedBackwardCompatibility:
+    """Test that changes maintain backward compatibility."""
+
+    def test_generic_action_endpoints_still_work(self, enhanced_client):
+        """Test that generic /action/{action_id}/result endpoints still work."""
+        response = enhanced_client.post("/action/return_int", json={})
+        action_id = response.json()["action_id"]
+
+        response = enhanced_client.post(f"/action/return_int/{action_id}/start")
+        assert response.status_code == 200
+
+        # Generic result endpoint should still work
+        response = enhanced_client.get(f"/action/{action_id}/result")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["json_result"]["data"] == 42
+
+    def test_generic_status_endpoints_work(self, enhanced_client):
+        """Test that generic status endpoints continue to work."""
+        response = enhanced_client.post("/action/return_int", json={})
+        action_id = response.json()["action_id"]
+
+        # Generic status endpoint
+        response = enhanced_client.get(f"/action/{action_id}/status")
+        assert response.status_code == 200
+        status = response.json()
+        assert status in ["not_started", "running", "succeeded", "failed", "unknown"]

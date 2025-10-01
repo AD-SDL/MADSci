@@ -21,7 +21,7 @@ class TestWaitAction:
 
     def test_wait_action_succeeds(self):
         """Test that wait action returns success after sleeping."""
-        with patch("time.sleep") as mock_sleep:
+        with patch("madsci.workcell_manager.workcell_actions.time.sleep") as mock_sleep:
             result = wait(5)
 
             mock_sleep.assert_called_once_with(5)
