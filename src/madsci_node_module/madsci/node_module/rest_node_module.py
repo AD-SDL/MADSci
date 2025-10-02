@@ -6,7 +6,7 @@ import tempfile
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Callable, Optional, Type
+from typing import Any, Callable, Optional, Type, get_origin, get_type_hints
 from zipfile import ZipFile
 
 from fastapi import Request, Response
@@ -21,10 +21,9 @@ from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
     ActionStatus,
-    DatapointActionResultDefinition,
-    FileActionResultDefinition,
-    JSONActionResultDefinition,
+    RestActionResult,
     create_action_request_model,
+    create_dynamic_model,
     extract_file_parameters,
     extract_file_result_definitions,
 )
@@ -43,7 +42,7 @@ from madsci.common.utils import new_ulid_str
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
-from pydantic import AnyUrl, BaseModel, Field, create_model
+from pydantic import AnyUrl
 from starlette.responses import FileResponse
 
 
@@ -61,14 +60,11 @@ class RestNode(AbstractNode):
     config_model = RestNodeConfig
     """The node config model class. This is the class that will be used to instantiate self.config."""
 
-    """------------------------------------------------------------------------------------------------"""
-    """Node Lifecycle and Public Methods"""
-    """------------------------------------------------------------------------------------------------"""
-
     def __init__(self, *args: Any, **kwargs: Any) -> "RestNode":
         """Initialize the node class."""
         super().__init__(*args, **kwargs)
         self.node_info.node_url = getattr(self.config, "node_url", None)
+        self._action_result_models = {}  # Cache for dynamic result models
 
     async def _get_request_files(self, request: Request) -> list[UploadFile]:
         """Extract uploaded files from a request."""
@@ -122,25 +118,15 @@ class RestNode(AbstractNode):
             self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
             self._configure_routes()
 
-    """------------------------------------------------------------------------------------------------"""
-    """Interface Methods"""
-    """------------------------------------------------------------------------------------------------"""
-
     def get_action_status(self, action_id: str) -> ActionStatus:
         """Get the status of an action on the node."""
         return super().get_action_status(action_id)
 
-    def get_action_result(
-        self,
-        action_id: str,
-    ) -> ActionResult:
+    def get_action_result(self, action_id: str) -> ActionResult:
         """Get the result of an action on the node."""
         return super().get_action_result(action_id)
 
-    def get_action_result_dict(
-        self,
-        action_id: str,
-    ) -> dict[str, Any]:
+    def get_action_result_dict(self, action_id: str) -> dict[str, Any]:
         """Get the result of an action on the node as a dictionary for API responses."""
         action_response = super().get_action_result(action_id)
 
@@ -156,10 +142,10 @@ class RestNode(AbstractNode):
         if hasattr(result_dict.get("status"), "value"):
             result_dict["status"] = result_dict["status"].value
 
-        # Handle files serialization if present
+        # Handle files serialization if present - convert to file keys
         files_field = result_dict.get("files")
         if files_field is not None:
-            result_dict["files"] = self._serialize_files_field(files_field)
+            result_dict["files"] = self._serialize_files_to_keys(files_field)
 
         return result_dict
 
@@ -182,27 +168,28 @@ class RestNode(AbstractNode):
             else None,
         }
 
-        # Handle files with proper serialization
+        # Handle files with proper serialization - convert to file keys for REST API
         if action_response.files:
-            result_dict["files"] = self._serialize_files_field(action_response.files)
+            result_dict["files"] = self._serialize_files_to_keys(action_response.files)
         else:
             result_dict["files"] = None
 
         return result_dict
 
-    def _serialize_files_field(self, files_field: Any) -> Any:
-        """Serialize files field to JSON-compatible format."""
+    def _serialize_files_to_keys(self, files_field: Any) -> Any:
+        """Serialize files field to file keys for REST API responses."""
         if isinstance(files_field, Path):
-            return str(files_field)
+            # Single file - return the file key (just "file")
+            return ["file"]
         if hasattr(files_field, "model_dump"):
+            # ActionFiles - return list of field names as file keys
             files_dict = files_field.model_dump()
-            for key, value in files_dict.items():
-                if isinstance(value, Path):
-                    files_dict[key] = str(value)
-            return files_dict
+            return list(files_dict.keys())
         if isinstance(files_field, str):
+            return [files_field]
+        if isinstance(files_field, list):
             return files_field
-        return files_field
+        return None
 
     def get_action_history(
         self, action_id: Optional[str] = None
@@ -233,10 +220,6 @@ class RestNode(AbstractNode):
     def run_admin_command(self, admin_command: AdminCommands) -> AdminCommandResponse:
         """Perform an administrative command on the node."""
         return super().run_admin_command(admin_command)
-
-    """------------------------------------------------------------------------------------------------"""
-    """Admin Commands"""
-    """------------------------------------------------------------------------------------------------"""
 
     def reset(self) -> AdminCommandResponse:
         """Restart the node."""
@@ -274,10 +257,6 @@ class RestNode(AbstractNode):
             success=True,
             errors=[],
         )
-
-    """------------------------------------------------------------------------------------------------"""
-    """Internal and Private Methods"""
-    """------------------------------------------------------------------------------------------------"""
 
     def _create_fastapi_metadata(self) -> dict[str, Any]:
         """Create FastAPI app metadata from node info."""
@@ -508,239 +487,49 @@ class RestNode(AbstractNode):
         for action_name, action_function in self.action_handlers.items():
             # Create dynamic models for this action
             request_model = create_action_request_model(action_function)
-            self._create_action_result_model(action_function, action_name)
+            result_model = self._create_action_result_model(
+                action_function, action_name
+            )
 
             self._setup_create_action_route(action_name, request_model)
             self._setup_file_upload_routes(action_name, action_function)
             self._setup_start_action_route(action_name)
             self._setup_get_status_route(action_name)
-            self._setup_get_result_route(action_name)
+            self._setup_get_result_route(action_name, result_model)
             self._setup_file_download_routes(action_name, action_function)
 
     def _create_action_result_model(
         self, action_function: Any, action_name: str
-    ) -> Type[BaseModel]:
+    ) -> Type[RestActionResult]:
         """Create an action result model that properly reflects the action's return type."""
-        result_definitions = getattr(
-            action_function, "__madsci_action_result_definitions__", []
+        # Check if we already have a cached model
+        if action_name in self._action_result_models:
+            return self._action_result_models[action_name]
+
+        # Get the return type of the action function
+        type_hints = get_type_hints(action_function)
+        return_type = type_hints.get("return")
+
+        # Determine the json_result type based on the return type
+        json_result_type = None
+        if (
+            return_type
+            and return_type is not type(None)
+            and not (get_origin(return_type) or return_type == Any)
+        ):
+            # This is a simple type like int, str, or a Pydantic model
+            json_result_type = return_type
+
+        # Create the dynamic RestActionResult model
+        result_model = create_dynamic_model(
+            action_name=action_name,
+            json_result_type=json_result_type,
+            action_function=action_function,
         )
 
-        base_fields = self._get_base_action_result_fields()
-
-        if result_definitions:
-            categorized_results = self._categorize_result_definitions(
-                result_definitions
-            )
-            base_fields.update(
-                self._create_specific_result_fields(categorized_results, action_name)
-            )
-        else:
-            base_fields.update(self._get_generic_result_fields())
-
-        return self._create_result_model(action_name, action_function, base_fields)
-
-    def _get_base_action_result_fields(self) -> dict:
-        """Get the base fields that all action results have."""
-        return {
-            "action_id": (str, Field(description="Unique identifier for this action")),
-            "status": (ActionStatus, Field(description="Current status of the action")),
-            "errors": (
-                list[Error],
-                Field(default_factory=list, description="Any errors that occurred"),
-            ),
-        }
-
-    def _categorize_result_definitions(self, result_definitions: list) -> dict:
-        """Categorize result definitions by type."""
-        return {
-            "json_results": [
-                rd
-                for rd in result_definitions
-                if isinstance(rd, JSONActionResultDefinition)
-            ],
-            "file_results": [
-                rd
-                for rd in result_definitions
-                if isinstance(rd, FileActionResultDefinition)
-            ],
-            "datapoint_results": [
-                rd
-                for rd in result_definitions
-                if isinstance(rd, DatapointActionResultDefinition)
-            ],
-        }
-
-    def _create_specific_result_fields(
-        self, categorized_results: dict, action_name: str
-    ) -> dict:
-        """Create specific result fields based on categorized result definitions."""
-        fields = {}
-        fields.update(
-            self._create_json_result_field(categorized_results["json_results"])
-        )
-        fields.update(
-            self._create_file_result_field(
-                categorized_results["file_results"], action_name
-            )
-        )
-        fields.update(
-            self._create_datapoint_result_field(
-                categorized_results["datapoint_results"], action_name
-            )
-        )
-        return fields
-
-    def _create_json_result_field(self, json_results: list) -> dict:
-        """Create JSON result field based on JSON result definitions."""
-        if json_results:
-            if len(json_results) == 1:
-                json_def = json_results[0]
-                if json_def.json_schema:
-                    return {
-                        "json_result": (
-                            Optional[dict],
-                            Field(
-                                default=None,
-                                description=f"JSON result data: {json_def.description or json_def.result_label}",
-                            ),
-                        )
-                    }
-                return {
-                    "json_result": (
-                        Optional[Any],
-                        Field(default=None, description="JSON result data"),
-                    )
-                }
-            return {
-                "json_result": (
-                    Optional[dict],
-                    Field(default=None, description="Combined JSON result data"),
-                )
-            }
-        return {
-            "json_result": (
-                Optional[Any],
-                Field(default=None, description="JSON result data"),
-            )
-        }
-
-    def _create_file_result_field(self, file_results: list, action_name: str) -> dict:
-        """Create file result field based on file result definitions."""
-        if file_results:
-            if len(file_results) == 1:
-                return self._create_single_file_field(file_results[0], action_name)
-            return self._create_multiple_files_field(file_results, action_name)
-        return {
-            "files": (
-                Optional[Any],
-                Field(default=None, description="Result files"),
-            )
-        }
-
-    def _create_single_file_field(self, file_def: Any, action_name: str) -> dict:
-        """Create field definition for a single file result."""
-        if file_def.result_label == "file":
-            return {
-                "files": (
-                    Optional[str],
-                    Field(default=None, description="Path to the result file"),
-                )
-            }
-        file_fields = {
-            file_def.result_label: (
-                str,
-                Field(description=f"Path to {file_def.result_label}"),
-            )
-        }
-        file_model = create_model(f"{action_name.title()}Files", **file_fields)
-        return {
-            "files": (
-                Optional[file_model],
-                Field(default=None, description="Result files"),
-            )
-        }
-
-    def _create_multiple_files_field(
-        self, file_results: list, action_name: str
-    ) -> dict:
-        """Create field definition for multiple file results."""
-        file_fields = {}
-        for file_def in file_results:
-            file_fields[file_def.result_label] = (
-                str,
-                Field(
-                    description=f"Path to {file_def.description or file_def.result_label}"
-                ),
-            )
-        file_model = create_model(f"{action_name.title()}Files", **file_fields)
-        return {
-            "files": (
-                Optional[file_model],
-                Field(default=None, description="Result files"),
-            )
-        }
-
-    def _create_datapoint_result_field(
-        self, datapoint_results: list, action_name: str
-    ) -> dict:
-        """Create datapoint result field based on datapoint result definitions."""
-        if datapoint_results:
-            dp_fields = {}
-            for dp_def in datapoint_results:
-                dp_fields[dp_def.result_label] = (
-                    str,
-                    Field(
-                        description=f"Datapoint ID for {dp_def.description or dp_def.result_label}"
-                    ),
-                )
-            if dp_fields:
-                dp_model = create_model(f"{action_name.title()}Datapoints", **dp_fields)
-                return {
-                    "datapoints": (
-                        Optional[dp_model],
-                        Field(default=None, description="Result datapoint IDs"),
-                    )
-                }
-            return {
-                "datapoints": (
-                    Optional[dict],
-                    Field(default=None, description="Result datapoint IDs"),
-                )
-            }
-        return {
-            "datapoints": (
-                Optional[dict],
-                Field(default=None, description="Result datapoint IDs"),
-            )
-        }
-
-    def _get_generic_result_fields(self) -> dict:
-        """Get generic result fields when no specific definitions are available."""
-        return {
-            "json_result": (
-                Optional[Any],
-                Field(default=None, description="JSON result data"),
-            ),
-            "files": (
-                Optional[Any],
-                Field(default=None, description="Result files"),
-            ),
-            "datapoints": (
-                Optional[dict],
-                Field(default=None, description="Result datapoint IDs"),
-            ),
-        }
-
-    def _create_result_model(
-        self, action_name: str, action_function: Any, base_fields: dict
-    ) -> Type[BaseModel]:
-        """Create the final result model with given fields."""
-        model_name = f"{action_name.title()}ActionResult"
-        model_docstring = f"Result model for {action_name} action"
-        if action_function.__doc__:
-            model_docstring = f"{model_docstring}. {action_function.__doc__.strip()}"
-
-        return create_model(model_name, __doc__=model_docstring, **base_fields)
+        # Cache the model
+        self._action_result_models[action_name] = result_model
+        return result_model
 
     def _setup_create_action_route(self, action_name: str, request_model: type) -> None:
         """Set up the create action route for a specific action."""
@@ -835,7 +624,9 @@ class RestNode(AbstractNode):
             tags=[action_name],
         )
 
-    def _setup_get_result_route(self, action_name: str) -> None:
+    def _setup_get_result_route(
+        self, action_name: str, result_model: Type[RestActionResult]
+    ) -> None:
         """Set up the get result route for a specific action."""
 
         def get_result_wrapper() -> Any:
@@ -848,12 +639,14 @@ class RestNode(AbstractNode):
             f"/action/{action_name}/{{action_id}}/result",
             get_result_wrapper(),
             methods=["GET"],
+            response_model=result_model,  # Use the specific result model for better OpenAPI docs
             summary=f"Get {action_name} action result",
             description=f"Get the detailed result data from the {action_name} action.",
             tags=[action_name],
             responses={
                 200: {
                     "description": "Action result",
+                    "model": result_model,
                 },
                 404: {"description": "Action not found"},
             },

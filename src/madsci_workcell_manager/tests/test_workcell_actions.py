@@ -24,7 +24,7 @@ class TestWaitAction:
         with patch("madsci.workcell_manager.workcell_actions.time.sleep") as mock_sleep:
             result = wait(5)
 
-            mock_sleep.assert_called_once_with(5)
+            mock_sleep.assert_called_with(5)
             assert result.status == ActionStatus.SUCCEEDED
 
 

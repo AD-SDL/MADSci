@@ -3,6 +3,7 @@
 import io
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,8 @@ from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
     ActionStatus,
+    RestActionResult,
+    create_dynamic_model,
     extract_file_parameters,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
@@ -1167,20 +1170,21 @@ class TestEnhancedActionResultTypeMapping:
 
     def test_labeled_files_return_structure(self, enhanced_client):
         """Test that ActionFiles subclass creates proper files structure."""
-        response = enhanced_client.post("/action/return_labeled_files", json={})
-        action_id = response.json()["action_id"]
+        with enhanced_client as client:
+            time.sleep(0.5)  # Wait for node to be ready
 
-        response = enhanced_client.post(
-            f"/action/return_labeled_files/{action_id}/start"
-        )
-        result = response.json()
+            response = client.post("/action/return_labeled_files", json={})
+            action_id = response.json()["action_id"]
 
-        assert "files" in result
-        files = result["files"]
-        assert "log_file" in files
-        assert "data_file" in files
-        assert files["log_file"].endswith(".txt")
-        assert files["data_file"].endswith(".csv")
+            response = client.post(f"/action/return_labeled_files/{action_id}/start")
+            result = response.json()
+
+            assert "files" in result
+            files = result["files"]
+            # Files are now returned as file keys (list) rather than dict
+            assert isinstance(files, list)
+            assert "log_file" in files
+            assert "data_file" in files
 
     def test_mixed_return_maps_to_both_fields(self, enhanced_client):
         """Test that tuple return populates both json_result and files."""
@@ -1223,3 +1227,269 @@ class TestEnhancedBackwardCompatibility:
         assert response.status_code == 200
         status = response.json()
         assert status in ["not_started", "running", "succeeded", "failed", "unknown"]
+
+
+# Test models to match the proposal example
+class ReadSensorValue(BaseModel):
+    """Result of reading a sensor, returned by the python action function"""
+
+    value: int
+    """Value from the sensor"""
+    timestamp: datetime
+    """Timestamp for when the sensor read occurred"""
+
+
+class TestNewActionResults(BaseModel):
+    """Test custom pydantic model for new action results"""
+
+    sensor_id: str = Field(description="Sensor identifier")
+    temperature: float = Field(description="Temperature measurement")
+    humidity: float = Field(description="Humidity measurement")
+    status: str = Field(description="Sensor status")
+
+
+class TestProposalExampleActionResultHandling:
+    """Test the action result handling features as described in the proposal."""
+
+    @pytest.fixture
+    def proposal_test_client(self) -> TestClient:
+        """Create a test client with actions that match the proposal examples."""
+
+        class ProposalTestNode(TestNode):
+            """Test node with actions matching the proposal."""
+
+            @action
+            def read_sensor(self) -> ReadSensorValue:
+                """Implementation matching the proposal example - returns simple ReadSensorValue."""
+                return ReadSensorValue(value=10, timestamp=datetime.now())
+
+            @action
+            def get_temperature_reading(self) -> TestNewActionResults:
+                """Returns a complex pydantic model."""
+                return TestNewActionResults(
+                    sensor_id="TEMP_001",
+                    temperature=23.5,
+                    humidity=45.2,
+                    status="active",
+                )
+
+            @action
+            def return_simple_int(self) -> int:
+                """Returns a simple integer."""
+                return 42
+
+            @action
+            def return_simple_string(self) -> str:
+                """Returns a simple string."""
+                return "hello world"
+
+            @action
+            def return_dict_data(self) -> dict:
+                """Returns a dictionary."""
+                return {"key": "value", "number": 123}
+
+            @action
+            def create_test_file(self) -> Path:
+                """Returns a single file."""
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".txt", delete=False
+                ) as f:
+                    f.write("test file content")
+                    return Path(f.name)
+
+        node_definition = NodeDefinition(
+            node_name="Proposal Test Node",
+            module_name="proposal_test_node",
+            description="A test node module for testing the action result handling proposal.",
+        )
+
+        test_node = ProposalTestNode(
+            node_definition=node_definition,
+            node_config=TestNodeConfig(
+                test_required_param=1,
+            ),
+        )
+        test_node.start_node(testing=True)
+        return TestClient(test_node.rest_api)
+
+    def test_proposal_example_read_sensor(self, proposal_test_client: TestClient):
+        """Test the exact example from the proposal - read_sensor action."""
+        with proposal_test_client as client:
+            time.sleep(0.5)  # Wait for node to initialize
+
+            # Check node status first
+            status_response = client.get("/status")
+            assert status_response.status_code == 200
+
+            # Create action
+            response = client.post("/action/read_sensor", json={})
+            assert response.status_code == 200
+            action_data = response.json()
+            action_id = action_data["action_id"]
+            assert ULID.from_str(action_id)
+
+            # Start action (no files needed)
+            response = client.post(f"/action/read_sensor/{action_id}/start")
+            assert response.status_code == 200
+            result = response.json()
+
+            # Check that it succeeded
+            assert result["status"] == "succeeded"
+            assert result["json_result"] is not None
+
+            # Check that the json_result contains the ReadSensorValue data
+            json_result = result["json_result"]
+            assert "value" in json_result
+            assert "timestamp" in json_result
+            assert json_result["value"] == 10
+            assert isinstance(json_result["timestamp"], str)  # ISO format timestamp
+
+    def test_complex_pydantic_model_return(self, proposal_test_client: TestClient):
+        """Test that complex pydantic models are properly handled."""
+        with proposal_test_client as client:
+            time.sleep(0.5)
+
+            response = client.post("/action/get_temperature_reading", json={})
+            action_id = response.json()["action_id"]
+
+            response = client.post(f"/action/get_temperature_reading/{action_id}/start")
+            result = response.json()
+
+            assert result["status"] == "succeeded"
+            json_result = result["json_result"]
+            assert json_result["sensor_id"] == "TEMP_001"
+            assert json_result["temperature"] == 23.5
+            assert json_result["humidity"] == 45.2
+            assert json_result["status"] == "active"
+
+    def test_file_return_with_file_keys(self, proposal_test_client: TestClient):
+        """Test that file returns use file keys instead of full paths."""
+        with proposal_test_client as client:
+            time.sleep(0.5)
+
+            response = client.post("/action/create_test_file", json={})
+            action_id = response.json()["action_id"]
+
+            response = client.post(f"/action/create_test_file/{action_id}/start")
+            result = response.json()
+
+            assert result["status"] == "succeeded"
+            assert result["json_result"] is None  # No JSON data
+            assert result["files"] == ["file"]  # File key instead of full path
+
+    def test_openapi_schema_generation(self, proposal_test_client: TestClient):
+        """Test that OpenAPI schema is generated with proper types."""
+        with proposal_test_client as client:
+            response = client.get("/openapi.json")
+            assert response.status_code == 200
+            schema = response.json()
+
+            # Check that we have paths for our actions
+            paths = schema["paths"]
+            assert "/action/read_sensor/{action_id}/result" in paths
+            assert "/action/get_temperature_reading/{action_id}/result" in paths
+
+            # Check that components contain our action-specific result models
+            components = schema.get("components", {})
+            schemas = components.get("schemas", {})
+
+            # Should have action-specific result models
+            result_models = [name for name in schemas if "ActionResult" in name]
+            assert len(result_models) > 0
+
+    def test_backward_compatibility(self, proposal_test_client: TestClient):
+        """Test that the implementation maintains backward compatibility."""
+        with proposal_test_client as client:
+            time.sleep(0.5)
+
+            # Test that generic endpoints still work
+            response = client.post("/action/read_sensor", json={})
+            action_id = response.json()["action_id"]
+
+            response = client.post(f"/action/read_sensor/{action_id}/start")
+            assert response.status_code == 200
+
+            # Generic result endpoint should still work
+            response = client.get(f"/action/{action_id}/result")
+            assert response.status_code == 200
+            result = response.json()
+            assert result["json_result"]["value"] == 10
+
+            # Generic status endpoint should still work
+            response = client.get(f"/action/{action_id}/status")
+            assert response.status_code == 200
+
+
+class TestRestActionResultType:
+    """Test the RestActionResult type itself."""
+
+    def test_rest_action_result_files_field(self):
+        """Test that RestActionResult has the correct files field type."""
+        # Create a RestActionResult instance
+        result = RestActionResult(
+            status=ActionStatus.SUCCEEDED, files=["file1", "file2"]
+        )
+
+        assert result.files == ["file1", "file2"]
+        assert isinstance(result.files, list)
+
+        # Test serialization
+        result_dict = result.model_dump()
+        assert result_dict["files"] == ["file1", "file2"]
+
+    def test_rest_action_result_inherits_from_action_result(self):
+        """Test that RestActionResult properly inherits from ActionResult."""
+        result = RestActionResult(
+            status=ActionStatus.SUCCEEDED,
+            json_result={"test": "data"},
+            files=["test_file"],
+        )
+
+        # Should have all ActionResult fields
+        assert hasattr(result, "action_id")
+        assert hasattr(result, "status")
+        assert hasattr(result, "errors")
+        assert hasattr(result, "json_result")
+        assert hasattr(result, "datapoints")
+        assert hasattr(result, "history_created_at")
+
+        # Should have the modified files field
+        assert result.files == ["test_file"]
+
+
+class TestDynamicModelCreation:
+    """Test the create_dynamic_model helper function."""
+
+    def test_create_dynamic_model_with_json_type(self):
+        """Test creating a dynamic model with a specific JSON result type."""
+        # Create a dynamic model for read_sensor action
+        dynamic_model = create_dynamic_model(
+            action_name="read_sensor", json_result_type=ReadSensorValue
+        )
+
+        # Check the model class
+        assert dynamic_model.__name__ == "ReadSensorActionResult"
+        assert issubclass(dynamic_model, RestActionResult)
+
+        # Create an instance
+        instance = dynamic_model(
+            status=ActionStatus.SUCCEEDED,
+            json_result=ReadSensorValue(value=42, timestamp=datetime.now()),
+        )
+
+        assert instance.status == ActionStatus.SUCCEEDED
+        assert instance.json_result.value == 42
+
+    def test_create_dynamic_model_without_json_type(self):
+        """Test creating a dynamic model without a specific JSON type."""
+        dynamic_model = create_dynamic_model(action_name="simple_action")
+
+        assert dynamic_model.__name__ == "SimpleActionActionResult"
+        assert issubclass(dynamic_model, RestActionResult)
+
+        # Should still work with any json_result
+        instance = dynamic_model(
+            status=ActionStatus.SUCCEEDED, json_result={"any": "data"}
+        )
+
+        assert instance.json_result == {"any": "data"}
