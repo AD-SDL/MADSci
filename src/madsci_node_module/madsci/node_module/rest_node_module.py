@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Type, get_origin, get_type_hints
 from zipfile import ZipFile
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from fastapi.applications import FastAPI
 from fastapi.background import BackgroundTasks
 from fastapi.datastructures import UploadFile
@@ -399,60 +399,40 @@ class RestNode(AbstractNode):
         action_response = super().get_action_result(action_id)
 
         if not action_response.files:
-            raise ValueError(f"Action {action_id} has no files")
-
-        if isinstance(action_response.files, Path):
-            # Single file - return as is (no ZIP needed)
-            return FileResponse(
-                path=action_response.files,
-                headers={"content-type": "application/octet-stream"},
+            if action_response.status != ActionStatus.SUCCEEDED:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Action {action_id} did not succeed (status: {action_response.status}). Cannot download files from failed action.",
+                )
+            raise HTTPException(
+                status_code=404,
+                detail=f"Action {action_id} completed successfully but produced no file results",
             )
-        if isinstance(action_response.files, ActionFiles):
-            # Multiple files - create ZIP
-            files_dict = action_response.files.model_dump()
 
-            with tempfile.NamedTemporaryFile(
-                suffix=".zip", delete=False
-            ) as temp_zip_file:
-                with ZipFile(temp_zip_file.name, "w") as zip_file:
-                    for _, file_path in files_dict.items():
+        # Always create a ZIP, even for single files for consistency
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip_file:
+            with ZipFile(temp_zip_file.name, "w") as zip_file:
+                if isinstance(action_response.files, Path):
+                    # Single file - add to ZIP with appropriate name
+                    if action_response.files.exists():
+                        zip_file.write(action_response.files, "file")
+                elif isinstance(action_response.files, ActionFiles):
+                    # Multiple files - add all to ZIP with their labels as names
+                    files_dict = action_response.files.model_dump()
+                    for file_label, file_path in files_dict.items():
                         if Path(file_path).exists():
-                            zip_file.write(file_path, Path(file_path).name)
+                            # Use the file label as the filename in the ZIP
+                            file_extension = Path(file_path).suffix
+                            zip_filename = f"{file_label}{file_extension}"
+                            zip_file.write(file_path, zip_filename)
+                else:
+                    raise ValueError("Invalid file response")
 
-                return FileResponse(
-                    path=temp_zip_file.name,
-                    filename=f"{action_id}_files.zip",
-                    headers={"content-type": "application/zip"},
-                )
-        else:
-            raise ValueError("Invalid file response")
-
-    def get_action_file(
-        self, _action_name: str, action_id: str, file_key: str
-    ) -> FileResponse:
-        """Get a specific file from an action."""
-        action_response = super().get_action_result(action_id)
-
-        if not action_response.files:
-            raise ValueError(f"Action {action_id} has no files")
-
-        if isinstance(action_response.files, Path):
-            # Single file
-            if file_key == "file":
-                return FileResponse(
-                    path=action_response.files,
-                    headers={"content-type": "application/octet-stream"},
-                )
-        elif isinstance(action_response.files, ActionFiles):
-            # Multiple files
-            files_dict = action_response.files.model_dump()
-            if file_key in files_dict:
-                file_path = Path(files_dict[file_key])
-                return FileResponse(
-                    path=file_path, headers={"content-type": "application/octet-stream"}
-                )
-
-        raise ValueError(f"File key '{file_key}' not found")
+            return FileResponse(
+                path=temp_zip_file.name,
+                filename=f"{action_id}_files.zip",
+                headers={"content-type": "application/zip"},
+            )
 
     def _configure_routes(self) -> None:
         """Configure the routes for the REST API."""
@@ -655,70 +635,45 @@ class RestNode(AbstractNode):
     def _setup_file_download_routes(
         self, action_name: str, action_function: Any
     ) -> None:
-        """Set up specific file download routes for each file result in the action."""
+        """Set up a single ZIP download route for all actions (defensive programming)."""
         file_results = extract_file_result_definitions(action_function)
 
-        # Create specific routes for each file result
-        for result_label, description in file_results.items():
+        # Create file list description for OpenAPI docs
+        if len(file_results) == 1:
+            file_key = next(iter(file_results.keys()))
+            file_description = f"Download files from {action_name} action as a ZIP archive containing: {file_key}"
+        elif len(file_results) > 1:
+            files_list = ", ".join(file_results.keys())
+            file_description = f"Download files from {action_name} action as a ZIP archive containing {len(file_results)} files: {files_list}"
+        else:
+            # No declared file results - but provide endpoint for unexpected files
+            file_description = f"Download any files returned by the {action_name} action as a ZIP archive. This action is not expected to return files based on type annotations, but this endpoint is available in case files are unexpectedly produced."
 
-            def create_file_download_wrapper(
-                file_result_name: str = result_label,
-            ) -> Any:
-                def wrapper(action_id: str) -> Any:
-                    return self.get_action_file(
-                        action_name, action_id, file_result_name
-                    )
+        def get_files_wrapper() -> Any:
+            def wrapper(action_id: str) -> Any:
+                return self.get_action_files_zip(action_name, action_id)
 
-                return wrapper
+            return wrapper
 
-            self.router.add_api_route(
-                f"/action/{action_name}/{{action_id}}/download/{result_label}",
-                create_file_download_wrapper(),
-                methods=["GET"],
-                summary=f"Download {result_label} from {action_name}",
-                description=description,
-                tags=[action_name],
-                responses={
-                    200: {
-                        "description": "File download",
-                        "content": {
-                            "application/octet-stream": {
-                                "schema": {"type": "string", "format": "binary"}
-                            }
-                        },
+        self.router.add_api_route(
+            f"/action/{action_name}/{{action_id}}/download",
+            get_files_wrapper(),
+            methods=["GET"],
+            summary=f"Download files from {action_name}",
+            description=file_description,
+            tags=[action_name],
+            responses={
+                200: {
+                    "description": "ZIP file containing action result files",
+                    "content": {
+                        "application/zip": {
+                            "schema": {"type": "string", "format": "binary"}
+                        }
                     },
-                    404: {"description": "File not found"},
                 },
-            )
-
-        # Create a combined files endpoint if there are multiple file results
-        if len(file_results) > 1:
-
-            def get_files_wrapper() -> Any:
-                def wrapper(action_id: str) -> Any:
-                    return self.get_action_files_zip(action_name, action_id)
-
-                return wrapper
-
-            self.router.add_api_route(
-                f"/action/{action_name}/{{action_id}}/download",
-                get_files_wrapper(),
-                methods=["GET"],
-                summary=f"Download all files from {action_name}",
-                description=f"Download all files from the {action_name} action as a ZIP archive.",
-                tags=[action_name],
-                responses={
-                    200: {
-                        "description": "ZIP file containing all result files",
-                        "content": {
-                            "application/zip": {
-                                "schema": {"type": "string", "format": "binary"}
-                            }
-                        },
-                    },
-                    404: {"description": "Files not found"},
-                },
-            )
+                404: {"description": "Action has no file results"},
+            },
+        )
 
 
 if __name__ == "__main__":

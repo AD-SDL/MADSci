@@ -705,29 +705,6 @@ def test_get_action_result_data(
 
 
 @patch("requests.get")
-def test_get_action_file(mock_get: MagicMock, rest_node_client: RestNodeClient) -> None:
-    """Test get_action_file method."""
-    action_id = new_ulid_str()
-    mock_response = MagicMock()
-    mock_response.ok = True
-    mock_response.content = b"test file content"
-    mock_get.return_value = mock_response
-
-    with patch("tempfile.NamedTemporaryFile") as mock_temp:
-        mock_temp.return_value.__enter__.return_value.name = "/tmp/test_file.txt"  # noqa: S108
-
-        result = rest_node_client._get_action_file(
-            "test_action", action_id, "output_file"
-        )
-
-        assert result == Path("/tmp/test_file.txt")  # noqa: S108
-        mock_get.assert_called_once_with(
-            f"http://localhost:2000/action/test_action/{action_id}/download/output_file",
-            timeout=60,
-        )
-
-
-@patch("requests.get")
 def test_get_action_files_zip(
     mock_get: MagicMock, rest_node_client: RestNodeClient
 ) -> None:

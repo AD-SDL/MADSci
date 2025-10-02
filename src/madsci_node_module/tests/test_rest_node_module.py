@@ -3,6 +3,7 @@
 import io
 import tempfile
 import time
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -626,51 +627,52 @@ def test_specific_file_upload_endpoints(test_client: TestClient) -> None:
 
 
 def test_file_download_routes(test_client: TestClient) -> None:
-    """Test that file download routes are created for actions that return files."""
+    """Test that single ZIP download routes are created for actions that return files."""
     with test_client as client:
         # Get the OpenAPI schema
         response = client.get("/openapi.json")
         assert response.status_code == 200
         openapi_schema = response.json()
 
-        # Check for single file result action
-        file_result_path = "/action/file_result_action/{action_id}/download/file"
-        assert file_result_path in openapi_schema["paths"]
+        # Check for single file result action - should have only ZIP download endpoint
+        single_file_zip_path = "/action/file_result_action/{action_id}/download"
+        assert single_file_zip_path in openapi_schema["paths"]
 
-        file_endpoint = openapi_schema["paths"][file_result_path]["get"]
-        assert "summary" in file_endpoint
-        assert "download" in file_endpoint["summary"].lower()
-        assert "file_result_action" in file_endpoint["tags"]
+        single_file_endpoint = openapi_schema["paths"][single_file_zip_path]["get"]
+        assert "summary" in single_file_endpoint
+        assert "download" in single_file_endpoint["summary"].lower()
+        assert "file_result_action" in single_file_endpoint["tags"]
+        # Should mention it's a ZIP archive
+        assert "ZIP archive" in single_file_endpoint["description"]
 
-        # Check for multiple file result action
-        output_file_path = (
-            "/action/multiple_file_result_action/{action_id}/download/output_file"
+        # Check for multiple file result action - should have only ZIP download endpoint
+        multi_files_zip_path = (
+            "/action/multiple_file_result_action/{action_id}/download"
         )
-        log_file_path = (
-            "/action/multiple_file_result_action/{action_id}/download/log_file"
-        )
-        all_files_path = "/action/multiple_file_result_action/{action_id}/download"
+        assert multi_files_zip_path in openapi_schema["paths"]
 
-        assert output_file_path in openapi_schema["paths"]
-        assert log_file_path in openapi_schema["paths"]
-        assert all_files_path in openapi_schema["paths"]
+        multi_files_endpoint = openapi_schema["paths"][multi_files_zip_path]["get"]
+        assert "multiple_file_result_action" in multi_files_endpoint["tags"]
+        # Should list expected files in description
+        assert "output_file" in multi_files_endpoint["description"]
+        assert "log_file" in multi_files_endpoint["description"]
 
-        # All should use the same tag for grouping
-        output_endpoint = openapi_schema["paths"][output_file_path]["get"]
-        log_endpoint = openapi_schema["paths"][log_file_path]["get"]
-        all_files_endpoint = openapi_schema["paths"][all_files_path]["get"]
-
-        assert "multiple_file_result_action" in output_endpoint["tags"]
-        assert "multiple_file_result_action" in log_endpoint["tags"]
-        assert "multiple_file_result_action" in all_files_endpoint["tags"]
-
-        # Verify actions without file results don't have download endpoints
-        test_action_paths = [
+        # Verify individual file endpoints no longer exist
+        individual_file_paths = [
             path
             for path in openapi_schema["paths"]
-            if "test_action" in path and "download" in path
+            if "download/" in path
+            and path.endswith(("/output_file", "/log_file", "/file"))
         ]
-        assert len(test_action_paths) == 0
+        assert len(individual_file_paths) == 0
+
+        # Verify that ALL actions now have download endpoints (defensive programming)
+        test_action_download_path = "/action/test_action/{action_id}/download"
+        assert test_action_download_path in openapi_schema["paths"]
+
+        # Verify the endpoint for actions without expected files explains this
+        test_action_endpoint = openapi_schema["paths"][test_action_download_path]["get"]
+        assert "not expected to return files" in test_action_endpoint["description"]
 
 
 def test_custom_pydantic_result_processing(test_node: TestNode) -> None:
@@ -956,39 +958,44 @@ class TestEnhancedOpenAPIDocumentationGeneration:
             assert "ReturnInt" in model_name or "return_int" in model_name.lower()
 
     def test_file_download_documentation(self, enhanced_client):
-        """Test that file download endpoints are properly documented."""
+        """Test that ZIP file download endpoints are properly documented."""
         response = enhanced_client.get("/openapi.json")
         schema = response.json()
 
         paths = schema["paths"]
-        # Should have file download endpoint for single file action
-        file_download_path = "/action/return_file/{action_id}/download/file"
+        # Should have ZIP download endpoint for single file action
+        file_download_path = "/action/return_file/{action_id}/download"
         assert file_download_path in paths
 
         endpoint = paths[file_download_path]["get"]
         assert "responses" in endpoint
-        # Should have proper file response documentation
+        # Should have proper ZIP response documentation
         assert "200" in endpoint["responses"]
         response_200 = endpoint["responses"]["200"]
         assert "content" in response_200
-        # Should specify file content type
-        assert any(
-            "application/octet-stream" in ct or "binary" in str(ct)
-            for ct in response_200["content"]
-        )
+        # Should specify ZIP content type
+        assert "application/zip" in response_200["content"]
 
     def test_labeled_file_download_endpoints(self, enhanced_client):
-        """Test that labeled files get individual download endpoints."""
+        """Test that labeled files only get a single ZIP download endpoint."""
         response = enhanced_client.get("/openapi.json")
         schema = response.json()
 
         paths = schema["paths"]
-        # Should have individual endpoints for each labeled file
-        assert "/action/return_labeled_files/{action_id}/download/log_file" in paths
-        assert "/action/return_labeled_files/{action_id}/download/data_file" in paths
+        # Should NOT have individual endpoints for each labeled file
+        assert "/action/return_labeled_files/{action_id}/download/log_file" not in paths
+        assert (
+            "/action/return_labeled_files/{action_id}/download/data_file" not in paths
+        )
 
-        # Should also have combined zip download endpoint
-        assert "/action/return_labeled_files/{action_id}/download" in paths
+        # Should only have single ZIP download endpoint
+        zip_endpoint_path = "/action/return_labeled_files/{action_id}/download"
+        assert zip_endpoint_path in paths
+
+        # Should list expected files in the description
+        zip_endpoint = paths[zip_endpoint_path]["get"]
+        assert "log_file" in zip_endpoint["description"]
+        assert "data_file" in zip_endpoint["description"]
 
     def test_file_upload_documentation(self, enhanced_client):
         """Test that file upload endpoints are properly documented."""
@@ -1079,50 +1086,98 @@ class TestEnhancedEndpointBehavior:
         assert result["json_result"]["data"]["file_size"] > 0
 
     def test_file_download_endpoint(self, enhanced_client):
-        """Test downloading files from completed actions."""
-        # Execute action that returns a file
-        response = enhanced_client.post("/action/return_file", json={})
-        action_id = response.json()["action_id"]
+        """Test downloading files from completed actions as ZIP."""
+        with enhanced_client as client:
+            # Wait for node to be ready
+            time.sleep(0.5)
 
-        response = enhanced_client.post(f"/action/return_file/{action_id}/start")
-        assert response.status_code == 200
+            # Execute action that returns a file
+            response = client.post("/action/return_file", json={})
+            action_id = response.json()["action_id"]
 
-        # Download the file
-        response = enhanced_client.get(f"/action/return_file/{action_id}/download/file")
-        assert response.status_code == 200
-        assert response.headers["content-type"] == "application/octet-stream"
-        assert b"test content" in response.content
+            response = client.post(f"/action/return_file/{action_id}/start")
+            assert response.status_code == 200
+
+            # Download the file as ZIP
+            response = client.get(f"/action/return_file/{action_id}/download")
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "application/zip"
+
+            # Verify ZIP contains the expected file content
+            with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
+                file_list = zip_file.namelist()
+                assert len(file_list) >= 1
+                # Read the first file in the ZIP
+                with zip_file.open(file_list[0]) as f:
+                    content = f.read()
+                    assert b"test content" in content
 
     def test_labeled_file_downloads(self, enhanced_client):
-        """Test downloading individual labeled files."""
-        # Execute action that returns labeled files
-        response = enhanced_client.post("/action/return_labeled_files", json={})
-        action_id = response.json()["action_id"]
+        """Test downloading labeled files as ZIP."""
+        with enhanced_client as client:
+            # Wait for node to be ready
+            time.sleep(0.5)
 
-        response = enhanced_client.post(
-            f"/action/return_labeled_files/{action_id}/start"
-        )
-        assert response.status_code == 200
+            # Execute action that returns labeled files
+            response = client.post("/action/return_labeled_files", json={})
+            action_id = response.json()["action_id"]
 
-        # Download individual files
-        response = enhanced_client.get(
-            f"/action/return_labeled_files/{action_id}/download/log_file"
-        )
-        assert response.status_code == 200
-        assert b"log content" in response.content
+            response = client.post(f"/action/return_labeled_files/{action_id}/start")
+            assert response.status_code == 200
 
-        response = enhanced_client.get(
-            f"/action/return_labeled_files/{action_id}/download/data_file"
-        )
-        assert response.status_code == 200
-        assert b"data content" in response.content
+            # Individual file endpoints should not exist
+            response = client.get(
+                f"/action/return_labeled_files/{action_id}/download/log_file"
+            )
+            assert response.status_code == 404
 
-        # Download combined zip
-        response = enhanced_client.get(
-            f"/action/return_labeled_files/{action_id}/download"
-        )
-        assert response.status_code == 200
-        assert response.headers["content-type"] == "application/zip"
+            response = client.get(
+                f"/action/return_labeled_files/{action_id}/download/data_file"
+            )
+            assert response.status_code == 404
+
+            # Download ZIP with all files
+            response = client.get(f"/action/return_labeled_files/{action_id}/download")
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "application/zip"
+
+            # Verify ZIP contains the expected labeled files
+            with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
+                file_list = zip_file.namelist()
+                assert len(file_list) == 2
+
+                # Files should be named with their labels
+                file_contents = {}
+                for filename in file_list:
+                    with zip_file.open(filename) as f:
+                        file_contents[filename] = f.read()
+
+                # Check that we have both expected files with correct content
+                log_file_found = any(
+                    b"log content" in content for content in file_contents.values()
+                )
+                data_file_found = any(
+                    b"data content" in content for content in file_contents.values()
+                )
+                assert log_file_found, "Log file content not found in ZIP"
+                assert data_file_found, "Data file content not found in ZIP"
+
+    def test_download_endpoint_for_non_file_actions(self, enhanced_client):
+        """Test that actions without declared file results still have download endpoints."""
+        with enhanced_client as client:
+            # Wait for node to be ready
+            time.sleep(0.5)
+
+            # Execute action that normally doesn't return files
+            response = client.post("/action/return_int", json={})
+            action_id = response.json()["action_id"]
+
+            response = client.post(f"/action/return_int/{action_id}/start")
+            assert response.status_code == 200
+
+            # Download endpoint should exist but return 404 since no files
+            response = client.get(f"/action/return_int/{action_id}/download")
+            assert response.status_code == 404  # No files to download
 
 
 class TestEnhancedActionResultTypeMapping:

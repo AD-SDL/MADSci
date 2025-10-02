@@ -2,6 +2,7 @@
 
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 from typing import Any, ClassVar, Optional
 
@@ -141,19 +142,49 @@ class RestNodeClient(AbstractNodeClient):
         self, action_name: str, action_id: str, result: ActionResult
     ) -> None:
         """Return the files associated with an action result. REST-implementation specific."""
+        if result.files is None:
+            return
+
+        # Always download as ZIP and extract files
+        zip_path = self._get_action_files_zip(action_name, action_id)
+
         if isinstance(result.files, ActionFiles):
+            # Multiple files case - extract from ZIP
             files_dict = result.files.model_dump()
             downloaded_files = {}
-            for file_key, _ in files_dict.items():
-                downloaded_path = self._get_action_file(
-                    action_name, action_id, file_key
-                )
-                downloaded_files[file_key] = downloaded_path
+
+            # Extract files from ZIP
+            with zipfile.ZipFile(zip_path, "r") as zip_file:
+                temp_dir = Path(tempfile.mkdtemp())
+                zip_file.extractall(temp_dir)
+
+                # Map extracted files back to their labels
+                for file_key in files_dict:
+                    # Look for file with matching label (with any extension)
+                    extracted_files = list(temp_dir.glob(f"{file_key}*"))
+                    if extracted_files:
+                        downloaded_files[file_key] = extracted_files[0]
+                    else:
+                        # Fallback: use the first file if label matching fails
+                        all_files = list(temp_dir.iterdir())
+                        if all_files:
+                            downloaded_files[file_key] = all_files[0]
+
             result.files = ActionFiles.model_validate(downloaded_files)
+
         elif isinstance(result.files, Path):
-            # Single file case - download it
-            downloaded_path = self._get_action_file(action_name, action_id, "file")
-            result.files = downloaded_path
+            # Single file case - extract from ZIP
+            with zipfile.ZipFile(zip_path, "r") as zip_file:
+                temp_dir = Path(tempfile.mkdtemp())
+                zip_file.extractall(temp_dir)
+
+                # Get the first (and likely only) file from the ZIP
+                extracted_files = list(temp_dir.iterdir())
+                if extracted_files:
+                    result.files = extracted_files[0]
+
+        # Clean up the ZIP file
+        zip_path.unlink(missing_ok=True)
 
     def get_action_result_by_name(
         self, action_name: str, action_id: str, include_files: bool = True
@@ -170,21 +201,6 @@ class RestNodeClient(AbstractNodeClient):
             self._get_result_files(action_name, action_id, result)
 
         return result
-
-    def _get_action_file(self, action_name: str, action_id: str, file_key: str) -> Path:
-        """Download a specific file from an action result. REST-implementation specific."""
-        rest_response = requests.get(
-            f"{self.url}/action/{action_name}/{action_id}/download/{file_key}",
-            timeout=60,
-        )
-        rest_response.raise_for_status()
-
-        # Save to temporary file
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=f"_{file_key}"
-        ) as temp_file:
-            temp_file.write(rest_response.content)
-            return Path(temp_file.name)
 
     def _get_action_files_zip(self, action_name: str, action_id: str) -> Path:
         """Download all files from an action result as a ZIP. REST-implementation specific."""
