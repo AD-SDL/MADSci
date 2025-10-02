@@ -865,7 +865,12 @@ def enhanced_test_node():
 @pytest.fixture
 def enhanced_client(enhanced_test_node):
     """Create a test client for the enhanced node."""
-    return TestClient(enhanced_test_node.rest_api)
+    with TestClient(enhanced_test_node.rest_api) as client:
+        time.sleep(0.5)  # Wait for startup to complete
+
+        # Verify startup completed
+        assert enhanced_test_node.startup_has_run
+        yield client
 
 
 class TestActionDefinitionGeneration:
@@ -1052,9 +1057,18 @@ class TestEnhancedEndpointBehavior:
         # 2. Start action (no files to upload)
         response = enhanced_client.post(f"/action/return_int/{action_id}/start")
         assert response.status_code == 200
-        result = response.json()
+
+        # Wait for action to complete
+        for _ in range(50):  # Wait up to 5 seconds
+            response = enhanced_client.get(f"/action/{action_id}/result")
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") in ["succeeded", "failed", "error"]:
+                    break
+            time.sleep(0.1)
+
         assert result["status"] == "succeeded"
-        assert result["json_result"]["data"] == 42
+        assert result["json_result"] == 42
 
     def test_file_action_execution_flow(self, enhanced_client, tmp_path):
         """Test executing an action that takes a file input."""
@@ -1080,10 +1094,19 @@ class TestEnhancedEndpointBehavior:
         # 3. Start action
         response = enhanced_client.post(f"/action/take_file_input/{action_id}/start")
         assert response.status_code == 200
-        result = response.json()
+
+        # Wait for action to complete
+        for _ in range(50):  # Wait up to 5 seconds
+            response = enhanced_client.get(f"/action/{action_id}/result")
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") in ["succeeded", "failed", "error"]:
+                    break
+            time.sleep(0.1)
+
         assert result["status"] == "succeeded"
-        assert result["json_result"]["data"]["processed"] == "test_value"
-        assert result["json_result"]["data"]["file_size"] > 0
+        assert result["json_result"]["processed"] == "test_value"
+        assert result["json_result"]["file_size"] > 0
 
     def test_file_download_endpoint(self, enhanced_client):
         """Test downloading files from completed actions as ZIP."""
@@ -1189,10 +1212,20 @@ class TestEnhancedActionResultTypeMapping:
         action_id = response.json()["action_id"]
 
         response = enhanced_client.post(f"/action/return_int/{action_id}/start")
-        result = response.json()
+        assert response.status_code == 200
 
+        # Wait for action to complete
+        for _ in range(50):  # Wait up to 5 seconds
+            response = enhanced_client.get(f"/action/{action_id}/result")
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") in ["succeeded", "failed", "error"]:
+                    break
+            time.sleep(0.1)
+
+        assert result["status"] == "succeeded"
         assert "json_result" in result
-        assert result["json_result"]["data"] == 42
+        assert result["json_result"] == 42
         assert result["files"] is None
 
     def test_custom_model_return_maps_to_json_result(self, enhanced_client):
@@ -1247,11 +1280,21 @@ class TestEnhancedActionResultTypeMapping:
         action_id = response.json()["action_id"]
 
         response = enhanced_client.post(f"/action/return_mixed/{action_id}/start")
-        result = response.json()
+        assert response.status_code == 200
 
+        # Wait for action to complete
+        for _ in range(50):  # Wait up to 5 seconds
+            response = enhanced_client.get(f"/action/{action_id}/result")
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") in ["succeeded", "failed", "error"]:
+                    break
+            time.sleep(0.1)
+
+        assert result["status"] == "succeeded"
         assert "json_result" in result
         assert "files" in result
-        assert result["json_result"]["data"]["result"] == "success"
+        assert result["json_result"]["result"] == "success"
         assert result["files"] is not None
 
 
@@ -1266,11 +1309,17 @@ class TestEnhancedBackwardCompatibility:
         response = enhanced_client.post(f"/action/return_int/{action_id}/start")
         assert response.status_code == 200
 
-        # Generic result endpoint should still work
-        response = enhanced_client.get(f"/action/{action_id}/result")
-        assert response.status_code == 200
-        result = response.json()
-        assert result["json_result"]["data"] == 42
+        # Wait for action to complete
+        for _ in range(50):  # Wait up to 5 seconds
+            response = enhanced_client.get(f"/action/{action_id}/result")
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") in ["succeeded", "failed", "error"]:
+                    break
+            time.sleep(0.1)
+
+        assert result["status"] == "succeeded"
+        assert result["json_result"] == 42
 
     def test_generic_status_endpoints_work(self, enhanced_client):
         """Test that generic status endpoints continue to work."""

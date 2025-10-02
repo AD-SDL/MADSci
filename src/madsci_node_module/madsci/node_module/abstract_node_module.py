@@ -610,10 +610,10 @@ class AbstractNode:
             result = (result,)
 
         # Parse the result tuple into separate components
-        json_data_dict, files, datapoints = self._parse_result_components(result)
+        json_data, files, datapoints = self._parse_result_components(result)
 
-        # Set json_result to the combined dictionary, or None if empty
-        json_result = json_data_dict if json_data_dict else None
+        # Set json_result to the parsed data (could be primitive, dict, or None)
+        json_result = json_data
 
         return ActionResult(
             status=ActionStatus.SUCCEEDED,
@@ -623,33 +623,90 @@ class AbstractNode:
             datapoints=datapoints,
         )
 
-    def _parse_result_components(self, result: tuple) -> tuple[dict, Any, Any]:
+    def _parse_result_components(self, result: tuple) -> tuple[Any, Any, Any]:
         """Parse result tuple into JSON data, files, and datapoints."""
-        json_data_dict = {}
+        json_components = []
         files = None
         datapoints = None
 
         for value in result:
-            if isinstance(value, ActionJSON):
-                # Extract all fields from ActionJSON subclass
-                json_data = value.model_dump(mode="json")
-                for key, val in json_data.items():
-                    if key != "type":  # Skip the type field
-                        json_data_dict[key] = val
-            elif isinstance(value, ActionFiles):
-                files = value
-            elif isinstance(value, ActionDatapoints):
-                datapoints = value
-            elif isinstance(value, Path):
-                files = value
-            elif hasattr(value, "model_dump") and hasattr(value, "model_json_schema"):
-                # Handle custom pydantic models - serialize them as JSON
-                json_data_dict = value.model_dump(mode="json")
-            else:
-                # For simple return values, add them to the combined result
-                json_data_dict["data"] = value
+            json_component, file_component, datapoint_component = (
+                self._parse_single_result_value(value)
+            )
 
-        return json_data_dict, files, datapoints
+            if json_component is not None:
+                json_components.append(json_component)
+            if file_component is not None:
+                files = file_component
+            if datapoint_component is not None:
+                datapoints = datapoint_component
+
+        json_data = self._combine_json_components(json_components)
+        return json_data, files, datapoints
+
+    def _parse_single_result_value(self, value: Any) -> tuple[Any, Any, Any]:
+        """Parse a single result value into JSON, files, and datapoints components.
+
+        Returns:
+            Tuple of (json_component, file_component, datapoint_component)
+        """
+        if isinstance(value, ActionJSON):
+            return self._parse_action_json(value), None, None
+        if isinstance(value, ActionFiles):
+            return None, value, None
+        if isinstance(value, ActionDatapoints):
+            return None, None, value
+        if isinstance(value, Path):
+            return None, value, None
+        if self._is_pydantic_model(value):
+            return value.model_dump(mode="json"), None, None
+        # For primitive values, return them directly
+        return value, None, None
+
+    def _parse_action_json(self, action_json: "ActionJSON") -> list[dict]:
+        """Parse ActionJSON subclass into list of key-value dictionaries."""
+        json_data_dict = action_json.model_dump(mode="json")
+        json_components = []
+        for key, val in json_data_dict.items():
+            if key != "type":  # Skip the type field
+                json_components.append({key: val})
+        return json_components
+
+    def _is_pydantic_model(self, value: Any) -> bool:
+        """Check if a value is a Pydantic model."""
+        return hasattr(value, "model_dump") and hasattr(value, "model_json_schema")
+
+    def _combine_json_components(self, json_components: list) -> Any:
+        """Combine multiple JSON components into final JSON result.
+
+        Args:
+            json_components: List of JSON components (primitives, dicts, or lists)
+
+        Returns:
+            Combined JSON result (None, single value, or combined dict)
+        """
+        if len(json_components) == 0:
+            return None
+        if len(json_components) == 1:
+            component = json_components[0]
+            # Handle ActionJSON case where we get a list of dicts
+            if isinstance(component, list) and len(component) == 1:
+                return component[0]
+            return component
+        # Multiple components - combine into a dictionary
+        json_data = {}
+        for i, component in enumerate(json_components):
+            if isinstance(component, list):
+                # Handle ActionJSON components (list of dicts)
+                for item in component:
+                    if isinstance(item, dict):
+                        json_data.update(item)
+            elif isinstance(component, dict):
+                json_data.update(component)
+            else:
+                # Multiple primitives - use indexed keys
+                json_data[f"result_{i}"] = component
+        return json_data
 
     @threaded_daemon
     def _action_thread(

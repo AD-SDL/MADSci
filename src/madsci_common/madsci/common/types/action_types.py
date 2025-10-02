@@ -784,7 +784,7 @@ def create_dynamic_model(
 
     Args:
         action_name: Name of the action
-        json_result_type: Type to use for the json_result field
+        json_result_type: Type to use for the json_result field (None for file-only actions)
         action_function: Optional action function for extracting additional metadata
 
     Returns:
@@ -792,12 +792,22 @@ def create_dynamic_model(
     """
     fields = {}
 
-    # If we have a specific type for json_result, use it
+    # Always override json_result field for proper OpenAPI documentation
     if json_result_type is not None:
+        # Specific type for json_result
         fields["json_result"] = (
             json_result_type,
             Field(
                 description=f"JSON result data for {action_name} action", default=None
+            ),
+        )
+    else:
+        # For file-only actions, explicitly set json_result as nullable
+        fields["json_result"] = (
+            Optional[Any],
+            Field(
+                description=f"JSON result data for {action_name} action (null for file-only actions)",
+                default=None,
             ),
         )
 

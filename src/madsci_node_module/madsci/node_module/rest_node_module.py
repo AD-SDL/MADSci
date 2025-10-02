@@ -166,6 +166,9 @@ class RestNode(AbstractNode):
             "datapoints": action_response.datapoints.model_dump()
             if action_response.datapoints
             else None,
+            "history_created_at": action_response.history_created_at.isoformat()
+            if action_response.history_created_at
+            else None,
         }
 
         # Handle files with proper serialization - convert to file keys for REST API
@@ -491,14 +494,7 @@ class RestNode(AbstractNode):
         return_type = type_hints.get("return")
 
         # Determine the json_result type based on the return type
-        json_result_type = None
-        if (
-            return_type
-            and return_type is not type(None)
-            and not (get_origin(return_type) or return_type == Any)
-        ):
-            # This is a simple type like int, str, or a Pydantic model
-            json_result_type = return_type
+        json_result_type = self._extract_json_result_type(return_type)
 
         # Create the dynamic RestActionResult model
         result_model = create_dynamic_model(
@@ -510,6 +506,51 @@ class RestNode(AbstractNode):
         # Cache the model
         self._action_result_models[action_name] = result_model
         return result_model
+
+    def _extract_json_result_type(self, return_type: Any) -> Optional[type]:
+        """Extract the appropriate type for json_result field from action return type."""
+        if not return_type or return_type is type(None):
+            return None
+
+        # Handle tuple returns (mixed results)
+        if get_origin(return_type) is tuple:
+            # Extract non-file types from tuple for json_result
+            json_types = []
+            for arg_type in return_type.__args__:
+                if not self._is_file_type(arg_type):
+                    json_types.append(arg_type)
+
+            # If we have exactly one non-file type, use it
+            if len(json_types) == 1:
+                return json_types[0]
+            # If multiple non-file types, return None (will use generic)
+            return None
+
+        # Handle file-only returns
+        if self._is_file_type(return_type):
+            return None
+
+        # Handle simple types and Pydantic models
+        if not (get_origin(return_type) or return_type == Any):
+            return return_type
+
+        return None
+
+    def _is_file_type(self, type_to_check: Any) -> bool:
+        """Check if a type represents file output (Path or ActionFiles subclass)."""
+        if type_to_check is Path:
+            return True
+
+        # Check if it's an ActionFiles subclass
+        try:
+            if hasattr(type_to_check, "__mro__") and any(
+                base.__name__ == "ActionFiles" for base in type_to_check.__mro__
+            ):
+                return True
+        except (TypeError, AttributeError):
+            pass
+
+        return False
 
     def _setup_create_action_route(self, action_name: str, request_model: type) -> None:
         """Set up the create action route for a specific action."""
