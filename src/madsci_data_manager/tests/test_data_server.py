@@ -42,10 +42,16 @@ db_connection = create_mongo_fixture()
 
 
 @pytest.fixture
-def test_client(db_connection: Database) -> TestClient:
-    """Data Server Test Client Fixture"""
+def test_manager(db_connection: Database) -> DataManager:
+    """Data Manager Fixture"""
     manager = DataManager(definition=data_manager_def, db_client=db_connection.client)
-    app = manager.create_server()
+    return manager
+
+
+@pytest.fixture
+def test_client(test_manager: DataManager) -> TestClient:
+    """Data Server Test Client Fixture"""
+    app = test_manager.create_server()
     return TestClient(app)
 
 
@@ -133,10 +139,13 @@ def test_get_datapoints(test_client: TestClient) -> None:
         previous_timestamp = datapoint.data_timestamp.timestamp()
 
 
-def test_query_datapoints(test_client: TestClient) -> None:
+def test_query_datapoints(test_client: TestClient, test_manager: DataManager) -> None:
     """
     Test querying events based on a selector.
     """
+    # Clear datapoints
+    test_manager.datapoints.delete_many({})
+    # Create 20 datapoints with values 0-19
     for i in range(10, 20):
         test_datapoint = ValueDataPoint(
             label="test_" + str(i),
@@ -607,10 +616,20 @@ def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:
 
 def test_health_endpoint(test_client: TestClient) -> None:
     """Test the health endpoint of the Data Manager."""
+
+    test_datapoint = ValueDataPoint(
+        label="test",
+        value=5,
+    )
+    test_client.post(
+        "/datapoint", data={"datapoint": test_datapoint.model_dump_json()}
+    ).json()
+
     response = test_client.get("/health")
     assert response.status_code == 200
 
     health_data = response.json()
+    print(health_data)
     assert "healthy" in health_data
     assert "description" in health_data
     assert "db_connected" in health_data

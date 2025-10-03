@@ -119,10 +119,15 @@ class NodeClientCapabilities(MadsciBaseModel):
         title="Node Send Action",
         description="Whether the node supports sending actions.",
     )
+    get_action_status: Optional[bool] = Field(
+        default=None,
+        title="Node Get Action Status",
+        description="Whether the node supports querying the status of an action.",
+    )
     get_action_result: Optional[bool] = Field(
         default=None,
-        title="Node Get Action",
-        description="Whether the node supports querying the status of an action.",
+        title="Node Get Action Result",
+        description="Whether the node supports querying the result of an action.",
     )
     get_action_history: Optional[bool] = Field(
         default=None,
@@ -216,6 +221,7 @@ class NodeDefinition(MadsciBaseModel):
         default=Version.parse("0.0.1"),
         title="Module Version",
         description="The version of the node module.",
+        examples=["1.0.0"],
     )
     capabilities: Optional["NodeCapabilities"] = Field(
         default=None,

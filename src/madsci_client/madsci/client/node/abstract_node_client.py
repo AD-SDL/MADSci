@@ -5,6 +5,7 @@ from typing import Any, ClassVar, Optional
 from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
+    ActionStatus,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
@@ -47,8 +48,12 @@ class AbstractNodeClient:
             "get_action_history is not implemented by this client"
         )
 
-    def get_action_result(self, action_id: str) -> ActionResult:
+    def get_action_status(self, action_id: str) -> ActionStatus:
         """Get the status of an action on the node."""
+        raise NotImplementedError("get_action_status is not implemented by this client")
+
+    def get_action_result(self, action_id: str) -> ActionResult:
+        """Get the result of an action on the node."""
         raise NotImplementedError("get_action_result is not implemented by this client")
 
     def await_action_result(
