@@ -725,3 +725,101 @@ def test_get_action_files_zip(
             f"http://localhost:2000/action/test_action/{action_id}/download",
             timeout=60,
         )
+
+
+@patch("requests.post")
+def test_upload_action_files_list_support(
+    mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test the _upload_action_files method with list[Path] support."""
+    # Create temporary test files
+    with tempfile.TemporaryDirectory() as temp_dir:
+        file1 = Path(temp_dir) / "file1.txt"
+        file2 = Path(temp_dir) / "file2.txt"
+        file1.write_text("content1")
+        file2.write_text("content2")
+
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_post.return_value = mock_response
+
+        # Test single file upload
+        rest_node_client._upload_action_files(
+            "test_action", "test_id", {"single_file": str(file1)}
+        )
+
+        # Verify single file upload call
+        assert mock_post.called
+        call_args = mock_post.call_args
+        assert (
+            call_args[0][0]
+            == "http://localhost:2000/action/test_action/test_id/upload/single_file"
+        )
+        assert call_args[1]["timeout"] == 60
+        assert "file" in call_args[1]["files"]
+
+        # Reset mock for list upload test
+        mock_post.reset_mock()
+
+        # Test list file upload
+        rest_node_client._upload_action_files(
+            "test_action", "test_id", {"file_list": [str(file1), str(file2)]}
+        )
+
+        # Verify list file upload call
+        # The exact files parameter structure depends on implementation
+        assert mock_post.called
+        call_args = mock_post.call_args
+        assert call_args[1]["timeout"] == 60
+        assert "file_list" in str(call_args)  # files parameter should contain file_list
+
+
+@patch("requests.post")
+def test_send_action_with_list_files(
+    mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test sending an action with list[Path] files."""
+    # Create temporary test files
+    with tempfile.TemporaryDirectory() as temp_dir:
+        file1 = Path(temp_dir) / "test1.txt"
+        file2 = Path(temp_dir) / "test2.txt"
+        file1.write_text("test content 1")
+        file2.write_text("test content 2")
+
+        # Mock responses for the three-step process
+        action_id = new_ulid_str()
+
+        # Mock create action response
+        create_response = MagicMock()
+        create_response.ok = True
+        create_response.json.return_value = {"action_id": action_id}
+
+        # Mock file upload responses
+        upload_response = MagicMock()
+        upload_response.ok = True
+
+        # Mock start action response
+        start_response = MagicMock()
+        start_response.ok = True
+        start_response.json.return_value = ActionSucceeded(
+            action_id=action_id, json_result="test result"
+        ).model_dump(mode="json")
+
+        mock_post.side_effect = [create_response, upload_response, start_response]
+
+        # Create action request with list files
+        action_request = ActionRequest(
+            action_name="test_list_action",
+            args={"param": "value"},
+            files={"file_list": [str(file1), str(file2)]},
+        )
+
+        result = rest_node_client.send_action(action_request, await_result=False)
+
+        # Verify the result
+        assert isinstance(result, ActionResult)
+        assert result.action_id == action_id
+        assert result.status == ActionStatus.SUCCEEDED
+
+        # Verify all three calls were made
+        assert mock_post.call_count == 3

@@ -548,6 +548,68 @@ class OpenAPIArgumentTestNode(TestNode):
 
         return TestFileOutput(log_file_1=log1_path, log_file_2=log2_path)
 
+    @action
+    def list_file_action(self, required_param: str, input_files: list[Path]) -> str:
+        """Test action with a list of files parameter.
+
+        Args:
+            required_param: A required string parameter
+            input_files: A list of files to process
+
+        Returns:
+            str: Processing result message
+        """
+        total_size = 0
+        file_names = []
+        for file_path in input_files:
+            if file_path.exists():
+                total_size += file_path.stat().st_size
+                file_names.append(file_path.name)
+
+        return f"{required_param}: processed {len(input_files)} files ({', '.join(file_names)}) totaling {total_size} bytes"
+
+    @action
+    def optional_file_action(
+        self, required_param: str, optional_file: Optional[Path] = None
+    ) -> str:
+        """Test action with an optional file parameter.
+
+        Args:
+            required_param: A required string parameter
+            optional_file: An optional file
+
+        Returns:
+            str: Processing result message
+        """
+        if optional_file is not None and optional_file.exists():
+            file_size = optional_file.stat().st_size
+            return f"{required_param}: processed file {optional_file.name} ({file_size} bytes)"
+        return f"{required_param}: no optional file provided"
+
+    @action
+    def optional_list_file_action(
+        self, required_param: str, optional_files: Optional[list[Path]] = None
+    ) -> str:
+        """Test action with an optional list of files parameter.
+
+        Args:
+            required_param: A required string parameter
+            optional_files: An optional list of files
+
+        Returns:
+            str: Processing result message
+        """
+        if optional_files is not None:
+            total_size = 0
+            file_names = []
+            for file_path in optional_files:
+                if file_path.exists():
+                    total_size += file_path.stat().st_size
+                    file_names.append(file_path.name)
+
+            return f"{required_param}: processed {len(optional_files)} files ({', '.join(file_names)}) totaling {total_size} bytes"
+        return f"{required_param}: no optional files provided"
+
     # ============================================================================
     # Location Argument Tests
     # ============================================================================
@@ -1778,28 +1840,31 @@ class TestActionArgumentSchemaGeneration:
         props = self._get_schema_props(mixed_schema, components)
         required = self._get_schema_required(mixed_schema, components)
 
-        # Should have all expected arguments
+        # Should have all expected non-file arguments
         assert "sample_request" in props
         assert "target_location" in props
-        assert "data_files" in props
         assert "config" in props
         assert "optional_notes" in props
         assert "priority_override" in props
 
+        # File parameters should be excluded from main schema
+        assert "data_files" not in props
+
         # Check which are required vs optional
         assert "sample_request" in required
         assert "target_location" in required
-        assert "data_files" in required
+        # data_files should not be in main schema required list since it's handled via upload endpoints
         assert "config" in required
         assert "optional_notes" not in required  # Optional
         assert "priority_override" not in required  # Has default
 
-        # Check data_files is array of files
-        data_files_prop = props["data_files"]
-        assert data_files_prop["type"] == "array"
-        assert data_files_prop["items"]["type"] == "string"
-        # File format might be 'binary' or 'path' depending on implementation
-        assert data_files_prop["items"]["format"] in ["binary", "path"]
+        # Check that file parameters have separate upload endpoints
+        upload_paths = [
+            path
+            for path in paths
+            if "test_everything_mixed" in path and "upload" in path
+        ]
+        assert len(upload_paths) > 0, "Should have upload endpoints for file parameters"
 
 
 class TestActionArgumentSchemaAccuracy:
@@ -1991,6 +2056,414 @@ class TestActionArgumentSchemaAccuracy:
             },
         )
         assert response.status_code == 422  # Validation error
+
+
+class TestAdvancedFileParameterSchemas:
+    """Test OpenAPI schema generation for advanced file parameter types."""
+
+    def test_list_file_parameter_upload_endpoint_schema(self, argument_test_client):
+        """Test that list[Path] parameters generate correct upload endpoint schemas."""
+        response = argument_test_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+
+        # Look for list file action upload endpoints
+        list_file_upload_paths = [
+            path for path in paths if "list_file_action" in path and "upload" in path
+        ]
+
+        assert len(list_file_upload_paths) > 0, (
+            "Should have upload endpoint for list[Path] parameter"
+        )
+
+        upload_path = list_file_upload_paths[0]
+        upload_spec = paths[upload_path]
+        assert "post" in upload_spec, "Upload endpoint should have POST method"
+
+        post_spec = upload_spec["post"]
+
+        # Check endpoint description indicates multiple files
+        assert "summary" in post_spec
+        assert "files" in post_spec["summary"].lower()
+
+        assert "description" in post_spec
+        description = post_spec["description"].lower()
+        assert (
+            "multiple files" in description
+            or "list" in description
+            or "accepts multiple files" in description
+        )
+
+        # Check request body uses multipart/form-data
+        request_body = post_spec.get("requestBody", {})
+        content = request_body.get("content", {})
+        assert "multipart/form-data" in content, (
+            "List file upload should use multipart/form-data"
+        )
+
+        # Check schema allows multiple files
+        multipart_schema = content["multipart/form-data"]["schema"]
+        if "$ref" in multipart_schema:
+            ref_model = components[multipart_schema["$ref"].split("/")[-1]]
+            multipart_props = ref_model["properties"]
+        else:
+            multipart_props = multipart_schema["properties"]
+
+        # Should have a "files" field that accepts multiple files
+        assert "files" in multipart_props, "Should have 'files' field for list uploads"
+        files_prop = multipart_props["files"]
+
+        # Should be an array of files
+        assert files_prop["type"] == "array", "files field should be array type"
+        assert files_prop["items"]["type"] == "string", (
+            "Array items should be strings (files)"
+        )
+        assert files_prop["items"].get("format") in ["binary", "byte"], (
+            "Should have binary format"
+        )
+
+    def test_optional_file_parameter_upload_endpoint_schema(self, argument_test_client):
+        """Test that Optional[Path] parameters generate correct upload endpoint schemas."""
+        response = argument_test_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+
+        # Look for optional file action upload endpoints
+        optional_file_upload_paths = [
+            path
+            for path in paths
+            if "optional_file_action" in path
+            and "upload" in path
+            and "optional_file" in path
+        ]
+
+        assert len(optional_file_upload_paths) > 0, (
+            "Should have upload endpoint for Optional[Path] parameter"
+        )
+
+        upload_path = optional_file_upload_paths[0]
+        upload_spec = paths[upload_path]
+        post_spec = upload_spec["post"]
+
+        # Check endpoint description indicates optional file
+        assert "description" in post_spec
+        description = post_spec["description"].lower()
+        assert "optional" in description, "Description should indicate file is optional"
+
+        # Check request body structure for single file
+        request_body = post_spec.get("requestBody", {})
+        content = request_body.get("content", {})
+        assert "multipart/form-data" in content
+
+        multipart_schema = content["multipart/form-data"]["schema"]
+        schema_props = self._get_schema_props(
+            multipart_schema, schema.get("components", {}).get("schemas", {})
+        )
+
+        # Should have a "file" field (singular)
+        assert "file" in schema_props, "Should have 'file' field for single file upload"
+        file_prop = schema_props["file"]
+        assert file_prop["type"] == "string"
+        assert file_prop.get("format") in ["binary", "byte"]
+
+    def test_optional_list_file_parameter_upload_endpoint_schema(
+        self, argument_test_client
+    ):
+        """Test that Optional[list[Path]] parameters generate correct upload endpoint schemas."""
+        response = argument_test_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+
+        # Look for optional list file action upload endpoints
+        optional_list_upload_paths = [
+            path
+            for path in paths
+            if "optional_list_file_action" in path
+            and "upload" in path
+            and "optional_files" in path
+        ]
+
+        assert len(optional_list_upload_paths) > 0, (
+            "Should have upload endpoint for Optional[list[Path]] parameter"
+        )
+
+        upload_path = optional_list_upload_paths[0]
+        upload_spec = paths[upload_path]
+        post_spec = upload_spec["post"]
+
+        # Check endpoint description indicates optional multiple files
+        assert "description" in post_spec
+        description = post_spec["description"].lower()
+        assert "optional" in description, (
+            "Description should indicate files are optional"
+        )
+        assert (
+            "multiple files" in description
+            or "list" in description
+            or "accepts multiple files" in description
+        )
+
+        # Check request body allows multiple files
+        request_body = post_spec.get("requestBody", {})
+        content = request_body.get("content", {})
+        assert "multipart/form-data" in content
+
+        multipart_schema = content["multipart/form-data"]["schema"]
+        if "$ref" in multipart_schema:
+            ref_model = components[multipart_schema["$ref"].split("/")[-1]]
+            multipart_props = ref_model["properties"]
+        else:
+            multipart_props = multipart_schema["properties"]
+
+        # Should support multiple files
+        files_field = None
+        for field_name, field_prop in multipart_props.items():
+            if "files" in field_name.lower():
+                files_field = field_prop
+                break
+
+        assert files_field is not None, (
+            "Should have files field for multiple file upload"
+        )
+        assert files_field["type"] == "array"
+        assert files_field["items"]["type"] == "string"
+        assert files_field["items"].get("format") in ["binary", "byte"]
+
+    def test_file_parameters_excluded_from_main_action_schemas(
+        self, argument_test_client
+    ):
+        """Test that file parameters are properly excluded from main action request schemas."""
+        response = argument_test_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+
+        # Check list_file_action main endpoint
+        list_action_path = "/action/list_file_action"
+        if list_action_path in paths:
+            list_post = paths[list_action_path]["post"]
+            list_schema = list_post["requestBody"]["content"]["application/json"][
+                "schema"
+            ]
+            list_props = self._get_schema_props(list_schema, components)
+
+            # File parameter 'input_files' should NOT be in main schema
+            assert "input_files" not in list_props, (
+                "File parameters should be excluded from main action schema"
+            )
+
+            # Non-file parameters should be present
+            assert "required_param" in list_props, (
+                "Non-file parameters should be in main action schema"
+            )
+
+        # Check optional_file_action main endpoint
+        optional_action_path = "/action/optional_file_action"
+        if optional_action_path in paths:
+            optional_post = paths[optional_action_path]["post"]
+            optional_schema = optional_post["requestBody"]["content"][
+                "application/json"
+            ]["schema"]
+            optional_props = self._get_schema_props(optional_schema, components)
+
+            # File parameter 'optional_file' should NOT be in main schema
+            assert "optional_file" not in optional_props, (
+                "Optional file parameters should be excluded from main action schema"
+            )
+
+            # Non-file parameters should be present
+            assert "required_param" in optional_props, (
+                "Non-file parameters should be in main action schema"
+            )
+
+    def test_upload_endpoint_tags_and_organization(self, argument_test_client):
+        """Test that upload endpoints are properly tagged and organized in OpenAPI schema."""
+        response = argument_test_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+
+        # Find all upload endpoints
+        upload_paths = [path for path in paths if "upload" in path]
+
+        for upload_path in upload_paths:
+            upload_spec = paths[upload_path]
+            if "post" in upload_spec:
+                post_spec = upload_spec["post"]
+
+                # Should have appropriate tags
+                assert "tags" in post_spec, (
+                    f"Upload endpoint {upload_path} should have tags"
+                )
+                tags = post_spec["tags"]
+
+                # Extract action name from path
+                action_name = None
+                path_parts = upload_path.split("/")
+                if len(path_parts) >= 3 and path_parts[1] == "action":
+                    action_name = path_parts[2]
+
+                if action_name:
+                    assert action_name in tags, (
+                        f"Upload endpoint should be tagged with action name {action_name}"
+                    )
+
+                # Should have clear summary
+                assert "summary" in post_spec, (
+                    f"Upload endpoint {upload_path} should have summary"
+                )
+                summary = post_spec["summary"]
+                assert "upload" in summary.lower(), "Summary should mention uploading"
+
+                # Should have descriptive operationId
+                if "operationId" in post_spec:
+                    operation_id = post_spec["operationId"]
+                    assert "upload" in operation_id.lower(), (
+                        "OperationId should mention uploading"
+                    )
+
+    def test_file_parameter_descriptions_are_informative(self, argument_test_client):
+        """Test that file parameter descriptions provide clear information about requirements and types."""
+        response = argument_test_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+
+        # Test list file upload endpoint description
+        list_upload_paths = [
+            path for path in paths if "list_file_action" in path and "upload" in path
+        ]
+
+        if list_upload_paths:
+            list_upload = paths[list_upload_paths[0]]["post"]
+            description = list_upload["description"].lower()
+
+            # Should clearly indicate this accepts multiple files
+            assert any(
+                phrase in description
+                for phrase in [
+                    "multiple files",
+                    "list of files",
+                    "accepts multiple files",
+                    "list[path]",
+                ]
+            ), (
+                f"List file upload description should clearly indicate multiple files: {description}"
+            )
+
+            # Should indicate it's required (not optional)
+            assert (
+                "required" in description or "accepts multiple files" in description
+            ), "Should indicate the parameter requirement status"
+
+        # Test optional file upload endpoint description
+        optional_upload_paths = [
+            path
+            for path in paths
+            if "optional_file_action" in path and "upload" in path
+        ]
+
+        if optional_upload_paths:
+            optional_upload = paths[optional_upload_paths[0]]["post"]
+            description = optional_upload["description"].lower()
+
+            # Should clearly indicate this is optional
+            assert "optional" in description, (
+                f"Optional file upload description should clearly indicate it's optional: {description}"
+            )
+
+        # Test optional list file upload endpoint description
+        optional_list_paths = [
+            path
+            for path in paths
+            if "optional_list_file_action" in path and "upload" in path
+        ]
+
+        if optional_list_paths:
+            optional_list_upload = paths[optional_list_paths[0]]["post"]
+            description = optional_list_upload["description"].lower()
+
+            # Should indicate both optional and multiple files
+            assert "optional" in description, (
+                "Optional list file description should indicate it's optional"
+            )
+            assert any(
+                phrase in description
+                for phrase in [
+                    "multiple files",
+                    "list of files",
+                    "accepts multiple files",
+                ]
+            ), "Optional list file description should indicate multiple files"
+
+    def test_upload_endpoint_response_schemas(self, argument_test_client):
+        """Test that upload endpoints have appropriate response schemas."""
+        response = argument_test_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+
+        # Find upload endpoints
+        upload_paths = [path for path in paths if "upload" in path]
+
+        for upload_path in upload_paths:
+            upload_spec = paths[upload_path]
+            if "post" in upload_spec:
+                post_spec = upload_spec["post"]
+
+                # Should have responses defined
+                assert "responses" in post_spec, (
+                    f"Upload endpoint {upload_path} should have responses"
+                )
+                responses = post_spec["responses"]
+
+                # Should have 200 success response
+                assert "200" in responses, "Upload endpoint should have 200 response"
+                success_response = responses["200"]
+
+                # Should have description
+                assert "description" in success_response, (
+                    "Success response should have description"
+                )
+
+                # Should have content schema for JSON response
+                if "content" in success_response:
+                    content = success_response["content"]
+                    if "application/json" in content:
+                        json_schema = content["application/json"]["schema"]
+
+                        # Should define the upload response structure
+                        if "properties" in json_schema:
+                            props = json_schema["properties"]
+                            # Should include status and file_arg information
+                            assert "status" in props, (
+                                "Upload response should include status"
+                            )
+                            assert "file_arg" in props, (
+                                "Upload response should include file_arg"
+                            )
+
+    def _get_schema_props(self, schema_ref_or_props, components):
+        """Helper to get properties from either a $ref or direct properties"""
+        if "$ref" in schema_ref_or_props:
+            ref_path = schema_ref_or_props["$ref"]
+            model_name = ref_path.split("/")[-1]
+            assert model_name in components
+            return components[model_name]["properties"]
+        return schema_ref_or_props.get("properties", {})
 
 
 class TestActionArgumentSchemaConsistency:

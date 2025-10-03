@@ -342,25 +342,59 @@ class RestNode(AbstractNode):
     def upload_action_file(
         self, _action_name: str, action_id: str, file_arg: str, file: UploadFile
     ) -> dict[str, str]:
-        """Upload a file for a specific action."""
+        """Upload a single file for a specific action."""
         if not hasattr(self, "_pending_actions"):
             self._pending_actions = {}
 
         if action_id not in self._pending_actions:
             raise ValueError(f"Action {action_id} not found")
 
-        # Save the uploaded file to a temporary location
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        # Save the uploaded file to a temporary location, preserving filename
+        original_filename = file.filename or "uploaded_file"
+        temp_dir = Path(tempfile.mkdtemp())
+        temp_path = temp_dir / original_filename
+
+        with temp_path.open("wb") as temp_file:
             file.file.seek(0)
             content = file.file.read()
             temp_file.write(content)
-            temp_path = Path(temp_file.name)
 
         # Update the action request with the file
         action_request = self._pending_actions[action_id]
         action_request.files[file_arg] = temp_path
 
         return {"status": "uploaded", "file_arg": file_arg}
+
+    def upload_action_files(
+        self, _action_name: str, action_id: str, file_arg: str, files: list[UploadFile]
+    ) -> dict[str, str]:
+        """Upload multiple files for a specific action (for list[Path] parameters)."""
+        if not hasattr(self, "_pending_actions"):
+            self._pending_actions = {}
+
+        if action_id not in self._pending_actions:
+            raise ValueError(f"Action {action_id} not found")
+
+        # Save the uploaded files to temporary locations, preserving filenames
+        temp_paths = []
+        temp_dir = Path(tempfile.mkdtemp())
+
+        for file in files:
+            original_filename = file.filename or f"uploaded_file_{len(temp_paths)}"
+            temp_path = temp_dir / original_filename
+
+            with temp_path.open("wb") as temp_file:
+                file.file.seek(0)
+                content = file.file.read()
+                temp_file.write(content)
+
+            temp_paths.append(temp_path)
+
+        # Update the action request with the files list
+        action_request = self._pending_actions[action_id]
+        action_request.files[file_arg] = temp_paths
+
+        return {"status": "uploaded", "file_arg": file_arg, "file_count": len(files)}
 
     def start_action(self, _action_name: str, action_id: str) -> dict[str, Any]:
         """Start an action after all files have been uploaded."""
@@ -587,13 +621,29 @@ class RestNode(AbstractNode):
         # Create a specific route for each file parameter
         for param_name, param_info in file_params.items():
             required_text = "Required" if param_info["required"] else "Optional"
+            is_list = param_info.get("is_list", False)
             description = f"{required_text} file parameter: {param_info['description']}"
 
-            def create_upload_wrapper(file_param_name: str = param_name) -> Any:
-                def wrapper(action_id: str, file: UploadFile) -> dict[str, str]:
-                    return self.upload_action_file(
-                        action_name, action_id, file_param_name, file
-                    )
+            if is_list:
+                description += " (accepts multiple files)"
+
+            def create_upload_wrapper(
+                file_param_name: str = param_name, is_list_param: bool = is_list
+            ) -> Any:
+                if is_list_param:
+
+                    def wrapper(
+                        action_id: str, files: list[UploadFile]
+                    ) -> dict[str, str]:
+                        return self.upload_action_files(
+                            action_name, action_id, file_param_name, files
+                        )
+                else:
+
+                    def wrapper(action_id: str, file: UploadFile) -> dict[str, str]:
+                        return self.upload_action_file(
+                            action_name, action_id, file_param_name, file
+                        )
 
                 return wrapper
 

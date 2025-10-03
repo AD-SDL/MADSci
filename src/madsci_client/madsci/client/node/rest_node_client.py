@@ -106,17 +106,43 @@ class RestNodeClient(AbstractNodeClient):
         return response_data["action_id"]
 
     def _upload_action_files(
-        self, action_name: str, action_id: str, files: dict[str, str]
+        self, action_name: str, action_id: str, files: dict[str, str | list[str]]
     ) -> None:
         """Upload files for an action. REST-implementation specific"""
-        for file_key, file_path in files.items():
-            with Path(file_path).expanduser().open("rb") as file_handle:
-                rest_response = requests.post(
-                    f"{self.url}/action/{action_name}/{action_id}/upload/{file_key}",
-                    files={"file": file_handle},
-                    timeout=60,
-                )
-                rest_response.raise_for_status()
+        for file_key, file_value in files.items():
+            if isinstance(file_value, list):
+                # Handle list[Path] parameters - upload multiple files
+                files_to_upload = []
+                for file_path in file_value:
+                    path = Path(file_path).expanduser()
+                    files_to_upload.append(
+                        (
+                            file_key,
+                            (path.name, path.open("rb"), "application/octet-stream"),
+                        )
+                    )
+
+                try:
+                    rest_response = requests.post(
+                        f"{self.url}/action/{action_name}/{action_id}/upload/{file_key}",
+                        files=files_to_upload,
+                        timeout=60,
+                    )
+                    rest_response.raise_for_status()
+                finally:
+                    # Close any opened file handles
+                    for _, (_, file_handle, _) in files_to_upload:
+                        if hasattr(file_handle, "close"):
+                            file_handle.close()
+            else:
+                # Handle single Path parameters
+                with Path(file_value).expanduser().open("rb") as file_handle:
+                    rest_response = requests.post(
+                        f"{self.url}/action/{action_name}/{action_id}/upload/{file_key}",
+                        files={"file": file_handle},
+                        timeout=60,
+                    )
+                    rest_response.raise_for_status()
 
     def _start_action(self, action_name: str, action_id: str) -> ActionResult:
         """Start an action that has been created. REST-implementation specific."""

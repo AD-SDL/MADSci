@@ -245,7 +245,7 @@ def test_get_info(test_client: TestClient) -> None:
         node_info = NodeInfo.model_validate(response.json())
         assert node_info.node_name == "Test Node 1"
         assert node_info.module_name == "test_node"
-        assert len(node_info.actions) == 9
+        assert len(node_info.actions) == 12
         assert node_info.actions["test_action"].description == "A test action."
         assert node_info.actions["test_action"].args["test_param"].required
         assert (
@@ -1350,6 +1350,242 @@ class TestNewActionResults(BaseModel):
     temperature: float = Field(description="Temperature measurement")
     humidity: float = Field(description="Humidity measurement")
     status: str = Field(description="Sensor status")
+
+
+class TestAdvancedFileParameterSupport:
+    """Test support for advanced file parameter types: list[Path], Optional[Path], Optional[list[Path]]."""
+
+    def test_list_file_parameter_extraction(self, test_node: TestNode) -> None:
+        """Test that list[Path] parameters are correctly extracted."""
+        list_file_action_func = test_node.action_handlers.get("list_file_action")
+        assert list_file_action_func is not None
+
+        file_params = extract_file_parameters(list_file_action_func)
+
+        # Should detect the list[Path] parameter
+        assert "files" in file_params
+        assert file_params["files"]["required"] is True
+        assert "files: A list of input files" in file_params["files"]["description"]
+
+    def test_optional_file_parameter_extraction(self, test_node: TestNode) -> None:
+        """Test that Optional[Path] parameters are correctly extracted."""
+        optional_file_action_func = test_node.action_handlers.get(
+            "optional_file_action"
+        )
+        assert optional_file_action_func is not None
+
+        file_params = extract_file_parameters(optional_file_action_func)
+
+        # Should detect the Optional[Path] parameter
+        assert "optional_file" in file_params
+        assert file_params["optional_file"]["required"] is False
+        assert (
+            "optional_file: An optional file parameter"
+            in file_params["optional_file"]["description"]
+        )
+
+    def test_optional_list_file_parameter_extraction(self, test_node: TestNode) -> None:
+        """Test that Optional[list[Path]] parameters are correctly extracted."""
+        optional_list_action_func = test_node.action_handlers.get(
+            "optional_list_file_action"
+        )
+        assert optional_list_action_func is not None
+
+        file_params = extract_file_parameters(optional_list_action_func)
+
+        # Should detect the Optional[list[Path]] parameter
+        assert "optional_files" in file_params
+        assert file_params["optional_files"]["required"] is False
+        assert (
+            "optional_files: An optional list of files"
+            in file_params["optional_files"]["description"]
+        )
+
+    def test_list_file_upload_endpoints_generated(
+        self, test_client: TestClient
+    ) -> None:
+        """Test that list[Path] parameters generate appropriate upload endpoints."""
+        with test_client as client:
+            # Get the OpenAPI schema
+            response = client.get("/openapi.json")
+            assert response.status_code == 200
+            openapi_schema = response.json()
+
+            # Should have upload endpoint for list files parameter
+            list_upload_path = "/action/list_file_action/{action_id}/upload/files"
+            assert list_upload_path in openapi_schema["paths"]
+
+            # Check the endpoint configuration
+            upload_endpoint = openapi_schema["paths"][list_upload_path]["post"]
+            assert "summary" in upload_endpoint
+            assert "files" in upload_endpoint["summary"]
+            assert "list_file_action" in upload_endpoint["tags"]
+
+    def test_optional_file_upload_endpoints_generated(
+        self, test_client: TestClient
+    ) -> None:
+        """Test that Optional[Path] parameters generate appropriate upload endpoints."""
+        with test_client as client:
+            # Get the OpenAPI schema
+            response = client.get("/openapi.json")
+            assert response.status_code == 200
+            openapi_schema = response.json()
+
+            # Should have upload endpoint for optional file parameter
+            optional_upload_path = (
+                "/action/optional_file_action/{action_id}/upload/optional_file"
+            )
+            assert optional_upload_path in openapi_schema["paths"]
+
+            # Check the endpoint configuration
+            upload_endpoint = openapi_schema["paths"][optional_upload_path]["post"]
+            assert "Optional" in upload_endpoint["description"]
+
+    def test_optional_list_file_upload_endpoints_generated(
+        self, test_client: TestClient
+    ) -> None:
+        """Test that Optional[list[Path]] parameters generate appropriate upload endpoints."""
+        with test_client as client:
+            # Get the OpenAPI schema
+            response = client.get("/openapi.json")
+            assert response.status_code == 200
+            openapi_schema = response.json()
+
+            # Should have upload endpoint for optional list files parameter
+            optional_list_upload_path = (
+                "/action/optional_list_file_action/{action_id}/upload/optional_files"
+            )
+            assert optional_list_upload_path in openapi_schema["paths"]
+
+            # Check the endpoint configuration
+            upload_endpoint = openapi_schema["paths"][optional_list_upload_path]["post"]
+            assert "Optional" in upload_endpoint["description"]
+
+    def test_list_file_action_execution_flow(
+        self, test_client: TestClient, tmp_path
+    ) -> None:
+        """Test executing an action with list[Path] parameter."""
+        with test_client as client:
+            time.sleep(0.5)
+
+            # Create test files
+            file1 = tmp_path / "file1.txt"
+            file1.write_text("content of file 1")
+            file2 = tmp_path / "file2.txt"
+            file2.write_text("content of file 2")
+
+            # Create action
+            response = client.post("/action/list_file_action", json={"prefix": "batch"})
+            assert response.status_code == 200
+            action_id = response.json()["action_id"]
+
+            # Upload multiple files using FastAPI's native list[UploadFile] support
+            with file1.open("rb") as f1, file2.open("rb") as f2:
+                response = client.post(
+                    f"/action/list_file_action/{action_id}/upload/files",
+                    files=[
+                        ("files", ("file1.txt", f1, "text/plain")),
+                        ("files", ("file2.txt", f2, "text/plain")),
+                    ],
+                )
+            assert response.status_code == 200
+            upload_result = response.json()
+            assert upload_result["status"] == "uploaded"
+            assert upload_result["file_arg"] == "files"
+            assert upload_result["file_count"] == 2
+
+            # Start action
+            response = client.post(f"/action/list_file_action/{action_id}/start")
+            assert response.status_code == 200
+            result = response.json()
+
+            # Wait for completion if needed
+            if result["status"] == "running":
+                time.sleep(0.1)
+                response = client.get(f"/action/list_file_action/{action_id}/result")
+                result = response.json()
+
+            assert result["status"] == "succeeded"
+            assert "batch: processed 2 files" in result["json_result"]
+            assert "file1.txt, file2.txt" in result["json_result"]
+
+    def test_optional_file_action_execution_without_file(
+        self, test_client: TestClient
+    ) -> None:
+        """Test executing an action with Optional[Path] parameter without providing the file."""
+        with test_client as client:
+            time.sleep(0.5)
+
+            # Create action without optional file
+            response = client.post(
+                "/action/optional_file_action", json={"required_param": "test"}
+            )
+            assert response.status_code == 200
+            action_id = response.json()["action_id"]
+
+            # Start action without uploading optional file
+            response = client.post(f"/action/optional_file_action/{action_id}/start")
+            assert response.status_code == 200
+            result = response.json()
+
+            # Should succeed and indicate no optional file was provided
+            assert result["status"] in ["succeeded", "running"]
+            # Wait for completion if needed
+            if result["status"] == "running":
+                time.sleep(0.1)
+                response = client.get(
+                    f"/action/optional_file_action/{action_id}/result"
+                )
+                result = response.json()
+
+            assert result["status"] == "succeeded"
+            assert "no optional file provided" in result["json_result"]
+
+    def test_optional_file_action_execution_with_file(
+        self, test_client: TestClient, tmp_path
+    ) -> None:
+        """Test executing an action with Optional[Path] parameter with providing the file."""
+        with test_client as client:
+            time.sleep(0.5)
+
+            # Create test file
+            test_file = tmp_path / "optional_test.txt"
+            test_file.write_text("This is optional content")
+
+            # Create action
+            response = client.post(
+                "/action/optional_file_action",
+                json={"required_param": "test_with_file"},
+            )
+            assert response.status_code == 200
+            action_id = response.json()["action_id"]
+
+            # Upload optional file
+            with test_file.open("rb") as f:
+                response = client.post(
+                    f"/action/optional_file_action/{action_id}/upload/optional_file",
+                    files={"file": ("optional_test.txt", f, "text/plain")},
+                )
+            assert response.status_code == 200
+
+            # Start action
+            response = client.post(f"/action/optional_file_action/{action_id}/start")
+            assert response.status_code == 200
+            result = response.json()
+
+            # Wait for completion if needed
+            if result["status"] == "running":
+                time.sleep(0.1)
+                response = client.get(
+                    f"/action/optional_file_action/{action_id}/result"
+                )
+                result = response.json()
+
+            assert result["status"] == "succeeded"
+            assert "processed file with" in result["json_result"]
+            assert (
+                "24 characters" in result["json_result"]
+            )  # Length of "This is optional content"
 
 
 class TestProposalExampleActionResultHandling:

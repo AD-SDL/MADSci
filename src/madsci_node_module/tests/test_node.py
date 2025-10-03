@@ -300,6 +300,81 @@ class TestNode(RestNode):
 
         return result, file_path
 
+    @action
+    def list_file_action(self, files: list[Path], prefix: str = "processed") -> str:
+        """Test action that takes a list of files as input.
+
+        Args:
+            files: A list of input files to process
+            prefix: Prefix for processing results
+
+        Returns:
+            str: Summary of processing results
+        """
+        self.logger.log(f"Processing {len(files)} files with prefix: {prefix}")
+
+        total_size = 0
+        file_names = []
+        for file_path in files:
+            if file_path.exists():
+                total_size += file_path.stat().st_size
+                file_names.append(file_path.name)
+                self.logger.log(f"Processed file: {file_path.name}")
+
+        return f"{prefix}: processed {len(files)} files ({', '.join(file_names)}) totaling {total_size} bytes"
+
+    @action
+    def optional_file_action(
+        self, required_param: str, optional_file: Optional[Path] = None
+    ) -> str:
+        """Test action with an optional file parameter.
+
+        Args:
+            required_param: A required string parameter
+            optional_file: An optional file parameter
+
+        Returns:
+            str: Processing result message
+        """
+        self.logger.log(f"Processing action with param: {required_param}")
+
+        if optional_file is not None:
+            self.logger.log(f"Processing optional file: {optional_file}")
+            if optional_file.exists():
+                content = optional_file.read_text()
+                return (
+                    f"{required_param}: processed file with {len(content)} characters"
+                )
+            return f"{required_param}: file does not exist"
+        return f"{required_param}: no optional file provided"
+
+    @action
+    def optional_list_file_action(
+        self, required_param: str, optional_files: Optional[list[Path]] = None
+    ) -> str:
+        """Test action with an optional list of files parameter.
+
+        Args:
+            required_param: A required string parameter
+            optional_files: An optional list of files
+
+        Returns:
+            str: Processing result message
+        """
+        self.logger.log(f"Processing action with param: {required_param}")
+
+        if optional_files is not None:
+            self.logger.log(f"Processing {len(optional_files)} optional files")
+            total_size = 0
+            file_names = []
+            for file_path in optional_files:
+                if file_path.exists():
+                    total_size += file_path.stat().st_size
+                    file_names.append(file_path.name)
+
+            return f"{required_param}: processed {len(optional_files)} files ({', '.join(file_names)}) totaling {total_size} bytes"
+        return f"{required_param}: no optional files provided"
+
 
 if __name__ == "__main__":
     test_node = TestNode()

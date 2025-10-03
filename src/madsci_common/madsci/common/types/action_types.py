@@ -6,7 +6,7 @@ import inspect
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union, get_args, get_origin
 
 from madsci.common.types.base_types import Error, MadsciBaseModel
 from madsci.common.utils import localnow, new_ulid_str
@@ -57,9 +57,9 @@ class ActionRequest(MadsciBaseModel):
         default_factory=dict,
     )
     """Arguments for the action"""
-    files: dict[str, Path] = Field(
+    files: dict[str, Path | list[Path]] = Field(
         title="Action Files",
-        description="Files sent along with the action.",
+        description="Files sent along with the action. Can be single files (Path) or multiple files (list[Path]).",
         default_factory=dict,
     )
     """Files sent along with the action"""
@@ -579,8 +579,9 @@ def create_action_request_model(action_function: Any) -> type[MadsciBaseModel]:
             param.annotation if param.annotation != inspect.Parameter.empty else Any
         )
 
-        # Handle file parameters by converting Path to UploadFile for documentation
-        if field_type == Path:
+        # Handle file parameters - skip them as they're handled separately in file upload endpoints
+        file_type_info = _analyze_file_parameter_type(field_type)
+        if file_type_info["is_file_param"]:
             # For file parameters, we'll handle them separately in the API
             continue
 
@@ -660,6 +661,7 @@ def extract_file_parameters(action_function: Any) -> dict[str, dict[str, Any]]:
         - required: bool indicating if the parameter is required
         - description: str describing the parameter
         - annotation: type annotation of the parameter
+        - is_list: bool indicating if this is a list[Path] parameter
     """
     signature = inspect.signature(action_function)
     file_parameters = {}
@@ -668,12 +670,10 @@ def extract_file_parameters(action_function: Any) -> dict[str, dict[str, Any]]:
         if param_name == "self":
             continue
 
-        # Check if this is a file parameter (Path type)
-        if param.annotation == Path or (
-            hasattr(param.annotation, "__origin__")
-            and param.annotation.__origin__ is Union
-            and Path in param.annotation.__args__
-        ):
+        # Check if this is a file parameter
+        file_type_info = _analyze_file_parameter_type(param.annotation)
+
+        if file_type_info["is_file_param"]:
             is_required = param.default == inspect.Parameter.empty
 
             # Extract description from docstring if available
@@ -690,12 +690,73 @@ def extract_file_parameters(action_function: Any) -> dict[str, dict[str, Any]]:
                 "required": is_required,
                 "description": description,
                 "annotation": param.annotation,
+                "is_list": file_type_info["is_list"],
+                "is_optional": file_type_info["is_optional"],
                 "default": param.default
                 if param.default != inspect.Parameter.empty
                 else None,
             }
 
     return file_parameters
+
+
+def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
+    """Analyze a type annotation to determine if it's a file parameter.
+
+    Supports:
+    - Path
+    - list[Path]
+    - Optional[Path]
+    - Optional[list[Path]]
+    - Union[Path, None] (equivalent to Optional[Path])
+    - Union[list[Path], None] (equivalent to Optional[list[Path]])
+
+    Returns:
+        Dict with keys: is_file_param, is_list, is_optional
+    """
+    result = {
+        "is_file_param": False,
+        "is_list": False,
+        "is_optional": False,
+    }
+
+    # Direct Path type
+    if annotation == Path:
+        result["is_file_param"] = True
+        return result
+
+    # Handle generic types (list, Optional, Union)
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    if origin is list:
+        if args and args[0] == Path:
+            result["is_file_param"] = True
+            result["is_list"] = True
+        return result
+
+    if origin is Union:
+        non_none_args = [arg for arg in args if arg is not type(None)]
+
+        if len(non_none_args) == 1 and type(None) in args:
+            inner_type = non_none_args[0]
+            result["is_optional"] = True
+
+            if inner_type == Path:
+                result["is_file_param"] = True
+                return result
+            if get_origin(inner_type) is list:
+                inner_args = get_args(inner_type)
+                if inner_args and inner_args[0] == Path:
+                    result["is_file_param"] = True
+                    result["is_list"] = True
+                    return result
+        elif Path in args:
+            result["is_file_param"] = True
+            result["is_optional"] = type(None) in args
+            return result
+
+    return result
 
 
 def extract_file_result_definitions(action_function: Any) -> dict[str, str]:

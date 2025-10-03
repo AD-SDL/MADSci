@@ -816,7 +816,9 @@ class AbstractNode:
             for arg_name, arg_def in self.node_info.actions[
                 action_request.action_name
             ].args.items()
-            if arg_def.required and arg_name not in action_request.args
+            if arg_def.required
+            and arg_name not in action_request.args
+            and arg_name not in action_request.files
         ]
         if missing_args:
             raise ValueError(
