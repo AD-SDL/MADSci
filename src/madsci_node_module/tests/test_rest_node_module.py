@@ -21,11 +21,14 @@ from madsci.common.types.action_types import (
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import NodeDefinition, NodeInfo, NodeStatus
+from madsci.node_module.abstract_node_module import AbstractNode
 from madsci.node_module.helpers import action
+from madsci.node_module.rest_node_module import RestNode
 from pydantic import BaseModel, Field
 from ulid import ULID
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
+from madsci_node_module.tests.test_rest_utils import wait_for_node_ready
 
 
 @pytest.fixture
@@ -1833,3 +1836,339 @@ class TestDynamicModelCreation:
         )
 
         assert instance.json_result == {"any": "data"}
+
+
+class VarArgsTestNode(RestNode):
+    """Test node with *args and **kwargs actions for testing."""
+
+    config: TestNodeConfig
+    config_model = TestNodeConfig
+
+    startup_has_run: bool = False
+    shutdown_has_run: bool = False
+
+    def startup_handler(self) -> None:
+        """Called to (re)initialize the node."""
+        self.logger.log("Node initializing...")
+        self.startup_has_run = True
+        self.logger.log("Test node initialized!")
+
+    def shutdown_handler(self) -> None:
+        """Called to shutdown the node."""
+        self.logger.log("Shutting down")
+        self.shutdown_has_run = True
+        self.logger.log("Shutdown complete.")
+
+    def state_handler(self) -> None:
+        """Periodically called to update the current state of the node."""
+        # No state to track for this test node
+
+    @action
+    def test_action_with_var_args(self, required_param: str, *args) -> dict:
+        """Test action that accepts variable arguments."""
+        return {
+            "required_param": required_param,
+            "var_args": list(args),
+            "var_args_count": len(args),
+        }
+
+    @action
+    def test_action_with_var_kwargs(self, required_param: str, **kwargs) -> dict:
+        """Test action that accepts variable keyword arguments."""
+        return {
+            "required_param": required_param,
+            "var_kwargs": kwargs,
+            "var_kwargs_count": len(kwargs),
+        }
+
+    @action
+    def test_action_with_both_var(self, required_param: str, *args, **kwargs) -> dict:
+        """Test action that accepts both *args and **kwargs."""
+        return {
+            "required_param": required_param,
+            "var_args": list(args),
+            "var_kwargs": kwargs,
+            "total_extra_params": len(args) + len(kwargs),
+        }
+
+    @action
+    def test_mixed_with_defaults(
+        self, required_param: str, optional_param: int = 10, **kwargs
+    ) -> dict:
+        """Test action with required, optional with default, and **kwargs."""
+        return {
+            "required_param": required_param,
+            "optional_param": optional_param,
+            "var_kwargs": kwargs,
+        }
+
+
+@pytest.fixture
+def var_args_test_node() -> VarArgsTestNode:
+    """Return a VarArgsTestNode instance for testing."""
+    node_definition = NodeDefinition(
+        node_name="Var Args Test Node",
+        module_name="var_args_test_node",
+        description="A test node module for testing *args and **kwargs.",
+    )
+
+    return VarArgsTestNode(
+        node_definition=node_definition,
+        node_config=TestNodeConfig(
+            test_required_param=1,
+        ),
+    )
+
+
+@pytest.fixture
+def var_args_test_client(var_args_test_node: VarArgsTestNode) -> TestClient:
+    """Return a TestClient instance for var_args testing."""
+    # Call parent's start_node to trigger startup logic
+    AbstractNode.start_node(var_args_test_node)
+    # Now start the REST API
+    var_args_test_node.start_node(testing=True)
+    return TestClient(var_args_test_node.rest_api)
+
+
+class TestVariableArgumentActions:
+    """Test class for actions with *args and **kwargs support."""
+
+    def test_var_args_action_creation_and_execution(
+        self, var_args_test_client: TestClient
+    ):
+        """Test creating and executing an action with *args."""
+        # Wait for node to be ready (allow initializing state for var_args testing)
+        assert wait_for_node_ready(
+            var_args_test_client, timeout=10.0, allow_initializing=True
+        ), "Node failed to become ready"
+
+        # Create action with just required parameter
+        response = var_args_test_client.post(
+            "/action/test_action_with_var_args",
+            json={"required_param": "test_value"},
+        )
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+
+        # Start the action
+        response = var_args_test_client.post(
+            f"/action/test_action_with_var_args/{action_id}/start"
+        )
+        assert response.status_code == 200
+
+        # Wait for completion and check result
+        time.sleep(0.1)
+        response = var_args_test_client.get(f"/action/{action_id}/result")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["required_param"] == "test_value"
+        assert result["json_result"]["var_args"] == []
+        assert result["json_result"]["var_args_count"] == 0
+
+        # Create action with var_args
+        response = var_args_test_client.post(
+            "/action/test_action_with_var_args",
+            json={
+                "required_param": "test_value",
+                "var_args": ["arg1", "arg2", 123, True],
+            },
+        )
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+
+        # Start the action
+        response = var_args_test_client.post(
+            f"/action/test_action_with_var_args/{action_id}/start"
+        )
+        assert response.status_code == 200
+
+        # Wait for completion and check result
+        time.sleep(0.1)
+        response = var_args_test_client.get(f"/action/{action_id}/result")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["required_param"] == "test_value"
+        assert result["json_result"]["var_args"] == ["arg1", "arg2", 123, True]
+        assert result["json_result"]["var_args_count"] == 4
+
+    def test_var_kwargs_action_creation_and_execution(
+        self, var_args_test_client: TestClient
+    ):
+        """Test creating and executing an action with **kwargs."""
+        # Wait for node to be ready (allow initializing state for var_args testing)
+        assert wait_for_node_ready(
+            var_args_test_client, timeout=10.0, allow_initializing=True
+        ), "Node failed to become ready"
+
+        # Create action with just required parameter
+        response = var_args_test_client.post(
+            "/action/test_action_with_var_kwargs",
+            json={"required_param": "test_value"},
+        )
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+
+        # Start the action
+        response = var_args_test_client.post(
+            f"/action/test_action_with_var_kwargs/{action_id}/start"
+        )
+        assert response.status_code == 200
+
+        # Wait for completion and check result
+        time.sleep(0.1)
+        response = var_args_test_client.get(f"/action/{action_id}/result")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["required_param"] == "test_value"
+        assert result["json_result"]["var_kwargs"] == {}
+        assert result["json_result"]["var_kwargs_count"] == 0
+
+        # Create action with var_kwargs
+        response = var_args_test_client.post(
+            "/action/test_action_with_var_kwargs",
+            json={
+                "required_param": "test_value",
+                "var_kwargs": {
+                    "extra1": "value1",
+                    "extra2": 42,
+                    "extra3": True,
+                    "extra4": [1, 2, 3],
+                },
+            },
+        )
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+
+        # Start the action
+        response = var_args_test_client.post(
+            f"/action/test_action_with_var_kwargs/{action_id}/start"
+        )
+        assert response.status_code == 200
+
+        # Wait for completion and check result
+        time.sleep(0.1)
+        response = var_args_test_client.get(f"/action/{action_id}/result")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["required_param"] == "test_value"
+        expected_kwargs = {
+            "extra1": "value1",
+            "extra2": 42,
+            "extra3": True,
+            "extra4": [1, 2, 3],
+        }
+        assert result["json_result"]["var_kwargs"] == expected_kwargs
+        assert result["json_result"]["var_kwargs_count"] == 4
+
+    def test_both_var_args_and_kwargs(self, var_args_test_client: TestClient):
+        """Test action with both *args and **kwargs."""
+        # Wait for node to be ready (allow initializing state for var_args testing)
+        assert wait_for_node_ready(
+            var_args_test_client, timeout=10.0, allow_initializing=True
+        ), "Node failed to become ready"
+
+        response = var_args_test_client.post(
+            "/action/test_action_with_both_var",
+            json={
+                "required_param": "test_value",
+                "var_args": ["arg1", "arg2"],
+                "var_kwargs": {"key1": "val1", "key2": "val2"},
+            },
+        )
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+
+        # Start the action
+        response = var_args_test_client.post(
+            f"/action/test_action_with_both_var/{action_id}/start"
+        )
+        assert response.status_code == 200
+
+        # Wait for completion and check result
+        time.sleep(0.1)
+        response = var_args_test_client.get(f"/action/{action_id}/result")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["required_param"] == "test_value"
+        assert result["json_result"]["var_args"] == ["arg1", "arg2"]
+        assert result["json_result"]["var_kwargs"] == {"key1": "val1", "key2": "val2"}
+        assert result["json_result"]["total_extra_params"] == 4
+
+    def test_mixed_params_with_defaults_and_kwargs(
+        self, var_args_test_client: TestClient
+    ):
+        """Test action with mixed parameter types including defaults and **kwargs."""
+        # Wait for node to be ready (allow initializing state for var_args testing)
+        assert wait_for_node_ready(
+            var_args_test_client, timeout=10.0, allow_initializing=True
+        ), "Node failed to become ready"
+
+        # Test with default value
+        response = var_args_test_client.post(
+            "/action/test_mixed_with_defaults",
+            json={
+                "required_param": "test_value",
+                "var_kwargs": {"extra1": "value1"},
+            },
+        )
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+
+        # Start the action
+        response = var_args_test_client.post(
+            f"/action/test_mixed_with_defaults/{action_id}/start"
+        )
+        assert response.status_code == 200
+
+        # Wait for completion and check result
+        time.sleep(0.1)
+        response = var_args_test_client.get(f"/action/{action_id}/result")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["required_param"] == "test_value"
+        assert result["json_result"]["optional_param"] == 10  # default value
+        assert result["json_result"]["var_kwargs"] == {"extra1": "value1"}
+
+        # Test with custom optional value
+        response = var_args_test_client.post(
+            "/action/test_mixed_with_defaults",
+            json={
+                "required_param": "test_value",
+                "optional_param": 25,
+                "var_kwargs": {"extra1": "value1", "extra2": "value2"},
+            },
+        )
+        assert response.status_code == 200
+        action_data = response.json()
+        action_id = action_data["action_id"]
+
+        # Start the action
+        response = var_args_test_client.post(
+            f"/action/test_mixed_with_defaults/{action_id}/start"
+        )
+        assert response.status_code == 200
+
+        # Wait for completion and check result
+        time.sleep(0.1)
+        response = var_args_test_client.get(f"/action/{action_id}/result")
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "succeeded"
+        assert result["json_result"]["required_param"] == "test_value"
+        assert result["json_result"]["optional_param"] == 25
+        assert result["json_result"]["var_kwargs"] == {
+            "extra1": "value1",
+            "extra2": "value2",
+        }

@@ -413,6 +413,13 @@ class AbstractNode:
         )
         # *Create basic action definition from function signature
         signature = inspect.signature(func)
+
+        # Check for *args and **kwargs support
+        for param in signature.parameters.values():
+            if param.kind == inspect.Parameter.VAR_POSITIONAL:
+                action_def.accepts_var_args = True
+            elif param.kind == inspect.Parameter.VAR_KEYWORD:
+                action_def.accepts_var_kwargs = True
         if signature.parameters:
             for parameter_name, parameter_type in get_type_hints(
                 func,
@@ -525,45 +532,215 @@ class AbstractNode:
         action_request: ActionRequest,
     ) -> Union[ActionResult, tuple[callable, dict[str, Any]]]:
         """Parse the arguments for an action request."""
-        action_callable = self.action_handlers.get(action_request.action_name, None)
-        if action_callable is None:
-            raise ActionNotImplementedError(
-                f"Action {action_request.action_name} not implemented by this node",
-            )
-        # * Prepare arguments for the action function.
-        # * If the action function has a 'state' or 'action' parameter
-        # * we'll pass in our state and action objects.
-        arg_dict = {}
+        action_callable = self._get_action_callable(action_request.action_name)
         parameters = inspect.signature(action_callable).parameters
-        if parameters.__contains__("action"):
-            arg_dict["action"] = action_request
-        if parameters.__contains__("self"):
-            arg_dict["self"] = self
-        if list(parameters.values())[-1].kind == inspect.Parameter.VAR_KEYWORD:
-            # * Function has **kwargs, so we can pass all action args and files
-            arg_dict = {**arg_dict, **action_request.args}
-            arg_dict = {
-                **arg_dict,
-                **{file.filename: file.file for file in action_request.files},
-            }
-        else:
-            # * Pass only explicit arguments, dropping extras
-            for arg_name, arg_value in action_request.args.items():
-                if arg_name in parameters:
-                    arg_dict[arg_name] = arg_value
-                else:
-                    EventClient().log_warning(
-                        f"Ignoring unexpected argument {arg_name}"
-                    )
-            for file in action_request.files:
-                if file in parameters:
-                    arg_dict[file] = action_request.files[file]
-                else:
-                    EventClient().log_warning(f"Ignoring unexpected file {file}")
+
+        # Analyze function signature for special parameter types
+        param_analysis = self._analyze_function_parameters(parameters)
+
+        # Set up base arguments (action, self)
+        arg_dict = self._setup_base_arguments(
+            action_request, parameters, param_analysis
+        )
+
+        # Process regular arguments and files based on function signature
+        self._process_regular_arguments(
+            arg_dict, action_request, parameters, param_analysis
+        )
+
+        # Handle variable arguments (*args, **kwargs)
+        self._process_variable_arguments(
+            arg_dict, action_request, param_analysis, parameters
+        )
 
         # Validate any arguments that expect a LocationArgument
-
         return self._validate_location_arguments(action_callable, arg_dict)
+
+    def _get_action_callable(self, action_name: str) -> Callable:
+        """Get the callable for an action, raising an error if not found."""
+        action_callable = self.action_handlers.get(action_name, None)
+        if action_callable is None:
+            raise ActionNotImplementedError(
+                f"Action {action_name} not implemented by this node",
+            )
+        return action_callable
+
+    def _analyze_function_parameters(self, parameters: dict) -> dict[str, Any]:
+        """Analyze function parameters to detect *args and **kwargs."""
+        # Get ordered list of regular parameters (excluding *args, **kwargs, self, action)
+        regular_params = []
+        positional_before_varargs = []
+        keyword_only_after_varargs = []
+
+        var_args_found = False
+
+        for param_name, param in parameters.items():
+            if param_name in ("self", "action"):
+                continue
+
+            if param.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD:
+                regular_params.append(param_name)
+                if not var_args_found:
+                    positional_before_varargs.append(param_name)
+
+            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+                var_args_found = True
+
+            elif param.kind == inspect.Parameter.KEYWORD_ONLY:
+                keyword_only_after_varargs.append(param_name)
+
+        return {
+            "has_var_kwargs": any(
+                param.kind == inspect.Parameter.VAR_KEYWORD
+                for param in parameters.values()
+            ),
+            "has_var_args": any(
+                param.kind == inspect.Parameter.VAR_POSITIONAL
+                for param in parameters.values()
+            ),
+            "regular_params_order": regular_params,
+            "positional_before_varargs": positional_before_varargs,
+            "keyword_only_after_varargs": keyword_only_after_varargs,
+        }
+
+    def _setup_base_arguments(
+        self,
+        action_request: ActionRequest,
+        parameters: dict,
+        param_analysis: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Set up base arguments like 'action' and 'self' if needed by the function."""
+        arg_dict = {}
+        if parameters.__contains__("action"):
+            arg_dict["action"] = action_request
+
+        # Only add 'self' to kwargs if we don't have *args
+        # (with *args, self will be the first positional argument)
+        if parameters.__contains__("self") and not param_analysis["has_var_args"]:
+            arg_dict["self"] = self
+
+        return arg_dict
+
+    def _process_regular_arguments(
+        self,
+        arg_dict: dict[str, Any],
+        action_request: ActionRequest,
+        parameters: dict,
+        param_analysis: dict[str, Any],
+    ) -> None:
+        """Process regular arguments and files based on function signature."""
+        if param_analysis["has_var_kwargs"] and param_analysis["has_var_args"]:
+            # Function has both *args and **kwargs
+            # Only add args that won't be handled positionally by *args
+            for arg_name, arg_value in action_request.args.items():
+                if arg_name not in param_analysis["positional_before_varargs"]:
+                    arg_dict[arg_name] = arg_value
+            arg_dict.update({file.filename: file.file for file in action_request.files})
+        elif param_analysis["has_var_kwargs"]:
+            # Function has **kwargs, so we can pass all action args and files
+            arg_dict.update(action_request.args)
+            arg_dict.update({file.filename: file.file for file in action_request.files})
+        elif param_analysis["has_var_args"]:
+            # Function has *args - only pass files as keyword arguments here
+            # Regular args will be handled specially in _process_variable_arguments
+            arg_dict.update({file.filename: file.file for file in action_request.files})
+        else:
+            # Pass only explicit arguments, dropping extras
+            self._process_explicit_arguments(arg_dict, action_request, parameters)
+
+    def _process_explicit_arguments(
+        self,
+        arg_dict: dict[str, Any],
+        action_request: ActionRequest,
+        parameters: dict,
+    ) -> None:
+        """Process only explicit arguments that match function parameters."""
+        for arg_name, arg_value in action_request.args.items():
+            if arg_name in parameters:
+                arg_dict[arg_name] = arg_value
+            else:
+                EventClient().log_warning(f"Ignoring unexpected argument {arg_name}")
+
+        for file in action_request.files:
+            if file in parameters:
+                arg_dict[file] = action_request.files[file]
+            else:
+                EventClient().log_warning(f"Ignoring unexpected file {file}")
+
+    def _validate_var_args_compatibility(
+        self,
+        action_request: ActionRequest,
+        param_analysis: dict[str, Any],
+        parameters: dict,
+    ) -> None:
+        """Validate that *args usage won't cause parameter conflicts."""
+        if not param_analysis["has_var_args"] or not action_request.var_args:
+            return
+
+        # Check for optional parameters with defaults that aren't provided
+        missing_optional_params = []
+        for param_name in param_analysis["positional_before_varargs"]:
+            param = parameters[param_name]
+            if (
+                param_name not in action_request.args
+                and param.default != inspect.Parameter.empty
+            ):
+                missing_optional_params.append(param_name)
+
+        if missing_optional_params:
+            raise ValueError(
+                f"Action '{action_request.action_name}' has *args but optional parameters "
+                f"{missing_optional_params} with defaults are not provided. This would cause "
+                f"var_args {action_request.var_args} to be incorrectly assigned to these "
+                f"parameters instead of going to *args. Solutions: "
+                f"1) Provide values for {missing_optional_params}, "
+                f"2) Use **kwargs instead of *args, or "
+                f"3) Make parameters before *args required (no defaults)."
+            )
+
+    def _process_variable_arguments(
+        self,
+        arg_dict: dict[str, Any],
+        action_request: ActionRequest,
+        param_analysis: dict[str, Any],
+        parameters: dict,
+    ) -> None:
+        """Process variable arguments (*args, **kwargs) if present."""
+        # Handle **kwargs
+        if param_analysis["has_var_kwargs"] and action_request.var_kwargs:
+            arg_dict.update(action_request.var_kwargs)
+
+        # Handle *args with safety validation
+        if param_analysis["has_var_args"]:
+            # Validate compatibility first
+            self._validate_var_args_compatibility(
+                action_request, param_analysis, parameters
+            )
+
+            var_args = []
+
+            # Always add self as first argument if the function expects it
+            if "self" in parameters:
+                var_args.append(self)
+
+            # Add regular parameters that come before *args as positional arguments
+            # in the correct order to avoid "multiple values for argument" errors
+            for param_name in param_analysis["positional_before_varargs"]:
+                if param_name != "self" and param_name in action_request.args:
+                    var_args.append(action_request.args[param_name])
+
+            # Add actual var_args from the request (these go to *args)
+            if action_request.var_args:
+                var_args.extend(action_request.var_args)
+
+            # Include keyword-only parameters in arg_dict for *args functions
+            for param_name in param_analysis["keyword_only_after_varargs"]:
+                if param_name in action_request.args and param_name not in arg_dict:
+                    arg_dict[param_name] = action_request.args[param_name]
+
+            # Store the args list
+            if var_args:
+                arg_dict["__madsci_var_args__"] = var_args
 
     def _validate_location_arguments(
         self,
@@ -724,7 +901,13 @@ class AbstractNode:
                 try:
                     if self.node_info.actions[action_request.action_name].blocking:
                         self.node_status.busy = True
-                    result = action_callable(**arg_dict)
+
+                    # Handle var_args specially if present
+                    if "__madsci_var_args__" in arg_dict:
+                        var_args = arg_dict.pop("__madsci_var_args__")
+                        result = action_callable(*var_args, **arg_dict)
+                    else:
+                        result = action_callable(**arg_dict)
                 except Exception as e:
                     self._exception_handler(e)
                     result = action_request.failed(errors=Error.from_exception(e))

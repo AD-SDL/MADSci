@@ -329,11 +329,17 @@ class RestNode(AbstractNode):
         if not hasattr(self, "_pending_actions"):
             self._pending_actions = {}
 
+        # Extract var_args and var_kwargs from request_data
+        var_args = request_data.pop("var_args", None)
+        var_kwargs = request_data.pop("var_kwargs", None)
+
         action_request = ActionRequest(
             action_id=action_id,
             action_name=action_name,
             args=request_data,
             files={},  # Files will be added separately
+            var_args=var_args,
+            var_kwargs=var_kwargs,
         )
 
         self._pending_actions[action_id] = action_request

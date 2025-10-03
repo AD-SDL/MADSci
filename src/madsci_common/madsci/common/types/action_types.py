@@ -63,6 +63,18 @@ class ActionRequest(MadsciBaseModel):
         default_factory=dict,
     )
     """Files sent along with the action"""
+    var_args: Optional[list[Any]] = Field(
+        title="Variable Arguments",
+        description="Additional positional arguments (*args) for actions that accept them.",
+        default=None,
+    )
+    """Additional positional arguments for the action"""
+    var_kwargs: Optional[dict[str, Any]] = Field(
+        title="Variable Keyword Arguments",
+        description="Additional keyword arguments (**kwargs) for actions that accept them.",
+        default=None,
+    )
+    """Additional keyword arguments for the action"""
 
     def failed(
         self,
@@ -404,6 +416,26 @@ class ActionDefinition(MadsciBaseModel):
         description="Whether the action is asynchronous, and will return a 'running' status immediately rather than waiting for the action to complete before returning. This should be used for long-running actions (e.g. actions that take more than a few seconds to complete).",
         default=True,
     )
+    accepts_var_args: bool = Field(
+        title="Accepts Variable Arguments",
+        description="Whether the action accepts additional positional arguments (*args).",
+        default=False,
+    )
+    accepts_var_kwargs: bool = Field(
+        title="Accepts Variable Keyword Arguments",
+        description="Whether the action accepts additional keyword arguments (**kwargs).",
+        default=False,
+    )
+    var_args_schema: Optional[dict[str, Any]] = Field(
+        title="Variable Arguments Schema",
+        description="JSON schema for validating additional positional arguments when accepts_var_args is True.",
+        default=None,
+    )
+    var_kwargs_schema: Optional[dict[str, Any]] = Field(
+        title="Variable Keyword Arguments Schema",
+        description="JSON schema for validating additional keyword arguments when accepts_var_kwargs is True.",
+        default=None,
+    )
 
     @field_validator("args", mode="after")
     @classmethod
@@ -569,9 +601,19 @@ def create_action_request_model(action_function: Any) -> type[MadsciBaseModel]:
     """Create a dynamic action request model based on function signature."""
     signature = inspect.signature(action_function)
     fields = {}
+    has_var_args = False
+    has_var_kwargs = False
 
     for param_name, param in signature.parameters.items():
         if param_name == "self":
+            continue
+
+        # Check for *args and **kwargs
+        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+            has_var_args = True
+            continue
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            has_var_kwargs = True
             continue
 
         # Determine field type and default
@@ -585,33 +627,11 @@ def create_action_request_model(action_function: Any) -> type[MadsciBaseModel]:
             # For file parameters, we'll handle them separately in the API
             continue
 
-        # Set up default value and description
-        if param.default != inspect.Parameter.empty:
-            default_value = param.default
-        elif param_name in ["args", "kwargs"]:
-            # Skip *args and **kwargs
-            continue
-        else:
-            default_value = ... if field_type != Optional[Any] else None
+        # Process regular parameter
+        _add_parameter_field(fields, param_name, param, field_type, action_function)
 
-        # Create a descriptive field with title and description
-        field_title = param_name.replace("_", " ").title()
-        field_description = f"Parameter: {param_name}"
-
-        # Try to extract parameter description from docstring
-        if action_function.__doc__:
-            doc_lines = action_function.__doc__.strip().split("\n")
-            for line in doc_lines:
-                if param_name in line.lower() and ":" in line:
-                    field_description = line.strip()
-                    break
-
-        fields[param_name] = (
-            field_type,
-            Field(
-                default=default_value, title=field_title, description=field_description
-            ),
-        )
+    # Add variable argument fields
+    _add_variable_argument_fields(fields, has_var_args, has_var_kwargs)
 
     # Create the dynamic model with a descriptive docstring
     model_name = f"{action_function.__name__.title()}Request"
@@ -622,6 +642,65 @@ def create_action_request_model(action_function: Any) -> type[MadsciBaseModel]:
     return create_model(
         model_name, __base__=MadsciBaseModel, __doc__=model_docstring, **fields
     )
+
+
+def _add_parameter_field(
+    fields: dict,
+    param_name: str,
+    param: inspect.Parameter,
+    field_type: Any,
+    action_function: Any,
+) -> None:
+    """Add a parameter field to the fields dictionary."""
+    # Set up default value and description
+    if param.default != inspect.Parameter.empty:
+        default_value = param.default
+    else:
+        default_value = ... if field_type != Optional[Any] else None
+
+    # Create a descriptive field with title and description
+    field_title = param_name.replace("_", " ").title()
+    field_description = f"Parameter: {param_name}"
+
+    # Try to extract parameter description from docstring
+    if action_function.__doc__:
+        doc_lines = action_function.__doc__.strip().split("\n")
+        for line in doc_lines:
+            if param_name in line.lower() and ":" in line:
+                field_description = line.strip()
+                break
+
+    fields[param_name] = (
+        field_type,
+        Field(default=default_value, title=field_title, description=field_description),
+    )
+
+
+def _add_variable_argument_fields(
+    fields: dict, has_var_args: bool, has_var_kwargs: bool
+) -> None:
+    """Add variable argument fields to the fields dictionary."""
+    # Add var_args field if function accepts *args
+    if has_var_args:
+        fields["var_args"] = (
+            list[Any],
+            Field(
+                default_factory=list,
+                title="Variable Arguments",
+                description="Additional positional arguments (*args) for this action.",
+            ),
+        )
+
+    # Add var_kwargs field if function accepts **kwargs
+    if has_var_kwargs:
+        fields["var_kwargs"] = (
+            dict[str, Any],
+            Field(
+                default_factory=dict,
+                title="Variable Keyword Arguments",
+                description="Additional keyword arguments (**kwargs) for this action.",
+            ),
+        )
 
 
 def create_action_result_model(action_function: Any) -> type[ActionResult]:

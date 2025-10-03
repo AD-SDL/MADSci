@@ -1,6 +1,5 @@
 """Test-driven development approach to verify OpenAPI schema generation for json_result field."""
 
-import contextlib
 import tempfile
 import time
 from datetime import datetime
@@ -16,79 +15,7 @@ from madsci.node_module.helpers import action
 from pydantic import BaseModel, Field
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
-
-
-def wait_for_node_ready(client: TestClient, timeout: float = 5.0) -> bool:
-    """Wait for node to be ready before executing actions.
-
-    Args:
-        client: FastAPI test client
-        timeout: Maximum time to wait in seconds
-
-    Returns:
-        True if node is ready, False if timeout
-    """
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        with contextlib.suppress(Exception):
-            response = client.get("/status")
-            if response.status_code == 200:
-                status_data = response.json()
-                if status_data.get("ready", False):
-                    return True
-        time.sleep(0.1)  # Check every 100ms
-    return False
-
-
-def execute_action_and_wait(
-    client: TestClient,
-    action_name: str,
-    parameters: Optional[dict] = None,
-    timeout: float = 10.0,
-) -> dict:
-    """Execute an action and wait for it to complete.
-
-    Args:
-        client: FastAPI test client
-        action_name: Name of the action to execute
-        parameters: Optional parameters for the action
-        timeout: Maximum time to wait for completion
-
-    Returns:
-        Final action result dict
-
-    Raises:
-        AssertionError: If action fails or times out
-    """
-    if parameters is None:
-        parameters = {}
-
-    # Create action
-    response = client.post(f"/action/{action_name}", json=parameters)
-    assert response.status_code == 200, f"Failed to create action: {response.text}"
-    action_id = response.json()["action_id"]
-
-    # Start action
-    response = client.post(f"/action/{action_name}/{action_id}/start")
-    assert response.status_code == 200, f"Failed to start action: {response.text}"
-
-    # Wait for completion
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        response = client.get(f"/action/{action_id}/result")
-        if response.status_code == 200:
-            result = response.json()
-            status = result.get("status")
-            if status in ["succeeded", "failed", "error"]:
-                return result
-        time.sleep(0.1)  # Check every 100ms
-
-    # If we get here, the action timed out
-    response = client.get(f"/action/{action_id}/result")
-    result = response.json() if response.status_code == 200 else {"status": "timeout"}
-    raise AssertionError(
-        f"Action {action_name} timed out after {timeout}s. Last status: {result.get('status', 'unknown')}"
-    )
+from madsci_node_module.tests.test_rest_utils import execute_action_and_wait
 
 
 # Test result models for various type scenarios
@@ -326,6 +253,76 @@ class OpenAPISchemaTestNode(TestNode):
         """Action that takes a file and returns a model."""
         file_size = input_file.stat().st_size if input_file.exists() else 0
         return SimpleTestResult(value=file_size, message="file_processed")
+
+    # ============================================================================
+    # Variable Arguments Tests (*args, **kwargs)
+    # ============================================================================
+
+    @action
+    def test_var_args_only(self, required_param: str, *args) -> dict:
+        """Action that accepts additional positional arguments."""
+        return {
+            "required_param": required_param,
+            "var_args": list(args),
+            "var_args_count": len(args),
+        }
+
+    @action
+    def test_var_kwargs_only(self, required_param: str, **kwargs) -> dict:
+        """Action that accepts additional keyword arguments."""
+        return {
+            "required_param": required_param,
+            "var_kwargs": kwargs,
+            "var_kwargs_count": len(kwargs),
+        }
+
+    @action
+    def test_var_args_and_kwargs(self, required_param: str, *args, **kwargs) -> dict:
+        """Action that accepts both additional positional and keyword arguments."""
+        return {
+            "required_param": required_param,
+            "var_args": list(args),
+            "var_kwargs": kwargs,
+            "total_extra_params": len(args) + len(kwargs),
+        }
+
+    @action
+    def test_mixed_params_with_var_args(
+        self,
+        required_param: str,
+        optional_param: int = 10,
+        *args,
+    ) -> dict:
+        """Action with required, optional, and variable positional arguments."""
+        return {
+            "required_param": required_param,
+            "optional_param": optional_param,
+            "var_args": list(args),
+        }
+
+    @action
+    def test_mixed_params_with_var_kwargs(
+        self,
+        required_param: str,
+        optional_param: int = 10,
+        **kwargs,
+    ) -> dict:
+        """Action with required, optional, and variable keyword arguments."""
+        return {
+            "required_param": required_param,
+            "optional_param": optional_param,
+            "var_kwargs": kwargs,
+        }
+
+    @action
+    def test_files_with_var_kwargs(self, input_file: Path, **kwargs) -> dict:
+        """Action that combines file parameters with variable keyword arguments."""
+        file_size = input_file.stat().st_size if input_file.exists() else 0
+        return {
+            "file_name": input_file.name,
+            "file_size": file_size,
+            "var_kwargs": kwargs,
+        }
 
 
 class OpenAPIArgumentTestNode(TestNode):
@@ -2588,3 +2585,181 @@ class TestActionArgumentSchemaConsistency:
                     f"Runtime default for {field_name} ({runtime_value}) "
                     f"doesn't match schema default ({schema_default})"
                 )
+
+    def test_var_args_schema_generation(self, openapi_test_client):
+        """Test that *args support is correctly reflected in OpenAPI schema."""
+        response = openapi_test_client.get("/openapi.json")
+        schema = response.json()
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+
+        # Check if the var_args actions exist
+        var_args_path = "/action/test_var_args_only"
+        if var_args_path not in paths:
+            pytest.skip(
+                f"Test action {var_args_path} not found in OpenAPI schema. This test requires the OpenAPISchemaTestNode to include *args actions."
+            )
+
+        var_args_schema = paths[var_args_path]["post"]["requestBody"]["content"][
+            "application/json"
+        ]["schema"]
+        props = self._get_schema_props(var_args_schema, components)
+
+        # Should have var_args field
+        assert "var_args" in props
+        var_args_prop = props["var_args"]
+        assert var_args_prop["type"] == "array"
+        assert var_args_prop["title"] == "Variable Arguments"
+
+        # Check that var_args is optional
+        required_fields = set(self._get_schema_required(var_args_schema, components))
+        assert "var_args" not in required_fields
+        assert "required_param" in required_fields
+
+    def test_var_kwargs_schema_generation(self, openapi_test_client):
+        """Test that **kwargs support is correctly reflected in OpenAPI schema."""
+        response = openapi_test_client.get("/openapi.json")
+        schema = response.json()
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+
+        # Test action with **kwargs only
+        var_kwargs_path = "/action/test_var_kwargs_only"
+        var_kwargs_schema = paths[var_kwargs_path]["post"]["requestBody"]["content"][
+            "application/json"
+        ]["schema"]
+        props = self._get_schema_props(var_kwargs_schema, components)
+
+        # Should have var_kwargs field
+        assert "var_kwargs" in props
+        var_kwargs_prop = props["var_kwargs"]
+        assert var_kwargs_prop["type"] == "object"
+        assert var_kwargs_prop["title"] == "Variable Keyword Arguments"
+
+        # Check that var_kwargs is optional
+        required_fields = set(self._get_schema_required(var_kwargs_schema, components))
+        assert "var_kwargs" not in required_fields
+        assert "required_param" in required_fields
+
+    def test_var_args_and_kwargs_schema_generation(self, openapi_test_client):
+        """Test that both *args and **kwargs are correctly reflected in OpenAPI schema."""
+        response = openapi_test_client.get("/openapi.json")
+        schema = response.json()
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+
+        # Test action with both *args and **kwargs
+        both_path = "/action/test_var_args_and_kwargs"
+        both_schema = paths[both_path]["post"]["requestBody"]["content"][
+            "application/json"
+        ]["schema"]
+        props = self._get_schema_props(both_schema, components)
+
+        # Should have both var_args and var_kwargs fields
+        assert "var_args" in props
+        assert "var_kwargs" in props
+
+        var_args_prop = props["var_args"]
+        assert var_args_prop["type"] == "array"
+
+        var_kwargs_prop = props["var_kwargs"]
+        assert var_kwargs_prop["type"] == "object"
+
+        # Check that both are optional
+        required_fields = set(self._get_schema_required(both_schema, components))
+        assert "var_args" not in required_fields
+        assert "var_kwargs" not in required_fields
+        assert "required_param" in required_fields
+
+    def test_var_args_runtime_execution(self, openapi_test_client):
+        """Test that actions with *args execute correctly at runtime."""
+        # Test with no extra args
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_var_args_only",
+            {"required_param": "test"},
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["var_args"] == []
+        assert json_result["var_args_count"] == 0
+
+        # Test with extra args
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_var_args_only",
+            {"required_param": "test", "var_args": ["arg1", "arg2", 123]},
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["var_args"] == ["arg1", "arg2", 123]
+        assert json_result["var_args_count"] == 3
+
+    def test_var_kwargs_runtime_execution(self, openapi_test_client):
+        """Test that actions with **kwargs execute correctly at runtime."""
+        # Test with no extra kwargs
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_var_kwargs_only",
+            {"required_param": "test"},
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["var_kwargs"] == {}
+        assert json_result["var_kwargs_count"] == 0
+
+        # Test with extra kwargs
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_var_kwargs_only",
+            {
+                "required_param": "test",
+                "var_kwargs": {"extra1": "value1", "extra2": 42, "extra3": True},
+            },
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["var_kwargs"] == {
+            "extra1": "value1",
+            "extra2": 42,
+            "extra3": True,
+        }
+        assert json_result["var_kwargs_count"] == 3
+
+    def test_mixed_params_with_var_args_runtime(self, openapi_test_client):
+        """Test runtime execution of actions with mixed parameters and *args."""
+        # Test with explicit optional parameter (required to avoid parameter conflicts)
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_mixed_params_with_var_args",
+            {
+                "required_param": "test",
+                "optional_param": 10,
+                "var_args": ["extra1", "extra2"],
+            },
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["optional_param"] == 10  # default value
+        assert json_result["var_args"] == ["extra1", "extra2"]
+
+        # Test with custom optional parameter
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_mixed_params_with_var_args",
+            {
+                "required_param": "test",
+                "optional_param": 25,
+                "var_args": ["extra1", "extra2"],
+            },
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["optional_param"] == 25
+        assert json_result["var_args"] == ["extra1", "extra2"]

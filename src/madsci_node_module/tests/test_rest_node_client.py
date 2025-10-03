@@ -823,3 +823,206 @@ def test_send_action_with_list_files(
 
         # Verify all three calls were made
         assert mock_post.call_count == 3
+
+
+@patch("requests.post")
+def test_send_action_with_var_args(
+    mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test sending an action request with variable arguments (*args)."""
+    action_id = new_ulid_str()
+
+    # Mock create action response
+    create_response = MagicMock()
+    create_response.ok = True
+    create_response.json.return_value = {"action_id": action_id}
+
+    # Mock start action response
+    start_response = MagicMock()
+    start_response.ok = True
+    start_response.json.return_value = ActionSucceeded(
+        action_id=action_id, json_result={"var_args": ["arg1", "arg2", 123]}
+    ).model_dump(mode="json")
+
+    mock_post.side_effect = [create_response, start_response]
+
+    # Create action request with var_args
+    action_request = ActionRequest(
+        action_name="test_var_args",
+        args={"required_param": "value"},
+        var_args=["arg1", "arg2", 123],
+    )
+
+    result = rest_node_client.send_action(action_request, await_result=False)
+
+    # Verify the result
+    assert isinstance(result, ActionResult)
+    assert result.action_id == action_id
+    assert result.status == ActionStatus.SUCCEEDED
+    assert result.json_result["var_args"] == ["arg1", "arg2", 123]
+
+    # Verify the calls
+    assert mock_post.call_count == 2
+
+    # Check that var_args was included in the request payload
+    create_call_kwargs = mock_post.call_args_list[0][1]
+    request_data = create_call_kwargs["json"]
+    assert request_data["var_args"] == ["arg1", "arg2", 123]
+
+
+@patch("requests.post")
+def test_send_action_with_var_kwargs(
+    mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test sending an action request with variable keyword arguments (**kwargs)."""
+    action_id = new_ulid_str()
+
+    # Mock create action response
+    create_response = MagicMock()
+    create_response.ok = True
+    create_response.json.return_value = {"action_id": action_id}
+
+    # Mock start action response
+    start_response = MagicMock()
+    start_response.ok = True
+    start_response.json.return_value = ActionSucceeded(
+        action_id=action_id,
+        json_result={"var_kwargs": {"extra1": "value1", "extra2": 42}},
+    ).model_dump(mode="json")
+
+    mock_post.side_effect = [create_response, start_response]
+
+    # Create action request with var_kwargs
+    action_request = ActionRequest(
+        action_name="test_var_kwargs",
+        args={"required_param": "value"},
+        var_kwargs={"extra1": "value1", "extra2": 42},
+    )
+
+    result = rest_node_client.send_action(action_request, await_result=False)
+
+    # Verify the result
+    assert isinstance(result, ActionResult)
+    assert result.action_id == action_id
+    assert result.status == ActionStatus.SUCCEEDED
+    assert result.json_result["var_kwargs"] == {"extra1": "value1", "extra2": 42}
+
+    # Verify the calls
+    assert mock_post.call_count == 2
+
+    # Check that var_kwargs was included in the request payload
+    create_call_kwargs = mock_post.call_args_list[0][1]
+    request_data = create_call_kwargs["json"]
+    assert request_data["var_kwargs"] == {"extra1": "value1", "extra2": 42}
+
+
+@patch("requests.post")
+def test_send_action_with_var_args_and_kwargs(
+    mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test sending an action request with both *args and **kwargs."""
+    action_id = new_ulid_str()
+
+    # Mock create action response
+    create_response = MagicMock()
+    create_response.ok = True
+    create_response.json.return_value = {"action_id": action_id}
+
+    # Mock start action response
+    start_response = MagicMock()
+    start_response.ok = True
+    start_response.json.return_value = ActionSucceeded(
+        action_id=action_id,
+        json_result={"var_args": ["arg1", "arg2"], "var_kwargs": {"extra1": "value1"}},
+    ).model_dump(mode="json")
+
+    mock_post.side_effect = [create_response, start_response]
+
+    # Create action request with both var_args and var_kwargs
+    action_request = ActionRequest(
+        action_name="test_both_var",
+        args={"required_param": "value"},
+        var_args=["arg1", "arg2"],
+        var_kwargs={"extra1": "value1"},
+    )
+
+    result = rest_node_client.send_action(action_request, await_result=False)
+
+    # Verify the result
+    assert isinstance(result, ActionResult)
+    assert result.action_id == action_id
+    assert result.status == ActionStatus.SUCCEEDED
+    assert result.json_result["var_args"] == ["arg1", "arg2"]
+    assert result.json_result["var_kwargs"] == {"extra1": "value1"}
+
+    # Verify the calls
+    assert mock_post.call_count == 2
+
+    # Check that both var_args and var_kwargs were included in the request payload
+    create_call_kwargs = mock_post.call_args_list[0][1]
+    request_data = create_call_kwargs["json"]
+    assert request_data["var_args"] == ["arg1", "arg2"]
+    assert request_data["var_kwargs"] == {"extra1": "value1"}
+
+
+@patch("requests.post")
+def test_send_action_with_files_and_var_kwargs(
+    mock_post: MagicMock, rest_node_client: RestNodeClient
+) -> None:
+    """Test sending an action request that combines file uploads with **kwargs."""
+    action_id = new_ulid_str()
+
+    # Create temporary files
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        f.write("test content")
+        test_file = Path(f.name)
+
+    # Mock responses
+    create_response = MagicMock()
+    create_response.ok = True
+    create_response.json.return_value = {"action_id": action_id}
+
+    upload_response = MagicMock()
+    upload_response.ok = True
+
+    start_response = MagicMock()
+    start_response.ok = True
+    start_response.json.return_value = ActionSucceeded(
+        action_id=action_id,
+        json_result={
+            "file_processed": True,
+            "var_kwargs": {"processing_mode": "fast", "quality": "high"},
+        },
+    ).model_dump(mode="json")
+
+    mock_post.side_effect = [create_response, upload_response, start_response]
+
+    # Create action request with files and var_kwargs
+    action_request = ActionRequest(
+        action_name="test_files_with_kwargs",
+        args={"required_param": "value"},
+        files={"input_file": test_file},
+        var_kwargs={"processing_mode": "fast", "quality": "high"},
+    )
+
+    result = rest_node_client.send_action(action_request, await_result=False)
+
+    # Verify the result
+    assert isinstance(result, ActionResult)
+    assert result.action_id == action_id
+    assert result.status == ActionStatus.SUCCEEDED
+    assert result.json_result["var_kwargs"] == {
+        "processing_mode": "fast",
+        "quality": "high",
+    }
+
+    # Verify all three calls were made (create, upload, start)
+    assert mock_post.call_count == 3
+
+    # Check that var_kwargs was included in the create request payload
+    create_call_kwargs = mock_post.call_args_list[0][1]
+    request_data = create_call_kwargs["json"]
+    assert request_data["var_kwargs"] == {"processing_mode": "fast", "quality": "high"}
+
+    # Clean up
+    test_file.unlink()
