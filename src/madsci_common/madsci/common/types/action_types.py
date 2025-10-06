@@ -57,7 +57,7 @@ class ActionRequest(MadsciBaseModel):
         default_factory=dict,
     )
     """Arguments for the action"""
-    files: dict[str, Path | list[Path]] = Field(
+    files: dict[str, Union[Path, list[Path]]] = Field(
         title="Action Files",
         description="Files sent along with the action. Can be single files (Path) or multiple files (list[Path]).",
         default_factory=dict,
