@@ -4,7 +4,7 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
@@ -106,7 +106,7 @@ class RestNodeClient(AbstractNodeClient):
         return response_data["action_id"]
 
     def _upload_action_files(
-        self, action_name: str, action_id: str, files: dict[str, str | list[str]]
+        self, action_name: str, action_id: str, files: dict[str, Union[str, list[str]]]
     ) -> None:
         """Upload files for an action. REST-implementation specific"""
         for file_key, file_value in files.items():
