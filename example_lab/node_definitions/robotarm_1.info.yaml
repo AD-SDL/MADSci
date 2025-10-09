@@ -52,6 +52,10 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: node_definitions/robotarm_1.node.yaml
   node_info_path: null

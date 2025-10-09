@@ -35,6 +35,10 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_json:
     name: return_json
     description: Return a JSON object
@@ -57,6 +61,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_dict:
     name: return_dict
     description: Return a JSON object
@@ -80,6 +88,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_file:
     name: return_file
     description: Return a file
@@ -93,6 +105,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_file_and_json:
     name: return_file_and_json
     description: Return data and a file
@@ -119,6 +135,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_labeled_json_values:
     name: return_labeled_json_values
     description: Return labeled JSON values
@@ -142,6 +162,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_labeled_file_values:
     name: return_labeled_file_values
     description: Return labeled file values
@@ -159,6 +183,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_labeled_file_and_json_values:
     name: return_labeled_file_and_json_values
     description: Return labeled file and json values
@@ -190,6 +218,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_analysis_result:
     name: return_analysis_result
     description: Return a custom pydantic model with analysis results
@@ -247,6 +279,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_experiment_metadata:
     name: return_experiment_metadata
     description: Return complex experiment metadata as a custom pydantic model
@@ -308,6 +344,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_mixed_custom_and_files:
     name: return_mixed_custom_and_files
     description: Return a custom pydantic model and a file
@@ -369,6 +409,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_simple_string:
     name: test_simple_string
     description: Test action with a simple string argument
@@ -397,6 +441,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_simple_int:
     name: test_simple_int
     description: Test action with a simple integer argument
@@ -425,6 +473,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_simple_float:
     name: test_simple_float
     description: Test action with a simple float argument
@@ -453,6 +505,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_simple_bool:
     name: test_simple_bool
     description: Test action with a simple boolean argument
@@ -481,6 +537,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_multiple_simple_args:
     name: test_multiple_simple_args
     description: Test action with multiple simple arguments of different types
@@ -528,6 +588,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_optional_string:
     name: test_optional_string
     description: Test action with optional string argument
@@ -562,6 +626,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_optional_with_defaults:
     name: test_optional_with_defaults
     description: Test action with various optional parameters and defaults
@@ -615,6 +683,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_annotated_args:
     name: test_annotated_args
     description: Test action with annotated type parameters
@@ -656,6 +728,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_list_args:
     name: test_list_args
     description: Test action with list arguments
@@ -691,6 +767,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_dict_args:
     name: test_dict_args
     description: Test action with dictionary argument
@@ -720,6 +800,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_nested_structures:
     name: test_nested_structures
     description: Test action with complex nested data structures
@@ -749,6 +833,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_pydantic_input:
     name: test_pydantic_input
     description: Test action with pydantic model as input
@@ -778,6 +866,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_optional_pydantic_input:
     name: test_optional_pydantic_input
     description: Test action with optional pydantic model input
@@ -841,6 +933,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_file_input:
     name: test_file_input
     description: Test action with file path input
@@ -869,6 +965,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_optional_file_input:
     name: test_optional_file_input
     description: Test action with optional file input
@@ -894,6 +994,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_multiple_file_inputs:
     name: test_multiple_file_inputs
     description: Test action with multiple file inputs
@@ -923,6 +1027,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_location_input:
     name: test_location_input
     description: Test action with location argument
@@ -952,6 +1060,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_multiple_locations:
     name: test_multiple_locations
     description: Test action with multiple location arguments
@@ -979,6 +1091,10 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_location_with_resource_interaction:
     name: test_location_with_resource_interaction
     description: Test action that simulates resource movement between locations
@@ -1014,6 +1130,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   test_everything_mixed:
     name: test_everything_mixed
     description: Test action with a mix of all argument types
@@ -1109,6 +1229,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: node_definitions/advanced_example_node.node.yaml
   node_info_path: null

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Optional, Union, get_args, get_origin
 
 from madsci.common.types.base_types import Error, MadsciBaseModel
+from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.utils import localnow, new_ulid_str
 from pydantic import Field, create_model
 from pydantic.functional_validators import field_validator, model_validator
@@ -234,9 +235,9 @@ class ActionDatapoints(MadsciBaseModel, extra="allow"):
             if hasattr(value, "datapoint_id"):
                 # DataPoint object, extract the ID
                 v[key] = value.datapoint_id
-            elif isinstance(value, dict) and "datapoint_id" in value:
+            elif datapoint := DataPoint.model_validate(value):
                 # Dict representation of DataPoint, extract the ID
-                v[key] = value["datapoint_id"]
+                v[key] = datapoint.datapoint_id
             else:
                 raise ValueError(
                     f"Datapoint '{key}' must be a ULID string or DataPoint object with datapoint_id, got: {type(value).__name__}"

@@ -54,6 +54,10 @@ actions:
           type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   run_protocol:
     name: run_protocol
     description: Run a protocol on the liquid handler
@@ -73,6 +77,10 @@ actions:
         result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   deck_transfer:
     name: deck_transfer
     description: Transfer labware between deck locations on the liquid handler.
@@ -94,6 +102,10 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   arg_type_test:
     name: arg_type_test
     description: Used to test that argument types are correctly passed to the node
@@ -128,6 +140,10 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: node_definitions/liquidhandler_1.node.yaml
   node_info_path: null
