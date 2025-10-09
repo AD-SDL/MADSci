@@ -61,7 +61,7 @@ class DataPoint(MadsciBaseModel, extra="allow"):
         data_timestamp: The time the data point was created.
     """
 
-    label: str
+    label: Optional[str] = None
     """Label of this data point"""
     ownership_info: Optional[OwnershipInfo] = Field(
         default_factory=get_current_ownership_info

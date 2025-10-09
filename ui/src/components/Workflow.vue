@@ -19,8 +19,8 @@
         <div v-if="!(value.end_time == '') && !(value.end_time == null)"><b>End Time</b>: {{ value.end_time }}</div>
         <div v-if="!(value.result == '') && !(value.result == null)"><b>Status</b>: {{
           value.result.status }} <br>
-          <div v-if="!(value.result.data == null)"> <b>Data:</b><br>
-            <v-data-table :headers="data_headers" :items="Object.values(test[value.step_id])">
+          <div v-if="Object.values(value.result.datapoints || {}).length !== 0"> <b>Datapoints:</b><br>
+            <v-data-table :headers="data_headers" :items="Object.values(value.result.datapoints || {})">
               <template v-slot:item="{ item }: { item: any }">
                 <tr>
                   <td>{{ item.label }}</td>
@@ -60,26 +60,7 @@ const data_headers = [
 
 
 ]
-watch (() => props.steps, async(newSteps) => {
-  const tmp: Record<string, Record<string, any>> = {}
-  for (const step of newSteps) {
-    tmp[step.step_id] = {}
-    if (step.result?.data) {
-      for (const [label, datapointId] of Object.entries(step.result.data)) {
-        try { const resp = await fetch(urls.value["data_server_url"] + "datapoint/" + datapointId)
-          const val = await resp.json()
-          const key = val.datapoint_id ?? val._id
-          if (!key) { console.warn("No valid ID found", val)
-            continue
-          }
-          tmp[step.step_id][key] = val;
-        } catch (err) { console.error("Failed to fetch datapoint", datapointId, err)}
-    }}}
-  test.value = tmp;
-  console.log(test.value)
-  },
-  { immediate: true, deep: false}
-)
+
 
 const forceFileDownload = (val: any, title: any) => {
   console.log(title)

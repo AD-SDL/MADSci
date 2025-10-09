@@ -1,0 +1,8 @@
+node_name: advanced_example_node.node
+node_id: 01K5W0W665KJNT9RC6JD9N4BEN
+node_description: Advanced example node demonstrating various action types and result
+  formats
+node_type: device
+module_name: advanced_example_node
+module_version: 0.0.1
+capabilities: null

@@ -3,7 +3,6 @@ Engine Class and associated helpers and data
 """
 
 import concurrent
-import copy
 import importlib
 import time
 import traceback
@@ -16,7 +15,13 @@ from madsci.client.location_client import LocationClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.ownership import ownership_context
-from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.action_types import (
+    ActionDatapoints,
+    ActionFiles,
+    ActionRequest,
+    ActionResult,
+    ActionStatus,
+)
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import (
     DataPoint,
@@ -207,6 +212,9 @@ class Engine:
                 )
                 action_id = request.action_id
                 self.add_pending_action(step, action_id)
+                self.logger.log_info(
+                    f"Added Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}"
+                )
                 try:
                     response = client.send_action(request, await_result=False)
                 except Exception as e:
@@ -218,6 +226,9 @@ class Engine:
                     else:
                         response.errors.append(Error.from_exception(e))
                 finally:
+                    self.logger.log_info(
+                        f"Removed Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}"
+                    )
                     self.remove_pending_action(step)
                 response = self.handle_response(wf, step, response)
                 action_id = response.action_id
@@ -263,9 +274,14 @@ class Engine:
         interval = 0.25
         retry_count = 0
         while not response.status.is_terminal:
-            if node.info.capabilities.get_action_result is False or (
+            if (
+                node.info.capabilities.get_action_result is False
+                and node.info.capabilities.get_action_status is False
+            ) or (
                 node.info.capabilities.get_action_result is None
+                and node.info.capabilities.get_action_status is None
                 and client.supported_capabilities.get_action_result is False
+                and client.supported_capabilities.get_action_status is False
             ):
                 self.logger.warning(
                     f"While running Step {step.step_id} of workflow {wf.workflow_id}, send_action returned a non-terminal response {response}. However, node {step.node} does not support querying an action result."
@@ -355,35 +371,47 @@ class Engine:
             self.state_handler.set_active_workflow(wf)
 
             if wf.status.terminal:
+                self.logger.log_info(str(wf))
                 self._log_completion_event(wf)
 
     def _feed_data_forward(self, step: Step, wf: Workflow) -> Workflow:
         """Feed data forward from the completed step to the workflow parameters"""
         for param in wf.parameters.feed_forward:
-            if (
-                (isinstance(param.step, str) and param.step == step.key)
-                or (
-                    isinstance(param.step, int)
-                    and wf.status.current_step_index == param.step
-                )
-                or param.step is None
+            if (isinstance(param.step, str) and param.step == step.key) or (
+                isinstance(param.step, int)
+                and wf.status.current_step_index == param.step
             ):
+                if step.result.datapoints:
+                    self.logger.log_warning(
+                        event=Event(event_data=str(step.result.datapoints))
+                    )
+                    datapoint_ids = step.result.datapoints.model_dump()
+                    # Fetch actual DataPoint objects from data manager using the IDs
+                    datapoint_dict = {}
+                    for key, datapoint_id in datapoint_ids.items():
+                        datapoint = self.data_client.get_datapoint(datapoint_id)
+                        datapoint_dict[key] = datapoint
+                else:
+                    raise ValueError(
+                        f"Feed-forward parameter {param.key} specified step {param.step} but step has no datapoints"
+                    )
                 if param.label is None:
-                    if len(step.result.datapoints) == 1:
-                        datapoint = next(iter(step.result.datapoints.values()))
+                    self.logger.log_warning(event=Event(event_data=str(datapoint_dict)))
+                    if len(datapoint_dict) == 1:
+                        datapoint = next(iter(datapoint_dict.values()))
                         wf = self.update_param_value_from_datapoint(
                             wf, datapoint, param
                         )
                     else:
                         raise ValueError(
-                            f"Ambiguous feed-forward parameter {param.key}: multiple possible matching labels: {step.result.datapoints.keys()}"
+                            f"Ambiguous feed-forward parameter {param.key}: multiple possible matching labels: {step.result.datapoints.model_dump().keys()}"
                         )
-                elif param.label in step.result.datapoints:
-                    datapoint = step.result.datapoints[param.label]
+                elif param.label in datapoint_dict:
+                    datapoint = datapoint_dict[param.label]
                     wf = self.update_param_value_from_datapoint(wf, datapoint, param)
                 elif param.step is not None:
                     raise ValueError(
-                        f"Feed-forward parameter {param.key}'s specified label {param.label} not found in step result datapoints: {step.result.datapoints.keys()}"
+                        f"Feed-forward parameter {param.key}'s specified label {param.label} not found in step result datapoints: {step.result.datapoints.model_dump().keys()}"
                     )
         return wf
 
@@ -401,17 +429,9 @@ class Engine:
                 else "Duration: Unknown"
             )
 
-            author = "Unknown"
-            if (
-                "definition_metadata" in event_data
-                and event_data["definition_metadata"]
-                and "author" in event_data["definition_metadata"]
-            ):
-                author = event_data["definition_metadata"]["author"] or "Unknown"
-
             self.logger.info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {event_data['status']}, Author: {author}, "
+                f"Status: {event_data['status']}, Author: {(event_data.get('definition_metadata') or {}).get('author') or 'Unknown'}, "
                 f"{duration_text}"
             )
         except Exception as e:
@@ -470,48 +490,55 @@ class Engine:
         self, step: Step, wf: Workflow, response: ActionResult
     ) -> ActionResult:
         """create and save datapoints for data returned from step"""
-        labeled_data = {}
-        datapoints = response.datapoints
-        ownership_info = copy.deepcopy(wf.ownership_info)
-        ownership_info.step_id = step.step_id
-        ownership_info.node_id = self.state_handler.get_node(step.node).info.node_id
-        ownership_info.workflow_id = wf.workflow_id
-        if response.data:
-            for data_key in response.data:
-                if step.data_labels is not None and data_key in step.data_labels:
-                    label = step.data_labels[data_key]
-                else:
-                    label = data_key
+        if response.datapoints:
+            datapoint_ids = response.datapoints.model_dump(mode="json")
+        else:
+            datapoint_ids = {}
+        with ownership_context(
+            workcell_id=self.workcell_definition.manager_id,
+            workflow_id=wf.workflow_id,
+            node_id=self.state_handler.get_node(step.node).info.node_id,
+            step_id=step.step_id,
+        ):
+            if response.json_result:
                 datapoint = ValueDataPoint(
-                    label=label,
-                    ownership_info=ownership_info,
-                    value=response.data[data_key],
+                    label="json_result",
+                    value=response.json_result,
                 )
-                self.data_client.submit_datapoint(datapoint)
-                labeled_data[label] = datapoint.datapoint_id
-                datapoints[label] = datapoint
-        if response.files:
-            for file_key in response.files:
-                if step.data_labels is not None and file_key in step.data_labels:
-                    label = step.data_labels[file_key]
-                else:
-                    label = file_key
-                datapoint = FileDataPoint(
-                    label=label,
-                    ownership_info=ownership_info,
-                    path=str(response.files[file_key]),
-                )
-                self.logger.debug(
-                    "Submitting datapoint: " + str(datapoint.datapoint_id)
-                )
-                self.data_client.submit_datapoint(datapoint)
-                self.logger.debug("Submitted datapoint: " + str(datapoint.datapoint_id))
+                submitted_datapoint = self.data_client.submit_datapoint(datapoint)
+                datapoint_ids["json_result"] = submitted_datapoint.datapoint_id
 
-                labeled_data[label] = datapoint.datapoint_id
-                datapoints[label] = datapoint
-        response.data = labeled_data
-        response.datapoints = datapoints
-        return response
+            if response.files:
+                if isinstance(response.files, ActionFiles):
+                    response_files = response.files.model_dump(mode="json")
+                    for file_key in response_files:
+                        datapoint = FileDataPoint(
+                            label=file_key,
+                            path=str(response_files[file_key]),
+                        )
+                        self.logger.log_debug(
+                            "Submitting datapoint: " + str(datapoint.datapoint_id)
+                        )
+                        submitted_datapoint = self.data_client.submit_datapoint(
+                            datapoint
+                        )
+                        self.logger.log_debug(
+                            "Submitted datapoint: "
+                            + str(submitted_datapoint.datapoint_id)
+                        )
+
+                        datapoint_ids[file_key] = submitted_datapoint.datapoint_id
+                else:
+                    label = "file"
+                    datapoint = FileDataPoint(
+                        label=label,
+                        path=str(response.files),
+                    )
+                    submitted_datapoint = self.data_client.submit_datapoint(datapoint)
+                    datapoint_ids[label] = submitted_datapoint.datapoint_id
+
+            response.datapoints = ActionDatapoints.model_validate(datapoint_ids)
+            return response
 
     def update_active_nodes(self, state_manager: WorkcellStateHandler) -> None:
         """Update all active nodes in the workcell."""
