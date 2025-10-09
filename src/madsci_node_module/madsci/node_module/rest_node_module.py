@@ -166,9 +166,7 @@ class RestNode(AbstractNode):
             "datapoints": action_response.datapoints.model_dump()
             if action_response.datapoints
             else None,
-            "history_created_at": action_response.history_created_at.isoformat()
-            if action_response.history_created_at
-            else None,
+            "history_created_at": action_response.history_created_at,
         }
 
         # Handle files with proper serialization - convert to file keys for REST API
