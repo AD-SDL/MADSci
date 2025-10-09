@@ -431,7 +431,7 @@ class Engine:
 
             self.logger.info(
                 f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {event_data['status']}, Author: {event_data['definition_metadata']['author'] or 'Unknown'}, "
+                f"Status: {event_data['status']}, Author: {(event_data.get('definition_metadata') or {}).get('author') or 'Unknown'}, "
                 f"{duration_text}"
             )
         except Exception as e:
