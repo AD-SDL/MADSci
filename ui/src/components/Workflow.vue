@@ -19,8 +19,8 @@
         <div v-if="!(value.end_time == '') && !(value.end_time == null)"><b>End Time</b>: {{ value.end_time }}</div>
         <div v-if="!(value.result == '') && !(value.result == null)"><b>Status</b>: {{
           value.result.status }} <br>
-          <div v-if="!(Object.values(value.result.datapoints).length == 0)"> <b>Datapoints:</b><br>
-            <v-data-table :headers="data_headers" :items="Object.values(value.result.datapoints)">
+          <div v-if="Object.values(value.result.datapoints || {}).length !== 0"> <b>Datapoints:</b><br>
+            <v-data-table :headers="data_headers" :items="Object.values(value.result.datapoints || {})">
               <template v-slot:item="{ item }: { item: any }">
                 <tr>
                   <td>{{ item.label }}</td>
