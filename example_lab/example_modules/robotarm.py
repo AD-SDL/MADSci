@@ -6,10 +6,11 @@ from typing import Annotated, Any, Optional
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
-from madsci.common.types.resource_types.definitions import SlotResourceDefinition
+from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 from pydantic import Field
@@ -55,9 +56,42 @@ class RobotArmNode(RestNode):
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
         self.robot_arm = RobotArmInterface(logger=self.logger)
-        resource_name = "robot_arm_gripper_" + str(self.node_definition.node_name)
-        slot_def = SlotResourceDefinition(resource_name=resource_name)
-        self.gripper = self.resource_client.init_resource(slot_def)
+
+        if self.resource_client:
+            self.resource_owner = OwnershipInfo(node_id=self.node_definition.node_id)
+
+            gripper_slot = Slot(
+                resource_name="robot_arm_gripper",
+                resource_class="RobotArmGripper",
+                capacity=1,
+                attributes={
+                    "gripper_type": "robotic_gripper",
+                    "description": "Robot arm gripper slot",
+                },
+            )
+
+            self.resource_client.init_template(
+                resource=gripper_slot,
+                template_name="robot_arm_gripper_slot",
+                description="Template for robot arm gripper slot. Used to track what the robot arm is currently holding.",
+                required_overrides=["resource_name"],
+                tags=["robot_arm", "gripper", "slot", "robot"],
+                created_by=self.node_definition.node_id,
+                version="1.0.0",
+            )
+
+            resource_name = "robot_arm_gripper_" + str(self.node_definition.node_name)
+            self.gripper = self.resource_client.create_resource_from_template(
+                template_name="robot_arm_gripper_slot",
+                resource_name=resource_name,
+                add_to_database=True,
+            )
+            self.logger.log(
+                f"Initialized gripper resource from template: {self.gripper.resource_id}"
+            )
+        else:
+            self.gripper = None
+
         self.logger.log("Robot arm initialized!")
 
     def shutdown_handler(self) -> None:
