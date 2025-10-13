@@ -970,6 +970,55 @@ class ResourceClient:
             self.local_resources[resource.resource_id] = resource
         return self._wrap_resource(resource)
 
+    def init_template(
+        self,
+        resource: ResourceDataModels,
+        template_name: str,
+        description: str = "",
+        required_overrides: Optional[list[str]] = None,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+        version: str = "1.0.0",
+    ) -> ResourceDataModels:
+        """
+        Initialize a template with the resource manager.
+
+        If a template with the given name already exists, returns the existing template.
+        If no matching template exists, creates a new one.
+
+        Args:
+            resource (ResourceDataModels): The resource to use as a template.
+            template_name (str): Unique name for the template.
+            description (str): Description of what this template creates.
+            required_overrides (Optional[list[str]]): Fields that must be provided when using template.
+            tags (Optional[list[str]]): Tags for categorization.
+            created_by (Optional[str]): Creator identifier.
+            version (str): Template version.
+
+        Returns:
+            ResourceDataModels: The existing or newly created template resource.
+        """
+        existing_template = self.get_template(template_name)
+
+        if existing_template is not None:
+            self.logger.info(f"Using existing template '{template_name}'")
+            return existing_template
+
+        self.logger.info(
+            f"Template '{template_name}' not found, creating new template..."
+        )
+        new_template = self.create_template(
+            resource=resource,
+            template_name=template_name,
+            description=description,
+            required_overrides=required_overrides,
+            tags=tags,
+            created_by=created_by,
+            version=version,
+        )
+        self.logger.info(f"Created template '{template_name}'")
+        return new_template
+
     def create_template(
         self,
         resource: ResourceDataModels,
