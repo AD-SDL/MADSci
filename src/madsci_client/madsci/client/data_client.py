@@ -21,6 +21,7 @@ from madsci.common.types.datapoint_types import (
     DataPointTypeEnum,
     ObjectStorageSettings,
 )
+from madsci.common.utils import extract_datapoint_ids
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 from ulid import ULID
@@ -354,3 +355,103 @@ class DataClient:
 
         self._local_datapoints[datapoint.datapoint_id] = datapoint
         return datapoint
+
+    def get_datapoints_by_ids(self, datapoint_ids: list[str]) -> dict[str, DataPoint]:
+        """Fetch multiple datapoints by their IDs in a batch operation.
+
+        This method enables just-in-time fetching of datapoints when only IDs are stored
+        in workflows, following the principle of efficient datapoint management.
+
+        Args:
+            datapoint_ids: List of datapoint ULID strings to fetch
+
+        Returns:
+            Dictionary mapping datapoint IDs to DataPoint objects
+
+        Raises:
+            Exception: If any datapoint cannot be fetched
+        """
+        if not datapoint_ids:
+            return {}
+
+        result = {}
+        for datapoint_id in datapoint_ids:
+            try:
+                datapoint = self.get_datapoint(datapoint_id)
+                result[datapoint_id] = datapoint
+            except Exception as e:
+                # Log warning but continue with other datapoints
+                self.logger.warn(f"Failed to fetch datapoint {datapoint_id}: {e}")
+
+        return result
+
+    def get_datapoint_metadata(self, datapoint_id: str) -> dict[str, Any]:
+        """Get basic metadata for a datapoint without fetching the full data.
+
+        Useful for UI display where you need labels, types, timestamps, etc.
+        without loading large file contents or values.
+
+        Args:
+            datapoint_id: ULID string of the datapoint
+
+        Returns:
+            Dictionary with metadata fields like label, data_type, data_timestamp
+        """
+        datapoint = self.get_datapoint(datapoint_id)
+        return {
+            "datapoint_id": datapoint.datapoint_id,
+            "label": getattr(datapoint, "label", None),
+            "data_type": datapoint.data_type,
+            "data_timestamp": getattr(datapoint, "data_timestamp", None),
+            "ownership_info": getattr(datapoint, "ownership_info", None),
+            # Add additional metadata fields based on datapoint type
+            **(
+                {"size_bytes": datapoint.size_bytes}
+                if hasattr(datapoint, "size_bytes")
+                else {}
+            ),
+            **(
+                {"content_type": datapoint.content_type}
+                if hasattr(datapoint, "content_type")
+                else {}
+            ),
+        }
+
+    def get_datapoints_metadata(
+        self, datapoint_ids: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """Get metadata for multiple datapoints efficiently.
+
+        Args:
+            datapoint_ids: List of datapoint ULID strings
+
+        Returns:
+            Dictionary mapping datapoint IDs to metadata dictionaries
+        """
+        result = {}
+        for datapoint_id in datapoint_ids:
+            try:
+                metadata = self.get_datapoint_metadata(datapoint_id)
+                result[datapoint_id] = metadata
+            except Exception as e:
+                self.logger.warn(
+                    f"Failed to fetch metadata for datapoint {datapoint_id}: {e}"
+                )
+
+        return result
+
+    def extract_datapoint_ids_from_action_result(self, action_result: Any) -> list[str]:
+        """Extract all datapoint IDs from an ActionResult.
+
+        Args:
+            action_result: ActionResult object to extract IDs from
+
+        Returns:
+            List of unique datapoint ULID strings
+        """
+        ids = []
+        if hasattr(action_result, "datapoints") and action_result.datapoints:
+            datapoint_dict = action_result.datapoints.model_dump(mode="json")
+            ids.extend(extract_datapoint_ids(datapoint_dict))
+
+        return list(set(ids))  # Remove duplicates

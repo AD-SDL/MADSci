@@ -268,11 +268,14 @@ def test_check_parameter_conflict() -> None:
     workflow = WorkflowDefinition(
         name="Test",
         parameters=WorkflowParameters(
+            json_inputs=[
+                ParameterInputJson(key="input_param", default="default_value")
+            ],
             feed_forward=[
                 ParameterFeedForwardJson(
-                    key="conflict_param", label="some_label", step="step1"
+                    key="feed_forward_param", label="some_label", step="step1"
                 )
-            ]
+            ],
         ),
         steps=[
             StepDefinition(
@@ -281,17 +284,21 @@ def test_check_parameter_conflict() -> None:
                 node="node1",
                 action="action1",
                 use_parameters={
-                    "args": {"param": "conflict_param"},
+                    "args": {"param": "feed_forward_param"},
                 },
             )
         ],
     )
 
+    # Test that providing a value for a feed_forward parameter raises an error
     with pytest.raises(
         ValueError,
-        match="conflict_param is a Feed Forward Value and will be calculated during execution",
+        match="feed_forward_param is a Feed Forward Value and will be calculated during execution",
     ):
-        check_parameters(workflow, {"conflict_param": "value"})
+        check_parameters(workflow, {"feed_forward_param": "value"})
+
+    # Test that providing a value for a normal parameter works
+    check_parameters(workflow, {"input_param": "value"})  # Should not raise
 
 
 def test_health_endpoint(test_client: TestClient) -> None:

@@ -60,6 +60,28 @@ For detailed documentation on usage, see the [ExperimentManager Documentation](.
 
 Allows the user or an automated system/agent to interface with a MADSci DataManager to upload, query, and fetch `DataPoint`s. Currently supports `ValueDataPoint`s (which can include any JSON-serializable data) and `FileDataPoint`s (which directly stores the files).
 
+### Enhanced Datapoint Operations
+
+The Data Client now includes improved methods for working with datapoint IDs in workflows:
+
+```python
+from madsci.client.data_client import DataClient
+
+client = DataClient()
+
+# Batch fetch multiple datapoints efficiently
+datapoints = client.get_datapoints_by_ids(["id1", "id2", "id3"])
+
+# Get lightweight metadata without loading full data
+metadata = client.get_datapoint_metadata("datapoint_id")
+
+# Extract datapoint IDs from ActionResult objects
+action_result = get_workflow_step_result()
+ids = client.extract_datapoint_ids_from_action_result(action_result)
+```
+
+These methods support the new datapoint handling system that stores only ULID strings in workflows for better performance and memory efficiency.
+
 For detailed documentation on usage, see the [DataManager Documentation](../madsci_data_manager/README.md).
 
 ## Resource Client

@@ -897,3 +897,55 @@ def test_feed_data_forward_no_matching_parameters(engine: Engine) -> None:
     # Should not modify existing values
     assert updated_wf.parameter_values == {"existing": "value"}
     assert updated_wf.file_input_ids == {"existing_file": "file_id"}
+
+
+# Additional tests for handle_data_and_files method
+class TestDatapointHandlingMethod:
+    """Test cases for the handle_data_and_files method specifically."""
+
+    def test_json_result_upload_isolated(self):
+        """Test that JSON results are uploaded as ValueDataPoints in isolation."""
+        # Mock the data client
+        mock_data_client = MagicMock()
+        submitted_datapoint = ValueDataPoint(
+            value={"test": "data"}, label="json_result"
+        )
+        mock_data_client.submit_datapoint.return_value = submitted_datapoint
+
+        # Create test data
+        step = Step(name="Test Step", action="test_action", node="node1")
+        workflow = Workflow(name="Test Workflow", steps=[step])
+        response = ActionResult(
+            status=ActionStatus.SUCCEEDED, json_result={"test": "data"}
+        )
+
+        # Mock the required attributes for the method
+        mock_state_handler = MagicMock()
+        mock_node_info = MagicMock()
+        mock_node_info.info.node_id = "test_node_id"
+        mock_state_handler.get_node.return_value = mock_node_info
+
+        # Test the method directly by monkey-patching it onto a mock object
+        with patch("madsci.workcell_manager.workcell_engine.ownership_context"):
+            # Create a mock engine with just the required attributes
+            mock_engine = MagicMock()
+            mock_engine.data_client = mock_data_client
+            mock_engine.state_handler = mock_state_handler
+            mock_engine.workcell_definition = WorkcellManagerDefinition(
+                name="Test Workcell"
+            )
+
+            # Bind the method to our mock
+            result = Engine.handle_data_and_files(mock_engine, step, workflow, response)
+
+            # Verify datapoint was uploaded
+            mock_data_client.submit_datapoint.assert_called_once()
+            call_args = mock_data_client.submit_datapoint.call_args[0][0]
+            assert isinstance(call_args, ValueDataPoint)
+            assert call_args.value == {"test": "data"}
+            assert call_args.label == "json_result"
+
+            # Verify response contains only datapoint IDs
+            assert result.json_result is None  # Cleared after upload
+            assert result.datapoints is not None
+            assert result.datapoints.json_result == submitted_datapoint.datapoint_id

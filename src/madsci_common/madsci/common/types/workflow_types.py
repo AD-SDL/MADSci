@@ -1,22 +1,7 @@
 """Types for MADSci Worfklow running."""
 
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Optional, Union
-
-if TYPE_CHECKING:
-    from madsci.client.data_client import DataPointTypeEnum
-else:
-    try:
-        from madsci.client.data_client import DataPointTypeEnum
-    except ImportError:
-        # Fallback for circular import situations
-        class DataPointTypeEnum:
-            """Fallback enum for data point types during import resolution."""
-
-            FILE = "FILE"
-            JSON = "JSON"
-            OBJECT_STORAGE = "OBJECT_STORAGE"
-
+from typing import Any, Optional, Union
 
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.action_types import ActionStatus
@@ -316,6 +301,9 @@ class WorkflowDefinition(MadsciBaseModel):
     @model_validator(mode="after")
     def ensure_all_param_keys_have_matching_parameters(self) -> "WorkflowDefinition":
         """Ensures that all step parameters have matching workflow parameters."""
+        from madsci.common.types.datapoint_types import (  # noqa: PLC0415
+            DataPointTypeEnum,
+        )
 
         file_param_keys = [param.key for param in self.parameters.file_inputs] + [
             param.key

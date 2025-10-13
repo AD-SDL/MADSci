@@ -211,6 +211,43 @@ class IntegratedNode(RestNode):
         return ActionSucceeded(data=result)
 ```
 
+### Simplified Datapoint Uploads
+
+Nodes now include helper methods for easy datapoint creation and upload:
+
+```python
+from madsci.node_module.rest_node_module import RestNode
+
+class MyNode(RestNode):
+    @action
+    def analyze_sample(self, sample_id: str) -> str:
+        """Analyze a sample and return the datapoint ID."""
+        analysis_data = {"purity": 95.2, "concentration": 1.25}
+
+        # Easy datapoint upload - returns ULID string
+        datapoint_id = self.create_and_upload_value_datapoint(
+            value=analysis_data,
+            label=f"analysis_{sample_id}"
+        )
+
+        return datapoint_id  # Return just the ID for workflow storage
+
+    @action
+    def capture_image(self, location: str) -> str:
+        """Capture an image and return the datapoint ID."""
+        image_path = self.camera.capture(location)
+
+        # Upload file datapoint
+        datapoint_id = self.create_and_upload_file_datapoint(
+            file_path=image_path,
+            label=f"image_{location}"
+        )
+
+        return datapoint_id
+```
+
+These helper methods automatically handle datapoint creation and upload, returning only the ULID string for efficient workflow storage.
+
 ## Example Nodes
 
 See complete working examples in [example_lab/example_modules/](../../example_lab/example_modules/):

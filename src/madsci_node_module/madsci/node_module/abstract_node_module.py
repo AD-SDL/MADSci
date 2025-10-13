@@ -41,6 +41,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error
+from madsci.common.types.datapoint_types import DataPoint, FileDataPoint, ValueDataPoint
 from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.location_types import (
     LocationArgument,
@@ -1007,6 +1008,72 @@ class AbstractNode:
             raise ValueError(
                 f"Missing required arguments for action '{action_request.action_name}': {missing_args}"
             )
+
+    def upload_datapoint(self, datapoint: DataPoint) -> str:
+        """Upload a datapoint to the data manager and return its ID.
+
+        Args:
+            datapoint: DataPoint object to upload
+
+        Returns:
+            The ULID string ID of the uploaded datapoint
+
+        Raises:
+            Exception: If upload fails
+        """
+        if not isinstance(datapoint, DataPoint):
+            raise ValueError("Expected DataPoint object")
+
+        uploaded_datapoint = self.data_client.submit_datapoint(datapoint)
+        return uploaded_datapoint.datapoint_id
+
+    def upload_datapoints(self, datapoints: list[DataPoint]) -> list[str]:
+        """Upload multiple datapoints to the data manager and return their IDs.
+
+        Args:
+            datapoints: List of DataPoint objects to upload
+
+        Returns:
+            List of ULID string IDs of the uploaded datapoints
+
+        Raises:
+            Exception: If any upload fails
+        """
+        uploaded_ids = []
+        for datapoint in datapoints:
+            uploaded_id = self.upload_datapoint(datapoint)
+            uploaded_ids.append(uploaded_id)
+        return uploaded_ids
+
+    def create_and_upload_value_datapoint(
+        self, value: Any, label: Optional[str] = None
+    ) -> str:
+        """Create a ValueDataPoint and upload it to the data manager.
+
+        Args:
+            value: JSON-serializable value to store
+            label: Optional label for the datapoint
+
+        Returns:
+            The ULID string ID of the uploaded datapoint
+        """
+        datapoint = ValueDataPoint(value=value, label=label)
+        return self.upload_datapoint(datapoint)
+
+    def create_and_upload_file_datapoint(
+        self, file_path: Union[str, Path], label: Optional[str] = None
+    ) -> str:
+        """Create a FileDataPoint and upload it to the data manager.
+
+        Args:
+            file_path: Path to the file to store
+            label: Optional label for the datapoint
+
+        Returns:
+            The ULID string ID of the uploaded datapoint
+        """
+        datapoint = FileDataPoint(path=Path(file_path), label=label)
+        return self.upload_datapoint(datapoint)
 
     @threaded_daemon
     def _startup(self) -> None:

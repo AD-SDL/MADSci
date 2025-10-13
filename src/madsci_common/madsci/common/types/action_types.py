@@ -222,27 +222,72 @@ class ActionFiles(MadsciBaseModel, extra="allow"):
 
 
 class ActionDatapoints(MadsciBaseModel, extra="allow"):
-    """Datapoint IDs returned from an action"""
+    """Datapoint IDs returned from an action.
+
+    This class stores only ULID strings (datapoint IDs) for efficient storage and workflow management.
+    Full DataPoint objects can be fetched just-in-time when needed using the data client.
+
+    Values can be:
+    - str: Single datapoint ID (ULID)
+    - list[str]: List of datapoint IDs (ULIDs)
+    """
 
     @model_validator(mode="before")
     @classmethod
     def ensure_datapoints_are_strings(cls: Any, v: Any) -> Any:
-        """Ensure that the datapoints are ULID strings"""
+        """Convert DataPoint objects to ULID strings, support both single items and lists"""
         for key, value in v.items():
             if isinstance(value, str):
-                # Already a string ID, keep as is
-                continue
-            if hasattr(value, "datapoint_id"):
-                # DataPoint object, extract the ID
-                v[key] = value.datapoint_id
-            elif datapoint := DataPoint.model_validate(value):
-                # Dict representation of DataPoint, extract the ID
-                v[key] = datapoint.datapoint_id
+                # Already a string ID, validate it's ULID-like
+                if not cls._is_valid_ulid(value):
+                    raise ValueError(
+                        f"Datapoint ID '{key}' must be a valid ULID string, got: {value}"
+                    )
+            elif isinstance(value, list):
+                # Handle list of datapoints/IDs
+                converted_list = []
+                for i, item in enumerate(value):
+                    converted_id = cls._convert_to_datapoint_id(item, f"{key}[{i}]")
+                    converted_list.append(converted_id)
+                v[key] = converted_list
             else:
-                raise ValueError(
-                    f"Datapoint '{key}' must be a ULID string or DataPoint object with datapoint_id, got: {type(value).__name__}"
-                ) from None
+                # Handle single datapoint object/dict
+                v[key] = cls._convert_to_datapoint_id(value, key)
         return v
+
+    @classmethod
+    def _convert_to_datapoint_id(cls, value: Any, field_name: str) -> str:
+        """Convert a single value to a datapoint ID"""
+        if isinstance(value, str):
+            if not cls._is_valid_ulid(value):
+                raise ValueError(
+                    f"Datapoint ID '{field_name}' must be a valid ULID string, got: {value}"
+                )
+            return value
+        if hasattr(value, "datapoint_id"):
+            # DataPoint object, extract the ID
+            return value.datapoint_id
+        if isinstance(value, dict):
+            # Dict representation of DataPoint, extract the ID
+            try:
+                datapoint = DataPoint.model_validate(value)
+                return datapoint.datapoint_id
+            except Exception:
+                raise ValueError(
+                    f"Datapoint '{field_name}' dict must be a valid DataPoint representation"
+                ) from None
+        raise ValueError(
+            f"Datapoint '{field_name}' must be a ULID string, DataPoint object, or DataPoint dict, got: {type(value).__name__}"
+        ) from None
+
+    @staticmethod
+    def _is_valid_ulid(value: str) -> bool:
+        """Basic ULID validation - 26 characters, alphanumeric + some special chars"""
+        if not isinstance(value, str) or len(value) != 26:
+            return False
+        # ULID uses Crockford's Base32: 0-9, A-Z (excluding I, L, O, U)
+        allowed_chars = set("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
+        return all(c.upper() in allowed_chars for c in value)
 
 
 class ActionResult(MadsciBaseModel):

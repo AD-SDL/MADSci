@@ -489,55 +489,74 @@ class Engine:
     def handle_data_and_files(
         self, step: Step, wf: Workflow, response: ActionResult
     ) -> ActionResult:
-        """create and save datapoints for data returned from step"""
+        """Upload non-datapoint results as datapoints and consolidate all datapoint IDs.
+
+        This method ensures that all results (JSON data, files) are stored as datapoints
+        in the data manager, following the principle of getting data into the data manager ASAP.
+        The response datapoints field will contain only ULID strings for efficient storage.
+        """
+        # Start with existing datapoint IDs (these are already uploaded)
         if response.datapoints:
             datapoint_ids = response.datapoints.model_dump(mode="json")
         else:
             datapoint_ids = {}
+
+        # Set ownership context for all datapoint uploads
         with ownership_context(
             workcell_id=self.workcell_definition.manager_id,
             workflow_id=wf.workflow_id,
             node_id=self.state_handler.get_node(step.node).info.node_id,
             step_id=step.step_id,
         ):
-            if response.json_result:
+            # Upload JSON result as ValueDataPoint if present
+            if response.json_result is not None:
                 datapoint = ValueDataPoint(
                     label="json_result",
                     value=response.json_result,
                 )
                 submitted_datapoint = self.data_client.submit_datapoint(datapoint)
                 datapoint_ids["json_result"] = submitted_datapoint.datapoint_id
+                self.logger.log_debug(
+                    f"Uploaded JSON result as datapoint: {submitted_datapoint.datapoint_id}"
+                )
 
+            # Upload files as FileDataPoints if present
             if response.files:
                 if isinstance(response.files, ActionFiles):
+                    # Multiple files in ActionFiles object
                     response_files = response.files.model_dump(mode="json")
-                    for file_key in response_files:
+                    for file_key, file_path in response_files.items():
                         datapoint = FileDataPoint(
                             label=file_key,
-                            path=str(response_files[file_key]),
-                        )
-                        self.logger.log_debug(
-                            "Submitting datapoint: " + str(datapoint.datapoint_id)
+                            path=str(file_path),
                         )
                         submitted_datapoint = self.data_client.submit_datapoint(
                             datapoint
                         )
-                        self.logger.log_debug(
-                            "Submitted datapoint: "
-                            + str(submitted_datapoint.datapoint_id)
-                        )
-
                         datapoint_ids[file_key] = submitted_datapoint.datapoint_id
+                        self.logger.log_debug(
+                            f"Uploaded file '{file_key}' as datapoint: {submitted_datapoint.datapoint_id}"
+                        )
                 else:
-                    label = "file"
+                    # Single file Path
                     datapoint = FileDataPoint(
-                        label=label,
+                        label="file",
                         path=str(response.files),
                     )
                     submitted_datapoint = self.data_client.submit_datapoint(datapoint)
-                    datapoint_ids[label] = submitted_datapoint.datapoint_id
+                    datapoint_ids["file"] = submitted_datapoint.datapoint_id
+                    self.logger.log_debug(
+                        f"Uploaded file as datapoint: {submitted_datapoint.datapoint_id}"
+                    )
 
+            # Update response to contain only datapoint IDs
             response.datapoints = ActionDatapoints.model_validate(datapoint_ids)
+
+            # Clear the original data now that it's stored as datapoints
+            # This ensures we only store IDs in workflows for efficiency
+            response.json_result = None
+            response.files = None
+
             return response
 
     def update_active_nodes(self, state_manager: WorkcellStateHandler) -> None:

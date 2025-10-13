@@ -179,7 +179,7 @@ def is_docker_available():  # noqa
             ["docker", "version"],  # noqa
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=60,
             check=False,
         )
         return result.returncode == 0
