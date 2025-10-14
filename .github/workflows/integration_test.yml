@@ -18,13 +18,13 @@ env:
 
 jobs:
   name: Docker Compose Workflow
-runs-on: ubuntu-latest
+  runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-  - name: Run Docker Compose
-    uses: hoverkraft-tech/compose-action@v2.0.1
-    with:
-    compose-file: "./compose.yaml"
+    - name: Run Docker Compose
+      uses: hoverkraft-tech/compose-action@v2.0.1
+      with:
+      compose-file: "./compose.yaml"
