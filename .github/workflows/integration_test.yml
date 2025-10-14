@@ -1,0 +1,30 @@
+name: Docker Image
+
+on:
+  push: # * Run for every push
+    branches: [ "*" ]
+    tags: [ '*' ]
+  schedule: # Run on Tuesday's at 12:00
+    - cron: '0 12 * * 2'
+  workflow_dispatch: # Run manually
+
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ghcr.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+  DASHBOARD_IMAGE_NAME: ${{ github.repository }}_dashboard
+
+
+jobs:
+  name: Docker Compose Workflow
+runs-on: ubuntu-latest
+
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v4
+
+  - name: Run Docker Compose
+    uses: hoverkraft-tech/compose-action@v2.0.1
+    with:
+    compose-file: "./compose.yaml"

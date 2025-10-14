@@ -5,10 +5,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import (
-    ActionFiles,
-    ActionJSON,
-)
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
@@ -16,23 +12,13 @@ from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
 
-class RunCommandJSONData(ActionJSON):
-    """JSON data returned from the run_command action"""
-
-    command: str
-
-
-class RunCommandFileData(ActionFiles):
-    """File data returned from the run_command action"""
-
-    log_file: Path
-
-
 class LiquidHandlerConfig(RestNodeConfig):
     """Configuration for the liquid handler node module."""
 
     device_number: int = 0
     """The device number of the liquid handler."""
+    wait_time: float = 2.0
+    """Time to wait while running an action, in seconds."""
 
 
 class LiquidHandlerInterface:
@@ -86,14 +72,15 @@ class LiquidHandlerNode(RestNode):
     def run_command(self, command: str) -> str:
         """Run a command on the liquid handler. Shows returning both JSON and file data."""
         self.liquid_handler.run_command(command)
+        time.sleep(self.config.wait_time)
         return command
 
     @action
-    def run_protocol(self, protocol: Path) -> Path:
+    def run_protocol(self, protocol: Path) -> dict:
         """Run a protocol on the liquid handler"""
         self.logger.log(protocol)
-        self.liquid_handler.run_command("run_protocol")
-        return protocol
+        time.sleep(self.config.wait_time)
+        return {"protocol_name": str(protocol.name)}
 
     @action
     def deck_transfer(
@@ -106,18 +93,11 @@ class LiquidHandlerNode(RestNode):
         self.liquid_handler.run_command(
             f"move_labware {source_location} {target_location}"
         )
+        time.sleep(self.config.wait_time)
         self.resource_client.push(
             target_location.resource_id,
             self.resource_client.pop(source_location.resource_id)[0].resource_id,
         )
-
-    @action
-    def arg_type_test(self, x: bool, y: int, z: float, w: str) -> None:
-        """Used to test that argument types are correctly passed to the node module."""
-        if type(x) is bool and type(y) is int and type(z) is float and type(w) is str:
-            self.logger.log(f"Value of x is {x} and type is {type(x)}")
-            return
-        raise ValueError("Argument types are incorrect")
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the liquid handler"""

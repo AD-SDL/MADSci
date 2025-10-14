@@ -6,9 +6,11 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, Union
 
+import madsci.common.context
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
+from madsci.client.lab_client import LabClient
 from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
@@ -50,6 +52,8 @@ class ExperimentApplicationConfig(
 
     server_mode: bool = False
     """Whether the application should start a REST Server acting as a MADSci node or not."""
+    lab_server_url: Optional[Union[str, AnyUrl]] = None
+    """The URL of the lab server to connect to."""
     run_args: list[Any] = Field(default_factory=list)
     """Arguments to pass to the run_experiment function when not running in server mode."""
     run_kwargs: dict[str, Any] = Field(default_factory=dict)
@@ -70,6 +74,8 @@ class ExperimentApplication(RestNode):
     logger: EventClient
     event_client: EventClient
     """The event logger for the experiment."""
+    lab_client: LabClient
+    """Client for getting lab config."""
     workcell_client: WorkcellClient
     """Client for managing workcells."""
     resource_client: ResourceClient
@@ -85,7 +91,7 @@ class ExperimentApplication(RestNode):
 
     def __init__(
         self,
-        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
+        lab_server_url: Optional[Union[str, AnyUrl]] = None,
         experiment_design: Optional[Union[str, Path, ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
         *args: Any,
@@ -93,7 +99,12 @@ class ExperimentApplication(RestNode):
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
         super().__init__(*args, **kwargs)
-
+        lab_server_url = lab_server_url or self.config.lab_server_url
+        if lab_server_url:
+            self.lab_client = LabClient(lab_server_url=lab_server_url)
+            madsci.common.context.global_madsci_context = (
+                self.lab_client.get_lab_context()
+            )
         self.logger = self.event_client = EventClient()
         self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
@@ -102,9 +113,7 @@ class ExperimentApplication(RestNode):
         self.experiment = experiment if experiment else self.experiment
 
         # * Re-initialize experiment client in-case user provided a different server URL
-        self.experiment_client = ExperimentClient(
-            experiment_server_url=experiment_server_url
-        )
+        self.experiment_client = ExperimentClient()
         self.workcell_client = WorkcellClient()
         self.location_client = LocationClient()
         self.data_client = DataClient()

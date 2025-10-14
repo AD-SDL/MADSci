@@ -1,12 +1,12 @@
 """A fake plate reader module for testing."""
 
+import random
 import time
 from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionFiles
-from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -17,6 +17,8 @@ class PlateReaderConfig(RestNodeConfig):
 
     device_number: int = 0
     """The device number of the plate reader."""
+    wait_time: float = 2.0
+    """Time to wait while running an action, in seconds."""
 
 
 class PlateReaderInterface:
@@ -33,13 +35,6 @@ class PlateReaderInterface:
         """Initialize the plate reader."""
         self.logger = logger or EventClient()
         self.device_number = device_number
-
-    def run_command(self, command: str) -> None:
-        """Run a command on the plate reader."""
-        self.logger.log(
-            f"Running command {command} on device number {self.device_number}."
-        )
-        time.sleep(2)  # Simulate command execution
 
 
 class PlateFiles(ActionFiles):
@@ -73,26 +68,27 @@ class PlateReaderNode(RestNode):
             }
 
     @action
-    def read_plate(
+    def read_well(
         self,
     ) -> int:
-        """Run a command on the plate reader."""
-        time.sleep(5)
-        return 5
+        """Read a well on the plate reader."""
+        time.sleep(self.config.wait_time)
+        return random.randint(0, 10)
 
     @action
-    def create_plate_file(
+    def read_plate(
         self,
     ) -> Path:
-        """Run a command on the plate reader."""
+        """Read a plate on the plate reader."""
 
         with (Path.home() / "test.txt").open("w") as f:
             self.logger.log_info(f.write("test"))
+            time.sleep(self.config.wait_time)
 
         return Path.home() / "test.txt"
 
     @action
-    def create_plate_files(
+    def read_plates(
         self,
     ) -> PlateFiles:
         """Run a command on the plate reader."""
@@ -103,12 +99,8 @@ class PlateReaderNode(RestNode):
         with (Path.home() / "test2.txt").open("w") as f:
             self.logger.log_info(f.write("test2"))
         path2 = Path.home() / "test2.txt"
-
+        time.sleep(self.config.wait_time)
         return PlateFiles(file_path_1=path1, file_path_2=path2)
-
-    def get_location(self) -> AdminCommandResponse:
-        """Get location for the plate reader"""
-        return AdminCommandResponse(data=[0, 0, 0, 0])
 
 
 if __name__ == "__main__":

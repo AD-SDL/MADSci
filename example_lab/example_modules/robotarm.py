@@ -20,6 +20,8 @@ class RobotArmConfig(RestNodeConfig):
     """The device number of the robot arm."""
     speed: Optional[float] = Field(default=50.0, ge=1.0, le=100.0)
     """The speed of the robot arm, in mm/s."""
+    wait_time: float = 2.0
+    """Time to wait while running an action, in seconds."""
 
 
 class RobotArmInterface:
