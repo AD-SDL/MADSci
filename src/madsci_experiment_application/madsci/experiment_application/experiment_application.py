@@ -102,7 +102,7 @@ class ExperimentApplication(RestNode):
         lab_server_url = lab_server_url or self.config.lab_server_url
         if lab_server_url:
             self.lab_client = LabClient(lab_server_url=lab_server_url)
-            madsci.common.context.global_madsci_context = (
+            madsci.common.context._current_madsci_context = (
                 self.lab_client.get_lab_context()
             )
         self.logger = self.event_client = EventClient()
