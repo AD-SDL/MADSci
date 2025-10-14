@@ -6,7 +6,6 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, Union
 
-import madsci.common.context
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
@@ -14,6 +13,7 @@ from madsci.client.lab_client import LabClient
 from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
+from madsci.common.context import set_current_madsci_context
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
@@ -102,9 +102,7 @@ class ExperimentApplication(RestNode):
         lab_server_url = lab_server_url or self.config.lab_server_url
         if lab_server_url:
             self.lab_client = LabClient(lab_server_url=lab_server_url)
-            madsci.common.context._current_madsci_context = (
-                self.lab_client.get_lab_context()
-            )
+            set_current_madsci_context(self.lab_client.get_lab_context())
         self.logger = self.event_client = EventClient()
         self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
