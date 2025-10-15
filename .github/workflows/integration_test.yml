@@ -31,5 +31,7 @@ jobs:
         run: docker compose up -d
       - name: sleep 10
         run: sleep 10
+      - name: fix permissions
+        run: sudo chown -R $USER:$USER .madsci
       - name: Run a command in the lab manager container
-        run: docker compose exec -T workcell_manager python -m nbconvert --to notebook --inplace --execute ./notebooks/experiment_notebook.ipynb
+        run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace ./notebooks/experiment_notebook.ipynb
