@@ -80,7 +80,7 @@ jobs:
       - name: sleep 10
         run: sleep 10
       - name: Run a command in the lab manager container
-        run: docker compose run --rm --no-deps lab_manager jupyter nbconvert --to script ./notebooks/experiment_notebook.ipynb
+        run: docker compose run --rm --no-deps lab_manager python -m nbconvert --to script ./notebooks/experiment_notebook.ipynb
 
     outputs:
       image_tags: ${{ steps.meta.outputs.tags }}
