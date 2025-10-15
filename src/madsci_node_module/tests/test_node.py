@@ -375,6 +375,45 @@ class TestNode(RestNode):
             return f"{required_param}: processed {len(optional_files)} files ({', '.join(file_names)}) totaling {total_size} bytes"
         return f"{required_param}: no optional files provided"
 
+    @action
+    def test_dict_str_str_return(self, key: str = "test") -> dict[str, str]:
+        """Test action that returns dict[str, str] to demonstrate the type annotation bug.
+
+        Args:
+            key: Key to use in the returned dictionary
+
+        Returns:
+            dict[str, str]: A dictionary with string keys and values
+        """
+        return {key: f"value_for_{key}", "status": "completed"}
+
+    @action
+    def test_list_int_return(self, size: int = 3) -> list[int]:
+        """Test action that returns list[int] to demonstrate the type annotation bug.
+
+        Args:
+            size: Number of integers to return
+
+        Returns:
+            list[int]: A list of integers
+        """
+        return list(range(size))
+
+    @action
+    def test_nested_dict_return(self, prefix: str = "test") -> dict[str, list[int]]:
+        """Test action that returns deeply nested types.
+
+        Args:
+            prefix: Prefix for dictionary keys
+
+        Returns:
+            dict[str, list[int]]: A dictionary mapping strings to lists of integers
+        """
+        return {
+            f"{prefix}_data": [1, 2, 3],
+            f"{prefix}_values": [10, 20, 30],
+        }
+
 
 if __name__ == "__main__":
     test_node = TestNode()

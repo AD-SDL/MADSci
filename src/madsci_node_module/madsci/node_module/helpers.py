@@ -2,7 +2,7 @@
 
 import inspect
 from pathlib import Path
-from typing import Any, Callable, Type
+from typing import Any, Callable, Type, get_origin
 
 import regex
 from madsci.common.types.action_types import (
@@ -221,14 +221,31 @@ def _parse_pydantic_class(returned: Any) -> list[ActionResultDefinition]:
 
 def _parse_basic_type(returned: Any) -> list[ActionResultDefinition]:
     """Parse basic Python types."""
-    if returned not in [str, int, float, bool, dict, list]:
+    # Check basic types directly
+    basic_types = [str, int, float, bool, dict, list]
+
+    # For generic types like dict[str, str], check the origin type
+    origin_type = get_origin(returned)
+    if origin_type is not None:
+        # Generic type - check if its origin is a basic type
+        if origin_type not in basic_types:
+            raise ValueError(
+                f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, a Pydantic BaseModel, str, int, float, bool, dict, or list but got {returned}",
+            )
+    elif returned not in basic_types:
+        # Non-generic type - check directly
         raise ValueError(
             f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, a Pydantic BaseModel, str, int, float, bool, dict, or list but got {returned}",
         )
 
-    model = create_dynamic_model(
-        returned, field_name="data", model_name=f"{returned.__name__}Model"
-    )
+    # Generate model name safely for both basic types and generic types
+    origin_type = get_origin(returned)
+    if origin_type is not None:
+        model_name = f"{origin_type.__name__}Model"
+    else:
+        model_name = f"{returned.__name__}Model"
+
+    model = create_dynamic_model(returned, field_name="data", model_name=model_name)
     json_schema = model.model_json_schema()
     return [
         JSONActionResultDefinition(result_label="json_result", json_schema=json_schema)

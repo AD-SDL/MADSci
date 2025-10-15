@@ -248,7 +248,7 @@ def test_get_info(test_client: TestClient) -> None:
         node_info = NodeInfo.model_validate(response.json())
         assert node_info.node_name == "Test Node 1"
         assert node_info.module_name == "test_node"
-        assert len(node_info.actions) == 12
+        assert len(node_info.actions) == 15
         assert node_info.actions["test_action"].description == "A test action."
         assert node_info.actions["test_action"].args["test_param"].required
         assert (
@@ -1928,6 +1928,84 @@ def var_args_test_client(var_args_test_node: VarArgsTestNode) -> TestClient:
     # Now start the REST API
     var_args_test_node.start_node(testing=True)
     return TestClient(var_args_test_node.rest_api)
+
+
+class TestNestedTypeAnnotationHandling:
+    """Test that nested type annotations like dict[str, str] are handled correctly."""
+
+    def test_nested_type_annotation_info_generation(
+        self, test_client: TestClient
+    ) -> None:
+        """Test that actions with nested type annotations generate correct info."""
+        with test_client as client:
+            time.sleep(0.5)
+
+            # Get node info to check action definitions
+            response = client.get("/info")
+            assert response.status_code == 200
+            node_info = NodeInfo.model_validate(response.json())
+
+            # Check dict[str, str] action
+            assert "test_dict_str_str_return" in node_info.actions
+            dict_action = node_info.actions["test_dict_str_str_return"]
+
+            # This should be able to handle the nested type annotation
+            # Currently this might fail or return an incorrect type string
+            assert dict_action.args["key"].argument_type == "str"
+
+            # Check list[int] action
+            assert "test_list_int_return" in node_info.actions
+            list_action = node_info.actions["test_list_int_return"]
+            assert list_action.args["size"].argument_type == "int"
+
+            # Check nested dict[str, list[int]] action
+            assert "test_nested_dict_return" in node_info.actions
+            nested_action = node_info.actions["test_nested_dict_return"]
+            assert nested_action.args["prefix"].argument_type == "str"
+
+    def test_nested_type_action_execution(self, test_client: TestClient) -> None:
+        """Test that actions with nested return types can be executed successfully."""
+        with test_client as client:
+            time.sleep(0.5)
+
+            # Test dict[str, str] action
+            response = client.post(
+                "/action/test_dict_str_str_return", json={"key": "mykey"}
+            )
+            assert response.status_code == 200
+            action_id = response.json()["action_id"]
+
+            response = client.post(
+                f"/action/test_dict_str_str_return/{action_id}/start"
+            )
+            assert response.status_code == 200
+
+            # Wait for completion
+            time.sleep(0.1)
+            response = client.get(
+                f"/action/test_dict_str_str_return/{action_id}/result"
+            )
+            assert response.status_code == 200
+            result = response.json()
+            assert result["status"] == "succeeded"
+            assert "mykey" in result["json_result"]
+            assert result["json_result"]["mykey"] == "value_for_mykey"
+
+            # Test list[int] action
+            response = client.post("/action/test_list_int_return", json={"size": 5})
+            assert response.status_code == 200
+            action_id = response.json()["action_id"]
+
+            response = client.post(f"/action/test_list_int_return/{action_id}/start")
+            assert response.status_code == 200
+
+            # Wait for completion
+            time.sleep(0.1)
+            response = client.get(f"/action/test_list_int_return/{action_id}/result")
+            assert response.status_code == 200
+            result = response.json()
+            assert result["status"] == "succeeded"
+            assert result["json_result"] == [0, 1, 2, 3, 4]
 
 
 class TestVariableArgumentActions:
