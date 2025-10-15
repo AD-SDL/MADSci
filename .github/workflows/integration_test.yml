@@ -24,6 +24,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Copy Example Env
+        run: cp .env.example .env
+
       - name: Run Docker Compose
         uses: hoverkraft-tech/compose-action@v2.0.1
         with:
