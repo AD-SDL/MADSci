@@ -71,6 +71,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: example.env to .env
+        run: cp example.env .env
       - name: Start services to verify build
         run: docker compose up -d
 
