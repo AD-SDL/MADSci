@@ -602,7 +602,7 @@ def test_create_action(mock_post: MagicMock, rest_node_client: RestNodeClient) -
     assert result_action_id == action_id
     mock_post.assert_called_once_with(
         "http://localhost:2000/action/test_action",
-        json=action_request.model_dump(mode="json"),
+        json={"args": {"param": "value"}},
         timeout=60,
     )
 

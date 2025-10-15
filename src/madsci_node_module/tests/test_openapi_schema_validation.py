@@ -1384,9 +1384,13 @@ class TestActionArgumentSchemaGeneration:
             "schema"
         ]
 
+        # With RestActionRequest structure, parameters are in the args field
         string_props = self._get_schema_props(string_schema, components)
-        assert "message" in string_props
-        message_prop = string_props["message"]
+        assert "args" in string_props
+        args_schema = string_props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+        assert "message" in args_props
+        message_prop = args_props["message"]
         assert message_prop["type"] == "string"
 
         # Check int argument schema
@@ -1396,8 +1400,11 @@ class TestActionArgumentSchemaGeneration:
         int_schema = int_post["requestBody"]["content"]["application/json"]["schema"]
 
         int_props = self._get_schema_props(int_schema, components)
-        assert "number" in int_props
-        number_prop = int_props["number"]
+        assert "args" in int_props
+        int_args_schema = int_props["args"]
+        int_args_props = self._get_schema_props(int_args_schema, components)
+        assert "number" in int_args_props
+        number_prop = int_args_props["number"]
         assert number_prop["type"] == "integer"
 
         # Check float argument schema
@@ -1409,8 +1416,11 @@ class TestActionArgumentSchemaGeneration:
         ]
 
         float_props = self._get_schema_props(float_schema, components)
-        assert "value" in float_props
-        value_prop = float_props["value"]
+        assert "args" in float_props
+        float_args_schema = float_props["args"]
+        float_args_props = self._get_schema_props(float_args_schema, components)
+        assert "value" in float_args_props
+        value_prop = float_args_props["value"]
         assert value_prop["type"] == "number"
 
         # Check bool argument schema
@@ -1420,8 +1430,11 @@ class TestActionArgumentSchemaGeneration:
         bool_schema = bool_post["requestBody"]["content"]["application/json"]["schema"]
 
         bool_props = self._get_schema_props(bool_schema, components)
-        assert "flag" in bool_props
-        flag_prop = bool_props["flag"]
+        assert "args" in bool_props
+        bool_args_schema = bool_props["args"]
+        bool_args_props = self._get_schema_props(bool_args_schema, components)
+        assert "flag" in bool_args_props
+        flag_prop = bool_args_props["flag"]
         assert flag_prop["type"] == "boolean"
 
     def test_multiple_arguments_schema_generation(self, argument_test_client):
@@ -1439,24 +1452,29 @@ class TestActionArgumentSchemaGeneration:
         ]["schema"]
         props = self._get_schema_props(multi_schema, components)
 
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
         # Should have all four arguments
-        assert "name" in props
-        assert "age" in props
-        assert "height" in props
-        assert "active" in props
+        assert "name" in args_props
+        assert "age" in args_props
+        assert "height" in args_props
+        assert "active" in args_props
 
         # Check types
-        assert props["name"]["type"] == "string"
-        assert props["age"]["type"] == "integer"
-        assert props["height"]["type"] == "number"
-        assert props["active"]["type"] == "boolean"
+        assert args_props["name"]["type"] == "string"
+        assert args_props["age"]["type"] == "integer"
+        assert args_props["height"]["type"] == "number"
+        assert args_props["active"]["type"] == "boolean"
 
-        # Should mark all as required
-        required = self._get_schema_required(multi_schema, components)
-        assert "name" in required
-        assert "age" in required
-        assert "height" in required
-        assert "active" in required
+        # Should mark all as required - check in the args schema
+        args_required = self._get_schema_required(args_schema, components)
+        assert "name" in args_required
+        assert "age" in args_required
+        assert "height" in args_required
+        assert "active" in args_required
 
     def test_optional_arguments_schema_generation(self, argument_test_client):
         """Test that optional arguments are correctly marked in schemas."""
@@ -1474,14 +1492,19 @@ class TestActionArgumentSchemaGeneration:
             "application/json"
         ]["schema"]
         props = self._get_schema_props(opt_schema, components)
-        required = self._get_schema_required(opt_schema, components)
 
-        assert "message" in props
-        assert "prefix" in props
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+        args_required = self._get_schema_required(args_schema, components)
+
+        assert "message" in args_props
+        assert "prefix" in args_props
 
         # message should be required, prefix should not be
-        assert "message" in required
-        assert "prefix" not in required
+        assert "message" in args_required
+        assert "prefix" not in args_required
 
         # Test with defaults
         defaults_path = "/action/test_optional_with_defaults"
@@ -1491,22 +1514,29 @@ class TestActionArgumentSchemaGeneration:
             "application/json"
         ]["schema"]
         defaults_props = self._get_schema_props(defaults_schema, components)
-        defaults_required = self._get_schema_required(defaults_schema, components)
+
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in defaults_props
+        defaults_args_schema = defaults_props["args"]
+        defaults_args_props = self._get_schema_props(defaults_args_schema, components)
+        defaults_args_required = self._get_schema_required(
+            defaults_args_schema, components
+        )
 
         # Only required_param should be required
-        assert "required_param" in defaults_required
-        assert "optional_int" not in defaults_required
-        assert "default_string" not in defaults_required
-        assert "default_float" not in defaults_required
-        assert "default_bool" not in defaults_required
+        assert "required_param" in defaults_args_required
+        assert "optional_int" not in defaults_args_required
+        assert "default_string" not in defaults_args_required
+        assert "default_float" not in defaults_args_required
+        assert "default_bool" not in defaults_args_required
 
         # Check default values are present in schema
-        assert "default" in defaults_props["default_string"]
-        assert defaults_props["default_string"]["default"] == "default_value"
-        assert "default" in defaults_props["default_float"]
-        assert defaults_props["default_float"]["default"] == 1.0
-        assert "default" in defaults_props["default_bool"]
-        assert defaults_props["default_bool"]["default"] is False
+        assert "default" in defaults_args_props["default_string"]
+        assert defaults_args_props["default_string"]["default"] == "default_value"
+        assert "default" in defaults_args_props["default_float"]
+        assert defaults_args_props["default_float"]["default"] == 1.0
+        assert "default" in defaults_args_props["default_bool"]
+        assert defaults_args_props["default_bool"]["default"] is False
 
     def test_annotated_arguments_schema_generation(self, argument_test_client):
         """Test that annotated arguments include description metadata."""
@@ -1523,9 +1553,14 @@ class TestActionArgumentSchemaGeneration:
         ]["schema"]
         props = self._get_schema_props(annotated_schema, components)
 
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
         # Check that descriptions from annotations are present
-        assert "annotated_int" in props
-        int_prop = props["annotated_int"]
+        assert "annotated_int" in args_props
+        int_prop = args_props["annotated_int"]
         assert "description" in int_prop
         # The framework may generate generic descriptions instead of using annotation metadata
         assert (
@@ -1533,8 +1568,8 @@ class TestActionArgumentSchemaGeneration:
             or "Parameter" in int_prop["description"]
         )
 
-        assert "annotated_str" in props
-        str_prop = props["annotated_str"]
+        assert "annotated_str" in args_props
+        str_prop = args_props["annotated_str"]
         assert "description" in str_prop
         # The framework may generate generic descriptions instead of using annotation metadata
         assert (
@@ -1557,15 +1592,20 @@ class TestActionArgumentSchemaGeneration:
         ]["schema"]
         props = self._get_schema_props(list_schema, components)
 
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
         # Check string list
-        assert "string_list" in props
-        string_list_prop = props["string_list"]
+        assert "string_list" in args_props
+        string_list_prop = args_props["string_list"]
         assert string_list_prop["type"] == "array"
         assert string_list_prop["items"]["type"] == "string"
 
         # Check number list
-        assert "number_list" in props
-        number_list_prop = props["number_list"]
+        assert "number_list" in args_props
+        number_list_prop = args_props["number_list"]
         assert number_list_prop["type"] == "array"
         assert number_list_prop["items"]["type"] == "integer"
 
@@ -1584,8 +1624,13 @@ class TestActionArgumentSchemaGeneration:
         ]["schema"]
         props = self._get_schema_props(dict_schema, components)
 
-        assert "config" in props
-        config_prop = props["config"]
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
+        assert "config" in args_props
+        config_prop = args_props["config"]
         assert config_prop["type"] == "object"
 
         # Should allow string, int, or float values
@@ -1611,8 +1656,13 @@ class TestActionArgumentSchemaGeneration:
         ]["schema"]
         props = self._get_schema_props(nested_schema, components)
 
-        assert "nested_data" in props
-        nested_prop = props["nested_data"]
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
+        assert "nested_data" in args_props
+        nested_prop = args_props["nested_data"]
         assert nested_prop["type"] == "object"
 
         # The additionalProperties should be arrays
@@ -1636,8 +1686,13 @@ class TestActionArgumentSchemaGeneration:
         ]["schema"]
         props = self._get_schema_props(pydantic_schema, components)
 
-        assert "request" in props
-        request_prop = props["request"]
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
+        assert "request" in args_props
+        request_prop = args_props["request"]
 
         # Should reference the SampleProcessingRequest model
         if "$ref" in request_prop:
@@ -1806,8 +1861,13 @@ class TestActionArgumentSchemaGeneration:
         ]["schema"]
         props = self._get_schema_props(location_schema, components)
 
-        assert "target_location" in props
-        location_prop = props["target_location"]
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
+        assert "target_location" in args_props
+        location_prop = args_props["target_location"]
 
         # Should reference LocationArgument model
         if "$ref" in location_prop:
@@ -1835,25 +1895,30 @@ class TestActionArgumentSchemaGeneration:
             "application/json"
         ]["schema"]
         props = self._get_schema_props(mixed_schema, components)
-        required = self._get_schema_required(mixed_schema, components)
+
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+        args_required = self._get_schema_required(args_schema, components)
 
         # Should have all expected non-file arguments
-        assert "sample_request" in props
-        assert "target_location" in props
-        assert "config" in props
-        assert "optional_notes" in props
-        assert "priority_override" in props
+        assert "sample_request" in args_props
+        assert "target_location" in args_props
+        assert "config" in args_props
+        assert "optional_notes" in args_props
+        assert "priority_override" in args_props
 
         # File parameters should be excluded from main schema
-        assert "data_files" not in props
+        assert "data_files" not in args_props
 
         # Check which are required vs optional
-        assert "sample_request" in required
-        assert "target_location" in required
+        assert "sample_request" in args_required
+        assert "target_location" in args_required
         # data_files should not be in main schema required list since it's handled via upload endpoints
-        assert "config" in required
-        assert "optional_notes" not in required  # Optional
-        assert "priority_override" not in required  # Has default
+        assert "config" in args_required
+        assert "optional_notes" not in args_required  # Optional
+        assert "priority_override" not in args_required  # Has default
 
         # Check that file parameters have separate upload endpoints
         upload_paths = [
@@ -2254,13 +2319,18 @@ class TestAdvancedFileParameterSchemas:
             ]
             list_props = self._get_schema_props(list_schema, components)
 
+            # With RestActionRequest structure, parameters are in the args field
+            assert "args" in list_props
+            args_schema = list_props["args"]
+            args_props = self._get_schema_props(args_schema, components)
+
             # File parameter 'input_files' should NOT be in main schema
-            assert "input_files" not in list_props, (
+            assert "input_files" not in args_props, (
                 "File parameters should be excluded from main action schema"
             )
 
             # Non-file parameters should be present
-            assert "required_param" in list_props, (
+            assert "required_param" in args_props, (
                 "Non-file parameters should be in main action schema"
             )
 
@@ -2273,13 +2343,20 @@ class TestAdvancedFileParameterSchemas:
             ]["schema"]
             optional_props = self._get_schema_props(optional_schema, components)
 
+            # With RestActionRequest structure, parameters are in the args field
+            assert "args" in optional_props
+            optional_args_schema = optional_props["args"]
+            optional_args_props = self._get_schema_props(
+                optional_args_schema, components
+            )
+
             # File parameter 'optional_file' should NOT be in main schema
-            assert "optional_file" not in optional_props, (
+            assert "optional_file" not in optional_args_props, (
                 "Optional file parameters should be excluded from main action schema"
             )
 
             # Non-file parameters should be present
-            assert "required_param" in optional_props, (
+            assert "required_param" in optional_args_props, (
                 "Non-file parameters should be in main action schema"
             )
 
@@ -2500,7 +2577,12 @@ class TestActionArgumentSchemaConsistency:
         multi_schema = paths[multi_arg_path]["post"]["requestBody"]["content"][
             "application/json"
         ]["schema"]
-        required_fields = set(self._get_schema_required(multi_schema, components))
+
+        # With RestActionRequest structure, required fields are in the args schema
+        multi_props = self._get_schema_props(multi_schema, components)
+        assert "args" in multi_props
+        args_schema = multi_props["args"]
+        required_fields = set(self._get_schema_required(args_schema, components))
         expected_required = {"name", "age", "height", "active"}
 
         assert required_fields == expected_required
@@ -2538,13 +2620,18 @@ class TestActionArgumentSchemaConsistency:
             "application/json"
         ]["schema"]
         props = self._get_schema_props(int_schema, components)
-        number_prop = props["number"]
+
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+        number_prop = args_props["number"]
         assert number_prop["type"] == "integer"
 
         # Test that runtime validates integers
         response = argument_test_client.post(
             "/action/test_simple_int_arg",
-            json={"number": 3.14},  # Float instead of int
+            json={"args": {"number": 3.14}},  # Float instead of int
         )
         # Should either work (auto-conversion) or fail (strict validation)
         assert response.status_code in [200, 422]
@@ -2608,13 +2695,25 @@ class TestActionArgumentSchemaConsistency:
         # Should have var_args field
         assert "var_args" in props
         var_args_prop = props["var_args"]
-        assert var_args_prop["type"] == "array"
+
+        # var_args is nullable, so it uses anyOf structure
+        assert "anyOf" in var_args_prop
+        # One of the anyOf options should be an array
+        array_option = next(
+            (opt for opt in var_args_prop["anyOf"] if opt.get("type") == "array"), None
+        )
+        assert array_option is not None, "var_args should allow array type"
         assert var_args_prop["title"] == "Variable Arguments"
 
-        # Check that var_args is optional
+        # Check that var_args is optional (it's not in the top-level required fields)
         required_fields = set(self._get_schema_required(var_args_schema, components))
         assert "var_args" not in required_fields
-        assert "required_param" in required_fields
+
+        # Check that required_param is in the args required fields
+        assert "args" in props
+        args_schema = props["args"]
+        args_required = set(self._get_schema_required(args_schema, components))
+        assert "required_param" in args_required
 
     def test_var_kwargs_schema_generation(self, openapi_test_client):
         """Test that **kwargs support is correctly reflected in OpenAPI schema."""
@@ -2633,13 +2732,26 @@ class TestActionArgumentSchemaConsistency:
         # Should have var_kwargs field
         assert "var_kwargs" in props
         var_kwargs_prop = props["var_kwargs"]
-        assert var_kwargs_prop["type"] == "object"
+
+        # var_kwargs is nullable, so it uses anyOf structure
+        assert "anyOf" in var_kwargs_prop
+        # One of the anyOf options should be an object
+        object_option = next(
+            (opt for opt in var_kwargs_prop["anyOf"] if opt.get("type") == "object"),
+            None,
+        )
+        assert object_option is not None, "var_kwargs should allow object type"
         assert var_kwargs_prop["title"] == "Variable Keyword Arguments"
 
         # Check that var_kwargs is optional
         required_fields = set(self._get_schema_required(var_kwargs_schema, components))
         assert "var_kwargs" not in required_fields
-        assert "required_param" in required_fields
+
+        # Check that required_param is in the args required fields
+        assert "args" in props
+        args_schema = props["args"]
+        args_required = set(self._get_schema_required(args_schema, components))
+        assert "required_param" in args_required
 
     def test_var_args_and_kwargs_schema_generation(self, openapi_test_client):
         """Test that both *args and **kwargs are correctly reflected in OpenAPI schema."""
@@ -2660,16 +2772,32 @@ class TestActionArgumentSchemaConsistency:
         assert "var_kwargs" in props
 
         var_args_prop = props["var_args"]
-        assert var_args_prop["type"] == "array"
+        # var_args is nullable, so it uses anyOf structure
+        assert "anyOf" in var_args_prop
+        array_option = next(
+            (opt for opt in var_args_prop["anyOf"] if opt.get("type") == "array"), None
+        )
+        assert array_option is not None, "var_args should allow array type"
 
         var_kwargs_prop = props["var_kwargs"]
-        assert var_kwargs_prop["type"] == "object"
+        # var_kwargs is nullable, so it uses anyOf structure
+        assert "anyOf" in var_kwargs_prop
+        object_option = next(
+            (opt for opt in var_kwargs_prop["anyOf"] if opt.get("type") == "object"),
+            None,
+        )
+        assert object_option is not None, "var_kwargs should allow object type"
 
         # Check that both are optional
         required_fields = set(self._get_schema_required(both_schema, components))
         assert "var_args" not in required_fields
         assert "var_kwargs" not in required_fields
-        assert "required_param" in required_fields
+
+        # Check that required_param is in the args required fields
+        assert "args" in props
+        args_schema = props["args"]
+        args_required = set(self._get_schema_required(args_schema, components))
+        assert "required_param" in args_required
 
     def test_var_args_runtime_execution(self, openapi_test_client):
         """Test that actions with *args execute correctly at runtime."""

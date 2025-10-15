@@ -137,7 +137,9 @@ class TestBasicActions:
             time.sleep(0.5)
 
             # Create action
-            response = client.post("/action/test_action", json={"test_param": 1})
+            response = client.post(
+                "/action/test_action", json={"args": {"test_param": 1}}
+            )
             assert response.status_code == 200
             result = response.json()
             assert "action_id" in result
@@ -150,7 +152,9 @@ class TestBasicActions:
             time.sleep(0.5)
 
             # Create action
-            response = client.post("/action/test_action", json={"test_param": 1})
+            response = client.post(
+                "/action/test_action", json={"args": {"test_param": 1}}
+            )
             assert response.status_code == 200
             action_id = response.json()["action_id"]
 
@@ -183,7 +187,9 @@ class TestBasicActions:
             time.sleep(0.5)
 
             # Create and start action
-            response = client.post("/action/test_action", json={"test_param": 1})
+            response = client.post(
+                "/action/test_action", json={"args": {"test_param": 1}}
+            )
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/test_action/{action_id}/start")
@@ -202,7 +208,9 @@ class TestBasicActions:
             time.sleep(0.5)
 
             # Create and start action
-            response = client.post("/action/test_action", json={"test_param": 1})
+            response = client.post(
+                "/action/test_action", json={"args": {"test_param": 1}}
+            )
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/test_action/{action_id}/start")
@@ -260,11 +268,15 @@ class TestBasicActions:
             time.sleep(0.5)
 
             # Execute a few actions
-            response = client.post("/action/test_action", json={"test_param": 1})
+            response = client.post(
+                "/action/test_action", json={"args": {"test_param": 1}}
+            )
             action_id_1 = response.json()["action_id"]
             client.post(f"/action/test_action/{action_id_1}/start")
 
-            response = client.post("/action/test_action", json={"test_param": 2})
+            response = client.post(
+                "/action/test_action", json={"args": {"test_param": 2}}
+            )
             action_id_2 = response.json()["action_id"]
             client.post(f"/action/test_action/{action_id_2}/start")
 

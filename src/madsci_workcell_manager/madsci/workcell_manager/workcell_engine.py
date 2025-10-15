@@ -222,7 +222,9 @@ class Engine:
                         f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
                     )
                     if response is None:
-                        response = request.failed(errors=[Error.from_exception(e)])
+                        # Create a running response so monitor_action_progress can try get_action_result
+                        # as a fallback in case the action was actually created but the response was lost
+                        response = request.running(errors=[Error.from_exception(e)])
                     else:
                         response.errors.append(Error.from_exception(e))
                 finally:
@@ -312,6 +314,9 @@ class Engine:
                     self.logger.error(
                         f"Exceeded maximum number of retries for querying action {action_id} for step {step.step_id}"
                     )
+                    # Set status to UNKNOWN after exhausting retries
+                    response = request.unknown(errors=response.errors)
+                    self.handle_response(wf, step, response)
                     break
                 retry_count += 1
 

@@ -69,8 +69,18 @@ def execute_action_and_wait(
     # Wait for node to be ready first
     assert wait_for_node_ready(client, timeout=timeout), "Node failed to become ready"
 
-    # Create action
-    response = client.post(f"/action/{action_name}", json=parameters)
+    # Create action with RestActionRequest structure
+    # Extract var_args and var_kwargs from parameters if present
+    args = dict(parameters) if parameters else {}
+    var_args = args.pop("var_args", None)
+    var_kwargs = args.pop("var_kwargs", None)
+
+    request_data = {"args": args}
+    if var_args is not None:
+        request_data["var_args"] = var_args
+    if var_kwargs is not None:
+        request_data["var_kwargs"] = var_kwargs
+    response = client.post(f"/action/{action_name}", json=request_data)
     assert response.status_code == 200, f"Failed to create action: {response.text}"
     action_id = response.json()["action_id"]
 
