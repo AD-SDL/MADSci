@@ -32,7 +32,7 @@ jobs:
       - name: fix permissions
         run: sudo chown -R $USER:$USER .madsci
       - name: fix other permissions
-        run: sudo chown -R $USER:$USER example_lab
+        run: sudo chmod -R 777 example_lab
 
       - name: Run a command in the lab manager container
         run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace ./notebooks/experiment_notebook.ipynb
