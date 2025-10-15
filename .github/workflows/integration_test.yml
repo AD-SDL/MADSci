@@ -27,9 +27,14 @@ jobs:
       - name: Copy Example Env
         run: cp .env.example .env
 
-      - name: Run docker compose
-        uses: hoverkraft-tech/compose-action@v2.0.1
-        with:
-          compose-file: "./compose.yaml"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Compose services
+        run: docker compose build
+
+      - name: Start services to verify build
+        run: docker compose up -d
+
       - name: Run a command in the lab manager container
         run: docker compose exec -T lab_manager jupyter nbconvert --to script ./MADSci/example_lab/notebooks/experiment_notebook.ipynb
