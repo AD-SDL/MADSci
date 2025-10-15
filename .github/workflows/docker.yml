@@ -72,7 +72,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: example.env to .env
-        run: cp example.env .env
+        run: cp .env.example .env
       - name: Start services to verify build
         run: docker compose up -d
 
