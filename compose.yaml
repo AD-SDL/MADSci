@@ -159,3 +159,22 @@ services:
       - NODE_DEFINITION=node_definitions/platereader_1.node.yaml
       - NODE_URL=http://localhost:2002
     command: python example_modules/platereader.py
+
+
+  ot2:
+    <<: *madsci-service
+    container_name: ot2_gamma
+    environment:
+      - NODE_DEFINITION=node_definitions/ot2_gamma.node.yaml
+      - NODE_URL=http://localhost:2003
+    command: python example_modules/ot2.py
+
+
+  pf400:
+    <<: *madsci-service
+    container_name: pf400
+    environment:
+      - NODE_DEFINITION=node_definitions/pf400_1.node.yaml
+      - NODE_URL=http://localhost:2004
+    command: python example_modules/pf400.py
+
