@@ -71,6 +71,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Start services to verify build
+        run: docker compose up -d
+
+      - name: Run a command in the lab manager container
+        run: docker compose exec -T lab_manager jupyter nbconvert --to script ./MADSci/example_lab/notebooks/experiment_notebook.ipynb
 
     outputs:
       image_tags: ${{ steps.meta.outputs.tags }}
