@@ -222,7 +222,7 @@ class Engine:
                         f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
                     )
                     if response is None:
-                        response = request.unknown(errors=[Error.from_exception(e)])
+                        response = request.failed(errors=[Error.from_exception(e)])
                     else:
                         response.errors.append(Error.from_exception(e))
                 finally:

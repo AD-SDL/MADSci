@@ -96,6 +96,7 @@ def transfer(  # noqa: C901
             workflow = workcell_client.start_workflow(
                 workflow_definition=workflow_definition,
                 await_completion=await_completion,
+                prompt_on_error=False,
             )
         except WorkflowFailedError as e:
             result = ActionFailed(
