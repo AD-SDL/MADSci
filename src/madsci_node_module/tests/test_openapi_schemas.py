@@ -48,6 +48,16 @@ class OpenAPISchemaTestNode(TestNode):
     """Test node for OpenAPI schema validation."""
 
     @action
+    def test_action(self, test_param: int) -> None:
+        """A test action with required parameter for validation testing."""
+        result = self.test_interface.run_command(
+            f"Test action with param {test_param}."
+        )
+        if result:
+            return
+        raise ValueError(f"`run_command` returned '{result}'. Expected 'True'.")
+
+    @action
     def return_int(self) -> int:
         """Action that returns a simple integer."""
         return 42
@@ -299,8 +309,9 @@ class TestSchemaValidation:
         self, openapi_test_client: TestClient, action_name, test_params
     ):
         """Test that action execution results match the generated schema."""
-        # Create and execute action
-        response = openapi_test_client.post(f"/action/{action_name}", json=test_params)
+        # Create and execute action with RestActionRequest structure
+        request_data = {"args": test_params}
+        response = openapi_test_client.post(f"/action/{action_name}", json=request_data)
         assert response.status_code == 200
         action_id = response.json()["action_id"]
 
@@ -395,12 +406,12 @@ class TestParameterValidation:
     def test_required_parameters_validation(self, openapi_test_client: TestClient):
         """Test that required parameters are properly validated."""
         # Test action with missing required parameters (using base TestNode actions)
-        response = openapi_test_client.post("/action/test_action", json={})
+        response = openapi_test_client.post("/action/test_action", json={"args": {}})
         assert response.status_code == 422  # Validation error
 
         # Test with correct parameters
         response = openapi_test_client.post(
-            "/action/test_action", json={"test_param": 1}
+            "/action/test_action", json={"args": {"test_param": 1}}
         )
         assert response.status_code == 200
 
@@ -408,13 +419,13 @@ class TestParameterValidation:
         """Test that parameter types are properly validated."""
         # Test with wrong parameter type
         response = openapi_test_client.post(
-            "/action/test_action", json={"test_param": "not_int"}
+            "/action/test_action", json={"args": {"test_param": "not_int"}}
         )
         assert response.status_code == 422  # Validation error
 
         # Test with correct type
         response = openapi_test_client.post(
-            "/action/test_action", json={"test_param": 42}
+            "/action/test_action", json={"args": {"test_param": 42}}
         )
         assert response.status_code == 200
 
@@ -459,10 +470,20 @@ class TestDocumentationGeneration:
             schema = json_content.get("schema", {})
             properties = schema.get("properties", {})
 
-            # Should have test_param documented
-            if "test_param" in properties:
-                param_schema = properties["test_param"]
-                assert "type" in param_schema
+            # Should have args field with test_param documented inside
+            if "args" in properties:
+                args_schema = properties["args"]
+                # args should be an object with properties
+                if "$ref" in args_schema:
+                    # If it's a reference, we'd need to follow it to components/schemas
+                    # For now, just verify the reference exists
+                    assert args_schema["$ref"] is not None
+                elif "properties" in args_schema:
+                    # Direct properties in args
+                    args_properties = args_schema["properties"]
+                    if "test_param" in args_properties:
+                        param_schema = args_properties["test_param"]
+                        assert "type" in param_schema
 
 
 class TestErrorHandling:

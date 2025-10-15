@@ -30,6 +30,29 @@ from madsci.common.types.resource_types import ResourceDataModels
 from pydantic import AnyUrl
 
 
+def _serialize_for_json(obj: Any) -> Any:
+    """
+    Recursively serialize Pydantic models and other complex objects for JSON transmission.
+
+    Args:
+        obj: The object to serialize
+
+    Returns:
+        A JSON-serializable representation of the object
+    """
+    if hasattr(obj, "model_dump"):
+        # This is a Pydantic model - use model_dump(mode="json") for proper serialization
+        return obj.model_dump(mode="json")
+    if isinstance(obj, dict):
+        # Recursively serialize dictionary values
+        return {key: _serialize_for_json(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        # Recursively serialize list/tuple items
+        return [_serialize_for_json(item) for item in obj]
+    # For primitive types and other objects, return as-is
+    return obj
+
+
 class RestNodeClient(AbstractNodeClient):
     """REST-based node client."""
 
@@ -96,9 +119,31 @@ class RestNodeClient(AbstractNodeClient):
     def _create_action(self, action_request: ActionRequest) -> str:
         """Create a new action and return the action_id. REST-implementation specific"""
 
+        # Convert ActionRequest to RestActionRequest format
+        args = dict(action_request.args) if action_request.args else {}
+
+        # Serialize all arguments to ensure Pydantic models are JSON-serializable
+        serialized_args = _serialize_for_json(args)
+        serialized_var_args = (
+            _serialize_for_json(action_request.var_args)
+            if action_request.var_args is not None
+            else None
+        )
+        serialized_var_kwargs = (
+            _serialize_for_json(action_request.var_kwargs)
+            if action_request.var_kwargs is not None
+            else None
+        )
+
+        request_data = {"args": serialized_args}
+        if serialized_var_args is not None:
+            request_data["var_args"] = serialized_var_args
+        if serialized_var_kwargs is not None:
+            request_data["var_kwargs"] = serialized_var_kwargs
+
         rest_response = requests.post(
             f"{self.url}/action/{action_request.action_name}",
-            json=action_request.model_dump(mode="json"),
+            json=request_data,
             timeout=60,
         )
         rest_response.raise_for_status()

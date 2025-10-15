@@ -643,23 +643,42 @@ ActionResultDefinitions = Annotated[
 ]
 
 
-def create_action_request_model(action_function: Any) -> type[MadsciBaseModel]:
-    """Create a dynamic action request model based on function signature."""
+class RestActionRequest(MadsciBaseModel):
+    """Base REST action request model with nested args structure."""
+
+    args: dict[str, Any] = Field(
+        title="Action Arguments",
+        description="Arguments for the action.",
+        default_factory=dict,
+    )
+    """Arguments for the action"""
+    var_args: Optional[list[Any]] = Field(
+        title="Variable Arguments",
+        description="Additional positional arguments (*args) for actions that accept them.",
+        default=None,
+    )
+    """Additional positional arguments for *args"""
+    var_kwargs: Optional[dict[str, Any]] = Field(
+        title="Variable Keyword Arguments",
+        description="Additional keyword arguments (**kwargs) for actions that accept them.",
+        default=None,
+    )
+    """Additional keyword arguments for **kwargs"""
+
+
+def create_action_request_model(action_function: Any) -> type[RestActionRequest]:
+    """Create a dynamic action request model that extends RestActionRequest with typed args."""
     signature = inspect.signature(action_function)
-    fields = {}
-    has_var_args = False
-    has_var_kwargs = False
+    args_fields = {}
 
     for param_name, param in signature.parameters.items():
         if param_name == "self":
             continue
 
-        # Check for *args and **kwargs
+        # Check for *args and **kwargs - these are handled by the base RestActionRequest
         if param.kind == inspect.Parameter.VAR_POSITIONAL:
-            has_var_args = True
             continue
         if param.kind == inspect.Parameter.VAR_KEYWORD:
-            has_var_kwargs = True
             continue
 
         # Determine field type and default
@@ -673,20 +692,36 @@ def create_action_request_model(action_function: Any) -> type[MadsciBaseModel]:
             # For file parameters, we'll handle them separately in the API
             continue
 
-        # Process regular parameter
-        _add_parameter_field(fields, param_name, param, field_type, action_function)
+        # Process regular parameter for the args model
+        _add_parameter_field(
+            args_fields, param_name, param, field_type, action_function
+        )
 
-    # Add variable argument fields
-    _add_variable_argument_fields(fields, has_var_args, has_var_kwargs)
+    # Create the args model
+    args_model_name = f"{action_function.__name__.title()}Args"
+    args_model = create_model(args_model_name, __base__=MadsciBaseModel, **args_fields)
 
-    # Create the dynamic model with a descriptive docstring
+    # Create the action-specific request model that overrides the args field
     model_name = f"{action_function.__name__.title()}Request"
     model_docstring = f"Request parameters for the {action_function.__name__} action."
     if action_function.__doc__:
         model_docstring = f"{model_docstring}\n\n{action_function.__doc__.strip()}"
 
+    # Create the final model with typed args field
+    typed_args_field = (
+        args_model,
+        Field(
+            title="Action Arguments",
+            description=f"Arguments for the {action_function.__name__} action.",
+            default_factory=args_model,
+        ),
+    )
+
     return create_model(
-        model_name, __base__=MadsciBaseModel, __doc__=model_docstring, **fields
+        model_name,
+        __base__=RestActionRequest,
+        __doc__=model_docstring,
+        args=typed_args_field,
     )
 
 

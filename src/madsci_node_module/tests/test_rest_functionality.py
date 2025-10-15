@@ -56,7 +56,9 @@ class TestRESTEndpoints:
             time.sleep(0.5)
 
             # Execute an action to generate some log entries
-            response = client.post("/action/test_action", json={"test_param": 1})
+            response = client.post(
+                "/action/test_action", json={"args": {"test_param": 1}}
+            )
             action_id = response.json()["action_id"]
             client.post(f"/action/test_action/{action_id}/start")
             time.sleep(0.5)
@@ -547,6 +549,8 @@ class TestAPICompatibility:
             assert response.status_code == 200
 
             # Test action creation still works
-            response = client.post("/action/test_action", json={"test_param": 1})
+            response = client.post(
+                "/action/test_action", json={"args": {"test_param": 1}}
+            )
             assert response.status_code == 200
             assert "action_id" in response.json()

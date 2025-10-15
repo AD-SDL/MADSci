@@ -174,7 +174,7 @@ def test_create_action(test_client: TestClient) -> None:
         time.sleep(0.5)
 
         # Create action
-        response = client.post("/action/test_action", json={"test_param": 1})
+        response = client.post("/action/test_action", json={"args": {"test_param": 1}})
         assert response.status_code == 200
         result = response.json()
         assert "action_id" in result
@@ -188,7 +188,7 @@ def test_start_action(test_client: TestClient) -> None:
         time.sleep(0.5)
 
         # Create action
-        response = client.post("/action/test_action", json={"test_param": 1})
+        response = client.post("/action/test_action", json={"args": {"test_param": 1}})
         assert response.status_code == 200
         action_id = response.json()["action_id"]
 
@@ -206,7 +206,7 @@ def test_run_action_fail(test_client: TestClient) -> None:
         time.sleep(0.5)
 
         # Create and start failing action
-        response = client.post("/action/test_fail", json={"test_param": 1})
+        response = client.post("/action/test_fail", json={"args": {"test_param": 1}})
         action_id = response.json()["action_id"]
 
         response = client.post(f"/action/test_fail/{action_id}/start")
@@ -332,7 +332,7 @@ def test_get_action_result_by_name(test_client: TestClient) -> None:
         time.sleep(0.5)
 
         # Create and start action
-        response = client.post("/action/test_action", json={"test_param": 1})
+        response = client.post("/action/test_action", json={"args": {"test_param": 1}})
         action_id = response.json()["action_id"]
 
         response = client.post(f"/action/test_action/{action_id}/start")
@@ -353,7 +353,7 @@ def test_get_action_result(test_client: TestClient) -> None:
         time.sleep(0.5)
 
         # Create and start action
-        response = client.post("/action/test_action", json={"test_param": 1})
+        response = client.post("/action/test_action", json={"args": {"test_param": 1}})
         action_id = response.json()["action_id"]
 
         response = client.post(f"/action/test_action/{action_id}/start")
@@ -391,7 +391,7 @@ def test_get_action_history(test_client: TestClient) -> None:
         existing_history_length = len(action_history)
 
         # Create and start an action
-        response = client.post("/action/test_action", json={"test_param": 1})
+        response = client.post("/action/test_action", json={"args": {"test_param": 1}})
         action_id = response.json()["action_id"]
 
         response = client.post(f"/action/test_action/{action_id}/start")
@@ -401,7 +401,7 @@ def test_get_action_history(test_client: TestClient) -> None:
         time.sleep(0.1)
 
         # Create and start another action
-        response = client.post("/action/test_action", json={"test_param": 1})
+        response = client.post("/action/test_action", json={"args": {"test_param": 1}})
         action_id2 = response.json()["action_id"]
 
         response = client.post(f"/action/test_action/{action_id2}/start")
@@ -457,7 +457,7 @@ def test_get_log(test_client: TestClient) -> None:
         time.sleep(0.5)
 
         # Create and start an action to generate log entries
-        response = client.post("/action/test_action", json={"test_param": 1})
+        response = client.post("/action/test_action", json={"args": {"test_param": 1}})
         assert response.status_code == 200
         action_id = response.json()["action_id"]
 
@@ -481,7 +481,7 @@ def test_optional_param_action(test_client: TestClient) -> None:
         # Test with optional parameter
         response = client.post(
             "/action/test_optional_param_action",
-            json={"test_param": 1, "optional_param": "test_value"},
+            json={"args": {"test_param": 1, "optional_param": "test_value"}},
         )
         action_id = response.json()["action_id"]
 
@@ -492,7 +492,7 @@ def test_optional_param_action(test_client: TestClient) -> None:
 
         # Test without optional parameter
         response = client.post(
-            "/action/test_optional_param_action", json={"test_param": 1}
+            "/action/test_optional_param_action", json={"args": {"test_param": 1}}
         )
         action_id = response.json()["action_id"]
 
@@ -510,7 +510,7 @@ def test_action_with_missing_params(test_client: TestClient) -> None:
         # Create action without required parameter - should fail validation
         response = client.post(
             "/action/test_action",
-            json={},  # Missing test_param
+            json={"args": {}},  # Missing test_param in args
         )
         # FastAPI validation should reject this with 422
         assert response.status_code == 422
@@ -602,7 +602,7 @@ def test_specific_file_upload_endpoints(test_client: TestClient) -> None:
     """Test that specific file upload endpoints work correctly."""
     with test_client as client:
         # Create an action first
-        response = client.post("/action/file_action", json={})
+        response = client.post("/action/file_action", json={"args": {}})
         assert response.status_code == 200
         action_id = response.json()["action_id"]
 
@@ -1051,7 +1051,7 @@ class TestEnhancedEndpointBehavior:
     def test_simple_action_execution_flow(self, enhanced_client):
         """Test the full flow of executing a simple action."""
         # 1. Create action
-        response = enhanced_client.post("/action/return_int", json={})
+        response = enhanced_client.post("/action/return_int", json={"args": {}})
         assert response.status_code == 200
         action_data = response.json()
         action_id = action_data["action_id"]
@@ -1077,7 +1077,7 @@ class TestEnhancedEndpointBehavior:
         """Test executing an action that takes a file input."""
         # 1. Create action
         response = enhanced_client.post(
-            "/action/take_file_input", json={"param": "test_value"}
+            "/action/take_file_input", json={"args": {"param": "test_value"}}
         )
         assert response.status_code == 200
         action_data = response.json()
@@ -1118,7 +1118,7 @@ class TestEnhancedEndpointBehavior:
             time.sleep(0.5)
 
             # Execute action that returns a file
-            response = client.post("/action/return_file", json={})
+            response = client.post("/action/return_file", json={"args": {}})
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/return_file/{action_id}/start")
@@ -1145,7 +1145,7 @@ class TestEnhancedEndpointBehavior:
             time.sleep(0.5)
 
             # Execute action that returns labeled files
-            response = client.post("/action/return_labeled_files", json={})
+            response = client.post("/action/return_labeled_files", json={"args": {}})
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/return_labeled_files/{action_id}/start")
@@ -1195,7 +1195,7 @@ class TestEnhancedEndpointBehavior:
             time.sleep(0.5)
 
             # Execute action that normally doesn't return files
-            response = client.post("/action/return_int", json={})
+            response = client.post("/action/return_int", json={"args": {}})
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/return_int/{action_id}/start")
@@ -1211,7 +1211,7 @@ class TestEnhancedActionResultTypeMapping:
 
     def test_int_return_maps_to_json_result(self, enhanced_client):
         """Test that int return becomes json_result in API response."""
-        response = enhanced_client.post("/action/return_int", json={})
+        response = enhanced_client.post("/action/return_int", json={"args": {}})
         action_id = response.json()["action_id"]
 
         response = enhanced_client.post(f"/action/return_int/{action_id}/start")
@@ -1233,7 +1233,9 @@ class TestEnhancedActionResultTypeMapping:
 
     def test_custom_model_return_maps_to_json_result(self, enhanced_client):
         """Test that custom Pydantic model becomes structured json_result."""
-        response = enhanced_client.post("/action/return_custom_model", json={})
+        response = enhanced_client.post(
+            "/action/return_custom_model", json={"args": {}}
+        )
         action_id = response.json()["action_id"]
 
         response = enhanced_client.post(
@@ -1264,7 +1266,7 @@ class TestEnhancedActionResultTypeMapping:
         with enhanced_client as client:
             time.sleep(0.5)  # Wait for node to be ready
 
-            response = client.post("/action/return_labeled_files", json={})
+            response = client.post("/action/return_labeled_files", json={"args": {}})
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/return_labeled_files/{action_id}/start")
@@ -1279,7 +1281,7 @@ class TestEnhancedActionResultTypeMapping:
 
     def test_mixed_return_maps_to_both_fields(self, enhanced_client):
         """Test that tuple return populates both json_result and files."""
-        response = enhanced_client.post("/action/return_mixed", json={})
+        response = enhanced_client.post("/action/return_mixed", json={"args": {}})
         action_id = response.json()["action_id"]
 
         response = enhanced_client.post(f"/action/return_mixed/{action_id}/start")
@@ -1306,7 +1308,7 @@ class TestEnhancedBackwardCompatibility:
 
     def test_generic_action_endpoints_still_work(self, enhanced_client):
         """Test that generic /action/{action_id}/result endpoints still work."""
-        response = enhanced_client.post("/action/return_int", json={})
+        response = enhanced_client.post("/action/return_int", json={"args": {}})
         action_id = response.json()["action_id"]
 
         response = enhanced_client.post(f"/action/return_int/{action_id}/start")
@@ -1326,7 +1328,7 @@ class TestEnhancedBackwardCompatibility:
 
     def test_generic_status_endpoints_work(self, enhanced_client):
         """Test that generic status endpoints continue to work."""
-        response = enhanced_client.post("/action/return_int", json={})
+        response = enhanced_client.post("/action/return_int", json={"args": {}})
         action_id = response.json()["action_id"]
 
         # Generic status endpoint
@@ -1478,7 +1480,9 @@ class TestAdvancedFileParameterSupport:
             file2.write_text("content of file 2")
 
             # Create action
-            response = client.post("/action/list_file_action", json={"prefix": "batch"})
+            response = client.post(
+                "/action/list_file_action", json={"args": {"prefix": "batch"}}
+            )
             assert response.status_code == 200
             action_id = response.json()["action_id"]
 
@@ -1521,7 +1525,8 @@ class TestAdvancedFileParameterSupport:
 
             # Create action without optional file
             response = client.post(
-                "/action/optional_file_action", json={"required_param": "test"}
+                "/action/optional_file_action",
+                json={"args": {"required_param": "test"}},
             )
             assert response.status_code == 200
             action_id = response.json()["action_id"]
@@ -1558,7 +1563,7 @@ class TestAdvancedFileParameterSupport:
             # Create action
             response = client.post(
                 "/action/optional_file_action",
-                json={"required_param": "test_with_file"},
+                json={"args": {"required_param": "test_with_file"}},
             )
             assert response.status_code == 200
             action_id = response.json()["action_id"]
@@ -1665,7 +1670,7 @@ class TestProposalExampleActionResultHandling:
             assert status_response.status_code == 200
 
             # Create action
-            response = client.post("/action/read_sensor", json={})
+            response = client.post("/action/read_sensor", json={"args": {}})
             assert response.status_code == 200
             action_data = response.json()
             action_id = action_data["action_id"]
@@ -1692,7 +1697,7 @@ class TestProposalExampleActionResultHandling:
         with proposal_test_client as client:
             time.sleep(0.5)
 
-            response = client.post("/action/get_temperature_reading", json={})
+            response = client.post("/action/get_temperature_reading", json={"args": {}})
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/get_temperature_reading/{action_id}/start")
@@ -1710,7 +1715,7 @@ class TestProposalExampleActionResultHandling:
         with proposal_test_client as client:
             time.sleep(0.5)
 
-            response = client.post("/action/create_test_file", json={})
+            response = client.post("/action/create_test_file", json={"args": {}})
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/create_test_file/{action_id}/start")
@@ -1746,7 +1751,7 @@ class TestProposalExampleActionResultHandling:
             time.sleep(0.5)
 
             # Test that generic endpoints still work
-            response = client.post("/action/read_sensor", json={})
+            response = client.post("/action/read_sensor", json={"args": {}})
             action_id = response.json()["action_id"]
 
             response = client.post(f"/action/read_sensor/{action_id}/start")
@@ -1970,7 +1975,7 @@ class TestNestedTypeAnnotationHandling:
 
             # Test dict[str, str] action
             response = client.post(
-                "/action/test_dict_str_str_return", json={"key": "mykey"}
+                "/action/test_dict_str_str_return", json={"args": {"key": "mykey"}}
             )
             assert response.status_code == 200
             action_id = response.json()["action_id"]
@@ -1992,7 +1997,9 @@ class TestNestedTypeAnnotationHandling:
             assert result["json_result"]["mykey"] == "value_for_mykey"
 
             # Test list[int] action
-            response = client.post("/action/test_list_int_return", json={"size": 5})
+            response = client.post(
+                "/action/test_list_int_return", json={"args": {"size": 5}}
+            )
             assert response.status_code == 200
             action_id = response.json()["action_id"]
 
@@ -2023,7 +2030,7 @@ class TestVariableArgumentActions:
         # Create action with just required parameter
         response = var_args_test_client.post(
             "/action/test_action_with_var_args",
-            json={"required_param": "test_value"},
+            json={"args": {"required_param": "test_value"}},
         )
         assert response.status_code == 200
         action_data = response.json()
@@ -2049,7 +2056,7 @@ class TestVariableArgumentActions:
         response = var_args_test_client.post(
             "/action/test_action_with_var_args",
             json={
-                "required_param": "test_value",
+                "args": {"required_param": "test_value"},
                 "var_args": ["arg1", "arg2", 123, True],
             },
         )
@@ -2085,7 +2092,7 @@ class TestVariableArgumentActions:
         # Create action with just required parameter
         response = var_args_test_client.post(
             "/action/test_action_with_var_kwargs",
-            json={"required_param": "test_value"},
+            json={"args": {"required_param": "test_value"}},
         )
         assert response.status_code == 200
         action_data = response.json()
@@ -2111,7 +2118,7 @@ class TestVariableArgumentActions:
         response = var_args_test_client.post(
             "/action/test_action_with_var_kwargs",
             json={
-                "required_param": "test_value",
+                "args": {"required_param": "test_value"},
                 "var_kwargs": {
                     "extra1": "value1",
                     "extra2": 42,
@@ -2156,7 +2163,7 @@ class TestVariableArgumentActions:
         response = var_args_test_client.post(
             "/action/test_action_with_both_var",
             json={
-                "required_param": "test_value",
+                "args": {"required_param": "test_value"},
                 "var_args": ["arg1", "arg2"],
                 "var_kwargs": {"key1": "val1", "key2": "val2"},
             },
@@ -2195,7 +2202,7 @@ class TestVariableArgumentActions:
         response = var_args_test_client.post(
             "/action/test_mixed_with_defaults",
             json={
-                "required_param": "test_value",
+                "args": {"required_param": "test_value"},
                 "var_kwargs": {"extra1": "value1"},
             },
         )
@@ -2223,8 +2230,7 @@ class TestVariableArgumentActions:
         response = var_args_test_client.post(
             "/action/test_mixed_with_defaults",
             json={
-                "required_param": "test_value",
-                "optional_param": 25,
+                "args": {"required_param": "test_value", "optional_param": 25},
                 "var_kwargs": {"extra1": "value1", "extra2": "value2"},
             },
         )
