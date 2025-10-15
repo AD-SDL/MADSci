@@ -1,0 +1,33 @@
+name: Integration Test
+
+on:
+  push: # * Run for every push
+    branches: [ "*" ]
+    tags: [ '*' ]
+  schedule: # Run on Tuesday's at 12:00
+    - cron: '0 12 * * 2'
+  workflow_dispatch: # Run manually
+
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ghcr.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+  DASHBOARD_IMAGE_NAME: ${{ github.repository }}_dashboard
+
+
+jobs:
+  docker-compose-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: example.env to .env
+        run: cp .env.example .env
+      - name: Start services to verify build
+        run: docker compose up -d
+      - name: sleep 10
+        run: sleep 10
+      - name: Run a command in the lab manager container
+        run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to script ./notebooks/experiment_notebook.ipynb
