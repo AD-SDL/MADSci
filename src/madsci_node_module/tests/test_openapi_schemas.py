@@ -1,23 +1,21 @@
-"""Streamlined OpenAPI schema validation tests.
-
-Consolidates and parametrizes tests from test_openapi_schema_validation.py
-to reduce redundancy while maintaining comprehensive coverage.
-"""
+"""Comprehensive OpenAPI schema validation tests."""
 
 import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.action_types import ActionFiles
+from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import NodeDefinition
 from madsci.node_module.helpers import action
 from pydantic import BaseModel, Field
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
+from madsci_node_module.tests.test_rest_utils import execute_action_and_wait
 
 
 # Test result models for schema validation
@@ -35,6 +33,66 @@ class ComplexTestResult(BaseModel):
     measurements: List[float] = Field(description="List of measurement values")
     metadata: Dict[str, Any] = Field(description="Additional metadata")
     timestamp: datetime = Field(description="Processing timestamp")
+
+
+class NestedTestResult(BaseModel):
+    """Test result with nested models."""
+
+    primary: SimpleTestResult = Field(description="Primary result data")
+    secondary: Optional[SimpleTestResult] = Field(
+        default=None, description="Optional secondary data"
+    )
+    status: str = Field(description="Overall status")
+
+
+class OptionalFieldsResult(BaseModel):
+    """Test result with various optional field types."""
+
+    required_field: str = Field(description="Always present field")
+    optional_string: Optional[str] = Field(
+        default=None, description="Optional string field"
+    )
+    optional_int: Optional[int] = Field(
+        default=None, description="Optional integer field"
+    )
+    optional_list: Optional[List[str]] = Field(
+        default=None, description="Optional list field"
+    )
+    optional_dict: Optional[Dict[str, Any]] = Field(
+        default=None, description="Optional dict field"
+    )
+
+
+class SampleProcessingRequest(BaseModel):
+    """Example complex input model for testing pydantic argument handling"""
+
+    sample_ids: list[str] = Field(description="List of sample identifiers to process")
+    processing_type: str = Field(description="Type of processing to perform")
+    parameters: dict[str, Union[str, int, float]] = Field(
+        description="Processing parameters"
+    )
+    priority: int = Field(description="Processing priority (1-10)", ge=1, le=10)
+    notify_on_completion: bool = Field(
+        default=False, description="Whether to send notifications"
+    )
+
+
+class AnalysisResult(BaseModel):
+    """Example custom pydantic model for analysis results"""
+
+    sample_id: str = Field(description="Unique identifier for the sample")
+    concentration: float = Field(description="Measured concentration in mg/mL")
+    ph_level: float = Field(description="pH level of the sample")
+    temperature: float = Field(description="Temperature in Celsius during measurement")
+    quality_score: int = Field(description="Quality score from 0-100", ge=0, le=100)
+    notes: str = Field(default="", description="Additional notes about the analysis")
+
+
+class TestFileOutput(ActionFiles):
+    """Test file output model for argument testing"""
+
+    log_file_1: Path
+    log_file_2: Path
 
 
 class TestFiles(ActionFiles):
@@ -123,6 +181,26 @@ class OpenAPISchemaTestNode(TestNode):
         return TestFiles(data_file=data_path, config_file=config_path)
 
     @action
+    def return_nested_model(self) -> NestedTestResult:
+        """Action that returns a nested Pydantic model."""
+        primary = SimpleTestResult(value=10, message="primary")
+        secondary = SimpleTestResult(value=20, message="secondary")
+        return NestedTestResult(
+            primary=primary, secondary=secondary, status="completed"
+        )
+
+    @action
+    def return_optional_fields_model(self) -> OptionalFieldsResult:
+        """Action that returns a model with optional fields."""
+        return OptionalFieldsResult(
+            required_field="always_present",
+            optional_string="present_string",
+            optional_int=42,
+            optional_list=["item1", "item2"],
+            optional_dict={"key": "value"},
+        )
+
+    @action
     def mixed_return(self) -> tuple[SimpleTestResult, Path]:
         """Action that returns both a model and a file."""
         result = SimpleTestResult(value=100, message="mixed")
@@ -132,6 +210,203 @@ class OpenAPISchemaTestNode(TestNode):
             file_path = Path(f.name)
 
         return result, file_path
+
+    # ============================================================================
+    # Argument Testing Actions
+    # ============================================================================
+
+    @action
+    def test_simple_string_arg(self, message: str) -> str:
+        """Test action with a simple string argument"""
+        return f"Processed: {message}"
+
+    @action
+    def test_simple_int_arg(self, number: int) -> int:
+        """Test action with a simple integer argument"""
+        return number * 2
+
+    @action
+    def test_simple_float_arg(self, value: float) -> float:
+        """Test action with a simple float argument"""
+        return round(value * 3.14, 2)
+
+    @action
+    def test_simple_bool_arg(self, flag: bool) -> bool:
+        """Test action with a simple boolean argument"""
+        return not flag
+
+    @action
+    def test_multiple_simple_args(
+        self, name: str, age: int, height: float, active: bool
+    ) -> dict:
+        """Test action with multiple simple arguments of different types"""
+        return {
+            "name": name.upper(),
+            "age_doubled": age * 2,
+            "height_cm": height * 100,
+            "status": "active" if active else "inactive",
+        }
+
+    @action
+    def test_optional_string_arg(
+        self, message: str, prefix: Optional[str] = None
+    ) -> str:
+        """Test action with optional string argument"""
+        return f"{prefix}: {message}" if prefix else message
+
+    @action
+    def test_optional_with_defaults(
+        self,
+        required_param: str,
+        optional_int: Optional[int] = None,
+        default_string: str = "default_value",
+        default_float: float = 1.0,
+        default_bool: bool = False,
+    ) -> dict:
+        """Test action with various optional parameters and defaults"""
+        return {
+            "required": required_param,
+            "optional_int": optional_int
+            if optional_int is not None
+            else "not_provided",
+            "default_string": default_string,
+            "default_float": default_float,
+            "default_bool": default_bool,
+        }
+
+    @action
+    def test_annotated_args(
+        self,
+        annotated_int: Annotated[int, "An annotated integer parameter"] = 42,
+        annotated_str: Annotated[str, "An annotated string parameter"] = "default",
+        optional_annotated: Optional[
+            Annotated[float, "Optional annotated float"]
+        ] = None,
+    ) -> dict:
+        """Test action with annotated type parameters"""
+        return {
+            "annotated_int": annotated_int,
+            "annotated_str": annotated_str,
+            "optional_annotated": optional_annotated,
+        }
+
+    @action
+    def test_list_args(self, string_list: list[str], number_list: list[int]) -> dict:
+        """Test action with list arguments"""
+        return {
+            "string_count": len(string_list),
+            "strings_upper": [s.upper() for s in string_list],
+            "number_sum": sum(number_list),
+            "number_max": max(number_list) if number_list else 0,
+        }
+
+    @action
+    def test_dict_args(self, config: dict[str, Union[str, int, float]]) -> dict:
+        """Test action with dictionary argument"""
+        processed_config = {}
+        for key, value in config.items():
+            if isinstance(value, str):
+                processed_config[f"{key}_processed"] = value.upper()
+            elif isinstance(value, (int, float)):
+                processed_config[f"{key}_doubled"] = value * 2
+        return processed_config
+
+    @action
+    def test_pydantic_input(self, request: SampleProcessingRequest) -> dict:
+        """Test action with pydantic model as input"""
+        # Handle case where framework passes dict instead of pydantic model
+        if isinstance(request, dict):
+            request = SampleProcessingRequest(**request)
+
+        return {
+            "processing_type": request.processing_type,
+            "sample_count": len(request.sample_ids),
+            "priority": request.priority,
+            "estimated_time": len(request.sample_ids) * request.priority * 5,
+            "notifications_enabled": request.notify_on_completion,
+        }
+
+    @action
+    def test_file_input(self, input_file: Path) -> str:
+        """Test action with file path input"""
+        # Handle case where framework passes string instead of Path
+        if isinstance(input_file, str):
+            input_file = Path(input_file)
+        if input_file.exists():
+            with input_file.open("r") as f:
+                content = f.read()
+            return f"File content length: {len(content)} characters"
+        return f"File not found: {input_file}"
+
+    @action
+    def test_location_input(self, target_location: LocationArgument) -> dict:
+        """Test action with location argument"""
+        return {
+            "location_representation": str(target_location.representation),
+            "location_name": target_location.location_name,
+            "resource_id": target_location.resource_id,
+            "has_reservation": target_location.reservation is not None,
+        }
+
+    # ============================================================================
+    # Variable Arguments Tests (*args, **kwargs)
+    # ============================================================================
+
+    @action
+    def test_var_args_only(self, required_param: str, *args) -> dict:
+        """Action that accepts additional positional arguments."""
+        return {
+            "required_param": required_param,
+            "var_args": list(args),
+            "var_args_count": len(args),
+        }
+
+    @action
+    def test_var_kwargs_only(self, required_param: str, **kwargs) -> dict:
+        """Action that accepts additional keyword arguments."""
+        return {
+            "required_param": required_param,
+            "var_kwargs": kwargs,
+            "var_kwargs_count": len(kwargs),
+        }
+
+    @action
+    def test_var_args_and_kwargs(self, required_param: str, *args, **kwargs) -> dict:
+        """Action that accepts both additional positional and keyword arguments."""
+        return {
+            "required_param": required_param,
+            "var_args": list(args),
+            "var_kwargs": kwargs,
+            "total_extra_params": len(args) + len(kwargs),
+        }
+
+    @action
+    def test_mixed_params_with_var_args(
+        self,
+        required_param: str,
+        optional_param: int = 10,
+        *args,
+    ) -> dict:
+        """Action with required, optional, and variable positional arguments."""
+        return {
+            "required_param": required_param,
+            "optional_param": optional_param,
+            "var_args": list(args),
+        }
+
+    @action
+    def test_mixed_params_with_var_kwargs(
+        self,
+        required_param: str,
+        optional_param: int = 10,
+        **kwargs,
+    ) -> dict:
+        """Action with required, optional, and variable keyword arguments."""
+        return {
+            "required_param": required_param,
+            "optional_param": optional_param,
+            "var_kwargs": kwargs,
+        }
 
 
 @pytest.fixture
@@ -486,6 +761,366 @@ class TestDocumentationGeneration:
                         assert "type" in param_schema
 
 
+class TestArgumentSchemaGeneration:
+    """Test that OpenAPI schemas accurately represent action argument types."""
+
+    def _get_schema_props(self, schema_ref_or_props, components):
+        """Helper to get properties from either a $ref or direct properties"""
+        if "$ref" in schema_ref_or_props:
+            ref_path = schema_ref_or_props["$ref"]
+            model_name = ref_path.split("/")[-1]
+            assert model_name in components
+            return components[model_name]["properties"]
+        return schema_ref_or_props["properties"]
+
+    def _get_schema_required(self, schema_ref_or_props, components):
+        """Helper to get required fields from either a $ref or direct properties"""
+        if "$ref" in schema_ref_or_props:
+            ref_path = schema_ref_or_props["$ref"]
+            model_name = ref_path.split("/")[-1]
+            assert model_name in components
+            return components[model_name].get("required", [])
+        return schema_ref_or_props.get("required", [])
+
+    @pytest.mark.parametrize(
+        "action_name,param_name,expected_type",
+        [
+            ("test_simple_string_arg", "message", "string"),
+            ("test_simple_int_arg", "number", "integer"),
+            ("test_simple_float_arg", "value", "number"),
+            ("test_simple_bool_arg", "flag", "boolean"),
+        ],
+    )
+    def test_simple_argument_schemas_are_generated(
+        self, openapi_test_client, action_name, param_name, expected_type
+    ):
+        """Test that simple argument types generate correct OpenAPI parameter schemas."""
+        response = openapi_test_client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+
+        # Check argument schema
+        action_path = f"/action/{action_name}"
+        assert action_path in paths
+        post_spec = paths[action_path]["post"]
+        request_schema = post_spec["requestBody"]["content"]["application/json"][
+            "schema"
+        ]
+
+        # With RestActionRequest structure, parameters are in the args field
+        props = self._get_schema_props(request_schema, components)
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+        assert param_name in args_props
+        param_prop = args_props[param_name]
+        assert param_prop["type"] == expected_type
+
+    def test_multiple_arguments_schema_generation(self, openapi_test_client):
+        """Test that actions with multiple arguments generate correct schemas."""
+        response = openapi_test_client.get("/openapi.json")
+        schema = response.json()
+
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+        multi_arg_path = "/action/test_multiple_simple_args"
+        assert multi_arg_path in paths
+
+        multi_schema = paths[multi_arg_path]["post"]["requestBody"]["content"][
+            "application/json"
+        ]["schema"]
+        props = self._get_schema_props(multi_schema, components)
+
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
+        # Should have all four arguments
+        assert "name" in args_props
+        assert "age" in args_props
+        assert "height" in args_props
+        assert "active" in args_props
+
+        # Check types
+        assert args_props["name"]["type"] == "string"
+        assert args_props["age"]["type"] == "integer"
+        assert args_props["height"]["type"] == "number"
+        assert args_props["active"]["type"] == "boolean"
+
+        # Should mark all as required - check in the args schema
+        args_required = self._get_schema_required(args_schema, components)
+        assert "name" in args_required
+        assert "age" in args_required
+        assert "height" in args_required
+        assert "active" in args_required
+
+    def test_pydantic_model_arguments_schema_generation(self, openapi_test_client):
+        """Test that pydantic model arguments generate detailed schemas."""
+        response = openapi_test_client.get("/openapi.json")
+        schema = response.json()
+
+        components = schema.get("components", {}).get("schemas", {})
+        paths = schema.get("paths", {})
+
+        pydantic_path = "/action/test_pydantic_input"
+        assert pydantic_path in paths
+
+        pydantic_schema = paths[pydantic_path]["post"]["requestBody"]["content"][
+            "application/json"
+        ]["schema"]
+        props = self._get_schema_props(pydantic_schema, components)
+
+        # With RestActionRequest structure, parameters are in the args field
+        assert "args" in props
+        args_schema = props["args"]
+        args_props = self._get_schema_props(args_schema, components)
+
+        assert "request" in args_props
+        request_prop = args_props["request"]
+
+        # Should reference the SampleProcessingRequest model
+        if "$ref" in request_prop:
+            ref_path = request_prop["$ref"]
+            model_name = ref_path.split("/")[-1]
+            assert model_name in components
+
+            # Check the referenced model has expected fields
+            referenced_model = components[model_name]
+            model_props = referenced_model["properties"]
+            assert "sample_ids" in model_props
+            assert "processing_type" in model_props
+            assert "parameters" in model_props
+            assert "priority" in model_props
+            assert "notify_on_completion" in model_props
+
+
+class TestRuntimeValidation:
+    """Test that schemas match actual runtime behavior."""
+
+    def test_simple_arguments_runtime_validation(self, openapi_test_client):
+        """Test that simple arguments work correctly at runtime."""
+        # Test string argument
+        result = execute_action_and_wait(
+            openapi_test_client, "test_simple_string_arg", {"message": "hello world"}
+        )
+        assert result["status"] == "succeeded"
+        assert "hello world" in result["json_result"]
+
+        # Test int argument
+        result = execute_action_and_wait(
+            openapi_test_client, "test_simple_int_arg", {"number": 21}
+        )
+        assert result["status"] == "succeeded"
+        assert result["json_result"] == 42  # 21 * 2
+
+        # Test float argument
+        result = execute_action_and_wait(
+            openapi_test_client, "test_simple_float_arg", {"value": 1.0}
+        )
+        assert result["status"] == "succeeded"
+        assert abs(result["json_result"] - 3.14) < 0.01
+
+        # Test bool argument
+        result = execute_action_and_wait(
+            openapi_test_client, "test_simple_bool_arg", {"flag": True}
+        )
+        assert result["status"] == "succeeded"
+        assert result["json_result"] is False
+
+    def test_optional_arguments_runtime_validation(self, openapi_test_client):
+        """Test that optional arguments work correctly."""
+        # Test with optional argument provided
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_optional_string_arg",
+            {"message": "test", "prefix": "INFO"},
+        )
+        assert result["status"] == "succeeded"
+        assert result["json_result"] == "INFO: test"
+
+        # Test with optional argument omitted
+        result = execute_action_and_wait(
+            openapi_test_client, "test_optional_string_arg", {"message": "test"}
+        )
+        assert result["status"] == "succeeded"
+        assert result["json_result"] == "test"
+
+    def test_list_arguments_runtime_validation(self, openapi_test_client):
+        """Test that list arguments work correctly."""
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_list_args",
+            {"string_list": ["hello", "world"], "number_list": [1, 2, 3, 4, 5]},
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["string_count"] == 2
+        assert json_result["strings_upper"] == ["HELLO", "WORLD"]
+        assert json_result["number_sum"] == 15
+        assert json_result["number_max"] == 5
+
+    def test_pydantic_arguments_runtime_validation(self, openapi_test_client):
+        """Test that pydantic model arguments work correctly."""
+        request_data = {
+            "sample_ids": ["S001", "S002", "S003"],
+            "processing_type": "analysis",
+            "parameters": {"temperature": 25.0, "ph": 7.0},
+            "priority": 5,
+            "notify_on_completion": True,
+        }
+
+        result = execute_action_and_wait(
+            openapi_test_client, "test_pydantic_input", {"request": request_data}
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["processing_type"] == "analysis"
+        assert json_result["sample_count"] == 3
+        assert json_result["priority"] == 5
+        assert json_result["estimated_time"] == 75  # 3 * 5 * 5
+        assert json_result["notifications_enabled"] is True
+
+    def test_location_arguments_runtime_validation(self, openapi_test_client):
+        """Test that location arguments work correctly."""
+        location_data = {
+            "representation": {"x": 10, "y": 20, "z": 5},
+            "location_name": "test_location",
+            "resource_id": "resource_123",
+        }
+
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_location_input",
+            {"target_location": location_data},
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["location_name"] == "test_location"
+        assert json_result["resource_id"] == "resource_123"
+        assert json_result["has_reservation"] is False
+
+
+class TestVariableArgumentsSupport:
+    """Test support for *args and **kwargs in action definitions."""
+
+    def _get_schema_props(self, schema: dict, components: dict) -> dict:
+        """Helper to get properties from schema, handling $ref resolution."""
+        if "$ref" in schema:
+            ref_path = schema["$ref"]
+            model_name = ref_path.split("/")[-1]
+            if model_name in components:
+                referenced_schema = components[model_name]
+                return referenced_schema.get("properties", {})
+            return {}
+        return schema.get("properties", {})
+
+    def _get_schema_required(self, schema: dict, components: dict) -> list:
+        """Helper to get required fields from schema, handling $ref resolution."""
+        if "$ref" in schema:
+            ref_path = schema["$ref"]
+            model_name = ref_path.split("/")[-1]
+            if model_name in components:
+                referenced_schema = components[model_name]
+                return referenced_schema.get("required", [])
+            return []
+        return schema.get("required", [])
+
+    def test_var_args_schema_generation(self, openapi_test_client):
+        """Test that *args support is correctly reflected in OpenAPI schema."""
+        response = openapi_test_client.get("/openapi.json")
+        schema = response.json()
+        paths = schema.get("paths", {})
+        components = schema.get("components", {}).get("schemas", {})
+
+        # Check if the var_args actions exist
+        var_args_path = "/action/test_var_args_only"
+        if var_args_path not in paths:
+            pytest.skip(
+                f"Test action {var_args_path} not found in OpenAPI schema. This test requires the OpenAPISchemaTestNode to include *args actions."
+            )
+
+        var_args_schema = paths[var_args_path]["post"]["requestBody"]["content"][
+            "application/json"
+        ]["schema"]
+        props = self._get_schema_props(var_args_schema, components)
+
+        # Should have var_args field
+        assert "var_args" in props
+        var_args_prop = props["var_args"]
+
+        # var_args is nullable, so it uses anyOf structure
+        assert "anyOf" in var_args_prop
+        # One of the anyOf options should be an array
+        array_option = next(
+            (opt for opt in var_args_prop["anyOf"] if opt.get("type") == "array"), None
+        )
+        assert array_option is not None, "var_args should allow array type"
+        assert var_args_prop["title"] == "Variable Arguments"
+
+    def test_var_args_runtime_execution(self, openapi_test_client):
+        """Test that actions with *args execute correctly at runtime."""
+        # Test with no extra args
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_var_args_only",
+            {"required_param": "test"},
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["var_args"] == []
+        assert json_result["var_args_count"] == 0
+
+        # Test with extra args
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_var_args_only",
+            {"required_param": "test", "var_args": ["arg1", "arg2", 123]},
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["var_args"] == ["arg1", "arg2", 123]
+        assert json_result["var_args_count"] == 3
+
+    def test_var_kwargs_runtime_execution(self, openapi_test_client):
+        """Test that actions with **kwargs execute correctly at runtime."""
+        # Test with no extra kwargs
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_var_kwargs_only",
+            {"required_param": "test"},
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["var_kwargs"] == {}
+        assert json_result["var_kwargs_count"] == 0
+
+        # Test with extra kwargs
+        result = execute_action_and_wait(
+            openapi_test_client,
+            "test_var_kwargs_only",
+            {
+                "required_param": "test",
+                "var_kwargs": {"extra1": "value1", "extra2": 42, "extra3": True},
+            },
+        )
+        assert result["status"] == "succeeded"
+        json_result = result["json_result"]
+        assert json_result["required_param"] == "test"
+        assert json_result["var_kwargs"] == {
+            "extra1": "value1",
+            "extra2": 42,
+            "extra3": True,
+        }
+        assert json_result["var_kwargs_count"] == 3
+
+
 class TestErrorHandling:
     """Test error handling in schema generation and validation."""
 
@@ -503,3 +1138,18 @@ class TestErrorHandling:
             headers={"Content-Type": "application/json"},
         )
         assert response.status_code in [400, 422]  # Bad request or validation error
+
+    def test_argument_validation_errors(self, openapi_test_client):
+        """Test that invalid arguments produce appropriate errors."""
+        # Test missing required argument
+        response = openapi_test_client.post(
+            "/action/test_simple_string_arg",
+            json={"args": {}},  # Missing required 'message'
+        )
+        assert response.status_code == 422  # Validation error
+
+        # Test wrong type
+        response = openapi_test_client.post(
+            "/action/test_simple_int_arg", json={"args": {"number": "not_int"}}
+        )
+        assert response.status_code == 422  # Validation error

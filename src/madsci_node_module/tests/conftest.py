@@ -125,7 +125,7 @@ def client_factory(test_node_factory) -> Callable[..., TestClient]:
     def _create_client(
         node_config: Optional[Dict] = None,
         testing: bool = True,
-        startup_wait: float = 0.5,
+        startup_wait: float = 0.1,
         **node_kwargs,
     ) -> TestClient:
         """Create a test client with optional node customizations.

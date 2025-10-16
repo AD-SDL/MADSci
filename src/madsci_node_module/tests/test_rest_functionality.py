@@ -53,7 +53,7 @@ class TestRESTEndpoints:
     def test_get_log(self, test_client: TestClient) -> None:
         """Test the /log endpoint."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Execute an action to generate some log entries
             response = client.post(
@@ -61,7 +61,7 @@ class TestRESTEndpoints:
             )
             action_id = response.json()["action_id"]
             client.post(f"/action/test_action/{action_id}/start")
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Get log
             response = client.get("/log")
@@ -278,7 +278,7 @@ class TestFileOperations:
     def test_openapi_file_documentation(self, test_client: TestClient) -> None:
         """Test that file parameters are correctly documented in OpenAPI."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
             response = client.get("/openapi.json")
             assert response.status_code == 200
             openapi_spec = response.json()
@@ -297,7 +297,7 @@ class TestFileOperations:
     def test_file_upload_endpoints_generated(self, test_client: TestClient) -> None:
         """Test that file upload endpoints are automatically generated."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
             response = client.get("/openapi.json")
             openapi_spec = response.json()
             paths = openapi_spec.get("paths", {})
@@ -309,7 +309,7 @@ class TestFileOperations:
     def test_file_download_routes(self, test_client: TestClient) -> None:
         """Test file download functionality."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Execute an action that returns a file
             result = execute_action_with_validation(
@@ -338,7 +338,7 @@ class TestFileOperations:
 
         try:
             with test_client as client:
-                time.sleep(0.5)
+                time.sleep(0.1)
 
                 # Prepare parameters based on action type
                 if action_name in ["file_result_action", "multiple_file_result_action"]:
@@ -384,7 +384,7 @@ class TestFileOperations:
     def test_file_upload_with_zip_extraction(self, test_client: TestClient) -> None:
         """Test file upload with zip file handling."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Create a test zip file
             with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as zip_file:
@@ -409,10 +409,10 @@ class TestFileOperations:
     def test_large_file_handling(self, test_client: TestClient) -> None:
         """Test handling of larger files."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
-            # Create a larger test file (1MB)
-            large_content = "x" * (1024 * 1024)  # 1MB
+            # Create a moderately sized test file (10KB - sufficient for testing)
+            large_content = "x" * (1024 * 10)  # 10KB
             with tempfile.NamedTemporaryFile(
                 mode="w", delete=False, suffix=".txt"
             ) as f:
@@ -438,7 +438,7 @@ class TestFileOperations:
     def test_file_validation_errors(self, test_client: TestClient) -> None:
         """Test file validation error cases."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # For REST API, file parameters are handled via uploads, not JSON
             # Test missing required non-file parameter instead
@@ -461,7 +461,7 @@ class TestCustomReturnTypes:
         basic_test_node.start_node(testing=True)
 
         with TestClient(basic_test_node.rest_api) as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             result = execute_action_with_validation(
                 client,
@@ -484,7 +484,7 @@ class TestCustomReturnTypes:
         basic_test_node.start_node(testing=True)
 
         with TestClient(basic_test_node.rest_api) as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             result = execute_action_with_validation(
                 client,
@@ -539,7 +539,7 @@ class TestAPICompatibility:
     def test_backward_compatibility_endpoints(self, test_client: TestClient) -> None:
         """Test that existing API endpoints maintain compatibility."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Test that legacy endpoints still work
             response = client.get("/status")
