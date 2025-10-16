@@ -212,35 +212,43 @@ class Engine:
                     files=step.file_paths,
                 )
                 action_id = request.action_id
-                self.add_pending_action(step, action_id)
-                self.logger.log_info(
-                    f"Added Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}"
-                )
+
+                # Acquire lock on the node for the entire action duration
+                node_lock = self.state_handler.node_lock(step.node)
+                if not node_lock.acquire():
+                    raise RuntimeError(f"Failed to acquire lock on node {step.node}")
+
                 try:
-                    response = client.send_action(request, await_result=False)
-                except Exception as e:
-                    self.logger.error(
-                        f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                    self.logger.log_info(
+                        f"Acquired lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
                     )
-                    if response is None:
-                        # Create a running response so monitor_action_progress can try get_action_result
-                        # as a fallback in case the action was actually created but the response was lost
-                        response = request.running(errors=[Error.from_exception(e)])
-                    else:
-                        response.errors.append(Error.from_exception(e))
+
+                    try:
+                        response = client.send_action(request, await_result=False)
+                    except Exception as e:
+                        self.logger.error(
+                            f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                        )
+                        if response is None:
+                            # Create a running response so monitor_action_progress can try get_action_result
+                            # as a fallback in case the action was actually created but the response was lost
+                            response = request.running(errors=[Error.from_exception(e)])
+                        else:
+                            response.errors.append(Error.from_exception(e))
+
+                    response = self.handle_response(wf, step, response)
+                    action_id = response.action_id
+
+                    # * Periodically query the action status until complete, updating the workflow as needed
+                    # * If the node or client supports get_action_result, query the action result
+                    self.monitor_action_progress(
+                        wf, step, node, client, response, request, action_id
+                    )
                 finally:
                     self.logger.log_info(
-                        f"Removed Pending Action {action_id} to Node {step.node} for Step {step.step_id} in Workflow {workflow_id}"
+                        f"Released lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
                     )
-                    self.remove_pending_action(step)
-                response = self.handle_response(wf, step, response)
-                action_id = response.action_id
-
-                # * Periodically query the action status until complete, updating the workflow as needed
-                # * If the node or client supports get_action_result, query the action result
-                self.monitor_action_progress(
-                    wf, step, node, client, response, request, action_id
-                )
+                    node_lock.release()
                 # * Finalize the step
             self.finalize_step(workflow_id, step)
             self.logger.info(f"Completed step {step.step_id} in workflow {workflow_id}")
@@ -449,20 +457,6 @@ class Engine:
             self.state_handler.set_active_workflow(wf)
         return wf
 
-    def add_pending_action(self, step: Step, action_id: str) -> None:
-        """Update the step in the workflow"""
-        with self.state_handler.wc_state_lock():
-            node = self.state_handler.get_node(step.node)
-            node.pending_action_id = action_id
-            self.state_handler.set_node(step.node, node)
-
-    def remove_pending_action(self, step: Step) -> None:
-        """Update the step in the workflow"""
-        with self.state_handler.wc_state_lock():
-            node = self.state_handler.get_node(step.node)
-            node.pending_action_id = None
-            self.state_handler.set_node(step.node, node)
-
     def handle_response(
         self, wf: Workflow, step: Step, response: ActionResult
     ) -> Optional[ActionResult]:
@@ -583,8 +577,6 @@ class Engine:
             node.status = client.get_status()
             node.info = client.get_info()
             node.state = client.get_state()
-            if node.pending_action_id in node.status.running_actions:
-                node.pending_action_id = None
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
         except Exception as e:
