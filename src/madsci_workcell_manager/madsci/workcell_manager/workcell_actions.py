@@ -1,7 +1,7 @@
 """Built-in actions for the Workcell Manager, which don't require a node to be specified."""
 
 import time
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
@@ -12,13 +12,33 @@ from madsci.common.exceptions import (
     WorkflowCanceledError,
     WorkflowFailedError,
 )
-from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
+from madsci.common.types.action_types import (
+    ActionFailed,
+    ActionJSON,
+    ActionResult,
+    ActionSucceeded,
+)
 
 
 def wait(seconds: Union[int, float]) -> ActionResult:
     """Waits for a specified number of seconds"""
     time.sleep(seconds)
     return ActionSucceeded()
+
+
+class WorkcellTransferJSON(ActionJSON):
+    """JSON response model for transfer action"""
+
+    message: str
+    """A message describing the result of the transfer."""
+    workflow_id: str
+    """The ID of the workflow that was executed."""
+    source_location_id: str
+    """The ID of the source location."""
+    target_location_id: str
+    """The ID of the target location."""
+    execution_time: Optional[float] = None
+    """The time taken to execute the transfer, in seconds. Only present if await_completion is True."""
 
 
 def transfer(  # noqa: C901
@@ -76,6 +96,7 @@ def transfer(  # noqa: C901
             workflow = workcell_client.start_workflow(
                 workflow_definition=workflow_definition,
                 await_completion=await_completion,
+                prompt_on_error=False,
             )
         except WorkflowFailedError as e:
             result = ActionFailed(
@@ -87,18 +108,17 @@ def transfer(  # noqa: C901
             if not await_completion:
                 # Return immediately after successful enqueueing
                 result = ActionSucceeded(
-                    data={
+                    json_result={
                         "message": f"Transfer workflow enqueued from {source} to {target}",
                         "workflow_id": workflow.workflow_id,
                         "source_location_id": source_location_id,
                         "target_location_id": target_location_id,
                     }
                 )
-
             # Check final workflow status after completion
             elif workflow.status.completed:
                 result = ActionSucceeded(
-                    data={
+                    json_result={
                         "message": f"Transfer completed from {source} to {target}",
                         "workflow_id": workflow.workflow_id,
                         "execution_time": workflow.duration_seconds,

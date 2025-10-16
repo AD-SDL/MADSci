@@ -9,6 +9,7 @@ capabilities:
   get_state: true
   get_status: true
   send_action: true
+  get_action_status: true
   get_action_result: true
   get_action_history: true
   action_files: true
@@ -26,7 +27,8 @@ node_url: null
 actions:
   run_command:
     name: run_command
-    description: Run a command on the liquid handler.
+    description: Run a command on the liquid handler. Shows returning both JSON and
+      file data.
     args:
       command:
         name: command
@@ -36,9 +38,26 @@ actions:
         default: null
     locations: {}
     files: {}
-    results: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: string
+          required:
+          - data
+          title: strModel
+          type: object
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   run_protocol:
     name: run_protocol
     description: Run a protocol on the liquid handler
@@ -51,9 +70,17 @@ actions:
         argument_type: file
         required: true
         default: null
-    results: {}
+    results:
+      file:
+        result_label: file
+        description: null
+        result_type: file
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   deck_transfer:
     name: deck_transfer
     description: Transfer labware between deck locations on the liquid handler.
@@ -75,6 +102,10 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   arg_type_test:
     name: arg_type_test
     description: Used to test that argument types are correctly passed to the node
@@ -109,13 +140,17 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: node_definitions/liquidhandler_2.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://localhost:2003/
+  node_url: http://localhost:2001/
   uvicorn_kwargs: {}
   device_number: 0
 config_schema:

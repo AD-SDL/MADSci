@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionResult, ActionSucceeded
+from madsci.common.types.action_types import ActionFiles
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types import Slot
@@ -41,6 +41,13 @@ class PlateReaderInterface:
             f"Running command {command} on device number {self.device_number}."
         )
         time.sleep(2)  # Simulate command execution
+
+
+class PlateFiles(ActionFiles):
+    """Example of returned files with labeled values"""
+
+    file_path_1: Path
+    file_path_2: Path
 
 
 class PlateReaderNode(RestNode):
@@ -103,22 +110,36 @@ class PlateReaderNode(RestNode):
     @action
     def read_plate(
         self,
-    ) -> ActionResult:
+    ) -> int:
         """Run a command on the plate reader."""
         time.sleep(5)
-        return ActionSucceeded(data={"example_data": {"example": "data"}})
+        return 5
 
     @action
     def create_plate_file(
         self,
-    ) -> ActionResult:
+    ) -> Path:
         """Run a command on the plate reader."""
 
         with (Path.home() / "test.txt").open("w") as f:
-            self.logger.info(f.write("test"))
-        path = str(Path.home() / "test.txt")
+            self.logger.log_info(f.write("test"))
 
-        return ActionSucceeded(files={"example_file": path})
+        return Path.home() / "test.txt"
+
+    @action
+    def create_plate_files(
+        self,
+    ) -> PlateFiles:
+        """Run a command on the plate reader."""
+
+        with (Path.home() / "test.txt").open("w") as f:
+            self.logger.log_info(f.write("test"))
+        path1 = Path.home() / "test.txt"
+        with (Path.home() / "test2.txt").open("w") as f:
+            self.logger.log_info(f.write("test2"))
+        path2 = Path.home() / "test2.txt"
+
+        return PlateFiles(file_path_1=path1, file_path_2=path2)
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the plate reader"""

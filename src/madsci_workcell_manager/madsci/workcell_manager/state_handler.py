@@ -131,6 +131,17 @@ class WorkcellStateHandler:
             auto_release_time=60,
         )
 
+    def node_lock(self, node_name: str) -> Redlock:
+        """
+        Gets a lock on a specific node's state. This should be called before any state updates are made to a node,
+        or where we don't want the node's state to be changing underneath us (i.e., in the engine).
+        """
+        return Redlock(
+            key=f"{self._workcell_prefix}:node:{node_name}:lock",
+            masters={self._redis_client},
+            auto_release_time=60,
+        )
+
     # *State Methods
     def get_workcell_state(self) -> WorkcellState:
         """

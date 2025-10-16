@@ -9,6 +9,7 @@ capabilities:
   get_state: true
   get_status: true
   send_action: true
+  get_action_status: true
   get_action_result: true
   get_action_history: true
   action_files: true
@@ -51,13 +52,17 @@ actions:
     results: {}
     blocking: false
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: node_definitions/robotarm_1.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://localhost:2001/
+  node_url: http://localhost:2002/
   uvicorn_kwargs: {}
   device_number: 0
   speed: 50.0

@@ -21,10 +21,10 @@ class TestWaitAction:
 
     def test_wait_action_succeeds(self):
         """Test that wait action returns success after sleeping."""
-        with patch("time.sleep") as mock_sleep:
+        with patch("madsci.workcell_manager.workcell_actions.time.sleep") as mock_sleep:
             result = wait(5)
 
-            mock_sleep.assert_called_once_with(5)
+            mock_sleep.assert_called_with(5)
             assert result.status == ActionStatus.SUCCEEDED
 
 
@@ -147,15 +147,16 @@ class TestTransferAction:
             mock_workflow.workflow_id = "test_workflow_123"
             mock_workflow.status.completed = True
             mock_workflow.status.workflow_runtime = 5.0
+            mock_workflow.duration_seconds = 5.0
             mock_workcell_instance.start_workflow.return_value = mock_workflow
 
             result = transfer("source_loc", "dest_loc")
 
             assert result.status == ActionStatus.SUCCEEDED
-            assert "Transfer completed" in result.data["message"]
-            assert result.data["source_location_id"] == "source_id"
-            assert result.data["target_location_id"] == "dest_id"
-            assert result.data["workflow_id"] == "test_workflow_123"
+            assert "Transfer completed" in result.json_result["message"]
+            assert result.json_result["source_location_id"] == "source_id"
+            assert result.json_result["target_location_id"] == "dest_id"
+            assert result.json_result["workflow_id"] == "test_workflow_123"
 
     @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
     @patch("madsci.workcell_manager.workcell_actions.LocationClient")
@@ -240,8 +241,8 @@ class TestTransferAction:
             result = transfer("source_loc", "dest_loc", await_completion=False)
 
             assert result.status == ActionStatus.SUCCEEDED
-            assert "Transfer workflow enqueued" in result.data["message"]
-            assert result.data["workflow_id"] == "test_workflow_123"
+            assert "Transfer workflow enqueued" in result.json_result["message"]
+            assert result.json_result["workflow_id"] == "test_workflow_123"
 
     @patch("madsci.workcell_manager.workcell_actions.get_current_madsci_context")
     @patch("madsci.workcell_manager.workcell_actions.LocationClient")
@@ -452,7 +453,7 @@ class TestTransferResourceAction:
         # Mock successful transfer result
         mock_transfer_result = MagicMock()
         mock_transfer_result.status = ActionStatus.SUCCEEDED
-        mock_transfer_result.data = {
+        mock_transfer_result.json_result = {
             "message": "Transfer completed",
             "source_location_id": "source_location_id",
             "target_location_id": "dest_location_id",
@@ -463,7 +464,7 @@ class TestTransferResourceAction:
         result = transfer_resource("resource_123", "dest_loc")
 
         assert result.status == ActionStatus.SUCCEEDED
-        assert result.data["message"] == "Transfer completed"
+        assert result.json_result["message"] == "Transfer completed"
         mock_find_and_transfer.assert_called_once_with(
             "resource_123", "dest_loc", True, mock_context.return_value
         )
@@ -505,7 +506,7 @@ class TestTransferResourceAction:
         # Mock successful async transfer result
         mock_transfer_result = MagicMock()
         mock_transfer_result.status = ActionStatus.SUCCEEDED
-        mock_transfer_result.data = {
+        mock_transfer_result.json_result = {
             "message": "Transfer workflow enqueued",
             "workflow_id": "workflow_123",
         }
@@ -514,7 +515,7 @@ class TestTransferResourceAction:
         result = transfer_resource("resource_123", "dest_loc", await_completion=False)
 
         assert result.status == ActionStatus.SUCCEEDED
-        assert result.data["message"] == "Transfer workflow enqueued"
+        assert result.json_result["message"] == "Transfer workflow enqueued"
         mock_find_and_transfer.assert_called_once_with(
             "resource_123", "dest_loc", False, mock_context.return_value
         )

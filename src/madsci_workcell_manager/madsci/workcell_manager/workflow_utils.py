@@ -297,7 +297,9 @@ def check_parameters(
     if workflow_definition.parameters.json_inputs:
         check_json_parameters(workflow_definition, json_inputs)
     for ffv in workflow_definition.parameters.feed_forward:
-        if ffv.key in json_inputs or ffv.key in file_input_paths:
+        if (json_inputs and ffv.key in json_inputs) or (
+            file_input_paths and ffv.key in file_input_paths
+        ):
             raise ValueError(
                 f"{ffv.key} is a Feed Forward Value and will be calculated during execution; it should not be provided as an input."
             )

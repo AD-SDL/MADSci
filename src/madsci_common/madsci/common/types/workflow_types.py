@@ -1,27 +1,13 @@
 """Types for MADSci Worfklow running."""
 
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Optional, Union
-
-if TYPE_CHECKING:
-    from madsci.client.data_client import DataPointTypeEnum
-else:
-    try:
-        from madsci.client.data_client import DataPointTypeEnum
-    except ImportError:
-        # Fallback for circular import situations
-        class DataPointTypeEnum:
-            """Fallback enum for data point types during import resolution."""
-
-            FILE = "FILE"
-            JSON = "JSON"
-            OBJECT_STORAGE = "OBJECT_STORAGE"
-
+from typing import Any, Optional, Union
 
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel
+from madsci.common.types.datapoint_types import DataPoint
 from madsci.common.types.parameter_types import (
     ParameterFeedForwardFile,
     ParameterFeedForwardJson,
@@ -168,20 +154,14 @@ class WorkflowDefinition(MadsciBaseModel):
 
     @field_validator("steps", mode="after")
     @classmethod
-    def ensure_data_label_and_step_key_uniqueness(cls, v: Any) -> Any:
+    def ensure_step_key_uniqueness(cls, v: Any) -> Any:
         """Ensure that the names of the data labels are unique"""
-        labels = []
         keys = []
         for step in v:
             if step.key:
                 if step.key in keys:
                     raise ValueError("Step keys must be unique across workflow")
                 keys.append(step.key)
-            if step.data_labels:
-                for key in step.data_labels:
-                    if step.data_labels[key] in labels:
-                        raise ValueError("Data labels must be unique across workflow")
-                    labels.append(step.data_labels[key])
         return v
 
     @field_validator("parameters", mode="after")
@@ -322,6 +302,9 @@ class WorkflowDefinition(MadsciBaseModel):
     @model_validator(mode="after")
     def ensure_all_param_keys_have_matching_parameters(self) -> "WorkflowDefinition":
         """Ensures that all step parameters have matching workflow parameters."""
+        from madsci.common.types.datapoint_types import (  # noqa: PLC0415
+            DataPointTypeEnum,
+        )
 
         file_param_keys = [param.key for param in self.parameters.file_inputs] + [
             param.key
@@ -425,35 +408,59 @@ class Workflow(WorkflowDefinition):
         for step in self.steps:
             if step.name == name:
                 return step
-        raise KeyError(f"Step {name} not found in workflow run {self.run_id}")
+        raise KeyError(f"Step {name} not found in workflow run {self.workflow_id}")
+
+    def get_step_by_key(self, key: str) -> Step:
+        """Return the step object by its name"""
+        for step in self.steps:
+            if step.key == key:
+                return step
+        raise KeyError(
+            f"Step with key {key} not found in workflow run {self.workflow_id}"
+        )
 
     def get_step_by_id(self, id: str) -> Step:
         """Return the step object indexed by its id"""
         for step in self.steps:
             if step.id == id:
                 return step
-        raise KeyError(f"Step {id} not found in workflow run {self.run_id}")
+        raise KeyError(f"Step {id} not found in workflow run {self.workflow_id}")
 
-    def get_datapoint_id_by_label(self, label: str) -> str:
-        """Return the ID of the first datapoint with the given label in a workflow run"""
+    def get_datapoint_id(
+        self, step_key: Optional[str] = None, label: Optional[str] = None
+    ) -> str:
+        """Return the ID of the first datapoint in a workflow run matching the given step key and/or label."""
         for step in self.steps:
-            if step.result.data:
-                for key in step.result.data:
-                    if key == label:
-                        return step.result.data[key]
-        raise KeyError(f"Label {label} not found in workflow run {self.run_id}")
+            if step_key is None or step.key == step_key:
+                if not step.result.datapoints:
+                    raise KeyError(
+                        f"No datapoints found in step {step_key} of workflow run {self.workflow_id}"
+                    )
+                datapoint_ids = step.result.datapoints.model_dump()
+                if len(datapoint_ids) == 1:
+                    return next(iter(datapoint_ids.values()))
+                if label is None:
+                    raise ValueError(
+                        f"Step {step_key} has multiple datapoints, label must be specified"
+                    )
+                if label in datapoint_ids:
+                    return datapoint_ids[label]
+                raise KeyError(
+                    f"Label {label} not found in step {step_key} of workflow run {self.workflow_id}"
+                )
+        raise KeyError(f"Datapoint ID not found in workflow run {self.workflow_id}")
 
-    def get_all_datapoint_ids_by_label(self, label: str) -> list[str]:
-        """Return the IDs of all datapoints with the given label in a workflow run"""
-        ids = []
-        for step in self.steps:
-            if step.result.data:
-                for key in step.result.data:
-                    if key == label:
-                        ids.append(step.result.data[key])
-        if not ids:
-            raise KeyError(f"Label {label} not found in workflow run {self.run_id}")
-        return ids
+    def get_datapoint(
+        self, step_key: Optional[str] = None, label: Optional[str] = None
+    ) -> DataPoint:
+        """Return the first datapoint in a workflow run matching the given step key and/or label."""
+        from madsci.client.data_client import (  # noqa: PLC0415
+            DataClient,  # avoid circular import
+        )
+
+        datapoint_id = self.get_datapoint_id(step_key=step_key, label=label)
+        data_client = DataClient()
+        return data_client.get_datapoint(datapoint_id)
 
     @computed_field
     @property

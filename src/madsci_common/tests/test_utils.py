@@ -11,9 +11,13 @@ from typing import Annotated, List, Optional, Union
 from unittest.mock import patch
 
 import pytest
+from madsci.common.types.action_types import ActionDatapoints
+from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.utils import (
+    extract_datapoint_ids,
     is_annotated,
     is_optional,
+    is_valid_ulid,
     localnow,
     new_name_str,
     new_ulid_str,
@@ -349,3 +353,97 @@ def test_new_ulid_str():
     # ULIDs should be alphanumeric (Crockford's Base32)
     assert ulid1.isalnum()
     assert ulid2.isalnum()
+
+
+def test_is_valid_ulid():
+    """Test ULID validation function."""
+    # Test with valid ULIDs
+    valid_ulid = new_ulid_str()
+    assert is_valid_ulid(valid_ulid)
+
+    # Test with invalid inputs
+    assert not is_valid_ulid("too-short")
+    assert not is_valid_ulid("too-long-to-be-a-valid-ulid-string")
+    assert not is_valid_ulid("invalid-chars-!@#$%^&*()")
+    assert not is_valid_ulid(123)
+    assert not is_valid_ulid(None)
+
+
+def test_extract_datapoint_ids():
+    """Test datapoint ID extraction from data structures."""
+    # Test with simple dictionary
+    ulid1 = new_ulid_str()
+    ulid2 = new_ulid_str()
+    data = {"result1": ulid1, "result2": ulid2}
+    extracted = extract_datapoint_ids(data)
+    assert set(extracted) == {ulid1, ulid2}
+
+    # Test with nested structures
+    data = {"results": [ulid1, {"nested": ulid2}], "other": "not-a-ulid"}
+    extracted = extract_datapoint_ids(data)
+    assert set(extracted) == {ulid1, ulid2}
+
+    # Test with DataPoint objects
+    value_dp = ValueDataPoint(value="test", label="test_value")
+    data = {"datapoint": value_dp, "id": value_dp.datapoint_id}
+    extracted = extract_datapoint_ids(data)
+    assert extracted == [value_dp.datapoint_id]  # Deduplicated
+
+    # Test with empty input
+    assert extract_datapoint_ids({}) == []
+    assert extract_datapoint_ids([]) == []
+    assert extract_datapoint_ids(None) == []
+
+
+class TestActionDatapoints:
+    """Test cases for ActionDatapoints validation and conversion."""
+
+    def test_single_datapoint_id_string(self):
+        """Test that a single ULID string is accepted."""
+        ulid = new_ulid_str()
+        datapoints = ActionDatapoints.model_validate({"result": ulid})
+        assert datapoints.result == ulid
+
+    def test_list_of_datapoint_ids(self):
+        """Test that a list of ULID strings is accepted."""
+        ulids = [new_ulid_str(), new_ulid_str()]
+        datapoints = ActionDatapoints.model_validate({"results": ulids})
+        assert datapoints.results == ulids
+
+    def test_datapoint_object_to_id_conversion(self):
+        """Test that DataPoint objects are converted to IDs."""
+        value_dp = ValueDataPoint(value="test", label="test_value")
+        datapoints = ActionDatapoints.model_validate({"result": value_dp})
+        assert datapoints.result == value_dp.datapoint_id
+
+    def test_list_of_datapoint_objects_conversion(self):
+        """Test that a list of DataPoint objects is converted to IDs."""
+        value_dp1 = ValueDataPoint(value="test1", label="test_value1")
+        value_dp2 = ValueDataPoint(value="test2", label="test_value2")
+        datapoints = ActionDatapoints.model_validate(
+            {"results": [value_dp1, value_dp2]}
+        )
+        assert datapoints.results == [value_dp1.datapoint_id, value_dp2.datapoint_id]
+
+    def test_mixed_datapoint_objects_and_ids(self):
+        """Test mixing DataPoint objects and ULID strings in a list."""
+        value_dp = ValueDataPoint(value="test", label="test_value")
+        ulid = new_ulid_str()
+        datapoints = ActionDatapoints.model_validate({"results": [value_dp, ulid]})
+        assert datapoints.results == [value_dp.datapoint_id, ulid]
+
+    def test_invalid_ulid_string_raises_error(self):
+        """Test that invalid ULID strings raise validation errors."""
+        with pytest.raises(ValueError, match="must be a valid ULID string"):
+            ActionDatapoints.model_validate({"result": "invalid-ulid"})
+
+    def test_invalid_datapoint_type_raises_error(self):
+        """Test that invalid datapoint types raise validation errors."""
+        with pytest.raises(ValueError, match="must be a ULID string, DataPoint object"):
+            ActionDatapoints.model_validate({"result": 123})
+
+    def test_file_datapoint_conversion(self):
+        """Test that FileDataPoint objects are handled correctly."""
+        file_dp = FileDataPoint(path="/test/file.txt", label="test_file")
+        datapoints = ActionDatapoints.model_validate({"file_result": file_dp})
+        assert datapoints.file_result == file_dp.datapoint_id
