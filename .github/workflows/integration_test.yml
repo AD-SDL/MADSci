@@ -37,6 +37,5 @@ jobs:
         run: sudo chown -R madsci:madsci .madsci && sudo chmod -R 777 .
       - name: check ownership
         run: ls -ld .madsci
-
-      # - name: Run a command in the lab manager container
-      #   run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --execute ./notebooks/experiment_notebook.ipynb
+      - name: Run a command in the lab manager container
+        run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --execute ./notebooks/experiment_notebook.ipynb
