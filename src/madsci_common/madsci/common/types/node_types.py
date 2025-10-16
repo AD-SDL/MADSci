@@ -254,11 +254,6 @@ class Node(MadsciBaseModel, arbitrary_types_allowed=True):
         title="Node State",
         description="Detailed nodes specific state information",
     )
-    pending_action_id: Optional[str] = Field(
-        default=None,
-        title="Pending Action ID",
-        description="ID of an action that has been sent to the node but not yet started (e.g. queued). This is used to prevent sending multiple actions to a node that can only handle one action at a time.",
-    )
 
     reservation: Optional["NodeReservation"] = Field(
         default=None,

@@ -132,11 +132,11 @@ class Scheduler(AbstractScheduler):
                 metadata.reasons.append(
                     f"Node {step.node} not ready: {node.status.description}"
                 )
-            if node.pending_action_id is not None:
+            # Check if node is locked (another workflow is currently sending it an action request)
+            node_lock = self.state_handler.node_lock(step.node)
+            if node_lock.locked():
                 metadata.ready_to_run = False
-                metadata.reasons.append(
-                    f"Node {step.node} has a pending action that needs to be resolved"
-                )
+                metadata.reasons.append(f"Node {step.node} is locked by another action")
 
             if node.reservation is not None and node.reservation.check(
                 wf.ownership_info
