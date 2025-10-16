@@ -24,7 +24,6 @@ class PlateReaderConfig(RestNodeConfig):
 class PlateReaderInterface:
     """A fake plate reader interface for testing."""
 
-    config_model = PlateReaderConfig
     status_code: int = 0
     device_number: int = 0
 
@@ -47,6 +46,7 @@ class PlateReaderNode(RestNode):
     """A fake plate reader node module for testing."""
 
     plate_reader: PlateReaderInterface = None
+    config: PlateReaderConfig = PlateReaderConfig()
     config_model = PlateReaderConfig
 
     def startup_handler(self) -> None:

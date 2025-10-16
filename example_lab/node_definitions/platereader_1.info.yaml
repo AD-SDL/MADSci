@@ -96,8 +96,10 @@ config:
   state_update_interval: 2.0
   node_url: http://localhost:2003/
   uvicorn_kwargs: {}
+  device_number: 0
+  wait_time: 2.0
 config_schema:
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: Configuration for the plate reader node module.
   properties:
     node_definition:
       anyOf:
@@ -154,5 +156,13 @@ config_schema:
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-  title: RestNodeConfig
+    device_number:
+      default: 0
+      title: Device Number
+      type: integer
+    wait_time:
+      default: 2.0
+      title: Wait Time
+      type: number
+  title: PlateReaderConfig
   type: object
