@@ -34,7 +34,7 @@ jobs:
       - name: check ownership
         run: ls -ld .madsci
       - name: fix  permissions
-        run: sudo chown -R madsci:madsci .madsci && sudo chmod -R 777 .
+        run: sudo chown -R 1000:1000 .madsci && sudo chmod -R 777 .
       - name: check ownership
         run: ls -ld .madsci
       - name: Run a command in the lab manager container
