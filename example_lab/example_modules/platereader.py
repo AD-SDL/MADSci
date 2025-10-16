@@ -8,6 +8,7 @@ from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionResult, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
+from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
@@ -51,6 +52,40 @@ class PlateReaderNode(RestNode):
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
         self.plate_reader = PlateReaderInterface(logger=self.logger)
+
+        # Create plate deck slot template
+        plate_deck_slot = Slot(
+            resource_name="plate_reader_deck",
+            resource_class="PlateReaderDeck",
+            capacity=1,
+            attributes={
+                "slot_type": "plate_deck",
+                "can_read": True,
+                "description": "Plate reader deck slot where plates are placed for reading",
+            },
+        )
+
+        self.resource_client.init_template(
+            resource=plate_deck_slot,
+            template_name="plate_reader_deck_slot",
+            description="Template for plate reader deck slot. Represents the deck position where plates are placed for reading.",
+            required_overrides=["resource_name"],
+            tags=["plate_reader", "deck", "slot", "measurement"],
+            created_by=self.node_definition.node_id,
+            version="1.0.0",
+        )
+
+        # Initialize plate deck resource
+        deck_resource_name = "plate_reader_deck_" + str(self.node_definition.node_name)
+        self.plate_deck = self.resource_client.create_resource_from_template(
+            template_name="plate_reader_deck_slot",
+            resource_name=deck_resource_name,
+            add_to_database=True,
+        )
+        self.logger.log(
+            f"Initialized plate deck resource from template: {self.plate_deck.resource_id}"
+        )
+
         self.logger.log("Plate reader initialized!")
 
     def shutdown_handler(self) -> None:

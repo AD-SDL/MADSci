@@ -478,8 +478,52 @@ class ResourceManager(
     async def create_resource_from_template(
         self, template_name: str, body: CreateResourceFromTemplateBody
     ) -> ResourceDataModels:
-        """Create a resource from a template."""
+        """
+        Create a resource from a template.
+
+        If a matching resource already exists (based on name, class, type, and owner),
+        it will be returned instead of creating a duplicate.
+        """
         try:
+            # Get the template to understand what properties to search for
+            template = self._resource_interface.get_template(template_name)
+
+            if not template:
+                raise ValueError(f"Template '{template_name}' not found")
+
+            # Build search criteria from template defaults and overrides
+            search_criteria = {
+                "resource_name": body.resource_name,
+                "resource_class": body.overrides.get(
+                    "resource_class", template.resource_class
+                )
+                if body.overrides
+                else template.resource_class,
+                "base_type": body.overrides.get("base_type", template.base_type)
+                if body.overrides
+                else template.base_type,
+            }
+
+            if body.overrides:
+                for field, value in body.overrides.items():
+                    search_criteria[field] = value
+            # Add owner if provided in overrides
+            if body.overrides and "owner" not in body.overrides:
+                search_criteria["owner"] = template.owner
+            # Check if a matching resource already exists
+            existing_resource = self._resource_interface.get_resource(
+                **search_criteria,
+                multiple=False,
+                unique=True,
+            )
+
+            if existing_resource:
+                self.logger.info(
+                    f"Resource '{body.resource_name}' with matching properties already exists (ID: {existing_resource.resource_id}), returning existing resource"
+                )
+                return existing_resource
+
+            # No existing resource found, create new one from template
             return self._resource_interface.create_resource_from_template(
                 template_name=template_name,
                 resource_name=body.resource_name,
