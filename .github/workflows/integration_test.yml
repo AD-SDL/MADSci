@@ -30,7 +30,7 @@ jobs:
       - name: Start services to verify build
         run: docker compose up -d
       - name: fix permissions
-        run: sudo chown -R $USER:$USER .madsci
+        run: sudo chmod -R 777 .madsci
       - name: fix other permissions
         run: sudo chmod -R 777 example_lab
 
