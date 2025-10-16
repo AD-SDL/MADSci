@@ -14,6 +14,7 @@ from madsci.client.event_client import EventClient
 from madsci.client.location_client import LocationClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.nodes import check_node_capability
 from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import (
     ActionDatapoints,
@@ -276,14 +277,10 @@ class Engine:
         interval = 0.25
         retry_count = 0
         while not response.status.is_terminal:
-            if (
-                node.info.capabilities.get_action_result is False
-                and node.info.capabilities.get_action_status is False
-            ) or (
-                node.info.capabilities.get_action_result is None
-                and node.info.capabilities.get_action_status is None
-                and client.supported_capabilities.get_action_result is False
-                and client.supported_capabilities.get_action_status is False
+            if not check_node_capability(
+                node_info=node.info, client=client, capability="get_action_result"
+            ) and not check_node_capability(
+                node_info=node.info, client=client, capability="get_action_status"
             ):
                 self.logger.warning(
                     f"While running Step {step.step_id} of workflow {wf.workflow_id}, send_action returned a non-terminal response {response}. However, node {step.node} does not support querying an action result."

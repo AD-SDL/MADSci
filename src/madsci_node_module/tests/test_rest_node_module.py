@@ -30,31 +30,7 @@ from ulid import ULID
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
 from madsci_node_module.tests.test_rest_utils import wait_for_node_ready
 
-
-@pytest.fixture
-def test_node() -> TestNode:
-    """Return a RestNode instance for testing."""
-    node_definition = NodeDefinition(
-        node_name="Test Node 1",
-        module_name="test_node",
-        description="A test node module for automated testing.",
-    )
-
-    return TestNode(
-        node_definition=node_definition,
-        node_config=TestNodeConfig(
-            test_required_param=1,
-        ),
-    )
-
-
-@pytest.fixture
-def test_client(test_node: TestNode) -> TestClient:
-    """Return a TestClient instance for testing."""
-
-    test_node.start_node(testing=True)
-
-    return TestClient(test_node.rest_api)
+# Using centralized fixtures from conftest.py
 
 
 def test_lifecycle_handlers(test_node: TestNode) -> None:
@@ -67,7 +43,8 @@ def test_lifecycle_handlers(test_node: TestNode) -> None:
     test_node.start_node(testing=True)
 
     with TestClient(test_node.rest_api) as client:
-        time.sleep(0.5)
+        # Small delay to ensure startup completes
+        time.sleep(0.1)
         assert test_node.startup_has_run
         assert not hasattr(test_node, "shutdown_has_run")
         assert test_node.test_interface is not None
@@ -75,7 +52,8 @@ def test_lifecycle_handlers(test_node: TestNode) -> None:
         response = client.get("/status")
         assert response.status_code == 200
 
-    time.sleep(0.5)
+    # Small delay to ensure shutdown completes
+    time.sleep(0.1)
 
     assert test_node.startup_has_run
     assert test_node.shutdown_has_run
@@ -159,7 +137,7 @@ def test_shutdown(test_node: TestNode) -> None:
     test_node.start_node(testing=True)
 
     with TestClient(test_node.rest_api) as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
         response = client.post("/admin/shutdown")
         assert response.status_code == 200
         validated_response = AdminCommandResponse.model_validate(response.json())
@@ -171,7 +149,7 @@ def test_shutdown(test_node: TestNode) -> None:
 def test_create_action(test_client: TestClient) -> None:
     """Test creating a new action."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Create action
         response = client.post("/action/test_action", json={"args": {"test_param": 1}})
@@ -185,7 +163,7 @@ def test_create_action(test_client: TestClient) -> None:
 def test_start_action(test_client: TestClient) -> None:
     """Test starting an action."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Create action
         response = client.post("/action/test_action", json={"args": {"test_param": 1}})
@@ -203,7 +181,7 @@ def test_start_action(test_client: TestClient) -> None:
 def test_run_action_fail(test_client: TestClient) -> None:
     """Test an action that is designed to fail."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Create and start failing action
         response = client.post("/action/test_fail", json={"args": {"test_param": 1}})
@@ -224,7 +202,7 @@ def test_run_action_fail(test_client: TestClient) -> None:
 def test_get_status(test_client: TestClient) -> None:
     """Test the get_status command."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
         response = client.get("/status")
         assert response.status_code == 200
         assert NodeStatus.model_validate(response.json()).ready is True
@@ -233,7 +211,7 @@ def test_get_status(test_client: TestClient) -> None:
 def test_get_state(test_client: TestClient) -> None:
     """Test the get_state command."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
         response = client.get("/state")
         assert response.status_code == 200
         assert response.json() == {"test_status_code": 0}
@@ -242,11 +220,11 @@ def test_get_state(test_client: TestClient) -> None:
 def test_get_info(test_client: TestClient) -> None:
     """Test the get_info command."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
         response = client.get("/info")
         assert response.status_code == 200
         node_info = NodeInfo.model_validate(response.json())
-        assert node_info.node_name == "Test Node 1"
+        assert node_info.node_name == "Test Node"
         assert node_info.module_name == "test_node"
         assert len(node_info.actions) == 15
         assert node_info.actions["test_action"].description == "A test action."
@@ -329,7 +307,7 @@ def test_get_info(test_client: TestClient) -> None:
 def test_get_action_result_by_name(test_client: TestClient) -> None:
     """Test getting action result by action name."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Create and start action
         response = client.post("/action/test_action", json={"args": {"test_param": 1}})
@@ -350,7 +328,7 @@ def test_get_action_result_by_name(test_client: TestClient) -> None:
 def test_get_action_result(test_client: TestClient) -> None:
     """Test getting action result."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Create and start action
         response = client.post("/action/test_action", json={"args": {"test_param": 1}})
@@ -371,7 +349,7 @@ def test_get_action_result(test_client: TestClient) -> None:
 def test_get_nonexistent_action(test_client: TestClient) -> None:
     """Test getting status of a nonexistent action."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Try to get status of nonexistent action
         invalid_id = str(ULID())
@@ -384,7 +362,7 @@ def test_get_nonexistent_action(test_client: TestClient) -> None:
 def test_get_action_history(test_client: TestClient) -> None:
     """Test the get_action_history command."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
         response = client.get("/action")
         assert response.status_code == 200
         action_history = response.json()
@@ -454,7 +432,7 @@ def test_get_action_history(test_client: TestClient) -> None:
 def test_get_log(test_client: TestClient) -> None:
     """Test the get_log command."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Create and start an action to generate log entries
         response = client.post("/action/test_action", json={"args": {"test_param": 1}})
@@ -476,7 +454,7 @@ def test_get_log(test_client: TestClient) -> None:
 def test_optional_param_action(test_client: TestClient) -> None:
     """Test an action with optional parameters."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Test with optional parameter
         response = client.post(
@@ -505,7 +483,7 @@ def test_optional_param_action(test_client: TestClient) -> None:
 def test_action_with_missing_params(test_client: TestClient) -> None:
     """Test creating an action with missing required parameters."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Create action without required parameter - should fail validation
         response = client.post(
@@ -524,7 +502,7 @@ def test_action_with_missing_params(test_client: TestClient) -> None:
 def test_invalid_action_id(test_client: TestClient) -> None:
     """Test starting an action with an invalid action_id."""
     with test_client as client:
-        time.sleep(0.5)
+        time.sleep(0.1)
 
         # Try to start action with invalid ID
         invalid_id = str(ULID())
@@ -685,7 +663,7 @@ def test_custom_pydantic_result_processing(test_node: TestNode) -> None:
 
     # Use test client to properly wait for node to be ready
     with TestClient(test_node.rest_api):
-        time.sleep(0.5)  # Give the node time to initialize
+        time.sleep(0.1)  # Give the node time to initialize
 
         # Create an action request for the custom pydantic result action
         action_request = ActionRequest(
@@ -730,7 +708,7 @@ def test_mixed_pydantic_and_file_result_processing(test_node: TestNode) -> None:
 
     # Use test client to properly wait for node to be ready
     with TestClient(test_node.rest_api):
-        time.sleep(0.5)  # Give the node time to initialize
+        time.sleep(0.1)  # Give the node time to initialize
 
         # Create an action request for the mixed result action
         action_request = ActionRequest(
@@ -869,7 +847,7 @@ def enhanced_test_node():
 def enhanced_client(enhanced_test_node):
     """Create a test client for the enhanced node."""
     with TestClient(enhanced_test_node.rest_api) as client:
-        time.sleep(0.5)  # Wait for startup to complete
+        time.sleep(0.1)  # Wait for startup to complete
 
         # Verify startup completed
         assert enhanced_test_node.startup_has_run
@@ -1115,7 +1093,7 @@ class TestEnhancedEndpointBehavior:
         """Test downloading files from completed actions as ZIP."""
         with enhanced_client as client:
             # Wait for node to be ready
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Execute action that returns a file
             response = client.post("/action/return_file", json={"args": {}})
@@ -1142,7 +1120,7 @@ class TestEnhancedEndpointBehavior:
         """Test downloading labeled files as ZIP."""
         with enhanced_client as client:
             # Wait for node to be ready
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Execute action that returns labeled files
             response = client.post("/action/return_labeled_files", json={"args": {}})
@@ -1192,7 +1170,7 @@ class TestEnhancedEndpointBehavior:
         """Test that actions without declared file results still have download endpoints."""
         with enhanced_client as client:
             # Wait for node to be ready
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Execute action that normally doesn't return files
             response = client.post("/action/return_int", json={"args": {}})
@@ -1264,7 +1242,7 @@ class TestEnhancedActionResultTypeMapping:
     def test_labeled_files_return_structure(self, enhanced_client):
         """Test that ActionFiles subclass creates proper files structure."""
         with enhanced_client as client:
-            time.sleep(0.5)  # Wait for node to be ready
+            time.sleep(0.1)  # Wait for node to be ready
 
             response = client.post("/action/return_labeled_files", json={"args": {}})
             action_id = response.json()["action_id"]
@@ -1471,7 +1449,7 @@ class TestAdvancedFileParameterSupport:
     ) -> None:
         """Test executing an action with list[Path] parameter."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Create test files
             file1 = tmp_path / "file1.txt"
@@ -1521,7 +1499,7 @@ class TestAdvancedFileParameterSupport:
     ) -> None:
         """Test executing an action with Optional[Path] parameter without providing the file."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Create action without optional file
             response = client.post(
@@ -1554,7 +1532,7 @@ class TestAdvancedFileParameterSupport:
     ) -> None:
         """Test executing an action with Optional[Path] parameter with providing the file."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Create test file
             test_file = tmp_path / "optional_test.txt"
@@ -1663,7 +1641,7 @@ class TestProposalExampleActionResultHandling:
     def test_proposal_example_read_sensor(self, proposal_test_client: TestClient):
         """Test the exact example from the proposal - read_sensor action."""
         with proposal_test_client as client:
-            time.sleep(0.5)  # Wait for node to initialize
+            time.sleep(0.1)  # Wait for node to initialize
 
             # Check node status first
             status_response = client.get("/status")
@@ -1695,7 +1673,7 @@ class TestProposalExampleActionResultHandling:
     def test_complex_pydantic_model_return(self, proposal_test_client: TestClient):
         """Test that complex pydantic models are properly handled."""
         with proposal_test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             response = client.post("/action/get_temperature_reading", json={"args": {}})
             action_id = response.json()["action_id"]
@@ -1713,7 +1691,7 @@ class TestProposalExampleActionResultHandling:
     def test_file_return_with_file_keys(self, proposal_test_client: TestClient):
         """Test that file returns use file keys instead of full paths."""
         with proposal_test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             response = client.post("/action/create_test_file", json={"args": {}})
             action_id = response.json()["action_id"]
@@ -1748,7 +1726,7 @@ class TestProposalExampleActionResultHandling:
     def test_backward_compatibility(self, proposal_test_client: TestClient):
         """Test that the implementation maintains backward compatibility."""
         with proposal_test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Test that generic endpoints still work
             response = client.post("/action/read_sensor", json={"args": {}})
@@ -1943,7 +1921,7 @@ class TestNestedTypeAnnotationHandling:
     ) -> None:
         """Test that actions with nested type annotations generate correct info."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Get node info to check action definitions
             response = client.get("/info")
@@ -1971,7 +1949,7 @@ class TestNestedTypeAnnotationHandling:
     def test_nested_type_action_execution(self, test_client: TestClient) -> None:
         """Test that actions with nested return types can be executed successfully."""
         with test_client as client:
-            time.sleep(0.5)
+            time.sleep(0.1)
 
             # Test dict[str, str] action
             response = client.post(
