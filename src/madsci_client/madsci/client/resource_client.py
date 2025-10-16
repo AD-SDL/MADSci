@@ -1001,11 +1001,45 @@ class ResourceClient:
         existing_template = self.get_template(template_name)
 
         if existing_template is not None:
-            self.logger.info(f"Using existing template '{template_name}'")
+            # If versions are different, update the template
+            if version != existing_template.version:
+                self.logger.info(
+                    f"Template '{template_name}' exists with version {existing_template.version}. "
+                    f"Updating to version {version}..."
+                )
+                updated_template = self.update_template(
+                    template_name=template_name,
+                    updates={
+                        "description": description,
+                        "required_overrides": required_overrides,
+                        "tags": tags,
+                        "version": version,
+                        # Update resource fields from the new resource
+                        **resource.model_dump(
+                            exclude={
+                                "resource_id",
+                                "created_at",
+                                "updated_at",
+                                "removed",
+                                "children",
+                                "parent_id",
+                                "key",
+                                "resource_url",
+                            }
+                        ),
+                    },
+                )
+                self.logger.info(
+                    f"Updated template '{template_name}' to version {version}"
+                )
+                return updated_template
+            self.logger.info(
+                f"Using existing template '{template_name}' version {existing_template.version}"
+            )
             return existing_template
 
         self.logger.info(
-            f"Template '{template_name}' not found, creating new template..."
+            f"Template '{template_name}' not found, creating new template version {version}..."
         )
         new_template = self.create_template(
             resource=resource,
@@ -1016,7 +1050,7 @@ class ResourceClient:
             created_by=created_by,
             version=version,
         )
-        self.logger.info(f"Created template '{template_name}'")
+        self.logger.info(f"Created template '{template_name}' version {version}")
         return new_template
 
     def create_template(
