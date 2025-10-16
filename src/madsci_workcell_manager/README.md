@@ -49,10 +49,18 @@ from madsci.client.workcell_client import WorkcellClient
 workcell_client = WorkcellClient("http://localhost:8005")
 
 # Submit workflow from file (recommended)
-result = workcell_client.submit_workflow(
+workflow = workcell_client.submit_workflow(
     workflow="path/to/workflow.yaml",
-    parameters={"test_param": 10}
+    json_inputs={"test_param": 10},
+    file_inputs={"input_file": "./data.csv"}
 )
+
+# Access workflow results with helper methods
+# Get datapoint ID from a specific step
+datapoint_id = workflow.get_datapoint_id("analysis_step")
+
+# Get full datapoint object from a specific step
+datapoint = workflow.get_datapoint("analysis_step")
 
 # Or create workflow programmatically
 from madsci.common.types.workflow_types import WorkflowDefinition
@@ -68,13 +76,35 @@ wf_def = WorkflowDefinition(
         args={"test_arg": "${test_param}"}
     )]
 )
-result = workcell_client.submit_workflow(workflow=wf_def)
+workflow = workcell_client.submit_workflow(workflow=wf_def)
 
 # Query workflow status
-result = workcell_client.query_workflow(result.workflow_id)
+status = workcell_client.query_workflow(workflow.workflow_id)
 ```
 
 **Example workflows**: See [example_lab/workflows/](../../example_lab/workflows/) for complete workflow definitions.
+
+**Workflow Result Access:**
+```python
+# Submit workflow and access results (await_completion=True by default)
+workflow = workcell_client.submit_workflow("analysis.workflow.yaml")
+
+# Or submit without waiting and poll status
+workflow = workcell_client.submit_workflow("analysis.workflow.yaml", await_completion=False)
+while not workflow.status.terminal:
+    workflow = workcell_client.query_workflow(workflow.workflow_id)
+    time.sleep(1)
+
+# Access step results efficiently
+analysis_datapoint_id = workflow.get_datapoint_id("analysis_step")
+analysis_result = workflow.get_datapoint("analysis_step")
+
+# Results are automatically validated and properly typed
+if analysis_result.datapoint_type == "value":
+    data = analysis_result.value  # Direct access to result data
+elif analysis_result.datapoint_type == "file":
+    file_path = analysis_result.file_path  # Access to result files
+```
 
 ## Defining a Workcell
 
@@ -100,6 +130,13 @@ MADSci Workcell Managers accept `WorkflowDefinition`s, which define a sequence o
 
 Workflows can either be directly created as python objects, or defined as YAML files (typically with the `.workflow.yaml` extension) which are then read, validated, and submitted by the workcell client.
 
+**Enhanced Features:**
+- **Flexible data handling**: Support for JSON inputs, file uploads, and complex parameter types
+- **Result validation**: Automatic validation of step results and datapoint creation
+- **Helper methods**: Convenient access to step results via `get_datapoint()` and `get_datapoint_id()`
+- **Error handling**: Improved error reporting and workflow recovery mechanisms
+- **Type safety**: Full validation of workflow parameters and step arguments
+
 ### Steps
 
 The `steps` list allows you to specify a sequence of `StepDefinition`s, which are evaluated by the Workcell Manager's Scheduler and executed when able.
@@ -115,6 +152,9 @@ A step has the following important properties:
 - `locations`: any locations to be passed to the node as arguments. Note that this will send _just the representation relevant to that node_, so the workcell's `LocationDefinition` must include a reference value matching the node name.
 - `conditions`: a list of user-specified conditions that must be met before this step can be run.
 - `data_labels`: allows you to attach unique labels to datapoints returned as part of the action results.
+
+**Enhanced Result Handling:**
+Steps now support flexible return types from nodes, including direct JSON data, datapoint IDs, file paths, and custom Pydantic models. The workcell engine automatically handles serialization and provides convenient access methods for retrieving results.
 
 ### Parameters
 
