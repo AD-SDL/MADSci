@@ -25,6 +25,8 @@ jobs:
         uses: actions/checkout@v4
       - name: example.env to .env
         run: cp .env.example .env
+      - name: check permissions
+        run: sudo chmod -R 777 .madsci
       - name: check ownership
         run: ls -ld .madsci
       # - name: docker build
