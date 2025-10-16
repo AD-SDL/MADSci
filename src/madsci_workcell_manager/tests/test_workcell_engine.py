@@ -34,6 +34,7 @@ from madsci.common.types.workflow_types import (
     WorkflowParameters,
     WorkflowStatus,
 )
+from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from pytest_mock_resources import RedisConfig, create_redis_fixture
@@ -897,6 +898,301 @@ def test_feed_data_forward_no_matching_parameters(engine: Engine) -> None:
     # Should not modify existing values
     assert updated_wf.parameter_values == {"existing": "value"}
     assert updated_wf.file_input_ids == {"existing_file": "file_id"}
+
+
+# Workflow get_datapoint_id and get_datapoint method tests
+def test_get_datapoint_id_single_datapoint_no_label() -> None:
+    """Test get_datapoint_id with single datapoint and no label specified."""
+    datapoint_id = new_ulid_str()
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={"result": datapoint_id},
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should return the single datapoint ID when no label specified
+    result_id = workflow.get_datapoint_id(step_key="step1")
+    assert result_id == datapoint_id
+
+
+def test_get_datapoint_id_single_datapoint_with_label() -> None:
+    """Test get_datapoint_id with single datapoint and specific label."""
+    datapoint_id = new_ulid_str()
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={"output_file": datapoint_id},
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should return the datapoint ID for the specific label
+    result_id = workflow.get_datapoint_id(step_key="step1", label="output_file")
+    assert result_id == datapoint_id
+
+
+def test_get_datapoint_id_multiple_datapoints_with_label() -> None:
+    """Test get_datapoint_id with multiple datapoints and specific label."""
+    datapoint_id_1 = new_ulid_str()
+    datapoint_id_2 = new_ulid_str()
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={
+                "result_data": datapoint_id_1,
+                "log_file": datapoint_id_2,
+            },
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should return the correct datapoint ID for the specified label
+    result_id = workflow.get_datapoint_id(step_key="step1", label="log_file")
+    assert result_id == datapoint_id_2
+
+
+def test_get_datapoint_id_multiple_datapoints_no_label_raises_error() -> None:
+    """Test get_datapoint_id with multiple datapoints but no label raises ValueError."""
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={
+                "result_data": new_ulid_str(),
+                "log_file": new_ulid_str(),
+            },
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should raise ValueError when multiple datapoints exist but no label specified
+    with pytest.raises(
+        ValueError, match="Step step1 has multiple datapoints, label must be specified"
+    ):
+        workflow.get_datapoint_id(step_key="step1")
+
+
+def test_get_datapoint_id_single_datapoint_ignores_wrong_label() -> None:
+    """Test get_datapoint_id with single datapoint ignores wrong label."""
+    datapoint_id = new_ulid_str()
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={"existing_label": datapoint_id},
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should return the single datapoint even with wrong label (expected behavior)
+    result_id = workflow.get_datapoint_id(step_key="step1", label="nonexistent_label")
+    assert result_id == datapoint_id
+
+
+def test_get_datapoint_id_label_not_found_raises_error() -> None:
+    """Test get_datapoint_id with non-existent label raises KeyError (multiple datapoints case)."""
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={
+                "existing_label": new_ulid_str(),
+                "another_label": new_ulid_str(),
+            },
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should raise KeyError when label doesn't exist in multiple datapoints case
+    with pytest.raises(
+        KeyError, match="Label nonexistent_label not found in step step1"
+    ):
+        workflow.get_datapoint_id(step_key="step1", label="nonexistent_label")
+
+
+def test_get_datapoint_id_step_not_found_raises_error() -> None:
+    """Test get_datapoint_id with non-existent step key raises KeyError."""
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={"result": new_ulid_str()},
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should raise KeyError when step doesn't exist
+    with pytest.raises(KeyError, match="Datapoint ID not found in workflow run"):
+        workflow.get_datapoint_id(step_key="nonexistent_step")
+
+
+def test_get_datapoint_id_no_datapoints_raises_error() -> None:
+    """Test get_datapoint_id with step having no datapoints raises KeyError."""
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints=None,  # No datapoints
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should raise KeyError when step has no datapoints
+    with pytest.raises(KeyError, match="No datapoints found in step step1"):
+        workflow.get_datapoint_id(step_key="step1")
+
+
+def test_get_datapoint_id_no_step_key_single_step() -> None:
+    """Test get_datapoint_id with no step key specified, single step with single datapoint."""
+    datapoint_id = new_ulid_str()
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={"result": datapoint_id},
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Should return the datapoint from the first step when no step_key specified
+    result_id = workflow.get_datapoint_id()
+    assert result_id == datapoint_id
+
+
+def test_get_datapoint_method_with_mock_client() -> None:
+    """Test get_datapoint method calls DataClient correctly."""
+    datapoint_id = new_ulid_str()
+    mock_datapoint = ValueDataPoint(label="test_result", value=42)
+
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={"test_result": datapoint_id},
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    # Mock the DataClient import and instantiation
+    with patch("madsci.client.data_client.DataClient") as mock_data_client_class:
+        mock_data_client = MagicMock()
+        mock_data_client.get_datapoint.return_value = mock_datapoint
+        mock_data_client_class.return_value = mock_data_client
+
+        # Should call DataClient.get_datapoint with the correct datapoint_id
+        result = workflow.get_datapoint(step_key="step1", label="test_result")
+
+        mock_data_client_class.assert_called_once()
+        mock_data_client.get_datapoint.assert_called_once_with(datapoint_id)
+        assert result == mock_datapoint
+
+
+def test_get_datapoint_method_integration_with_get_datapoint_id() -> None:
+    """Test get_datapoint method properly uses get_datapoint_id."""
+    datapoint_id = new_ulid_str()
+    mock_datapoint = FileDataPoint(label="output_file", path="/test/path.txt")
+
+    step = Step(
+        name="Test Step",
+        key="step1",
+        action="test_action",
+        node="node1",
+        result=ActionResult(
+            status=ActionStatus.SUCCEEDED,
+            datapoints={"output_file": datapoint_id},
+        ),
+    )
+
+    workflow = Workflow(
+        name="Test Workflow",
+        steps=[step],
+    )
+
+    with patch("madsci.client.data_client.DataClient") as mock_data_client_class:
+        mock_data_client = MagicMock()
+        mock_data_client.get_datapoint.return_value = mock_datapoint
+        mock_data_client_class.return_value = mock_data_client
+
+        # Test that get_datapoint correctly finds the datapoint_id and passes it to DataClient
+        result = workflow.get_datapoint(step_key="step1", label="output_file")
+
+        mock_data_client.get_datapoint.assert_called_once_with(datapoint_id)
+        assert result == mock_datapoint
 
 
 # Additional tests for handle_data_and_files method
