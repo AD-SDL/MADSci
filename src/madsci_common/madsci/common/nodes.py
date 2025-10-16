@@ -13,7 +13,7 @@ def check_node_capability(
 
     node_capability = getattr(node_info.capabilities, capability, None)
     client_capability = (
-        getattr(client.capabilities, capability, None) if client else None
+        getattr(client.supported_capabilities, capability, None) if client else None
     )
 
     return bool(
