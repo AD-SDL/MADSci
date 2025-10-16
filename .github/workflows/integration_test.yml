@@ -35,4 +35,4 @@ jobs:
         run: sudo chmod -R 777 example_lab
 
       - name: Run a command in the lab manager container
-        run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace ./notebooks/experiment_notebook.ipynb
+        run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --execute ./notebooks/experiment_notebook.ipynb
