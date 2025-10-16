@@ -29,11 +29,15 @@ jobs:
         run: docker compose build
       - name: Start services to verify build
         run: docker compose up -d
+      - name: sleep 10
+        run: sleep 10
+      - name: check ownership
+        run: ls -ld .madsci
+      - name: fix  permissions
+        run: sudo chown -R 1000:1000 .madsci && sudo chmod -R 777 .
       - name: check ownership
         run: ls -ld .madsci
 
-      # - name: fix  permissions
-      #   run: sudo chmod -R 777 .
       # - name: fix other permissions
       #   run: sudo chown $USER_ID:$GROUP_ID .madsci && sudo chmod -R 777 .madsci
       # - name: Run a command in the lab manager container
