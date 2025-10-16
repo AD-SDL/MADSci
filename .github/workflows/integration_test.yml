@@ -25,6 +25,8 @@ jobs:
         uses: actions/checkout@v4
       - name: example.env to .env
         run: cp .env.example .env
+      - name: check ownership
+        run: ls -ld .madsci
       - name: docker build
         run: docker compose build
       - name: Start services to verify build
