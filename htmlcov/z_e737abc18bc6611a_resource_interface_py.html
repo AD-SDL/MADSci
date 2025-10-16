@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">643 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">520<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">123<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">518<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">125<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_e737abc18bc6611a_resource_server_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.6">coverage.py v7.10.6</a>,
-            created at 2025-09-25 21:06 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.7">coverage.py v7.10.7</a>,
+            created at 2025-10-16 23:08 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1280,13 +1280,13 @@
     <p class="run run2"><span class="n"><a id="t1198" href="#t1198">1198</a></span><span class="t">                <span class="op">)</span><span class="op">.</span><span class="nam">first</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1199" href="#t1199">1199</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1200" href="#t1200">1200</a></span><span class="t">                <span class="key">if</span> <span class="key">not</span> <span class="nam">template_row</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1201" href="#t1201">1201</a></span><span class="t">                    <span class="nam">available_templates</span> <span class="op">=</span> <span class="op">[</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1202" href="#t1202">1202</a></span><span class="t">                        <span class="nam">row</span><span class="op">.</span><span class="nam">template_name</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1203" href="#t1203">1203</a></span><span class="t">                        <span class="key">for</span> <span class="nam">row</span> <span class="key">in</span> <span class="nam">session</span><span class="op">.</span><span class="nam">exec</span><span class="op">(</span><span class="nam">select</span><span class="op">(</span><span class="nam">ResourceTemplateTable</span><span class="op">)</span><span class="op">)</span><span class="op">.</span><span class="nam">all</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1204" href="#t1204">1204</a></span><span class="t">                    <span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1205" href="#t1205">1205</a></span><span class="t">                    <span class="key">raise</span> <span class="nam">ValueError</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1206" href="#t1206">1206</a></span><span class="t">                        <span class="fst">f"</span><span class="fst">Template '</span><span class="op">{</span><span class="nam">template_name</span><span class="op">}</span><span class="fst">' not found. Available: </span><span class="op">{</span><span class="nam">available_templates</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1207" href="#t1207">1207</a></span><span class="t">                    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1201" href="#t1201">1201</a></span><span class="t">                    <span class="nam">available_templates</span> <span class="op">=</span> <span class="op">[</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1202" href="#t1202">1202</a></span><span class="t">                        <span class="nam">row</span><span class="op">.</span><span class="nam">template_name</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1203" href="#t1203">1203</a></span><span class="t">                        <span class="key">for</span> <span class="nam">row</span> <span class="key">in</span> <span class="nam">session</span><span class="op">.</span><span class="nam">exec</span><span class="op">(</span><span class="nam">select</span><span class="op">(</span><span class="nam">ResourceTemplateTable</span><span class="op">)</span><span class="op">)</span><span class="op">.</span><span class="nam">all</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1204" href="#t1204">1204</a></span><span class="t">                    <span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1205" href="#t1205">1205</a></span><span class="t">                    <span class="key">raise</span> <span class="nam">ValueError</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1206" href="#t1206">1206</a></span><span class="t">                        <span class="fst">f"</span><span class="fst">Template '</span><span class="op">{</span><span class="nam">template_name</span><span class="op">}</span><span class="fst">' not found. Available: </span><span class="op">{</span><span class="nam">available_templates</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis mis2 show_mis"><span class="n"><a id="t1207" href="#t1207">1207</a></span><span class="t">                    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1208" href="#t1208">1208</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1209" href="#t1209">1209</a></span><span class="t">                <span class="com"># Prepare resource data</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1210" href="#t1210">1210</a></span><span class="t">                <span class="nam">overrides</span> <span class="op">=</span> <span class="nam">overrides</span> <span class="key">or</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
@@ -1723,8 +1723,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_e737abc18bc6611a_resource_server_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.6">coverage.py v7.10.6</a>,
-            created at 2025-09-25 21:06 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.10.7">coverage.py v7.10.7</a>,
+            created at 2025-10-16 23:08 +0000
         </p>
     </div>
 </footer>
