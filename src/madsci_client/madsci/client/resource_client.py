@@ -970,6 +970,89 @@ class ResourceClient:
             self.local_resources[resource.resource_id] = resource
         return self._wrap_resource(resource)
 
+    def init_template(
+        self,
+        resource: ResourceDataModels,
+        template_name: str,
+        description: str = "",
+        required_overrides: Optional[list[str]] = None,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+        version: str = "1.0.0",
+    ) -> ResourceDataModels:
+        """
+        Initialize a template with the resource manager.
+
+        If a template with the given name already exists, returns the existing template.
+        If no matching template exists, creates a new one.
+
+        Args:
+            resource (ResourceDataModels): The resource to use as a template.
+            template_name (str): Unique name for the template.
+            description (str): Description of what this template creates.
+            required_overrides (Optional[list[str]]): Fields that must be provided when using template.
+            tags (Optional[list[str]]): Tags for categorization.
+            created_by (Optional[str]): Creator identifier.
+            version (str): Template version.
+
+        Returns:
+            ResourceDataModels: The existing or newly created template resource.
+        """
+        existing_template = self.get_template(template_name)
+
+        if existing_template is not None:
+            # If versions are different, update the template
+            if version != existing_template.version:
+                self.logger.info(
+                    f"Template '{template_name}' exists with version {existing_template.version}. "
+                    f"Updating to version {version}..."
+                )
+                updated_template = self.update_template(
+                    template_name=template_name,
+                    updates={
+                        "description": description,
+                        "required_overrides": required_overrides,
+                        "tags": tags,
+                        "version": version,
+                        # Update resource fields from the new resource
+                        **resource.model_dump(
+                            exclude={
+                                "resource_id",
+                                "created_at",
+                                "updated_at",
+                                "removed",
+                                "children",
+                                "parent_id",
+                                "key",
+                                "resource_url",
+                            }
+                        ),
+                    },
+                )
+                self.logger.info(
+                    f"Updated template '{template_name}' to version {version}"
+                )
+                return updated_template
+            self.logger.info(
+                f"Using existing template '{template_name}' version {existing_template.version}"
+            )
+            return existing_template
+
+        self.logger.info(
+            f"Template '{template_name}' not found, creating new template version {version}..."
+        )
+        new_template = self.create_template(
+            resource=resource,
+            template_name=template_name,
+            description=description,
+            required_overrides=required_overrides,
+            tags=tags,
+            created_by=created_by,
+            version=version,
+        )
+        self.logger.info(f"Created template '{template_name}' version {version}")
+        return new_template
+
     def create_template(
         self,
         resource: ResourceDataModels,
