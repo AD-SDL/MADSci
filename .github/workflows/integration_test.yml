@@ -32,6 +32,6 @@ jobs:
       - name: fix  permissions
         run: sudo chmod -R 777 .
       - name: fix other permissions
-        run: sudo chmod -R 777 .madsci
+        run: sudo chown $USER_ID:$GROUP_ID .madsci & chmod -R 777 .madsci
       - name: Run a command in the lab manager container
         run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --execute ./notebooks/experiment_notebook.ipynb
