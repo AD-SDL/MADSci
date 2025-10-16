@@ -29,10 +29,7 @@ jobs:
         run: docker compose build
       - name: Start services to verify build
         run: docker compose up -d
-      - name: fix permissions
-        run: sudo chmod -R 777 .madsci
-      - name: fix other permissions
-        run: sudo chmod -R 777 example_lab
-
+      - name: fix  permissions
+        run: sudo chmod -R 777 .
       - name: Run a command in the lab manager container
         run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --execute ./notebooks/experiment_notebook.ipynb
