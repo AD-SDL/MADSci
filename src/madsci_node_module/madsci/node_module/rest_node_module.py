@@ -6,7 +6,16 @@ import tempfile
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Callable, Optional, Type, get_origin, get_type_hints
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Optional,
+    Type,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 from zipfile import ZipFile
 
 from fastapi import HTTPException, Request, Response
@@ -551,6 +560,10 @@ class RestNode(AbstractNode):
         if not return_type or return_type is type(None):
             return None
 
+        # Extract underlying type if it's an Annotated type
+        if get_origin(return_type) is Annotated:
+            return_type = get_args(return_type)[0]
+
         # Handle tuple returns (mixed results)
         if get_origin(return_type) is tuple:
             # Extract non-file types from tuple for json_result
@@ -577,6 +590,10 @@ class RestNode(AbstractNode):
 
     def _is_file_type(self, type_to_check: Any) -> bool:
         """Check if a type represents file output (Path or ActionFiles subclass)."""
+        # Extract underlying type if it's an Annotated type
+        if get_origin(type_to_check) is Annotated:
+            type_to_check = get_args(type_to_check)[0]
+
         if type_to_check is Path:
             return True
 
