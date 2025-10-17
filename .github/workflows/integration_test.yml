@@ -32,6 +32,6 @@ jobs:
       - name: Sleep for 30 seconds to allow services to start
         run: sleep 30
       - name: Change ownership of /home/madsci/.madsci
-        run: sudo chown -R $USER:$USER /home/madsci/.madsci
+        run: sudo chown -R $USER:$USER .madsci
       - name: Run a command in the lab manager container
         run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
