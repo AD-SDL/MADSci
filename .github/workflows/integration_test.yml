@@ -27,10 +27,11 @@ jobs:
         run: cp .env.example .env
       - name: docker build
         run: docker compose build
-      - name: Set permissions for madsci log directory
-        run: sudo mkdir -p /home/madsci/.madsci/logs && sudo chown -R $USER:$USER /home/madsci/.madsci
       - name: Start services to verify build
         run: docker compose up -d
-
+      - name: Sleep for 30 seconds to allow services to start
+        run: sleep 30
+      - name: Change ownership of /home/madsci/.madsci
+        run: sudo chown -R $USER:$USER /home/madsci/.madsci
       - name: Run a command in the lab manager container
         run: docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
