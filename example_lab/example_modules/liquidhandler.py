@@ -8,6 +8,7 @@ from madsci.client.event_client import EventClient
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
+from madsci.common.types.resource_types import Pool, Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
@@ -51,9 +52,89 @@ class LiquidHandlerNode(RestNode):
 
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
-        self.liquid_handler = LiquidHandlerInterface(
-            logger=self.logger, device_number=self.config.device_number
+        self.liquid_handler = LiquidHandlerInterface(logger=self.logger)
+
+        # Create deck slot template
+        deck_slot = Slot(
+            resource_name="liquid_handler_deck",
+            resource_class="LiquidHandlerDeck",
+            capacity=1,
+            attributes={
+                "slot_type": "deck_position",
+                "accessible": True,
+                "description": "Liquid handler deck slot for placing plates or labware",
+            },
         )
+
+        self.resource_client.init_template(
+            resource=deck_slot,
+            template_name="liquid_handler_deck_slot",
+            description="Template for liquid handler deck slot. Represents deck positions where plates or labware can be placed.",
+            required_overrides=["resource_name"],
+            tags=["liquid_handler", "deck", "slot"],
+            created_by=self.node_definition.node_id,
+            version="1.0.0",
+        )
+
+        # Create pipette template (Pool type for holding tips/liquid)
+        pipette_pool = Pool(
+            resource_name="liquid_handler_pipette",
+            resource_class="LiquidHandlerPipette",
+            capacity=1000.0,
+            attributes={
+                "pipette_type": "8-channel",
+                "min_volume": 0.5,
+                "max_volume": 1000.0,
+                "channels": 8,
+                "description": "Liquid handler pipette pool for tracking tips and aspirated liquid",
+            },
+        )
+
+        self.resource_client.init_template(
+            resource=pipette_pool,
+            template_name="liquid_handler_pipette_pool",
+            description="Template for liquid handler pipette pool. Tracks pipette tips and aspirated liquids.",
+            required_overrides=["resource_name"],
+            tags=["liquid_handler", "pipette", "pool", "consumable"],
+            created_by=self.node_definition.node_id,
+            version="1.0.0",
+        )
+
+        # Initialize deck 1
+        deck1_resource_name = f"liquid_handler_deck1_{self.node_definition.node_name}"
+        self.deck1 = self.resource_client.create_resource_from_template(
+            template_name="liquid_handler_deck_slot",
+            resource_name=deck1_resource_name,
+            add_to_database=True,
+        )
+        self.logger.log(
+            f"Initialized deck1 resource from template: {self.deck1.resource_id}"
+        )
+
+        # Initialize deck 2
+        deck2_resource_name = f"liquid_handler_deck2_{self.node_definition.node_name}"
+        self.deck2 = self.resource_client.create_resource_from_template(
+            template_name="liquid_handler_deck_slot",
+            resource_name=deck2_resource_name,
+            add_to_database=True,
+        )
+        self.logger.log(
+            f"Initialized deck2 resource from template: {self.deck2.resource_id}"
+        )
+
+        # Initialize pipette
+        pipette_resource_name = (
+            f"liquid_handler_pipette_{self.node_definition.node_name}"
+        )
+        self.pipette = self.resource_client.create_resource_from_template(
+            template_name="liquid_handler_pipette_pool",
+            resource_name=pipette_resource_name,
+            add_to_database=True,
+        )
+        self.logger.log(
+            f"Initialized pipette resource from template: {self.pipette.resource_id}"
+        )
+
         self.logger.log("Liquid handler initialized!")
 
     def shutdown_handler(self) -> None:

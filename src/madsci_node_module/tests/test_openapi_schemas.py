@@ -4,7 +4,7 @@ import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, Generator, List, Optional, Union
 
 import pytest
 from fastapi.testclient import TestClient
@@ -427,7 +427,7 @@ def openapi_test_node() -> OpenAPISchemaTestNode:
 
 
 @pytest.fixture
-def openapi_test_client(openapi_test_node) -> TestClient:
+def openapi_test_client(openapi_test_node) -> Generator[TestClient, None, None]:
     """Create test client for OpenAPI test node."""
     with TestClient(openapi_test_node.rest_api) as client:
         time.sleep(0.5)  # Wait for startup to complete

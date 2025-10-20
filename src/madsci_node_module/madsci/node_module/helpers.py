@@ -2,7 +2,7 @@
 
 import inspect
 from pathlib import Path
-from typing import Any, Callable, Type, get_origin
+from typing import Annotated, Any, Callable, Type, get_args, get_origin
 
 import regex
 from madsci.common.types.action_types import (
@@ -178,8 +178,19 @@ def _parse_custom_pydantic_model(returned: Any) -> list[ActionResultDefinition]:
     ]
 
 
+def _extract_underlying_type(type_hint: Any) -> Any:
+    """Extract the underlying type from Annotated types."""
+    if get_origin(type_hint) is Annotated:
+        # Return the first type argument from Annotated[T, metadata...]
+        return get_args(type_hint)[0]
+    return type_hint
+
+
 def parse_result(returned: Any) -> list[ActionResultDefinition]:
     """Parse a single result from an Action"""
+
+    # First extract the underlying type if it's an Annotated type
+    returned = _extract_underlying_type(returned)
 
     # Handle tuple types by recursively parsing each element
     if getattr(returned, "__origin__", None) is tuple:
