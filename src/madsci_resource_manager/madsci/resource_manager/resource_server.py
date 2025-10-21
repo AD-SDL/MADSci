@@ -380,10 +380,12 @@ class ResourceManager(
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/templates/query")
-    async def list_templates(self, query: TemplateGetQuery) -> list[ResourceDataModels]:
-        """List templates with optional filtering."""
+    async def query_templates(
+        self, query: TemplateGetQuery
+    ) -> list[ResourceDataModels]:
+        """Query templates with optional filtering."""
         try:
-            return self._resource_interface.list_templates(
+            return self._resource_interface.query_templates(
                 base_type=query.base_type,
                 tags=query.tags,
                 created_by=query.created_by,
@@ -393,10 +395,10 @@ class ResourceManager(
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @get("/templates")
-    async def list_templates_simple(self) -> list[ResourceDataModels]:
+    async def query_templates_simple(self) -> list[ResourceDataModels]:
         """List all templates (simple endpoint without filtering)."""
         try:
-            return self._resource_interface.list_templates()
+            return self._resource_interface.query_templates()
         except Exception as e:
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
