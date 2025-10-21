@@ -131,12 +131,6 @@ class RobotArmNode(RestNode):
                 resource=self.gripper.resource_id, child=popped_plate
             )
 
-        try:
-            popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
-        except Exception:
-            return ActionFailed(errors=[Error(message="No plate in source!")])
-        self.resource_client.push(resource=self.gripper.resource_id, child=popped_plate)
-
         time.sleep(100 / speed)  # Simulate time taken to move
 
         popped_plate, _ = self.resource_client.pop(resource=self.gripper.resource_id)
