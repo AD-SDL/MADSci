@@ -516,23 +516,22 @@ class ActionDefinition(MadsciBaseModel):
         return v
 
     @model_validator(mode="after")
-    @classmethod
-    def ensure_name_uniqueness(cls: Any, v: Any) -> Any:
+    def ensure_name_uniqueness(self) -> Any:
         """Ensure that the names of the arguments and files are unique"""
         names = set()
-        for arg in v.args.values():
+        for arg in self.args.values():
             if arg.name in names:
                 raise ValueError(f"Action name '{arg.name}' is not unique")
             names.add(arg.name)
-        for file in v.files.values():
+        for file in self.files.values():
             if file.name in names:
                 raise ValueError(f"File name '{file.name}' is not unique")
             names.add(file.name)
-        for location in v.locations.values():
+        for location in self.locations.values():
             if location.name in names:
                 raise ValueError(f"Location name '{location.name}' is not unique")
             names.add(location.name)
-        return v
+        return self
 
 
 class ArgumentDefinition(MadsciBaseModel):
