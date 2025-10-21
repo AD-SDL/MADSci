@@ -118,7 +118,7 @@ class ResourceWrapper:
             "query_history",
             "get_template_info",
             "delete_template",
-            "list_templates",
+            "query_templates",
             "get_templates_by_category",
         }
 
@@ -1141,7 +1141,7 @@ class ResourceClient:
             return self._wrap_resource(template_data["resource"])
         return None
 
-    def list_templates(
+    def query_templates(
         self,
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
