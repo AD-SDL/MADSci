@@ -363,7 +363,7 @@ def test_get_template_not_found(client: ResourceClient) -> None:
     assert template is None
 
 
-def test_list_templates(client: ResourceClient) -> None:
+def test_query_templates(client: ResourceClient) -> None:
     """Test listing templates using ResourceClient"""
     # Create multiple templates
     resource1 = Container(resource_name="Container1", capacity=50)
@@ -384,13 +384,13 @@ def test_list_templates(client: ResourceClient) -> None:
     )
 
     # List all templates
-    all_templates = client.list_templates()
+    all_templates = client.query_templates()
     template_names = [t.resource_name for t in all_templates]
     assert "Container1" in template_names
     assert "Resource2" in template_names
 
     # Filter by tags
-    test_templates = client.list_templates(tags=["test"])
+    test_templates = client.query_templates(tags=["test"])
     assert len(test_templates) >= 2
 
 
