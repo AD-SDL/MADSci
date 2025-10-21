@@ -10,6 +10,7 @@ from typing import Any, ClassVar, Optional, Union
 import requests
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -1306,6 +1307,17 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The created resource.
         """
+        # Get current ownership info
+        current_owner = get_current_ownership_info()
+
+        # Initialize overrides if None
+        if overrides is None:
+            overrides = {}
+
+        # Add owner to overrides if not already present
+        if "owner" not in overrides and current_owner and current_owner.node_id:
+            overrides["owner"] = {"node_id": current_owner.node_id}
+
         if self.resource_server_url:
             payload = CreateResourceFromTemplateBody(
                 resource_name=resource_name,
@@ -1322,13 +1334,14 @@ class ResourceClient:
             resource.resource_url = (
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
-            return resource
+            return self._wrap_resource(resource)
+
+        # Local-only mode
         template_data = self.local_templates.get(template_name)
         if not template_data:
             raise ValueError(f"Template '{template_name}' not found")
 
         # Check required overrides
-        overrides = overrides or {}
         missing_required = [
             field
             for field in template_data["required_overrides"]
