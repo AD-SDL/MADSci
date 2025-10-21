@@ -1,7 +1,7 @@
 """Test node infrastructure including lifecycle, configuration, and basic actions."""
 
 import time
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi.testclient import TestClient
 from madsci.client.data_client import DataClient
@@ -449,7 +449,7 @@ class MockNode(AbstractNode):
     @action
     def action_with_union_location(
         self,
-        target: Optional[LocationArgument] | str = "default",
+        target: Union[LocationArgument, str] = "default",
         speed: int = 100,
     ) -> str:
         """Action with union type including location argument."""
@@ -473,7 +473,7 @@ class MockNode(AbstractNode):
     @action
     def action_with_union_custom_model(
         self,
-        data: CustomModel | dict = None,
+        data: Union[CustomModel, dict] = None,
     ) -> str:
         """Action with union type including custom BaseModel."""
         if isinstance(data, CustomModel):
