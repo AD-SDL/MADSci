@@ -1,6 +1,7 @@
 name: Pre-Commit Checks
 
 on:
+  pull_request:
   push: # Run for every push
     branches: ["*"]
     tags: ["*"]
