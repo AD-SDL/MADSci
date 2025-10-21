@@ -633,7 +633,7 @@ def test_minimal_template(client: ResourceClient) -> None:
     )
 
     assert new_resource.resource_name == "MinimalCopy"
-    assert type(new_resource).__name__ == "Resource"
+    assert type(new_resource.unwrap).__name__ == "Resource"
 
 
 def test_resource_wrapper_creation(client: ResourceClient) -> None:
