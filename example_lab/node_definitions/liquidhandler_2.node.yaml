@@ -1,0 +1,7 @@
+node_name: liquidhandler_2
+node_id: 01JYFEHVSV20D60Z88RVERJ75P
+node_description: A second (fake) liquidhandler for testing purposes.
+node_type: device
+module_name: liquidhandler
+module_version: 0.0.1
+capabilities: null

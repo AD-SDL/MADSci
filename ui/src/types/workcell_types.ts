@@ -91,7 +91,11 @@ export interface Location {
   /**
    * The name of the location.
    */
-  location_name: string;
+  location_name?: string;
+  /**
+   * The name of the location (new field).
+   */
+  name?: string;
   /**
    * The ID of the location.
    */
@@ -103,9 +107,9 @@ export interface Location {
   /**
    * A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).
    */
-  lookup?: {
+  representations?: {
     [k: string]: unknown;
-  };
+  } | null;
   /**
    * Definition of the Resource to be associated with this location (if any) on location initialization.
    */
@@ -1129,7 +1133,7 @@ export interface LocationDefinition {
   /**
    * A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).
    */
-  lookup?: {
+  reference?: {
     [k: string]: unknown;
   };
   /**

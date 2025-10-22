@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Generic, Optional, TypeVar
 
 import uvicorn
-from classy_fastapi import Routable
+from classy_fastapi import Routable, get
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient
@@ -30,7 +30,7 @@ class ManagerBaseMeta(ABCMeta, type(Routable)):
 
 
 class AbstractManagerBase(
-    Routable, Generic[SettingsT, DefinitionT], metaclass=ManagerBaseMeta
+    Generic[SettingsT, DefinitionT], Routable, metaclass=ManagerBaseMeta
 ):
     """
     Abstract base class for MADSci manager services using classy-fastapi.
@@ -56,6 +56,32 @@ class AbstractManagerBase(
     SETTINGS_CLASS: Optional[type[MadsciBaseSettings]] = None
     DEFINITION_CLASS: Optional[type[MadsciBaseModel]] = None
 
+    def __init_subclass__(cls) -> None:
+        """
+        Initialize subclass and collect endpoints.
+
+        This override handles the __abstractmethods__ issue that occurs when
+        combining ABC with classy-fastapi's Routable in generic classes.
+        """
+        # Import here to avoid circular dependencies and to match classy-fastapi's pattern
+        import inspect  # noqa: PLC0415
+
+        from classy_fastapi.decorators import EndpointDefinition  # noqa: PLC0415
+
+        endpoints: list[EndpointDefinition] = []
+        for obj_name in dir(cls):
+            # Skip __abstractmethods__ to avoid AttributeError during ABC construction
+            if obj_name == "__abstractmethods__":
+                continue
+            try:
+                obj = getattr(cls, obj_name)
+                if inspect.isfunction(obj) and hasattr(obj, "_endpoint"):
+                    endpoints.append(obj._endpoint)
+            except AttributeError:
+                # Some attributes may not be accessible during class construction
+                pass
+        cls._endpoints = endpoints
+
     def __init__(
         self,
         settings: Optional[SettingsT] = None,
@@ -78,9 +104,9 @@ class AbstractManagerBase(
 
         # Setup logging
         self.setup_logging()
-        self.logger.log_info(self._settings)
-        self.logger.log_info(self._definition)
-        self.logger.log_info(get_current_madsci_context())
+        self.logger.info(self._settings)
+        self.logger.info(self._definition)
+        self.logger.info(get_current_madsci_context())
 
         # Setup ownership context
         self.setup_ownership()
@@ -121,7 +147,7 @@ class AbstractManagerBase(
             raise NotImplementedError(
                 f"{self.__class__.__name__} must set DEFINITION_CLASS class attribute"
             )
-        return self.DEFINITION_CLASS()
+        return self.DEFINITION_CLASS(name=f"Default {self.__class__.__name__}")
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -133,8 +159,6 @@ class AbstractManagerBase(
         Args:
             **kwargs: Additional arguments from __init__
         """
-        # Base implementation does nothing, subclasses can override
-        _ = kwargs  # Mark kwargs as used to avoid lint warning
 
     def setup_logging(self) -> None:
         """Setup logging for the manager."""
@@ -160,12 +184,50 @@ class AbstractManagerBase(
             # the manager is at least partially functional
             return ManagerHealth(
                 healthy=True,
-                description="Manager is running and responding to requests",
+                description="Manager is running normally.",
             )
         except Exception as e:
             return ManagerHealth(
                 healthy=False, description=f"Health check failed: {e!s}"
             )
+
+    @get("/health")
+    def health_endpoint(self) -> ManagerHealth:
+        """
+        Health check endpoint for the manager.
+
+        This endpoint is automatically inherited by all manager subclasses.
+        Managers that override get_health() will automatically have their
+        custom health checks exposed through this endpoint.
+
+        Returns:
+            ManagerHealth: The current health status
+        """
+        return self.get_health()
+
+    @get("/")
+    def get_definition_root(self) -> DefinitionT:
+        """
+        Return the manager definition at the root endpoint.
+
+        This endpoint is automatically inherited by all manager subclasses.
+
+        Returns:
+            DefinitionT: The manager definition
+        """
+        return self.definition
+
+    @get("/definition")
+    def get_definition_alt(self) -> DefinitionT:
+        """
+        Return the manager definition at the /definition endpoint.
+
+        This endpoint is automatically inherited by all manager subclasses.
+
+        Returns:
+            DefinitionT: The manager definition
+        """
+        return self.definition
 
     def load_or_create_definition(self) -> DefinitionT:
         """Load definition from file or create default."""
@@ -181,7 +243,7 @@ class AbstractManagerBase(
 
         # Only log if logger is initialized
         if hasattr(self, "_logger"):
-            self.logger.log_info(f"Writing to definition file: {def_path}")
+            self.logger.info(f"Writing to definition file: {def_path}")
         definition.to_yaml(def_path)
         return definition
 

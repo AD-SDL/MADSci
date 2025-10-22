@@ -72,7 +72,7 @@ type LocationDefinition = {
     location_name: string;
     location_id: string;
     description: string | null;
-    lookup: Record<string, any>;
+    reference: Record<string, any>;
     resource_definition: any | null;
 
 

@@ -50,6 +50,7 @@ services:
       - 6379:6379
     volumes:
       - ${REPO_PATH:-.}/.madsci/redis:/data
+    command: redis-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
   postgres:
     container_name: postgres
     image: postgres:17
@@ -122,6 +123,16 @@ services:
     depends_on:
       - mongodb
       - event_manager
+
+  location_manager:
+    <<: *madsci-service
+    container_name: location_manager
+    command: python -m madsci.location_manager.location_server
+    depends_on:
+      - redis
+      - event_manager
+      - resource_manager
+
   workcell_manager:
     <<: *madsci-service
     container_name: workcell_manager
@@ -132,49 +143,46 @@ services:
       - resource_manager
       - event_manager
       - postgres
+      - location_manager
 
 
    # *Nodes
-  liquidhandler:
+  liquidhandler_1:
     <<: *madsci-service
-    container_name: liquidhandler
+    container_name: liquidhandler_1
     environment:
       - NODE_DEFINITION=node_definitions/liquidhandler_1.node.yaml
       - NODE_URL=http://localhost:2000
     command: python example_modules/liquidhandler.py
 
-  robotarm:
+  liquidhandler_2:
     <<: *madsci-service
-    container_name: robotarm
+    container_name: liquidhandler_2
+    environment:
+      - NODE_DEFINITION=node_definitions/liquidhandler_2.node.yaml
+      - NODE_URL=http://localhost:2001
+    command: python example_modules/liquidhandler.py
+
+  robotarm_1:
+    <<: *madsci-service
+    container_name: robotarm_1
     environment:
       - NODE_DEFINITION=node_definitions/robotarm_1.node.yaml
-      - NODE_URL=http://localhost:2001
+      - NODE_URL=http://localhost:2002
     command: python example_modules/robotarm.py
 
-
-  platereader:
+  platereader_1:
     <<: *madsci-service
-    container_name: platereader
+    container_name: platereader_1
     environment:
       - NODE_DEFINITION=node_definitions/platereader_1.node.yaml
-      - NODE_URL=http://localhost:2002
+      - NODE_URL=http://localhost:2003
     command: python example_modules/platereader.py
 
-
-  ot2:
+  advanced_example_node:
     <<: *madsci-service
-    container_name: ot2_gamma
+    container_name: advanced_example_node
     environment:
-      - NODE_DEFINITION=node_definitions/ot2_gamma.node.yaml
-      - NODE_URL=http://localhost:2003
-    command: python example_modules/ot2.py
-
-
-  pf400:
-    <<: *madsci-service
-    container_name: pf400
-    environment:
-      - NODE_DEFINITION=node_definitions/pf400_1.node.yaml
+      - NODE_DEFINITION=node_definitions/advanced_example_node.node.yaml
       - NODE_URL=http://localhost:2004
-    command: python example_modules/pf400.py
-
+    command: python example_modules/advanced_example_module.py

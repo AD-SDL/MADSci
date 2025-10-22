@@ -92,6 +92,11 @@ client.increase_quantity(resource=added_reagent, amount=100.0) # Add 100mL
 history = client.query_history(resource_id=added_sample.resource_id)
 client.remove_resource(resource_id=added_sample.resource_id)  # Soft delete
 client.restore_deleted_resource(resource_id=added_sample.resource_id)
+
+# Query resource hierarchy
+hierarchy = client.query_resource_hierarchy(resource_id=added_plate.resource_id)
+print(f"Ancestors: {hierarchy.ancestor_ids}")
+print(f"Descendants: {hierarchy.descendant_ids}")
 ```
 
 ## Resource Types
@@ -591,5 +596,132 @@ class AnalyzerNode(RestNode):
 
             return ActionSucceeded(data=result)
 ```
+
+## Resource Hierarchy Queries
+
+The Resource Manager provides functionality to query the hierarchical relationships between resources, making it easy to understand parent-child relationships and navigate resource trees.
+
+### Understanding Resource Hierarchy
+
+Resources can form hierarchical structures where:
+- **Parent resources** contain child resources (e.g., a plate contains samples)
+- **Child resources** belong to parent resources and have a specific key/position
+- **Ancestor resources** are all parents up the hierarchy chain
+- **Descendant resources** are all children down the hierarchy chain
+
+### Querying Resource Hierarchy
+
+```python
+from madsci.client.resource_client import ResourceClient
+
+client = ResourceClient("http://localhost:8003")
+
+# Create a hierarchy: Rack -> Plate -> Sample
+rack = Grid(resource_name="Sample Rack", rows=2, columns=3, resource_class="rack")
+rack = client.add_resource(rack)
+
+plate = Grid(resource_name="96-well Plate", rows=8, columns=12, resource_class="plate")
+plate = client.add_resource(plate)
+client.set_child(resource=rack, key=(0, 0), child=plate)
+
+sample = Asset(resource_name="Sample A1", resource_class="sample")
+sample = client.add_resource(sample)
+client.set_child(resource=plate, key=(0, 0), child=sample)
+
+# Query hierarchy for the plate (middle of the hierarchy)
+hierarchy = client.query_resource_hierarchy(plate.resource_id)
+
+print(f"Resource ID: {hierarchy.resource_id}")
+print(f"Ancestors (closest to furthest): {hierarchy.ancestor_ids}")
+print(f"Descendants by parent: {hierarchy.descendant_ids}")
+
+# Example output:
+# Resource ID: 01HQ2K3M4N5P6Q7R8S9T0V1W2X
+# Ancestors: ['01HQ2K3M4N5P6Q7R8S9T0V1W2Y']  # [rack_id]
+# Descendants: {
+#     '01HQ2K3M4N5P6Q7R8S9T0V1W2X': ['01HQ2K3M4N5P6Q7R8S9T0V1W2Z']  # plate -> [sample_id]
+# }
+```
+
+### Hierarchy Query Results
+
+The `query_resource_hierarchy` method returns a `ResourceHierarchy` object with:
+
+- **`ancestor_ids`**: List of parent resource IDs, ordered from closest to furthest
+  - `[parent_id, grandparent_id, great_grandparent_id, ...]`
+  - Empty list if the resource has no parents
+
+- **`resource_id`**: The ID of the queried resource
+
+- **`descendant_ids`**: Dictionary mapping parent IDs to their direct child IDs
+  - Recursively includes all descendant generations (children, grandchildren, great-grandchildren, etc.)
+  - Only includes direct parent-child relationships (no "uncle" or "cousin" resources)
+  - Key: parent resource ID, Value: list of direct child resource IDs
+  - Empty dictionary if no descendants exist
+
+### Use Cases
+
+**1. Navigate Up the Hierarchy:**
+```python
+# Find all containers holding a specific sample
+sample_hierarchy = client.query_resource_hierarchy(sample_id)
+for ancestor_id in sample_hierarchy.ancestor_ids:
+    ancestor = client.get_resource(ancestor_id)
+    print(f"Sample is contained in: {ancestor.resource_name}")
+```
+
+**2. Navigate Down the Hierarchy:**
+```python
+# Find all contents of a container and their sub-contents
+container_hierarchy = client.query_resource_hierarchy(container_id)
+for parent_id, child_ids in container_hierarchy.descendant_ids.items():
+    parent = client.get_resource(parent_id)
+    print(f"{parent.resource_name} contains:")
+    for child_id in child_ids:
+        child = client.get_resource(child_id)
+        print(f"  - {child.resource_name}")
+```
+
+**3. Verify Containment Relationships:**
+```python
+# Check if one resource is an ancestor of another
+def is_ancestor(potential_ancestor_id, resource_id, client):
+    hierarchy = client.query_resource_hierarchy(resource_id)
+    return potential_ancestor_id in hierarchy.ancestor_ids
+
+# Check if one resource is a descendant of another
+def is_descendant(potential_descendant_id, resource_id, client):
+    hierarchy = client.query_resource_hierarchy(resource_id)
+    for child_ids in hierarchy.descendant_ids.values():
+        if potential_descendant_id in child_ids:
+            return True
+    return False
+```
+
+**4. Build Resource Trees:**
+```python
+# Recursively build a complete resource tree
+def build_resource_tree(resource_id, client, depth=0):
+    resource = client.get_resource(resource_id)
+    hierarchy = client.query_resource_hierarchy(resource_id)
+
+    indent = "  " * depth
+    print(f"{indent}{resource.resource_name} ({resource.resource_id})")
+
+    # Process direct children
+    if resource_id in hierarchy.descendant_ids:
+        for child_id in hierarchy.descendant_ids[resource_id]:
+            build_resource_tree(child_id, client, depth + 1)
+
+# Start from a root resource
+build_resource_tree(root_container_id, client)
+```
+
+### Performance Considerations
+
+- Hierarchy queries are optimized to fetch only direct parent-child relationships
+- For deep hierarchies, consider caching results if querying frequently
+- The query returns all direct ancestors and recursively traverses all descendants
+- Use sparingly for very large resource trees with many nested levels
 
 **Examples**: See [example_lab/](../../example_lab/) for complete resource management workflows integrated with laboratory operations.

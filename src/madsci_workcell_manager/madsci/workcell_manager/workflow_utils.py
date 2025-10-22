@@ -11,6 +11,7 @@ from typing import Any, Optional
 from fastapi import UploadFile
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
+from madsci.client.location_client import LocationClient
 from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.location_types import (
     LocationArgument,
@@ -64,15 +65,19 @@ def validate_workcell_action_step(step: Step) -> tuple[bool, str]:
 def _validate_feedforward(
     step: Step, feedforward_parameters: dict[str, Any]
 ) -> Optional[tuple[bool, str]]:
-    if step.node is None and step.parameters and step.parameters.node is not None:
-        if step.parameters.node in [param.key for param in feedforward_parameters]:
+    if (
+        step.node is None
+        and step.use_parameters
+        and step.use_parameters.node is not None
+    ):
+        if step.use_parameters.node in [param.key for param in feedforward_parameters]:
             return (
                 True,
-                f"Waiting for value from feedforward parameter {step.parameters.node} before validating step {step.name}",
+                f"Waiting for value from feedforward parameter {step.use_parameters.node} before validating step {step.name}",
             )
         return (
             False,
-            f"Step '{step.name}': Feedforward parameter {step.parameters.node} not found",
+            f"Step '{step.name}': Feedforward parameter {step.use_parameters.node} not found",
         )
     return None
 
@@ -99,7 +104,9 @@ def _validate_node_action(
             for arg in action.args.values()
             if arg.required
             and arg.name not in step.args
-            and arg.name not in step.parameters.args
+            and (
+                step.use_parameters is None or arg.name not in step.use_parameters.args
+            )
         ),
         None,
     )
@@ -114,7 +121,10 @@ def _validate_node_action(
             for loc in action.locations.values()
             if loc.required
             and loc.name not in step.locations
-            and loc.name not in step.parameters.locations
+            and (
+                step.use_parameters is None
+                or loc.name not in step.use_parameters.locations
+            )
         ),
         None,
     )
@@ -177,6 +187,7 @@ def create_workflow(
     data_client: DataClient,
     json_inputs: Optional[dict[str, Any]] = None,
     file_input_paths: Optional[dict[str, str]] = None,
+    location_client: Optional[LocationClient] = None,
 ) -> Workflow:
     """Pulls the workcell and builds a list of dictionary steps to be executed
 
@@ -217,7 +228,13 @@ def create_workflow(
     for step in workflow_def.steps:
         steps.append(
             prepare_workflow_step(
-                workcell, state_handler, step, wf, data_client, running=False
+                workcell,
+                state_handler,
+                step,
+                wf,
+                data_client,
+                location_client,
+                running=False,
             )
         )
 
@@ -228,17 +245,17 @@ def create_workflow(
 
 def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
     """Replace parameter values in a provided step"""
-    if step.parameters is not None:
+    if step.use_parameters is not None:
         step_dict = step.model_dump()
-        for key, parameter_name in step.parameters.model_dump().items():
+        for key, parameter_name in step.use_parameters.model_dump().items():
             if type(parameter_name) is str and parameter_name in parameter_values:
                 step_dict[key] = parameter_values[parameter_name]
         step = Step.model_validate(step_dict)
 
-        for key, parameter_name in step.parameters.args.items():
+        for key, parameter_name in step.use_parameters.args.items():
             if parameter_name in parameter_values:
                 step.args[key] = parameter_values[parameter_name]
-        for key, parameter_name in step.parameters.locations.items():
+        for key, parameter_name in step.use_parameters.locations.items():
             if parameter_name in parameter_values:
                 step.locations[key] = parameter_values[parameter_name]
     return step
@@ -250,14 +267,15 @@ def prepare_workflow_step(
     step: Step,
     workflow: Workflow,
     data_client: DataClient,
+    location_client: Optional[LocationClient] = None,
     running: bool = True,
 ) -> Step:
     """Prepares a step for execution by replacing locations and validating it"""
     parameter_values = workflow.parameter_values
     working_step = deepcopy(step)
-    if step.parameters is not None:
+    if step.use_parameters is not None:
         working_step = insert_parameters(working_step, parameter_values)
-    replace_locations(workcell, working_step, state_handler)
+    replace_locations(workcell, working_step, location_client)
     valid, validation_string = validate_step(
         working_step,
         state_handler=state_handler,
@@ -265,7 +283,7 @@ def prepare_workflow_step(
     )
     if running:
         working_step = prepare_workflow_files(working_step, workflow, data_client)
-    EventClient().log_info(validation_string)
+    EventClient().info(validation_string)
     if not valid:
         raise ValueError(validation_string)
     return working_step
@@ -280,7 +298,9 @@ def check_parameters(
     if workflow_definition.parameters.json_inputs:
         check_json_parameters(workflow_definition, json_inputs)
     for ffv in workflow_definition.parameters.feed_forward:
-        if ffv.key in json_inputs or ffv.key in file_input_paths:
+        if (json_inputs and ffv.key in json_inputs) or (
+            file_input_paths and ffv.key in file_input_paths
+        ):
             raise ValueError(
                 f"{ffv.key} is a Feed Forward Value and will be calculated during execution; it should not be provided as an input."
             )
@@ -333,10 +353,15 @@ def prepare_workflow_files(
 
 
 def replace_locations(
-    workcell: WorkcellManagerDefinition, step: Step, state_handler: WorkcellStateHandler
+    workcell: WorkcellManagerDefinition,
+    step: Step,
+    location_client: Optional[LocationClient] = None,
 ) -> None:
     """Replaces the location names with the location objects"""
-    locations = state_handler.get_locations()
+    locations = {}
+    if location_client is not None:
+        location_list = location_client.get_locations()
+        locations = {loc.location_id: loc for loc in location_list}
     for location_arg, location_name_or_object in step.locations.items():
         # * No location provided, set to None
         if location_name_or_object is None:
@@ -349,11 +374,7 @@ def replace_locations(
 
         # * Location is a string, find the corresponding Location object from state_handler
         target_loc = next(
-            (
-                loc
-                for loc in locations.values()
-                if loc.location_name == location_name_or_object
-            ),
+            (loc for loc in locations.values() if loc.name == location_name_or_object),
             None,
         )
         if target_loc is None:
@@ -361,9 +382,9 @@ def replace_locations(
                 f"Location {location_name_or_object} not found in Workcell '{workcell.name}'"
             )
         node_location = LocationArgument(
-            location=target_loc.lookup[step.node],
+            location=target_loc.representations[step.node],
             resource_id=target_loc.resource_id,
-            location_name=target_loc.location_name,
+            location_name=target_loc.name,
         )
         step.locations[location_arg] = node_location
 

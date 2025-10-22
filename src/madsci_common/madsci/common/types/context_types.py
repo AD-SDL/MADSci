@@ -47,3 +47,8 @@ class MadsciContext(
         description="The URL of the workcell server.",
         default=None,
     )
+    location_server_url: Optional[AnyUrl] = Field(
+        title="Location Server URL",
+        description="The URL of the location server.",
+        default=None,
+    )

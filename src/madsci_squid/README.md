@@ -122,7 +122,8 @@ The Lab Manager provides REST endpoints for lab coordination:
 
 - `GET /context`: Lab-wide service URLs and configuration
 - `GET /health`: Service health check
-- `GET /info`: Lab definition and metadata
+- `GET /lab_health`: Collected health information for the lab
+- `GET /definition`: Lab definition and metadata
 - Dashboard files served at root when configured
 
 **Full API documentation**: Available at `http://localhost:8000/docs` when running

@@ -14,6 +14,7 @@ Base class for MADSci context settings.
 | `DATA_SERVER_URL`       | `AnyUrl` \| `NoneType` | `null`  | The URL of the data server.       | `null`  |
 | `RESOURCE_SERVER_URL`   | `AnyUrl` \| `NoneType` | `null`  | The URL of the resource server.   | `null`  |
 | `WORKCELL_SERVER_URL`   | `AnyUrl` \| `NoneType` | `null`  | The URL of the workcell server.   | `null`  |
+| `LOCATION_SERVER_URL`   | `AnyUrl` \| `NoneType` | `null`  | The URL of the location server.   | `null`  |
 
 ## EventClientConfig
 

@@ -10,6 +10,7 @@ from typing import Any, ClassVar, Optional, Union
 import requests
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -22,6 +23,7 @@ from madsci.common.types.resource_types.server_types import (
     PushResourceBody,
     RemoveChildBody,
     ResourceGetQuery,
+    ResourceHierarchy,
     ResourceHistoryGetQuery,
     SetChildBody,
     TemplateCreateBody,
@@ -116,7 +118,7 @@ class ResourceWrapper:
             "query_history",
             "get_template_info",
             "delete_template",
-            "list_templates",
+            "query_templates",
             "get_templates_by_category",
         }
 
@@ -232,7 +234,7 @@ class ResourceClient:
         self.local_resources = {}
         self.logger = event_client if event_client is not None else EventClient()
         if self.resource_server_url is None:
-            self.logger.log_warning(
+            self.logger.warning(
                 "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
                 warning_category=MadsciLocalOnlyWarning,
             )
@@ -305,7 +307,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_warning(
+            self.logger.warning(
                 "Local-only mode does not check to see if an existing resource match already exists."
             )
             resource = Resource.discriminate(resource_definition)
@@ -395,7 +397,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_warning(
+            self.logger.warning(
                 "Local-only mode does not currently search through child resources to get children."
             )
             resource = self.local_resources.get(resource_id)
@@ -460,9 +462,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_error(
-                "Local-only mode does not currently support querying."
-            )
+            self.logger.error("Local-only mode does not currently support querying.")
             raise NotImplementedError(
                 "Local-only mode does not currently support querying."
             )
@@ -523,7 +523,7 @@ class ResourceClient:
             )
             response.raise_for_status()
         else:
-            self.logger.log_error(
+            self.logger.error(
                 "Local-only mode does not currently support querying history."
             )
             raise NotImplementedError(
@@ -549,7 +549,7 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.log_error(
+            self.logger.error(
                 "Local-only mode does not currently support restoring resources."
             )
             raise NotImplementedError(
@@ -971,6 +971,89 @@ class ResourceClient:
             self.local_resources[resource.resource_id] = resource
         return self._wrap_resource(resource)
 
+    def init_template(
+        self,
+        resource: ResourceDataModels,
+        template_name: str,
+        description: str = "",
+        required_overrides: Optional[list[str]] = None,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+        version: str = "1.0.0",
+    ) -> ResourceDataModels:
+        """
+        Initialize a template with the resource manager.
+
+        If a template with the given name already exists, returns the existing template.
+        If no matching template exists, creates a new one.
+
+        Args:
+            resource (ResourceDataModels): The resource to use as a template.
+            template_name (str): Unique name for the template.
+            description (str): Description of what this template creates.
+            required_overrides (Optional[list[str]]): Fields that must be provided when using template.
+            tags (Optional[list[str]]): Tags for categorization.
+            created_by (Optional[str]): Creator identifier.
+            version (str): Template version.
+
+        Returns:
+            ResourceDataModels: The existing or newly created template resource.
+        """
+        existing_template = self.get_template(template_name)
+
+        if existing_template is not None:
+            # If versions are different, update the template
+            if version != existing_template.version:
+                self.logger.info(
+                    f"Template '{template_name}' exists with version {existing_template.version}. "
+                    f"Updating to version {version}..."
+                )
+                updated_template = self.update_template(
+                    template_name=template_name,
+                    updates={
+                        "description": description,
+                        "required_overrides": required_overrides,
+                        "tags": tags,
+                        "version": version,
+                        # Update resource fields from the new resource
+                        **resource.model_dump(
+                            exclude={
+                                "resource_id",
+                                "created_at",
+                                "updated_at",
+                                "removed",
+                                "children",
+                                "parent_id",
+                                "key",
+                                "resource_url",
+                            }
+                        ),
+                    },
+                )
+                self.logger.info(
+                    f"Updated template '{template_name}' to version {version}"
+                )
+                return updated_template
+            self.logger.info(
+                f"Using existing template '{template_name}' version {existing_template.version}"
+            )
+            return existing_template
+
+        self.logger.info(
+            f"Template '{template_name}' not found, creating new template version {version}..."
+        )
+        new_template = self.create_template(
+            resource=resource,
+            template_name=template_name,
+            description=description,
+            required_overrides=required_overrides,
+            tags=tags,
+            created_by=created_by,
+            version=version,
+        )
+        self.logger.info(f"Created template '{template_name}' version {version}")
+        return new_template
+
     def create_template(
         self,
         resource: ResourceDataModels,
@@ -1013,7 +1096,7 @@ class ResourceClient:
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
         else:
             # Store template in local templates
@@ -1043,14 +1126,14 @@ class ResourceClient:
 
         if self.resource_server_url:
             response = requests.get(
-                f"{self.resource_server_url}templates/{template_name}", timeout=10
+                f"{self.resource_server_url}template/{template_name}", timeout=10
             )
             if response.status_code == 404:
                 return None
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
             return self._wrap_resource(template)
         template_data = self.local_templates.get(template_name)
@@ -1058,7 +1141,7 @@ class ResourceClient:
             return self._wrap_resource(template_data["resource"])
         return None
 
-    def list_templates(
+    def query_templates(
         self,
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
@@ -1128,7 +1211,7 @@ class ResourceClient:
         """
         if self.resource_server_url:
             response = requests.get(
-                f"{self.resource_server_url}templates/{template_name}/info", timeout=10
+                f"{self.resource_server_url}template/{template_name}/info", timeout=10
             )
             if response.status_code == 404:
                 return None
@@ -1163,14 +1246,14 @@ class ResourceClient:
         if self.resource_server_url:
             payload = TemplateUpdateBody(updates=updates).model_dump(mode="json")
             response = requests.put(
-                f"{self.resource_server_url}templates/{template_name}",
+                f"{self.resource_server_url}template/{template_name}",
                 json=payload,
                 timeout=10,
             )
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
             return self._wrap_resource(template)
         template_data = self.local_templates.get(template_name)
@@ -1194,7 +1277,7 @@ class ResourceClient:
         """
         if self.resource_server_url:
             response = requests.delete(
-                f"{self.resource_server_url}templates/{template_name}", timeout=10
+                f"{self.resource_server_url}template/{template_name}", timeout=10
             )
             if response.status_code == 404:
                 return False
@@ -1224,6 +1307,17 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The created resource.
         """
+        # Get current ownership info
+        current_owner = get_current_ownership_info()
+
+        # Initialize overrides if None
+        if overrides is None:
+            overrides = {}
+
+        # Add owner to overrides if not already present
+        if "owner" not in overrides and current_owner and current_owner.node_id:
+            overrides["owner"] = {"node_id": current_owner.node_id}
+
         if self.resource_server_url:
             payload = CreateResourceFromTemplateBody(
                 resource_name=resource_name,
@@ -1231,7 +1325,7 @@ class ResourceClient:
                 add_to_database=add_to_database,
             ).model_dump(mode="json")
             response = requests.post(
-                f"{self.resource_server_url}templates/{template_name}/create_resource",
+                f"{self.resource_server_url}template/{template_name}/create_resource",
                 json=payload,
                 timeout=10,
             )
@@ -1240,13 +1334,14 @@ class ResourceClient:
             resource.resource_url = (
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
-            return resource
+            return self._wrap_resource(resource)
+
+        # Local-only mode
         template_data = self.local_templates.get(template_name)
         if not template_data:
             raise ValueError(f"Template '{template_name}' not found")
 
         # Check required overrides
-        overrides = overrides or {}
         missing_required = [
             field
             for field in template_data["required_overrides"]
@@ -1329,26 +1424,24 @@ class ResourceClient:
                     f"{self.resource_server_url}resource/{locked_resource.resource_id}"
                 )
 
-                self.logger.log_info(
+                self.logger.info(
                     f"Acquired lock on resource {resource_id} for client {locked_resource.locked_by}"
                 )
                 return self._wrap_resource(locked_resource)
-            self.logger.log_warning(
+            self.logger.warning(
                 f"Failed to acquire lock on resource {resource_id} for client {self._client_id}"
             )
             return None
         # Local-only mode implementation
         if resource_id not in self.local_resources:
-            self.logger.log_warning(
-                f"Resource {resource_id} not found in local resources"
-            )
+            self.logger.warning(f"Resource {resource_id} not found in local resources")
             return None
 
         # Simple local locking - just mark as locked
         local_resource = self.local_resources[resource_id]
         try:
             if local_resource.locked_by and local_resource.locked_by != self._client_id:
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Resource {resource_id} already locked by {local_resource.locked_by}"
                 )
                 return None
@@ -1360,7 +1453,7 @@ class ResourceClient:
         local_resource.locked_by = self._client_id
         local_resource.locked_until = datetime.now() + timedelta(seconds=lock_duration)
 
-        self.logger.log_info(f"Acquired local lock on resource {resource_id}")
+        self.logger.info(f"Acquired local lock on resource {resource_id}")
         return self._wrap_resource(local_resource)
 
     def release_lock(
@@ -1398,23 +1491,23 @@ class ResourceClient:
                     unlocked_resource = Resource.discriminate(unlocked_resource_data)
                     unlocked_resource.resource_url = f"{self.resource_server_url}resource/{unlocked_resource.resource_id}"
 
-                    self.logger.log_info(
+                    self.logger.info(
                         f"Released lock on resource {resource_id} for client {self._client_id}"
                     )
                     return self._wrap_resource(unlocked_resource)
 
             except requests.HTTPError as e:
                 if e.response.status_code == 403:
-                    self.logger.log_warning(
+                    self.logger.warning(
                         f"Access denied: {e.response.json().get('detail', str(e))}"
                     )
                     return None
-                self.logger.log_error(f"Error releasing lock: {e}")
+                self.logger.error(f"Error releasing lock: {e}")
                 raise e
         else:
             # Local-only mode implementation
             if resource_id not in self.local_resources:
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Resource {resource_id} not found in local resources"
                 )
                 return None
@@ -1428,7 +1521,7 @@ class ResourceClient:
                     and self._client_id
                     and local_resource.locked_by != self._client_id
                 ):
-                    self.logger.log_warning(
+                    self.logger.warning(
                         f"Cannot release lock on {resource_id}: not owned by {self._client_id}"
                     )
                     return None
@@ -1440,7 +1533,7 @@ class ResourceClient:
             local_resource.locked_by = None
             local_resource.locked_until = None
 
-            self.logger.log_info(f"Released local lock on resource {resource_id}")
+            self.logger.info(f"Released local lock on resource {resource_id}")
             return self._wrap_resource(local_resource)
 
     def is_locked(
@@ -1658,3 +1751,75 @@ class ResourceClient:
             self.logger.error(
                 f"Error refreshing resource before release: {refresh_error}"
             )
+
+    def query_resource_hierarchy(self, resource_id: str) -> ResourceHierarchy:
+        """
+        Query the hierarchical relationships of a resource.
+
+        Returns the ancestors (successive parent IDs from closest to furthest)
+        and descendants (direct children organized by parent) of the specified resource.
+
+        Args:
+            resource_id (str): The ID of the resource to query hierarchy for.
+
+        Returns:
+            ResourceHierarchy: Hierarchy information with ancestor_ids, resource_id, and descendant_ids.
+
+        Raises:
+            ValueError: If resource not found.
+            requests.HTTPError: If server request fails.
+        """
+        if self.resource_server_url:
+            response = requests.get(
+                f"{self.resource_server_url}resource/{resource_id}/hierarchy",
+                timeout=10,
+            )
+            response.raise_for_status()
+            return ResourceHierarchy.model_validate(response.json())
+
+        # Local implementation for when no server URL is configured
+        # This would only work if local_resources are being used
+        if resource_id not in self.local_resources:
+            raise ValueError(f"Resource with ID '{resource_id}' not found")
+
+        # Simple local implementation - find ancestors by walking up parent chain
+        # and descendants by checking all resources for children
+        ancestor_ids = []
+        current_resource = self.local_resources[resource_id]
+
+        # Walk up parent chain
+        while hasattr(current_resource, "parent_id") and current_resource.parent_id:
+            if current_resource.parent_id in self.local_resources:
+                ancestor_ids.append(current_resource.parent_id)
+                current_resource = self.local_resources[current_resource.parent_id]
+            else:
+                break
+
+        # Find direct children and their children
+        descendant_ids = {}
+
+        # Find direct children of the queried resource
+        direct_children = [
+            res.resource_id
+            for res in self.local_resources.values()
+            if hasattr(res, "parent_id") and res.parent_id == resource_id
+        ]
+
+        if direct_children:
+            descendant_ids[resource_id] = direct_children
+
+            # Find children of each direct child (grandchildren)
+            for child_id in direct_children:
+                grandchildren = [
+                    res.resource_id
+                    for res in self.local_resources.values()
+                    if hasattr(res, "parent_id") and res.parent_id == child_id
+                ]
+                if grandchildren:
+                    descendant_ids[child_id] = grandchildren
+
+        return ResourceHierarchy(
+            ancestor_ids=ancestor_ids,
+            resource_id=resource_id,
+            descendant_ids=descendant_ids,
+        )

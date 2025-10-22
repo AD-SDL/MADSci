@@ -1,6 +1,6 @@
 [project]
 name = "madsci"
-version = "0.4.7"
+version = "0.5.0-rc.2"
 dependencies = ["pre-commit>=4.3.0"]
 readme="README.md"
 requires-python = ">=3.9.1"
@@ -49,6 +49,7 @@ dev = [
     "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
     "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
     "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
+    "-e madsci.location_manager @ file:///${PROJECT_ROOT}/src/madsci_location_manager",
     "-e madsci.experiment_application @ file:///${PROJECT_ROOT}/src/madsci_experiment_application",
 ]
 

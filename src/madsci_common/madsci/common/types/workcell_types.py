@@ -8,7 +8,6 @@ from madsci.common.types.base_types import (
     MadsciBaseModel,
     PathLike,
 )
-from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.manager_types import (
     ManagerHealth,
     ManagerSettings,
@@ -52,23 +51,6 @@ class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
         title="Workcell Node URLs",
         description="The URL for each node in the workcell.",
     )
-    locations: list[LocationDefinition] = Field(
-        default_factory=list,
-        title="Workcell Locations",
-        description="The Locations used in the workcell.",
-    )
-
-    def get_workcell_directory(
-        self, workcells_directory: Optional[PathLike] = None
-    ) -> Path:
-        """Get the directory for the workcell.
-
-        Args:
-            workcells_directory: Optional directory path. If not provided, defaults to ~/.madsci/workcells
-        """
-        if workcells_directory is None:
-            workcells_directory = Path("~") / ".madsci" / "workcells"
-        return Path(workcells_directory) / self.name
 
     is_ulid = field_validator("manager_id")(ulid_validator)
 
@@ -161,11 +143,6 @@ class WorkcellState(MadsciBaseModel):
         default_factory=dict,
         title="Workcell Nodes",
         description="The nodes in the workcell.",
-    )
-    locations: dict[str, Location] = Field(
-        default_factory=dict,
-        title="Workcell Locations",
-        description="The locations in the workcell.",
     )
 
 

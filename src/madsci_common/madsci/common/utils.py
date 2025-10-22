@@ -459,3 +459,49 @@ def new_ulid_str() -> str:
     Generate a new ULID string.
     """
     return str(ULID())
+
+
+def is_valid_ulid(value: str) -> bool:
+    """Check if a string is a valid ULID.
+
+    Args:
+        value: String to validate
+
+    Returns:
+        True if the string is a valid ULID format
+    """
+    if not isinstance(value, str) or len(value) != 26:
+        return False
+    # ULID uses Crockford's Base32: 0-9, A-Z (excluding I, L, O, U)
+    allowed_chars = set("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
+    return all(c.upper() in allowed_chars for c in value)
+
+
+def extract_datapoint_ids(data: Any) -> list[str]:
+    """Extract all datapoint IDs from a data structure.
+
+    Recursively searches through dictionaries, lists, and objects to find
+    datapoint IDs (ULID strings that are likely datapoints).
+
+    Args:
+        data: Data structure to search
+
+    Returns:
+        List of unique datapoint IDs found
+    """
+    ids = set()
+
+    def _extract_recursive(obj: Any) -> None:
+        if isinstance(obj, str) and is_valid_ulid(obj):
+            ids.add(obj)
+        elif isinstance(obj, dict):
+            for value in obj.values():
+                _extract_recursive(value)
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                _extract_recursive(item)
+        elif hasattr(obj, "datapoint_id"):
+            ids.add(obj.datapoint_id)
+
+    _extract_recursive(data)
+    return list(ids)

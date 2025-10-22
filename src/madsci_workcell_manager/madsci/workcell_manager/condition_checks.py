@@ -1,5 +1,7 @@
 """Functions for checking conditions on a step"""
 
+from typing import Optional, Union
+
 from madsci.common.types.condition_types import (
     Condition,
     NoResourceInLocationCondition,
@@ -7,6 +9,7 @@ from madsci.common.types.condition_types import (
     ResourceFieldCheckCondition,
     ResourceInLocationCondition,
 )
+from madsci.common.types.location_types import Location
 from madsci.common.types.resource_types import ContainerTypeEnum, Resource
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import SchedulerMetadata
@@ -39,31 +42,44 @@ def evaluate_condition_checks(
     return metadata
 
 
+def _get_location_from_condition(
+    condition: Union[ResourceInLocationCondition, NoResourceInLocationCondition],
+    scheduler: AbstractScheduler,
+) -> Optional[Location]:
+    """Helper function to get location from LocationManager using condition."""
+    try:
+        if scheduler.location_client is None:
+            return None
+        if condition.location_id:
+            return scheduler.location_client.get_location(condition.location_id)
+        if condition.location_name:
+            locations = scheduler.location_client.get_locations()
+            return next(
+                (loc for loc in locations if loc.name == condition.location_name),
+                None,
+            )
+    except Exception:
+        # If LocationManager is not available, return None
+        return None
+    return None
+
+
 def evaluate_resource_in_location_condition(
     condition: ResourceInLocationCondition,
     scheduler: AbstractScheduler,
     metadata: SchedulerMetadata,
 ) -> SchedulerMetadata:
     """Check if a resource is present in a specified location"""
-    location = next(
-        (
-            loc
-            for loc in scheduler.state_handler.get_locations()
-            if (
-                condition.location_name is not None
-                and condition.location_name == loc.location_name
-            )
-            or condition.location_id == loc.location_id
-        ),
-        None,
-    )
+    location = _get_location_from_condition(condition, scheduler)
     if location is None:
         metadata.ready_to_run = False
-        metadata.reasons.append(f"Location {condition.location} not found.")
+        metadata.reasons.append(
+            f"Location {condition.location_name or condition.location_id} not found."
+        )
     elif location.resource_id is None:
         metadata.ready_to_run = False
         metadata.reasons.append(
-            f"Location {location.location_name} does not have an attached container resource."
+            f"Location {location.name} does not have an attached container resource."
         )
     elif scheduler.resource_client is None:
         metadata.ready_to_run = False
@@ -95,25 +111,16 @@ def evaluate_no_resource_in_location_condition(
     metadata: SchedulerMetadata,
 ) -> SchedulerMetadata:
     """Check if a resource is not present in a specified location"""
-    location = next(
-        (
-            loc
-            for loc in scheduler.state_handler.get_locations()
-            if (
-                condition.location_name is not None
-                and condition.location_name == loc.location_name
-            )
-            or condition.location_id == loc.location_id
-        ),
-        None,
-    )
+    location = _get_location_from_condition(condition, scheduler)
     if location is None:
         metadata.ready_to_run = False
-        metadata.reasons.append(f"Location {condition.location} not found.")
+        metadata.reasons.append(
+            f"Location {condition.location_name or condition.location_id} not found."
+        )
     elif location.resource_id is None:
         metadata.ready_to_run = False
         metadata.reasons.append(
-            f"Location {location.location_name} does not have an attached container resource."
+            f"Location {location.name} does not have an attached container resource."
         )
     elif scheduler.resource_client is None:
         metadata.ready_to_run = False
