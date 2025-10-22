@@ -396,7 +396,7 @@ class ResourceManager(
 
     @get("/templates")
     async def query_templates_simple(self) -> list[ResourceDataModels]:
-        """List all templates (simple endpoint without filtering)."""
+        """Query all templates (simple endpoint without filtering)."""
         try:
             return self._resource_interface.query_templates()
         except Exception as e:
