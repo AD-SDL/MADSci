@@ -222,21 +222,6 @@ class LocationManager(
 
         return health
 
-    @get("/health", tags=["Status"])
-    def health_endpoint(self) -> LocationManagerHealth:
-        """Get the health status of the Location Manager."""
-        return self.get_health()
-
-    @get("/")
-    def root_endpoint(self) -> LocationManagerDefinition:
-        """Get the Location Manager information."""
-        return self.definition
-
-    @get("/definition", tags=["Status"])
-    def definition_endpoint(self) -> LocationManagerDefinition:
-        """Get the Location Manager information."""
-        return self.definition
-
     @get("/locations", tags=["Locations"])
     def get_locations(self) -> list[Location]:
         """Get all locations."""

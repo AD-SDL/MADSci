@@ -186,21 +186,6 @@ class ResourceManager(
 
         return health
 
-    @get("/health")
-    def health_endpoint(self) -> ResourceManagerHealth:
-        """Health check endpoint for the Resource Manager."""
-        return self.get_health()
-
-    @get("/")
-    def get_definition(self) -> ResourceManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
-    @get("/definition")
-    def get_definition_alt(self) -> ResourceManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
     @post("/resource/init")
     async def init_resource(
         self, resource_definition: ResourceDefinitions = RESOURCE_DEFINITION_BODY_PARAM
