@@ -63,9 +63,10 @@ class AbstractManagerBase(
         This override handles the __abstractmethods__ issue that occurs when
         combining ABC with classy-fastapi's Routable in generic classes.
         """
-        import inspect
+        # Import here to avoid circular dependencies and to match classy-fastapi's pattern
+        import inspect  # noqa: PLC0415
 
-        from classy_fastapi.decorators import EndpointDefinition
+        from classy_fastapi.decorators import EndpointDefinition  # noqa: PLC0415
 
         endpoints: list[EndpointDefinition] = []
         for obj_name in dir(cls):

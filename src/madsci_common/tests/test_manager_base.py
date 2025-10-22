@@ -1,6 +1,6 @@
 """Tests for the AbstractManagerBase class and inherited routes."""
 
-from typing import Optional
+from typing import ClassVar
 
 import pytest
 from madsci.common.manager_base import AbstractManagerBase
@@ -17,7 +17,7 @@ from starlette.testclient import TestClient
 class TestManagerSettings(ManagerSettings):
     """Test settings for the manager."""
 
-    model_config = {"env_prefix": "TEST_"}
+    model_config: ClassVar[dict] = {"env_prefix": "TEST_"}
 
 
 class TestManagerDefinition(ManagerDefinition):
@@ -107,8 +107,6 @@ def test_inherited_routes_with_custom_subclass() -> None:
 
     class CustomManager(TestManager):
         """Custom subclass that doesn't override health."""
-
-        pass
 
     definition = TestManagerDefinition(name="Custom Manager")
     manager = CustomManager(definition=definition)
