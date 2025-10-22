@@ -364,7 +364,7 @@ def test_get_template_not_found(client: ResourceClient) -> None:
 
 
 def test_query_templates(client: ResourceClient) -> None:
-    """Test listing templates using ResourceClient"""
+    """Test querying templates using ResourceClient"""
     # Create multiple templates
     resource1 = Container(resource_name="Container1", capacity=50)
     resource2 = Resource(resource_name="Resource2")
@@ -383,7 +383,7 @@ def test_query_templates(client: ResourceClient) -> None:
         tags=["resource", "test"],
     )
 
-    # List all templates
+    # Query all templates
     all_templates = client.query_templates()
     template_names = [t.resource_name for t in all_templates]
     assert "Container1" in template_names
