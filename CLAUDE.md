@@ -147,6 +147,7 @@ src/madsci_common/
 - The project is currently in beta with potential breaking changes
 - Each package can be used independently or composed together
 - Use PDM virtual environments for development isolation
+- **IMPORTANT**: if you try to run python commands and see missing modules, ensure that the correct virtual environment is activated.
 - **IMPORTANT**: Use `yarn` for managing Node.js dependencies in the `ui/` directory, not npm
 - Ignore minor linting errors that will be fixed by autoformatting, such as "No newline at end of file"
 - Always use pydantic's `AnyUrl` to store URL's, and note that AnyUrl always ensures a trailing forward slash

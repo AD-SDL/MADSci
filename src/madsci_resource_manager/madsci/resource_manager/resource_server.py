@@ -396,7 +396,7 @@ class ResourceManager(
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @get("/templates/{template_name}")
+    @get("/template/{template_name}")
     async def get_template(self, template_name: str) -> ResourceDataModels:
         """Get a template by name."""
         try:
@@ -412,7 +412,7 @@ class ResourceManager(
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @get("/templates/{template_name}/info")
+    @get("/template/{template_name}/info")
     async def get_template_info(self, template_name: str) -> dict[str, Any]:
         """Get detailed template metadata."""
         try:
@@ -428,7 +428,7 @@ class ResourceManager(
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @put("/templates/{template_name}")
+    @put("/template/{template_name}")
     async def update_template(
         self, template_name: str, body: TemplateUpdateBody
     ) -> ResourceDataModels:
@@ -443,7 +443,7 @@ class ResourceManager(
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @delete("/templates/{template_name}")
+    @delete("/template/{template_name}")
     async def delete_template(self, template_name: str) -> dict[str, str]:
         """Delete a template from the database."""
         try:
@@ -459,7 +459,7 @@ class ResourceManager(
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @post("/templates/{template_name}/create_resource")
+    @post("/template/{template_name}/create_resource")
     async def create_resource_from_template(
         self, template_name: str, body: CreateResourceFromTemplateBody
     ) -> ResourceDataModels:
