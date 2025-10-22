@@ -42,9 +42,9 @@ def test_lab_manager_server_creation(lab_manager_definition):
     assert app is not None
 
     with TestClient(app) as client:
-        # Test the root endpoint (should return 404 since no dashboard files are configured)
+        # Test the root endpoint (should return 200 even without dashboard files)
         response = client.get("/")
-        assert response.status_code == 404
+        assert response.status_code == 200
 
         # Test the definition endpoint
         response = client.get("/definition")

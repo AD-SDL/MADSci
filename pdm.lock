@@ -563,17 +563,17 @@ files = [
 
 [[package]]
 name = "classy-fastapi"
-version = "0.6.1"
-requires_python = ">=3.8"
+version = "0.7.0"
+requires_python = ">=3.9"
 summary = "Class based routing for FastAPI"
 groups = ["dev"]
 dependencies = [
     "fastapi<1.0.0,>=0.73.0",
-    "pydantic<3.0.0,>=1.10.2",
+    "pydantic<3.0.0,>=2.8",
 ]
 files = [
-    {file = "classy-fastapi-0.6.1.tar.gz", hash = "sha256:5dfc33bab8e01e07c56855b78ce9a8152c871ab544a565d0d3d05a5c1ca4ed68"},
-    {file = "classy_fastapi-0.6.1-py3-none-any.whl", hash = "sha256:196e5c2890269627d52851f3f86001a0dfda0070053d38f8a7bd896ac2f67737"},
+    {file = "classy_fastapi-0.7.0-py3-none-any.whl", hash = "sha256:eea211181d065fecb543d68b75a6a6ab93393bb7ca48551887fa898ba7d40ec3"},
+    {file = "classy_fastapi-0.7.0.tar.gz", hash = "sha256:4ab934fc309b134cd8dde5f7d6f98e1303a111cf1341ebd5bf900a630d20b084"},
 ]
 
 [[package]]
@@ -1780,7 +1780,7 @@ groups = ["dev"]
 dependencies = [
     "PyYAML>=6.0.2",
     "aenum>=3.1.15",
-    "classy-fastapi>=0.6.1",
+    "classy-fastapi>=0.7.0",
     "fastapi>=0.115.4",
     "multiprocess>=0.70.17",
     "pydantic-extra-types>=2.10.2",

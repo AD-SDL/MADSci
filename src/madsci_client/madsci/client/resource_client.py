@@ -1096,7 +1096,7 @@ class ResourceClient:
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
         else:
             # Store template in local templates
@@ -1126,14 +1126,14 @@ class ResourceClient:
 
         if self.resource_server_url:
             response = requests.get(
-                f"{self.resource_server_url}templates/{template_name}", timeout=10
+                f"{self.resource_server_url}template/{template_name}", timeout=10
             )
             if response.status_code == 404:
                 return None
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
             return self._wrap_resource(template)
         template_data = self.local_templates.get(template_name)
@@ -1211,7 +1211,7 @@ class ResourceClient:
         """
         if self.resource_server_url:
             response = requests.get(
-                f"{self.resource_server_url}templates/{template_name}/info", timeout=10
+                f"{self.resource_server_url}template/{template_name}/info", timeout=10
             )
             if response.status_code == 404:
                 return None
@@ -1246,14 +1246,14 @@ class ResourceClient:
         if self.resource_server_url:
             payload = TemplateUpdateBody(updates=updates).model_dump(mode="json")
             response = requests.put(
-                f"{self.resource_server_url}templates/{template_name}",
+                f"{self.resource_server_url}template/{template_name}",
                 json=payload,
                 timeout=10,
             )
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
             return self._wrap_resource(template)
         template_data = self.local_templates.get(template_name)
@@ -1277,7 +1277,7 @@ class ResourceClient:
         """
         if self.resource_server_url:
             response = requests.delete(
-                f"{self.resource_server_url}templates/{template_name}", timeout=10
+                f"{self.resource_server_url}template/{template_name}", timeout=10
             )
             if response.status_code == 404:
                 return False
@@ -1325,7 +1325,7 @@ class ResourceClient:
                 add_to_database=add_to_database,
             ).model_dump(mode="json")
             response = requests.post(
-                f"{self.resource_server_url}templates/{template_name}/create_resource",
+                f"{self.resource_server_url}template/{template_name}/create_resource",
                 json=payload,
                 timeout=10,
             )

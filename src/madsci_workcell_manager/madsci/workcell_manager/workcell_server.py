@@ -179,17 +179,6 @@ class WorkcellManager(
 
         return health
 
-    @get("/health")
-    def health_endpoint(self) -> WorkcellManagerHealth:
-        """Health check endpoint for the Workcell Manager."""
-        return self.get_health()
-
-    @get("/")
-    @get("/definition")
-    def get_definition(self) -> WorkcellManagerDefinition:
-        """Return the manager definition."""
-        return self._definition
-
     @get("/workcell")
     def get_workcell(self) -> WorkcellManagerDefinition:
         """Get the currently running workcell (backward compatibility)."""
