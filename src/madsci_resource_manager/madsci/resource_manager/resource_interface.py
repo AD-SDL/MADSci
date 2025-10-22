@@ -1091,7 +1091,7 @@ class ResourceInterface:
             self.logger.error(f"Error deleting template: \n{traceback.format_exc()}")
             raise e
 
-    def list_templates(
+    def query_templates(
         self,
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
@@ -1099,7 +1099,7 @@ class ResourceInterface:
         parent_session: Optional[Session] = None,
     ) -> list[ResourceDataModels]:
         """
-        List templates with optional filtering, returned as resources.
+        Query templates with optional filtering, returned as resources.
 
         Args:
             base_type (Optional[str]): Filter by base resource type.
@@ -1139,7 +1139,7 @@ class ResourceInterface:
                 return [row.to_data_model() for row in template_rows]
 
         except Exception as e:
-            self.logger.error(f"Error listing templates: \n{traceback.format_exc()}")
+            self.logger.error(f"Error querying templates: \n{traceback.format_exc()}")
             raise e
 
     def _check_template_nested_field(self, data: dict, field_path: str) -> bool:
@@ -1311,7 +1311,7 @@ class ResourceInterface:
         Returns:
             dict[str, list[str]]: Dictionary mapping base_type to template names.
         """
-        templates = self.list_templates(parent_session=parent_session)
+        templates = self.query_templates(parent_session=parent_session)
         categories = {}
 
         for template in templates:

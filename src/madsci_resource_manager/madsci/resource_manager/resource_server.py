@@ -365,10 +365,12 @@ class ResourceManager(
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/templates/query")
-    async def list_templates(self, query: TemplateGetQuery) -> list[ResourceDataModels]:
-        """List templates with optional filtering."""
+    async def query_templates(
+        self, query: TemplateGetQuery
+    ) -> list[ResourceDataModels]:
+        """Query templates with optional filtering."""
         try:
-            return self._resource_interface.list_templates(
+            return self._resource_interface.query_templates(
                 base_type=query.base_type,
                 tags=query.tags,
                 created_by=query.created_by,
@@ -378,10 +380,10 @@ class ResourceManager(
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @get("/templates")
-    async def list_templates_simple(self) -> list[ResourceDataModels]:
-        """List all templates (simple endpoint without filtering)."""
+    async def list_templates(self) -> list[ResourceDataModels]:
+        """List all templates."""
         try:
-            return self._resource_interface.list_templates()
+            return self._resource_interface.query_templates()
         except Exception as e:
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -466,7 +468,7 @@ class ResourceManager(
         """
         Create a resource from a template.
 
-        If a matching resource already exists (based on name, class, type, and owner),
+        If a matching resource already exists (based on name, class, type, owner, and any overrides),
         it will be returned instead of creating a duplicate.
         """
         try:
@@ -479,40 +481,44 @@ class ResourceManager(
             # Build search criteria from template defaults and overrides
             search_criteria = {
                 "resource_name": body.resource_name,
-                "resource_class": body.overrides.get(
-                    "resource_class", template.resource_class
-                )
-                if body.overrides
-                else template.resource_class,
-                "base_type": body.overrides.get("base_type", template.base_type)
-                if body.overrides
-                else template.base_type,
+                "resource_class": template.resource_class,
+                "base_type": template.base_type,
             }
 
+            # Add owner to search criteria if present in overrides
+            if body.overrides and "owner" in body.overrides:
+                search_criteria["owner"] = body.overrides["owner"]
+
+            # Add all override fields to search criteria
             if body.overrides:
                 for field, value in body.overrides.items():
                     search_criteria[field] = value
-            # Add owner if provided in overrides
-            if body.overrides and "owner" not in body.overrides:
-                search_criteria["owner"] = template.owner
-            # Check if a matching resource already exists
-            existing_resource = self._resource_interface.get_resource(
+
+            # Check if matching resources exist
+            existing_resources = self._resource_interface.get_resource(
                 **search_criteria,
-                multiple=False,
-                unique=True,
+                multiple=True,
             )
 
-            if existing_resource:
+            # If exactly one match found, return it
+            if existing_resources and len(existing_resources) == 1:
+                existing_resource = existing_resources[0]
                 self.logger.info(
                     f"Resource '{body.resource_name}' with matching properties already exists (ID: {existing_resource.resource_id}), returning existing resource"
                 )
                 return existing_resource
 
-            # No existing resource found, create new one from template
+            # If multiple matches found, log warning and create new one
+            if existing_resources and len(existing_resources) > 1:
+                self.logger.warning(
+                    f"Found {len(existing_resources)} resources matching '{body.resource_name}' with criteria {search_criteria}. Creating new resource."
+                )
+
+            # No existing resource found or multiple found, create new one from template
             return self._resource_interface.create_resource_from_template(
                 template_name=template_name,
                 resource_name=body.resource_name,
-                overrides=body.overrides,
+                overrides=body.overrides if body.overrides else {},
                 add_to_database=body.add_to_database,
             )
         except ValueError as e:
