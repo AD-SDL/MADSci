@@ -1,0 +1,7 @@
+node_name: default.node
+node_id: 01K895ZXJD88DGCEWQX7ABJ74G
+node_description: null
+node_type: device
+module_name: dummy_node
+module_version: 0.0.1
+capabilities: null
