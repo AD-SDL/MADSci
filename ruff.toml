@@ -113,7 +113,7 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [lint.per-file-ignores]
-"**/tests/**/*.py" = ["S101", "ANN", "D"]
+"**/tests/**/*.py" = ["S101", "ANN", "D", "PLC0415"]
 
 [format]
 # Like Black, use double quotes for strings.

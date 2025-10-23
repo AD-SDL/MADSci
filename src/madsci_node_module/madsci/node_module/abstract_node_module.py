@@ -455,14 +455,14 @@ class AbstractNode:
         # Direct Path type
         if getattr(type_hint, "__name__", None) in ["Path", "PurePath", "PosixPath", "WindowsPath"]:
             return True
-        
+
         # Check for list[Path] - get_origin returns list, get_args returns (Path,)
         origin = get_origin(type_hint)
         if origin is list:
             args = get_args(type_hint)
             if args and getattr(args[0], "__name__", None) in ["Path", "PurePath", "PosixPath", "WindowsPath"]:
                 return True
-        
+
         return False
 
     def _parse_action_arg(

@@ -1,10 +1,12 @@
 """Test case to reproduce the bug with Annotated[Path, "description"] being treated as JSON argument."""
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
-import pytest
-from madsci.common.types.action_types import _analyze_file_parameter_type, extract_file_parameters
+from madsci.common.types.action_types import (
+    _analyze_file_parameter_type,
+    extract_file_parameters,
+)
 
 
 def test_annotated_path_recognized_as_file_parameter():
@@ -39,26 +41,25 @@ def test_annotated_path_list_recognized_as_file_parameter():
 
 def test_extract_file_parameters_with_annotated_path():
     """Test that extract_file_parameters correctly identifies Annotated[Path] parameters."""
-    
+
     def action_with_annotated_path(
         config_file: Annotated[Path, "Configuration file path"],
         data_files: Annotated[list[Path], "List of data files"],
-        optional_file: Annotated[Path, "Optional file"] = None,
+        optional_file: Optional[Annotated[Path, "Optional file"]] = None,
     ) -> None:
         """Test action with annotated path parameters."""
-        pass
-    
+
     file_params = extract_file_parameters(action_with_annotated_path)
-    
+
     # Check that all path parameters are recognized
     assert "config_file" in file_params, "config_file should be recognized as a file parameter"
     assert file_params["config_file"]["required"] is True
     assert file_params["config_file"]["is_list"] is False
-    
+
     assert "data_files" in file_params, "data_files should be recognized as a file parameter"
     assert file_params["data_files"]["required"] is True
     assert file_params["data_files"]["is_list"] is True
-    
+
     assert "optional_file" in file_params, "optional_file should be recognized as a file parameter"
     assert file_params["optional_file"]["required"] is False
     assert file_params["optional_file"]["is_list"] is False

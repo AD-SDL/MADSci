@@ -908,6 +908,10 @@ def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
             inner_type = non_none_args[0]
             result["is_optional"] = True
 
+            # Extract from Annotated if present
+            if get_origin(inner_type) is Annotated:
+                inner_type = get_args(inner_type)[0]
+
             if inner_type == Path:
                 result["is_file_param"] = True
                 return result
