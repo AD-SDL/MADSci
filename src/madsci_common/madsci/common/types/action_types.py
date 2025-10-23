@@ -859,6 +859,48 @@ def extract_file_parameters(action_function: Any) -> dict[str, dict[str, Any]]:
     return file_parameters
 
 
+def _extract_from_annotated(annotation: Any) -> Any:
+    """Extract the underlying type from Annotated wrapper if present."""
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        return get_args(annotation)[0]
+    return annotation
+
+
+def _check_list_path(origin: Any, args: tuple) -> bool:
+    """Check if this is a list[Path] type."""
+    return origin is list and args and args[0] == Path
+
+
+def _analyze_optional_type(args: tuple) -> dict[str, Any]:
+    """Analyze Optional/Union type for file parameters."""
+    result = {
+        "is_file_param": False,
+        "is_list": False,
+        "is_optional": False,
+    }
+
+    non_none_args = [arg for arg in args if arg is not type(None)]
+
+    if len(non_none_args) == 1 and type(None) in args:
+        inner_type = non_none_args[0]
+        result["is_optional"] = True
+
+        # Extract from Annotated if present
+        inner_type = _extract_from_annotated(inner_type)
+
+        if inner_type == Path:
+            result["is_file_param"] = True
+        elif _check_list_path(get_origin(inner_type), get_args(inner_type)):
+            result["is_file_param"] = True
+            result["is_list"] = True
+    elif Path in args:
+        result["is_file_param"] = True
+        result["is_optional"] = type(None) in args
+
+    return result
+
+
 def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
     """Analyze a type annotation to determine if it's a file parameter.
 
@@ -881,11 +923,8 @@ def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
     }
 
     # Extract underlying type from Annotated if present
+    annotation = _extract_from_annotated(annotation)
     origin = get_origin(annotation)
-    if origin is Annotated:
-        # For Annotated[T, metadata...], extract T
-        annotation = get_args(annotation)[0]
-        origin = get_origin(annotation)
 
     # Direct Path type
     if annotation == Path:
@@ -895,36 +934,13 @@ def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
     # Handle generic types (list, Optional, Union)
     args = get_args(annotation)
 
-    if origin is list:
-        if args and args[0] == Path:
-            result["is_file_param"] = True
-            result["is_list"] = True
+    if _check_list_path(origin, args):
+        result["is_file_param"] = True
+        result["is_list"] = True
         return result
 
     if origin is Union:
-        non_none_args = [arg for arg in args if arg is not type(None)]
-
-        if len(non_none_args) == 1 and type(None) in args:
-            inner_type = non_none_args[0]
-            result["is_optional"] = True
-
-            # Extract from Annotated if present
-            if get_origin(inner_type) is Annotated:
-                inner_type = get_args(inner_type)[0]
-
-            if inner_type == Path:
-                result["is_file_param"] = True
-                return result
-            if get_origin(inner_type) is list:
-                inner_args = get_args(inner_type)
-                if inner_args and inner_args[0] == Path:
-                    result["is_file_param"] = True
-                    result["is_list"] = True
-                    return result
-        elif Path in args:
-            result["is_file_param"] = True
-            result["is_optional"] = type(None) in args
-            return result
+        return _analyze_optional_type(args)
 
     return result
 

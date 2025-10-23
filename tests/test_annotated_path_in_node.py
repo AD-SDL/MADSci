@@ -62,13 +62,11 @@ def test_annotated_path_extraction_in_parse_action_arg():
 
     # Parse the parameter
     from typing import get_type_hints
+
     type_hints = get_type_hints(test_func, include_extras=True)
 
     node._parse_action_arg(
-        action_def,
-        signature,
-        "file_param",
-        type_hints["file_param"]
+        action_def, signature, "file_param", type_hints["file_param"]
     )
 
     # Verify it was added as a file parameter, not a regular argument
@@ -109,13 +107,11 @@ def test_annotated_list_path_extraction():
 
     # Parse the parameter
     from typing import get_type_hints
+
     type_hints = get_type_hints(test_func, include_extras=True)
 
     node._parse_action_arg(
-        action_def,
-        signature,
-        "files_param",
-        type_hints["files_param"]
+        action_def, signature, "files_param", type_hints["files_param"]
     )
 
     # Verify it was added as a file parameter, not a regular argument
@@ -156,13 +152,11 @@ def test_plain_list_path_recognition():
 
     # Parse the parameter
     from typing import get_type_hints
+
     type_hints = get_type_hints(test_func, include_extras=True)
 
     node._parse_action_arg(
-        action_def,
-        signature,
-        "files_param",
-        type_hints["files_param"]
+        action_def, signature, "files_param", type_hints["files_param"]
     )
 
     # Verify it was added as a file parameter, not a regular argument
@@ -202,13 +196,11 @@ def test_optional_annotated_path():
 
     # Parse the parameter
     from typing import get_type_hints
+
     type_hints = get_type_hints(test_func, include_extras=True)
 
     node._parse_action_arg(
-        action_def,
-        signature,
-        "optional_file",
-        type_hints["optional_file"]
+        action_def, signature, "optional_file", type_hints["optional_file"]
     )
 
     # Verify it was added as a file parameter

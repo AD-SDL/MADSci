@@ -445,22 +445,32 @@ class AbstractNode:
 
     def _is_file_type(self, type_hint: Any) -> bool:
         """Check if a type hint represents a file parameter (Path or list[Path]).
-        
+
         Args:
             type_hint: The type hint to check (after extracting from Annotated/Optional)
-            
+
         Returns:
             True if the type represents a file parameter (Path, list[Path], etc.)
         """
         # Direct Path type
-        if getattr(type_hint, "__name__", None) in ["Path", "PurePath", "PosixPath", "WindowsPath"]:
+        if getattr(type_hint, "__name__", None) in [
+            "Path",
+            "PurePath",
+            "PosixPath",
+            "WindowsPath",
+        ]:
             return True
 
         # Check for list[Path] - get_origin returns list, get_args returns (Path,)
         origin = get_origin(type_hint)
         if origin is list:
             args = get_args(type_hint)
-            if args and getattr(args[0], "__name__", None) in ["Path", "PurePath", "PosixPath", "WindowsPath"]:
+            if args and getattr(args[0], "__name__", None) in [
+                "Path",
+                "PurePath",
+                "PosixPath",
+                "WindowsPath",
+            ]:
                 return True
 
         return False
@@ -513,7 +523,9 @@ class AbstractNode:
         if is_optional(type_hint):
             type_hint = get_args(type_hint)[0]
             # * If the type hint is a file type, add it to the files list
-        if annotated_as_file or (self._is_file_type(type_hint) and not annotated_as_arg):
+        if annotated_as_file or (
+            self._is_file_type(type_hint) and not annotated_as_arg
+        ):
             # * Add a file parameter to the action
             action_def.files[parameter_name] = FileArgumentDefinition(
                 name=parameter_name,
