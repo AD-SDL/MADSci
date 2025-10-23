@@ -869,6 +869,7 @@ def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
     - Optional[list[Path]]
     - Union[Path, None] (equivalent to Optional[Path])
     - Union[list[Path], None] (equivalent to Optional[list[Path]])
+    - Annotated[Path, ...] and other Annotated variants of the above
 
     Returns:
         Dict with keys: is_file_param, is_list, is_optional
@@ -879,13 +880,19 @@ def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
         "is_optional": False,
     }
 
+    # Extract underlying type from Annotated if present
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        # For Annotated[T, metadata...], extract T
+        annotation = get_args(annotation)[0]
+        origin = get_origin(annotation)
+
     # Direct Path type
     if annotation == Path:
         result["is_file_param"] = True
         return result
 
     # Handle generic types (list, Optional, Union)
-    origin = get_origin(annotation)
     args = get_args(annotation)
 
     if origin is list:
