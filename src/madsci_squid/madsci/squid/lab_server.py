@@ -24,6 +24,7 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
 
     SETTINGS_CLASS = LabManagerSettings
     DEFINITION_CLASS = LabManagerDefinition
+    ENABLE_ROOT_DEFINITION_ENDPOINT = False
 
     def __init__(
         self,

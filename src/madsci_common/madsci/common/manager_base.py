@@ -50,11 +50,13 @@ class AbstractManagerBase(
     Class Attributes:
         SETTINGS_CLASS: The settings class for this manager (set by subclasses)
         DEFINITION_CLASS: The definition class for this manager (set by subclasses)
+        ENABLE_ROOT_DEFINITION_ENDPOINT: Whether to enable the root definition endpoint (default: True)
     """
 
     # Class attributes to be set by subclasses
     SETTINGS_CLASS: Optional[type[MadsciBaseSettings]] = None
     DEFINITION_CLASS: Optional[type[MadsciBaseModel]] = None
+    ENABLE_ROOT_DEFINITION_ENDPOINT: bool = True
 
     def __init_subclass__(cls) -> None:
         """
@@ -62,6 +64,7 @@ class AbstractManagerBase(
 
         This override handles the __abstractmethods__ issue that occurs when
         combining ABC with classy-fastapi's Routable in generic classes.
+        Also conditionally excludes the root endpoint based on ENABLE_ROOT_DEFINITION_ENDPOINT.
         """
         # Import here to avoid circular dependencies and to match classy-fastapi's pattern
         import inspect  # noqa: PLC0415
@@ -76,7 +79,15 @@ class AbstractManagerBase(
             try:
                 obj = getattr(cls, obj_name)
                 if inspect.isfunction(obj) and hasattr(obj, "_endpoint"):
-                    endpoints.append(obj._endpoint)
+                    endpoint = obj._endpoint
+                    # Skip root definition endpoint if disabled
+                    if (
+                        not cls.ENABLE_ROOT_DEFINITION_ENDPOINT
+                        and obj_name == "get_definition_root"
+                        and endpoint.path == "/"
+                    ):
+                        continue
+                    endpoints.append(endpoint)
             except AttributeError:
                 # Some attributes may not be accessible during class construction
                 pass
