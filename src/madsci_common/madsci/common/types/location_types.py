@@ -1,10 +1,11 @@
 """Location types for MADSci."""
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel
+from madsci.common.types.base_types import MadsciBaseModel, PathLike
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -320,6 +321,11 @@ class LocationManagerSettings(
         title="Server Host",
         description="The host to run the server on.",
         default="localhost",
+    )
+    manager_definition: PathLike = Field(
+        title="Location Manager Definition File",
+        description="Path to the location manager definition file to use.",
+        default=Path("location.manager.yaml"),
     )
     server_port: int = Field(
         title="Server Port",
