@@ -60,21 +60,15 @@ def test_version_checker_fresh_database(fresh_postgres_engine: Engine) -> None:
     """Test version checker behavior with fresh database."""
     version_checker = DatabaseVersionChecker(str(fresh_postgres_engine.url))
 
-    try:
-        # Fresh database should have no version
-        db_version = version_checker.get_database_version()
-        assert db_version is None, "Fresh database should have no version"
+    # Fresh database should have no version
+    db_version = version_checker.get_database_version()
+    assert db_version is None, "Fresh database should have no version"
 
-        # Should indicate migration is needed
-        needs_migration, madsci_version, db_version = (
-            version_checker.is_migration_needed()
-        )
-        assert needs_migration, "Fresh database should need migration"
-        assert madsci_version is not None, "MADSci version should be available"
-        assert db_version is None, "Database version should be None for fresh database"
-
-    finally:
-        version_checker.dispose()
+    # Should indicate migration is needed
+    needs_migration, madsci_version, db_version = version_checker.is_migration_needed()
+    assert needs_migration, "Fresh database should need migration"
+    assert madsci_version is not None, "MADSci version should be available"
+    assert db_version is None, "Database version should be None for fresh database"
 
 
 def test_auto_initialization_methods_exist():

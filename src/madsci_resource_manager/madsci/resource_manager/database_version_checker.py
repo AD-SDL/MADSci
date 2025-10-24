@@ -21,11 +21,12 @@ class DatabaseVersionChecker:
         self.logger = logger or EventClient()
         self.engine = create_engine(db_url)
 
-    def dispose(self) -> None:
-        """Dispose of the engine and cleanup resources."""
-        if self.engine:
+    def __del__(self) -> None:
+        """Cleanup database engine resources."""
+        if hasattr(self, "engine") and self.engine:
             self.engine.dispose()
-            self.logger.info("Database version checker engine disposed")
+            if hasattr(self, "logger") and self.logger:
+                self.logger.info("Database version checker engine disposed")
 
     def get_current_madsci_version(self) -> str:
         """Get the current MADSci version from the package."""

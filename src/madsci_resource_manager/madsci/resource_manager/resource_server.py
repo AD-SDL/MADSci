@@ -135,10 +135,6 @@ class ResourceManager(
                 "\nTo resolve this issue, run the migration tool and restart the server."
             )
             raise
-        finally:
-            # Always dispose of the version checker engine
-            if version_checker:
-                version_checker.dispose()
 
     def _setup_ownership(self) -> None:
         """Setup ownership information."""
@@ -288,18 +284,15 @@ class ResourceManager(
 
             # Initialize version tracking
             version_checker = DatabaseVersionChecker(self.settings.db_url, self.logger)
-            try:
-                current_version = version_checker.get_current_madsci_version()
-                version_checker.create_version_table_if_not_exists()
-                version_checker.record_version(
-                    current_version,
-                    f"Auto-initialized fresh database with MADSci version {current_version}",
-                )
-                self.logger.info(
-                    f"Database version tracking initialized with version {current_version}"
-                )
-            finally:
-                version_checker.dispose()
+            current_version = version_checker.get_current_madsci_version()
+            version_checker.create_version_table_if_not_exists()
+            version_checker.record_version(
+                current_version,
+                f"Auto-initialized fresh database with MADSci version {current_version}",
+            )
+            self.logger.info(
+                f"Database version tracking initialized with version {current_version}"
+            )
 
         except Exception as e:
             self.logger.error(f"Failed to auto-initialize fresh database: {e}")

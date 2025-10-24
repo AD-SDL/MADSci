@@ -57,13 +57,15 @@ class MongoDBMigrator:
         """Parse MongoDB connection URL using pydantic AnyUrl."""
         return AnyUrl(self.db_url)
 
-    def dispose(self) -> None:
-        """Dispose of MongoDB client and cleanup resources."""
-        if self.version_checker:
-            self.version_checker.dispose()
-        if self.client:
+    def __del__(self) -> None:
+        """Cleanup MongoDB client and version checker resources."""
+        if hasattr(self, "version_checker") and self.version_checker:
+            # Version checker now has its own __del__ method
+            pass
+        if hasattr(self, "client") and self.client:
             self.client.close()
-            self.logger.info("MongoDB migrator client disposed")
+            if hasattr(self, "logger") and self.logger:
+                self.logger.info("MongoDB migrator client disposed")
 
     def _get_backup_directory(self) -> Path:
         """Get the backup directory path that works consistently in both local and Docker environments."""
@@ -579,12 +581,7 @@ Examples:
             db_url, args.database, schema_file_path, logger
         )
 
-        try:
-            handle_migration_commands(args, version_checker, migrator, logger)
-        finally:
-            # Always cleanup resources
-            version_checker.dispose()
-            migrator.dispose()
+        handle_migration_commands(args, version_checker, migrator, logger)
 
     except KeyboardInterrupt:
         logger.info("Migration interrupted by user")

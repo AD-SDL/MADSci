@@ -91,10 +91,6 @@ class ExperimentManager(
                 "\nTo resolve this issue, run the migration tool and restart the server."
             )
             raise
-        finally:
-            # Always dispose of the version checker
-            if version_checker:
-                version_checker.dispose()
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""

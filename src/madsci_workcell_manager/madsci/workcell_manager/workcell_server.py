@@ -132,10 +132,6 @@ class WorkcellManager(
                 "\nTo resolve this issue, run the migration tool and restart the server."
             )
             raise
-        finally:
-            # Always dispose of the version checker
-            if version_checker:
-                version_checker.dispose()
 
         # Set up global ownership
         global_ownership_info.workcell_id = self.definition.manager_id

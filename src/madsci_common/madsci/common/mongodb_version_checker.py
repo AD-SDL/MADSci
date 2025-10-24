@@ -40,11 +40,12 @@ class MongoDBVersionChecker:
         self.client = MongoClient(db_url)
         self.database = self.client[database_name]
 
-    def dispose(self) -> None:
-        """Dispose of the MongoDB client and cleanup resources."""
-        if self.client:
+    def __del__(self) -> None:
+        """Cleanup MongoDB client resources."""
+        if hasattr(self, "client") and self.client:
             self.client.close()
-            self.logger.info("MongoDB version checker client disposed")
+            if hasattr(self, "logger") and self.logger:
+                self.logger.info("MongoDB version checker client disposed")
 
     def get_current_madsci_version(self) -> str:
         """Get the current MADSci version from the package."""
