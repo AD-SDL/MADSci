@@ -8,31 +8,39 @@ from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     MadsciBaseModel,
-    MadsciBaseSettings,
     PathLike,
     datetime,
 )
 from madsci.common.types.condition_types import Conditions
-from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerHealth,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.utils import new_ulid_str
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, AnyUrl, Field, computed_field, field_validator
 
 
 class ExperimentManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "experiments.env"),
     toml_file=("settings.toml", "experiments.settings.toml"),
     yaml_file=("settings.yaml", "experiments.settings.yaml"),
     json_file=("settings.json", "experiments.settings.json"),
-    env_prefix="EXPERIMENTS_",
+    env_prefix="EXPERIMENT_",
 ):
     """Settings for the MADSci Experiment Manager."""
 
-    experiment_manager_definition: PathLike = Field(
+    server_url: AnyUrl = Field(
+        title="Experiment Manager Server URL",
+        description="The URL of the experiment manager server.",
+        default=AnyUrl("http://localhost:8002"),
+    )
+    manager_definition: PathLike = Field(
         title="Experiment Manager Definition File",
         description="Path to the experiment manager definition file to use.",
         default="experiment.manager.yaml",
-        alias="experiment_manager_definition",  # * Don't double prefix
     )
     db_url: str = Field(
         title="Database URL",
@@ -59,16 +67,23 @@ class ExperimentManagerDefinition(ManagerDefinition):
         description="The name of this experiment manager instance.",
         default="Experiment Manager",
     )
-    experiment_manager_id: str = Field(
+    manager_id: str = Field(
         title="Experiment Manager ID",
         description="The ID of the experiment manager.",
         default_factory=new_ulid_str,
+        alias=AliasChoices("manager_id", "experiment_manager_id"),
     )
     manager_type: Literal[ManagerType.EXPERIMENT_MANAGER] = Field(
         title="Manager Type",
         description="The type of the event manager",
         default=ManagerType.EXPERIMENT_MANAGER,
     )
+
+    @computed_field
+    @property
+    def experiment_manager_id(self) -> str:
+        """Alias for manager_id for backward compatibility."""
+        return self.manager_id
 
 
 class ExperimentDesign(MadsciBaseModel):
@@ -239,5 +254,20 @@ class ExperimentalCampaign(MadsciBaseModel):
     ended_at: Optional[datetime] = Field(
         title="Ended At",
         description="The time the campaign was ended.",
+        default=None,
+    )
+
+
+class ExperimentManagerHealth(ManagerHealth):
+    """Health status for Experiment Manager including database connectivity."""
+
+    db_connected: Optional[bool] = Field(
+        title="Database Connected",
+        description="Whether the database connection is working.",
+        default=None,
+    )
+    total_experiments: Optional[int] = Field(
+        title="Total Experiments",
+        description="Total number of experiments in the database.",
         default=None,
     )

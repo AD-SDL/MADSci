@@ -7,16 +7,14 @@ from typing import Any, Callable, Optional, Union
 
 import redis
 from fastapi import HTTPException
-from madsci.client.resource_client import ResourceClient
-from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeDefinition
 from madsci.common.types.workcell_types import (
-    WorkcellDefinition,
+    WorkcellManagerDefinition,
     WorkcellManagerSettings,
     WorkcellState,
     WorkcellStatus,
 )
-from madsci.common.types.workflow_types import Workflow
+from madsci.common.types.workflow_types import Workflow, WorkflowDefinition
 from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
 from pydantic import AnyUrl, ValidationError
 from pymongo import MongoClient
@@ -35,7 +33,7 @@ class WorkcellStateHandler:
 
     def __init__(
         self,
-        workcell_definition: Optional[WorkcellDefinition] = None,
+        workcell_definition: Optional[WorkcellManagerDefinition] = None,
         workcell_settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
@@ -44,7 +42,7 @@ class WorkcellStateHandler:
         Initialize a StateManager for a given workcell.
         """
         self.workcell_settings = workcell_settings or WorkcellManagerSettings()
-        self._workcell_id = workcell_definition.workcell_id
+        self._workcell_id = workcell_definition.manager_id
         self._redis_host = self.workcell_settings.redis_host
         self._redis_port = self.workcell_settings.redis_port
         self._redis_password = self.workcell_settings.redis_password
@@ -53,16 +51,13 @@ class WorkcellStateHandler:
             self.db_connection = mongo_connection
         else:
             self.db_client = MongoClient(self.workcell_settings.mongo_url)
-            self.db_connection = self.db_client[self.workcell_settings.database_name]
-        self.archived_workflows = self.db_connection[
-            self.workcell_settings.collection_name
-        ]
+            self.db_connection = self.db_client["workcell_manager"]
+        self.archived_workflows = self.db_connection["archived_workflows"]
+        self.workflow_definitions = self.db_connection["workflow_definitions"]
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
         self.set_workcell_definition(workcell_definition)
 
-    def initialize_workcell_state(
-        self, resource_client: Optional[ResourceClient] = None
-    ) -> None:
+    def initialize_workcell_state(self) -> None:
         """
         Initializes the state of the workcell from the workcell definition.
         """
@@ -72,32 +67,10 @@ class WorkcellStateHandler:
         # * Initialize Nodes
         for key, value in self.get_workcell_definition().nodes.items():
             self.set_node(key, Node(node_url=AnyUrl(value)))
-        # * Initialize Locations and Resources
-        self.initialize_locations_and_resources(resource_client)
-        # TODO: Update the workcell definition with the new locations and resources
         status = self.get_workcell_status()
         status.initializing = False
         self.set_workcell_status(status)
         self.mark_state_changed()
-
-    def initialize_locations_and_resources(
-        self, resource_client: Optional[ResourceClient] = None
-    ) -> None:
-        """Set the workcell's location based on the location definitions in the workcell, and create resources if necessary/possible"""
-        workcell = self.get_workcell_definition()
-        for location_definition in workcell.locations:
-            resource = None
-            if (
-                location_definition.resource_definition is not None
-                and resource_client is not None
-            ):
-                resource = resource_client.init_resource(
-                    resource_definition=location_definition.resource_definition
-                )
-            location = Location.model_validate(location_definition.model_dump())
-            if resource:
-                location.resource_id = resource.resource_id
-            self.set_location(location)
 
     @property
     def _workcell_prefix(self) -> str:
@@ -130,12 +103,6 @@ class WorkcellStateHandler:
         return RedisDict(key=f"{self._workcell_prefix}:nodes", redis=self._redis_client)
 
     @property
-    def _locations(self) -> RedisDict:
-        return RedisDict(
-            key=f"{self._workcell_prefix}:locations", redis=self._redis_client
-        )
-
-    @property
     def _workflow_queue(self) -> RedisList:
         return RedisList(
             key=f"{self._workcell_prefix}:workflow_queue", redis=self._redis_client
@@ -164,6 +131,17 @@ class WorkcellStateHandler:
             auto_release_time=60,
         )
 
+    def node_lock(self, node_name: str) -> Redlock:
+        """
+        Gets a lock on a specific node's state. This should be called before any state updates are made to a node,
+        or where we don't want the node's state to be changing underneath us (i.e., in the engine).
+        """
+        return Redlock(
+            key=f"{self._workcell_prefix}:node:{node_name}:lock",
+            masters={self._redis_client},
+            auto_release_time=60,
+        )
+
     # *State Methods
     def get_workcell_state(self) -> WorkcellState:
         """
@@ -174,7 +152,6 @@ class WorkcellStateHandler:
             workflow_queue=self.get_workflow_queue(),
             workcell_definition=self.get_workcell_definition(),
             nodes=self.get_nodes(),
-            locations=self.get_locations(),
         )
 
     def get_workcell_status(self) -> WorkcellStatus:
@@ -207,13 +184,15 @@ class WorkcellStateHandler:
         return False
 
     # *Workcell Methods
-    def get_workcell_definition(self) -> WorkcellDefinition:
+    def get_workcell_definition(self) -> WorkcellManagerDefinition:
         """
         Returns the current workcell definition as a WorkcellDefinition object
         """
-        return WorkcellDefinition.model_validate(self._workcell_definition.to_dict())
+        return WorkcellManagerDefinition.model_validate(
+            self._workcell_definition.to_dict()
+        )
 
-    def set_workcell_definition(self, workcell: WorkcellDefinition) -> None:
+    def set_workcell_definition(self, workcell: WorkcellManagerDefinition) -> None:
         """
         Sets the active workcell
         """
@@ -235,6 +214,50 @@ class WorkcellStateHandler:
         self.set_workcell_definition(
             func(self.get_workcell_definition(), *args, **kwargs)
         )
+
+    # Workflow Definition Method
+    def save_workflow_definition(self, workflow_definition: WorkflowDefinition) -> None:
+        """move a workflow from redis to mongo"""
+        self.workflow_definitions.insert_one(workflow_definition.to_mongo())
+        return workflow_definition.workflow_definition_id
+
+    def delete_workflow_definition(self, workflow_definition_id: str) -> None:
+        """
+        Deletes an active workflow by ID
+        """
+        self.workflow_definitions.delete_one({"workflow_id": workflow_definition_id})
+
+    def get_workflow_definition(
+        self, workflow_definition_id: str
+    ) -> WorkflowDefinition:
+        """
+        Returns a workflow definition by ID
+        """
+        return WorkflowDefinition.model_validate(
+            self.workflow_definitions.find_one(
+                {"workflow_definition_id": workflow_definition_id}
+            )
+        )
+
+    def get_workflow_definitions(
+        self, number: int = 20
+    ) -> dict[str, WorkflowDefinition]:
+        """Get the latest experiments."""
+        workflow_definition_list = (
+            self.workflow_definitions.find()
+            .sort("submitted_time", -1)
+            .limit(number)
+            .to_list()
+        )
+        workflow_definitions = {}
+        for workflow_defintion in workflow_definition_list:
+            valid_workflow_definition = WorkflowDefinition.model_validate(
+                workflow_defintion
+            )
+            workflow_definitions[valid_workflow_definition.workflow_definition_id] = (
+                valid_workflow_definition
+            )
+        return workflow_definitions
 
     # *Workflow Methods
 
@@ -407,49 +430,3 @@ class WorkcellStateHandler:
         Updates the state of a node.
         """
         self.set_node(node_name, func(self.get_node(node_name), *args, **kwargs))
-
-    def get_location(self, location_id: str) -> Location:
-        """
-        Returns a location by ID
-        """
-        return Location.model_validate(self._locations[location_id])
-
-    def get_locations(self) -> dict[str, Location]:
-        """
-        Returns all locations
-        """
-        valid_locations = {}
-        for location in self._locations:
-            try:
-                valid_locations[location] = Location.model_validate(
-                    self._locations[location]
-                )
-            except ValidationError:
-                continue
-        return valid_locations
-
-    def set_location(self, location: Union[Location, dict[str, Any]]) -> None:
-        """
-        Sets a location by ID
-        """
-        if isinstance(location, Location):
-            location_dump = location.model_dump(mode="json")
-        else:
-            location_dump = Location.model_validate(location).model_dump(mode="json")
-        self._locations[location_dump["location_id"]] = location_dump
-        self.mark_state_changed()
-
-    def delete_location(self, location_id: str) -> None:
-        """
-        Deletes a location by ID
-        """
-        del self._locations[location_id]
-        self.mark_state_changed()
-
-    def update_location(
-        self, location_id: str, func: Callable[..., Any], *args: Any, **kwargs: Any
-    ) -> None:
-        """
-        Updates the state of a location.
-        """
-        self.set_location(func(self.get_location(location_id), *args, **kwargs))

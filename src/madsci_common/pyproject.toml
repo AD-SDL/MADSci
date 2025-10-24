@@ -1,6 +1,6 @@
 [project]
 name = "madsci.common"
-version = "0.4.7"
+version = "0.5.0-rc.3"
 description = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -27,7 +27,9 @@ dependencies = [
     "semver>=3.0.4",
     "multiprocess >= 0.70.17",
     "pydantic-settings>=2.9.1",
-    "pydantic-settings-export>=1.0.2"
+    "pydantic-settings-export>=1.0.2",
+    "regex>=2025.7.34",
+    "classy-fastapi>=0.7.0"
 ]
 
 

@@ -1,7 +1,7 @@
 [project]
 name = "madsci"
-version = "0.4.7"
-dependencies = []
+version = "0.5.0-rc.3"
+dependencies = ["pre-commit>=4.3.0"]
 readme="README.md"
 requires-python = ">=3.9.1"
 
@@ -13,6 +13,7 @@ dev = [
     "ipykernel>=6.29.5",
     "pre-commit>=4.3.0",
     "pydantic-settings-export>=1.0.2",
+    "ruff>=0.13.0",
 ]
 
 [tool.pydantic_settings_export]
@@ -27,6 +28,7 @@ default_settings = [
     "madsci.common.types.experiment_types:ExperimentManagerSettings",
     "madsci.common.types.resource_types.definitions:ResourceManagerSettings",
     "madsci.common.types.lab_types:LabManagerSettings",
+    "madsci.common.types.location_types:LocationManagerSettings",
 ]
 
 # Generate Markdown docs
@@ -48,8 +50,8 @@ dev = [
     "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
     "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
     "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
+    "-e madsci.location_manager @ file:///${PROJECT_ROOT}/src/madsci_location_manager",
     "-e madsci.experiment_application @ file:///${PROJECT_ROOT}/src/madsci_experiment_application",
-    "-e madsci.transfer_manager @ file:///${PROJECT_ROOT}/src/madsci_transfer_manager"
 ]
 
 [tool.coverage.run]

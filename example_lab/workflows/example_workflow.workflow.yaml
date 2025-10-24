@@ -6,29 +6,23 @@ metadata:
   version: 0.1
 
 parameters:
-  - name: example_parameter
-    default: 0
+  json_inputs:
+    - key: example_parameter
+      default: 0
+  file_inputs:
+    - key: liquidhandler_protocol
 steps:
-  - name: Run Liquid Handeler Protocol
+  - name: Run Liquid Handler Protocol
     node: liquidhandler_1
-    action: run_command
-    args:
-      command: first_command
+    action: run_protocol
+    files:
+      protocol: liquidhandler_protocol
   - name: Transfer Plate
-    node: transfer_manager
-    action: transfer_resource
-    args:
-      source_resource: 01K4B3CZA2GHANSBD85T7C1EPZ
-    locations:
-      target: location_2
-  - name: Transfer Plate
-    node: transfer_manager
-    action: transfer_resource
+    node: robotarm_1
+    action: transfer
     locations:
       source: location_1
       target: location_2
   - name: Run Plate Reader Protocol
     node: platereader_1
     action: read_plate
-    # files:
-    #   protocol: "./test.txt"

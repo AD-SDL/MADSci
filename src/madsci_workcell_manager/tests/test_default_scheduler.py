@@ -14,7 +14,7 @@ from madsci.common.types.location_types import Location, LocationDefinition
 from madsci.common.types.node_types import Node, NodeInfo, NodeStatus
 from madsci.common.types.resource_types import Slot
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellDefinition
+from madsci.common.types.workcell_types import WorkcellManagerDefinition
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -26,8 +26,8 @@ from madsci.workcell_manager.schedulers.default_scheduler import Scheduler
 @pytest.fixture
 def mock_scheduler() -> Generator[Scheduler, None, None]:
     """Fixture to create a mock scheduler"""
-    mock_workcell_definition = WorkcellDefinition(
-        workcell_name="test workcell",
+    mock_workcell_definition = WorkcellManagerDefinition(
+        name="test workcell",
         locations=[
             LocationDefinition(
                 location_name="loc1",
@@ -48,17 +48,26 @@ def mock_scheduler() -> Generator[Scheduler, None, None]:
             module_name="test_module",
         ),
     )
-    mock_state_handler.get_locations.return_value = [
+
+    # Mock the node_lock to return an unlocked lock by default
+    mock_lock = MagicMock()
+    mock_lock.locked.return_value = False
+    mock_state_handler.node_lock.return_value = mock_lock
+
+    scheduler = Scheduler(mock_workcell_definition, mock_state_handler)
+
+    # Mock the LocationClient
+    scheduler.location_client = MagicMock()
+    scheduler.location_client.get_locations.return_value = [
         Location(
-            location_name="loc1",
+            name="loc1",
             resource_id=None,
         ),
         Location(
-            location_name="loc2",
+            name="loc2",
             resource_id=None,
         ),
     ]
-    scheduler = Scheduler(mock_workcell_definition, mock_state_handler)
     yield scheduler
 
 
@@ -151,10 +160,10 @@ def test_condition_checking_resource_presence(mock_scheduler: Scheduler) -> None
     mock_scheduler.resource_client = MagicMock()
     test_slot = Slot()
     mock_scheduler.resource_client.get_resource.return_value = test_slot
-    mock_scheduler.state_handler.get_locations.return_value[
+    mock_scheduler.location_client.get_locations.return_value[
         0
     ].resource_id = test_slot.resource_id
-    mock_scheduler.state_handler.get_locations.return_value[
+    mock_scheduler.location_client.get_locations.return_value[
         1
     ].resource_id = test_slot.resource_id
 
@@ -256,6 +265,32 @@ def test_node_status_abnormal(
         "Node test_node not ready: Node is in an error state"
         in result[workflows[0].workflow_id].reasons[0]
     )
+
+
+def test_node_locked(mock_scheduler: Scheduler, workflows: list[Workflow]) -> None:
+    """Test that workflows are not ready to run if the node is locked"""
+    # Mock the node_lock to return a locked lock
+    mock_lock = MagicMock()
+    mock_lock.locked.return_value = True
+    mock_scheduler.state_handler.node_lock.return_value = mock_lock
+
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert not result[workflows[0].workflow_id].ready_to_run
+    assert (
+        "Node test_node is locked by another action"
+        in result[workflows[0].workflow_id].reasons
+    )
+
+
+def test_node_unlocked(mock_scheduler: Scheduler, workflows: list[Workflow]) -> None:
+    """Test that workflows are ready to run if the node is not locked"""
+    # Mock the node_lock to return an unlocked lock
+    mock_lock = MagicMock()
+    mock_lock.locked.return_value = False
+    mock_scheduler.state_handler.node_lock.return_value = mock_lock
+
+    result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)
+    assert result[workflows[0].workflow_id].ready_to_run
 
 
 # TODO: Test Location Reservation

@@ -190,7 +190,7 @@ def test_migration_file_generation(mock_command, temp_alembic_dir: Path):
 
         # Verify Alembic revision command was called
         mock_command.revision.assert_called_once()
-        args, kwargs = mock_command.revision.call_args
+        _, kwargs = mock_command.revision.call_args
         assert kwargs["message"] == "Test migration"
         assert kwargs["autogenerate"] is True
 

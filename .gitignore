@@ -313,5 +313,7 @@ htmlcov/
 coverage.xml
 .coverage
 
+.mcp.json
+
 # Alembic migration versions (environment-specific)
 src/madsci_resource_manager/madsci/resource_manager/alembic/versions/*.py

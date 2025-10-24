@@ -20,9 +20,13 @@ class ExampleApp(ExperimentApplication):
     def run_experiment(self) -> str:
         """main experiment function"""
 
-        self.workcell_client.submit_workflow(
-            "./workflows/test_feedforward_data.workflow.yaml"
+        workflow = self.workcell_client.submit_workflow(
+            "./workflows/test_feedforward_data.workflow.yaml",
+            json_inputs={"test_command_1": "test"},
+            file_inputs={"test_file_2": "./test.txt"},
         )
+        workflow.get_datapoint_id("generate")
+        workflow.get_datapoint("generate")
         return "test"
 
 

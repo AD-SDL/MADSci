@@ -243,7 +243,7 @@ class TestEventClientLogging:
 
         # These should be filtered out
         client.log_debug("Debug message")
-        client.log_info("Info message")
+        client.info("Info message")
 
         # These should go through
         client.log_warning("Warning message")
@@ -264,7 +264,10 @@ class TestEventClientLogging:
         client = EventClient(config=config_with_server)
 
         # Should not raise an exception, should buffer the event
-        client.log_info("Test message")
+        client.info("Test message gets queued 1")
+        client.info(
+            "Test message gets queued 2"
+        )  # * Need a second event so there's at least one in the queue while the other is being retried
 
         time.sleep(0.1)
 
@@ -356,7 +359,7 @@ class TestEventClientEventRetrieval:
 
         mock_get.assert_called_once_with(
             "http://localhost:8001/events",
-            timeout=10,
+            timeout=120,
             params={"number": 50, "level": logging.INFO},
         )
         assert isinstance(result, dict)
@@ -380,7 +383,7 @@ class TestEventClientEventRetrieval:
 
         mock_get.assert_called_once_with(
             "http://localhost:8001/events",
-            timeout=10,
+            timeout=120,
             params={"number": 100, "level": 10},  # DEBUG level
         )
         assert isinstance(result, dict)
@@ -523,7 +526,6 @@ class TestEventClientUtilizationMethods:
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time": "2025-01-02T00:00:00Z",
             },
-            timeout=30,
         )
         assert result == {"utilization_data": "test"}
 
@@ -558,7 +560,6 @@ class TestEventClientUtilizationMethods:
             mock_get.assert_called_once_with(
                 "http://localhost:8001/utilization/sessions",
                 params=expected_params,
-                timeout=60,
             )
             assert result == "date,utilization\\n2025-01-01,50%"
 
@@ -595,7 +596,6 @@ class TestEventClientUtilizationMethods:
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time": "2025-01-02T00:00:00Z",
             },
-            timeout=60,
         )
         assert result == {"sessions": []}
 
@@ -629,7 +629,6 @@ class TestEventClientUtilizationMethods:
             mock_get.assert_called_once_with(
                 "http://localhost:8001/utilization/sessions",
                 params=expected_params,
-                timeout=60,
             )
             assert result == "session,start,end\\nsession1,2025-01-01,2025-01-02"
 
@@ -666,7 +665,6 @@ class TestEventClientUtilizationMethods:
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time": "2025-01-02T00:00:00Z",
             },
-            timeout=60,
         )
         assert result == {"users": {}}
 

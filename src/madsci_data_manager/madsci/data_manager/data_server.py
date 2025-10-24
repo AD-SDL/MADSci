@@ -1,28 +1,26 @@
-"""REST Server for the MADSci Data Manager"""
+"""Data Manager implementation using the new AbstractManagerBase class."""
 
 import json
 import tempfile
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Dict, Optional
 
-import uvicorn
-from fastapi import FastAPI, Form, Response, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from classy_fastapi import get, post
+from fastapi import Form, Response, UploadFile
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
-from madsci.client.event_client import EventClient
-from madsci.common.context import get_current_madsci_context
+from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
     upload_file_to_object_storage,
 )
-from madsci.common.ownership import global_ownership_info
 from madsci.common.types.datapoint_types import (
     DataManagerDefinition,
+    DataManagerHealth,
     DataManagerSettings,
     DataPoint,
     ObjectStorageSettings,
@@ -31,93 +29,140 @@ from minio import Minio
 from pymongo import MongoClient
 
 
-def create_data_server(  # noqa: C901, PLR0915
-    data_manager_settings: Optional[DataManagerSettings] = None,
-    data_manager_definition: Optional[DataManagerDefinition] = None,
-    object_storage_settings: Optional[ObjectStorageSettings] = None,
-    db_client: Optional[MongoClient] = None,
-) -> FastAPI:
-    """Creates a Data Manager's REST server."""
-    logger = EventClient()
+class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition]):
+    """Data Manager REST Server."""
 
-    data_manager_settings = data_manager_settings or DataManagerSettings()
-    logger.log_info(data_manager_settings)
-    if not data_manager_definition:
-        def_path = Path(data_manager_settings.data_manager_definition).expanduser()
-        if def_path.exists():
-            data_manager_definition = DataManagerDefinition.from_yaml(
-                def_path,
+    SETTINGS_CLASS = DataManagerSettings
+    DEFINITION_CLASS = DataManagerDefinition
+
+    def __init__(
+        self,
+        settings: Optional[DataManagerSettings] = None,
+        definition: Optional[DataManagerDefinition] = None,
+        object_storage_settings: Optional[ObjectStorageSettings] = None,
+        db_client: Optional[MongoClient] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the Data Manager."""
+        # Store additional dependencies before calling super().__init__
+        self._object_storage_settings = object_storage_settings
+        self._db_client = db_client
+
+        super().__init__(settings=settings, definition=definition, **kwargs)
+
+        # Initialize database and storage
+        self._setup_database()
+        self._setup_object_storage()
+
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize manager-specific components."""
+        super().initialize(**kwargs)
+
+        # Skip version validation if an external db_client was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self._db_client is not None:
+            # External client provided, likely in test context - skip version validation
+            self.logger.info(
+                "External db_client provided, skipping MongoDB version validation"
             )
-        else:
-            data_manager_definition = DataManagerDefinition()
-        logger.log_info(f"Writing to data manager definition file: {def_path}")
-        data_manager_definition.to_yaml(def_path)
-    global_ownership_info.manager_id = data_manager_definition.data_manager_id
-    logger = EventClient(
-        name=f"data_manager.{data_manager_definition.name}",
-    )
-    logger.log_info(data_manager_definition)
-    logger.log_info(get_current_madsci_context())
+            return
 
-    # DATABASE VERSION VALIDATION - MongoDB version checking
-    logger.info("Validating MongoDB schema version...")
-    version_checker = None
-    try:
-        # Get schema file path relative to this module
-        schema_file_path = Path(__file__).parent / "schema.json"
+        # DATABASE VERSION VALIDATION - MongoDB version checking
+        self.logger.info("Validating MongoDB schema version...")
+        version_checker = None
+        try:
+            # Get schema file path relative to this module
+            schema_file_path = Path(__file__).parent / "schema.json"
 
-        version_checker = MongoDBVersionChecker(
-            db_url=data_manager_settings.db_url,
-            database_name=data_manager_settings.collection_name,
-            schema_file_path=str(schema_file_path),
-            logger=logger,
+            version_checker = MongoDBVersionChecker(
+                db_url=self.settings.db_url,
+                database_name=self.settings.collection_name,
+                schema_file_path=str(schema_file_path),
+                logger=self.logger,
+            )
+            version_checker.validate_or_fail()
+            self.logger.info("MongoDB version validation completed successfully")
+        except RuntimeError as e:
+            if "needs version tracking initialization" in str(e):
+                self.logger.error(
+                    "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
+                    "The database exists but needs version tracking setup."
+                )
+            else:
+                self.logger.error(
+                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+                    "Please run the migration tool before starting the server."
+                )
+            self.logger.error(
+                "\nTo resolve this issue, run the migration tool and restart the server."
+            )
+            raise
+        finally:
+            # Always dispose of the version checker
+            if version_checker:
+                version_checker.dispose()
+
+    def _setup_database(self) -> None:
+        """Setup database connection and collections."""
+        if self._db_client is None:
+            self._db_client = MongoClient(self.settings.db_url)
+
+        datapoints_db = self._db_client["madsci_data"]
+        self.datapoints = datapoints_db["datapoints"]
+
+    def _setup_object_storage(self) -> None:
+        """Setup MinIO object storage client."""
+        self.minio_client = create_minio_client(
+            object_storage_settings=self._object_storage_settings
         )
-        version_checker.validate_or_fail()
-        logger.info("MongoDB version validation completed successfully")
-    except RuntimeError as e:
-        if "needs version tracking initialization" in str(e):
-            logger.error(
-                "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
-                "The database exists but needs version tracking setup."
-            )
-        else:
-            logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
-                "Please run the migration tool before starting the server."
-            )
-        logger.error(
-            "\nTo resolve this issue, run the migration tool and restart the server."
-        )
-        raise
-    finally:
-        # Always dispose of the version checker
-        if version_checker:
-            version_checker.dispose()
 
-    if db_client is None:
-        db_client = MongoClient(data_manager_settings.db_url)
+    def get_health(self) -> DataManagerHealth:
+        """Get the health status of the Data Manager."""
+        health = DataManagerHealth()
 
-    # Initialize MinIO client if configuration is provided
-    minio_client = create_minio_client(object_storage_settings=object_storage_settings)
+        try:
+            # Test database connection
+            self._db_client.admin.command("ping")
+            health.db_connected = True
 
-    app = FastAPI()
-    datapoints_db = db_client[data_manager_settings.collection_name]
-    datapoints = datapoints_db["datapoints"]
+            # Get total datapoints count
+            health.total_datapoints = self.datapoints.count_documents({})
 
-    @app.get("/")
-    @app.get("/info")
-    @app.get("/definition")
-    async def root() -> DataManagerDefinition:
-        """Return the DataPoint Manager Definition"""
-        return data_manager_definition
+            # Test storage accessibility
+            try:
+                if self.minio_client:
+                    # Try to list buckets to verify MinIO connectivity
+                    list(self.minio_client.list_buckets())
+                    health.storage_accessible = True
+                else:
+                    # No object storage configured, but file storage should be accessible
+                    storage_path = Path(self.settings.file_storage_path).expanduser()
+                    storage_path.mkdir(parents=True, exist_ok=True)
+                    health.storage_accessible = (
+                        storage_path.exists() and storage_path.is_dir()
+                    )
+            except Exception:
+                health.storage_accessible = False
+
+            health.healthy = True
+            health.description = "Data Manager is running normally"
+
+        except Exception as e:
+            health.healthy = False
+            health.db_connected = False
+            health.storage_accessible = False
+            health.description = f"Database connection failed: {e!s}"
+
+        return health
 
     def _upload_file_to_minio(
+        self,
         minio_client: Minio,
         file_path: Path,
         filename: str,
         label: Optional[str] = None,
-        metadata: Optional[dict[str, str]] = None,
-    ) -> Optional[dict[str, Any]]:
+        metadata: Optional[Dict[str, str]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Upload a file to MinIO object storage and return object storage info."""
         if minio_client is None:
             return None
@@ -127,17 +172,17 @@ def create_data_server(  # noqa: C901, PLR0915
             minio_client=minio_client,
             file_path=file_path,
             bucket_name=(
-                object_storage_settings or ObjectStorageSettings()
+                self._object_storage_settings or ObjectStorageSettings()
             ).default_bucket,
             metadata=metadata,
-            naming_strategy=ObjectNamingStrategy.TIMESTAMPED_PATH,  # Server uses timestamped paths
+            naming_strategy=ObjectNamingStrategy.TIMESTAMPED_PATH,
             label=label or filename,
-            object_storage_settings=object_storage_settings,
+            object_storage_settings=self._object_storage_settings,
         )
 
-    @app.post("/datapoint")
+    @post("/datapoint")
     async def create_datapoint(
-        datapoint: Annotated[str, Form()], files: list[UploadFile] = []
+        self, datapoint: Annotated[str, Form()], files: list[UploadFile] = []
     ) -> Any:
         """Create a new datapoint."""
         datapoint_obj = DataPoint.discriminate(json.loads(datapoint))
@@ -146,7 +191,10 @@ def create_data_server(  # noqa: C901, PLR0915
         if files:
             for file in files:
                 # Check if this is a file datapoint and MinIO is configured
-                if datapoint_obj.data_type.value == "file" and minio_client is not None:
+                if (
+                    datapoint_obj.data_type.value == "file"
+                    and self.minio_client is not None
+                ):
                     # Use MinIO object storage instead of local storage
                     # First, save file temporarily to upload to MinIO
 
@@ -159,8 +207,8 @@ def create_data_server(  # noqa: C901, PLR0915
                         temp_path = Path(temp_file.name)
 
                     # Upload to MinIO object storage
-                    object_storage_info = _upload_file_to_minio(
-                        minio_client=minio_client,
+                    object_storage_info = self._upload_file_to_minio(
+                        minio_client=self.minio_client,
                         file_path=temp_path,
                         filename=file.filename,
                         label=datapoint_obj.label,
@@ -177,7 +225,7 @@ def create_data_server(  # noqa: C901, PLR0915
                         datapoint_dict.update(object_storage_info)
                         # Update data_type to indicate this is now an object storage datapoint
                         datapoint_dict["data_type"] = "object_storage"
-                        datapoints.insert_one(datapoint_dict)
+                        self.datapoints.insert_one(datapoint_dict)
                         # Return the transformed datapoint
                         return DataPoint.discriminate(datapoint_dict)
                     # If MinIO upload failed, fall back to local storage
@@ -189,7 +237,7 @@ def create_data_server(  # noqa: C901, PLR0915
                 # Fallback to local storage
                 time = datetime.now()
                 path = (
-                    Path(data_manager_settings.file_storage_path).expanduser()
+                    Path(self.settings.file_storage_path).expanduser()
                     / str(time.year)
                     / str(time.month)
                     / str(time.day)
@@ -203,19 +251,19 @@ def create_data_server(  # noqa: C901, PLR0915
                     contents = file.file.read()
                     f.write(contents)
                 datapoint_obj.path = str(final_path)
-                datapoints.insert_one(datapoint_obj.to_mongo())
+                self.datapoints.insert_one(datapoint_obj.to_mongo())
                 return datapoint_obj
         else:
             # No files - just insert the datapoint (for ValueDataPoint, etc.)
-            datapoints.insert_one(datapoint_obj.to_mongo())
+            self.datapoints.insert_one(datapoint_obj.to_mongo())
             return datapoint_obj
 
         return None
 
-    @app.get("/datapoint/{datapoint_id}")
-    async def get_datapoint(datapoint_id: str) -> Any:
+    @get("/datapoint/{datapoint_id}")
+    async def get_datapoint(self, datapoint_id: str) -> Any:
         """Look up a datapoint by datapoint_id"""
-        datapoint = datapoints.find_one({"_id": datapoint_id})
+        datapoint = self.datapoints.find_one({"_id": datapoint_id})
         if not datapoint:
             return JSONResponse(
                 status_code=404,
@@ -223,55 +271,37 @@ def create_data_server(  # noqa: C901, PLR0915
             )
         return DataPoint.discriminate(datapoint)
 
-    @app.get("/datapoint/{datapoint_id}/value")
-    async def get_datapoint_value(datapoint_id: str) -> Response:
+    @get("/datapoint/{datapoint_id}/value")
+    async def get_datapoint_value(self, datapoint_id: str) -> Response:
         """Returns a specific data point's value. If this is a file, it will return the file."""
-        datapoint = datapoints.find_one({"_id": datapoint_id})
+        datapoint = self.datapoints.find_one({"_id": datapoint_id})
         datapoint = DataPoint.discriminate(datapoint)
         if datapoint.data_type == "file":
             return FileResponse(datapoint.path)
         return JSONResponse(datapoint.value)
 
-    @app.get("/datapoints")
-    async def get_datapoints(number: int = 100) -> dict[str, Any]:
+    @get("/datapoints")
+    async def get_datapoints(self, number: int = 100) -> Dict[str, Any]:
         """Get the latest datapoints"""
         datapoint_list = (
-            datapoints.find({}).sort("data_timestamp", -1).limit(number).to_list()
+            self.datapoints.find({}).sort("data_timestamp", -1).limit(number).to_list()
         )
         return {
             datapoint["_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 
-    @app.post("/datapoints/query")
-    async def query_datapoints(selector: Any = Body()) -> dict[str, Any]:  # noqa: B008
+    @post("/datapoints/query")
+    async def query_datapoints(self, selector: Any = Body()) -> Dict[str, Any]:  # noqa: B008
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
-        datapoint_list = datapoints.find(selector).to_list()
+        datapoint_list = self.datapoints.find(selector).to_list()
         return {
             datapoint["_id"]: DataPoint.discriminate(datapoint)
             for datapoint in datapoint_list
         }
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
-    return app
-
-
+# Main entry point for running the server
 if __name__ == "__main__":
-    data_manager_settings = DataManagerSettings()
-    db_client = MongoClient(data_manager_settings.db_url)
-    app = create_data_server(
-        data_manager_settings=data_manager_settings,
-        db_client=db_client,
-    )
-    uvicorn.run(
-        app,
-        host=data_manager_settings.data_server_url.host,
-        port=data_manager_settings.data_server_url.port,
-    )
+    manager = DataManager()
+    manager.run_server()

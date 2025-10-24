@@ -517,10 +517,34 @@ class DatabaseMigrator:
                 f"Current database version: {current_db_version or 'None'}"
             )
 
-            # ALWAYS CREATE BACKUP FIRST - regardless of migration type
+            # Check if this is a fresh database initialization
+            if self._is_fresh_database():
+                self.logger.info(
+                    "Fresh database detected, performing initialization without backup..."
+                )
+                try:
+                    # For fresh databases, just apply schema migrations and set up version tracking
+                    self.apply_schema_migrations()
+
+                    # Initialize version tracking for fresh database
+                    migration_notes = f"Fresh database initialized with MADSci version {target_version}"
+                    self.version_checker.record_version(target_version, migration_notes)
+
+                    self.logger.info(
+                        f"Fresh database initialization completed successfully with version {target_version}"
+                    )
+                    return
+
+                except Exception as init_error:
+                    self.logger.error(
+                        f"Fresh database initialization failed: {init_error}"
+                    )
+                    raise init_error
+
+            # EXISTING DATABASE - CREATE BACKUP FIRST
             backup_path = self.create_backup()
 
-            # ALWAYS apply schema migrations - check for changes and apply them
+            # Apply schema migrations for existing database
             try:
                 # Apply Alembic migrations (this will detect and apply any schema changes)
                 self.apply_schema_migrations()
@@ -598,6 +622,31 @@ class DatabaseMigrator:
         except Exception as e:
             self.logger.error(f"Could not mark version as current: {e}")
             raise
+
+    def _is_fresh_database(self) -> bool:
+        """Check if this is a fresh database with no existing tables."""
+        try:
+            inspector = inspect(self.engine)
+            existing_tables = inspector.get_table_names()
+
+            # Consider it fresh if no resource-related tables exist
+            resource_tables = ["resource", "resource_history", "madsci_schema_version"]
+            has_resource_tables = any(
+                table in existing_tables for table in resource_tables
+            )
+
+            if not has_resource_tables:
+                self.logger.info(
+                    "No existing resource tables found, treating as fresh database"
+                )
+                return True
+
+            self.logger.info(f"Found existing tables: {existing_tables}")
+            return False
+
+        except Exception as e:
+            self.logger.warning(f"Could not check database tables: {e}")
+            return False
 
 
 def main() -> None:

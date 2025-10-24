@@ -15,8 +15,8 @@
       <v-container class="pa-1" fluid>
         <v-row dense wrap justify-content="space-evenly">
           <v-col cols="12" md="6" lg="6" xl="6">
-            <NodesPanel :nodes="workcell_state.nodes" :main_url="main_url" :wc_state="workcell_state" :locations="workcell_info.locations"/>
-            <LocationsPanel :locations="workcell_info.locations" />
+            <NodesPanel :nodes="workcell_state.nodes" :main_url="main_url" :wc_state="workcell_state" :locations="locations"/>
+            <LocationsPanel :locations="locations" :responsiveLayout="false" :tabbedLayout="true" />
           </v-col>
           <v-col cols="12" md="6" lg="6" xl="6">
             <WorkflowsPanel @view-workflows="$emit('view-workflows')" />
@@ -59,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { main_url, workcell_info, workcell_state, active_workflows } from "@/store";
+import { main_url, workcell_info, workcell_state, active_workflows, locations } from "@/store";
 import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 import CancelButton from './AdminButtons/CancelButton.vue';

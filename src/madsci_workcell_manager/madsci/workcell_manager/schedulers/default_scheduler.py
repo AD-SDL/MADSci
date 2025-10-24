@@ -11,6 +11,7 @@ from madsci.common.types.workflow_types import (
 )
 from madsci.workcell_manager.condition_checks import evaluate_condition_checks
 from madsci.workcell_manager.schedulers.scheduler import AbstractScheduler
+from madsci.workcell_manager.workflow_utils import insert_parameters
 
 
 class Scheduler(AbstractScheduler):
@@ -28,7 +29,7 @@ class Scheduler(AbstractScheduler):
             workflows,
             key=lambda item: item.submitted_time,
         )
-        workflow_metadata_map = {}
+        workflow_definition_metadata_map = {}
 
         for wf in workflows:
             try:
@@ -38,25 +39,26 @@ class Scheduler(AbstractScheduler):
 
                 if wf.status.current_step_index < len(wf.steps):
                     step = wf.steps[wf.status.current_step_index]
+                    updated_step = insert_parameters(step, wf.parameter_values)
                     self.check_workflow_status(wf, metadata)
-                    self.location_checks(step, metadata)
-                    self.resource_checks(step, metadata)
-                    self.node_checks(step, wf, metadata)
-                    self.step_checks(step, metadata)
-                    metadata = evaluate_condition_checks(step, self, metadata)
+                    self.location_checks(updated_step, metadata)
+                    self.resource_checks(updated_step, metadata)
+                    self.node_checks(updated_step, wf, metadata)
+                    self.step_checks(updated_step, metadata)
+                    metadata = evaluate_condition_checks(updated_step, self, metadata)
                     metadata.priority = priority
                     priority -= 1
 
             except Exception as e:
-                self.logger.log_error(
+                self.logger.error(
                     f"Error in scheduler while evaluating workflow {wf.workflow_id}: {traceback.format_exc()}"
                 )
                 metadata.ready_to_run = False
                 metadata.reasons.append(f"Exception in scheduler: {e}")
             finally:
-                workflow_metadata_map[wf.workflow_id] = metadata
+                workflow_definition_metadata_map[wf.workflow_id] = metadata
 
-        return workflow_metadata_map
+        return workflow_definition_metadata_map
 
     def check_workflow_status(self, wf: Workflow, metadata: SchedulerMetadata) -> None:
         """Check if the workflow is ready to run (i.e. not paused, not completed, etc.)"""
@@ -79,13 +81,27 @@ class Scheduler(AbstractScheduler):
         for location in step.locations.values():
             if location is None:
                 continue
-            if location.resource_id is not None and self.resource_client is not None:
-                self.resource_client.get_resource(location.resource_id)
+            # Get the current location state from LocationManager
+            current_location = location
+            try:
+                if self.location_client is not None:
+                    current_location = self.location_client.get_location(
+                        location.location_id
+                    )
+            except Exception:
+                # If LocationManager is not available or location not found, use step's location
+                current_location = location
+
+            if (
+                current_location.resource_id is not None
+                and self.resource_client is not None
+            ):
+                self.resource_client.get_resource(current_location.resource_id)
                 # TODO: what do we do with the location_resource?
-            if location.reservation is not None:
+            if current_location.reservation is not None:
                 metadata.ready_to_run = False
                 metadata.reasons.append(
-                    f"Location {location.location_id} is reserved by {location.reservation.owned_by.model_dump(mode='json', exclude_none=True)}"
+                    f"Location {current_location.location_id} is reserved by {current_location.reservation.owned_by.model_dump(mode='json', exclude_none=True)}"
                 )
 
     def resource_checks(self, step: Step, metadata: SchedulerMetadata) -> None:
@@ -106,23 +122,26 @@ class Scheduler(AbstractScheduler):
         self, step: Step, wf: Workflow, metadata: SchedulerMetadata
     ) -> None:
         """Check if the node used in the step currently has a "ready" status"""
-        node = self.state_handler.get_node(step.node)
-        if node is None:
-            metadata.ready_to_run = False
-            metadata.reasons.append(f"Node {step.node} not found")
-        if not node.status.ready:
-            metadata.ready_to_run = False
-            metadata.reasons.append(
-                f"Node {step.node} not ready: {node.status.description}"
-            )
-        if node.pending_action_id is not None:
-            metadata.ready_to_run = False
-            metadata.reasons.append(
-                f"Node {step.node} has a pending action that needs to be resolved"
-            )
+        if step.node is not None:
+            node = self.state_handler.get_node(step.node)
+            if node is None:
+                metadata.ready_to_run = False
+                metadata.reasons.append(f"Node {step.node} not found")
+            if not node.status.ready:
+                metadata.ready_to_run = False
+                metadata.reasons.append(
+                    f"Node {step.node} not ready: {node.status.description}"
+                )
+            # Check if node is locked (another workflow is currently sending it an action request)
+            node_lock = self.state_handler.node_lock(step.node)
+            if node_lock.locked():
+                metadata.ready_to_run = False
+                metadata.reasons.append(f"Node {step.node} is locked by another action")
 
-        if node.reservation is not None and node.reservation.check(wf.ownership_info):
-            metadata.ready_to_run = False
-            metadata.reasons.append(
-                f"Node {step.node} is reserved by {node.reservation.owned_by.model_dump(mode='json', exclude_none=True)}"
-            )
+            if node.reservation is not None and node.reservation.check(
+                wf.ownership_info
+            ):
+                metadata.ready_to_run = False
+                metadata.reasons.append(
+                    f"Node {step.node} is reserved by {node.reservation.owned_by.model_dump(mode='json', exclude_none=True)}"
+                )

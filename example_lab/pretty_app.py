@@ -21,12 +21,10 @@ class ExampleApp(ExperimentApplication):
         while calculated_value < 3:
             workflow = self.workcell_client.submit_workflow(
                 "./workflows/example_workflow.workflow.yaml",
-                parameters={"example_parameter": 2},
+                json_inputs={"example_parameter": 2},
+                file_inputs={"liquidhandler_protocol": "./protocols/protocol.py"},
             )
-
-            datapoint = self.data_client.get_datapoint(
-                workflow.get_datapoint_id_by_label("example_file")
-            )
+            datapoint = workflow.get_datapoint(label="example_file")
             measured_value = datapoint.value
             calculated_value = run_calculation(measured_value)
         return calculated_value

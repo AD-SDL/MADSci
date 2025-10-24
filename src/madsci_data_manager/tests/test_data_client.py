@@ -23,7 +23,7 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageSettings,
     ValueDataPoint,
 )
-from madsci.data_manager.data_server import create_data_server
+from madsci.data_manager.data_server import DataManager
 from pymongo import MongoClient
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 from starlette.testclient import TestClient
@@ -43,10 +43,11 @@ mongo_client = create_mongo_fixture()
 def test_client(mongo_client: MongoClient) -> TestClient:
     """Data Server Test Client Fixture"""
     data_manager_definition = DataManagerDefinition(name="Test Data Manager")
-    app = create_data_server(
-        data_manager_definition=data_manager_definition,
+    manager = DataManager(
+        definition=data_manager_definition,
         db_client=mongo_client,
     )
+    app = manager.create_server()
     return TestClient(app)
 
 
@@ -104,7 +105,7 @@ def test_query_datapoints(client: DataClient) -> None:
     client.submit_datapoint(datapoint3)
     queried_datapoints = client.query_datapoints(
         {
-            "data_type": DataPointTypeEnum.DATA_VALUE,
+            "data_type": DataPointTypeEnum.JSON,
             "label": "Test",
             "value": "test_value",
         }
@@ -642,3 +643,79 @@ def test_s3_provider_configurations():
 
     # AWS should have region
     assert aws_config.region == "us-west-2"
+
+
+# Additional tests for improved data client functionality
+from datetime import datetime, timezone
+from unittest.mock import MagicMock
+from madsci.common.types.action_types import ActionDatapoints, ActionResult
+from madsci.common.utils import new_ulid_str
+
+
+class TestDataClientBatchOperations:
+    """Test cases for batch datapoint operations."""
+
+    @pytest.fixture
+    def mock_data_client(self):
+        """Create a DataClient with mocked get_datapoint method."""
+        client = DataClient(data_server_url="http://localhost:8004")
+        client.get_datapoint = MagicMock()
+        return client
+
+    def test_get_datapoints_by_ids_success(self, mock_data_client):
+        """Test successful batch fetching of datapoints."""
+        # Setup test data
+        dp1 = ValueDataPoint(value="test1", label="result1")
+        dp2 = FileDataPoint(path="/test/file.txt", label="result2")
+
+        mock_data_client.get_datapoint.side_effect = [dp1, dp2]
+
+        # Test batch fetching
+        result = mock_data_client.get_datapoints_by_ids(
+            [dp1.datapoint_id, dp2.datapoint_id]
+        )
+
+        # Verify results
+        assert len(result) == 2
+        assert result[dp1.datapoint_id] == dp1
+        assert result[dp2.datapoint_id] == dp2
+        assert mock_data_client.get_datapoint.call_count == 2
+
+    def test_get_datapoints_by_ids_empty_list(self, mock_data_client):
+        """Test batch fetching with empty input."""
+        result = mock_data_client.get_datapoints_by_ids([])
+        assert result == {}
+        mock_data_client.get_datapoint.assert_not_called()
+
+    def test_get_datapoint_metadata(self, mock_data_client):
+        """Test extracting metadata from a datapoint."""
+        dp = ValueDataPoint(value="test_data", label="test_result")
+        dp.data_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        mock_data_client.get_datapoint.return_value = dp
+
+        metadata = mock_data_client.get_datapoint_metadata(dp.datapoint_id)
+
+        assert metadata["datapoint_id"] == dp.datapoint_id
+        assert metadata["label"] == "test_result"
+        assert metadata["data_type"] == "json"
+        assert metadata["data_timestamp"] == dp.data_timestamp
+        assert "ownership_info" in metadata
+
+    def test_extract_datapoint_ids_from_action_result(self, mock_data_client):
+        """Test extracting datapoint IDs from ActionResult."""
+        ulid1 = new_ulid_str()
+        ulid2 = new_ulid_str()
+
+        datapoints = ActionDatapoints.model_validate(
+            {"single_result": ulid1, "list_results": [ulid2, new_ulid_str()]}
+        )
+
+        action_result = ActionResult(status="succeeded", datapoints=datapoints)
+
+        ids = mock_data_client.extract_datapoint_ids_from_action_result(action_result)
+
+        # Should extract all unique IDs
+        assert len(ids) == 3
+        assert ulid1 in ids
+        assert ulid2 in ids

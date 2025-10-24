@@ -3,7 +3,7 @@
 import importlib.metadata
 import os
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -138,6 +138,19 @@ class MongoDBVersionChecker:
         needs_migration, madsci_version, db_version = self.is_migration_needed()
 
         if needs_migration:
+            # Check if this is a completely fresh database (no collections at all)
+            if db_version is None:
+                # Auto-initialize fresh databases instead of requiring manual migration
+                try:
+                    self.auto_initialize_fresh_database()
+                    self.logger.info(
+                        f"Database version validation passed for {self.database_name}"
+                    )
+                    return
+                except Exception as e:
+                    self.logger.error(f"Auto-initialization failed: {e}")
+                    # Fall through to manual migration instructions
+
             # Detect if running in Docker
             is_docker = self._is_running_in_docker()
 
@@ -253,7 +266,7 @@ class MongoDBVersionChecker:
 
             version_doc = {
                 "version": version,
-                "applied_at": datetime.utcnow(),
+                "applied_at": datetime.now(timezone.utc),
                 "migration_notes": migration_notes
                 or f"Schema version {version} applied",
             }
@@ -280,3 +293,33 @@ class MongoDBVersionChecker:
         if not self.database_exists():
             return False
         return collection_name in self.database.list_collection_names()
+
+    def auto_initialize_fresh_database(self) -> None:
+        """
+        Auto-initialize a completely fresh database with version tracking.
+
+        This method should only be called for databases that have no collections at all.
+        It creates the schema_versions collection and records the current MADSci version.
+        """
+        try:
+            current_version = self.get_current_madsci_version()
+
+            self.logger.info(
+                f"Auto-initializing fresh database {self.database_name} with MADSci version {current_version}"
+            )
+
+            # Create the schema_versions collection and record current version
+            self.create_schema_versions_collection()
+            self.record_version(
+                current_version, f"Auto-initialized fresh database {self.database_name}"
+            )
+
+            self.logger.info(
+                f"Successfully auto-initialized database {self.database_name} with version {current_version}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Failed to auto-initialize fresh database: {e}")
+            raise RuntimeError(
+                f"Auto-initialization of fresh database failed: {e}"
+            ) from e

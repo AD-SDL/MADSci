@@ -60,6 +60,7 @@ event_client = EventClient(
 )
 
 event_client.log_info("This logs a simple string at the INFO level, with event_type LOG_INFO")
+event_client.info("This does the same thing")
 event = Event(
     event_type="NODE_CREATE",
     log_level=EventLogLevel.DEBUG,

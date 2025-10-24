@@ -32,15 +32,15 @@ def test_ulid_validator_invalid():
     info = MockValidationInfo("test_field")
 
     # Test invalid ULID format
-    with pytest.raises(ValueError, match="Invalid ULID.*for field test_field"):
+    with pytest.raises(ValueError, match=r"Invalid ULID.*for field test_field"):
         ulid_validator("invalid_ulid", info)
 
     # Test empty string
-    with pytest.raises(ValueError, match="Invalid ULID.*for field test_field"):
+    with pytest.raises(ValueError, match=r"Invalid ULID.*for field test_field"):
         ulid_validator("", info)
 
     # Test wrong length
-    with pytest.raises(ValueError, match="Invalid ULID.*for field test_field"):
+    with pytest.raises(ValueError, match=r"Invalid ULID.*for field test_field"):
         ulid_validator("01H4T5F9J8K7L6M3N2", info)  # Too short
 
 
@@ -48,7 +48,7 @@ def test_ulid_validator_field_name_in_error():
     """Test that ULID validator includes field name in error message."""
     info = MockValidationInfo("my_custom_field")
 
-    with pytest.raises(ValueError, match="Invalid ULID.*for field my_custom_field"):
+    with pytest.raises(ValueError, match=r"Invalid ULID.*for field my_custom_field"):
         ulid_validator("invalid", info)
 
 
@@ -73,7 +73,7 @@ def test_optional_ulid_validator_invalid():
     """Test optional ULID validator with invalid ULID."""
     info = MockValidationInfo("optional_field")
 
-    with pytest.raises(ValueError, match="Invalid ULID.*for field optional_field"):
+    with pytest.raises(ValueError, match=r"Invalid ULID.*for field optional_field"):
         optional_ulid_validator("invalid_ulid", info)
 
 

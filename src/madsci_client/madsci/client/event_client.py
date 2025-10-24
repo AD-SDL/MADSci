@@ -77,10 +77,6 @@ class EventClient:
             self.config.event_server_url
             or get_current_madsci_context().event_server_url
         )
-        self.log_debug(
-            "Event logger {self.name} initialized.",
-        )
-        self.log_debug(self.config)
 
     def get_log(self) -> dict[str, Event]:
         """Read the log"""

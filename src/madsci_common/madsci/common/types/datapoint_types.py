@@ -9,7 +9,12 @@ from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
-from madsci.common.types.lab_types import ManagerDefinition, ManagerType
+from madsci.common.types.manager_types import (
+    ManagerDefinition,
+    ManagerHealth,
+    ManagerSettings,
+    ManagerType,
+)
 from madsci.common.utils import new_ulid_str
 from pydantic import (
     AliasChoices,
@@ -26,12 +31,20 @@ class DataPointTypeEnum(str, Enum):
 
     Attributes:
         FILE: Represents a data point that contains a file.
-        DATA_VALUE: Represents a data point that contains a JSON serializable value.
+        JSON: Represents a data point that contains a JSON serializable value.
     """
 
+    JSON = "json"
     FILE = "file"
-    DATA_VALUE = "data_value"
     OBJECT_STORAGE = "object_storage"
+
+    @classmethod
+    def _missing_(cls, value: str) -> "DataPointTypeEnum":
+        """Handle missing enum values."""
+        value = value.lower()
+        if value == "data_value":
+            return cls.JSON
+        raise ValueError(f"Invalid DataPointType: {value}")
 
 
 class DataPoint(MadsciBaseModel, extra="allow"):
@@ -48,7 +61,7 @@ class DataPoint(MadsciBaseModel, extra="allow"):
         data_timestamp: The time the data point was created.
     """
 
-    label: str
+    label: Optional[str] = None
     """Label of this data point"""
     ownership_info: Optional[OwnershipInfo] = Field(
         default_factory=get_current_ownership_info
@@ -114,7 +127,7 @@ class ValueDataPoint(DataPoint):
         value: The value of the data point.
     """
 
-    data_type: Literal[DataPointTypeEnum.DATA_VALUE] = DataPointTypeEnum.DATA_VALUE
+    data_type: Literal[DataPointTypeEnum.JSON] = DataPointTypeEnum.JSON
     """The type of the data point, in this case a value"""
     value: Any
     """Value of the data point"""
@@ -153,10 +166,10 @@ class ObjectStorageDataPoint(DataPoint):
     )
     path: PathLike
     """Path to the file"""
-    bucket_name: str = Field(
+    bucket_name: Optional[str] = Field(
         default=None, description="Name of the bucket containing the object"
     )
-    object_name: str = Field(
+    object_name: Optional[str] = Field(
         default=None, description="Path/key of the object within the bucket"
     )
     content_type: Optional[str] = Field(
@@ -174,7 +187,7 @@ class ObjectStorageDataPoint(DataPoint):
 DataPointDataModels = Annotated[
     Union[
         Annotated[FileDataPoint, Tag(DataPointTypeEnum.FILE)],
-        Annotated[ValueDataPoint, Tag(DataPointTypeEnum.DATA_VALUE)],
+        Annotated[ValueDataPoint, Tag(DataPointTypeEnum.JSON)],
         Annotated[ObjectStorageDataPoint, Tag(DataPointTypeEnum.OBJECT_STORAGE)],
     ],
     Discriminator("data_type"),
@@ -182,7 +195,7 @@ DataPointDataModels = Annotated[
 
 DataPointTypeMap = {
     DataPointTypeEnum.FILE: FileDataPoint,
-    DataPointTypeEnum.DATA_VALUE: ValueDataPoint,
+    DataPointTypeEnum.JSON: ValueDataPoint,
     DataPointTypeEnum.OBJECT_STORAGE: ObjectStorageDataPoint,
 }
 
@@ -228,7 +241,7 @@ class ObjectStorageSettings(
 
 
 class DataManagerSettings(
-    MadsciBaseSettings,
+    ManagerSettings,
     env_file=(".env", "data.env"),
     toml_file=("settings.toml", "data.settings.toml"),
     yaml_file=("settings.yaml", "data.settings.yaml"),
@@ -237,17 +250,15 @@ class DataManagerSettings(
 ):
     """Settings for the MADSci Data Manager."""
 
-    data_server_url: AnyUrl = Field(
-        title="Lab URL",
-        description="The URL of the lab manager.",
+    server_url: AnyUrl = Field(
+        title="Data Manager Server URL",
+        description="The URL of the data manager server.",
         default=AnyUrl("http://localhost:8004"),
-        alias="data_server_url",  # * Don't double prefix
     )
-    data_manager_definition: PathLike = Field(
+    manager_definition: PathLike = Field(
         title="Data Manager Definition File",
         description="Path to the data manager definition file to use.",
         default=Path("data.manager.yaml"),
-        alias="data_manager_definition",  # * Don't double prefix
     )
     collection_name: str = Field(
         default="madsci_data",
@@ -266,6 +277,26 @@ class DataManagerSettings(
     )
 
 
+class DataManagerHealth(ManagerHealth):
+    """Health status for Data Manager including database and storage connectivity."""
+
+    db_connected: Optional[bool] = Field(
+        title="Database Connected",
+        description="Whether the database connection is working.",
+        default=None,
+    )
+    storage_accessible: Optional[bool] = Field(
+        title="Storage Accessible",
+        description="Whether file storage is accessible.",
+        default=None,
+    )
+    total_datapoints: Optional[int] = Field(
+        title="Total Datapoints",
+        description="Total number of datapoints stored in the database.",
+        default=None,
+    )
+
+
 class DataManagerDefinition(ManagerDefinition):
     """Definition for a Squid Data Manager.
 
@@ -281,10 +312,11 @@ class DataManagerDefinition(ManagerDefinition):
         description="The name of this manager instance.",
         default="Data Manager",
     )
-    data_manager_id: str = Field(
+    manager_id: str = Field(
         title="Data Manager ID",
         description="The ID of the data manager.",
         default_factory=new_ulid_str,
+        alias=AliasChoices("manager_id", "data_manager_id"),
     )
     manager_type: Literal[ManagerType.DATA_MANAGER] = Field(
         title="Manager Type",

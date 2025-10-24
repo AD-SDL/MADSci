@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionResult, ActionSucceeded
+from madsci.common.types.action_types import ActionFiles
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.node_types import RestNodeConfig
+from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
@@ -42,6 +43,13 @@ class PlateReaderInterface:
         time.sleep(2)  # Simulate command execution
 
 
+class PlateFiles(ActionFiles):
+    """Example of returned files with labeled values"""
+
+    file_path_1: Path
+    file_path_2: Path
+
+
 class PlateReaderNode(RestNode):
     """A fake plate reader node module for testing."""
 
@@ -51,6 +59,40 @@ class PlateReaderNode(RestNode):
     def startup_handler(self) -> None:
         """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
         self.plate_reader = PlateReaderInterface(logger=self.logger)
+
+        # Create plate deck slot template
+        plate_deck_slot = Slot(
+            resource_name="plate_reader_deck",
+            resource_class="PlateReaderDeck",
+            capacity=1,
+            attributes={
+                "slot_type": "plate_deck",
+                "can_read": True,
+                "description": "Plate reader deck slot where plates are placed for reading",
+            },
+        )
+
+        self.resource_client.init_template(
+            resource=plate_deck_slot,
+            template_name="plate_reader_deck_slot",
+            description="Template for plate reader deck slot. Represents the deck position where plates are placed for reading.",
+            required_overrides=["resource_name"],
+            tags=["plate_reader", "deck", "slot", "measurement"],
+            created_by=self.node_definition.node_id,
+            version="1.0.0",
+        )
+
+        # Initialize plate deck resource
+        deck_resource_name = "plate_reader_deck_" + str(self.node_definition.node_name)
+        self.plate_deck = self.resource_client.create_resource_from_template(
+            template_name="plate_reader_deck_slot",
+            resource_name=deck_resource_name,
+            add_to_database=True,
+        )
+        self.logger.log(
+            f"Initialized plate deck resource from template: {self.plate_deck.resource_id}"
+        )
+
         self.logger.log("Plate reader initialized!")
 
     def shutdown_handler(self) -> None:
@@ -68,22 +110,36 @@ class PlateReaderNode(RestNode):
     @action
     def read_plate(
         self,
-    ) -> ActionResult:
+    ) -> int:
         """Run a command on the plate reader."""
         time.sleep(5)
-        return ActionSucceeded(data={"example_data": {"example": "data"}})
+        return 5
 
     @action
     def create_plate_file(
         self,
-    ) -> ActionResult:
+    ) -> Path:
         """Run a command on the plate reader."""
 
         with (Path.home() / "test.txt").open("w") as f:
             self.logger.log_info(f.write("test"))
-        path = str(Path.home() / "test.txt")
 
-        return ActionSucceeded(files={"example_file": path})
+        return Path.home() / "test.txt"
+
+    @action
+    def create_plate_files(
+        self,
+    ) -> PlateFiles:
+        """Run a command on the plate reader."""
+
+        with (Path.home() / "test.txt").open("w") as f:
+            self.logger.log_info(f.write("test"))
+        path1 = Path.home() / "test.txt"
+        with (Path.home() / "test2.txt").open("w") as f:
+            self.logger.log_info(f.write("test2"))
+        path2 = Path.home() / "test2.txt"
+
+        return PlateFiles(file_path_1=path1, file_path_2=path2)
 
     def get_location(self) -> AdminCommandResponse:
         """Get location for the plate reader"""

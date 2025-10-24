@@ -1,32 +1,30 @@
 """Client for performing workcell actions"""
 
-import copy
 import json
 import time
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Any, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.data_manipulation import (
-    check_for_parameters,
-    value_substitution,
-    walk_and_replace,
-)
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.base_types import PathLike
-from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellState
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.utils import new_ulid_str
+from madsci.common.workflows import (
+    check_parameters_lists,
+)
 from pydantic import AnyUrl
+from requests.adapters import HTTPAdapter
 from rich import print
+from ulid import ULID
+from urllib3.util.retry import Retry
 
 
 class WorkcellClient:
@@ -39,6 +37,10 @@ class WorkcellClient:
         workcell_server_url: Optional[Union[str, AnyUrl]] = None,
         working_directory: str = "./",
         event_client: Optional[EventClient] = None,
+        retry: bool = False,
+        retry_total: int = 3,
+        retry_backoff_factor: float = 0.3,
+        retry_status_forcelist: Optional[list[int]] = None,
     ) -> None:
         """
         Initialize the WorkcellClient.
@@ -49,20 +51,52 @@ class WorkcellClient:
             The base URL of the Workcell Manager. If not provided, it will be taken from the current MadsciContext.
         working_directory : str, optional
             The directory to look for relative paths. Defaults to "./".
+        event_client : Optional[EventClient], optional
+            Event client for logging. If not provided, a new one will be created.
+        retry : bool, optional
+            Whether to enable retry by default for all requests. Defaults to False.
+        retry_total : int, optional
+            Total number of retries to allow. Defaults to 3.
+        retry_backoff_factor : float, optional
+            Backoff factor for retries. Defaults to 0.3.
+        retry_status_forcelist : Optional[list[int]], optional
+            HTTP status codes to force a retry on. Defaults to [429, 500, 502, 503, 504].
         """
         self.workcell_server_url = (
             AnyUrl(workcell_server_url)
             if workcell_server_url
             else get_current_madsci_context().workcell_server_url
         )
+        self.retry = retry
         self.logger = event_client or EventClient()
         if not self.workcell_server_url:
             raise ValueError(
-                "Workcell server URL is not provided and cannot be found in the context."
+                "Workcell server URL was not provided and cannot be found in the context."
             )
         self.working_directory = Path(working_directory).expanduser()
 
-    def query_workflow(self, workflow_id: str) -> Optional[Workflow]:
+        # Setup retry strategy
+        if retry_status_forcelist is None:
+            retry_status_forcelist = [429, 500, 502, 503, 504]
+
+        retry_strategy = Retry(
+            total=retry_total,
+            backoff_factor=retry_backoff_factor,
+            status_forcelist=retry_status_forcelist,
+            allowed_methods=["HEAD", "GET", "OPTIONS", "POST", "PUT", "DELETE"],
+        )
+
+        self.session = requests.Session()
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+
+        # Create a session without retries for when retry=False
+        self.session_no_retry = requests.Session()
+
+    def query_workflow(
+        self, workflow_id: str, retry: Optional[bool] = None
+    ) -> Optional[Workflow]:
         """
         Check the status of a workflow using its ID.
 
@@ -70,37 +104,117 @@ class WorkcellClient:
         ----------
         workflow_id : str
             The ID of the workflow to query.
+        retry : Optional[bool]
+            Whether to enable retry for this request. Defaults to the client's retry setting.
 
         Returns
         -------
         Optional[Workflow]
             The workflow object if found, otherwise None.
         """
+        if retry is None:
+            retry = self.retry
         url = f"{self.workcell_server_url}workflow/{workflow_id}"
-        response = requests.get(url, timeout=10)
+        session = self.session if retry else self.session_no_retry
+        response = session.get(url, timeout=10)
+
         if not response.ok and response.content:
             self.logger.error(f"Error querying workflow: {response.content.decode()}")
 
         response.raise_for_status()
         return Workflow(**response.json())
 
-    def submit_workflow(
+    def get_workflow_definition(
+        self, workflow_definition_id: str, retry: Optional[bool] = None
+    ) -> WorkflowDefinition:
+        """
+        Get the definition of a workflow.
+
+        Parameters
+        ----------
+        workflow_definition_id : str
+            The ID of the workflow definition to retrieve.
+        retry : Optional[bool]
+            Whether to enable retry for this request. Defaults to the client's retry setting.
+
+        Returns
+        -------
+        WorkflowDefinition
+            The workflow definition object.
+        """
+        url = f"{self.workcell_server_url}workflow_definition/{workflow_definition_id}"
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.get(url, timeout=10)
+        if not response.ok and response.content:
+            self.logger.error(f"Error querying workflow: {response.content.decode()}")
+
+        response.raise_for_status()
+        return WorkflowDefinition.model_validate(response.json())
+
+    def submit_workflow_definition(
         self,
-        workflow: Union[PathLike, WorkflowDefinition],
-        parameters: Optional[dict[str, Any]] = None,
-        validate_only: bool = False,
+        workflow_definition: Union[PathLike, WorkflowDefinition],
+        retry: Optional[bool] = None,
+    ) -> str:
+        """
+        Submit a workflow to the Workcell Manager.
+
+        Parameters
+        ----------
+        workflow_definition : Union[PathLike, WorkflowDefinition]
+            The workflow definition to submit.
+        retry : Optional[bool]
+            Whether to enable retry for this request. Defaults to the client's retry setting.
+
+        Returns
+        -------
+        str
+            The ID of the submitted workflow.
+        """
+        if retry is None:
+            retry = self.retry
+        if isinstance(workflow_definition, (Path, str)):
+            workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
+        else:
+            workflow_definition = WorkflowDefinition.model_validate(workflow_definition)
+        workflow_definition.definition_metadata.ownership_info = (
+            get_current_ownership_info()
+        )
+        url = f"{self.workcell_server_url}workflow_definition"
+        session = self.session if retry else self.session_no_retry
+        response = session.post(
+            url,
+            json=workflow_definition.model_dump(mode="json"),
+            timeout=10,
+        )
+
+        if not response.ok and response.content:
+            self.logger.error(
+                f"Error submitting workflow definition: {response.content.decode()}"
+            )
+        response.raise_for_status()
+        return str(response.json())
+
+    def start_workflow(
+        self,
+        workflow_definition: Union[str, PathLike, WorkflowDefinition],
+        json_inputs: Optional[dict[str, Any]] = None,
+        file_inputs: Optional[dict[str, PathLike]] = None,
         await_completion: bool = True,
         prompt_on_error: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
+        retry: Optional[bool] = None,
     ) -> Workflow:
         """
         Submit a workflow to the Workcell Manager.
 
         Parameters
         ----------
-        workflow: Union[PathLike, WorkflowDefinition],
-            Either a WorkflowDefinition or a path to a YAML file of one.
+        workflow_definition: Optional[Union[PathLike, WorkflowDefinition]],
+            Either a workflow definition ID, WorkflowDefinition or a path to a YAML file of one.
         parameters: Optional[dict[str, Any]] = None,
             Parameters to be inserted into the workflow.
         validate_only : bool, optional
@@ -119,35 +233,44 @@ class WorkcellClient:
         Workflow
             The submitted workflow object.
         """
-        if isinstance(workflow, (Path, str)):
-            workflow = WorkflowDefinition.from_yaml(workflow)
+        if retry is None:
+            retry = self.retry
+        if isinstance(workflow_definition, WorkflowDefinition):
+            workflow_definition_id = self.submit_workflow_definition(
+                workflow_definition
+            )
         else:
-            workflow = copy.deepcopy(workflow)
-            workflow = WorkflowDefinition.model_validate(workflow)
-        insert_parameter_values(
-            workflow=workflow, parameters=parameters if parameters else {}
-        )
-        files = self._extract_files_from_workflow(workflow)
-        response = requests.post(
-            f"{self.workcell_server_url}workflow",
-            data={
-                "workflow": workflow.model_dump_json(),
-                "parameters": json.dumps(parameters) if parameters else None,
-                "validate_only": validate_only,
-                "ownership_info": get_current_ownership_info().model_dump_json(),
-            },
-            files={
-                (
-                    "files",
-                    (
-                        str(Path(path).name),
-                        Path.open(Path(path).expanduser(), "rb"),
-                    ),
+            try:
+                workflow_definition_id = ULID.from_str(workflow_definition)
+            except ValueError:
+                workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
+                workflow_definition_id = self.submit_workflow_definition(
+                    workflow_definition
                 )
-                for _, path in files.items()
-            },
-            timeout=10,
-        )
+        workflow_definition = self.get_workflow_definition(workflow_definition_id)
+        files = {}
+        if file_inputs:
+            files = self.make_paths_absolute(file_inputs)
+        url = f"{self.workcell_server_url}workflow"
+        data = {
+            "workflow_definition_id": workflow_definition_id,
+            "json_inputs": json.dumps(json_inputs) if json_inputs else None,
+            "ownership_info": get_current_ownership_info().model_dump_json(),
+            "file_input_paths": json.dumps(file_inputs) if file_inputs else None,
+        }
+        files = {
+            (
+                "files",
+                (
+                    str(file),
+                    Path.open(Path(path).expanduser(), "rb"),
+                ),
+            )
+            for file, path in files.items()
+        }
+        session = self.session if retry else self.session_no_retry
+        response = session.post(url, data=data, files=files, timeout=10)
+
         if not response.ok and response.content:
             self.logger.error(f"Error submitting workflow: {response.content.decode()}")
         response.raise_for_status()
@@ -160,42 +283,35 @@ class WorkcellClient:
             raise_on_failed=raise_on_failed,
         )
 
-    start_workflow = submit_workflow
+    submit_workflow = start_workflow
 
-    def _extract_files_from_workflow(
-        self, workflow: WorkflowDefinition
-    ) -> dict[str, Path]:
+    def make_paths_absolute(self, files: dict[str, PathLike]) -> dict[str, Path]:
         """
         Extract file paths from a workflow definition.
 
         Parameters
         ----------
-        workflow : WorkflowDefinition
-            The workflow definition object.
+        files : dict[str, PathLike]
+            A dictionary mapping unique file keys to their paths.
 
         Returns
         -------
         dict[str, Path]
-            A dictionary mapping unique file names to their paths.
+            A dictionary mapping unique file keys to their paths.
         """
-        files = {}
-        for step in workflow.steps:
-            if step.files:
-                for file, path in step.files.items():
-                    if not check_for_parameters(
-                        str(path), [param.name for param in workflow.parameters]
-                    ):
-                        unique_filename = f"{new_ulid_str()}_{file}"
-                        files[unique_filename] = path
-                        if not Path(files[unique_filename]).is_absolute():
-                            files[unique_filename] = (
-                                self.working_directory / files[unique_filename]
-                            )
-                        step.files[file] = Path(files[unique_filename]).name
+
+        for file_key, path in files.items():
+            if not Path(path).is_absolute():
+                files[file_key] = str(self.working_directory / path)
+            else:
+                files[file_key] = str(path)
         return files
 
     def submit_workflow_sequence(
-        self, workflows: list[str], parameters: list[dict[str, Any]]
+        self,
+        workflows: list[str],
+        json_inputs: list[dict[str, Any]] = [],
+        file_inputs: list[dict[str, PathLike]] = [],
     ) -> list[Workflow]:
         """
         Submit a sequence of workflows to run in order.
@@ -213,15 +329,21 @@ class WorkcellClient:
             A list of submitted workflow objects.
         """
         wfs = []
+        json_inputs, file_inputs = check_parameters_lists(
+            workflows, json_inputs, file_inputs
+        )
         for i in range(len(workflows)):
             wf = self.submit_workflow(
-                workflows[i], parameters[i], await_completion=True
+                workflows[i], json_inputs[i], file_inputs[i], await_completion=True
             )
             wfs.append(wf)
         return wfs
 
     def submit_workflow_batch(
-        self, workflows: list[str], parameters: list[dict[str, Any]]
+        self,
+        workflows: list[str],
+        json_inputs: list[dict[str, Any]] = [],
+        file_inputs: list[dict[str, PathLike]] = [],
     ) -> list[Workflow]:
         """
         Submit a batch of workflows to run concurrently.
@@ -239,9 +361,12 @@ class WorkcellClient:
             A list of completed workflow objects.
         """
         id_list = []
+        json_inputs, file_inputs = check_parameters_lists(
+            workflows, json_inputs, file_inputs
+        )
         for i in range(len(workflows)):
             response = self.submit_workflow(
-                workflows[i], parameters[i], await_completion=False
+                workflows[i], json_inputs[i], file_inputs[i], await_completion=False
             )
             id_list.append(response.workflow_id)
         finished = False
@@ -258,11 +383,12 @@ class WorkcellClient:
     def retry_workflow(
         self,
         workflow_id: str,
-        index: int = -1,
+        index: int = 0,
         await_completion: bool = True,
         raise_on_cancelled: bool = True,
         raise_on_failed: bool = True,
         prompt_on_error: bool = True,
+        retry: Optional[bool] = None,
     ) -> Workflow:
         """
         Retry a workflow from a specific step.
@@ -287,8 +413,11 @@ class WorkcellClient:
         dict
             The response from the Workcell Manager.
         """
+        if retry is None:
+            retry = self.retry
         url = f"{self.workcell_server_url}workflow/{workflow_id}/retry"
-        response = requests.post(
+        session = self.session if retry else self.session_no_retry
+        response = session.post(
             url,
             params={
                 "workflow_id": workflow_id,
@@ -306,48 +435,6 @@ class WorkcellClient:
             )
 
         return Workflow.model_validate(response.json())
-
-    def resubmit_workflow(
-        self,
-        workflow_id: str,
-        await_completion: bool = True,
-        raise_on_failed: bool = True,
-        raise_on_cancelled: bool = True,
-        prompt_on_error: bool = True,
-    ) -> Workflow:
-        """
-        Resubmit a workflow as a new workflow with a new ID.
-
-        Parameters
-        ----------
-        workflow_id : str
-            The ID of the workflow to resubmit.
-        await_completion : bool, optional
-            If True, wait for the workflow to complete, by default True.
-        raise_on_failed : bool, optional
-            If True, raise an exception if the workflow fails, by default True.
-        raise_on_cancelled : bool, optional
-            If True, raise an exception if the workflow is cancelled, by default True.
-        prompt_on_error : bool, optional
-            If True, prompt the user for what action to take on workflow errors, by default True.
-
-        Returns
-        -------
-        Workflow
-            The resubmitted workflow object.
-        """
-        url = f"{self.workcell_server_url}workflow/{workflow_id}/resubmit"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        new_wf = Workflow.model_validate(response.json())
-        if await_completion:
-            return self.await_workflow(
-                new_wf.workflow_id,
-                raise_on_failed=raise_on_failed,
-                raise_on_cancelled=raise_on_cancelled,
-                prompt_on_error=prompt_on_error,
-            )
-        return new_wf
 
     def _handle_workflow_error(
         self,
@@ -378,21 +465,10 @@ class WorkcellClient:
                 decision = input(
                     f"""Workflow {"Failed" if wf.status.failed else "Cancelled"}.
 Options:
-
-- Resubmit the workflow, from the beginning (resubmit, r)
 - Retry from a specific step (Enter the step index, e.g., 1; 0 for the first step; -1 for the current step)
 - {"R" if raise_on_failed else "Do not r"}aise an exception and continue (c, enter to continue)
 """
                 ).strip()
-                if decision in {"resubmit", "r"}:
-                    wf = self.resubmit_workflow(
-                        wf.workflow_id,
-                        await_completion=True,
-                        raise_on_failed=raise_on_failed,
-                        raise_on_cancelled=raise_on_cancelled,
-                        prompt_on_error=prompt_on_error,
-                    )
-                    break
                 try:
                     step = int(decision)
                     if step in range(-1, len(wf.steps)):
@@ -481,7 +557,7 @@ Options:
             )
         return wf
 
-    def get_nodes(self) -> dict[str, Node]:
+    def get_nodes(self, retry: Optional[bool] = None) -> dict[str, Node]:
         """
         Get all nodes in the workcell.
 
@@ -490,10 +566,13 @@ Options:
         dict[str, Node]
             A dictionary of node names and their details.
         """
-        response = requests.get(f"{self.workcell_server_url}nodes", timeout=10)
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.get(f"{self.workcell_server_url}nodes", timeout=10)
         return response.json()
 
-    def get_node(self, node_name: str) -> Node:
+    def get_node(self, node_name: str, retry: Optional[bool] = None) -> Node:
         """
         Get details of a specific node.
 
@@ -507,7 +586,10 @@ Options:
         Node
             The node details.
         """
-        response = requests.get(
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.get(
             f"{self.workcell_server_url}node/{node_name}", timeout=10
         )
         return response.json()
@@ -518,6 +600,7 @@ Options:
         node_url: str,
         node_description: str = "A Node",
         permanent: bool = False,
+        retry: Optional[bool] = None,
     ) -> Node:
         """
         Add a node to the workcell.
@@ -538,7 +621,10 @@ Options:
         Node
             The added node details.
         """
-        response = requests.post(
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.post(
             f"{self.workcell_server_url}node",
             params={
                 "node_name": node_name,
@@ -550,7 +636,7 @@ Options:
         )
         return response.json()
 
-    def get_active_workflows(self) -> dict[str, Workflow]:
+    def get_active_workflows(self, retry: Optional[bool] = None) -> dict[str, Workflow]:
         """
         Get all workflows from the Workcell Manager.
 
@@ -559,7 +645,10 @@ Options:
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
         """
-        response = requests.get(
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.get(
             f"{self.workcell_server_url}workflows/active", timeout=100
         )
         response.raise_for_status()
@@ -572,7 +661,9 @@ Options:
             key: Workflow.model_validate(value) for key, value in workflow_dict.items()
         }
 
-    def get_archived_workflows(self, number: int = 20) -> dict[str, Workflow]:
+    def get_archived_workflows(
+        self, number: int = 20, retry: Optional[bool] = None
+    ) -> dict[str, Workflow]:
         """
         Get all workflows from the Workcell Manager.
 
@@ -581,7 +672,10 @@ Options:
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
         """
-        response = requests.get(
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.get(
             f"{self.workcell_server_url}workflows/archived",
             params={"number": number},
             timeout=100,
@@ -596,7 +690,7 @@ Options:
             key: Workflow.model_validate(value) for key, value in workflow_dict.items()
         }
 
-    def get_workflow_queue(self) -> list[Workflow]:
+    def get_workflow_queue(self, retry: Optional[bool] = None) -> list[Workflow]:
         """
         Get the workflow queue from the workcell.
 
@@ -605,13 +699,14 @@ Options:
         list[Workflow]
             A list of queued workflows.
         """
-        response = requests.get(
-            f"{self.workcell_server_url}workflows/queue", timeout=10
-        )
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.get(f"{self.workcell_server_url}workflows/queue", timeout=10)
         response.raise_for_status()
         return [Workflow.model_validate(wf) for wf in response.json()]
 
-    def get_workcell_state(self) -> WorkcellState:
+    def get_workcell_state(self, retry: Optional[bool] = None) -> WorkcellState:
         """
         Get the full state of the workcell.
 
@@ -620,11 +715,16 @@ Options:
         WorkcellState
             The current state of the workcell.
         """
-        response = requests.get(f"{self.workcell_server_url}state", timeout=10)
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.get(f"{self.workcell_server_url}state", timeout=10)
         response.raise_for_status()
         return WorkcellState.model_validate(response.json())
 
-    def pause_workflow(self, workflow_id: str) -> Workflow:
+    def pause_workflow(
+        self, workflow_id: str, retry: Optional[bool] = None
+    ) -> Workflow:
         """
         Pause a workflow.
 
@@ -638,13 +738,18 @@ Options:
         Workflow
             The paused workflow object.
         """
-        response = requests.post(
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.post(
             f"{self.workcell_server_url}workflow/{workflow_id}/pause", timeout=10
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
 
-    def resume_workflow(self, workflow_id: str) -> Workflow:
+    def resume_workflow(
+        self, workflow_id: str, retry: Optional[bool] = None
+    ) -> Workflow:
         """
         Resume a paused workflow.
 
@@ -658,13 +763,18 @@ Options:
         Workflow
             The resumed workflow object.
         """
-        response = requests.post(
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.post(
             f"{self.workcell_server_url}workflow/{workflow_id}/resume", timeout=10
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
 
-    def cancel_workflow(self, workflow_id: str) -> Workflow:
+    def cancel_workflow(
+        self, workflow_id: str, retry: Optional[bool] = None
+    ) -> Workflow:
         """
         Cancel a workflow.
 
@@ -678,151 +788,11 @@ Options:
         Workflow
             The cancelled workflow object.
         """
-        response = requests.post(
+        if retry is None:
+            retry = self.retry
+        session = self.session if retry else self.session_no_retry
+        response = session.post(
             f"{self.workcell_server_url}workflow/{workflow_id}/cancel", timeout=10
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
-
-    def get_locations(self) -> list[Location]:
-        """
-        Get all locations in the workcell.
-
-        Returns
-        -------
-        list[Location]
-            A list of locations.
-        """
-        response = requests.get(f"{self.workcell_server_url}locations", timeout=10)
-        response.raise_for_status()
-        return [Location.model_validate(loc) for loc in response.json().values()]
-
-    def get_location(self, location_id: str) -> Location:
-        """
-        Get details of a specific location.
-
-        Parameters
-        ----------
-        location_id : str
-            The ID of the location.
-
-        Returns
-        -------
-        Location
-            The location details.
-        """
-        response = requests.get(
-            f"{self.workcell_server_url}location/{location_id}", timeout=10
-        )
-        response.raise_for_status()
-        return Location.model_validate(response.json())
-
-    def add_location(self, location: Location, permanent: bool = True) -> Location:
-        """
-        Add a location to the workcell.
-
-        Parameters
-        ----------
-        location : Location
-            The location object to add.
-
-        Returns
-        -------
-        Location
-            The added location details.
-        """
-        response = requests.post(
-            f"{self.workcell_server_url}location",
-            json=location.model_dump(mode="json"),
-            timeout=10,
-            params={"permanent": permanent},
-        )
-        response.raise_for_status()
-        return Location.model_validate(response.json())
-
-    def attach_resource_to_location(
-        self, location_id: str, resource_id: str
-    ) -> Location:
-        """
-        Attach a resource container to a location.
-
-        Parameters
-        ----------
-        location_id : str
-            The ID of the location.
-        resource_id : str
-            The ID of the resource to attach.
-
-        Returns
-        -------
-        Location
-            The updated location details.
-        """
-        response = requests.post(
-            f"{self.workcell_server_url}location/{location_id}/attach_resource",
-            params={
-                "resource_id": resource_id,
-            },
-            timeout=10,
-        )
-        response.raise_for_status()
-        return Location.model_validate(response.json())
-
-    def delete_location(self, location_id: str) -> None:
-        """
-        Delete a location from the workcell.
-
-        Parameters
-        ----------
-        location_id : str
-            The ID of the location to delete.
-
-        Returns
-        -------
-        dict
-            A dictionary indicating the deletion status.
-        """
-        response = requests.delete(
-            f"{self.workcell_server_url}location/{location_id}", timeout=10
-        )
-        response.raise_for_status()
-
-
-def insert_parameter_values(
-    workflow: WorkflowDefinition, parameters: dict[str, Any]
-) -> Workflow:
-    """Replace the parameter strings in the workflow with the provided values"""
-    for param in workflow.parameters:
-        if param.name in parameters and (
-            param.label is not None
-            or param.step_name is not None
-            or param.step_index is not None
-        ):
-            raise ValueError(
-                f"{param} looks like it's configured to use data from a previous step, but you provided a value during workflow submission. Either remove the value or change the parameter configuration."
-            )
-        if param.name not in parameters:
-            if param.default:
-                parameters[param.name] = param.default
-            elif not (
-                (param.step_name is not None or param.step_index is not None)
-                and param.label is not None
-            ):
-                raise ValueError(
-                    f"Workflow parameter {param.name} is required, but no value was provided and no default is set."
-                )
-    parameters = {
-        key: (str(value) if isinstance(value, PurePath) else value)
-        for key, value in parameters.items()
-    }
-    steps = []
-    for step in workflow.steps:
-        for key, val in iter(step):
-            if type(val) is str:
-                setattr(step, key, value_substitution(val, parameters))
-
-        step.args = walk_and_replace(step.args, parameters)
-        step.files = walk_and_replace(step.files, parameters)
-        step.locations = walk_and_replace(step.locations, parameters)
-        steps.append(step)
-    workflow.steps = steps

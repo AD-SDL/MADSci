@@ -8,21 +8,24 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from madsci.client.workcell_client import WorkcellClient, insert_parameter_values
+from madsci.client.workcell_client import WorkcellClient
 from madsci.common.exceptions import WorkflowFailedError
-from madsci.common.types.location_types import Location, LocationDefinition
+from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
-from madsci.common.types.workcell_types import WorkcellDefinition, WorkcellState
+from madsci.common.types.workcell_types import (
+    WorkcellManagerDefinition,
+    WorkcellManagerSettings,
+    WorkcellState,
+)
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
-    WorkflowParameter,
+    WorkflowParameters,
     WorkflowStatus,
 )
 from madsci.common.utils import new_ulid_str
-from madsci.workcell_manager.workcell_server import (
-    create_workcell_server,
-)
+from madsci.workcell_manager.workcell_server import WorkcellManager
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import (
     MongoConfig,
@@ -32,6 +35,8 @@ from pytest_mock_resources import (
 )
 from redis import Redis
 from requests import Response
+
+# Imports removed since auto-initialization makes manual setup unnecessary
 
 
 # Create a Redis server fixture for testing
@@ -51,14 +56,15 @@ redis_server = create_redis_fixture()
 mongo_server = create_mongo_fixture()
 
 
+# Note: The initialized_mongo_server fixture is no longer needed since
+# MongoDBVersionChecker now auto-initializes fresh databases automatically
+
+
 @pytest.fixture
-def workcell() -> WorkcellDefinition:
+def workcell() -> WorkcellManagerDefinition:
     """Fixture for creating a WorkcellDefinition."""
-    return WorkcellDefinition(
-        workcell_name="Test Workcell",
-        locations=[
-            LocationDefinition(location_name="test_location"),
-        ],
+    return WorkcellManagerDefinition(
+        name="Test Workcell",
     )
 
 
@@ -75,7 +81,9 @@ def sample_workflow() -> WorkflowDefinition:
                 args={"test_arg": "test_value"},
             )
         ],
-        parameters=[WorkflowParameter(name="test_param", default="default_value")],
+        parameters=WorkflowParameters(
+            json_inputs=[ParameterInputJson(key="test_param", default="default_value")]
+        ),
     )
 
 
@@ -89,7 +97,12 @@ def sample_workflow_with_files() -> WorkflowDefinition:
                 name="test_step",
                 node="test_node",
                 action="test_action",
-                files={"input_file": Path("test_file.txt")},
+                files={
+                    "file_input": {
+                        "key": "file_input",
+                        "description": "An input file",
+                    }
+                },  # type: ignore
             )
         ],
     )
@@ -115,59 +128,114 @@ def sample_workflow_instance() -> Workflow:
 
 @pytest.fixture
 def test_client(
-    workcell: WorkcellDefinition, redis_server: Redis, mongo_server: Database
+    workcell: WorkcellManagerDefinition, redis_server: Redis, mongo_server: Database
 ) -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
-    app = create_workcell_server(
-        workcell=workcell,
-        redis_connection=redis_server,
-        mongo_connection=mongo_server,
-        start_engine=False,
+    # Create a mock context with all required URLs
+    mock_context = MadsciContext(
+        lab_server_url="http://localhost:8000/",
+        event_server_url="http://localhost:8001/",
+        experiment_server_url="http://localhost:8002/",
+        data_server_url="http://localhost:8004/",
+        resource_server_url="http://localhost:8003/",
+        workcell_server_url="http://localhost:8005/",
+        location_server_url="http://localhost:8006/",
     )
-    client = TestClient(app)
-    with client:
-        yield client
+
+    # Create custom settings that use the test database
+    client = mongo_server.client
+    host = client.address[0] if client.address else "localhost"
+    port = client.address[1] if client.address else 27017
+    mongo_url = f"mongodb://{host}:{port}"
+    database_name = mongo_server.name
+
+    custom_settings = WorkcellManagerSettings(
+        mongo_url=mongo_url,
+        database_name=database_name,
+    )
+
+    with (
+        patch(
+            "madsci.workcell_manager.workcell_server.get_current_madsci_context",
+            return_value=mock_context,
+        ),
+        patch(
+            "madsci.client.location_client.get_current_madsci_context",
+            return_value=mock_context,
+        ),
+        patch(
+            "madsci.workcell_manager.workcell_server.LocationClient"
+        ) as mock_location_client,
+        patch(
+            "madsci.workcell_manager.workcell_engine.LocationClient"
+        ) as mock_engine_location_client,
+    ):
+        # Configure the mock location clients to return empty location lists
+        mock_location_client_instance = MagicMock()
+        mock_location_client_instance.get_locations.return_value = []
+        mock_location_client.return_value = mock_location_client_instance
+
+        mock_engine_location_client_instance = MagicMock()
+        mock_engine_location_client_instance.get_locations.return_value = []
+        mock_engine_location_client.return_value = mock_engine_location_client_instance
+
+        manager = WorkcellManager(
+            settings=custom_settings,
+            definition=workcell,
+            redis_connection=redis_server,
+            mongo_connection=mongo_server,
+            start_engine=False,
+        )
+        app = manager.create_server()
+        client = TestClient(app)
+        with client:
+            yield client
 
 
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     """Fixture for WorkcellClient patched to use TestClient."""
-    with patch("madsci.client.workcell_client.requests") as mock_requests:
 
-        def add_ok_property(resp: Response) -> Response:
-            if not hasattr(resp, "ok"):
-                resp.ok = resp.status_code < 400
-            return resp
+    def add_ok_property(resp: Response) -> Response:
+        if not hasattr(resp, "ok"):
+            resp.ok = resp.status_code < 400
+        return resp
 
-        def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.post(*args, **kwargs)
-            return add_ok_property(resp)
+    def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.post(*args, **kwargs)
+        return add_ok_property(resp)
 
-        mock_requests.post.side_effect = post_no_timeout
+    def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.get(*args, **kwargs)
+        return add_ok_property(resp)
 
-        def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.get(*args, **kwargs)
-            return add_ok_property(resp)
+    def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.delete(*args, **kwargs)
+        return add_ok_property(resp)
 
-        mock_requests.get.side_effect = get_no_timeout
+    def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        resp = test_client.put(*args, **kwargs)
+        return add_ok_property(resp)
 
-        def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.delete(*args, **kwargs)
-            return add_ok_property(resp)
+    # Create the client
+    workcell_client = WorkcellClient(workcell_server_url="http://testserver")
 
-        mock_requests.delete.side_effect = delete_no_timeout
+    # Mock both sessions to use the test client
+    workcell_client.session.get = get_no_timeout
+    workcell_client.session.post = post_no_timeout
+    workcell_client.session.delete = delete_no_timeout
+    workcell_client.session.put = put_no_timeout
 
-        def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
-            kwargs.pop("timeout", None)
-            resp = test_client.put(*args, **kwargs)
-            return add_ok_property(resp)
+    workcell_client.session_no_retry.get = get_no_timeout
+    workcell_client.session_no_retry.post = post_no_timeout
+    workcell_client.session_no_retry.delete = delete_no_timeout
+    workcell_client.session_no_retry.put = put_no_timeout
 
-        mock_requests.put.side_effect = put_no_timeout
-
-        yield WorkcellClient(workcell_server_url="http://testserver")
+    yield workcell_client
 
 
 def test_get_nodes(client: WorkcellClient) -> None:
@@ -239,7 +307,7 @@ def test_get_workcell_state(client: WorkcellClient) -> None:
 
 def test_pause_workflow(client: WorkcellClient) -> None:
     """Test pausing a workflow."""
-    workflow = client.submit_workflow(
+    workflow = client.start_workflow(
         WorkflowDefinition(name="Test Workflow"), None, await_completion=False
     )
     paused_workflow = client.pause_workflow(workflow.workflow_id)
@@ -265,54 +333,6 @@ def test_cancel_workflow(client: WorkcellClient) -> None:
     assert canceled_workflow.status.cancelled is True
 
 
-def test_get_locations(client: WorkcellClient) -> None:
-    """Test retrieving locations."""
-    locations = client.get_locations()
-    assert isinstance(locations, list)
-    assert len(locations) == 1
-    assert locations[0].location_name == "test_location"
-
-
-def test_get_location(client: WorkcellClient) -> None:
-    """Test retrieving a specific location."""
-    location_id = client.get_locations()[0].location_id
-    fetched_location = client.get_location(location_id)
-    assert fetched_location.location_id == location_id
-
-
-def test_add_location(client: WorkcellClient) -> None:
-    """Test adding a location."""
-    location = Location(location_name="test_location2")
-    added_location = client.add_location(location, permanent=False)
-    assert added_location.location_id == location.location_id
-    assert added_location.location_name == location.location_name
-
-
-def test_add_location_permanent(client: WorkcellClient) -> None:
-    """Test adding a permanent location."""
-    location = Location(location_name="permanent_location")
-    added_location = client.add_location(location, permanent=True)
-    assert added_location.location_name == location.location_name
-
-
-def test_attach_resource_to_location(client: WorkcellClient) -> None:
-    """Test attaching a resource to a location."""
-    location = Location(location_name="test_location3")
-    client.add_location(location, permanent=False)
-    mock_resource_id = new_ulid_str()
-    updated_location = client.attach_resource_to_location(
-        location.location_id, mock_resource_id
-    )
-    assert updated_location.resource_id == mock_resource_id
-
-
-def test_delete_location(client: WorkcellClient) -> None:
-    """Test deleting a location."""
-    location = Location(location_name="temp_location")
-    added_location = client.add_location(location, permanent=False)
-    client.delete_location(added_location.location_id)
-
-
 # Additional Workflow Tests
 def test_submit_workflow_definition(
     client: WorkcellClient, sample_workflow: WorkflowDefinition
@@ -326,19 +346,6 @@ def test_submit_workflow_definition(
     )
     assert workflow.name == "Test Workflow"
     assert workflow.workflow_id is not None
-
-
-def test_submit_workflow_validate_only(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test validating a workflow without submission."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    workflow = client.submit_workflow(
-        sample_workflow, validate_only=True, await_completion=False
-    )
-    assert workflow.name == "Test Workflow"
 
 
 def test_query_workflow(
@@ -359,7 +366,7 @@ def test_submit_workflow_sequence(
 ) -> None:
     """Test submitting a sequence of workflows."""
     workflows = [sample_workflow, sample_workflow]
-    parameters = [{"test_param": "value1"}, {"test_param": "value2"}]
+    json_inputs = [{"test_param": "value1"}, {"test_param": "value2"}]
 
     with patch.object(client, "submit_workflow") as mock_submit:
         mock_workflow1 = Workflow(
@@ -376,12 +383,16 @@ def test_submit_workflow_sequence(
         )
         mock_submit.side_effect = [mock_workflow1, mock_workflow2]
 
-        result = client.submit_workflow_sequence(workflows, parameters)
+        result = client.submit_workflow_sequence(workflows, json_inputs)
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
-        mock_submit.assert_any_call(workflows[0], parameters[0], await_completion=True)
-        mock_submit.assert_any_call(workflows[1], parameters[1], await_completion=True)
+        mock_submit.assert_any_call(
+            workflows[0], json_inputs[0], {}, await_completion=True
+        )
+        mock_submit.assert_any_call(
+            workflows[1], json_inputs[1], {}, await_completion=True
+        )
 
 
 def test_submit_workflow_batch(
@@ -389,7 +400,7 @@ def test_submit_workflow_batch(
 ) -> None:
     """Test submitting a batch of workflows."""
     workflows = [sample_workflow, sample_workflow]
-    parameters = [{"test_param": "value1"}, {"test_param": "value2"}]
+    json_inputs = [{"test_param": "value1"}, {"test_param": "value2"}]
 
     # Create mock response objects that mimic what submit_workflow returns
     mock_response1 = MagicMock()
@@ -420,7 +431,7 @@ def test_submit_workflow_batch(
         mock_submit.side_effect = [mock_response1, mock_response2]
         mock_query.side_effect = [mock_workflow1, mock_workflow2]
 
-        result = client.submit_workflow_batch(workflows, parameters)
+        result = client.submit_workflow_batch(workflows, json_inputs)
 
         assert len(result) == 2
         assert mock_submit.call_count == 2
@@ -487,67 +498,6 @@ def test_retry_workflow_no_await(
         )
 
 
-def test_resubmit_workflow(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test resubmitting a workflow."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
-
-    with (
-        patch.object(client, "await_workflow") as mock_await,
-        patch.object(client, "resubmit_workflow") as mock_resubmit,
-    ):
-        mock_workflow = Workflow(
-            workflow_id=new_ulid_str(),
-            name="Test Workflow",
-            status=WorkflowStatus(completed=True),
-            steps=[],
-        )
-        mock_await.return_value = mock_workflow
-        mock_resubmit.return_value = mock_workflow
-
-        resubmitted_workflow = client.resubmit_workflow(
-            submitted_workflow.workflow_id, await_completion=True
-        )
-
-        assert isinstance(resubmitted_workflow, Workflow)
-        mock_resubmit.assert_called_once_with(
-            submitted_workflow.workflow_id, await_completion=True
-        )
-
-
-def test_resubmit_workflow_no_await(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test resubmitting a workflow without waiting for completion."""
-    # Add the test node first
-    client.add_node("test_node", "http://test_node/")
-
-    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
-
-    # Mock the resubmit operation since actual resubmit may have constraints
-    with patch.object(client, "resubmit_workflow") as mock_resubmit:
-        mock_workflow = Workflow(
-            workflow_id=new_ulid_str(),
-            name="Test Workflow",
-            status=WorkflowStatus(paused=False),
-            steps=[],
-        )
-        mock_resubmit.return_value = mock_workflow
-
-        resubmitted_workflow = client.resubmit_workflow(
-            submitted_workflow.workflow_id, await_completion=False
-        )
-
-        assert isinstance(resubmitted_workflow, Workflow)
-        mock_resubmit.assert_called_once_with(
-            submitted_workflow.workflow_id, await_completion=False
-        )
-
-
 def test_await_workflow_completed(
     client: WorkcellClient, sample_workflow_instance: Workflow
 ) -> None:
@@ -594,41 +544,6 @@ def test_await_workflow_failed(
 
         assert result == failed_workflow
         mock_handle.assert_called_once()
-
-
-# File Extraction Tests
-def test_extract_files_from_workflow(
-    client: WorkcellClient, sample_workflow_with_files: WorkflowDefinition
-) -> None:
-    """Test extracting files from a workflow definition."""
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".txt", delete=False
-    ) as temp_file:
-        temp_file.write("test content")
-        temp_file_path = Path(temp_file.name)
-
-    try:
-        sample_workflow_with_files.steps[0].files = {"input_file": temp_file_path}
-
-        extracted_files = client._extract_files_from_workflow(
-            sample_workflow_with_files
-        )
-
-        assert len(extracted_files) == 1
-        assert any("input_file" in key for key in extracted_files)
-
-        file_paths = list(extracted_files.values())
-        assert all(isinstance(path, Path) for path in file_paths)
-    finally:
-        temp_file_path.unlink(missing_ok=True)
-
-
-def test_extract_files_from_workflow_no_files(
-    client: WorkcellClient, sample_workflow: WorkflowDefinition
-) -> None:
-    """Test extracting files when workflow has no files."""
-    extracted_files = client._extract_files_from_workflow(sample_workflow)
-    assert len(extracted_files) == 0
 
 
 # Error Handling Tests
@@ -710,95 +625,8 @@ def test_workcell_client_init_no_url() -> None:
     ) as mock_context:
         mock_context.return_value.workcell_server_url = None
 
-        with pytest.raises(ValueError, match="Workcell server URL is not provided"):
+        with pytest.raises(ValueError, match="Workcell server URL was not provided"):
             WorkcellClient()
-
-
-# Parameter Insertion Tests
-def test_insert_parameter_values_basic() -> None:
-    """Test basic parameter value insertion."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="test_param", default="default")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${test_param}"},
-            )
-        ],
-    )
-
-    insert_parameter_values(workflow, {"test_param": "custom_value"})
-
-    assert workflow.steps[0].args["param"] == "custom_value"
-
-
-def test_insert_parameter_values_with_default() -> None:
-    """Test parameter insertion using default values."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="test_param", default="default_value")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${test_param}"},
-            )
-        ],
-    )
-
-    insert_parameter_values(workflow, {})
-
-    assert workflow.steps[0].args["param"] == "default_value"
-
-
-def test_insert_parameter_values_missing_required() -> None:
-    """Test parameter insertion with missing required parameter."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[WorkflowParameter(name="required_param")],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${required_param}"},
-            )
-        ],
-    )
-
-    with pytest.raises(
-        ValueError, match="Workflow parameter required_param is required"
-    ):
-        insert_parameter_values(workflow, {})
-
-
-def test_insert_parameter_values_conflict() -> None:
-    """Test parameter insertion with conflicting configuration."""
-    workflow = WorkflowDefinition(
-        name="Test",
-        parameters=[
-            WorkflowParameter(
-                name="conflict_param", label="some_label", step_name="step1"
-            )
-        ],
-        steps=[
-            StepDefinition(
-                name="step1",
-                node="node1",
-                action="action1",
-                args={"param": "${conflict_param}"},
-            )
-        ],
-    )
-
-    with pytest.raises(
-        ValueError, match="looks like it's configured to use data from a previous step"
-    ):
-        insert_parameter_values(workflow, {"conflict_param": "value"})
 
 
 # Additional Error Handling and Edge Case Tests
@@ -840,22 +668,3 @@ def test_add_node_error_handling(client: WorkcellClient) -> None:
     # Get the node to verify it exists
     retrieved_node = client.get_node("test_node")
     assert retrieved_node["node_url"] == "http://test_node/"
-
-
-def test_location_edge_cases(client: WorkcellClient) -> None:
-    """Test location methods with edge cases."""
-    # Get all locations initially
-    initial_locations = client.get_locations()
-    initial_count = len(initial_locations)
-
-    # Add a new location
-    location = Location(location_name="edge_case_location")
-    added_location = client.add_location(location, permanent=False)
-
-    # Verify it was added
-    all_locations = client.get_locations()
-    assert len(all_locations) == initial_count + 1
-
-    # Get the specific location
-    retrieved_location = client.get_location(added_location.location_id)
-    assert retrieved_location.location_name == "edge_case_location"

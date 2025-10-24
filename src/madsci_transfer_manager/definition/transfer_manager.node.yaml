@@ -1,7 +1,0 @@
-node_name: transfer_manager.node
-node_id: 01K3T5G185TVCZCGGYVK3VR1XK
-node_description: null
-node_type: device
-module_name: transfer_node
-module_version: 0.0.1
-capabilities: null

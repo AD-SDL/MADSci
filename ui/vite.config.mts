@@ -2,8 +2,9 @@
 import Vue from '@vitejs/plugin-vue'
 import ViteFonts from 'unplugin-fonts/vite'
 import Components from 'unplugin-vue-components/vite'
+import { PrimeVueResolver } from 'unplugin-vue-components/resolvers'
 import Vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
-
+import PrimeVue from 'primevue/config'
 // Utilities
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
@@ -16,7 +17,9 @@ export default defineConfig({
     }),
     // https://github.com/vuetifyjs/vuetify-loader/tree/master/packages/vite-plugin#readme
     Vuetify(),
-    Components(),
+    Components({
+      resolvers: [PrimeVueResolver()],
+    }),
     ViteFonts({
       google: {
         families: [{

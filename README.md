@@ -21,6 +21,7 @@ MADSci is a modular, autonomous, and scalable framework for scientific discovery
 - **Resource Management**, allowing robust tracking of all the labware, consumables, equipment, samples, and assets used in an autonomous laboratory.
 - **Event Management**, enabling distributed logging and event handling across every part of the autonomous lab.
 - **Data Management**, collecting and storing data created by instruments or analysis as part of an experiment.
+- **Location Management**, coordinating multiple different representations of locations in the laboratory and their interactions with resources and nodes.
 
 <img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
@@ -38,6 +39,7 @@ MADSci is made up of a number of different modular components, each of which can
 - [Clients](./src/madsci_client/README.md): A collection of clients for interacting with different components of MADSci
 - [Event Manager](./src/madsci_event_manager/README.md): handles distributed event logging and querying across a distributed lab.
 - [Workcell Manager](./src/madsci_workcell_manager/README.md): handles coordinating and scheduling a collection of interoperating instruments, robots, and resources using Workflows.
+- [Location Manager](./src/madsci_location_manager/README.md): manages laboratory locations, resource attachments, and node-specific references.
 - [Experiment Manager](./src/madsci_experiment_manager/README.md): manages experimental runs and campaigns across a MADSci-powered lab.
 - [Experiment Application](./src/madsci_experiment_application/README.md): extensible python class for running autonomous experiments.
 - [Resource Manager](./src/madsci_resource_manager/README.md): For tracking labware, assets, samples, and consumables in an automated or autonomous lab.
@@ -59,6 +61,7 @@ pip install madsci.experiment_application # Experiment Logic
 # Manager services
 pip install madsci.event_manager    # Event logging and querying
 pip install madsci.workcell_manager # Workflow coordination
+pip install madsci.location_manager # Location management
 pip install madsci.resource_manager # Resource tracking
 pip install madsci.data_manager     # Data capture and storage
 pip install madsci.experiment_manager # Experiment management
@@ -91,10 +94,10 @@ Access the dashboard at `http://localhost:8000` to monitor your virtual lab.
 
 MADSci uses environment variables for configuration with hierarchical precedence. Key patterns:
 
-- **Service URLs**: Each manager defaults to `localhost` with specific ports (Event: 8001, Experiment: 8002, etc.)
+- **Service URLs**: Each manager defaults to `localhost` with specific ports (Event: 8001, Experiment: 8002, Resource: 8003, Data: 8004, Workcell: 8005, Location: 8006, etc.)
 - **Database connections**: MongoDB/PostgreSQL on localhost by default
 - **File storage**: Defaults to `~/.madsci/` subdirectories
-- **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`)
+- **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
 
 See [Configuration.md](./Configuration.md) for comprehensive options and [example_lab/](./example_lab/) for working configurations.
 
