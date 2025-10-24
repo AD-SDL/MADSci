@@ -37,6 +37,17 @@ files = [
 ]
 
 [[package]]
+name = "annotated-doc"
+version = "0.0.3"
+requires_python = ">=3.8"
+summary = "Document parameters, class attributes, return types, and variables inline, with Annotated."
+groups = ["dev"]
+files = [
+    {file = "annotated_doc-0.0.3-py3-none-any.whl", hash = "sha256:348ec6664a76f1fd3be81f43dffbee4c7e8ce931ba71ec67cc7f4ade7fbbb580"},
+    {file = "annotated_doc-0.0.3.tar.gz", hash = "sha256:e18370014c70187422c33e945053ff4c286f453a984eba84d0dbfa0c935adeda"},
+]
+
+[[package]]
 name = "annotated-types"
 version = "0.7.0"
 requires_python = ">=3.8"
@@ -858,18 +869,19 @@ files = [
 
 [[package]]
 name = "fastapi"
-version = "0.119.1"
+version = "0.120.0"
 requires_python = ">=3.8"
 summary = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
 groups = ["dev"]
 dependencies = [
+    "annotated-doc>=0.0.2",
     "pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4",
     "starlette<0.49.0,>=0.40.0",
     "typing-extensions>=4.8.0",
 ]
 files = [
-    {file = "fastapi-0.119.1-py3-none-any.whl", hash = "sha256:0b8c2a2cce853216e150e9bd4faaed88227f8eb37de21cb200771f491586a27f"},
-    {file = "fastapi-0.119.1.tar.gz", hash = "sha256:a5e3426edce3fe221af4e1992c6d79011b247e3b03cc57999d697fe76cbf8ae0"},
+    {file = "fastapi-0.120.0-py3-none-any.whl", hash = "sha256:84009182e530c47648da2f07eb380b44b69889a4acfd9e9035ee4605c5cfc469"},
+    {file = "fastapi-0.120.0.tar.gz", hash = "sha256:6ce2c1cfb7000ac14ffd8ddb2bc12e62d023a36c20ec3710d09d8e36fab177a0"},
 ]
 
 [[package]]
@@ -1026,6 +1038,21 @@ files = [
 ]
 
 [[package]]
+name = "httpcore"
+version = "1.0.9"
+requires_python = ">=3.8"
+summary = "A minimal low-level HTTP client."
+groups = ["dev"]
+dependencies = [
+    "certifi",
+    "h11>=0.16",
+]
+files = [
+    {file = "httpcore-1.0.9-py3-none-any.whl", hash = "sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55"},
+    {file = "httpcore-1.0.9.tar.gz", hash = "sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8"},
+]
+
+[[package]]
 name = "httptools"
 version = "0.7.1"
 requires_python = ">=3.9"
@@ -1075,6 +1102,23 @@ files = [
     {file = "httptools-0.7.1-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:0d92b10dbf0b3da4823cde6a96d18e6ae358a9daa741c71448975f6a2c339cad"},
     {file = "httptools-0.7.1-cp39-cp39-win_amd64.whl", hash = "sha256:5ddbd045cfcb073db2449563dd479057f2c2b681ebc232380e63ef15edc9c023"},
     {file = "httptools-0.7.1.tar.gz", hash = "sha256:abd72556974f8e7c74a259655924a717a2365b236c882c3f6f8a45fe94703ac9"},
+]
+
+[[package]]
+name = "httpx"
+version = "0.28.1"
+requires_python = ">=3.8"
+summary = "The next generation HTTP client."
+groups = ["dev"]
+dependencies = [
+    "anyio",
+    "certifi",
+    "httpcore==1.*",
+    "idna",
+]
+files = [
+    {file = "httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad"},
+    {file = "httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc"},
 ]
 
 [[package]]
@@ -1358,7 +1402,7 @@ files = [
 
 [[package]]
 name = "madsci-client"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_client"
@@ -1373,7 +1417,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_common"
@@ -1384,6 +1428,7 @@ dependencies = [
     "aenum>=3.1.15",
     "classy-fastapi>=0.7.0",
     "fastapi>=0.115.4",
+    "httpx>=0.28.1",
     "multiprocess>=0.70.17",
     "pydantic-extra-types>=2.10.2",
     "pydantic-settings-export>=1.0.2",
@@ -1402,7 +1447,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-data-manager"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_data_manager"
@@ -1415,7 +1460,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-event-manager"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_event_manager"
@@ -1430,7 +1475,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-application"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_experiment_application"
@@ -1447,7 +1492,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-manager"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_experiment_manager"
@@ -1460,7 +1505,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-location-manager"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_location_manager"
@@ -1474,7 +1519,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-node-module"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_node_module"
@@ -1488,7 +1533,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_resource_manager"
@@ -1503,7 +1548,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_squid"
@@ -1516,7 +1561,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-workcell-manager"
-version = "0.5.0rc2"
+version = "0.5.0rc3"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_workcell_manager"
@@ -2873,7 +2918,7 @@ files = [
 
 [[package]]
 name = "python-on-whales"
-version = "0.78.0"
+version = "0.79.0"
 requires_python = "<4,>=3.8"
 summary = "A Docker client for Python, designed to be fun and intuitive!"
 groups = ["dev"]
@@ -2882,8 +2927,8 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "python_on_whales-0.78.0-py3-none-any.whl", hash = "sha256:c315c35a19f72543cf37f991c006c2056861031407ee199a17777e214eed846d"},
-    {file = "python_on_whales-0.78.0.tar.gz", hash = "sha256:0deab53cdbdd546f8a220c9205d73194ab187478497377a1d7b91de44140cc08"},
+    {file = "python_on_whales-0.79.0-py3-none-any.whl", hash = "sha256:4a39ab107a4e740e4302c853c0efc5ced4b4048f55acbb959a2faf53b7003c27"},
+    {file = "python_on_whales-0.79.0.tar.gz", hash = "sha256:919bba304cc04db4b75cdd7fb14c0a8fea6ebeafacf7989f6956641cb58210e0"},
 ]
 
 [[package]]
