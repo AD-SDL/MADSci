@@ -6,13 +6,13 @@ import os
 import subprocess
 import sys
 import traceback
-import urllib.parse as urlparse
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
+from pydantic import AnyUrl
 from pymongo import MongoClient
 
 
@@ -51,6 +51,11 @@ class MongoDBMigrator:
 
         # Parse database connection details for backup
         self.backup_dir = self._get_backup_directory()
+
+    @property
+    def parsed_db_url(self) -> AnyUrl:
+        """Parse MongoDB connection URL using pydantic AnyUrl."""
+        return AnyUrl(self.db_url)
 
     def dispose(self) -> None:
         """Dispose of MongoDB client and cleanup resources."""
@@ -91,20 +96,6 @@ class MongoDBMigrator:
         except Exception:
             return False
 
-    def _parse_db_url(self) -> Dict[str, Any]:
-        """Parse MongoDB connection details from database URL."""
-        parsed = urlparse.urlparse(self.db_url)
-
-        # Handle both mongodb:// and mongodb+srv:// schemes
-        return {
-            "host": parsed.hostname or "localhost",
-            "port": parsed.port or 27017,
-            "username": parsed.username,
-            "password": parsed.password,
-            "scheme": parsed.scheme,
-            "options": parsed.query,
-        }
-
     def load_expected_schema(self) -> Dict[str, Any]:
         """Load the expected schema from the schema.json file."""
         try:
@@ -129,20 +120,19 @@ class MongoDBMigrator:
         backup_filename = f"{self.database_name}_backup_{timestamp}"
         backup_path = self.backup_dir / backup_filename
 
-        db_info = self._parse_db_url()
-
         # Build mongodump command
         mongodump_cmd = ["mongodump"]
 
         # Add connection parameters
-        if db_info["host"]:
-            mongodump_cmd.extend(["--host", f"{db_info['host']}:{db_info['port']}"])
+        if self.parsed_db_url.host:
+            port = self.parsed_db_url.port or 27017
+            mongodump_cmd.extend(["--host", f"{self.parsed_db_url.host}:{port}"])
 
-        if db_info["username"]:
-            mongodump_cmd.extend(["--username", db_info["username"]])
+        if self.parsed_db_url.username:
+            mongodump_cmd.extend(["--username", self.parsed_db_url.username])
 
-        if db_info["password"]:
-            mongodump_cmd.extend(["--password", db_info["password"]])
+        if self.parsed_db_url.password:
+            mongodump_cmd.extend(["--password", self.parsed_db_url.password])
 
         # Specify database and output directory
         mongodump_cmd.extend(["--db", self.database_name, "--out", str(backup_path)])
@@ -178,20 +168,19 @@ class MongoDBMigrator:
         if not db_backup_path.exists():
             raise FileNotFoundError(f"Database backup not found in: {db_backup_path}")
 
-        db_info = self._parse_db_url()
-
         # Build mongorestore command
         mongorestore_cmd = ["mongorestore"]
 
         # Add connection parameters
-        if db_info["host"]:
-            mongorestore_cmd.extend(["--host", f"{db_info['host']}:{db_info['port']}"])
+        if self.parsed_db_url.host:
+            port = self.parsed_db_url.port or 27017
+            mongorestore_cmd.extend(["--host", f"{self.parsed_db_url.host}:{port}"])
 
-        if db_info["username"]:
-            mongorestore_cmd.extend(["--username", db_info["username"]])
+        if self.parsed_db_url.username:
+            mongorestore_cmd.extend(["--username", self.parsed_db_url.username])
 
-        if db_info["password"]:
-            mongorestore_cmd.extend(["--password", db_info["password"]])
+        if self.parsed_db_url.password:
+            mongorestore_cmd.extend(["--password", self.parsed_db_url.password])
 
         # Drop existing database and restore
         mongorestore_cmd.extend(

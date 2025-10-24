@@ -359,7 +359,7 @@ class TestEventClientEventRetrieval:
 
         mock_get.assert_called_once_with(
             "http://localhost:8001/events",
-            timeout=120,
+            timeout=60,
             params={"number": 50, "level": logging.INFO},
         )
         assert isinstance(result, dict)
@@ -383,7 +383,7 @@ class TestEventClientEventRetrieval:
 
         mock_get.assert_called_once_with(
             "http://localhost:8001/events",
-            timeout=120,
+            timeout=60,
             params={"number": 100, "level": 10},  # DEBUG level
         )
         assert isinstance(result, dict)

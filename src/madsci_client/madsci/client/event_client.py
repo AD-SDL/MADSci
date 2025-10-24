@@ -111,7 +111,7 @@ class EventClient:
         if self.event_server:
             response = requests.get(
                 str(self.event_server) + "events",
-                timeout=120,
+                timeout=60,
                 params={"number": number, "level": level},
             )
             if not response.ok:
@@ -272,7 +272,7 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = requests.get(  # noqa
+            response = requests.get(  # noqa: S113
                 str(self.event_server) + "utilization/periods",
                 params=params,
             )

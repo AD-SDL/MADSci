@@ -36,8 +36,6 @@ from pytest_mock_resources import (
 from redis import Redis
 from requests import Response
 
-# Imports removed since auto-initialization makes manual setup unnecessary
-
 
 # Create a Redis server fixture for testing
 @pytest.fixture(scope="session")
@@ -54,10 +52,6 @@ def pmr_mongo_config() -> MongoConfig:
 
 redis_server = create_redis_fixture()
 mongo_server = create_mongo_fixture()
-
-
-# Note: The initialized_mongo_server fixture is no longer needed since
-# MongoDBVersionChecker now auto-initializes fresh databases automatically
 
 
 @pytest.fixture

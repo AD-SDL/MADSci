@@ -239,9 +239,6 @@ class EventType(str, Enum):
     CAMPAIGN_ABORT = "campaign_abort"
     # *Action Events
     ACTION_STATUS_CHANGE = "action_status_change"
-    # *Transfer Events
-    TRANSFER_MANAGER_START = "transfer_manager_start"
-    TRANSFER_MANAGER_STOP = "transfer_manager_stop"
 
     @classmethod
     def _missing_(cls, value: str) -> "EventType":
