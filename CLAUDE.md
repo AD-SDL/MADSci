@@ -149,6 +149,7 @@ src/madsci_common/
 - Use PDM virtual environments for development isolation
 - **IMPORTANT**: if you try to run python commands and see missing modules, ensure that the correct virtual environment is activated.
 - **IMPORTANT**: Use `yarn` for managing Node.js dependencies in the `ui/` directory, not npm
-- Ignore minor linting errors that will be fixed by autoformatting, such as "No newline at end of file"
+- Try using ruff's autofix/autoformatting before attempting to manually fix linter errors, especially related to things like whitespace.
 - Always use pydantic's `AnyUrl` to store URL's, and note that AnyUrl always ensures a trailing forward slash
 - Imports should generally be done at the top of the file, unless there are circular dependencies or other factors which require localized importing.
+- **IMPORTANT**: do not use noqa's or modify the configuration of linters or checks to bypass linter errors without the users _EXPLICIT_ permission.
