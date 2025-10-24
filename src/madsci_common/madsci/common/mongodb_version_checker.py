@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from madsci.client.event_client import EventClient
+from packaging.version import Version
 from pymongo import MongoClient
 
 
@@ -98,6 +99,10 @@ class MongoDBVersionChecker:
         """
         Check if database migration is needed.
 
+        Migration is only needed for major or minor version mismatches,
+        not for patch versions or pre-release versions. Uses packaging.version.Version
+        for semantic version comparison.
+
         Returns:
             tuple: (needs_migration, current_madsci_version, database_version)
         """
@@ -116,14 +121,49 @@ class MongoDBVersionChecker:
             self.logger.info(
                 f"Database {self.database_name} exists but has no version tracking - migration needed for version tracking initialization"
             )
-            return True, current_madsci_version, None
-
-        if db_version != current_madsci_version:
-            self.logger.warning(
-                f"Version mismatch in {self.database_name}: "
-                f"MADSci v{current_madsci_version}, Database v{db_version}"
-            )
             return True, current_madsci_version, db_version
+
+        # Parse semantic versions for comparison
+        try:
+            current_semver = Version(current_madsci_version)
+            db_semver = Version(db_version)
+
+            # Only trigger migration for major or minor version mismatches
+            if (
+                current_semver.major != db_semver.major
+                or current_semver.minor != db_semver.minor
+            ):
+                self.logger.warning(
+                    f"Major/minor version mismatch in {self.database_name}: "
+                    f"MADSci v{current_madsci_version} (major.minor: {current_semver.major}.{current_semver.minor}), "
+                    f"Database v{db_version} (major.minor: {db_semver.major}.{db_semver.minor})"
+                )
+                return True, current_madsci_version, db_version
+            # Patch or pre-release differences don't require migration
+            if current_madsci_version != db_version:
+                self.logger.info(
+                    f"Database {self.database_name} has compatible version: "
+                    f"MADSci v{current_madsci_version}, Database v{db_version} "
+                    f"(only patch/pre-release differences, no migration needed)"
+                )
+            else:
+                self.logger.info(
+                    f"Database {self.database_name} version {db_version} matches MADSci version {current_madsci_version}"
+                )
+            return False, current_madsci_version, db_version
+
+        except Exception as e:
+            # If version parsing fails, fall back to exact string comparison
+            self.logger.warning(
+                f"Failed to parse semantic versions (MADSci: {current_madsci_version}, DB: {db_version}): {e}. "
+                f"Falling back to exact string comparison."
+            )
+            if db_version != current_madsci_version:
+                self.logger.warning(
+                    f"Version mismatch in {self.database_name}: "
+                    f"MADSci v{current_madsci_version}, Database v{db_version}"
+                )
+                return True, current_madsci_version, db_version
 
         self.logger.info(
             f"Database {self.database_name} version {db_version} matches MADSci version {current_madsci_version}"

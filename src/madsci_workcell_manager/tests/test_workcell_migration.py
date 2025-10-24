@@ -287,12 +287,12 @@ def test_workcell_check_version_command(mock_migrator_class, mock_resolve_schema
 
 
 def test_workcell_version_mismatch_detection():
-    """Test detection of version mismatches in workcells database"""
+    """Test detection of version mismatches in workcells database (major/minor versions)"""
     with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
 
-        # Mock existing version tracking with different version
+        # Mock existing version tracking with different major/minor version
         mock_collection.find_one.return_value = {"version": "0.9.0"}
         mock_db.list_collection_names.return_value = [
             "archived_workflows",
@@ -313,9 +313,51 @@ def test_workcell_version_mismatch_detection():
                 "mongodb://localhost:27017", "madsci_workcells", str(schema_file)
             )
 
-            needs_migration, _, db_version = checker.is_migration_needed()
-            assert needs_migration is True
-            assert db_version == "0.9.0"
+            # Mock MADSci version to be 1.0.0 (minor version difference from DB 0.9.0)
+            with patch.object(
+                checker, "get_current_madsci_version", return_value="1.0.0"
+            ):
+                needs_migration, _, db_version = checker.is_migration_needed()
+                assert needs_migration is True
+                assert db_version == "0.9.0"
+        finally:
+            schema_file.unlink()
+
+
+def test_workcell_patch_version_compatibility():
+    """Test that patch version differences don't trigger migration in workcells database"""
+    with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+        mock_db = Mock()
+        mock_collection = Mock()
+
+        # Mock existing version tracking with same major.minor but different patch
+        mock_collection.find_one.return_value = {"version": "1.0.0"}
+        mock_db.list_collection_names.return_value = [
+            "archived_workflows",
+            "schema_versions",
+        ]
+
+        # Fix the dictionary access
+        mock_db.__getitem__ = Mock(return_value=mock_collection)
+        mock_client_instance = Mock()
+        mock_client_instance.__getitem__ = Mock(return_value=mock_db)
+        mock_client.return_value = mock_client_instance
+
+        schema_file = Path("workcell_schema.json")
+        schema_file.write_text(json.dumps({"version": "1.0.0"}))
+
+        try:
+            checker = MongoDBVersionChecker(
+                "mongodb://localhost:27017", "madsci_workcells", str(schema_file)
+            )
+
+            # Mock MADSci version to be 1.0.1 (patch version difference from DB 1.0.0)
+            with patch.object(
+                checker, "get_current_madsci_version", return_value="1.0.1"
+            ):
+                needs_migration, _, db_version = checker.is_migration_needed()
+                assert needs_migration is False
+                assert db_version == "1.0.0"
         finally:
             schema_file.unlink()
 
