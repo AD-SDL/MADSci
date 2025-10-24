@@ -1,13 +1,21 @@
 """Test node infrastructure including lifecycle, configuration, and basic actions."""
 
+import inspect
 import time
-from typing import Optional, Union
+from pathlib import Path
+from typing import Annotated, Optional, Union, get_type_hints
 
 from fastapi.testclient import TestClient
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
-from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
+from madsci.common.types.action_types import (
+    ActionDefinition,
+    ActionRequest,
+    ActionResult,
+    ActionStatus,
+    FileArgumentDefinition,
+)
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import (
@@ -22,7 +30,7 @@ from madsci.node_module.helpers import action
 from pydantic import BaseModel
 from ulid import ULID
 
-from madsci_node_module.tests.test_node import TestNode
+from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
 from madsci_node_module.tests.test_rest_utils import (
     execute_action_with_validation,
     parametrize_admin_commands,
@@ -385,7 +393,7 @@ class CustomModel(BaseModel):
     count: int = 0
 
 
-class TestNodeConfig(NodeConfig):
+class LocalTestNodeConfig(NodeConfig):
     """Test configuration."""
 
     update_node_files: bool = False
@@ -395,11 +403,11 @@ class MockNode(AbstractNode):
     """Mock node for testing."""
 
     __test__ = False
-    config_model = TestNodeConfig
+    config_model = LocalTestNodeConfig
 
     def __init__(self):
         """Initialize without calling parent __init__ to avoid file dependencies."""
-        self.config = TestNodeConfig()
+        self.config = LocalTestNodeConfig()
         self.node_definition = NodeDefinition(
             node_name="test_node",
             node_id=new_ulid_str(),
@@ -597,3 +605,267 @@ class TestComplexTypeHandling:
 
         result = node.run_action(request)
         assert result.status.value == "succeeded"
+
+
+class TestAnnotatedPathInNode:
+    """Test that AbstractNode correctly handles Annotated[Path] in action parameters."""
+
+    def test_is_file_type_helper(self) -> None:
+        """Test the _is_file_type helper method logic."""
+
+        # Create a dummy node to access the method
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Test Path
+        assert node._is_file_type(Path) is True
+
+        # Test list[Path]
+        assert node._is_file_type(list[Path]) is True
+
+        # Test str (should not be a file type)
+        assert node._is_file_type(str) is False
+
+        # Test list[str] (should not be a file type)
+        assert node._is_file_type(list[str]) is False
+
+        # Test int (should not be a file type)
+        assert node._is_file_type(int) is False
+
+    def test_annotated_path_extraction_in_parse_action_arg(self) -> None:
+        """Test that Annotated[Path] is correctly extracted and recognized as a file parameter."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create a dummy node
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Simulate a function signature
+        def test_func(file_param: Annotated[Path, "A file parameter"]):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        node._parse_action_arg(
+            action_def, signature, "file_param", type_hints["file_param"]
+        )
+
+        # Verify it was added as a file parameter, not a regular argument
+        assert "file_param" in action_def.files, "file_param should be in files"
+        assert "file_param" not in action_def.args, "file_param should not be in args"
+        assert isinstance(action_def.files["file_param"], FileArgumentDefinition)
+        assert action_def.files["file_param"].description == "A file parameter"
+
+    def test_annotated_list_path_extraction(self) -> None:
+        """Test that Annotated[list[Path]] is correctly recognized as a file parameter."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create a dummy node
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Simulate a function signature
+        def test_func(files_param: Annotated[list[Path], "Multiple files"]):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        node._parse_action_arg(
+            action_def, signature, "files_param", type_hints["files_param"]
+        )
+
+        # Verify it was added as a file parameter, not a regular argument
+        assert "files_param" in action_def.files, "files_param should be in files"
+        assert "files_param" not in action_def.args, "files_param should not be in args"
+        assert isinstance(action_def.files["files_param"], FileArgumentDefinition)
+        assert action_def.files["files_param"].description == "Multiple files"
+
+    def test_plain_list_path_recognition(self) -> None:
+        """Test that list[Path] without Annotated is correctly recognized as a file parameter."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create a dummy node
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Simulate a function signature
+        def test_func(files_param: list[Path]):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        node._parse_action_arg(
+            action_def, signature, "files_param", type_hints["files_param"]
+        )
+
+        # Verify it was added as a file parameter, not a regular argument
+        assert "files_param" in action_def.files, "files_param should be in files"
+        assert "files_param" not in action_def.args, "files_param should not be in args"
+        assert isinstance(action_def.files["files_param"], FileArgumentDefinition)
+
+    def test_optional_annotated_path(self) -> None:
+        """Test that Optional[Annotated[Path, ...]] is correctly handled."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create a dummy node
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Simulate a function signature
+        def test_func(
+            optional_file: Optional[Annotated[Path, "An optional file"]] = None,
+        ):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        node._parse_action_arg(
+            action_def, signature, "optional_file", type_hints["optional_file"]
+        )
+
+        # Verify it was added as a file parameter
+        assert "optional_file" in action_def.files, "optional_file should be in files"
+        assert "optional_file" not in action_def.args, (
+            "optional_file should not be in args"
+        )
+        assert isinstance(action_def.files["optional_file"], FileArgumentDefinition)
+        assert action_def.files["optional_file"].description == "An optional file"

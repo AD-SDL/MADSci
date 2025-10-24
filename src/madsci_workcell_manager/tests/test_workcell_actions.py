@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from madsci.common.exceptions import LocationNotFoundError
+from madsci.common.exceptions import LocationNotFoundError, WorkflowFailedError
 from madsci.common.types.action_types import ActionStatus
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
@@ -268,7 +268,6 @@ class TestTransferAction:
         self, mock_workcell_client, mock_location_client, mock_context
     ):
         """Test transfer action when WorkflowFailedError is raised."""
-        from madsci.common.exceptions import WorkflowFailedError
 
         mock_context.return_value = MadsciContext(
             location_server_url="http://localhost:8006/",
