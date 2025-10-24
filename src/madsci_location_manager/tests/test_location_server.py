@@ -37,7 +37,6 @@ redis_server = create_redis_fixture()
 def app(redis_server: Redis):
     """Create a test app with test settings and Redis server."""
     settings = LocationManagerSettings(
-        manager_id="test_location_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -319,7 +318,6 @@ def test_automatic_location_initialization_from_definition(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_auto_location_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -372,7 +370,6 @@ def test_resource_initialization_prevents_duplicates(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_resource_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -433,7 +430,6 @@ def test_resource_initialization_with_matching_existing_resource(redis_server: R
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_shared_resource_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -533,7 +529,6 @@ def transfer_setup(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_transfer_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1071,7 +1066,6 @@ def test_transfer_graph_without_transfer_capabilities(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_no_transfer_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1105,7 +1099,6 @@ def test_get_location_by_name_endpoint(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_name_lookup_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1133,7 +1126,6 @@ def test_get_location_by_name_endpoint_not_found(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_name_lookup_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1178,7 +1170,6 @@ def test_get_location_by_name_endpoint_multiple_locations(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_multiple_locations_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1219,7 +1210,6 @@ def test_get_location_query_parameter_validation(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_query_validation_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1256,7 +1246,6 @@ def test_get_location_by_id_query_parameter(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_id_lookup_query_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1309,7 +1298,6 @@ def test_non_transfer_location_creation(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_non_transfer_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1375,7 +1363,6 @@ def test_non_transfer_location_excluded_from_graph(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_non_transfer_graph_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1433,7 +1420,6 @@ def test_non_transfer_location_plan_transfer_error(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_non_transfer_error_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1644,7 +1630,6 @@ def override_transfer_setup(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_override_transfer_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1812,7 +1797,6 @@ def test_override_templates_with_location_ids(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_id_override_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1882,7 +1866,6 @@ def test_override_templates_with_mixed_keys(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_mixed_keys_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -1965,7 +1948,6 @@ def test_no_override_templates_defined(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_basic_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2019,7 +2001,6 @@ def test_empty_override_templates(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_empty_override_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2087,7 +2068,6 @@ def test_capacity_cost_adjustment_disabled(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_capacity_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2152,7 +2132,6 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_capacity_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2212,7 +2191,6 @@ def test_capacity_cost_adjustment_with_mock_resource(
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_capacity_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2339,7 +2317,6 @@ def test_capacity_cost_adjustment_with_no_capacity_set(
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_capacity_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2413,7 +2390,6 @@ def test_capacity_cost_adjustment_resource_client_error(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_capacity_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2495,7 +2471,6 @@ def test_transfer_planning_with_capacity_constraints(
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_capacity_planning_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2585,7 +2560,6 @@ def test_transfer_template_with_additional_standard_args(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_additional_args_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2665,7 +2639,6 @@ def test_transfer_template_with_additional_location_args(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_additional_location_args_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2749,7 +2722,6 @@ def test_transfer_template_with_both_additional_args_types(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_comprehensive_args_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2861,7 +2833,6 @@ def test_override_templates_with_additional_args(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_override_args_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -2982,7 +2953,6 @@ def test_multi_step_transfer_with_additional_args(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_multistep_args_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3063,7 +3033,6 @@ def test_empty_additional_args_default_behavior(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_traditional_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3119,7 +3088,6 @@ def test_remove_representation_success(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_remove_representation_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3152,7 +3120,6 @@ def test_remove_representation_location_not_found(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_remove_representation_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3185,7 +3152,6 @@ def test_remove_representation_node_not_found(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_remove_representation_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3220,7 +3186,6 @@ def test_remove_representation_no_representations(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_remove_representation_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3255,7 +3220,6 @@ def test_remove_last_representation(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_remove_representation_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3294,7 +3258,6 @@ def test_detach_resource_success(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_detach_resource_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3324,7 +3287,6 @@ def test_detach_resource_location_not_found(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_detach_resource_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3355,7 +3317,6 @@ def test_detach_resource_no_resource_attached(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_detach_resource_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )
@@ -3400,7 +3361,6 @@ def test_remove_representation_rebuilds_transfer_graph(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        manager_id="test_transfer_graph_manager",
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
     )

@@ -1,0 +1,46 @@
+{
+    "database": "madsci_experiments",
+    "description": "Schema definition for MADSci Experiment Manager MongoDB",
+    "collections": {
+      "experiments": {
+        "description": "Main experiments collection for storing experiment data",
+        "indexes": [
+          {
+            "keys": [["experiment_id", 1]],
+            "name": "experiment_id_1",
+            "background": true,
+            "unique": true,
+            "description": "Unique constraint on experiment_id for fast lookups"
+          },
+          {
+            "keys": [["status", 1], ["started_at", -1]],
+            "name": "status_started_at",
+            "background": true,
+            "description": "Index for querying experiments by status and start time"
+          },
+          {
+            "keys": [["started_at", -1]],
+            "name": "started_at_desc",
+            "background": true,
+            "description": "Index for chronological experiment queries"
+          }
+        ]
+      },
+      "schema_versions": {
+        "description": "Version tracking for schema migrations",
+        "indexes": [
+          {
+            "keys": [["version", 1]],
+            "name": "version_unique",
+            "unique": true,
+            "description": "Unique constraint on version strings"
+          },
+          {
+            "keys": [["applied_at", -1]],
+            "name": "applied_at_desc",
+            "description": "Index for chronological version tracking"
+          }
+        ]
+      }
+    }
+  }
