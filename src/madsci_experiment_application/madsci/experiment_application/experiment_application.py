@@ -99,6 +99,7 @@ class ExperimentApplication(RestNode):
     ) -> "ExperimentApplication":
         """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
         super().__init__(*args, **kwargs)
+
         lab_server_url = lab_server_url or self.config.lab_server_url
         if lab_server_url:
             self.lab_client = LabClient(lab_server_url=lab_server_url)
