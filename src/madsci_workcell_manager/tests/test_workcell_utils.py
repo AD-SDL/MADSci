@@ -202,12 +202,12 @@ def test_save_workflow_files_flushes_buffer():
 
     # Verify that the file was submitted with non-empty content
     assert len(submitted_file_contents) == 1, "Expected one file to be submitted"
-    assert (
-        len(submitted_file_contents[0]) == len(test_content)
-    ), f"File content should be {len(test_content)} bytes, but got {len(submitted_file_contents[0])} bytes"
-    assert (
-        submitted_file_contents[0] == test_content
-    ), "File content does not match expected content"
+    assert len(submitted_file_contents[0]) == len(test_content), (
+        f"File content should be {len(test_content)} bytes, but got {len(submitted_file_contents[0])} bytes"
+    )
+    assert submitted_file_contents[0] == test_content, (
+        "File content does not match expected content"
+    )
 
     # Verify that the workflow was updated with the file input ID
     assert "test_file" in result.file_input_ids
@@ -267,10 +267,10 @@ def test_save_workflow_files_with_multiple_files():
     assert len(submitted_files) == 3, "Expected three files to be submitted"
     for file_key, expected_content in expected_contents.items():
         assert file_key in submitted_files, f"File {file_key} was not submitted"
-        assert (
-            submitted_files[file_key] == expected_content
-        ), f"Content mismatch for {file_key}"
-        assert (
-            file_key in result.file_input_ids
-        ), f"File {file_key} not in file_input_ids"
+        assert submitted_files[file_key] == expected_content, (
+            f"Content mismatch for {file_key}"
+        )
+        assert file_key in result.file_input_ids, (
+            f"File {file_key} not in file_input_ids"
+        )
         assert result.file_input_ids[file_key] == f"mock_id_{file_key}"
