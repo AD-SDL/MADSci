@@ -268,7 +268,7 @@ class TestTransferAction:
         self, mock_workcell_client, mock_location_client, mock_context
     ):
         """Test transfer action when WorkflowFailedError is raised."""
-        from madsci.common.exceptions import WorkflowFailedError  # noqa: PLC0415
+        from madsci.common.exceptions import WorkflowFailedError
 
         mock_context.return_value = MadsciContext(
             location_server_url="http://localhost:8006/",
