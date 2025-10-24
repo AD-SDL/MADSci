@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/madsci_workcell_manager/madsci/workcell_manager/workcell_server.py: 77%</title>
+    <title>Coverage for src/madsci_workcell_manager/madsci/workcell_manager/workcell_server.py: 78%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
     <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
     <script src="coverage_html_cb_6fb7b396.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src/madsci_workcell_manager/madsci/workcell_manager/workcell_server.py</b>:
-            <span class="pc_cov">77%</span>
+            <span class="pc_cov">78%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">243 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">188<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">55<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">190<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">53<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_ccee3f9be15274d0_workcell_utils_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.10.7">coverage.py v7.10.7</a>,
-            created at 2025-10-24 18:36 +0000
+            created at 2025-10-24 21:48 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -535,10 +535,10 @@
     <p class="run"><span class="n"><a id="t453" href="#t453">453</a></span><span class="t">                <span class="key">if</span> <span class="nam">file_input_paths</span> <span class="key">is</span> <span class="key">None</span> <span class="key">or</span> <span class="nam">file_input_paths</span> <span class="op">==</span> <span class="str">""</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t454" href="#t454">454</a></span><span class="t">                    <span class="nam">file_input_paths</span> <span class="op">=</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t455" href="#t455">455</a></span><span class="t">                <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t456" href="#t456">456</a></span><span class="t">                    <span class="nam">file_input_paths</span> <span class="op">=</span> <span class="nam">json</span><span class="op">.</span><span class="nam">loads</span><span class="op">(</span><span class="nam">file_input_paths</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t457" href="#t457">457</a></span><span class="t">                    <span class="key">if</span> <span class="key">not</span> <span class="nam">isinstance</span><span class="op">(</span><span class="nam">file_input_paths</span><span class="op">,</span> <span class="nam">dict</span><span class="op">)</span> <span class="key">or</span> <span class="key">not</span> <span class="nam">all</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t458" href="#t458">458</a></span><span class="t">                        <span class="nam">isinstance</span><span class="op">(</span><span class="nam">k</span><span class="op">,</span> <span class="nam">str</span><span class="op">)</span> <span class="key">for</span> <span class="nam">k</span> <span class="key">in</span> <span class="nam">file_input_paths</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t459" href="#t459">459</a></span><span class="t">                    <span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t456" href="#t456">456</a></span><span class="t">                    <span class="nam">file_input_paths</span> <span class="op">=</span> <span class="nam">json</span><span class="op">.</span><span class="nam">loads</span><span class="op">(</span><span class="nam">file_input_paths</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t457" href="#t457">457</a></span><span class="t">                    <span class="key">if</span> <span class="key">not</span> <span class="nam">isinstance</span><span class="op">(</span><span class="nam">file_input_paths</span><span class="op">,</span> <span class="nam">dict</span><span class="op">)</span> <span class="key">or</span> <span class="key">not</span> <span class="nam">all</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t458" href="#t458">458</a></span><span class="t">                        <span class="nam">isinstance</span><span class="op">(</span><span class="nam">k</span><span class="op">,</span> <span class="nam">str</span><span class="op">)</span> <span class="key">for</span> <span class="nam">k</span> <span class="key">in</span> <span class="nam">file_input_paths</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t459" href="#t459">459</a></span><span class="t">                    <span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t460" href="#t460">460</a></span><span class="t">                        <span class="key">raise</span> <span class="nam">HTTPException</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t461" href="#t461">461</a></span><span class="t">                            <span class="nam">status_code</span><span class="op">=</span><span class="num">400</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t462" href="#t462">462</a></span><span class="t">                            <span class="nam">detail</span><span class="op">=</span><span class="str">"Input File Paths must be a dictionary with string keys"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -594,7 +594,7 @@
             <a class="nav" href="z_ccee3f9be15274d0_workcell_utils_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.10.7">coverage.py v7.10.7</a>,
-            created at 2025-10-24 18:36 +0000
+            created at 2025-10-24 21:48 +0000
         </p>
     </div>
 </footer>
