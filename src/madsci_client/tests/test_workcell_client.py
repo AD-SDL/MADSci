@@ -144,7 +144,7 @@ def test_client(
     database_name = mongo_server.name
 
     custom_settings = WorkcellManagerSettings(
-        mongo_url=mongo_url,
+        mongo_db_url=mongo_url,
         database_name=database_name,
     )
 

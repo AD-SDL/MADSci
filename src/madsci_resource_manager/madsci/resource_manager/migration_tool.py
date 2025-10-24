@@ -1,6 +1,5 @@
 """Database migration tool for MADSci resources using Alembic with automatic type conversion handling."""
 
-import argparse
 import os
 import re
 import subprocess
@@ -16,28 +15,83 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from madsci.client.event_client import EventClient
+from madsci.common.types.base_types import MadsciBaseSettings, PathLike
 from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
 from madsci.resource_manager.resource_tables import ResourceTable, SchemaVersionTable
 from psycopg2 import sql
+from pydantic import Field
 from sqlalchemy import inspect
 from sqlmodel import Session, create_engine, select
+
+
+class DatabaseMigrationSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "resources.env", "migration.env"),
+    toml_file=("settings.toml", "resources.settings.toml", "migration.settings.toml"),
+    yaml_file=("settings.yaml", "resources.settings.yaml", "migration.settings.yaml"),
+    json_file=("settings.json", "resources.settings.json", "migration.settings.json"),
+    env_prefix="RESOURCES_MIGRATION_",
+):
+    """Configuration settings for PostgreSQL database migration operations."""
+
+    db_url: Optional[str] = Field(
+        default=None,
+        title="Database URL",
+        description="PostgreSQL connection URL (e.g., postgresql://user:pass@localhost:5432/resources). "
+        "If not provided, will try RESOURCES_DB_URL environment variable.",
+    )
+    target_version: Optional[str] = Field(
+        default=None,
+        title="Target Version",
+        description="Target version to migrate to (defaults to current MADSci version)",
+    )
+    backup_only: bool = Field(
+        default=False,
+        title="Backup Only",
+        description="Only create a backup, do not run migration",
+    )
+    restore_from: Optional[PathLike] = Field(
+        default=None,
+        title="Restore From",
+        description="Restore from specified backup file instead of migrating",
+    )
+    generate_migration: Optional[str] = Field(
+        default=None,
+        title="Generate Migration",
+        description="Generate a new migration file with the given message",
+    )
+
+    def get_effective_db_url(self) -> str:
+        """Get the effective database URL, trying fallback environment variables if needed."""
+        if self.db_url:
+            return self.db_url
+
+        # Try environment variable
+        db_url = os.getenv("RESOURCES_DB_URL")
+        if db_url:
+            return db_url
+
+        raise RuntimeError(
+            "No database URL provided and RESOURCES_DB_URL environment variable not found. "
+            "Please either:\n"
+            "1. Provide --db-url argument, or\n"
+            "2. Set RESOURCES_DB_URL in your environment/.env file\n"
+            "Example: RESOURCES_DB_URL=postgresql://user:pass@localhost:5432/resources"
+        )
 
 
 class DatabaseMigrator:
     """Handles database schema migrations for MADSci using Alembic with automatic type conversion handling."""
 
     def __init__(
-        self, db_url: Optional[str] = None, logger: Optional[EventClient] = None
+        self, settings: DatabaseMigrationSettings, logger: Optional[EventClient] = None
     ) -> None:
-        """Initialize the migrator with database URL and logger."""
-        # If no db_url provided, try to get from environment
-        if db_url is None:
-            db_url = self._get_database_url_from_env()
-
-        self.db_url = db_url
+        """Initialize the migrator with settings and logger."""
+        self.settings = settings
+        self.db_url = settings.get_effective_db_url()
         self.logger = logger or EventClient()
-        self.engine = create_engine(db_url)
-        self.version_checker = DatabaseVersionChecker(db_url, logger)
+        self.engine = create_engine(self.db_url)
+        self.version_checker = DatabaseVersionChecker(self.db_url, self.logger)
 
         # Get the package root directory for consistent file paths
         self.package_root = self._get_package_root()
@@ -109,22 +163,6 @@ class DatabaseMigrator:
             return False
         except Exception:
             return False
-
-    def _get_database_url_from_env(self) -> str:
-        """Get database URL from environment variables as fallback."""
-        # Try to get from environment variable
-        db_url = os.getenv("RESOURCES_DB_URL")
-        if db_url:
-            return db_url
-
-        # If no URL found, raise an error with helpful message
-        raise RuntimeError(
-            "No database URL provided and RESOURCES_DB_URL environment variable not found. "
-            "Please either:\n"
-            "1. Provide --db-url argument, or\n"
-            "2. Set RESOURCES_DB_URL in your environment/.env file\n"
-            "Example: RESOURCES_DB_URL=postgresql://user:pass@localhost:5432/resources"
-        )
 
     def _setup_alembic_config(self) -> Config:
         """Setup Alembic configuration with proper paths."""
@@ -651,49 +689,24 @@ class DatabaseMigrator:
 
 def main() -> None:
     """Command line interface for the migration tool."""
-
-    parser = argparse.ArgumentParser(
-        description="MADSci Database Migration Tool with Alembic"
-    )
-    parser.add_argument(
-        "--db-url",
-        help="Database URL (e.g., postgresql://user:pass@localhost:5432/resources). "
-        "If not provided, will try to read RESOURCES_DB_URL from environment.",
-    )
-    parser.add_argument(
-        "--target-version",
-        help="Target version to migrate to (defaults to current MADSci version)",
-    )
-    parser.add_argument(
-        "--backup-only",
-        action="store_true",
-        help="Only create a backup, do not run migration",
-    )
-    parser.add_argument(
-        "--restore-from", help="Restore from specified backup file instead of migrating"
-    )
-    parser.add_argument(
-        "--generate-migration",
-        help="Generate a new migration file with the given message",
-    )
-
-    args = parser.parse_args()
-
     logger = EventClient()
 
     try:
-        migrator = DatabaseMigrator(args.db_url, logger)
+        # Load settings from all sources (CLI, env vars, config files)
+        settings = DatabaseMigrationSettings()
 
-        if args.generate_migration:
-            migrator.generate_migration(args.generate_migration)
-        elif args.restore_from:
-            backup_path = Path(args.restore_from)
+        migrator = DatabaseMigrator(settings, logger)
+
+        if settings.generate_migration:
+            migrator.generate_migration(settings.generate_migration)
+        elif settings.restore_from:
+            backup_path = Path(settings.restore_from)
             migrator.restore_from_backup(backup_path)
-        elif args.backup_only:
+        elif settings.backup_only:
             backup_path = migrator.create_backup()
             logger.log_info(f"Backup created: {backup_path}")
         else:
-            migrator.run_migration(args.target_version)
+            migrator.run_migration(settings.target_version)
 
     except Exception as e:
         logger.error(f"Migration tool failed: {e}")

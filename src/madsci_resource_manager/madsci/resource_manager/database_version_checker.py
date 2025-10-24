@@ -26,7 +26,7 @@ class DatabaseVersionChecker:
         if hasattr(self, "engine") and self.engine:
             self.engine.dispose()
             if hasattr(self, "logger") and self.logger:
-                self.logger.info("Database version checker engine disposed")
+                self.logger.debug("Database version checker engine disposed")
 
     def get_current_madsci_version(self) -> str:
         """Get the current MADSci version from the package."""

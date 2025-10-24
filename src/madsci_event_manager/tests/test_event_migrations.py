@@ -8,9 +8,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 from madsci.common.mongodb_migration_tool import (
+    MongoDBMigrationSettings,
     MongoDBMigrator,
     main,
-    resolve_schema_file_path,
 )
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 
@@ -170,30 +170,50 @@ def test_event_version_checker_still_requires_migration_for_existing_db():
             schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.resolve_schema_file_path")
 @patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
 @patch(
-    "sys.argv", ["migration_tool.py", "--database", "madsci_events", "--backup-only"]
+    "sys.argv",
+    ["migration_tool.py", "--database", "madsci_events", "--backup_only", "true"],
 )
-def test_event_backup_only_command(mock_migrator_class, mock_resolve_schema):
+def test_event_backup_only_command(mock_migrator_class):
     """Test backup only command for events database"""
-    # Mock the schema file resolution
-    mock_resolve_schema.return_value = Path("fake_schema.json")
+    # Create a temporary schema file for testing
+    schema_file = Path("temp_schema.json")
+    schema_file.write_text(json.dumps({"version": "1.0.0"}))
 
     mock_migrator = Mock()
     backup_dir = Path(tempfile.gettempdir()) / "madsci_events_backup"
     mock_migrator.create_backup.return_value = backup_dir
     mock_migrator_class.return_value = mock_migrator
 
-    with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
-        main()
+    try:
+        with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
+            # We need to create a temp schema structure for auto-detection
+            temp_dir = Path(tempfile.gettempdir()) / "test_schema_detection"
+            temp_dir.mkdir(exist_ok=True)
+            schema_dir = temp_dir / "madsci" / "event_manager"
+            schema_dir.mkdir(parents=True, exist_ok=True)
+            temp_schema = schema_dir / "schema.json"
+            temp_schema.write_text(json.dumps({"version": "1.0.0"}))
 
-    # Verify only backup was called
-    mock_migrator.create_backup.assert_called_once()
-    mock_migrator.run_migration.assert_not_called()
+            original_cwd = Path.cwd()
+            os.chdir(temp_dir)
+
+            try:
+                main()
+            finally:
+                os.chdir(original_cwd)
+
+        # Verify only backup was called
+        mock_migrator.create_backup.assert_called_once()
+        mock_migrator.run_migration.assert_not_called()
+    finally:
+        if schema_file.exists():
+            schema_file.unlink()
 
 
 @patch("subprocess.run")
+@patch("sys.argv", ["test"])
 def test_event_backup_creation(mock_subprocess):
     """Test events database backup creation using mongodump"""
     mock_result = Mock()
@@ -204,9 +224,12 @@ def test_event_backup_creation(mock_subprocess):
     schema_file.write_text(json.dumps({"version": "1.0.0"}))
 
     try:
-        migrator = MongoDBMigrator(
-            "mongodb://localhost:27017", "madsci_events", str(schema_file)
+        settings = MongoDBMigrationSettings(
+            mongo_db_url="mongodb://localhost:27017",
+            database="madsci_events",
+            schema_file=str(schema_file),
         )
+        migrator = MongoDBMigrator(settings)
 
         backup_path = migrator.create_backup()
 
@@ -223,6 +246,7 @@ def test_event_backup_creation(mock_subprocess):
         schema_file.unlink()
 
 
+@patch("sys.argv", ["test"])
 def test_event_collection_creation(mock_mongo_client_events):  # noqa
     """Test events collection creation during migration"""
     schema_file = Path("event_schema.json")
@@ -233,9 +257,12 @@ def test_event_collection_creation(mock_mongo_client_events):  # noqa
     schema_file.write_text(json.dumps(schema_content))
 
     try:
-        migrator = MongoDBMigrator(
-            "mongodb://localhost:27017", "madsci_events", str(schema_file)
+        settings = MongoDBMigrationSettings(
+            mongo_db_url="mongodb://localhost:27017",
+            database="madsci_events",
+            schema_file=str(schema_file),
         )
+        migrator = MongoDBMigrator(settings)
 
         # Access the database from the migrator instance, not the mock client
         migrator.database.list_collection_names.return_value = []
@@ -248,33 +275,41 @@ def test_event_collection_creation(mock_mongo_client_events):  # noqa
         schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.resolve_schema_file_path")
 @patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
 @patch(
-    "sys.argv", ["migration_tool.py", "--database", "madsci_events", "--check-version"]
+    "sys.argv",
+    ["migration_tool.py", "--database", "madsci_events", "--check_version", "true"],
 )
-def test_event_check_version_command(mock_migrator_class, mock_resolve_schema):
+def test_event_check_version_command(mock_migrator_class):
     """Test check version command for events database"""
-    # Mock the schema file resolution
-    mock_resolve_schema.return_value = Path("fake_schema.json")
-
     mock_migrator = Mock()
     mock_migrator_class.return_value = mock_migrator
 
     # Mock version checker
-    with patch(
-        "madsci.common.mongodb_migration_tool.MongoDBVersionChecker"
-    ) as mock_checker_class:
-        mock_checker = Mock()
-        mock_checker.is_migration_needed.return_value = (False, "1.0.0", "1.0.0")
-        mock_checker_class.return_value = mock_checker
+    mock_version_checker = Mock()
+    mock_version_checker.is_migration_needed.return_value = (False, "1.0.0", "1.0.0")
+    mock_migrator.version_checker = mock_version_checker
 
-        with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
+    with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
+        # Create temp schema structure for auto-detection
+        temp_dir = Path(tempfile.gettempdir()) / "test_check_version"
+        temp_dir.mkdir(exist_ok=True)
+        schema_dir = temp_dir / "madsci" / "event_manager"
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        temp_schema = schema_dir / "schema.json"
+        temp_schema.write_text(json.dumps({"version": "1.0.0"}))
+
+        original_cwd = Path.cwd()
+        os.chdir(temp_dir)
+
+        try:
             main()
+        finally:
+            os.chdir(original_cwd)
 
-        # Verify version check was called
-        mock_checker.is_migration_needed.assert_called_once()
-        mock_migrator.run_migration.assert_not_called()
+    # Verify version check was called
+    mock_version_checker.is_migration_needed.assert_called_once()
+    mock_migrator.run_migration.assert_not_called()
 
 
 def test_event_version_mismatch_detection():
@@ -347,7 +382,6 @@ def test_event_patch_version_compatibility():
             schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.resolve_schema_file_path")
 @patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
 @patch(
     "sys.argv",
@@ -355,26 +389,38 @@ def test_event_patch_version_compatibility():
         "migration_tool.py",
         "--database",
         "madsci_events",
-        "--restore-from",
+        "--restore_from",
         "events_backup",
     ],
 )
-def test_event_restore_command(mock_migrator_class, mock_resolve_schema):
+def test_event_restore_command(mock_migrator_class):
     """Test restore command for events database"""
-    # Mock the schema file resolution
-    mock_resolve_schema.return_value = Path("fake_schema.json")
-
     mock_migrator = Mock()
     mock_migrator_class.return_value = mock_migrator
 
     with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
-        main()
+        # Create temp schema structure for auto-detection
+        temp_dir = Path(tempfile.gettempdir()) / "test_restore"
+        temp_dir.mkdir(exist_ok=True)
+        schema_dir = temp_dir / "madsci" / "event_manager"
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        temp_schema = schema_dir / "schema.json"
+        temp_schema.write_text(json.dumps({"version": "1.0.0"}))
+
+        original_cwd = Path.cwd()
+        os.chdir(temp_dir)
+
+        try:
+            main()
+        finally:
+            os.chdir(original_cwd)
 
     # Verify restore was called with correct path
     mock_migrator.restore_from_backup.assert_called_once_with(Path("events_backup"))
     mock_migrator.run_migration.assert_not_called()
 
 
+@patch("sys.argv", ["test"])
 def test_event_schema_file_detection():
     """Test automatic detection of event manager schema file"""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -390,7 +436,8 @@ def test_event_schema_file_detection():
         os.chdir(temp_path)
 
         try:
-            detected_path = resolve_schema_file_path("madsci_events")
+            settings = MongoDBMigrationSettings(database="madsci_events")
+            detected_path = settings.get_effective_schema_file_path()
             assert detected_path.name == "schema.json"
             assert "event_manager" in str(detected_path)
         finally:

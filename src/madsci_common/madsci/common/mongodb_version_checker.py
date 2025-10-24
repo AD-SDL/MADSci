@@ -45,7 +45,7 @@ class MongoDBVersionChecker:
         if hasattr(self, "client") and self.client:
             self.client.close()
             if hasattr(self, "logger") and self.logger:
-                self.logger.info("MongoDB version checker client disposed")
+                self.logger.debug("MongoDB version checker client disposed")
 
     def get_current_madsci_version(self) -> str:
         """Get the current MADSci version from the package."""

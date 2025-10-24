@@ -1,8 +1,6 @@
 """MongoDB migration tool for MADSci databases with backup, schema management, and CLI."""
 
-import argparse
 import json
-import os
 import subprocess
 import sys
 import traceback
@@ -12,8 +10,120 @@ from typing import Any, Dict, List, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
-from pydantic import AnyUrl
+from madsci.common.types.base_types import MadsciBaseSettings, PathLike
+from pydantic import AliasChoices, AnyUrl, Field
 from pymongo import MongoClient
+
+
+class MongoDBMigrationSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "mongodb.env", "migration.env"),
+    toml_file=("settings.toml", "mongodb.settings.toml", "migration.settings.toml"),
+    yaml_file=("settings.yaml", "mongodb.settings.yaml", "migration.settings.yaml"),
+    json_file=("settings.json", "mongodb.settings.json", "migration.settings.json"),
+    env_prefix="MONGODB_MIGRATION_",
+):
+    """Configuration settings for MongoDB migration operations."""
+
+    mongo_db_url: str = Field(
+        default="mongodb://localhost:27017",
+        title="MongoDB URL",
+        description="MongoDB connection URL (e.g., mongodb://localhost:27017). "
+        "Defaults to localhost MongoDB instance.",
+        validation_alias=AliasChoices(
+            "mongo_db_url", "MONGODB_URL", "MONGO_URL", "DATABASE_URL", "db_url"
+        ),
+    )
+    database: str = Field(
+        title="Database Name",
+        description="Database name to migrate (e.g., madsci_events, madsci_data)",
+    )
+    schema_file: Optional[PathLike] = Field(
+        default=None,
+        title="Schema File Path",
+        description="Path to schema.json file. If not provided, will auto-detect based on database name.",
+    )
+    target_version: Optional[str] = Field(
+        default=None,
+        title="Target Version",
+        description="Target version to migrate to (defaults to current MADSci version)",
+    )
+    backup_only: bool = Field(
+        default=False,
+        title="Backup Only",
+        description="Only create a backup, do not run migration",
+    )
+    restore_from: Optional[PathLike] = Field(
+        default=None,
+        title="Restore From",
+        description="Restore from specified backup directory instead of migrating",
+    )
+    check_version: bool = Field(
+        default=False,
+        title="Check Version Only",
+        description="Only check version compatibility, do not migrate",
+    )
+
+    def get_effective_schema_file_path(self) -> Path:
+        """Get the effective schema file path, auto-detecting if needed."""
+        if self.schema_file:
+            schema_path = Path(self.schema_file)
+            if not schema_path.exists():
+                raise FileNotFoundError(f"Schema file not found: {schema_path}")
+            return schema_path
+
+        # Auto-detect schema file based on database name
+        current_dir = Path.cwd()
+
+        # Common schema file locations based on database name
+        possible_paths = []
+
+        if self.database == "madsci_events":
+            possible_paths = [
+                current_dir / "madsci" / "event_manager" / "schema.json",
+                current_dir / "event_manager" / "schema.json",
+                current_dir / "schema" / "event_manager.json",
+            ]
+        elif self.database == "madsci_data":
+            possible_paths = [
+                current_dir / "madsci" / "data_manager" / "schema.json",
+                current_dir / "data_manager" / "schema.json",
+                current_dir / "schema" / "data_manager.json",
+            ]
+        elif self.database == "madsci_workcells":
+            possible_paths = [
+                current_dir / "madsci" / "workcell_manager" / "schema.json",
+                current_dir / "workcell_manager" / "schema.json",
+                current_dir / "schema" / "workcell_manager.json",
+            ]
+        elif self.database == "madsci_experiments":
+            possible_paths = [
+                current_dir / "madsci" / "experiment_manager" / "schema.json",
+                current_dir / "experiment_manager" / "schema.json",
+                current_dir / "schema" / "experiment_manager.json",
+            ]
+        else:
+            # Generic paths for custom database names
+            possible_paths = [
+                current_dir / "madsci" / self.database / "schema.json",
+                current_dir / self.database / "schema.json",
+                current_dir / "schema" / f"{self.database}.json",
+            ]
+
+        # Find the first existing schema file
+        for path in possible_paths:
+            if path.exists():
+                return path
+
+        # If no schema file found, provide helpful error
+        paths_str = "\n".join(f"  - {path}" for path in possible_paths)
+        raise FileNotFoundError(
+            f"No schema file found for database '{self.database}'. "
+            f"Searched in:\n{paths_str}\n\n"
+            f"Please either:\n"
+            f"1. Create a schema.json file in one of the above locations, or\n"
+            f"2. Specify the path explicitly with --schema-file"
+        )
 
 
 class MongoDBMigrator:
@@ -21,32 +131,29 @@ class MongoDBMigrator:
 
     def __init__(
         self,
-        db_url: str,
-        database_name: str,
-        schema_file_path: str,
+        settings: MongoDBMigrationSettings,
         logger: Optional[EventClient] = None,
     ) -> None:
         """
         Initialize the MongoDB migrator.
 
         Args:
-            db_url: MongoDB connection URL
-            database_name: Name of the database to migrate
-            schema_file_path: Path to the schema.json file
+            settings: Migration configuration settings
             logger: Optional logger instance
         """
-        self.db_url = db_url
-        self.database_name = database_name
-        self.schema_file_path = Path(schema_file_path)
+        self.settings = settings
+        self.db_url = settings.mongo_db_url
+        self.database_name = settings.database
+        self.schema_file_path = settings.get_effective_schema_file_path()
         self.logger = logger or EventClient()
 
         # Initialize MongoDB connection
-        self.client = MongoClient(db_url)
-        self.database = self.client[database_name]
+        self.client = MongoClient(self.db_url)
+        self.database = self.client[self.database_name]
 
         # Initialize version checker
         self.version_checker = MongoDBVersionChecker(
-            db_url, database_name, schema_file_path, logger
+            self.db_url, self.database_name, str(self.schema_file_path), self.logger
         )
 
         # Parse database connection details for backup
@@ -65,7 +172,7 @@ class MongoDBMigrator:
         if hasattr(self, "client") and self.client:
             self.client.close()
             if hasattr(self, "logger") and self.logger:
-                self.logger.info("MongoDB migrator client disposed")
+                self.logger.debug("MongoDB migrator client disposed")
 
     def _get_backup_directory(self) -> Path:
         """Get the backup directory path that works consistently in both local and Docker environments."""
@@ -378,106 +485,14 @@ class MongoDBMigrator:
             raise
 
 
-# CLI Functions
-def get_database_url_from_env() -> str:
-    """Get database URL from environment variables as fallback."""
-    # Try common environment variable names
-    for env_var in ["MONGODB_URL", "MONGO_URL", "DATABASE_URL"]:
-        db_url = os.getenv(env_var)
-        if db_url:
-            return db_url
-
-    # If no URL found, raise an error with helpful message
-    raise RuntimeError(
-        "No database URL provided and none found in environment variables. "
-        "Please either:\n"
-        "1. Provide --db-url argument, or\n"
-        "2. Set MONGODB_URL, MONGO_URL, or DATABASE_URL in your environment/.env file\n"
-        "Example: MONGODB_URL=mongodb://localhost:27017"
-    )
-
-
-def resolve_schema_file_path(
-    database_name: str, schema_file: Optional[str] = None
-) -> Path:
-    """Resolve the schema file path based on database name or explicit path."""
-    if schema_file:
-        schema_path = Path(schema_file)
-        if not schema_path.exists():
-            raise FileNotFoundError(f"Schema file not found: {schema_path}")
-        return schema_path
-
-    # Auto-detect schema file based on database name
-    current_dir = Path.cwd()
-
-    # Common schema file locations based on database name
-    possible_paths = []
-
-    if database_name == "madsci_events":
-        possible_paths = [
-            current_dir / "madsci" / "event_manager" / "schema.json",
-            current_dir / "event_manager" / "schema.json",
-            current_dir / "schema" / "event_manager.json",
-        ]
-    elif database_name == "madsci_data":
-        possible_paths = [
-            current_dir / "madsci" / "data_manager" / "schema.json",
-            current_dir / "data_manager" / "schema.json",
-            current_dir / "schema" / "data_manager.json",
-        ]
-    else:
-        # Generic paths for custom database names
-        possible_paths = [
-            current_dir / "madsci" / database_name / "schema.json",
-            current_dir / database_name / "schema.json",
-            current_dir / "schema" / f"{database_name}.json",
-        ]
-
-    # Find the first existing schema file
-    for path in possible_paths:
-        if path.exists():
-            return path
-
-    # If no schema file found, provide helpful error
-    paths_str = "\n".join(f"  - {path}" for path in possible_paths)
-    raise FileNotFoundError(
-        f"No schema file found for database '{database_name}'. "
-        f"Searched in:\n{paths_str}\n\n"
-        f"Please either:\n"
-        f"1. Create a schema.json file in one of the above locations, or\n"
-        f"2. Specify the path explicitly with --schema-file"
-    )
-
-
-def setup_migration_components(
-    db_url: str, database: str, schema_file_path: Path, logger: EventClient
-) -> tuple[MongoDBVersionChecker, MongoDBMigrator]:
-    """Setup version checker and migrator components."""
-    version_checker = MongoDBVersionChecker(
-        db_url=db_url,
-        database_name=database,
-        schema_file_path=str(schema_file_path),
-        logger=logger,
-    )
-
-    migrator = MongoDBMigrator(
-        db_url=db_url,
-        database_name=database,
-        schema_file_path=str(schema_file_path),
-        logger=logger,
-    )
-
-    return version_checker, migrator
-
-
 def handle_migration_commands(
-    args: Any,
+    settings: MongoDBMigrationSettings,
     version_checker: MongoDBVersionChecker,
     migrator: MongoDBMigrator,
     logger: EventClient,
 ) -> None:
     """Handle different migration command options."""
-    if args.check_version:
+    if settings.check_version:
         # Just check version compatibility
         needs_migration, madsci_version, db_version = (
             version_checker.is_migration_needed()
@@ -490,98 +505,39 @@ def handle_migration_commands(
         if needs_migration:
             sys.exit(1)  # Exit with error code if migration needed
 
-    elif args.restore_from:
+    elif settings.restore_from:
         # Restore from backup
-        backup_path = Path(args.restore_from)
+        backup_path = Path(settings.restore_from)
         migrator.restore_from_backup(backup_path)
         logger.info("Restore completed successfully")
 
-    elif args.backup_only:
+    elif settings.backup_only:
         # Just create backup
         backup_path = migrator.create_backup()
         logger.info(f"Backup created: {backup_path}")
 
     else:
         # Run full migration
-        migrator.run_migration(args.target_version)
+        migrator.run_migration(settings.target_version)
         logger.info("Migration completed successfully")
 
 
 def main() -> None:
     """Command line interface for the MongoDB migration tool."""
-    parser = argparse.ArgumentParser(
-        description="MADSci MongoDB Migration Tool",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Migrate event manager database (auto-detects schema file)
-  python -m madsci.common.mongodb_migration_tool --database madsci_events
-
-  # Migrate data manager database with explicit DB URL
-  python -m madsci.common.mongodb_migration_tool --db-url mongodb://localhost:27017 --database madsci_data
-
-  # Use custom schema file
-  python -m madsci.common.mongodb_migration_tool --database madsci_events --schema-file /path/to/schema.json
-
-  # Just create backup without migrating
-  python -m madsci.common.mongodb_migration_tool --database madsci_events --backup-only
-
-  # Restore from backup
-  python -m madsci.common.mongodb_migration_tool --database madsci_events --restore-from /path/to/backup
-        """,
-    )
-
-    parser.add_argument(
-        "--db-url",
-        help="MongoDB connection URL (e.g., mongodb://localhost:27017). If not provided, will try to read from MONGODB_URL, MONGO_URL, or DATABASE_URL environment variables.",
-    )
-    parser.add_argument(
-        "--database",
-        required=True,
-        help="Database name to migrate (e.g., madsci_events, madsci_data)",
-    )
-    parser.add_argument(
-        "--schema-file",
-        help="Path to schema.json file. If not provided, will auto-detect based on database name.",
-    )
-    parser.add_argument(
-        "--target-version",
-        help="Target version to migrate to (defaults to current MADSci version)",
-    )
-    parser.add_argument(
-        "--backup-only",
-        action="store_true",
-        help="Only create a backup, do not run migration",
-    )
-    parser.add_argument(
-        "--restore-from",
-        help="Restore from specified backup directory instead of migrating",
-    )
-    parser.add_argument(
-        "--check-version",
-        action="store_true",
-        help="Only check version compatibility, do not migrate",
-    )
-
-    args = parser.parse_args()
     logger = EventClient()
 
     try:
-        # Get database URL
-        db_url = args.db_url or get_database_url_from_env()
+        # Load settings from all sources (CLI, env vars, config files)
+        settings = MongoDBMigrationSettings()
 
-        # Resolve schema file path
-        schema_file_path = resolve_schema_file_path(args.database, args.schema_file)
+        logger.info(f"Using database: {settings.database}")
+        logger.info(f"Using schema file: {settings.get_effective_schema_file_path()}")
 
-        logger.info(f"Using database: {args.database}")
-        logger.info(f"Using schema file: {schema_file_path}")
+        # Create migrator with settings
+        migrator = MongoDBMigrator(settings, logger)
 
-        # Setup components
-        version_checker, migrator = setup_migration_components(
-            db_url, args.database, schema_file_path, logger
-        )
-
-        handle_migration_commands(args, version_checker, migrator, logger)
+        # Handle migration commands
+        handle_migration_commands(settings, migrator.version_checker, migrator, logger)
 
     except KeyboardInterrupt:
         logger.info("Migration interrupted by user")

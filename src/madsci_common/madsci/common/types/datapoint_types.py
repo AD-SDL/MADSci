@@ -265,10 +265,11 @@ class DataManagerSettings(
         title="Collection Name",
         description="The name of the MongoDB collection where data are stored.",
     )
-    db_url: str = Field(
+    mongo_db_url: str = Field(
         default="mongodb://localhost:27017",
-        title="Database URL",
-        description="The URL of the database used by the Data Manager.",
+        title="MongoDB URL",
+        description="The URL of the MongoDB database used by the Data Manager.",
+        validation_alias=AliasChoices("mongo_db_url", "DATA_DB_URL", "db_url"),
     )
     file_storage_path: PathLike = Field(
         title="File Storage Path",

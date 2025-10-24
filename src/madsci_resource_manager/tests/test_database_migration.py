@@ -7,7 +7,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
-from madsci.resource_manager.migration_tool import DatabaseMigrator, main
+from madsci.resource_manager.migration_tool import (
+    DatabaseMigrationSettings,
+    DatabaseMigrator,
+    main,
+)
 from madsci.resource_manager.resource_tables import (
     ResourceTable,
     SchemaVersionTable,
@@ -85,7 +89,7 @@ def test_version_mismatch_detection(postgres_engine: Engine, session: SQLModelSe
 
 
 @patch("madsci.resource_manager.migration_tool.DatabaseMigrator")
-@patch("sys.argv", ["migration_tool.py", "--target-version", "1.0.0"])
+@patch("sys.argv", ["migration_tool.py", "--target_version", "1.0.0"])
 def test_with_target_version(mock_migrator_class):
     """Test main function with target version argument"""
     mock_migrator = Mock()
@@ -101,7 +105,7 @@ def test_with_target_version(mock_migrator_class):
 
 
 @patch("madsci.resource_manager.migration_tool.DatabaseMigrator")
-@patch("sys.argv", ["migration_tool.py", "--backup-only"])
+@patch("sys.argv", ["migration_tool.py", "--backup_only", "true"])
 def test_backup_only(mock_migrator_class):
     """Test main function with backup only option"""
     mock_migrator = Mock()
@@ -119,7 +123,7 @@ def test_backup_only(mock_migrator_class):
 
 
 @patch("madsci.resource_manager.migration_tool.DatabaseMigrator")
-@patch("sys.argv", ["migration_tool.py", "--restore-from", "/tmp/backup.sql"])  # noqa
+@patch("sys.argv", ["migration_tool.py", "--restore_from", "/tmp/backup.sql"])  # noqa
 def test_restore_from(mock_migrator_class):
     """Test main function with restore from option"""
     mock_migrator = Mock()
@@ -136,7 +140,7 @@ def test_restore_from(mock_migrator_class):
 
 
 @patch("madsci.resource_manager.migration_tool.DatabaseMigrator")
-@patch("sys.argv", ["migration_tool.py", "--generate-migration", "Test migration"])
+@patch("sys.argv", ["migration_tool.py", "--generate_migration", "Test migration"])
 def test_generate_migration(mock_migrator_class):
     """Test main function with generate migration option"""
     mock_migrator = Mock()
@@ -153,6 +157,7 @@ def test_generate_migration(mock_migrator_class):
 
 
 @patch("subprocess.run")
+@patch("sys.argv", ["test"])
 def test_backup_creation(mock_subprocess, temp_alembic_dir: Path):
     """Test database backup creation"""
     mock_result = Mock()
@@ -160,11 +165,12 @@ def test_backup_creation(mock_subprocess, temp_alembic_dir: Path):
     mock_subprocess.return_value = mock_result
 
     test_url = "postgresql://test:test@localhost:5432/test"
+    settings = DatabaseMigrationSettings(db_url=test_url)
 
     with patch.object(
         DatabaseMigrator, "_get_package_root", return_value=temp_alembic_dir
     ):
-        migrator = DatabaseMigrator(test_url)
+        migrator = DatabaseMigrator(settings)
         backup_path = migrator.create_backup()
 
         # Verify backup path is correct format
@@ -178,14 +184,16 @@ def test_backup_creation(mock_subprocess, temp_alembic_dir: Path):
 
 
 @patch("madsci.resource_manager.migration_tool.command")
+@patch("sys.argv", ["test"])
 def test_migration_file_generation(mock_command, temp_alembic_dir: Path):
     """Test Alembic migration file generation"""
     test_url = "postgresql://test:test@localhost:5432/test"
+    settings = DatabaseMigrationSettings(db_url=test_url)
 
     with patch.object(
         DatabaseMigrator, "_get_package_root", return_value=temp_alembic_dir
     ):
-        migrator = DatabaseMigrator(test_url)
+        migrator = DatabaseMigrator(settings)
         migrator.generate_migration("Test migration")
 
         # Verify Alembic revision command was called
@@ -195,14 +203,16 @@ def test_migration_file_generation(mock_command, temp_alembic_dir: Path):
         assert kwargs["autogenerate"] is True
 
 
+@patch("sys.argv", ["test"])
 def test_migration_file_post_processing(temp_alembic_dir: Path):
     """Test post-processing of migration files for type conversions"""
     test_url = "postgresql://test:test@localhost:5432/test"
+    settings = DatabaseMigrationSettings(db_url=test_url)
 
     with patch.object(
         DatabaseMigrator, "_get_package_root", return_value=temp_alembic_dir
     ):
-        migrator = DatabaseMigrator(test_url)
+        migrator = DatabaseMigrator(settings)
 
         # Create test migration file with type conversion
         migration_file = temp_alembic_dir / "test_migration.py"

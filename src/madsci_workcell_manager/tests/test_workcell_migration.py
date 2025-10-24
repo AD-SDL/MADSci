@@ -8,9 +8,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 from madsci.common.mongodb_migration_tool import (
+    MongoDBMigrationSettings,
     MongoDBMigrator,
     main,
-    resolve_schema_file_path,
 )
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 
@@ -175,23 +175,40 @@ def test_workcell_version_checker_still_requires_migration_for_existing_db():
             schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.resolve_schema_file_path")
 @patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
 @patch(
-    "sys.argv", ["migration_tool.py", "--database", "madsci_workcells", "--backup-only"]
+    "sys.argv",
+    [
+        "migration_tool.py",
+        "--database",
+        "madsci_workcells",
+        "--backup_only",
+        "true",
+    ],
 )
-def test_workcell_backup_only_command(mock_migrator_class, mock_resolve_schema):
+def test_workcell_backup_only_command(mock_migrator_class):
     """Test backup only command for workcells database"""
-    # Mock the schema file resolution
-    mock_resolve_schema.return_value = Path("fake_schema.json")
-
     mock_migrator = Mock()
     backup_dir = Path(tempfile.gettempdir()) / "madsci_workcells_backup"
     mock_migrator.create_backup.return_value = backup_dir
     mock_migrator_class.return_value = mock_migrator
 
     with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
-        main()
+        # Create temp schema structure for auto-detection
+        temp_dir = Path(tempfile.gettempdir()) / "test_backup_command"
+        temp_dir.mkdir(exist_ok=True)
+        schema_dir = temp_dir / "madsci" / "workcell_manager"
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        temp_schema = schema_dir / "schema.json"
+        temp_schema.write_text(json.dumps({"version": "1.0.0"}))
+
+        original_cwd = Path.cwd()
+        os.chdir(temp_dir)
+
+        try:
+            main()
+        finally:
+            os.chdir(original_cwd)
 
     # Verify only backup was called
     mock_migrator.create_backup.assert_called_once()
@@ -209,9 +226,12 @@ def test_workcell_backup_creation(mock_subprocess):
     schema_file.write_text(json.dumps({"version": "1.0.0"}))
 
     try:
-        migrator = MongoDBMigrator(
-            "mongodb://localhost:27017", "madsci_workcells", str(schema_file)
+        settings = MongoDBMigrationSettings(
+            mongo_db_url="mongodb://localhost:27017",
+            database="madsci_workcells",
+            schema_file=str(schema_file),
         )
+        migrator = MongoDBMigrator(settings)
 
         backup_path = migrator.create_backup()
 
@@ -241,9 +261,12 @@ def test_workcell_collection_creation(mock_mongo_client_workcells):  # noqa
     schema_file.write_text(json.dumps(schema_content))
 
     try:
-        migrator = MongoDBMigrator(
-            "mongodb://localhost:27017", "madsci_workcells", str(schema_file)
+        settings = MongoDBMigrationSettings(
+            mongo_db_url="mongodb://localhost:27017",
+            database="madsci_workcells",
+            schema_file=str(schema_file),
         )
+        migrator = MongoDBMigrator(settings)
 
         # Access the database from the migrator instance, not the mock client
         migrator.database.list_collection_names.return_value = []
@@ -256,34 +279,47 @@ def test_workcell_collection_creation(mock_mongo_client_workcells):  # noqa
         schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.resolve_schema_file_path")
 @patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
 @patch(
     "sys.argv",
-    ["migration_tool.py", "--database", "madsci_workcells", "--check-version"],
+    [
+        "migration_tool.py",
+        "--database",
+        "madsci_workcells",
+        "--check_version",
+        "true",
+    ],
 )
-def test_workcell_check_version_command(mock_migrator_class, mock_resolve_schema):
+def test_workcell_check_version_command(mock_migrator_class):
     """Test check version command for workcells database"""
-    # Mock the schema file resolution
-    mock_resolve_schema.return_value = Path("fake_schema.json")
-
     mock_migrator = Mock()
     mock_migrator_class.return_value = mock_migrator
 
     # Mock version checker
-    with patch(
-        "madsci.common.mongodb_migration_tool.MongoDBVersionChecker"
-    ) as mock_checker_class:
-        mock_checker = Mock()
-        mock_checker.is_migration_needed.return_value = (False, "1.0.0", "1.0.0")
-        mock_checker_class.return_value = mock_checker
+    mock_version_checker = Mock()
+    mock_version_checker.is_migration_needed.return_value = (False, "1.0.0", "1.0.0")
+    mock_migrator.version_checker = mock_version_checker
 
-        with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
+    with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
+        # Create temp schema structure for auto-detection
+        temp_dir = Path(tempfile.gettempdir()) / "test_check_version"
+        temp_dir.mkdir(exist_ok=True)
+        schema_dir = temp_dir / "madsci" / "workcell_manager"
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        temp_schema = schema_dir / "schema.json"
+        temp_schema.write_text(json.dumps({"version": "1.0.0"}))
+
+        original_cwd = Path.cwd()
+        os.chdir(temp_dir)
+
+        try:
             main()
+        finally:
+            os.chdir(original_cwd)
 
-        # Verify version check was called
-        mock_checker.is_migration_needed.assert_called_once()
-        mock_migrator.run_migration.assert_not_called()
+    # Verify version check was called
+    mock_version_checker.is_migration_needed.assert_called_once()
+    mock_migrator.run_migration.assert_not_called()
 
 
 def test_workcell_version_mismatch_detection():
@@ -362,7 +398,6 @@ def test_workcell_patch_version_compatibility():
             schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.resolve_schema_file_path")
 @patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
 @patch(
     "sys.argv",
@@ -370,20 +405,31 @@ def test_workcell_patch_version_compatibility():
         "migration_tool.py",
         "--database",
         "madsci_workcells",
-        "--restore-from",
+        "--restore_from",
         "workcells_backup",
     ],
 )
-def test_workcell_restore_command(mock_migrator_class, mock_resolve_schema):
+def test_workcell_restore_command(mock_migrator_class):
     """Test restore command for workcells database"""
-    # Mock the schema file resolution
-    mock_resolve_schema.return_value = Path("fake_schema.json")
-
     mock_migrator = Mock()
     mock_migrator_class.return_value = mock_migrator
 
     with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
-        main()
+        # Create temp schema structure for auto-detection
+        temp_dir = Path(tempfile.gettempdir()) / "test_restore"
+        temp_dir.mkdir(exist_ok=True)
+        schema_dir = temp_dir / "madsci" / "workcell_manager"
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        temp_schema = schema_dir / "schema.json"
+        temp_schema.write_text(json.dumps({"version": "1.0.0"}))
+
+        original_cwd = Path.cwd()
+        os.chdir(temp_dir)
+
+        try:
+            main()
+        finally:
+            os.chdir(original_cwd)
 
     # Verify restore was called with correct path
     mock_migrator.restore_from_backup.assert_called_once_with(Path("workcells_backup"))
@@ -395,19 +441,19 @@ def test_workcell_schema_file_detection():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create schema directory using the generic path structure that resolve_schema_file_path expects
-        # The function looks for: madsci/madsci_workcells/schema.json for unknown database names
-        workcell_schema_dir = temp_path / "madsci" / "madsci_workcells"
-        workcell_schema_dir.mkdir(parents=True)
-        schema_file = workcell_schema_dir / "schema.json"
+        # Create workcell manager schema directory
+        workcell_manager_dir = temp_path / "madsci" / "workcell_manager"
+        workcell_manager_dir.mkdir(parents=True)
+        schema_file = workcell_manager_dir / "schema.json"
         schema_file.write_text(json.dumps({"version": "1.0.0"}))
 
         original_cwd = Path.cwd()
         os.chdir(temp_path)
 
         try:
-            detected_path = resolve_schema_file_path("madsci_workcells")
+            settings = MongoDBMigrationSettings(database="madsci_workcells")
+            detected_path = settings.get_effective_schema_file_path()
             assert detected_path.name == "schema.json"
-            assert "madsci_workcells" in str(detected_path)
+            assert "workcell_manager" in str(detected_path)
         finally:
             os.chdir(original_cwd)
