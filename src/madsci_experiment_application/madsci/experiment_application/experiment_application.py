@@ -137,10 +137,10 @@ class ExperimentApplication(RestNode):
     def continue_experiment(
         cls,
         experiment: Experiment,
-        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
+        lab_server_url: Optional[Union[str, AnyUrl]] = None,
     ) -> "ExperimentApplication":
         """Create a new experiment application with an existing experiment."""
-        self = cls(experiment_server_url=experiment_server_url, experiment=experiment)
+        self = cls(lab_server_url=lab_server_url, experiment=experiment)
         self.experiment_client.continue_experiment(
             experiment_id=experiment.experiment_id
         )
