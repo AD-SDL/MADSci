@@ -1134,7 +1134,7 @@ def test_default_template_initialization(interface: ResourceInterface) -> None:
     )
 
     # Verify the template was created
-    templates = manager._resource_interface.list_templates()
+    templates = manager._resource_interface.query_templates()
     template_names = [t.template_name for t in templates]
 
     assert "test_template" in template_names

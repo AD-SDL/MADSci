@@ -42,7 +42,7 @@ def test_lab_manager_server_creation(lab_manager_definition):
     assert app is not None
 
     with TestClient(app) as client:
-        # Test the root endpoint (should return 404 since no dashboard files are configured)
+        # Test the root endpoint (should return 404 since LabManager disables it)
         response = client.get("/")
         assert response.status_code == 404
 
@@ -51,6 +51,32 @@ def test_lab_manager_server_creation(lab_manager_definition):
         assert response.status_code == 200
 
         # Test the context endpoint (lab-specific)
+        response = client.get("/context")
+        assert response.status_code == 200
+
+
+def test_lab_manager_root_endpoint_disabled(lab_manager_definition):
+    """Test that LabManager disables the root definition endpoint."""
+    # Disable dashboard files for this test to avoid static file conflicts
+    settings = LabManagerSettings(dashboard_files_path=None)
+    manager = LabManager(settings=settings, definition=lab_manager_definition)
+    app = manager.create_server()
+
+    with TestClient(app) as client:
+        # Root endpoint should return 404 (disabled for lab manager)
+        response = client.get("/")
+        assert response.status_code == 404
+
+        # But /definition should still work
+        response = client.get("/definition")
+        assert response.status_code == 200
+        definition_data = response.json()
+        assert definition_data["name"] == "Test Lab Manager"
+
+        # Other endpoints should still work
+        response = client.get("/health")
+        assert response.status_code == 200
+
         response = client.get("/context")
         assert response.status_code == 200
 

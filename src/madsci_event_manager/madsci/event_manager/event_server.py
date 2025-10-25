@@ -83,21 +83,6 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
 
         return health
 
-    @get("/health")
-    def health_endpoint(self) -> EventManagerHealth:
-        """Health check endpoint for the Event Manager."""
-        return self.get_health()
-
-    @get("/")
-    def get_definition(self) -> EventManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
-    @get("/definition")
-    def get_definition_alt(self) -> EventManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
     @post("/event")
     async def log_event(self, event: Event) -> Event:
         """Create a new event."""

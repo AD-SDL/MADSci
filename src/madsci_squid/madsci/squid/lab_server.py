@@ -24,6 +24,7 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
 
     SETTINGS_CLASS = LabManagerSettings
     DEFINITION_CLASS = LabManagerDefinition
+    ENABLE_ROOT_DEFINITION_ENDPOINT = False
 
     def __init__(
         self,
@@ -59,11 +60,6 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
         return app
 
     # Lab-specific endpoints
-
-    @get("/health")
-    def health_endpoint(self) -> ManagerHealth:
-        """Health check endpoint for the Lab Manager."""
-        return self.get_health()
 
     async def get_lab_health(self) -> LabHealth:
         """Get the health status of the entire lab, including all managers."""
@@ -163,11 +159,6 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
     async def get_context(self) -> MadsciContext:
         """Get the context of the lab server."""
         return get_current_madsci_context()
-
-    @get("/definition")
-    def get_definition(self) -> LabManagerDefinition:
-        """Return the manager definition."""
-        return self._definition
 
 
 # Main entry point for running the server

@@ -103,21 +103,6 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
 
         return health
 
-    @get("/health")
-    def health_endpoint(self) -> DataManagerHealth:
-        """Health check endpoint for the Data Manager."""
-        return self.get_health()
-
-    @get("/")
-    def get_definition(self) -> DataManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
-    @get("/definition")
-    def get_definition_alt(self) -> DataManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
     def _upload_file_to_minio(
         self,
         minio_client: Minio,

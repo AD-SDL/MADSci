@@ -1,20 +1,36 @@
-"""Test node infrastructure including lifecycle, configuration, and basic actions.
+"""Test node infrastructure including lifecycle, configuration, and basic actions."""
 
-Consolidates tests from:
-- test_node.py (TestNode implementation)
-- test_rest_utils.py (utilities)
-- Basic node lifecycle tests from test_rest_node_module.py
-"""
-
+import inspect
 import time
+from pathlib import Path
+from typing import Annotated, Optional, Union, get_type_hints
 
 from fastapi.testclient import TestClient
-from madsci.common.types.action_types import ActionResult, ActionStatus
+from madsci.client.data_client import DataClient
+from madsci.client.event_client import EventClient
+from madsci.client.resource_client import ResourceClient
+from madsci.common.types.action_types import (
+    ActionDefinition,
+    ActionRequest,
+    ActionResult,
+    ActionStatus,
+    FileArgumentDefinition,
+)
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.node_types import NodeStatus
+from madsci.common.types.location_types import LocationArgument
+from madsci.common.types.node_types import (
+    NodeConfig,
+    NodeDefinition,
+    NodeInfo,
+    NodeStatus,
+)
+from madsci.common.utils import new_ulid_str
+from madsci.node_module.abstract_node_module import AbstractNode
+from madsci.node_module.helpers import action
+from pydantic import BaseModel
 from ulid import ULID
 
-from madsci_node_module.tests.test_node import TestNode
+from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
 from madsci_node_module.tests.test_rest_utils import (
     execute_action_with_validation,
     parametrize_admin_commands,
@@ -368,3 +384,488 @@ class TestAdminCommands:
             assert response.status_code == 200
             validated_response = AdminCommandResponse.model_validate(response.json())
             assert validated_response.success is True
+
+
+class CustomModel(BaseModel):
+    """A custom pydantic model for testing."""
+
+    value: str
+    count: int = 0
+
+
+class LocalTestNodeConfig(NodeConfig):
+    """Test configuration."""
+
+    update_node_files: bool = False
+
+
+class MockNode(AbstractNode):
+    """Mock node for testing."""
+
+    __test__ = False
+    config_model = LocalTestNodeConfig
+
+    def __init__(self):
+        """Initialize without calling parent __init__ to avoid file dependencies."""
+        self.config = LocalTestNodeConfig()
+        self.node_definition = NodeDefinition(
+            node_name="test_node",
+            node_id=new_ulid_str(),
+            module_name="test_module",
+            module_version="0.0.1",
+        )
+        self.node_info = NodeInfo.from_node_def_and_config(
+            self.node_definition, self.config
+        )
+        self.action_handlers = {}
+        self.action_history = {}
+        self.node_state = {}
+        self.logger = self.event_client = EventClient()
+        self.resource_client = ResourceClient(event_client=self.event_client)
+        self.data_client = DataClient()
+        self.node_status = NodeStatus(ready=True)
+
+        # Add actions
+        self._register_actions()
+
+    def _register_actions(self):
+        """Register all actions for this mock node."""
+        for action_callable in self.__class__.__dict__.values():
+            if hasattr(action_callable, "__is_madsci_action__"):
+                self._add_action(
+                    func=action_callable,
+                    action_name=action_callable.__madsci_action_name__,
+                    description=action_callable.__madsci_action_description__,
+                    blocking=action_callable.__madsci_action_blocking__,
+                    result_definitions=action_callable.__madsci_action_result_definitions__,
+                )
+
+    @action
+    def action_with_optional_location(
+        self,
+        target: Optional[LocationArgument] = None,
+        speed: int = 100,
+    ) -> str:
+        """Action with optional location argument."""
+        if target is not None:
+            assert isinstance(target, LocationArgument), (
+                f"Expected LocationArgument, got {type(target)}"
+            )
+            return f"Moving to {target.representation} at speed {speed}"
+        return f"No movement at speed {speed}"
+
+    @action
+    def action_with_union_location(
+        self,
+        target: Union[LocationArgument, str] = "default",
+        speed: int = 100,
+    ) -> str:
+        """Action with union type including location argument."""
+        if isinstance(target, LocationArgument):
+            return f"Moving to location {target.representation} at speed {speed}"
+        return f"Moving to string {target} at speed {speed}"
+
+    @action
+    def action_with_optional_custom_model(
+        self,
+        data: Optional[CustomModel] = None,
+    ) -> str:
+        """Action with optional custom BaseModel."""
+        if data is not None:
+            assert isinstance(data, CustomModel), (
+                f"Expected CustomModel, got {type(data)}"
+            )
+            return f"Data: {data.value}, count: {data.count}"
+        return "No data"
+
+    @action
+    def action_with_union_custom_model(
+        self,
+        data: Union[CustomModel, dict] = None,
+    ) -> str:
+        """Action with union type including custom BaseModel."""
+        if isinstance(data, CustomModel):
+            return f"CustomModel: {data.value}"
+        return f"Dict: {data}"
+
+
+class TestComplexTypeHandling:
+    """Test Optional[LocationArgument] and other complex type handling in node actions."""
+
+    def _create_mock_node(self) -> MockNode:
+        """Create a mock node for testing."""
+        return MockNode()
+
+    def test_optional_location_with_none(self) -> None:
+        """Test that Optional[LocationArgument] works with None."""
+        node = self._create_mock_node()
+        request = ActionRequest(
+            action_name="action_with_optional_location", args={"speed": 50}
+        )
+        result = node.run_action(request)
+        assert result.status.value == "succeeded"
+        assert "No movement" in result.json_result
+
+    def test_optional_location_with_dict(self) -> None:
+        """Test that Optional[LocationArgument] properly converts dict to LocationArgument."""
+        node = self._create_mock_node()
+
+        # Simulate deserialized JSON with dict instead of LocationArgument
+        request = ActionRequest(
+            action_name="action_with_optional_location",
+            args={
+                "target": {
+                    "representation": "deck_slot_A1",
+                    "resource_id": "resource_123",
+                    "location_name": "deck_A1",
+                },
+                "speed": 75,
+            },
+        )
+
+        result = node.run_action(request)
+        # This should succeed if the fix is applied
+        assert result.status.value == "succeeded", (
+            f"Expected success but got {result.status}: {result.errors}"
+        )
+        assert "deck_slot_A1" in result.json_result
+
+    def test_union_location_with_dict(self) -> None:
+        """Test that Union[LocationArgument, str] properly converts dict to LocationArgument."""
+        node = self._create_mock_node()
+
+        request = ActionRequest(
+            action_name="action_with_union_location",
+            args={
+                "target": {
+                    "representation": "deck_slot_B1",
+                    "resource_id": "resource_456",
+                    "location_name": "deck_B1",
+                },
+                "speed": 100,
+            },
+        )
+
+        result = node.run_action(request)
+        assert result.status.value == "succeeded", (
+            f"Expected success but got {result.status}: {result.errors}"
+        )
+        assert "deck_slot_B1" in result.json_result
+
+    def test_union_location_with_string(self) -> None:
+        """Test that Union[LocationArgument, str] works with string."""
+        node = self._create_mock_node()
+
+        request = ActionRequest(
+            action_name="action_with_union_location",
+            args={"target": "string_location", "speed": 100},
+        )
+
+        result = node.run_action(request)
+        assert result.status.value == "succeeded"
+        assert "string_location" in result.json_result
+
+    def test_optional_custom_model_with_none(self) -> None:
+        """Test that Optional[CustomModel] works with None."""
+        node = self._create_mock_node()
+
+        request = ActionRequest(
+            action_name="action_with_optional_custom_model", args={}
+        )
+
+        result = node.run_action(request)
+        assert result.status.value == "succeeded"
+        assert "No data" in result.json_result
+
+    def test_optional_custom_model_with_dict(self) -> None:
+        """Test that Optional[CustomModel] properly converts dict to CustomModel."""
+        node = self._create_mock_node()
+
+        request = ActionRequest(
+            action_name="action_with_optional_custom_model",
+            args={"data": {"value": "test_value", "count": 42}},
+        )
+
+        result = node.run_action(request)
+        # This should succeed if the fix is applied
+        assert result.status.value == "succeeded", (
+            f"Expected success but got {result.status}: {result.errors}"
+        )
+        assert "test_value" in result.json_result
+        assert "42" in result.json_result
+
+    def test_union_custom_model_with_dict(self) -> None:
+        """Test that Union[CustomModel, dict] properly converts dict to CustomModel when possible."""
+        node = self._create_mock_node()
+
+        request = ActionRequest(
+            action_name="action_with_union_custom_model",
+            args={"data": {"value": "test_value", "count": 10}},
+        )
+
+        result = node.run_action(request)
+        assert result.status.value == "succeeded"
+
+
+class TestAnnotatedPathInNode:
+    """Test that AbstractNode correctly handles Annotated[Path] in action parameters."""
+
+    def test_is_file_type_helper(self) -> None:
+        """Test the _is_file_type helper method logic."""
+
+        # Create a dummy node to access the method
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Test Path
+        assert node._is_file_type(Path) is True
+
+        # Test list[Path]
+        assert node._is_file_type(list[Path]) is True
+
+        # Test str (should not be a file type)
+        assert node._is_file_type(str) is False
+
+        # Test list[str] (should not be a file type)
+        assert node._is_file_type(list[str]) is False
+
+        # Test int (should not be a file type)
+        assert node._is_file_type(int) is False
+
+    def test_annotated_path_extraction_in_parse_action_arg(self) -> None:
+        """Test that Annotated[Path] is correctly extracted and recognized as a file parameter."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create a dummy node
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Simulate a function signature
+        def test_func(file_param: Annotated[Path, "A file parameter"]):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        node._parse_action_arg(
+            action_def, signature, "file_param", type_hints["file_param"]
+        )
+
+        # Verify it was added as a file parameter, not a regular argument
+        assert "file_param" in action_def.files, "file_param should be in files"
+        assert "file_param" not in action_def.args, "file_param should not be in args"
+        assert isinstance(action_def.files["file_param"], FileArgumentDefinition)
+        assert action_def.files["file_param"].description == "A file parameter"
+
+    def test_annotated_list_path_extraction(self) -> None:
+        """Test that Annotated[list[Path]] is correctly recognized as a file parameter."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create a dummy node
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Simulate a function signature
+        def test_func(files_param: Annotated[list[Path], "Multiple files"]):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        node._parse_action_arg(
+            action_def, signature, "files_param", type_hints["files_param"]
+        )
+
+        # Verify it was added as a file parameter, not a regular argument
+        assert "files_param" in action_def.files, "files_param should be in files"
+        assert "files_param" not in action_def.args, "files_param should not be in args"
+        assert isinstance(action_def.files["files_param"], FileArgumentDefinition)
+        assert action_def.files["files_param"].description == "Multiple files"
+
+    def test_plain_list_path_recognition(self) -> None:
+        """Test that list[Path] without Annotated is correctly recognized as a file parameter."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create a dummy node
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Simulate a function signature
+        def test_func(files_param: list[Path]):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        node._parse_action_arg(
+            action_def, signature, "files_param", type_hints["files_param"]
+        )
+
+        # Verify it was added as a file parameter, not a regular argument
+        assert "files_param" in action_def.files, "files_param should be in files"
+        assert "files_param" not in action_def.args, "files_param should not be in args"
+        assert isinstance(action_def.files["files_param"], FileArgumentDefinition)
+
+    def test_optional_annotated_path(self) -> None:
+        """Test that Optional[Annotated[Path, ...]] is correctly handled."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create a dummy node
+        class DummyNode(AbstractNode):
+            __test__ = False
+            config_model = TestNodeConfig
+
+            def __init__(self):
+                """Initialize without calling parent __init__ to avoid file dependencies."""
+                self.config = TestNodeConfig(test_required_param=42)
+                self.node_definition = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+                self.node_info = NodeInfo.from_node_def_and_config(
+                    self.node_definition, self.config
+                )
+                self.action_handlers = {}
+                self.action_history = {}
+                self.node_state = {}
+                self.logger = self.event_client = EventClient()
+                self.resource_client = ResourceClient(event_client=self.event_client)
+                self.data_client = DataClient()
+                self.node_status = NodeStatus(ready=True)
+
+        node = DummyNode()
+
+        # Simulate a function signature
+        def test_func(
+            optional_file: Optional[Annotated[Path, "An optional file"]] = None,
+        ):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        node._parse_action_arg(
+            action_def, signature, "optional_file", type_hints["optional_file"]
+        )
+
+        # Verify it was added as a file parameter
+        assert "optional_file" in action_def.files, "optional_file should be in files"
+        assert "optional_file" not in action_def.args, (
+            "optional_file should not be in args"
+        )
+        assert isinstance(action_def.files["optional_file"], FileArgumentDefinition)
+        assert action_def.files["optional_file"].description == "An optional file"

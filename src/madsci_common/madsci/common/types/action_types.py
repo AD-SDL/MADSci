@@ -516,23 +516,22 @@ class ActionDefinition(MadsciBaseModel):
         return v
 
     @model_validator(mode="after")
-    @classmethod
-    def ensure_name_uniqueness(cls: Any, v: Any) -> Any:
+    def ensure_name_uniqueness(self) -> Any:
         """Ensure that the names of the arguments and files are unique"""
         names = set()
-        for arg in v.args.values():
+        for arg in self.args.values():
             if arg.name in names:
                 raise ValueError(f"Action name '{arg.name}' is not unique")
             names.add(arg.name)
-        for file in v.files.values():
+        for file in self.files.values():
             if file.name in names:
                 raise ValueError(f"File name '{file.name}' is not unique")
             names.add(file.name)
-        for location in v.locations.values():
+        for location in self.locations.values():
             if location.name in names:
                 raise ValueError(f"Location name '{location.name}' is not unique")
             names.add(location.name)
-        return v
+        return self
 
 
 class ArgumentDefinition(MadsciBaseModel):
@@ -860,6 +859,48 @@ def extract_file_parameters(action_function: Any) -> dict[str, dict[str, Any]]:
     return file_parameters
 
 
+def _extract_from_annotated(annotation: Any) -> Any:
+    """Extract the underlying type from Annotated wrapper if present."""
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        return get_args(annotation)[0]
+    return annotation
+
+
+def _check_list_path(origin: Any, args: tuple) -> bool:
+    """Check if this is a list[Path] type."""
+    return origin is list and args and args[0] == Path
+
+
+def _analyze_optional_type(args: tuple) -> dict[str, Any]:
+    """Analyze Optional/Union type for file parameters."""
+    result = {
+        "is_file_param": False,
+        "is_list": False,
+        "is_optional": False,
+    }
+
+    non_none_args = [arg for arg in args if arg is not type(None)]
+
+    if len(non_none_args) == 1 and type(None) in args:
+        inner_type = non_none_args[0]
+        result["is_optional"] = True
+
+        # Extract from Annotated if present
+        inner_type = _extract_from_annotated(inner_type)
+
+        if inner_type == Path:
+            result["is_file_param"] = True
+        elif _check_list_path(get_origin(inner_type), get_args(inner_type)):
+            result["is_file_param"] = True
+            result["is_list"] = True
+    elif Path in args:
+        result["is_file_param"] = True
+        result["is_optional"] = type(None) in args
+
+    return result
+
+
 def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
     """Analyze a type annotation to determine if it's a file parameter.
 
@@ -870,6 +911,7 @@ def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
     - Optional[list[Path]]
     - Union[Path, None] (equivalent to Optional[Path])
     - Union[list[Path], None] (equivalent to Optional[list[Path]])
+    - Annotated[Path, ...] and other Annotated variants of the above
 
     Returns:
         Dict with keys: is_file_param, is_list, is_optional
@@ -880,41 +922,25 @@ def _analyze_file_parameter_type(annotation: Any) -> dict[str, Any]:
         "is_optional": False,
     }
 
+    # Extract underlying type from Annotated if present
+    annotation = _extract_from_annotated(annotation)
+    origin = get_origin(annotation)
+
     # Direct Path type
     if annotation == Path:
         result["is_file_param"] = True
         return result
 
     # Handle generic types (list, Optional, Union)
-    origin = get_origin(annotation)
     args = get_args(annotation)
 
-    if origin is list:
-        if args and args[0] == Path:
-            result["is_file_param"] = True
-            result["is_list"] = True
+    if _check_list_path(origin, args):
+        result["is_file_param"] = True
+        result["is_list"] = True
         return result
 
     if origin is Union:
-        non_none_args = [arg for arg in args if arg is not type(None)]
-
-        if len(non_none_args) == 1 and type(None) in args:
-            inner_type = non_none_args[0]
-            result["is_optional"] = True
-
-            if inner_type == Path:
-                result["is_file_param"] = True
-                return result
-            if get_origin(inner_type) is list:
-                inner_args = get_args(inner_type)
-                if inner_args and inner_args[0] == Path:
-                    result["is_file_param"] = True
-                    result["is_list"] = True
-                    return result
-        elif Path in args:
-            result["is_file_param"] = True
-            result["is_optional"] = type(None) in args
-            return result
+        return _analyze_optional_type(args)
 
     return result
 

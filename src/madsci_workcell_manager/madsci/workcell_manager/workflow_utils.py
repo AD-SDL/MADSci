@@ -406,6 +406,7 @@ def save_workflow_files(
         suffixes = path.suffixes
         with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
             f.write(file_inputs[file.key].read())
+            f.flush()  # Ensure file contents are written to disk before submitting
             datapoint = FileDataPoint(
                 label=file.key,
                 ownership_info=workflow.ownership_info,

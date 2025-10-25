@@ -63,7 +63,7 @@ from madsci.common.utils import (
     threaded_daemon,
     to_snake_case,
 )
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from semver import Version
 
 
@@ -443,6 +443,38 @@ class AbstractNode:
                     )
         self.node_info.actions[action_name] = action_def
 
+    def _is_file_type(self, type_hint: Any) -> bool:
+        """Check if a type hint represents a file parameter (Path or list[Path]).
+
+        Args:
+            type_hint: The type hint to check (after extracting from Annotated/Optional)
+
+        Returns:
+            True if the type represents a file parameter (Path, list[Path], etc.)
+        """
+        # Direct Path type
+        if getattr(type_hint, "__name__", None) in [
+            "Path",
+            "PurePath",
+            "PosixPath",
+            "WindowsPath",
+        ]:
+            return True
+
+        # Check for list[Path] - get_origin returns list, get_args returns (Path,)
+        origin = get_origin(type_hint)
+        if origin is list:
+            args = get_args(type_hint)
+            if args and getattr(args[0], "__name__", None) in [
+                "Path",
+                "PurePath",
+                "PosixPath",
+                "WindowsPath",
+            ]:
+                return True
+
+        return False
+
     def _parse_action_arg(
         self,
         action_def: ActionDefinition,
@@ -492,9 +524,7 @@ class AbstractNode:
             type_hint = get_args(type_hint)[0]
             # * If the type hint is a file type, add it to the files list
         if annotated_as_file or (
-            getattr(type_hint, "__name__", None)
-            in ["Path", "PurePath", "PosixPath", "WindowsPath"]
-            and not annotated_as_arg
+            self._is_file_type(type_hint) and not annotated_as_arg
         ):
             # * Add a file parameter to the action
             action_def.files[parameter_name] = FileArgumentDefinition(
@@ -554,8 +584,8 @@ class AbstractNode:
             arg_dict, action_request, param_analysis, parameters
         )
 
-        # Validate any arguments that expect a LocationArgument
-        return self._validate_location_arguments(action_callable, arg_dict)
+        # Validate any arguments that expect a Pydantic BaseModel (LocationArgument, etc.)
+        return self._validate_pydantic_arguments(action_callable, arg_dict)
 
     def _get_action_callable(self, action_name: str) -> Callable:
         """Get the callable for an action, raising an error if not found."""
@@ -743,35 +773,115 @@ class AbstractNode:
             if var_args:
                 arg_dict["__madsci_var_args__"] = var_args
 
-    def _validate_location_arguments(
+    def _extract_pydantic_types_from_hint(
+        self, type_hint: Any
+    ) -> list[type[BaseModel]]:
+        """
+        Extract all Pydantic BaseModel types from a type hint.
+
+        Handles:
+        - Direct BaseModel subclasses
+        - Optional[BaseModel] (Union[BaseModel, None])
+        - Union[BaseModel, OtherType, ...]
+        - Annotated[BaseModel, ...]
+
+        Args:
+            type_hint: The type hint to analyze
+
+        Returns:
+            List of BaseModel subclass types found in the hint
+        """
+        pydantic_types = []
+
+        # Handle Annotated types - extract the actual type
+        origin = get_origin(type_hint)
+        if origin is Annotated:
+            type_hint = get_args(type_hint)[0]
+            origin = get_origin(type_hint)
+
+        # Handle Union types (including Optional)
+        if origin is Union:
+            for arg in get_args(type_hint):
+                # Skip None type
+                if arg is type(None):
+                    continue
+                # Check if it's a BaseModel subclass
+                try:
+                    if isinstance(arg, type) and issubclass(arg, BaseModel):
+                        pydantic_types.append(arg)
+                except TypeError:
+                    # issubclass raises TypeError if arg is not a class
+                    pass
+        else:
+            # Direct type - check if it's a BaseModel subclass
+            try:
+                if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
+                    pydantic_types.append(type_hint)
+            except TypeError:
+                pass
+
+        return pydantic_types
+
+    def _validate_pydantic_arguments(
         self,
         action_callable: Callable,
         arg_dict: dict[str, Any],
     ) -> dict[str, Any]:
         """
-        Validate and convert any arguments expected as LocationArgument.
+        Validate and convert any arguments expected as Pydantic BaseModel instances.
 
-        If the action function declares a parameter with type LocationArgument and the
-        corresponding value in arg_dict is a dictionary (e.g., from a deserialized JSON payload),
-        this function uses Pydantic's model_validate to reconstruct a valid LocationArgument instance.
+        This handles LocationArgument and any other BaseModel subclasses that may be
+        passed as dictionaries from deserialized JSON payloads. It properly handles:
+        - Direct BaseModel types: LocationArgument, CustomModel, etc.
+        - Optional[BaseModel]: Optional[LocationArgument], etc.
+        - Union[BaseModel, OtherType]: Union[LocationArgument, str], etc.
+
+        If the action function declares a parameter with a BaseModel type (directly or
+        within Optional/Union) and the corresponding value in arg_dict is a dictionary,
+        this function uses Pydantic's model_validate to reconstruct the proper model instance.
 
         Raises:
-            ValueError: If the input dictionary fails LocationArgument validation.
+            ValueError: If the input dictionary fails validation for the expected model.
 
         Returns:
-            dict[str, Any]: The updated argument dictionary with validated LocationArgument objects.
+            dict[str, Any]: The updated argument dictionary with validated BaseModel objects.
         """
         type_hints = get_type_hints(action_callable)
         for name, expected_type in type_hints.items():
-            if expected_type is LocationArgument and isinstance(
-                arg_dict.get(name), dict
-            ):
+            # Skip if no value provided for this parameter
+            if name not in arg_dict:
+                continue
+
+            value = arg_dict[name]
+
+            # Skip if value is not a dict (already the right type or None)
+            if not isinstance(value, dict):
+                continue
+
+            # Extract all Pydantic types from the hint
+            pydantic_types = self._extract_pydantic_types_from_hint(expected_type)
+
+            # If we found Pydantic types, try to validate
+            for pydantic_type in pydantic_types:
                 try:
-                    arg_dict[name] = LocationArgument.model_validate(arg_dict[name])
-                except ValidationError as e:
-                    raise ValueError(
-                        f"Invalid LocationArgument for parameter '{name}': {e}"
-                    ) from e
+                    # Try to validate the dict as this Pydantic type
+                    arg_dict[name] = pydantic_type.model_validate(value)
+                    # If successful, break (we found the right type)
+                    break
+                except ValidationError:
+                    # This type didn't work, try the next one
+                    continue
+            else:
+                # If we had pydantic types but none validated successfully
+                if pydantic_types:
+                    # Try the first one again to get the proper error message
+                    try:
+                        arg_dict[name] = pydantic_types[0].model_validate(value)
+                    except ValidationError as e:
+                        raise ValueError(
+                            f"Invalid {pydantic_types[0].__name__} for parameter '{name}': {e}"
+                        ) from e
+
         return arg_dict
 
     def _process_result(

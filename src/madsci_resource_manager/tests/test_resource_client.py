@@ -363,8 +363,8 @@ def test_get_template_not_found(client: ResourceClient) -> None:
     assert template is None
 
 
-def test_list_templates(client: ResourceClient) -> None:
-    """Test listing templates using ResourceClient"""
+def test_query_templates(client: ResourceClient) -> None:
+    """Test querying templates using ResourceClient"""
     # Create multiple templates
     resource1 = Container(resource_name="Container1", capacity=50)
     resource2 = Resource(resource_name="Resource2")
@@ -383,14 +383,14 @@ def test_list_templates(client: ResourceClient) -> None:
         tags=["resource", "test"],
     )
 
-    # List all templates
-    all_templates = client.list_templates()
+    # Query all templates
+    all_templates = client.query_templates()
     template_names = [t.resource_name for t in all_templates]
     assert "Container1" in template_names
     assert "Resource2" in template_names
 
     # Filter by tags
-    test_templates = client.list_templates(tags=["test"])
+    test_templates = client.query_templates(tags=["test"])
     assert len(test_templates) >= 2
 
 
@@ -633,7 +633,7 @@ def test_minimal_template(client: ResourceClient) -> None:
     )
 
     assert new_resource.resource_name == "MinimalCopy"
-    assert type(new_resource).__name__ == "Resource"
+    assert type(new_resource.unwrap).__name__ == "Resource"
 
 
 def test_resource_wrapper_creation(client: ResourceClient) -> None:

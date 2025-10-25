@@ -161,3 +161,45 @@ param_def = ParameterDefinition(
     description="Complex nested parameter"
 )
 ```
+
+### Manager Base Class
+Create standardized manager services with `AbstractManagerBase`:
+
+```python
+from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.types.base_types import MadsciBaseSettings, MadsciBaseModel
+from madsci.common.types.manager_types import ManagerHealth
+
+class MyManagerSettings(MadsciBaseSettings):
+    model_config = {"env_prefix": "MY_MANAGER_"}
+    database_url: str = "mongodb://localhost:27017"
+
+class MyManagerDefinition(MadsciBaseModel):
+    name: str = "My Manager"
+    description: str = "Custom manager service"
+
+class MyManager(AbstractManagerBase[MyManagerSettings, MyManagerDefinition]):
+    SETTINGS_CLASS = MyManagerSettings
+    DEFINITION_CLASS = MyManagerDefinition
+    # ENABLE_ROOT_DEFINITION_ENDPOINT = True  # Default: enabled
+
+    def get_health(self) -> ManagerHealth:
+        """Override to implement custom health checks."""
+        return ManagerHealth(healthy=True, description="Manager is healthy")
+
+# Create and run the manager
+manager = MyManager()
+manager.run_server()  # Starts FastAPI server with auto-generated endpoints
+```
+
+**Built-in endpoints:**
+- `GET /` - Manager definition (configurable with `ENABLE_ROOT_DEFINITION_ENDPOINT`)
+- `GET /definition` - Manager definition (always available)
+- `GET /health` - Health status
+
+**Configurable root endpoint:**
+```python
+class CustomManager(AbstractManagerBase[Settings, Definition]):
+    ENABLE_ROOT_DEFINITION_ENDPOINT = False  # Disable root endpoint
+    # Allows custom root endpoint implementation or static file serving for UIs
+```

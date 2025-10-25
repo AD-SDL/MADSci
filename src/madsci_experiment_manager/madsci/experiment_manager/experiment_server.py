@@ -83,21 +83,6 @@ class ExperimentManager(
 
         return health
 
-    @get("/health")
-    def health_endpoint(self) -> ExperimentManagerHealth:
-        """Health check endpoint for the Experiment Manager."""
-        return self.get_health()
-
-    @get("/")
-    def get_definition(self) -> ExperimentManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
-    @get("/definition")
-    def get_definition_alt(self) -> ExperimentManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
     @get("/experiment/{experiment_id}")
     async def get_experiment(self, experiment_id: str) -> Experiment:
         """Get an experiment by ID."""

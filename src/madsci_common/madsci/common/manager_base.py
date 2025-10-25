@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Generic, Optional, TypeVar
 
 import uvicorn
-from classy_fastapi import Routable
+from classy_fastapi import Routable, get
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient
@@ -30,7 +30,7 @@ class ManagerBaseMeta(ABCMeta, type(Routable)):
 
 
 class AbstractManagerBase(
-    Routable, Generic[SettingsT, DefinitionT], metaclass=ManagerBaseMeta
+    Generic[SettingsT, DefinitionT], Routable, metaclass=ManagerBaseMeta
 ):
     """
     Abstract base class for MADSci manager services using classy-fastapi.
@@ -50,11 +50,48 @@ class AbstractManagerBase(
     Class Attributes:
         SETTINGS_CLASS: The settings class for this manager (set by subclasses)
         DEFINITION_CLASS: The definition class for this manager (set by subclasses)
+        ENABLE_ROOT_DEFINITION_ENDPOINT: Whether to enable the root definition endpoint (default: True)
     """
 
     # Class attributes to be set by subclasses
     SETTINGS_CLASS: Optional[type[MadsciBaseSettings]] = None
     DEFINITION_CLASS: Optional[type[MadsciBaseModel]] = None
+    ENABLE_ROOT_DEFINITION_ENDPOINT: bool = True
+
+    def __init_subclass__(cls) -> None:
+        """
+        Initialize subclass and collect endpoints.
+
+        This override handles the __abstractmethods__ issue that occurs when
+        combining ABC with classy-fastapi's Routable in generic classes.
+        Also conditionally excludes the root endpoint based on ENABLE_ROOT_DEFINITION_ENDPOINT.
+        """
+        # Import here to avoid circular dependencies and to match classy-fastapi's pattern
+        import inspect  # noqa: PLC0415
+
+        from classy_fastapi.decorators import EndpointDefinition  # noqa: PLC0415
+
+        endpoints: list[EndpointDefinition] = []
+        for obj_name in dir(cls):
+            # Skip __abstractmethods__ to avoid AttributeError during ABC construction
+            if obj_name == "__abstractmethods__":
+                continue
+            try:
+                obj = getattr(cls, obj_name)
+                if inspect.isfunction(obj) and hasattr(obj, "_endpoint"):
+                    endpoint = obj._endpoint
+                    # Skip root definition endpoint if disabled
+                    if (
+                        not cls.ENABLE_ROOT_DEFINITION_ENDPOINT
+                        and obj_name == "get_definition_root"
+                        and endpoint.path == "/"
+                    ):
+                        continue
+                    endpoints.append(endpoint)
+            except AttributeError:
+                # Some attributes may not be accessible during class construction
+                pass
+        cls._endpoints = endpoints
 
     def __init__(
         self,
@@ -164,6 +201,44 @@ class AbstractManagerBase(
             return ManagerHealth(
                 healthy=False, description=f"Health check failed: {e!s}"
             )
+
+    @get("/health")
+    def health_endpoint(self) -> ManagerHealth:
+        """
+        Health check endpoint for the manager.
+
+        This endpoint is automatically inherited by all manager subclasses.
+        Managers that override get_health() will automatically have their
+        custom health checks exposed through this endpoint.
+
+        Returns:
+            ManagerHealth: The current health status
+        """
+        return self.get_health()
+
+    @get("/")
+    def get_definition_root(self) -> DefinitionT:
+        """
+        Return the manager definition at the root endpoint.
+
+        This endpoint is automatically inherited by all manager subclasses.
+
+        Returns:
+            DefinitionT: The manager definition
+        """
+        return self.definition
+
+    @get("/definition")
+    def get_definition_alt(self) -> DefinitionT:
+        """
+        Return the manager definition at the /definition endpoint.
+
+        This endpoint is automatically inherited by all manager subclasses.
+
+        Returns:
+            DefinitionT: The manager definition
+        """
+        return self.definition
 
     def load_or_create_definition(self) -> DefinitionT:
         """Load definition from file or create default."""

@@ -10,6 +10,7 @@ from typing import Any, ClassVar, Optional, Union
 import requests
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -117,7 +118,7 @@ class ResourceWrapper:
             "query_history",
             "get_template_info",
             "delete_template",
-            "list_templates",
+            "query_templates",
             "get_templates_by_category",
         }
 
@@ -1095,7 +1096,7 @@ class ResourceClient:
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
         else:
             # Store template in local templates
@@ -1125,14 +1126,14 @@ class ResourceClient:
 
         if self.resource_server_url:
             response = requests.get(
-                f"{self.resource_server_url}templates/{template_name}", timeout=10
+                f"{self.resource_server_url}template/{template_name}", timeout=10
             )
             if response.status_code == 404:
                 return None
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
             return self._wrap_resource(template)
         template_data = self.local_templates.get(template_name)
@@ -1140,7 +1141,7 @@ class ResourceClient:
             return self._wrap_resource(template_data["resource"])
         return None
 
-    def list_templates(
+    def query_templates(
         self,
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
@@ -1210,7 +1211,7 @@ class ResourceClient:
         """
         if self.resource_server_url:
             response = requests.get(
-                f"{self.resource_server_url}templates/{template_name}/info", timeout=10
+                f"{self.resource_server_url}template/{template_name}/info", timeout=10
             )
             if response.status_code == 404:
                 return None
@@ -1245,14 +1246,14 @@ class ResourceClient:
         if self.resource_server_url:
             payload = TemplateUpdateBody(updates=updates).model_dump(mode="json")
             response = requests.put(
-                f"{self.resource_server_url}templates/{template_name}",
+                f"{self.resource_server_url}template/{template_name}",
                 json=payload,
                 timeout=10,
             )
             response.raise_for_status()
             template = Resource.discriminate(response.json())
             template.resource_url = (
-                f"{self.resource_server_url}templates/{template_name}"
+                f"{self.resource_server_url}template/{template_name}"
             )
             return self._wrap_resource(template)
         template_data = self.local_templates.get(template_name)
@@ -1276,7 +1277,7 @@ class ResourceClient:
         """
         if self.resource_server_url:
             response = requests.delete(
-                f"{self.resource_server_url}templates/{template_name}", timeout=10
+                f"{self.resource_server_url}template/{template_name}", timeout=10
             )
             if response.status_code == 404:
                 return False
@@ -1306,6 +1307,17 @@ class ResourceClient:
         Returns:
             ResourceDataModels: The created resource.
         """
+        # Get current ownership info
+        current_owner = get_current_ownership_info()
+
+        # Initialize overrides if None
+        if overrides is None:
+            overrides = {}
+
+        # Add owner to overrides if not already present
+        if "owner" not in overrides and current_owner and current_owner.node_id:
+            overrides["owner"] = {"node_id": current_owner.node_id}
+
         if self.resource_server_url:
             payload = CreateResourceFromTemplateBody(
                 resource_name=resource_name,
@@ -1313,7 +1325,7 @@ class ResourceClient:
                 add_to_database=add_to_database,
             ).model_dump(mode="json")
             response = requests.post(
-                f"{self.resource_server_url}templates/{template_name}/create_resource",
+                f"{self.resource_server_url}template/{template_name}/create_resource",
                 json=payload,
                 timeout=10,
             )
@@ -1322,13 +1334,14 @@ class ResourceClient:
             resource.resource_url = (
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
-            return resource
+            return self._wrap_resource(resource)
+
+        # Local-only mode
         template_data = self.local_templates.get(template_name)
         if not template_data:
             raise ValueError(f"Template '{template_name}' not found")
 
         # Check required overrides
-        overrides = overrides or {}
         missing_required = [
             field
             for field in template_data["required_overrides"]
