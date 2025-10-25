@@ -66,6 +66,7 @@ config:
   uvicorn_kwargs: {}
   device_number: 0
   speed: 50.0
+  wait_time: 2.0
 config_schema:
   description: Configuration for the robot arm node module.
   properties:
@@ -136,5 +137,9 @@ config_schema:
       - type: 'null'
       default: 50.0
       title: Speed
+    wait_time:
+      default: 2.0
+      title: Wait Time
+      type: number
   title: RobotArmConfig
   type: object

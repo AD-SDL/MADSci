@@ -201,28 +201,6 @@ class TestExperimentApplicationInit:
             assert app.logger is not None
             assert app.event_client is not None
 
-    def test_init_with_experiment_server_url(
-        self, node_definition: NodeDefinition
-    ) -> None:
-        """Test initialization with experiment server URL."""
-        server_url = AnyUrl("http://localhost:8002")
-
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            LocationClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
-            app = TestExperimentApplication(
-                node_definition=node_definition,
-                experiment_server_url=server_url,
-            )
-
-            assert app.experiment_client.experiment_server_url == server_url
-
     def test_init_with_experiment_design_dict(
         self, node_definition: NodeDefinition, experiment_design: ExperimentDesign
     ) -> None:
@@ -877,7 +855,6 @@ class TestClassMethods:
 
     def test_start_new(self, experiment_design: ExperimentDesign) -> None:
         """Test start_new class method."""
-        server_url = AnyUrl("http://localhost:8002")
 
         # Mock the experiment client to return a mock experiment
         mock_experiment_client = Mock()
@@ -940,14 +917,11 @@ class TestClassMethods:
             mock_data_client_class.return_value = Mock()
 
             app = TestExperimentApplication.start_new(
-                experiment_server_url=server_url,
                 experiment_design=experiment_design,
             )
 
         # Verify the experiment client was instantiated with the correct URL
-        mock_experiment_client_class.assert_called_once_with(
-            experiment_server_url=server_url
-        )
+        mock_experiment_client_class.assert_called_once_with()
 
         # Verify the experiment was started and the app has the right state
         assert app.experiment == mock_experiment
@@ -955,7 +929,6 @@ class TestClassMethods:
 
     def test_continue_experiment(self, mock_experiment: Experiment) -> None:
         """Test continue_experiment class method."""
-        server_url = AnyUrl("http://localhost:8002")
 
         # Mock the experiment client
         mock_experiment_client = Mock()
@@ -990,13 +963,10 @@ class TestClassMethods:
 
             app = TestExperimentApplication.continue_experiment(
                 experiment=mock_experiment,
-                experiment_server_url=server_url,
             )
 
         # Verify the experiment client was instantiated with the correct URL
-        mock_experiment_client_class.assert_called_once_with(
-            experiment_server_url=server_url
-        )
+        mock_experiment_client_class.assert_called_once_with()
 
         # Verify the experiment was continued and the app has the right state
         assert app.experiment == mock_experiment

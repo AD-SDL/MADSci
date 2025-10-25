@@ -37,3 +37,8 @@ def madsci_context(**overrides: dict[str, Any]) -> Generator[None, MadsciContext
 def get_current_madsci_context() -> MadsciContext:
     """Returns the current MadsciContext object."""
     return _current_madsci_context.get()
+
+
+def set_current_madsci_context(context: MadsciContext) -> None:
+    """Sets the current MadsciContext object."""
+    _current_madsci_context.set(context)

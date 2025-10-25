@@ -8,17 +8,12 @@ You can start the example lab using docker (compose) and the provided `compose.y
 
 ### Starting the Example Lab
 
-From the root of the repository, run:
+From the root of the repository, assuming either Docker Desktop or Rancher Desktop is running, run:
 
 ```sh
 docker compose up
 ```
 
-Or, if you are using Podman:
-
-```sh
-podman-compose up
-```
 
 This will start all the services defined in the compose file. You can then access and interact with the example lab as described in the following sections.
 

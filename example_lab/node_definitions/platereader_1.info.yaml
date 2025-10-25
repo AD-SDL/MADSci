@@ -18,16 +18,15 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
-  - get_location
   - lock
   - reset
   - shutdown
   - unlock
 node_url: null
 actions:
-  read_plate:
-    name: read_plate
-    description: Run a command on the plate reader.
+  read_well:
+    name: read_well
+    description: Read a well on the plate reader.
     args: {}
     locations: {}
     files: {}
@@ -51,9 +50,9 @@ actions:
     accepts_var_kwargs: false
     var_args_schema: null
     var_kwargs_schema: null
-  create_plate_file:
-    name: create_plate_file
-    description: Run a command on the plate reader.
+  read_plate:
+    name: read_plate
+    description: Read a plate on the plate reader.
     args: {}
     locations: {}
     files: {}
@@ -68,8 +67,8 @@ actions:
     accepts_var_kwargs: false
     var_args_schema: null
     var_kwargs_schema: null
-  create_plate_files:
-    name: create_plate_files
+  read_plates:
+    name: read_plates
     description: Run a command on the plate reader.
     args: {}
     locations: {}
@@ -97,8 +96,10 @@ config:
   state_update_interval: 2.0
   node_url: http://localhost:2003/
   uvicorn_kwargs: {}
+  device_number: 0
+  wait_time: 2.0
 config_schema:
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: Configuration for the plate reader node module.
   properties:
     node_definition:
       anyOf:
@@ -155,5 +156,13 @@ config_schema:
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
-  title: RestNodeConfig
+    device_number:
+      default: 0
+      title: Device Number
+      type: integer
+    wait_time:
+      default: 2.0
+      title: Wait Time
+      type: number
+  title: PlateReaderConfig
   type: object
