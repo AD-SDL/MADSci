@@ -22,6 +22,8 @@ class RobotArmConfig(RestNodeConfig):
     """The device number of the robot arm."""
     speed: Optional[float] = Field(default=50.0, ge=1.0, le=100.0)
     """The speed of the robot arm, in mm/s."""
+    wait_time: float = 2.0
+    """Time to wait while running an action, in seconds."""
 
 
 class RobotArmInterface:
@@ -114,19 +116,20 @@ class RobotArmNode(RestNode):
             speed = self.config.speed
         speed = max(1.0, min(100.0, speed))  # Clamp speed to 1-100 mm/s
         if self.resource_client:
+            target_resource = self.resource_client.get_resource(target.resource_id)
+            if len(target_resource.children) + 1 > target_resource.capacity:
+                return ActionFailed(
+                    errors=[
+                        Error(message=f"Target location {target.resource_id} is full")
+                    ]
+                )
             try:
                 popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
             except Exception as e:
-                raise ValueError("No plate in source!") from e
+                return ActionFailed(errors=[Error(message=str(e))])
             self.resource_client.push(
                 resource=self.gripper.resource_id, child=popped_plate
             )
-
-        try:
-            popped_plate, _ = self.resource_client.pop(resource=source.resource_id)
-        except Exception:
-            return ActionFailed(errors=[Error(message="No plate in source!")])
-        self.resource_client.push(resource=self.gripper.resource_id, child=popped_plate)
 
         time.sleep(100 / speed)  # Simulate time taken to move
 

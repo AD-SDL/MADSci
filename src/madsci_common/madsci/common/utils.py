@@ -222,7 +222,7 @@ def new_name_str(prefix: str = "") -> str:
         "elk",
     ]
 
-    name = f"{random.choice(adjectives)}_{random.choice(nouns)}"  # noqa: S311
+    name = f"{random.choice(adjectives)}_{random.choice(nouns)}"
     if prefix:
         name = f"{prefix}_{name}"
     return name

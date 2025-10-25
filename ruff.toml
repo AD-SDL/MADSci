@@ -103,6 +103,7 @@ ignore = [
     "UP045", # Ignoring errors for Unions
     "UP007", # Ignoring errors for Optional
     "UP035", # Ignoring errors for typing types such as Dict or List
+    "S311",  # Ignoring use of standard random number generators
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.

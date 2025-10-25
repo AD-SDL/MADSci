@@ -14,6 +14,7 @@ license = {text = "MIT"}
 dependencies = [
   "madsci.common",
   "madsci.client",
+  "nbconvert"
 ]
 
 [project.urls]
