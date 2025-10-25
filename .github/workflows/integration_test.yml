@@ -32,6 +32,8 @@ jobs:
       - name: Ensure .madsci directory exists
         run: mkdir -p ./.madsci
       - name: Build and start example lab services, and wait for startup
-        run: docker compose up --build -d && sleep 240
+        run: docker compose up --build -d && sleep 30
+      - name: logs
+        run: docker compose logs lab_manager
       - name: Run a command in the lab manager container
         run: timeout 10m docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
