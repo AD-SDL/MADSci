@@ -201,27 +201,6 @@ class TestExperimentApplicationInit:
             assert app.logger is not None
             assert app.event_client is not None
 
-    def test_init_with_experiment_server_url(
-        self, node_definition: NodeDefinition
-    ) -> None:
-        """Test initialization with experiment server URL."""
-        server_url = AnyUrl("http://localhost:8002")
-
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            LocationClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
-            app = TestExperimentApplication(
-                node_definition=node_definition,
-            )
-
-            assert app.experiment_client.experiment_server_url == server_url
-
     def test_init_with_experiment_design_dict(
         self, node_definition: NodeDefinition, experiment_design: ExperimentDesign
     ) -> None:

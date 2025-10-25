@@ -122,12 +122,12 @@ class ExperimentApplication(RestNode):
     @classmethod
     def start_new(
         cls,
-        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
+        lab_server_url: Optional[Union[str, AnyUrl]] = None,
         experiment_design: Optional[ExperimentDesign] = None,
     ) -> "ExperimentApplication":
         """Create a new experiment application with a new experiment."""
         self = cls(
-            experiment_server_url=experiment_server_url,
+            lab_server_url=lab_server_url,
             experiment_design=experiment_design,
         )
         self.start_experiment_run()
