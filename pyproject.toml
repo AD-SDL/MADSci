@@ -1,6 +1,6 @@
 [project]
 name = "madsci"
-version = "0.5.0-rc.3"
+version = "0.5.0"
 dependencies = ["pre-commit>=4.3.0"]
 readme="README.md"
 requires-python = ">=3.9.1"
