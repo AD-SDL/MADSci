@@ -25,8 +25,8 @@ class MongoDBMigrationSettings(
 ):
     """Configuration settings for MongoDB migration operations."""
 
-    mongo_db_url: str = Field(
-        default="mongodb://localhost:27017",
+    mongo_db_url: AnyUrl = Field(
+        default=AnyUrl("mongodb://localhost:27017"),
         title="MongoDB URL",
         description="MongoDB connection URL (e.g., mongodb://localhost:27017). "
         "Defaults to localhost MongoDB instance.",
@@ -142,7 +142,7 @@ class MongoDBMigrator:
             logger: Optional logger instance
         """
         self.settings = settings
-        self.db_url = settings.mongo_db_url
+        self.db_url = str(settings.mongo_db_url)
         self.database_name = settings.database
         self.schema_file_path = settings.get_effective_schema_file_path()
         self.logger = logger or EventClient()
@@ -162,7 +162,7 @@ class MongoDBMigrator:
     @property
     def parsed_db_url(self) -> AnyUrl:
         """Parse MongoDB connection URL using pydantic AnyUrl."""
-        return AnyUrl(self.db_url)
+        return self.settings.mongo_db_url
 
     def __del__(self) -> None:
         """Cleanup MongoDB client and version checker resources."""
@@ -435,17 +435,17 @@ class MongoDBMigrator:
     def run_migration(self, target_version: Optional[str] = None) -> None:
         """Run the complete migration process."""
         try:
-            # Use MADSci version as target if not specified
+            # Use expected schema version as target if not specified
             if target_version is None:
-                target_version = self.version_checker.get_current_madsci_version()
+                target_version = str(self.version_checker.get_expected_schema_version())
 
-            current_madsci_version = self.version_checker.get_current_madsci_version()
+            expected_schema_version = self.version_checker.get_expected_schema_version()
             current_db_version = self.version_checker.get_database_version()
 
             self.logger.info(
                 f"Starting migration of {self.database_name} to version {target_version}"
             )
-            self.logger.info(f"Current MADSci version: {current_madsci_version}")
+            self.logger.info(f"Expected schema version: {expected_schema_version}")
             self.logger.info(
                 f"Current database version: {current_db_version or 'None'}"
             )
@@ -458,7 +458,7 @@ class MongoDBMigrator:
                 self.apply_schema_migrations()
 
                 # Record new version in our tracking system
-                migration_notes = f"MongoDB migration from {current_db_version or 'unversioned'} to {target_version}"
+                migration_notes = f"MongoDB schema migration from {current_db_version or 'unversioned'} to {target_version}"
                 self.version_checker.record_version(target_version, migration_notes)
 
                 self.logger.info(
@@ -494,11 +494,11 @@ def handle_migration_commands(
     """Handle different migration command options."""
     if settings.check_version:
         # Just check version compatibility
-        needs_migration, madsci_version, db_version = (
+        needs_migration, expected_schema_version, db_version = (
             version_checker.is_migration_needed()
         )
 
-        logger.log_warning(f"MADSci version: {madsci_version}")
+        logger.log_warning(f"Expected schema version: {expected_schema_version}")
         logger.log_warning(f"Database version: {db_version or 'None'}")
         logger.log_warning(f"Migration needed: {needs_migration}")
 

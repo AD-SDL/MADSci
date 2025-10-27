@@ -1,10 +1,12 @@
-"""Pytest unit tests for the MongoDBVersionChecker with semantic versioning."""
+"""Pytest unit tests for the MongoDBVersionChecker with schema versioning."""
 
 import json
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
+from pydantic_extra_types.semantic_version import SemanticVersion
 
 
 @pytest.fixture
@@ -13,7 +15,7 @@ def temp_schema_file(tmp_path):
     schema_file = tmp_path / "schema.json"
     schema_content = {
         "database": "test_db",
-        "version": "1.0.0",
+        "schema_version": "1.0.0",
         "description": "Test schema",
         "collections": {
             "test_collection": {"description": "Test collection", "indexes": []},
@@ -53,50 +55,62 @@ def mock_mongo_client():
         yield mock_client, mock_db, mock_collection
 
 
-class TestSemanticVersionComparison:
-    """Test semantic version comparison logic in is_migration_needed."""
+class TestSchemaVersionComparison:
+    """Test schema version comparison logic in is_migration_needed."""
 
-    def test_no_migration_needed_for_patch_version_difference(
+    def test_migration_needed_for_patch_version_difference(
         self, mock_mongo_client, temp_schema_file
     ):
-        """Test that patch version differences don't trigger migration."""
+        """Test that patch version differences DO trigger migration (schema versions must match exactly)."""
         _mock_client, _mock_db, mock_collection = mock_mongo_client
 
-        # Database has 1.0.0, MADSci has 1.0.1
+        # Database has 1.0.0, Schema expects 1.0.1
         mock_collection.find_one.return_value = {"version": "1.0.0"}
+
+        # Update temp schema file to have version 1.0.1
+        schema_path = Path(temp_schema_file)
+        schema_content = json.loads(schema_path.read_text())
+        schema_content["schema_version"] = "1.0.1"
+        schema_path.write_text(json.dumps(schema_content))
 
         checker = MongoDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
-        with patch.object(checker, "get_current_madsci_version", return_value="1.0.1"):
-            needs_migration, madsci_version, db_version = checker.is_migration_needed()
+        needs_migration, expected_schema_version, db_version = (
+            checker.is_migration_needed()
+        )
 
-        assert needs_migration is False
-        assert madsci_version == "1.0.1"
-        assert db_version == "1.0.0"
+        assert needs_migration is True
+        assert expected_schema_version == SemanticVersion.parse("1.0.1")
+        assert db_version == SemanticVersion.parse("1.0.0")
 
-    def test_no_migration_needed_for_prerelease_version_difference(
+    def test_migration_needed_for_prerelease_version_difference(
         self, mock_mongo_client, temp_schema_file
     ):
-        """Test that pre-release version differences don't trigger migration."""
+        """Test that pre-release version differences DO trigger migration (schema versions must match exactly)."""
         _mock_client, _mock_db, mock_collection = mock_mongo_client
 
-        # Database has 1.0.0, MADSci has 1.0.0-rc1
+        # Database has 1.0.0, Schema expects 1.0.0-rc1
         mock_collection.find_one.return_value = {"version": "1.0.0"}
+
+        # Update temp schema file to have version 1.0.0-rc1
+        schema_path = Path(temp_schema_file)
+        schema_content = json.loads(schema_path.read_text())
+        schema_content["schema_version"] = "1.0.0-rc1"
+        schema_path.write_text(json.dumps(schema_content))
 
         checker = MongoDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
-        with patch.object(
-            checker, "get_current_madsci_version", return_value="1.0.0-rc1"
-        ):
-            needs_migration, madsci_version, db_version = checker.is_migration_needed()
+        needs_migration, expected_schema_version, db_version = (
+            checker.is_migration_needed()
+        )
 
-        assert needs_migration is False
-        assert madsci_version == "1.0.0-rc1"
-        assert db_version == "1.0.0"
+        assert needs_migration is True
+        assert expected_schema_version == SemanticVersion.parse("1.0.0-rc1")
+        assert db_version == SemanticVersion.parse("1.0.0")
 
     def test_migration_needed_for_minor_version_difference(
         self, mock_mongo_client, temp_schema_file
@@ -104,19 +118,26 @@ class TestSemanticVersionComparison:
         """Test that minor version differences trigger migration."""
         _mock_client, _mock_db, mock_collection = mock_mongo_client
 
-        # Database has 1.0.0, MADSci has 1.1.0
+        # Database has 1.0.0, Schema expects 1.1.0
         mock_collection.find_one.return_value = {"version": "1.0.0"}
+
+        # Update temp schema file to have version 1.1.0
+        schema_path = Path(temp_schema_file)
+        schema_content = json.loads(schema_path.read_text())
+        schema_content["schema_version"] = "1.1.0"
+        schema_path.write_text(json.dumps(schema_content))
 
         checker = MongoDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
-        with patch.object(checker, "get_current_madsci_version", return_value="1.1.0"):
-            needs_migration, madsci_version, db_version = checker.is_migration_needed()
+        needs_migration, expected_schema_version, db_version = (
+            checker.is_migration_needed()
+        )
 
         assert needs_migration is True
-        assert madsci_version == "1.1.0"
-        assert db_version == "1.0.0"
+        assert expected_schema_version == SemanticVersion.parse("1.1.0")
+        assert db_version == SemanticVersion.parse("1.0.0")
 
     def test_migration_needed_for_major_version_difference(
         self, mock_mongo_client, temp_schema_file
@@ -124,19 +145,26 @@ class TestSemanticVersionComparison:
         """Test that major version differences trigger migration."""
         _mock_client, _mock_db, mock_collection = mock_mongo_client
 
-        # Database has 1.0.0, MADSci has 2.0.0
+        # Database has 1.0.0, Schema expects 2.0.0
         mock_collection.find_one.return_value = {"version": "1.0.0"}
+
+        # Update temp schema file to have version 2.0.0
+        schema_path = Path(temp_schema_file)
+        schema_content = json.loads(schema_path.read_text())
+        schema_content["schema_version"] = "2.0.0"
+        schema_path.write_text(json.dumps(schema_content))
 
         checker = MongoDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
-        with patch.object(checker, "get_current_madsci_version", return_value="2.0.0"):
-            needs_migration, madsci_version, db_version = checker.is_migration_needed()
+        needs_migration, expected_schema_version, db_version = (
+            checker.is_migration_needed()
+        )
 
         assert needs_migration is True
-        assert madsci_version == "2.0.0"
-        assert db_version == "1.0.0"
+        assert expected_schema_version == SemanticVersion.parse("2.0.0")
+        assert db_version == SemanticVersion.parse("1.0.0")
 
     def test_no_migration_for_exact_version_match(
         self, mock_mongo_client, temp_schema_file
@@ -144,44 +172,52 @@ class TestSemanticVersionComparison:
         """Test that exact version matches don't trigger migration."""
         _mock_client, _mock_db, mock_collection = mock_mongo_client
 
-        # Database and MADSci both have 1.0.0
+        # Database and Schema both have 1.0.0
         mock_collection.find_one.return_value = {"version": "1.0.0"}
 
         checker = MongoDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
-        with patch.object(checker, "get_current_madsci_version", return_value="1.0.0"):
-            needs_migration, madsci_version, db_version = checker.is_migration_needed()
+        needs_migration, expected_schema_version, db_version = (
+            checker.is_migration_needed()
+        )
 
         assert needs_migration is False
-        assert madsci_version == "1.0.0"
-        assert db_version == "1.0.0"
+        assert expected_schema_version == SemanticVersion.parse("1.0.0")
+        assert db_version == SemanticVersion.parse("1.0.0")
 
-    def test_backward_compatibility_with_patch_versions(
+    def test_migration_needed_when_db_version_newer(
         self, mock_mongo_client, temp_schema_file
     ):
-        """Test backward compatibility: newer DB patch version with older MADSci."""
+        """Test that migration is needed when DB version is newer than expected schema version."""
         _mock_client, _mock_db, mock_collection = mock_mongo_client
 
-        # Database has 1.0.2, MADSci has 1.0.1
+        # Database has 1.0.2, Schema expects 1.0.1
         mock_collection.find_one.return_value = {"version": "1.0.2"}
+
+        # Update temp schema file to have version 1.0.1
+        schema_path = Path(temp_schema_file)
+        schema_content = json.loads(schema_path.read_text())
+        schema_content["schema_version"] = "1.0.1"
+        schema_path.write_text(json.dumps(schema_content))
 
         checker = MongoDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
-        with patch.object(checker, "get_current_madsci_version", return_value="1.0.1"):
-            needs_migration, madsci_version, db_version = checker.is_migration_needed()
+        needs_migration, expected_schema_version, db_version = (
+            checker.is_migration_needed()
+        )
 
-        assert needs_migration is False
-        assert madsci_version == "1.0.1"
-        assert db_version == "1.0.2"
+        assert needs_migration is True
+        assert expected_schema_version == SemanticVersion.parse("1.0.1")
+        assert db_version == SemanticVersion.parse("1.0.2")
 
-    def test_fallback_to_string_comparison_for_invalid_versions(
+    def test_fallback_for_invalid_db_versions(
         self, mock_mongo_client, temp_schema_file
     ):
-        """Test fallback to string comparison when semantic versioning fails."""
+        """Test behavior when database has invalid semantic version."""
         _mock_client, _mock_db, mock_collection = mock_mongo_client
 
         # Database has invalid semantic version
@@ -191,34 +227,40 @@ class TestSemanticVersionComparison:
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
-        with patch.object(checker, "get_current_madsci_version", return_value="1.0.0"):
-            needs_migration, madsci_version, db_version = checker.is_migration_needed()
+        needs_migration, expected_schema_version, db_version = (
+            checker.is_migration_needed()
+        )
 
-        # Should fall back to string comparison and trigger migration
+        # Should trigger migration due to version comparison failure (returns None on error)
         assert needs_migration is True
-        assert madsci_version == "1.0.0"
-        assert db_version == "invalid-version"
+        assert expected_schema_version == SemanticVersion.parse("1.0.0")
+        assert db_version is None
 
     def test_complex_prerelease_versions(self, mock_mongo_client, temp_schema_file):
         """Test complex pre-release version handling."""
         _mock_client, _mock_db, mock_collection = mock_mongo_client
 
-        # Database has 1.0.0-alpha.1, MADSci has 1.0.0-beta.2
+        # Database has 1.0.0-alpha.1, Schema expects 1.0.0-beta.2
         mock_collection.find_one.return_value = {"version": "1.0.0-alpha.1"}
+
+        # Update temp schema file to have version 1.0.0-beta.2
+        schema_path = Path(temp_schema_file)
+        schema_content = json.loads(schema_path.read_text())
+        schema_content["schema_version"] = "1.0.0-beta.2"
+        schema_path.write_text(json.dumps(schema_content))
 
         checker = MongoDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
-        with patch.object(
-            checker, "get_current_madsci_version", return_value="1.0.0-beta.2"
-        ):
-            needs_migration, madsci_version, db_version = checker.is_migration_needed()
+        needs_migration, expected_schema_version, db_version = (
+            checker.is_migration_needed()
+        )
 
-        # Pre-release differences should not trigger migration
-        assert needs_migration is False
-        assert madsci_version == "1.0.0-beta.2"
-        assert db_version == "1.0.0-alpha.1"
+        # Pre-release differences should trigger migration (exact match required)
+        assert needs_migration is True
+        assert expected_schema_version == SemanticVersion.parse("1.0.0-beta.2")
+        assert db_version == SemanticVersion.parse("1.0.0-alpha.1")
 
 
 class TestExistingFunctionality:
@@ -239,10 +281,13 @@ class TestExistingFunctionality:
                 "mongodb://localhost:27017", "test_db", temp_schema_file
             )
 
-            needs_migration, _madsci_version, db_version = checker.is_migration_needed()
+            needs_migration, expected_schema_version, db_version = (
+                checker.is_migration_needed()
+            )
 
             assert needs_migration is True
-            assert db_version == "NO_VERSION_TRACKING"
+            assert expected_schema_version == SemanticVersion.parse("1.0.0")
+            assert db_version == SemanticVersion(0, 0, 0)
 
     def test_migration_needed_for_nonexistent_database(self, temp_schema_file):
         """Test that non-existent databases trigger migration."""
@@ -259,7 +304,10 @@ class TestExistingFunctionality:
                 "mongodb://localhost:27017", "test_db", temp_schema_file
             )
 
-            needs_migration, _madsci_version, db_version = checker.is_migration_needed()
+            needs_migration, expected_schema_version, db_version = (
+                checker.is_migration_needed()
+            )
 
             assert needs_migration is True
+            assert expected_schema_version == SemanticVersion.parse("1.0.0")
             assert db_version is None

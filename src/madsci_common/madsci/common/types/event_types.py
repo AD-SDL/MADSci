@@ -62,8 +62,8 @@ class EventManagerSettings(
         description="Path to the event manager definition file to use.",
         default=Path("event.manager.yaml"),
     )
-    mongo_db_url: str = Field(
-        default="mongodb://localhost:27017",
+    mongo_db_url: AnyUrl = Field(
+        default=AnyUrl("mongodb://localhost:27017"),
         title="MongoDB URL",
         description="The URL of the MongoDB database used by the Event Manager.",
         validation_alias=AliasChoices("mongo_db_url", "EVENT_DB_URL", "db_url"),

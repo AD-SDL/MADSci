@@ -50,7 +50,7 @@ class WorkcellStateHandler:
         if mongo_connection is not None:
             self.db_connection = mongo_connection
         else:
-            self.db_client = MongoClient(self.workcell_settings.mongo_db_url)
+            self.db_client = MongoClient(str(self.workcell_settings.mongo_db_url))
             self.db_connection = self.db_client["workcell_manager"]
         self.archived_workflows = self.db_connection["archived_workflows"]
         self.workflow_definitions = self.db_connection["workflow_definitions"]

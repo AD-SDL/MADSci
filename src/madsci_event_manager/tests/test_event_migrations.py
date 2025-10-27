@@ -13,6 +13,7 @@ from madsci.common.mongodb_migration_tool import (
     main,
 )
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
+from pydantic_extra_types.semantic_version import SemanticVersion
 
 
 @pytest.fixture
@@ -26,7 +27,7 @@ def temp_event_schema():
         event_manager_dir.mkdir(parents=True)
         event_schema = {
             "database": "madsci_events",
-            "version": "1.0.0",
+            "schema_version": "1.0.0",
             "description": "Schema definition for MADSci Event Manager MongoDB",
             "collections": {
                 "events": {"description": "Main events collection", "indexes": []},
@@ -84,7 +85,7 @@ def test_event_version_checker_detects_missing_version_tracking():
         mock_client.return_value = mock_client_instance
 
         schema_file = Path("event_schema.json")
-        schema_file.write_text(json.dumps({"version": "1.0.0"}))
+        schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         try:
             checker = MongoDBVersionChecker(
@@ -92,7 +93,7 @@ def test_event_version_checker_detects_missing_version_tracking():
             )
 
             db_version = checker.get_database_version()
-            assert db_version == "NO_VERSION_TRACKING"
+            assert db_version == SemanticVersion(0, 0, 0)
 
             needs_migration, _, _ = checker.is_migration_needed()
             assert needs_migration is True
@@ -120,19 +121,15 @@ def test_event_version_checker_auto_initializes_fresh_database():
         mock_collection.find_one.return_value = None
 
         schema_file = Path("event_schema.json")
-        schema_file.write_text(json.dumps({"version": "1.0.0"}))
+        schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         try:
             checker = MongoDBVersionChecker(
                 "mongodb://localhost:27017", "madsci_events", str(schema_file)
             )
 
-            # Mock the current MADSci version
-            with patch.object(
-                checker, "get_current_madsci_version", return_value="0.5.0rc3"
-            ):
-                # This should auto-initialize without raising an error
-                checker.validate_or_fail()
+            # This should auto-initialize without raising an error
+            checker.validate_or_fail()
 
             # Verify that create_schema_versions_collection was called
             mock_collection.create_index.assert_called()
@@ -154,7 +151,7 @@ def test_event_version_checker_still_requires_migration_for_existing_db():
         mock_client.return_value = mock_client_instance
 
         schema_file = Path("event_schema.json")
-        schema_file.write_text(json.dumps({"version": "1.0.0"}))
+        schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         try:
             checker = MongoDBVersionChecker(
@@ -179,7 +176,7 @@ def test_event_backup_only_command(mock_migrator_class):
     """Test backup only command for events database"""
     # Create a temporary schema file for testing
     schema_file = Path("temp_schema.json")
-    schema_file.write_text(json.dumps({"version": "1.0.0"}))
+    schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
     mock_migrator = Mock()
     backup_dir = Path(tempfile.gettempdir()) / "madsci_events_backup"
@@ -194,7 +191,7 @@ def test_event_backup_only_command(mock_migrator_class):
             schema_dir = temp_dir / "madsci" / "event_manager"
             schema_dir.mkdir(parents=True, exist_ok=True)
             temp_schema = schema_dir / "schema.json"
-            temp_schema.write_text(json.dumps({"version": "1.0.0"}))
+            temp_schema.write_text(json.dumps({"schema_version": "1.0.0"}))
 
             original_cwd = Path.cwd()
             os.chdir(temp_dir)
@@ -221,7 +218,7 @@ def test_event_backup_creation(mock_subprocess):
     mock_subprocess.return_value = mock_result
 
     schema_file = Path("event_schema.json")
-    schema_file.write_text(json.dumps({"version": "1.0.0"}))
+    schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
     try:
         settings = MongoDBMigrationSettings(
@@ -251,7 +248,7 @@ def test_event_collection_creation(mock_mongo_client_events):  # noqa
     """Test events collection creation during migration"""
     schema_file = Path("event_schema.json")
     schema_content = {
-        "version": "1.0.0",
+        "schema_version": "1.0.0",
         "collections": {"events": {"indexes": []}, "schema_versions": {"indexes": []}},
     }
     schema_file.write_text(json.dumps(schema_content))
@@ -297,7 +294,7 @@ def test_event_check_version_command(mock_migrator_class):
         schema_dir = temp_dir / "madsci" / "event_manager"
         schema_dir.mkdir(parents=True, exist_ok=True)
         temp_schema = schema_dir / "schema.json"
-        temp_schema.write_text(json.dumps({"version": "1.0.0"}))
+        temp_schema.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         original_cwd = Path.cwd()
         os.chdir(temp_dir)
@@ -312,8 +309,8 @@ def test_event_check_version_command(mock_migrator_class):
     mock_migrator.run_migration.assert_not_called()
 
 
-def test_event_version_mismatch_detection():
-    """Test detection of version mismatches in events database (major/minor versions)"""
+def test_event_schema_version_mismatch_detection():
+    """Test detection of schema version mismatches in events database (major/minor versions)"""
     with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
@@ -329,26 +326,23 @@ def test_event_version_mismatch_detection():
         mock_client.return_value = mock_client_instance
 
         schema_file = Path("event_schema.json")
-        schema_file.write_text(json.dumps({"version": "1.0.0"}))
+        schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         try:
             checker = MongoDBVersionChecker(
                 "mongodb://localhost:27017", "madsci_events", str(schema_file)
             )
 
-            # Mock MADSci version to be 1.0.0 (minor version difference from DB 0.9.0)
-            with patch.object(
-                checker, "get_current_madsci_version", return_value="1.0.0"
-            ):
-                needs_migration, _, db_version = checker.is_migration_needed()
-                assert needs_migration is True
-                assert db_version == "0.9.0"
+            # Schema version is 1.0.0 (minor version difference from DB 0.9.0)
+            needs_migration, _, db_version = checker.is_migration_needed()
+            assert needs_migration is True
+            assert db_version == "0.9.0"
         finally:
             schema_file.unlink()
 
 
-def test_event_patch_version_compatibility():
-    """Test that patch version differences don't trigger migration in events database"""
+def test_event_patch_version_differences():
+    """Test that patch version differences trigger migration in events database (schema versions must match exactly)"""
     with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
@@ -364,20 +358,17 @@ def test_event_patch_version_compatibility():
         mock_client.return_value = mock_client_instance
 
         schema_file = Path("event_schema.json")
-        schema_file.write_text(json.dumps({"version": "1.0.0"}))
+        schema_file.write_text(json.dumps({"schema_version": "1.0.1"}))
 
         try:
             checker = MongoDBVersionChecker(
                 "mongodb://localhost:27017", "madsci_events", str(schema_file)
             )
 
-            # Mock MADSci version to be 1.0.1 (patch version difference from DB 1.0.0)
-            with patch.object(
-                checker, "get_current_madsci_version", return_value="1.0.1"
-            ):
-                needs_migration, _, db_version = checker.is_migration_needed()
-                assert needs_migration is False
-                assert db_version == "1.0.0"
+            # Schema version is 1.0.1 (patch version difference from DB 1.0.0)
+            needs_migration, _, db_version = checker.is_migration_needed()
+            assert needs_migration is True  # Should need migration since 1.0.1 != 1.0.0
+            assert db_version == SemanticVersion.parse("1.0.0")
         finally:
             schema_file.unlink()
 
@@ -405,7 +396,7 @@ def test_event_restore_command(mock_migrator_class):
         schema_dir = temp_dir / "madsci" / "event_manager"
         schema_dir.mkdir(parents=True, exist_ok=True)
         temp_schema = schema_dir / "schema.json"
-        temp_schema.write_text(json.dumps({"version": "1.0.0"}))
+        temp_schema.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         original_cwd = Path.cwd()
         os.chdir(temp_dir)
@@ -430,7 +421,7 @@ def test_event_schema_file_detection():
         event_manager_dir = temp_path / "madsci" / "event_manager"
         event_manager_dir.mkdir(parents=True)
         schema_file = event_manager_dir / "schema.json"
-        schema_file.write_text(json.dumps({"version": "1.0.0"}))
+        schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         original_cwd = Path.cwd()
         os.chdir(temp_path)

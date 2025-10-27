@@ -210,8 +210,8 @@ class WorkcellManagerSettings(
         title="scheduler",
         description="Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use",
     )
-    mongo_db_url: Optional[str] = Field(
-        default="mongodb://localhost:27017",
+    mongo_db_url: Optional[AnyUrl] = Field(
+        default=AnyUrl("mongodb://localhost:27017"),
         title="MongoDB URL",
         description="The URL for the MongoDB database.",
         validation_alias=AliasChoices(
