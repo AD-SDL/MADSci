@@ -40,7 +40,7 @@ mkdir -p /home/${CONTAINER_USER}/.madsci/logs
 chown $USER_ID:$GROUP_ID /home/${CONTAINER_USER} || true
 chown $USER_ID:$GROUP_ID /home/${CONTAINER_USER}/.madsci || true
 chown $USER_ID:$GROUP_ID /home/${CONTAINER_USER}/.madsci/logs || true
-
+chown -R $USER_ID:$GROUP_ID /home/${CONTAINER_USER}/MADSci || true
 
 
 # *Run the container command as the specified user

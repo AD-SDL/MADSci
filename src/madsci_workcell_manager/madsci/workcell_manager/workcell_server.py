@@ -3,6 +3,7 @@
 import json
 import traceback
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, Optional, Union
 
 from classy_fastapi import get, post
@@ -12,6 +13,7 @@ from madsci.client.data_client import DataClient
 from madsci.client.location_client import LocationClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
@@ -75,6 +77,62 @@ class WorkcellManager(
         """Initialize manager-specific components."""
         super().initialize(**kwargs)
 
+        # Skip version validation if external mongo_connection was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self.mongo_connection is not None:
+            # External connection provided, likely in test context - skip version validation
+            self.logger.info(
+                "External mongo_connection provided, skipping MongoDB version validation"
+            )
+            # Continue with the rest of initialization (ownership, state handler, clients)
+            global_ownership_info.workcell_id = self.definition.manager_id
+            global_ownership_info.manager_id = self.definition.manager_id
+
+            # Initialize state handler
+            self.state_handler = WorkcellStateHandler(
+                self.definition,
+                workcell_settings=self.settings,
+                redis_connection=self.redis_connection,
+                mongo_connection=self.mongo_connection,
+            )
+
+            # Initialize clients
+            context = get_current_madsci_context()
+            self.data_client = DataClient(context.data_server_url)
+            self.location_client = LocationClient(context.location_server_url)
+            return
+
+        # DATABASE VERSION VALIDATION - MongoDB version checking
+        self.logger.info("Validating MongoDB schema version...")
+        version_checker = None
+        try:
+            # Get schema file path relative to this module
+            schema_file_path = Path(__file__).parent / "schema.json"
+
+            version_checker = MongoDBVersionChecker(
+                db_url=self.settings.mongo_url or "mongodb://localhost:27017",
+                database_name="workcell_manager",
+                schema_file_path=str(schema_file_path),
+                logger=self.logger,
+            )
+            version_checker.validate_or_fail()
+            self.logger.info("MongoDB version validation completed successfully")
+        except RuntimeError as e:
+            if "needs version tracking initialization" in str(e):
+                self.logger.error(
+                    "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
+                    "The database exists but needs version tracking setup."
+                )
+            else:
+                self.logger.error(
+                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+                    "Please run the migration tool before starting the server."
+                )
+            self.logger.error(
+                "\nTo resolve this issue, run the migration tool and restart the server."
+            )
+            raise
+
         # Set up global ownership
         global_ownership_info.workcell_id = self.definition.manager_id
         global_ownership_info.manager_id = self.definition.manager_id
@@ -82,6 +140,7 @@ class WorkcellManager(
         # Initialize state handler
         self.state_handler = WorkcellStateHandler(
             self.definition,
+            workcell_settings=self.settings,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
         )

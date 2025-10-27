@@ -1,0 +1,27 @@
+{
+    "database": "madsci_events",
+    "schema_version": "1.0.0",
+    "description": "Schema definition for MADSci Event Manager MongoDB",
+    "collections": {
+      "events": {
+        "description": "Main events collection for storing all event data",
+        "indexes": []
+      },
+      "schema_versions": {
+        "description": "Version tracking for schema migrations",
+        "indexes": [
+          {
+            "keys": [["version", 1]],
+            "name": "version_unique",
+            "unique": true,
+            "description": "Unique constraint on version strings"
+          },
+          {
+            "keys": [["applied_at", -1]],
+            "name": "applied_at_desc",
+            "description": "Index for chronological version tracking"
+          }
+        ]
+      }
+    }
+  }

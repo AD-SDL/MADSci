@@ -1,12 +1,14 @@
 """Experiment Manager implementation using the new AbstractManagerBase class."""
 
 import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from classy_fastapi import get, post
 from fastapi import HTTPException
 from madsci.client.event_client import EventType
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
@@ -45,6 +47,50 @@ class ExperimentManager(
 
         # Initialize database connection
         self._setup_database()
+
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize manager-specific components."""
+        super().initialize(**kwargs)
+
+        # Skip version validation if external db_client or db_connection was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self._db_client is not None or self._db_connection is not None:
+            # External connection provided, likely in test context - skip version validation
+            self.logger.info(
+                "External db_client or db_connection provided, skipping MongoDB version validation"
+            )
+            return
+
+        # DATABASE VERSION VALIDATION - MongoDB version checking
+        self.logger.info("Validating MongoDB schema version...")
+        version_checker = None
+        try:
+            # Get schema file path relative to this module
+            schema_file_path = Path(__file__).parent / "schema.json"
+
+            version_checker = MongoDBVersionChecker(
+                db_url=self.settings.db_url,
+                database_name=self.settings.database_name,
+                schema_file_path=str(schema_file_path),
+                logger=self.logger,
+            )
+            version_checker.validate_or_fail()
+            self.logger.info("MongoDB version validation completed successfully")
+        except RuntimeError as e:
+            if "needs version tracking initialization" in str(e):
+                self.logger.error(
+                    "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
+                    "The database exists but needs version tracking setup."
+                )
+            else:
+                self.logger.error(
+                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+                    "Please run the migration tool before starting the server."
+                )
+            self.logger.error(
+                "\nTo resolve this issue, run the migration tool and restart the server."
+            )
+            raise
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""

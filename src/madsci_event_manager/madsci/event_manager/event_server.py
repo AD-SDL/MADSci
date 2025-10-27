@@ -1,6 +1,7 @@
 """Example Event Manager implementation using the new AbstractManagerBase class."""
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import pymongo
@@ -11,6 +12,7 @@ from fastapi.params import Body
 from fastapi.responses import Response
 from madsci.client.event_client import EventClient
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.event_types import (
     Event,
     EventLogLevel,
@@ -46,6 +48,50 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         # Initialize database connection and collections
         self._setup_database()
 
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize manager-specific components."""
+        super().initialize(**kwargs)
+
+        # Skip version validation if an external db_connection was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self._db_connection is not None:
+            # External connection provided, likely in test context - skip version validation
+            self.logger.info(
+                "External db_connection provided, skipping MongoDB version validation"
+            )
+            return
+
+        # DATABASE VERSION VALIDATION - MongoDB version checking
+        self.logger.info("Validating MongoDB schema version...")
+        version_checker = None
+        try:
+            # Get schema file path relative to this module
+            schema_file_path = Path(__file__).parent / "schema.json"
+
+            version_checker = MongoDBVersionChecker(
+                db_url=self.settings.db_url,
+                database_name=self.settings.database_name,
+                schema_file_path=str(schema_file_path),
+                logger=self.logger,
+            )
+            version_checker.validate_or_fail()
+            self.logger.info("MongoDB version validation completed successfully")
+        except RuntimeError as e:
+            if "needs version tracking initialization" in str(e):
+                self.logger.error(
+                    "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
+                    "The database exists but needs version tracking setup."
+                )
+            else:
+                self.logger.error(
+                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+                    "Please run the migration tool before starting the server."
+                )
+            self.logger.error(
+                "\nTo resolve this issue, run the migration tool and restart the server."
+            )
+            raise
+
     def setup_logging(self) -> None:
         """Setup logging for the event manager. Prevent recursive logging."""
         self._logger = EventClient(
@@ -57,7 +103,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         """Setup database connection and collections."""
         if self._db_connection is None:
             db_client = MongoClient(self.settings.db_url)
-            self._db_connection = db_client[self.settings.collection_name]
+            self._db_connection = db_client[self.settings.database_name]
 
         self.events = self._db_connection["events"]
 
