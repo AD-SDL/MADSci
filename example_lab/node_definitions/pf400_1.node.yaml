@@ -1,7 +1,0 @@
-node_name: pf400_1
-node_id: 01JQ9WC5N1CE6EVBNAJBE0WW1K
-node_description: A (fake) pf400 for testing purposes.
-node_type: device
-module_name: pf400
-module_version: 2.1.1
-capabilities: null

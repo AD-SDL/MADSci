@@ -1,7 +1,0 @@
-node_name: ot2_gamma
-node_id: 01JQF8FYR6N7FXT2QC2EJWQX94
-node_description: A (fake) OT2 for testing purposes.
-node_type: device
-module_name: ot2_module
-module_version: 2.1.1
-capabilities: null
