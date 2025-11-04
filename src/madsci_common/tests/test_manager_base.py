@@ -150,3 +150,91 @@ def test_manager_with_overridden_health() -> None:
     health_data = response.json()
     assert health_data["healthy"] is False
     assert health_data["description"] == "Custom health check failed"
+
+
+def test_root_endpoint_can_be_disabled() -> None:
+    """Test that the root definition endpoint can be disabled."""
+
+    class ManagerWithoutRootEndpoint(
+        AbstractManagerBase[TestManagerSettings, TestManagerDefinition]
+    ):
+        """Manager with disabled root endpoint."""
+
+        SETTINGS_CLASS = TestManagerSettings
+        DEFINITION_CLASS = TestManagerDefinition
+        ENABLE_ROOT_DEFINITION_ENDPOINT = False
+
+    definition = TestManagerDefinition(name="No Root Manager")
+    manager = ManagerWithoutRootEndpoint(definition=definition)
+    app = manager.create_server()
+    client = TestClient(app)
+
+    # Root endpoint should return 404
+    response = client.get("/")
+    assert response.status_code == 404
+
+    # But /definition should still work
+    response = client.get("/definition")
+    assert response.status_code == 200
+    definition_data = response.json()
+    assert definition_data["name"] == "No Root Manager"
+
+    # Health endpoint should still work
+    response = client.get("/health")
+    assert response.status_code == 200
+
+
+def test_root_endpoint_enabled_by_default() -> None:
+    """Test that the root definition endpoint is enabled by default."""
+
+    class DefaultManager(
+        AbstractManagerBase[TestManagerSettings, TestManagerDefinition]
+    ):
+        """Manager using default root endpoint setting."""
+
+        SETTINGS_CLASS = TestManagerSettings
+        DEFINITION_CLASS = TestManagerDefinition
+
+    definition = TestManagerDefinition(name="Default Manager")
+    manager = DefaultManager(definition=definition)
+    app = manager.create_server()
+    client = TestClient(app)
+
+    # Both root and definition endpoints should work
+    response = client.get("/")
+    assert response.status_code == 200
+    root_data = response.json()
+
+    response = client.get("/definition")
+    assert response.status_code == 200
+    definition_data = response.json()
+
+    assert root_data == definition_data
+    assert root_data["name"] == "Default Manager"
+
+
+def test_root_endpoint_can_be_explicitly_enabled() -> None:
+    """Test that the root definition endpoint can be explicitly enabled."""
+
+    class ManagerWithExplicitRootEndpoint(
+        AbstractManagerBase[TestManagerSettings, TestManagerDefinition]
+    ):
+        """Manager with explicitly enabled root endpoint."""
+
+        SETTINGS_CLASS = TestManagerSettings
+        DEFINITION_CLASS = TestManagerDefinition
+        ENABLE_ROOT_DEFINITION_ENDPOINT = True
+
+    definition = TestManagerDefinition(name="Explicit Root Manager")
+    manager = ManagerWithExplicitRootEndpoint(definition=definition)
+    app = manager.create_server()
+    client = TestClient(app)
+
+    # Both endpoints should work
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json()["name"] == "Explicit Root Manager"
+
+    response = client.get("/definition")
+    assert response.status_code == 200
+    assert response.json()["name"] == "Explicit Root Manager"
