@@ -38,8 +38,8 @@ from madsci.resource_manager.database_version_checker import (
     DatabaseVersionChecker,
 )
 from madsci.resource_manager.resource_interface import ResourceInterface
-from madsci.resource_manager.resource_tables import ResourceHistoryTable, ResourceTable
-from sqlalchemy import create_engine, inspect, text
+from madsci.resource_manager.resource_tables import ResourceHistoryTable
+from sqlalchemy import text
 from sqlalchemy.exc import NoResultFound
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -105,32 +105,27 @@ class ResourceManager(
         # DATABASE VERSION VALIDATION AND AUTO-INITIALIZATION
         self.logger.info("Validating database schema version...")
 
-        # Check if this is a fresh database that needs initialization
-        if self._is_fresh_database():
+        version_checker = DatabaseVersionChecker(self.settings.db_url, self.logger)
+
+        # Check if version tracking exists
+        if not version_checker.is_version_tracked():
+            # No version tracking - just log and continue
+            # User can manually run migration tool to enable tracking
             self.logger.info(
-                "Fresh database detected, performing auto-initialization..."
+                "No version tracking found - starting server without version validation. "
+                "To enable version tracking, run the migration tool manually."
             )
-            self._auto_initialize_fresh_database()
-            self.logger.info("Database auto-initialization completed successfully")
             return
 
         # Existing database - validate version compatibility
-        version_checker = None
         try:
-            version_checker = DatabaseVersionChecker(self.settings.db_url, self.logger)
             version_checker.validate_or_fail()
             self.logger.info("Database version validation completed successfully")
-        except RuntimeError as e:
-            if "needs version tracking initialization" in str(e):
-                self.logger.error(
-                    "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
-                    "The database exists but needs version tracking setup."
-                )
-            else:
-                self.logger.error(
-                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
-                    "Please run the migration tool before starting the server."
-                )
+        except RuntimeError:
+            self.logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
+                "Please run the migration tool before starting the server."
+            )
             self.logger.error(
                 "\nTo resolve this issue, run the migration tool and restart the server."
             )
@@ -230,73 +225,6 @@ class ResourceManager(
             health.description = f"Database connection failed: {e!s}"
 
         return health
-
-    def _is_fresh_database(self) -> bool:
-        """Check if this is a fresh database with no existing tables."""
-        try:
-            # Create a temporary engine to check database state
-            temp_engine = create_engine(self.settings.db_url)
-            try:
-                inspector = inspect(temp_engine)
-                existing_tables = inspector.get_table_names()
-
-                # Consider it fresh if no resource-related tables exist
-                resource_tables = [
-                    "resource",
-                    "resource_history",
-                    "madsci_schema_version",
-                ]
-                has_resource_tables = any(
-                    table in existing_tables for table in resource_tables
-                )
-
-                if not has_resource_tables:
-                    self.logger.info(
-                        "No existing resource tables found, treating as fresh database"
-                    )
-                    return True
-
-                self.logger.info(f"Found existing tables: {existing_tables}")
-                return False
-            finally:
-                temp_engine.dispose()
-
-        except Exception as e:
-            self.logger.warning(f"Could not check database tables: {e}")
-            return False
-
-    def _auto_initialize_fresh_database(self) -> None:
-        """Auto-initialize a fresh database with schema and version tracking."""
-        try:
-            self.logger.info("Creating database schema...")
-
-            # Create a temporary engine for schema creation if resource interface isn't ready
-            if self._resource_interface is None:
-                temp_engine = create_engine(self.settings.db_url)
-                try:
-                    # Create all tables using SQLModel metadata
-                    ResourceTable.metadata.create_all(temp_engine)
-                finally:
-                    temp_engine.dispose()
-            else:
-                # Use existing resource interface engine
-                ResourceTable.metadata.create_all(self._resource_interface.engine)
-
-            # Initialize version tracking
-            version_checker = DatabaseVersionChecker(self.settings.db_url, self.logger)
-            current_version = version_checker.get_current_madsci_version()
-            version_checker.create_version_table_if_not_exists()
-            version_checker.record_version(
-                current_version,
-                f"Auto-initialized fresh database with MADSci version {current_version}",
-            )
-            self.logger.info(
-                f"Database version tracking initialized with version {current_version}"
-            )
-
-        except Exception as e:
-            self.logger.error(f"Failed to auto-initialize fresh database: {e}")
-            raise RuntimeError(f"Database auto-initialization failed: {e}") from e
 
     @post("/resource/init")
     async def init_resource(
