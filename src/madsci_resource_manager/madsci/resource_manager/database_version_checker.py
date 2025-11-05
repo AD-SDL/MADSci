@@ -8,6 +8,7 @@ from typing import Optional
 
 from madsci.client.event_client import EventClient
 from madsci.resource_manager.resource_tables import SchemaVersionTable
+from pydantic_extra_types.semantic_version import SemanticVersion
 from sqlalchemy import inspect
 from sqlmodel import Session, create_engine, select
 
@@ -61,9 +62,60 @@ class DatabaseVersionChecker:
             )
             return None
 
+    def is_version_tracked(self) -> bool:
+        """
+        Check if version tracking exists in the database.
+
+        Returns True if the schema version table exists AND has at least one version record.
+        Returns False if the table doesn't exist or is empty.
+        """
+        try:
+            with Session(self.engine) as session:
+                inspector = inspect(self.engine)
+                if "madsci_schema_version" not in inspector.get_table_names():
+                    return False
+
+                # Check if table has any records
+                statement = select(SchemaVersionTable)
+                result = session.exec(statement).first()
+                return result is not None
+
+        except Exception:
+            return False
+
+    def versions_match(self, version1: str, version2: str) -> bool:
+        """
+        Check if two versions match based on major.minor comparison only.
+
+        Ignores patch version and pre-release/build metadata.
+
+        Examples:
+            1.0.0 == 1.0.1  -> True (same major.minor)
+            1.0.0 == 1.1.0  -> False (different minor)
+            1.0.0 == 2.0.0  -> False (different major)
+        """
+        try:
+            v1 = SemanticVersion.parse(version1)
+            v2 = SemanticVersion.parse(version2)
+
+            # Compare only major and minor versions
+            return v1.major == v2.major and v1.minor == v2.minor
+        except Exception as e:
+            self.logger.warning(
+                f"Could not parse versions for comparison ('{version1}', '{version2}'): {e}"
+            )
+            # If we can't parse, fall back to exact string comparison
+            return version1 == version2
+
     def is_migration_needed(self) -> tuple[bool, Optional[str], Optional[str]]:
         """
         Check if database migration is needed.
+
+        Migration is only needed if:
+        1. Version IS tracked in the database, AND
+        2. Major.minor version mismatch between MADSci and database
+
+        If version is NOT tracked, no migration is needed (server will start normally).
 
         Returns:
             tuple: (needs_migration, current_madsci_version, database_version)
@@ -71,21 +123,26 @@ class DatabaseVersionChecker:
         current_version = self.get_current_madsci_version()
         db_version = self.get_database_version()
 
-        if db_version is None:
-            # No version table exists, this is either a fresh install or pre-migration
-            self.logger.info(
-                "No database version found - migration needed for version tracking"
-            )
-            return True, current_version, None
-
-        if db_version != current_version:
+        # If version tracking doesn't exist, no migration needed
+        # User can manually run migration if they want to start tracking
+        if not self.is_version_tracked():
             self.logger.warning(
-                f"Version mismatch: MADSci v{current_version}, Database v{db_version}"
+                "No version tracking found - database will start without version validation. "
+                "Run migration tool manually to enable version tracking."
+            )
+            return False, current_version, None
+
+        # Version IS tracked - check for mismatch using major.minor comparison
+        if not self.versions_match(current_version, db_version):
+            self.logger.warning(
+                f"Version mismatch (major.minor): "
+                f"MADSci v{current_version}, Database v{db_version}"
             )
             return True, current_version, db_version
 
         self.logger.info(
-            f"Database version {db_version} matches MADSci version {current_version}"
+            f"Database version {db_version} is compatible with MADSci version {current_version} "
+            "(major.minor versions match)"
         )
         return False, current_version, db_version
 
