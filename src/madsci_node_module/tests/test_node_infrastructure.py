@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Annotated, Optional, Union, get_type_hints
 
+import pytest
 from fastapi.testclient import TestClient
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
@@ -38,6 +39,37 @@ from madsci_node_module.tests.test_rest_utils import (
     parametrize_admin_commands,
     validate_admin_command_response,
 )
+
+
+@pytest.fixture
+def dummy_node():
+    """Create a DummyNode instance for testing."""
+
+    class DummyNode(AbstractNode):
+        __test__ = False
+        config_model = TestNodeConfig
+
+        def __init__(self):
+            """Initialize without calling parent __init__ to avoid file dependencies."""
+            self.config = TestNodeConfig(test_required_param=42)
+            self.node_definition = NodeDefinition(
+                node_name="test_node",
+                node_id=new_ulid_str(),
+                module_name="test_module",
+                module_version="0.0.1",
+            )
+            self.node_info = NodeInfo.from_node_def_and_config(
+                self.node_definition, self.config
+            )
+            self.action_handlers = {}
+            self.action_history = {}
+            self.node_state = {}
+            self.logger = self.event_client = EventClient()
+            self.resource_client = ResourceClient(event_client=self.event_client)
+            self.data_client = DataClient()
+            self.node_status = NodeStatus(ready=True)
+
+    return DummyNode()
 
 
 class TestNodeLifecycle:
@@ -876,7 +908,7 @@ class TestAnnotatedPathInNode:
 class TestLocationArgumentDetection:
     """Test that Union types containing LocationArgument are properly detected as location arguments."""
 
-    def test_union_location_argument_detection(self) -> None:
+    def test_union_location_argument_detection(self, dummy_node) -> None:
         """Test that Union[LocationArgument, str] is properly detected as a location argument."""
         # Create test action definition
         action_def = ActionDefinition(
@@ -885,33 +917,6 @@ class TestLocationArgumentDetection:
             blocking=False,
         )
 
-        # Create a dummy node
-        class DummyNode(AbstractNode):
-            __test__ = False
-            config_model = TestNodeConfig
-
-            def __init__(self):
-                """Initialize without calling parent __init__ to avoid file dependencies."""
-                self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
-                self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
-                )
-                self.action_handlers = {}
-                self.action_history = {}
-                self.node_state = {}
-                self.logger = self.event_client = EventClient()
-                self.resource_client = ResourceClient(event_client=self.event_client)
-                self.data_client = DataClient()
-                self.node_status = NodeStatus(ready=True)
-
-        node = DummyNode()
-
         # Simulate a function signature with Union[LocationArgument, str]
         def test_func(target: Union[LocationArgument, str] = "default"):
             pass
@@ -919,7 +924,9 @@ class TestLocationArgumentDetection:
         signature = inspect.signature(test_func)
         type_hints = get_type_hints(test_func, include_extras=True)
 
-        node._parse_action_arg(action_def, signature, "target", type_hints["target"])
+        dummy_node._parse_action_arg(
+            action_def, signature, "target", type_hints["target"]
+        )
 
         # BUG: This currently fails because Union[LocationArgument, str] is not detected as location
         # The parameter gets added to args instead of locations
@@ -931,7 +938,7 @@ class TestLocationArgumentDetection:
         )
         assert isinstance(action_def.locations["target"], LocationArgumentDefinition)
 
-    def test_optional_location_argument_detection(self) -> None:
+    def test_optional_location_argument_detection(self, dummy_node) -> None:
         """Test that Optional[LocationArgument] is properly detected as a location argument."""
         # Create test action definition
         action_def = ActionDefinition(
@@ -940,33 +947,6 @@ class TestLocationArgumentDetection:
             blocking=False,
         )
 
-        # Create a dummy node
-        class DummyNode(AbstractNode):
-            __test__ = False
-            config_model = TestNodeConfig
-
-            def __init__(self):
-                """Initialize without calling parent __init__ to avoid file dependencies."""
-                self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
-                self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
-                )
-                self.action_handlers = {}
-                self.action_history = {}
-                self.node_state = {}
-                self.logger = self.event_client = EventClient()
-                self.resource_client = ResourceClient(event_client=self.event_client)
-                self.data_client = DataClient()
-                self.node_status = NodeStatus(ready=True)
-
-        node = DummyNode()
-
         # Simulate a function signature with Optional[LocationArgument]
         def test_func(target: Optional[LocationArgument] = None):
             pass
@@ -974,7 +954,9 @@ class TestLocationArgumentDetection:
         signature = inspect.signature(test_func)
         type_hints = get_type_hints(test_func, include_extras=True)
 
-        node._parse_action_arg(action_def, signature, "target", type_hints["target"])
+        dummy_node._parse_action_arg(
+            action_def, signature, "target", type_hints["target"]
+        )
 
         # BUG: This currently fails because Optional[LocationArgument] is not detected as location
         # after the Optional unwrapping, the type check fails
@@ -986,7 +968,7 @@ class TestLocationArgumentDetection:
         )
         assert isinstance(action_def.locations["target"], LocationArgumentDefinition)
 
-    def test_complex_union_location_argument_detection(self) -> None:
+    def test_complex_union_location_argument_detection(self, dummy_node) -> None:
         """Test that Union[str, LocationArgument, int] is properly detected as a location argument."""
         # Create test action definition
         action_def = ActionDefinition(
@@ -995,33 +977,6 @@ class TestLocationArgumentDetection:
             blocking=False,
         )
 
-        # Create a dummy node
-        class DummyNode(AbstractNode):
-            __test__ = False
-            config_model = TestNodeConfig
-
-            def __init__(self):
-                """Initialize without calling parent __init__ to avoid file dependencies."""
-                self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
-                self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
-                )
-                self.action_handlers = {}
-                self.action_history = {}
-                self.node_state = {}
-                self.logger = self.event_client = EventClient()
-                self.resource_client = ResourceClient(event_client=self.event_client)
-                self.data_client = DataClient()
-                self.node_status = NodeStatus(ready=True)
-
-        node = DummyNode()
-
         # Simulate a function signature with Union[str, LocationArgument, int]
         def test_func(target: Union[str, LocationArgument, int] = "default"):
             pass
@@ -1029,7 +984,9 @@ class TestLocationArgumentDetection:
         signature = inspect.signature(test_func)
         type_hints = get_type_hints(test_func, include_extras=True)
 
-        node._parse_action_arg(action_def, signature, "target", type_hints["target"])
+        dummy_node._parse_action_arg(
+            action_def, signature, "target", type_hints["target"]
+        )
 
         # Should be detected as a location argument because Union contains LocationArgument
         assert "target" in action_def.locations, (
@@ -1040,7 +997,7 @@ class TestLocationArgumentDetection:
         )
         assert isinstance(action_def.locations["target"], LocationArgumentDefinition)
 
-    def test_union_without_location_argument(self) -> None:
+    def test_union_without_location_argument(self, dummy_node) -> None:
         """Test that Union[str, int] without LocationArgument is NOT detected as a location argument."""
         # Create test action definition
         action_def = ActionDefinition(
@@ -1049,33 +1006,6 @@ class TestLocationArgumentDetection:
             blocking=False,
         )
 
-        # Create a dummy node
-        class DummyNode(AbstractNode):
-            __test__ = False
-            config_model = TestNodeConfig
-
-            def __init__(self):
-                """Initialize without calling parent __init__ to avoid file dependencies."""
-                self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
-                self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
-                )
-                self.action_handlers = {}
-                self.action_history = {}
-                self.node_state = {}
-                self.logger = self.event_client = EventClient()
-                self.resource_client = ResourceClient(event_client=self.event_client)
-                self.data_client = DataClient()
-                self.node_status = NodeStatus(ready=True)
-
-        node = DummyNode()
-
         # Simulate a function signature with Union[str, int] (no LocationArgument)
         def test_func(target: Union[str, int] = "default"):
             pass
@@ -1083,7 +1013,9 @@ class TestLocationArgumentDetection:
         signature = inspect.signature(test_func)
         type_hints = get_type_hints(test_func, include_extras=True)
 
-        node._parse_action_arg(action_def, signature, "target", type_hints["target"])
+        dummy_node._parse_action_arg(
+            action_def, signature, "target", type_hints["target"]
+        )
 
         # Should NOT be detected as a location argument because Union doesn't contain LocationArgument
         assert "target" not in action_def.locations, (

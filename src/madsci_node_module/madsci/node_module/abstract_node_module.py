@@ -479,7 +479,8 @@ class AbstractNode:
         """Check if a type hint contains LocationArgument either directly or within a Union.
 
         Args:
-            type_hint: The type hint to check (after extracting from Annotated/Optional)
+            type_hint: The type hint to check. Caller must unwrap Optional and Annotated types
+                      before calling this method.
 
         Returns:
             True if the type is LocationArgument or a Union containing LocationArgument
