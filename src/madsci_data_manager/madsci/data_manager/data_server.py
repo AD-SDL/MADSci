@@ -69,7 +69,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
 
         version_checker = MongoDBVersionChecker(
             db_url=str(self.settings.mongo_db_url),
-            database_name=self.settings.collection_name,
+            database_name=self.settings.database_name,
             schema_file_path=str(schema_file_path),
             logger=self.logger,
         )
@@ -88,8 +88,8 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         if self._db_client is None:
             self._db_client = MongoClient(str(self.settings.mongo_db_url))
 
-        datapoints_db = self._db_client["madsci_data"]
-        self.datapoints = datapoints_db["datapoints"]
+        datapoints_db = self._db_client[self.settings.database_name]
+        self.datapoints = datapoints_db[self.settings.collection_name]
 
     def _setup_object_storage(self) -> None:
         """Setup MinIO object storage client."""
