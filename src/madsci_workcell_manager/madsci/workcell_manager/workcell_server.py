@@ -102,36 +102,25 @@ class WorkcellManager(
             self.location_client = LocationClient(context.location_server_url)
             return
 
-        # DATABASE VERSION VALIDATION - MongoDB version checking
         self.logger.info("Validating MongoDB schema version...")
-        version_checker = None
-        try:
-            # Get schema file path relative to this module
-            schema_file_path = Path(__file__).parent / "schema.json"
 
-            version_checker = MongoDBVersionChecker(
-                db_url=self.settings.mongo_url or "mongodb://localhost:27017",
-                database_name="workcell_manager",
-                schema_file_path=str(schema_file_path),
-                logger=self.logger,
-            )
+        schema_file_path = Path(__file__).parent / "schema.json"
+
+        version_checker = MongoDBVersionChecker(
+            db_url=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+            schema_file_path=str(schema_file_path),
+            logger=self.logger,
+        )
+
+        try:
             version_checker.validate_or_fail()
             self.logger.info("MongoDB version validation completed successfully")
         except RuntimeError as e:
-            if "needs version tracking initialization" in str(e):
-                self.logger.error(
-                    "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
-                    "The database exists but needs version tracking setup."
-                )
-            else:
-                self.logger.error(
-                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
-                    "Please run the migration tool before starting the server."
-                )
             self.logger.error(
-                "\nTo resolve this issue, run the migration tool and restart the server."
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
             )
-            raise
+            raise e
 
         # Set up global ownership
         global_ownership_info.workcell_id = self.definition.manager_id
