@@ -1,4 +1,4 @@
-name: Integration Test
+name: Integration Tests
 
 on:
   push: # * Run for every push
@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - uses: extractions/setup-just@v2
+        name: Setup Just
       - name: example.env to .env
         run: cp .env.example .env
       - name: Set USER_ID and GROUP_ID in .env
@@ -33,7 +35,5 @@ jobs:
         run: mkdir -p ./.madsci
       - name: Build and start example lab services, and wait for startup
         run: docker compose up --build -d && sleep 30
-      - name: logs
-        run: docker compose logs lab_manager
-      - name: Run a command in the lab manager container
-        run: timeout 10m docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
+      - name: Run the experiment notebook
+        run: timeout 10m just integration_tests

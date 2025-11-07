@@ -475,6 +475,29 @@ class AbstractNode:
 
         return False
 
+    def _contains_location_argument(self, type_hint: Any) -> bool:
+        """Check if a type hint contains LocationArgument either directly or within a Union.
+
+        Args:
+            type_hint: The type hint to check. Caller must unwrap Optional and Annotated types
+                      before calling this method.
+
+        Returns:
+            True if the type is LocationArgument or a Union containing LocationArgument
+        """
+        # Direct LocationArgument type
+        if type_hint is LocationArgument:
+            return True
+
+        # Check for Union types that contain LocationArgument
+        origin = get_origin(type_hint)
+        if origin is Union:
+            args = get_args(type_hint)
+            # Check if any of the Union arguments is LocationArgument
+            return any(arg is LocationArgument for arg in args)
+
+        return False
+
     def _parse_action_arg(
         self,
         action_def: ActionDefinition,
@@ -543,7 +566,7 @@ class AbstractNode:
             )
             is_required = parameter_info.default == inspect.Parameter.empty
 
-            if annotated_as_location or type_hint is LocationArgument:
+            if annotated_as_location or self._contains_location_argument(type_hint):
                 action_def.locations[parameter_name] = LocationArgumentDefinition(
                     name=parameter_name,
                     required=is_required,

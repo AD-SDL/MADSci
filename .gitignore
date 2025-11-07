@@ -314,3 +314,4 @@ coverage.xml
 .coverage
 
 .mcp.json
+.claude/

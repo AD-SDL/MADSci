@@ -105,3 +105,80 @@ down:
 # Alias for docker compose
 dc *args:
   @docker compose {{args}}
+
+# Update version across all pyproject.toml and package.json files
+update-version version:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  # Validate version format (basic semver check)
+  if ! echo "{{version}}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$'; then
+    echo "❌ Error: Version '{{version}}' is not a valid semantic version (e.g., 1.0.0, 1.0.0-rc.1)"
+    exit 1
+  fi
+
+  echo "📦 Updating version to {{version}} across all files..."
+
+  # Store current version for comparison
+  current_version=$(grep '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+  echo "   Current version: $current_version"
+  echo "   New version: {{version}}"
+
+  if [ "$current_version" = "{{version}}" ]; then
+    echo "ℹ️  Version is already {{version}}, no changes needed"
+    exit 0
+  fi
+
+  # Update root pyproject.toml
+  sed -i.bak 's/^version = ".*"/version = "{{version}}"/' pyproject.toml
+
+  # Update all Python package pyproject.toml files
+  find src -name "pyproject.toml" -exec sed -i.bak 's/^version = ".*"/version = "{{version}}"/' {} \;
+
+  # Update UI package.json
+  if [ -f ui/package.json ]; then
+    sed -i.bak 's/"version": ".*"/"version": "{{version}}"/' ui/package.json
+  fi
+
+  # Clean up backup files
+  find . -name "*.bak" -delete
+
+  echo "✅ Updated version to {{version}} in:"
+  echo "  - Root pyproject.toml"
+  echo "  - All Python package pyproject.toml files ($(find src -name "pyproject.toml" | wc -l | xargs echo) files)"
+  echo "  - UI package.json"
+  echo ""
+
+  # Show changed files if in git repo
+  if git rev-parse --git-dir > /dev/null 2>&1; then
+    changed_files=$(git diff --name-only | grep -E "(pyproject\.toml|package\.json)" | head -20 || true)
+    if [ -n "$changed_files" ]; then
+      echo "📝 Files updated:"
+      echo "$changed_files" | sed 's/^/  - /'
+    fi
+  fi
+
+# Show current version across all files
+show-version:
+  #!/usr/bin/env bash
+  echo "📦 Current versions across the repository:"
+  echo ""
+  echo "Root:"
+  echo "  - pyproject.toml: $(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')"
+  echo ""
+  echo "Python packages:"
+  find src -name "pyproject.toml" | sort | while read file; do
+    version=$(grep '^version = ' "$file" | sed 's/version = "\(.*\)"/\1/')
+    package_name=$(grep '^name = ' "$file" | sed 's/name = "\(.*\)"/\1/')
+    echo "  - $package_name: $version"
+  done
+  echo ""
+  if [ -f ui/package.json ]; then
+    echo "UI:"
+    ui_version=$(grep '"version":' ui/package.json | sed 's/.*"version": "\(.*\)".*/\1/')
+    echo "  - package.json: $ui_version"
+  fi
+
+# Run the integration tests
+integration_tests:
+  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
