@@ -39,7 +39,13 @@ class Scheduler(AbstractScheduler):
 
                 if wf.status.current_step_index < len(wf.steps):
                     step = wf.steps[wf.status.current_step_index]
-                    updated_step = prepare_workflow_step(self.workcell_definition, self.state_handler, step, wf, location_client=self.location_client)
+                    updated_step = prepare_workflow_step(
+                        self.workcell_definition,
+                        self.state_handler,
+                        step,
+                        wf,
+                        location_client=self.location_client,
+                    )
                     self.check_workflow_status(wf, metadata)
                     self.location_checks(updated_step, metadata)
                     self.resource_checks(updated_step, metadata)

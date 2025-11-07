@@ -2,6 +2,7 @@
 
 import time
 from typing import Callable, Dict, Optional
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,16 @@ from madsci.common.types.node_types import NodeDefinition
 from madsci.node_module.abstract_node_module import AbstractNode
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
+
+
+@pytest.fixture(autouse=True)
+def setup_test_logging():
+    """Configure logging for tests to suppress event client output."""
+    # Mock the EventClient's log method to suppress output during tests
+    with patch("madsci.client.event_client.EventClient.log") as mock_log:
+        # Make the log method a no-op during tests
+        mock_log.return_value = None
+        yield
 
 
 @pytest.fixture

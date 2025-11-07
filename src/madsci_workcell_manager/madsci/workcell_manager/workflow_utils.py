@@ -183,7 +183,6 @@ def create_workflow(
     workflow_def: WorkflowDefinition,
     workcell: WorkcellManagerDefinition,
     state_handler: WorkcellStateHandler,
-    data_client: DataClient,
     json_inputs: Optional[dict[str, Any]] = None,
     file_input_paths: Optional[dict[str, str]] = None,
     location_client: Optional[LocationClient] = None,
@@ -227,11 +226,7 @@ def create_workflow(
     for step in workflow_def.steps:
         steps.append(
             prepare_workflow_step(
-                workcell,
-                state_handler,
-                step,
-                wf,
-                location_client=location_client
+                workcell, state_handler, step, wf, location_client=location_client
             )
         )
 
