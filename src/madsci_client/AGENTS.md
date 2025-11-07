@@ -10,7 +10,7 @@ The `madsci_client` package provides client libraries for interacting with all M
 
 ## Client Pattern
 All clients follow a consistent pattern:
-- Async/await support for all operations
+- Synchronous operations with result polling support for long-running tasks
 - Automatic request/response serialization using Pydantic models
 - Built-in error handling with MADSci exception types
 - Health check and service discovery capabilities
@@ -24,9 +24,9 @@ from madsci.client.experiment_client import ExperimentClient
 event_client = EventClient(base_url="http://localhost:8001")
 experiment_client = ExperimentClient(base_url="http://localhost:8002")
 
-# Use clients
-await event_client.log_event(event_data)
-experiments = await experiment_client.list_experiments()
+# Use clients (synchronous operations)
+event_client.log_event(event_data)
+experiments = experiment_client.list_experiments()
 ```
 
 ## Testing
