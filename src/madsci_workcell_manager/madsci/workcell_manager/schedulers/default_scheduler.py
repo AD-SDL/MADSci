@@ -11,7 +11,7 @@ from madsci.common.types.workflow_types import (
 )
 from madsci.workcell_manager.condition_checks import evaluate_condition_checks
 from madsci.workcell_manager.schedulers.scheduler import AbstractScheduler
-from madsci.workcell_manager.workflow_utils import insert_parameters
+from madsci.workcell_manager.workflow_utils import prepare_workflow_step
 
 
 class Scheduler(AbstractScheduler):
@@ -39,7 +39,7 @@ class Scheduler(AbstractScheduler):
 
                 if wf.status.current_step_index < len(wf.steps):
                     step = wf.steps[wf.status.current_step_index]
-                    updated_step = insert_parameters(step, wf.parameter_values)
+                    updated_step = prepare_workflow_step(self.workcell_definition, self.state_handler, step, wf, location_client=self.location_client)
                     self.check_workflow_status(wf, metadata)
                     self.location_checks(updated_step, metadata)
                     self.resource_checks(updated_step, metadata)
