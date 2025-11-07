@@ -1,5 +1,6 @@
 """MongoDB migration tool for MADSci databases with backup, schema management, and CLI."""
 
+import argparse
 import json
 import subprocess
 import sys
@@ -527,8 +528,59 @@ def main() -> None:
     logger = EventClient()
 
     try:
-        # Load settings from all sources (CLI, env vars, config files)
-        settings = MongoDBMigrationSettings()
+        # Parse command-line arguments
+        parser = argparse.ArgumentParser(
+            description="MADSci MongoDB migration tool for Event and Data Managers"
+        )
+        parser.add_argument(
+            "--db-url",
+            type=str,
+            help="MongoDB connection URL (e.g., mongodb://localhost:27017)",
+        )
+        parser.add_argument(
+            "--database",
+            type=str,
+            required=True,
+            help="Database name to migrate (e.g., madsci_events, madsci_data)",
+        )
+        parser.add_argument(
+            "--schema-file",
+            type=str,
+            help="Path to schema.json file (auto-detects if not provided)",
+        )
+        parser.add_argument(
+            "--target-version",
+            type=str,
+            help="Target version to migrate to (defaults to version in schema.json)",
+        )
+        parser.add_argument(
+            "--backup-only",
+            action="store_true",
+            help="Only create a backup, do not run migration",
+        )
+        parser.add_argument(
+            "--restore-from",
+            type=str,
+            help="Restore from specified backup directory instead of migrating",
+        )
+        parser.add_argument(
+            "--check-version",
+            action="store_true",
+            help="Only check version compatibility, do not migrate",
+        )
+
+        args = parser.parse_args()
+
+        # Create settings with CLI arguments (they override env vars and config files)
+        settings = MongoDBMigrationSettings(
+            mongo_db_url=args.db_url,
+            database=args.database,
+            schema_file=args.schema_file,
+            target_version=args.target_version,
+            backup_only=args.backup_only,
+            restore_from=args.restore_from,
+            check_version=args.check_version,
+        )
 
         logger.info(f"Using database: {settings.database}")
         logger.info(f"Using schema file: {settings.get_effective_schema_file_path()}")
