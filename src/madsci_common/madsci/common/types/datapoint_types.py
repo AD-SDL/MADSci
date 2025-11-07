@@ -260,8 +260,13 @@ class DataManagerSettings(
         description="Path to the data manager definition file to use.",
         default=Path("data.manager.yaml"),
     )
-    collection_name: str = Field(
+    database_name: str = Field(
         default="madsci_data",
+        title="Database Name",
+        description="The name of the MongoDB database where events are stored.",
+    )
+    collection_name: str = Field(
+        default="datapoints",
         title="Collection Name",
         description="The name of the MongoDB collection where data are stored.",
     )

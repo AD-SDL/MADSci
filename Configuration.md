@@ -73,7 +73,8 @@ Settings for the MADSci Data Manager.
 |---------------------------------------------|--------------------|-------------------------------|-----------------------------------------------------------|-------------------------------|
 | `DATA_SERVER_URL`                           | `AnyUrl`           | `"http://localhost:8004/"`    | The URL of the data manager server.                       | `"http://localhost:8004/"`    |
 | `DATA_MANAGER_DEFINITION`                   | `string` \| `Path` | `"data.manager.yaml"`         | Path to the data manager definition file to use.          | `"data.manager.yaml"`         |
-| `DATA_COLLECTION_NAME`                      | `string`           | `"madsci_data"`               | The name of the MongoDB collection where data are stored. | `"madsci_data"`               |
+| `DATA_DATABASE_NAME`                        | `string`           | `"madsci_data"`               | The name of the MongoDB database where events are stored. | `"madsci_data"`               |
+| `DATA_COLLECTION_NAME`                      | `string`           | `"datapoints"`                | The name of the MongoDB collection where data are stored. | `"datapoints"`                |
 | `MONGO_DB_URL` \| `DATA_DB_URL` \| `DB_URL` | `AnyUrl`           | `"mongodb://localhost:27017"` | The URL of the MongoDB database used by the Data Manager. | `"mongodb://localhost:27017"` |
 | `DATA_FILE_STORAGE_PATH`                    | `string` \| `Path` | `"~/.madsci/datapoints"`      | The path where files are stored on the server.            | `"~/.madsci/datapoints"`      |
 
