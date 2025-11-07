@@ -106,30 +106,18 @@ class ResourceManager(
         self.logger.info("Validating database schema version...")
 
         version_checker = DatabaseVersionChecker(self.settings.db_url, self.logger)
-
-        # Check if version tracking exists
-        if not version_checker.is_version_tracked():
-            # No version tracking - just log and continue
-            # User can manually run migration tool to enable tracking
-            self.logger.info(
-                "No version tracking found - starting server without version validation. "
-                "To enable version tracking, run the migration tool manually."
-            )
-            return
-
-        # Existing database - validate version compatibility
+        # Validate database version
+        # - Return silently if no version tracking (with helpful log message)
+        # - Return silently if version matches
+        # - Raise error if version mismatches (with helpful log message)
         try:
             version_checker.validate_or_fail()
             self.logger.info("Database version validation completed successfully")
-        except RuntimeError:
+        except RuntimeError as e:
             self.logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
-                "Please run the migration tool before starting the server."
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
             )
-            self.logger.error(
-                "\nTo resolve this issue, run the migration tool and restart the server."
-            )
-            raise
+            raise e
 
     def _setup_ownership(self) -> None:
         """Setup ownership information."""
