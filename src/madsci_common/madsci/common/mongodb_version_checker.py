@@ -1,7 +1,6 @@
 """MongoDB version checking and validation for MADSci."""
 
 import json
-import os
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
@@ -76,29 +75,31 @@ class MongoDBVersionChecker:
 
         Returns:
             SemanticVersion if a valid semantic version is found
-            0.0.0 if no version tracking exists
-            None if database/collection doesn't exist or an error occurs
+            None if database/collection doesn't exist or no version records
         """
         try:
-            # Try to access the database directly instead of checking list_database_names()
-            # MongoDB only shows databases in list_database_names() if they have collections with data
             collection_names = self.database.list_collection_names()
             if not collection_names:
-                # If database has no collections at all, it doesn't really exist
-                raise Exception("No collections found")
+                # Database has no collections
+                return None
 
             # Check if schema_versions collection exists
             if "schema_versions" not in collection_names:
-                # Database exists with collections but no schema_versions collection
-                return SemanticVersion(0, 0, 0)
+                # Database exists but no schema_versions collection
+                return None
+
+            # Check if collection has any records
+            version_record = self.database["schema_versions"].find_one(
+                {},
+                sort=[("applied_at", -1)],  # Most recent first
+            )
+
+            if not version_record:
+                # Collection exists but is empty
+                return None
 
             # Get the latest version entry
-            return SemanticVersion.parse(
-                self.database["schema_versions"].find_one(
-                    {},
-                    sort=[("applied_at", -1)],  # Most recent first
-                )["version"]
-            ) or SemanticVersion(0, 0, 0)
+            return SemanticVersion.parse(version_record["version"])
 
         except Exception:
             self.logger.error(
@@ -106,15 +107,37 @@ class MongoDBVersionChecker:
             )
             return None
 
+    def is_version_tracked(self) -> bool:
+        """
+        Check if version tracking exists in the database.
+
+        Returns True if the schema_versions collection exists AND has at least one version record.
+        Returns False if the collection doesn't exist or is empty.
+        """
+        try:
+            collection_names = self.database.list_collection_names()
+
+            if "schema_versions" not in collection_names:
+                return False
+
+            # Check if collection has any records
+            version_record = self.database["schema_versions"].find_one({})
+            return version_record is not None
+
+        except Exception:
+            return False
+
     def is_migration_needed(
         self,
-    ) -> tuple[bool, SemanticVersion, Optional[Union[SemanticVersion, str]]]:
+    ) -> tuple[bool, SemanticVersion, Optional[SemanticVersion]]:
         """
         Check if database migration is needed.
 
-        Migration is only needed for major or minor schema version mismatches,
-        not for patch versions or pre-release versions. Uses SemanticVersion
-        for semantic version comparison.
+        Migration is only needed if:
+        1. Version IS tracked in the database, AND
+        2. Schema version mismatch between expected and database
+
+        If version is NOT tracked, no migration is needed (server will start normally).
 
         Returns:
             tuple: (needs_migration, expected_schema_version, database_version)
@@ -122,115 +145,93 @@ class MongoDBVersionChecker:
         expected_schema_version = self.get_expected_schema_version()
         db_version = self.get_database_version()
 
-        if db_version is None:
-            # Database doesn't exist at all - fresh install
-            self.logger.info(
-                f"Database {self.database_name} does not exist - migration needed for initial setup"
-            )
-            return True, expected_schema_version, None
+        # If version tracking doesn't exist, no migration needed
+        # User can manually run migration if they want to start tracking
+        if not self.is_version_tracked():
+            is_docker = self._is_running_in_docker()
 
-        if db_version == SemanticVersion(0, 0, 0):
-            # Database exists but no version tracking - needs initialization
-            self.logger.info(
-                f"Database {self.database_name} exists but has no version tracking - migration needed for version tracking initialization"
-            )
-            return True, expected_schema_version, db_version
-
-        # Both versions are SemanticVersion objects - compare them
-        try:
-            # Schema versions must match exactly - any difference requires migration
-            if expected_schema_version != db_version:
-                self.logger.warning(
-                    f"Schema version mismatch in {self.database_name}: "
-                    f"Expected schema v{expected_schema_version}, "
-                    f"Database v{db_version}"
+            if is_docker:
+                container_name = self._get_container_name()
+                command = (
+                    f"docker-compose run --rm {container_name} python -m madsci.common.mongodb_migration_tool "
+                    f"--db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
                 )
-                return True, expected_schema_version, db_version
+            else:
+                command = (
+                    f"python -m madsci.common.mongodb_migration_tool "
+                    f"--db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
+                )
 
             self.logger.info(
-                f"Database {self.database_name} schema version {db_version} matches expected version {expected_schema_version}"
+                f"No version tracking found for {self.database_name} - database will start without version validation."
             )
-            return False, expected_schema_version, db_version
+            self.logger.info(
+                "To enable version tracking, run the migration tool manually:"
+            )
+            self.logger.info(command)
+            return False, expected_schema_version, None
 
-        except Exception as e:
-            # If version comparison fails, require migration to be safe
+        # Version IS tracked - check for exact match
+        # MongoDB uses exact version matching (not major.minor like PostgreSQL)
+        if expected_schema_version != db_version:
             self.logger.warning(
-                f"Failed to compare semantic versions (Expected: {expected_schema_version}, DB: {db_version}): {e}. "
-                f"Migration will be required for safety."
+                f"Schema version mismatch in {self.database_name}: "
+                f"Expected schema v{expected_schema_version}, "
+                f"Database v{db_version}"
             )
             return True, expected_schema_version, db_version
+
+        self.logger.info(
+            f"Database {self.database_name} schema version {db_version} matches expected version {expected_schema_version}"
+        )
+        return False, expected_schema_version, db_version
 
     def validate_or_fail(self) -> None:
         """
         Validate database version compatibility or raise an exception.
         This should be called during server startup.
+
+        Behavior:
+        - If version tracking doesn't exist -> Do nothing, allow server to start
+        - If version tracking exists and versions match -> Allow server to start
+        - If version tracking exists and versions mismatch -> Raise error, require migration
         """
         needs_migration, expected_schema_version, db_version = (
             self.is_migration_needed()
         )
 
         if needs_migration:
-            # Check if this is a completely fresh database (no collections at all)
-            if db_version is None:
-                # Auto-initialize fresh databases instead of requiring manual migration
-                try:
-                    self.auto_initialize_fresh_database(expected_schema_version)
-                    self.logger.info(
-                        f"Database version validation passed for {self.database_name}"
-                    )
-                    return
-                except Exception as e:
-                    self.logger.error(f"Auto-initialization failed: {e}")
-                    # Fall through to manual migration instructions
-
-            # Detect if running in Docker
+            # Only raise error if version IS tracked but mismatched
             is_docker = self._is_running_in_docker()
 
-            if db_version is None or db_version == SemanticVersion(0, 0, 0):
-                if is_docker:
-                    container_name = (
-                        os.getenv("container_name") or self._get_container_name()  # noqa
-                    )
-                    message = (
-                        f"Database {self.database_name} needs version tracking initialization. "
-                        f"The database exists but has no schema version tracking set up. "
-                        f"Expected schema version is {expected_schema_version}. "
-                        f"Please run the migration tool in the container:\n"
-                        f"docker-compose run --rm {container_name} python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                    )
-                else:
-                    message = (
-                        f"Database {self.database_name} needs version tracking initialization. "
-                        f"The database exists but has no schema version tracking set up. "
-                        f"Expected schema version is {expected_schema_version}. "
-                        f"Please run the migration tool to initialize version tracking:\n"
-                        f"python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                    )
-                self.logger.warning("Database needs version tracking initialization")
+            if is_docker:
+                container_name = self._get_container_name()
+                command = (
+                    f"docker-compose run --rm {container_name} python -m madsci.common.mongodb_migration_tool "
+                    f"--db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
+                )
             else:
-                # Similar logic for version mismatches
-                if is_docker:
-                    container_name = (
-                        os.getenv("container_name") or self._get_container_name()  # noqa
-                    )
-                    message = (
-                        f"Database schema version mismatch detected for {self.database_name}!\n"
-                        f"Expected schema version: {expected_schema_version}\n"
-                        f"Database version: {db_version}\n"
-                        f"Please run the migration tool in the container:\n"
-                        f"docker-compose run --rm {container_name} python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                    )
-                else:
-                    message = (
-                        f"Database schema version mismatch detected for {self.database_name}!\n"
-                        f"Expected schema version: {expected_schema_version}\n"
-                        f"Database version: {db_version}\n"
-                        f"Please run the migration tool to update the database schema:\n"
-                        f"python -m madsci.common.mongodb_migration_tool --db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                    )
-                self.logger.error("Database schema version mismatch detected")
+                command = (
+                    f"python -m madsci.common.mongodb_migration_tool "
+                    f"--db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
+                )
 
-            self.logger.error(message)
+            self.logger.error(
+                f"Database schema version mismatch detected for {self.database_name}"
+            )
+            self.logger.error(f"Expected schema version: {expected_schema_version}")
+            self.logger.error(f"Database version: {db_version}")
+            self.logger.error("Please run the migration tool:")
+            self.logger.error(command)
+
+            # Keep full message in exception for traceback
+            message = (
+                f"Database schema version mismatch detected for {self.database_name}!\n"
+                f"Expected schema version: {expected_schema_version}\n"
+                f"Database version: {db_version}\n"
+                f"Please run the migration tool:\n"
+                f"{command}"
+            )
             raise RuntimeError(message)
 
         self.logger.info(f"Database version validation passed for {self.database_name}")
@@ -332,36 +333,3 @@ class MongoDBVersionChecker:
         if not self.database_exists():
             return False
         return collection_name in self.database.list_collection_names()
-
-    def auto_initialize_fresh_database(
-        self, schema_version: Optional[SemanticVersion] = None
-    ) -> None:
-        """
-        Auto-initialize a completely fresh database with version tracking.
-
-        This method should only be called for databases that have no collections at all.
-        It creates the schema_versions collection and records the expected schema version.
-        """
-        try:
-            if schema_version is None:
-                schema_version = self.get_expected_schema_version()
-
-            self.logger.info(
-                f"Auto-initializing fresh database {self.database_name} with schema version {schema_version}"
-            )
-
-            # Create the schema_versions collection and record current version
-            self.create_schema_versions_collection()
-            self.record_version(
-                schema_version, f"Auto-initialized fresh database {self.database_name}"
-            )
-
-            self.logger.info(
-                f"Successfully auto-initialized database {self.database_name} with version {schema_version}"
-            )
-
-        except Exception as e:
-            self.logger.error(f"Failed to auto-initialize fresh database: {e}")
-            raise RuntimeError(
-                f"Auto-initialization of fresh database failed: {e}"
-            ) from e
