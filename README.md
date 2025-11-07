@@ -73,14 +73,14 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/\_\_init\_\_.py                        |        2 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/condition\_checks.py                   |      115 |       52 |     55% |32-41, 52, 54, 61-64, 75-76, 85-86, 98-99, 116-117, 126-127, 139-140, 153-162, 167-177, 186-192, 201-208 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/schedulers/\_\_init\_\_.py             |        0 |        0 |    100% |           |
-| src/madsci\_workcell\_manager/madsci/workcell\_manager/schedulers/default\_scheduler.py       |       83 |       23 |     72% |52-57, 82-103, 118-119, 128-129, 144-145 |
+| src/madsci\_workcell\_manager/madsci/workcell\_manager/schedulers/default\_scheduler.py       |       83 |       23 |     72% |58-63, 88-109, 124-125, 134-135, 150-151 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/schedulers/scheduler.py                |       16 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/state\_handler.py                      |      194 |       50 |     74% |69, 86, 170, 178-184, 214, 228, 246-260, 270-273, 281-282, 290-293, 306-307, 327, 343, 350-355, 359-361, 367-368, 380, 398-399, 410-415, 423-424, 432 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_actions.py                   |      100 |       14 |     86% |33-39, 105-106, 139-142, 236-237, 258, 291-292 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_engine.py                    |      313 |       91 |     71% |86-137, 156-164, 177, 198, 219, 237, 256-265, 269-272, 293-296, 314, 365-366, 368, 376-380, 405, 447-448, 523-533, 560-569, 575-591 |
-| src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                    |      243 |       53 |     78% |71-72, 114-115, 162, 174-178, 202-203, 215, 223, 233-236, 244-248, 279, 294, 308, 322, 328, 357-359, 363-368, 393-395, 432-434, 449, 460, 492-497, 504-505 |
+| src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                    |      243 |       53 |     78% |71-72, 114-115, 162, 174-178, 202-203, 215, 223, 233-236, 244-248, 279, 294, 308, 322, 328, 357-359, 363-368, 393-395, 432-434, 449, 460, 491-496, 503-504 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                     |        9 |        0 |    100% |           |
-| src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                     |      199 |       67 |     66% |40-41, 48-58, 72-77, 95, 113, 131, 144, 160, 165-176, 251, 258-259, 276, 287, 308, 313, 321, 338-350, 366-388, 404, 427-434, 441, 446-449, 455-456 |
+| src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                     |      199 |       67 |     66% |40-41, 48-58, 72-77, 95, 113, 131, 144, 160, 165-176, 244, 251-252, 268, 279, 300, 305, 313, 330-342, 358-380, 396, 419-426, 433, 438-441, 447-448 |
 |                                                                                     **TOTAL** | **10122** | **2798** | **72%** |           |
 
 

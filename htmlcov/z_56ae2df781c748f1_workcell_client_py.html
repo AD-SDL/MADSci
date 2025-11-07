@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_4bb681ccf265c7f0_context_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-27 22:14 +0000
+            created at 2025-11-07 22:23 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -324,7 +324,7 @@
     <p class="pln"><span class="n"><a id="t242" href="#t242">242</a></span><span class="t">        <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t243" href="#t243">243</a></span><span class="t">            <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t244" href="#t244">244</a></span><span class="t">                <span class="nam">workflow_definition_id</span> <span class="op">=</span> <span class="nam">ULID</span><span class="op">.</span><span class="nam">from_str</span><span class="op">(</span><span class="nam">workflow_definition</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t245" href="#t245">245</a></span><span class="t">            <span class="key">except</span> <span class="nam">ValueError</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t245" href="#t245">245</a></span><span class="t">            <span class="key">except</span> <span class="op">(</span><span class="nam">ValueError</span><span class="op">,</span> <span class="nam">TypeError</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t246" href="#t246">246</a></span><span class="t">                <span class="nam">workflow_definition</span> <span class="op">=</span> <span class="nam">WorkflowDefinition</span><span class="op">.</span><span class="nam">from_yaml</span><span class="op">(</span><span class="nam">workflow_definition</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t247" href="#t247">247</a></span><span class="t">                <span class="nam">workflow_definition_id</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">submit_workflow_definition</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis mis2 show_mis"><span class="n"><a id="t248" href="#t248">248</a></span><span class="t">                    <span class="nam">workflow_definition</span>&nbsp;</span><span class="r"></span></p>
@@ -887,7 +887,7 @@
             <a class="nav" href="z_4bb681ccf265c7f0_context_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-10-27 22:14 +0000
+            created at 2025-11-07 22:23 +0000
         </p>
     </div>
 </footer>
