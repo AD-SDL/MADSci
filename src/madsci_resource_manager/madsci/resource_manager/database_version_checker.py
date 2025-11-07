@@ -95,8 +95,20 @@ class DatabaseVersionChecker:
             1.0.0 == 2.0.0  -> False (different major)
         """
         try:
-            v1 = SemanticVersion.parse(version1)
-            v2 = SemanticVersion.parse(version2)
+            # For some reason release candidate versions are extracted as 0.0.0rc1 rather than 0.0.0-rc1
+            v1_str = (
+                version1.replace("rc", "-rc")
+                .replace("alpha", "-alpha")
+                .replace("beta", "-beta")
+            )
+            v2_str = (
+                version2.replace("rc", "-rc")
+                .replace("alpha", "-alpha")
+                .replace("beta", "-beta")
+            )
+
+            v1 = SemanticVersion.parse(v1_str)
+            v2 = SemanticVersion.parse(v2_str)
 
             # Compare only major and minor versions
             return v1.major == v2.major and v1.minor == v2.minor
@@ -126,10 +138,23 @@ class DatabaseVersionChecker:
         # If version tracking doesn't exist, no migration needed
         # User can manually run migration if they want to start tracking
         if not self.is_version_tracked():
-            self.logger.warning(
+            is_docker = self._is_running_in_docker()
+
+            if is_docker:
+                container_name = self._get_container_name()
+                command = (
+                    f"docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src {container_name} "
+                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                )
+            else:
+                command = f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+
+            self.logger.info(
                 "No version tracking found - database will start without version validation. "
-                "Run migration tool manually to enable version tracking."
+                "To enable version tracking, run the migration tool manually! "
             )
+
+            self.logger.info(f"{command}")
             return False, current_version, None
 
         # Version IS tracked - check for mismatch using major.minor comparison
@@ -174,46 +199,29 @@ class DatabaseVersionChecker:
         needs_migration, madsci_version, db_version = self.is_migration_needed()
 
         if needs_migration:
-            # Detect if running in Docker
+            # Only raise error if version IS tracked but mismatched
             is_docker = self._is_running_in_docker()
 
-            if db_version is None:
-                if is_docker:
-                    container_name = self._get_container_name()
-                    message = (
-                        f"Database schema version not found. "
-                        f"MADSci version is {madsci_version}. "
-                        f"Please run the migration tool in the container:\n"
-                        f"docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src {container_name} python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                    )
-                else:
-                    message = (
-                        f"Database schema version not found. "
-                        f"MADSci version is {madsci_version}. "
-                        f"Please run the migration tool to initialize version tracking:\n"
-                        f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                    )
-                self.logger.warning("Database needs version tracking initialization")
+            if is_docker:
+                container_name = self._get_container_name()
+                message = (
+                    f"Database schema version mismatch detected!\n"
+                    f"MADSci version: {madsci_version}\n"
+                    f"Database version: {db_version}\n"
+                    f"Please run the migration tool in the container: \n"
+                    f"docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src {container_name} "
+                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                )
             else:
-                if is_docker:
-                    container_name = self._get_container_name()
-                    message = (
-                        f"Database schema version mismatch detected!\n"
-                        f"MADSci version: {madsci_version}\n"
-                        f"Database version: {db_version}\n"
-                        f"Please run the migration tool in the container:\n"
-                        f"docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src {container_name} python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                    )
-                else:
-                    message = (
-                        f"Database schema version mismatch detected!\n"
-                        f"MADSci version: {madsci_version}\n"
-                        f"Database version: {db_version}\n"
-                        f"Please run the migration tool to update the database schema:\n"
-                        f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                    )
-                self.logger.error("Database schema version mismatch detected")
+                message = (
+                    f"Database schema version mismatch detected! \n"
+                    f"MADSci version: {madsci_version} \n"
+                    f"Database version: {db_version} \n"
+                    f"Please run the migration tool to update the database schema: \n"
+                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
+                )
 
+            self.logger.error("Database schema version mismatch detected")
             self.logger.error(message)
             raise RuntimeError(message)
 
