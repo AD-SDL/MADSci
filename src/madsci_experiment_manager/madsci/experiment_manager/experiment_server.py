@@ -61,45 +61,34 @@ class ExperimentManager(
             )
             return
 
-        # DATABASE VERSION VALIDATION - MongoDB version checking
         self.logger.info("Validating MongoDB schema version...")
-        version_checker = None
-        try:
-            # Get schema file path relative to this module
-            schema_file_path = Path(__file__).parent / "schema.json"
 
-            version_checker = MongoDBVersionChecker(
-                db_url=self.settings.db_url,
-                database_name=self.settings.database_name,
-                schema_file_path=str(schema_file_path),
-                logger=self.logger,
-            )
+        schema_file_path = Path(__file__).parent / "schema.json"
+
+        version_checker = MongoDBVersionChecker(
+            db_url=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+            schema_file_path=str(schema_file_path),
+            logger=self.logger,
+        )
+
+        try:
             version_checker.validate_or_fail()
             self.logger.info("MongoDB version validation completed successfully")
         except RuntimeError as e:
-            if "needs version tracking initialization" in str(e):
-                self.logger.error(
-                    "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
-                    "The database exists but needs version tracking setup."
-                )
-            else:
-                self.logger.error(
-                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
-                    "Please run the migration tool before starting the server."
-                )
             self.logger.error(
-                "\nTo resolve this issue, run the migration tool and restart the server."
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
             )
-            raise
+            raise e
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
         if self._db_connection is None:
             if self._db_client is None:
-                self._db_client = MongoClient(self.settings.db_url)
-            self._db_connection = self._db_client["experiment_manager"]
+                self._db_client = MongoClient(str(self.settings.mongo_db_url))
+            self._db_connection = self._db_client[self.settings.database_name]
 
-        self.experiments = self._db_connection["experiments"]
+        self.experiments = self._db_connection[self.settings.collection_name]
 
     def get_health(self) -> ExperimentManagerHealth:
         """Get the health status of the Experiment Manager."""
