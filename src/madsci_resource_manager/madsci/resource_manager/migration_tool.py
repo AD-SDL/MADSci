@@ -1,5 +1,6 @@
 """Database migration tool for MADSci resources using Alembic with automatic type conversion handling."""
 
+import argparse
 import os
 import re
 import subprocess
@@ -692,8 +693,46 @@ def main() -> None:
     logger = EventClient()
 
     try:
-        # Load settings from all sources (CLI, env vars, config files)
-        settings = DatabaseMigrationSettings()
+        parser = argparse.ArgumentParser(
+            description="MADSci PostgreSQL database migration tool"
+        )
+
+        parser.add_argument(
+            "--db-url",
+            type=str,
+            help="PostgreSQL connection URL (e.g., postgresql://user:pass@localhost:5432/resources)",
+        )
+        parser.add_argument(
+            "--target-version",
+            type=str,
+            help="Target version to migrate to (defaults to current MADSci version)",
+        )
+        parser.add_argument(
+            "--backup-only",
+            action="store_true",
+            help="Only create a backup, do not run migration",
+        )
+        parser.add_argument(
+            "--restore-from",
+            type=str,
+            help="Restore from specified backup file instead of migrating",
+        )
+        parser.add_argument(
+            "--generate-migration",
+            type=str,
+            help="Generate a new migration file with the given message",
+        )
+
+        args = parser.parse_args()
+
+        # Create settings with CLI arguments taking precedence
+        settings = DatabaseMigrationSettings(
+            db_url=args.db_url,
+            target_version=args.target_version,
+            backup_only=args.backup_only,
+            restore_from=args.restore_from,
+            generate_migration=args.generate_migration,
+        )
 
         migrator = DatabaseMigrator(settings, logger)
 
@@ -704,13 +743,12 @@ def main() -> None:
             migrator.restore_from_backup(backup_path)
         elif settings.backup_only:
             backup_path = migrator.create_backup()
-            logger.log_info(f"Backup created: {backup_path}")
+            logger.info(f"Backup created: {backup_path}")
         else:
             migrator.run_migration(settings.target_version)
 
     except Exception as e:
         logger.error(f"Migration tool failed: {e}")
-        logger.log_error(f"ERROR: {e}")
         sys.exit(1)
 
 
