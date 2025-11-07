@@ -61,47 +61,32 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         # Skip version validation if an external db_client was provided (e.g., in tests)
         # This is commonly done in tests where a mock or containerized MongoDB is used
         if self._db_client is not None:
-            # External client provided, likely in test context - skip version validation
-            self.logger.info(
-                "External db_client provided, skipping MongoDB version validation"
-            )
             return
 
-        # DATABASE VERSION VALIDATION - MongoDB version checking
         self.logger.info("Validating MongoDB schema version...")
-        version_checker = None
-        try:
-            # Get schema file path relative to this module
-            schema_file_path = Path(__file__).parent / "schema.json"
 
-            version_checker = MongoDBVersionChecker(
-                db_url=self.settings.db_url,
-                database_name=self.settings.collection_name,
-                schema_file_path=str(schema_file_path),
-                logger=self.logger,
-            )
+        schema_file_path = Path(__file__).parent / "schema.json"
+
+        version_checker = MongoDBVersionChecker(
+            db_url=str(self.settings.mongo_db_url),
+            database_name=self.settings.collection_name,
+            schema_file_path=str(schema_file_path),
+            logger=self.logger,
+        )
+
+        try:
             version_checker.validate_or_fail()
             self.logger.info("MongoDB version validation completed successfully")
         except RuntimeError as e:
-            if "needs version tracking initialization" in str(e):
-                self.logger.error(
-                    "DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED! "
-                    "The database exists but needs version tracking setup."
-                )
-            else:
-                self.logger.error(
-                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED! "
-                    "Please run the migration tool before starting the server."
-                )
             self.logger.error(
-                "\nTo resolve this issue, run the migration tool and restart the server."
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
             )
-            raise
+            raise e
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
         if self._db_client is None:
-            self._db_client = MongoClient(self.settings.db_url)
+            self._db_client = MongoClient(str(self.settings.mongo_db_url))
 
         datapoints_db = self._db_client["madsci_data"]
         self.datapoints = datapoints_db["datapoints"]
