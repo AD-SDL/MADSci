@@ -26,7 +26,7 @@
 | src/madsci\_common/madsci/common/types/action\_types.py                                       |      383 |       70 |     82% |54, 60, 66, 72, 78, 101, 129, 143, 157, 215-218, 263, 272-276, 336, 340, 346, 426, 507, 524, 528, 531-533, 653, 659, 764-776, 789-807, 897-899, 963, 972-1022 |
 | src/madsci\_common/madsci/common/types/admin\_command\_types.py                               |       18 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/auth\_types.py                                         |       38 |        4 |     89% |     94-97 |
-| src/madsci\_common/madsci/common/types/base\_types.py                                         |       56 |       16 |     71% |45, 78, 86-88, 100-102, 111, 124-126, 138-140, 149 |
+| src/madsci\_common/madsci/common/types/base\_types.py                                         |       58 |       17 |     71% |45, 78, 86-88, 100-102, 111, 124-126, 138-140, 149, 162 |
 | src/madsci\_common/madsci/common/types/condition\_types.py                                    |       53 |        5 |     91% |     22-26 |
 | src/madsci\_common/madsci/common/types/context\_types.py                                      |       11 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/datapoint\_types.py                                    |       88 |       17 |     81% |44-47, 65, 69-71, 77, 79, 100-105, 117, 131, 159, 168 |
@@ -82,7 +82,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                    |      243 |       53 |     78% |71-72, 114-115, 162, 174-178, 202-203, 215, 223, 233-236, 244-248, 279, 294, 308, 322, 328, 357-359, 363-368, 393-395, 432-434, 449, 460, 491-496, 503-504 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                     |        9 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                     |      199 |       67 |     66% |40-41, 48-58, 72-77, 95, 113, 131, 144, 160, 165-176, 244, 251-252, 268, 279, 300, 305, 313, 330-342, 358-380, 396, 419-426, 433, 438-441, 447-448 |
-|                                                                                     **TOTAL** | **10174** | **2822** | **72%** |           |
+|                                                                                     **TOTAL** | **10176** | **2823** | **72%** |           |
 
 
 ## Setup coverage badge
