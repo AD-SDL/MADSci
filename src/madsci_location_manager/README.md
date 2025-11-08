@@ -23,6 +23,7 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - `GET /location/{location_id}` - Get a specific location by ID
 - `DELETE /location/{location_id}` - Delete a location
 - `POST /location/{location_id}/set_representation/{node_name}` - Set a node-specific representation for a location (accepts any JSON-serializable value)
+- `DELETE /location/{location_id}/remove_representation/{node_name}` - Remove a node-specific representation from a location
 - `POST /location/{location_id}/attach_resource` - Attach a container resource to a location
 - `DELETE /location/{location_id}/detach_resource` - Detach a container resource from a location
 
@@ -37,6 +38,67 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - `GET /health` - Health check endpoint
 - `GET /definition` - Get Location Manager definition and configuration
 - `GET /` - Root endpoint returning manager definition
+
+## Error Handling
+
+The Location Manager returns standard HTTP status codes with descriptive error messages:
+
+### Common Status Codes
+
+- **200 OK** - Successful operation
+- **400 Bad Request** - Invalid request parameters or transfer restrictions
+  - Missing required query parameters (location_id or name)
+  - Transfers to/from non-transfer locations
+  - Invalid transfer parameters
+- **404 Not Found** - Resource not found
+  - Location not found by ID or name
+  - Representation not found for specified node
+  - No attached resource to detach
+  - No transfer path exists between locations
+- **500 Internal Server Error** - Server errors
+  - Redis connection failures
+  - Resource client errors
+  - Transfer planning failures
+
+### Error Response Format
+
+All error responses follow a consistent format:
+
+```json
+{
+  "detail": "Descriptive error message explaining what went wrong"
+}
+```
+
+### Example Error Responses
+
+**Location not found:**
+```json
+{
+  "detail": "Location with ID '01K5HDZZCF27YHD2WDGSXFPPKQ' not found"
+}
+```
+
+**Transfer not allowed:**
+```json
+{
+  "detail": "Location 'safety_zone' does not allow transfers"
+}
+```
+
+**Representation not found:**
+```json
+{
+  "detail": "Representation for node 'robotarm_1' not found in location 01K5HDZZCF27YHD2WDGSXFPPKQ"
+}
+```
+
+**No transfer path:**
+```json
+{
+  "detail": "No transfer path exists from 'source_location' to 'target_location'"
+}
+```
 
 ## Configuration
 
@@ -231,6 +293,151 @@ transfer_capabilities:
 ```
 
 This configuration allows the system to automatically choose the best transfer method based on available equipment at each location and the relative costs of different approaches.
+
+#### Complete Example Configuration
+
+Here's a comprehensive example showing a complete location manager definition with multiple transfer capabilities:
+
+```yaml
+# location_manager_definition.yaml
+manager_id: "location_manager_main"
+locations:
+  - location_id: "01K5HDZZCF27YHD2WDGSXFPPKQ"
+    location_name: "sample_storage"
+    description: "Main sample storage rack"
+    allow_transfers: true
+    representations:
+      robotarm_1: {"position": "A1", "height": 150}
+      conveyor_belt: {"station_id": "storage_01"}
+    resource_template_name: "storage_rack_template"
+    resource_template_overrides:
+      capacity: 96
+      compartment_size: "small"
+
+  - location_id: "01K5HDZZCF27YHD2WDGSXFPPKT"
+    location_name: "analysis_station"
+    description: "Chemical analysis workstation"
+    allow_transfers: true
+    representations:
+      robotarm_1: {"position": "B2", "height": 120}
+      liquid_handler: {"deck_position": 1}
+
+  - location_id: "01K5HDZZCF27YHD2WDGSXFPPU"
+    location_name: "safety_zone"
+    description: "Restricted safety area"
+    allow_transfers: false
+    representations:
+      sensor_array: {"zone": "restricted"}
+
+transfer_capabilities:
+  # Default transfer templates
+  transfer_templates:
+    - node_name: "robotarm_1"
+      action: "transfer_sample"
+      source_argument_name: "pickup_location"
+      target_argument_name: "dropoff_location"
+      cost_weight: 1.0
+      additional_args:
+        safety_check: true
+        grip_force: "medium"
+
+    - node_name: "conveyor_belt"
+      action: "belt_transfer"
+      source_argument_name: "origin_station"
+      target_argument_name: "destination_station"
+      cost_weight: 0.8
+      additional_args:
+        speed: "medium"
+        verification: true
+
+  # Override templates for specialized scenarios
+  override_transfer_templates:
+    # Gentle handling when transferring to analysis station
+    target_overrides:
+      "analysis_station":
+        - node_name: "robotarm_1"
+          action: "gentle_transfer"
+          source_argument_name: "pickup_location"
+          target_argument_name: "dropoff_location"
+          cost_weight: 1.2
+          additional_args:
+            safety_check: true
+            grip_force: "gentle"
+            speed: "slow"
+
+    # Heavy duty mode when transferring from storage
+    source_overrides:
+      "sample_storage":
+        - node_name: "robotarm_1"
+          action: "heavy_transfer"
+          source_argument_name: "pickup_location"
+          target_argument_name: "dropoff_location"
+          cost_weight: 0.9
+          additional_args:
+            safety_check: true
+            grip_force: "strong"
+
+  # Capacity-aware cost adjustments
+  capacity_cost_config:
+    enabled: true
+    high_capacity_threshold: 0.75
+    full_capacity_threshold: 1.0
+    high_capacity_multiplier: 2.0
+    full_capacity_multiplier: 5.0
+```
+
+#### Minimal Configuration Example
+
+For simple laboratories, a minimal configuration might look like:
+
+```yaml
+# Simple lab with one robot arm
+manager_id: "simple_lab_location_manager"
+locations:
+  - location_id: "01K5HDZZCF27YHD2WDGSXFPPKA"
+    location_name: "input_tray"
+    representations:
+      robot_arm: {"slot": 1}
+
+  - location_id: "01K5HDZZCF27YHD2WDGSXFPPKB"
+    location_name: "output_tray"
+    representations:
+      robot_arm: {"slot": 2}
+
+transfer_capabilities:
+  transfer_templates:
+    - node_name: "robot_arm"
+      action: "move"
+      source_argument_name: "from_slot"
+      target_argument_name: "to_slot"
+```
+
+#### Resource Template Integration Example
+
+For locations that automatically create associated resources:
+
+```yaml
+locations:
+  - location_name: "tip_rack_station"
+    resource_template_name: "pipette_tip_rack"
+    resource_template_overrides:
+      tip_type: "1000ul"
+      brand: "generic"
+      initial_quantity: 96
+    representations:
+      liquid_handler: {"deck_slot": "A1"}
+      robotarm_1: {"position": "rack_01"}
+
+transfer_capabilities:
+  transfer_templates:
+    - node_name: "liquid_handler"
+      action: "pick_up_tips"
+      source_argument_name: "tip_source"
+      target_argument_name: "liquid_destination"
+      cost_weight: 0.5
+      additional_location_args:
+        waste_location: "tip_waste_container"
+```
 
 ### Non-Transfer Locations
 

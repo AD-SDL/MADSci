@@ -7,7 +7,7 @@ The Node Module package provides the framework for creating laboratory instrumen
 
 ### Abstract Base Classes
 - **abstract_node_module.py**: Base class defining the node interface and common functionality
-- **AbstractNodeModule**: Core abstract class that all instrument nodes must inherit from
+- **AbstractNode**: Core abstract class that all instrument nodes must inherit from
 - Standardized action patterns and state management
 - Built-in health monitoring and diagnostics
 
@@ -26,11 +26,11 @@ The Node Module package provides the framework for creating laboratory instrumen
 ## Node Development Pattern
 All laboratory instrument nodes follow this pattern:
 
-1. **Inherit from AbstractNodeModule**:
+1. **Inherit from AbstractNode**:
 ```python
-from madsci.node_module import AbstractNodeModule
+from madsci.node_module import AbstractNode
 
-class MyInstrumentNode(AbstractNodeModule):
+class MyInstrumentNode(AbstractNode):
     def __init__(self, settings: NodeSettings):
         super().__init__(settings)
 ```
