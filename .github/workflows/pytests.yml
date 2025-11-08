@@ -4,6 +4,11 @@ name: Pytests and Coverage
 on:
   pull_request:
   push:
+    branches: [main]
+    tags: [ '*' ]
+  schedule: # Run on Tuesday's at 12:00
+    - cron: '0 12 * * 2'
+  workflow_dispatch: # Run manually
 
 jobs:
   test:
