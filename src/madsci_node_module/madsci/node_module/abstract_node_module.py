@@ -713,13 +713,13 @@ class AbstractNode:
             if arg_name in parameters:
                 arg_dict[arg_name] = arg_value
             else:
-                EventClient().log_warning(f"Ignoring unexpected argument {arg_name}")
+                self.logger.log_warning(f"Ignoring unexpected argument {arg_name}")
 
         for file in action_request.files:
             if file in parameters:
                 arg_dict[file] = action_request.files[file]
             else:
-                EventClient().log_warning(f"Ignoring unexpected file {file}")
+                self.logger.log_warning(f"Ignoring unexpected file {file}")
 
     def _validate_var_args_compatibility(
         self,

@@ -1,6 +1,8 @@
 """Test node infrastructure including lifecycle, configuration, and basic actions."""
 
+import contextlib
 import inspect
+import logging
 import time
 from pathlib import Path
 from typing import Annotated, Optional, Union, get_type_hints
@@ -1025,3 +1027,56 @@ class TestLocationArgumentDetection:
             "target should be in regular args when Union doesn't contain LocationArgument"
         )
         assert isinstance(action_def.args["target"], ArgumentDefinition)
+
+
+class TestNodeLogging:
+    """Test node logging behavior to ensure no duplicate handlers."""
+
+    def test_no_double_logging_with_unexpected_args(self, dummy_node) -> None:
+        """Test that processing unexpected arguments doesn't create duplicate console handlers."""
+        # Get the initial number of handlers on the node's logger
+        initial_handler_count = len(dummy_node.logger.logger.handlers)
+
+        # Create a simple action for testing
+        @action(name="test_simple_action", description="Test action")
+        def simple_action(self, expected_arg: int) -> None:
+            pass
+
+        # Add the action to the node
+        dummy_node._add_action(
+            func=simple_action,
+            action_name="test_simple_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create an action request with unexpected arguments
+        action_request = ActionRequest(
+            action_id=new_ulid_str(),
+            action_name="test_simple_action",
+            args={
+                "expected_arg": 42,
+                "unexpected_arg": "value",
+                "another_unexpected": 123,
+            },
+            files={},
+        )
+
+        # Process the action arguments (this will log warnings about unexpected args)
+        with contextlib.suppress(Exception):
+            # We don't care if it fails, we just want to check logging
+            dummy_node._parse_action_args(action_request)
+
+        # Check that no new handlers were added
+        final_handler_count = len(dummy_node.logger.logger.handlers)
+        assert final_handler_count == initial_handler_count, (
+            f"Logger handler count increased from {initial_handler_count} to {final_handler_count}. "
+            "This indicates that new EventClient instances are being created and adding duplicate handlers."
+        )
+
+        # Also verify we're not creating multiple loggers with the same name
+        logger_name = dummy_node.logger.name
+        python_logger = logging.getLogger(logger_name)
+        assert python_logger is dummy_node.logger.logger, (
+            "Logger instance mismatch - multiple loggers with same name"
+        )
