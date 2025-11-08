@@ -90,6 +90,12 @@ services:
         - ghcr.io/ad-sdl/madsci_dashboard:latest
         - ghcr.io/ad-sdl/madsci_dashboard:dev
     command: python -m madsci.squid.lab_server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
     depends_on:
       - event_manager
 
