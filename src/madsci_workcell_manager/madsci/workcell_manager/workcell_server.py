@@ -18,6 +18,7 @@ from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.event_types import Event, EventType
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
     WorkcellManagerDefinition,
@@ -105,11 +106,12 @@ class WorkcellManager(
         self.logger.info("Validating MongoDB schema version...")
 
         schema_file_path = Path(__file__).parent / "schema.json"
-
+        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
         version_checker = MongoDBVersionChecker(
             db_url=str(self.settings.mongo_db_url),
             database_name=self.settings.database_name,
             schema_file_path=str(schema_file_path),
+            backup_dir=str(mig_cfg.backup_dir),
             logger=self.logger,
         )
 

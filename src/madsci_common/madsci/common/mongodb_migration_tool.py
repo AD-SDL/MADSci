@@ -11,120 +11,9 @@ from typing import Any, Dict, List, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
-from madsci.common.types.base_types import MadsciBaseSettings, PathLike
-from pydantic import AliasChoices, AnyUrl, Field
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
+from pydantic import AnyUrl
 from pymongo import MongoClient
-
-
-class MongoDBMigrationSettings(
-    MadsciBaseSettings,
-    env_file=(".env", "mongodb.env", "migration.env"),
-    toml_file=("settings.toml", "mongodb.settings.toml", "migration.settings.toml"),
-    yaml_file=("settings.yaml", "mongodb.settings.yaml", "migration.settings.yaml"),
-    json_file=("settings.json", "mongodb.settings.json", "migration.settings.json"),
-    env_prefix="MONGODB_MIGRATION_",
-):
-    """Configuration settings for MongoDB migration operations."""
-
-    mongo_db_url: AnyUrl = Field(
-        default=AnyUrl("mongodb://localhost:27017"),
-        title="MongoDB URL",
-        description="MongoDB connection URL (e.g., mongodb://localhost:27017). "
-        "Defaults to localhost MongoDB instance.",
-        validation_alias=AliasChoices(
-            "mongo_db_url", "MONGODB_URL", "MONGO_URL", "DATABASE_URL", "db_url"
-        ),
-    )
-    database: str = Field(
-        title="Database Name",
-        description="Database name to migrate (e.g., madsci_events, madsci_data)",
-    )
-    schema_file: Optional[PathLike] = Field(
-        default=None,
-        title="Schema File Path",
-        description="Path to schema.json file. If not provided, will auto-detect based on database name.",
-    )
-    target_version: Optional[str] = Field(
-        default=None,
-        title="Target Version",
-        description="Target version to migrate to (defaults to current MADSci version)",
-    )
-    backup_only: bool = Field(
-        default=False,
-        title="Backup Only",
-        description="Only create a backup, do not run migration",
-    )
-    restore_from: Optional[PathLike] = Field(
-        default=None,
-        title="Restore From",
-        description="Restore from specified backup directory instead of migrating",
-    )
-    check_version: bool = Field(
-        default=False,
-        title="Check Version Only",
-        description="Only check version compatibility, do not migrate",
-    )
-
-    def get_effective_schema_file_path(self) -> Path:
-        """Get the effective schema file path, auto-detecting if needed."""
-        if self.schema_file:
-            schema_path = Path(self.schema_file)
-            if not schema_path.exists():
-                raise FileNotFoundError(f"Schema file not found: {schema_path}")
-            return schema_path
-
-        # Auto-detect schema file based on database name
-        current_dir = Path.cwd()
-
-        # Common schema file locations based on database name
-        possible_paths = []
-
-        if self.database == "madsci_events":
-            possible_paths = [
-                current_dir / "madsci" / "event_manager" / "schema.json",
-                current_dir / "event_manager" / "schema.json",
-                current_dir / "schema" / "event_manager.json",
-            ]
-        elif self.database == "madsci_data":
-            possible_paths = [
-                current_dir / "madsci" / "data_manager" / "schema.json",
-                current_dir / "data_manager" / "schema.json",
-                current_dir / "schema" / "data_manager.json",
-            ]
-        elif self.database == "madsci_workcells":
-            possible_paths = [
-                current_dir / "madsci" / "workcell_manager" / "schema.json",
-                current_dir / "workcell_manager" / "schema.json",
-                current_dir / "schema" / "workcell_manager.json",
-            ]
-        elif self.database == "madsci_experiments":
-            possible_paths = [
-                current_dir / "madsci" / "experiment_manager" / "schema.json",
-                current_dir / "experiment_manager" / "schema.json",
-                current_dir / "schema" / "experiment_manager.json",
-            ]
-        else:
-            # Generic paths for custom database names
-            possible_paths = [
-                current_dir / "madsci" / self.database / "schema.json",
-                current_dir / self.database / "schema.json",
-                current_dir / "schema" / f"{self.database}.json",
-            ]
-
-        # Find the first existing schema file
-        for path in possible_paths:
-            if path.exists():
-                return path
-
-        # If no schema file found, provide helpful error
-        paths_str = "\n".join(f"  - {path}" for path in possible_paths)
-        raise FileNotFoundError(
-            f"No schema file found for database '{self.database}'. "
-            f"Searched in:\n{paths_str}\n\n"
-            f"Please either:\n"
-            f"1. Create a schema.json file in one of the above locations, or\n"
-            f"2. Specify the path explicitly with --schema-file"
-        )
 
 
 class MongoDBMigrator:
@@ -152,13 +41,21 @@ class MongoDBMigrator:
         self.client = MongoClient(self.db_url)
         self.database = self.client[self.database_name]
 
+        # Use configured backup directory (with ~ expansion)
+        raw_backup = Path(self.settings.backup_dir)
+        self.backup_dir = (
+            raw_backup if raw_backup.is_absolute() else Path.cwd() / raw_backup
+        )
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.logger.info(f"Using backup directory: {self.backup_dir}")
         # Initialize version checker
         self.version_checker = MongoDBVersionChecker(
-            self.db_url, self.database_name, str(self.schema_file_path), self.logger
+            db_url=self.db_url,
+            database_name=self.database_name,
+            schema_file_path=str(self.schema_file_path),
+            backup_dir=str(self.backup_dir),
+            logger=self.logger,
         )
-
-        # Parse database connection details for backup
-        self.backup_dir = self._get_backup_directory()
 
     @property
     def parsed_db_url(self) -> AnyUrl:
@@ -174,37 +71,6 @@ class MongoDBMigrator:
             self.client.close()
             if hasattr(self, "logger") and self.logger:
                 self.logger.debug("MongoDB migrator client disposed")
-
-    def _get_backup_directory(self) -> Path:
-        """Get the backup directory path that works consistently in both local and Docker environments."""
-        # Check if we're running in a Docker container
-        if Path("/.dockerenv").exists() or self._is_running_in_docker():
-            # In Docker, use the mounted .madsci directory
-            backup_dir = Path("/home/madsci/.madsci/mongodb/backups")
-        else:
-            # Local development - use current directory structure
-            current_dir = Path.cwd()
-            backup_dir = current_dir / ".madsci" / "mongodb" / "backups"
-
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        self.logger.info(f"Using backup directory: {backup_dir}")
-        return backup_dir
-
-    def _is_running_in_docker(self) -> bool:
-        """Detect if running inside a Docker container."""
-        try:
-            # Check for .dockerenv file
-            if Path("/.dockerenv").exists():
-                return True
-
-            # Check cgroup for docker
-            if Path("/proc/1/cgroup").exists():
-                with open("/proc/1/cgroup") as f:  # noqa
-                    return "docker" in f.read() or "containerd" in f.read()
-
-            return False
-        except Exception:
-            return False
 
     def load_expected_schema(self) -> Dict[str, Any]:
         """Load the expected schema from the schema.json file."""
@@ -546,7 +412,13 @@ def main() -> None:
         parser.add_argument(
             "--schema-file",
             type=str,
+            required=True,
             help="Path to schema.json file (auto-detects if not provided)",
+        )
+        parser.add_argument(
+            "--backup-dir",
+            type=str,
+            help="Directory for database backups (default: ~/.madsci/mongodb/backups)",
         )
         parser.add_argument(
             "--target-version",
@@ -571,8 +443,8 @@ def main() -> None:
 
         args = parser.parse_args()
 
-        # Create settings with CLI arguments (they override env vars and config files)
-        settings = MongoDBMigrationSettings(
+        # Create settings with CLI arguments (override only when provided)
+        kwargs = dict(  # noqa
             mongo_db_url=args.db_url,
             database=args.database,
             schema_file=args.schema_file,
@@ -581,6 +453,12 @@ def main() -> None:
             restore_from=args.restore_from,
             check_version=args.check_version,
         )
+        if args.backup_dir is not None and str(args.backup_dir).strip():
+            kwargs["backup_dir"] = (
+                args.backup_dir
+            )  # only override default if user passed it
+
+        settings = MongoDBMigrationSettings(**kwargs)
 
         logger.info(f"Using database: {settings.database}")
         logger.info(f"Using schema file: {settings.get_effective_schema_file_path()}")

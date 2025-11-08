@@ -1,9 +1,7 @@
 """Database version checking and validation for MADSci."""
 
 import importlib.metadata
-import os
 import traceback
-from pathlib import Path
 from typing import Optional
 
 from madsci.client.event_client import EventClient
@@ -61,6 +59,32 @@ class DatabaseVersionChecker:
                 f"Error getting database version: {traceback.format_exc()}"
             )
             return None
+
+    def _build_migration_base_args(self) -> list[str]:
+        # Do NOT include --backup-dir; let tool use its default
+        return [
+            "python",
+            "-m",
+            "madsci.resource_manager.migration_tool",
+            "--db-url",
+            f"'{self.db_url}'",
+        ]
+
+    def _bare_command(self) -> str:
+        return " ".join(self._build_migration_base_args())
+
+    def _docker_compose_command(self) -> str:
+        # Template with a clear placeholder; no volume flags hardcoded here
+        service = "<your_compose_service_name>"
+        return f"docker compose run --rm {service} " + " ".join(
+            self._build_migration_base_args()
+        )
+
+    def _both_commands(self) -> dict[str, str]:
+        return {
+            "bare_metal": self._bare_command(),
+            "docker_compose": self._docker_compose_command(),
+        }
 
     def is_version_tracked(self) -> bool:
         """
@@ -138,23 +162,19 @@ class DatabaseVersionChecker:
         # If version tracking doesn't exist, no migration needed
         # User can manually run migration if they want to start tracking
         if not self.is_version_tracked():
-            is_docker = self._is_running_in_docker()
-
-            if is_docker:
-                container_name = self._get_container_name()
-                command = (
-                    f"docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src {container_name} "
-                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                )
-            else:
-                command = f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-
+            cmds = self._both_commands()
             self.logger.info(
-                "No version tracking found - database will start without version validation. "
-                "To enable version tracking, run the migration tool manually! "
+                "No version tracking found, database will start without version validation."
             )
-
-            self.logger.info(f"{command}")
+            self.logger.info(
+                "To enable version tracking, run the migration tool using one of:"
+            )
+            self.logger.info(f"  • Bare metal:     {cmds['bare_metal']}")
+            self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
+            # Optional: explain default backup location without printing a user path
+            self.logger.info(
+                "Backups default to .madsci/postgres/backups relative to the working directory."
+            )
             return False, current_version, None
 
         # Version IS tracked - check for mismatch using major.minor comparison
@@ -171,26 +191,6 @@ class DatabaseVersionChecker:
         )
         return False, current_version, db_version
 
-    def _is_running_in_docker(self) -> bool:
-        """Detect if the application is running inside a Docker container."""
-        try:
-            # Check for .dockerenv file
-            if Path("/.dockerenv").exists():
-                return True
-
-            # Check cgroup for docker
-            if Path("/proc/1/cgroup").exists():
-                with open("/proc/1/cgroup") as f:  # noqa
-                    return "docker" in f.read() or "containerd" in f.read()
-
-            return False
-        except Exception:
-            return False
-
-    def _get_container_name(self) -> str:
-        """Get the container name for resource manager."""
-        return os.getenv("container_name", "resource_manager")  # noqa
-
     def validate_or_fail(self) -> None:
         """
         Validate database version compatibility or raise an exception.
@@ -199,33 +199,19 @@ class DatabaseVersionChecker:
         needs_migration, madsci_version, db_version = self.is_migration_needed()
 
         if needs_migration:
-            # Only raise error if version IS tracked but mismatched
-            is_docker = self._is_running_in_docker()
-
-            if is_docker:
-                container_name = self._get_container_name()
-                message = (
-                    f"Database schema version mismatch detected!\n"
-                    f"MADSci version: {madsci_version}\n"
-                    f"Database version: {db_version}\n"
-                    f"Please run the migration tool in the container: \n"
-                    f"docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src {container_name} "
-                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                )
-            else:
-                message = (
-                    f"Database schema version mismatch detected! \n"
-                    f"MADSci version: {madsci_version} \n"
-                    f"Database version: {db_version} \n"
-                    f"Please run the migration tool to update the database schema: \n"
-                    f"python -m madsci.resource_manager.migration_tool --db-url '{self.db_url}'"
-                )
-
+            cmds = self._both_commands()
+            message = (
+                "Database schema version mismatch detected!\n"
+                f"MADSci version: {madsci_version}\n"
+                f"Database version: {db_version}\n"
+                "Run one of:\n"
+                f"  • Bare metal:     {cmds['bare_metal']}\n"
+                f"  • Docker Compose: {cmds['docker_compose']}\n"
+                "Note: backups default to .madsci/postgres/backups relative to the working directory."
+            )
             self.logger.error("Database schema version mismatch detected")
             self.logger.error(message)
             raise RuntimeError(message)
-
-        self.logger.info("Database version validation passed")
 
     def create_version_table_if_not_exists(self) -> None:
         """Create the schema version table if it doesn't exist."""

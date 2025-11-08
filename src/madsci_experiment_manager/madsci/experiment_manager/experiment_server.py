@@ -18,6 +18,7 @@ from madsci.common.types.experiment_types import (
     ExperimentRegistration,
     ExperimentStatus,
 )
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from pymongo import MongoClient
 from pymongo.database import Database
 
@@ -65,10 +66,12 @@ class ExperimentManager(
 
         schema_file_path = Path(__file__).parent / "schema.json"
 
+        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
         version_checker = MongoDBVersionChecker(
             db_url=str(self.settings.mongo_db_url),
             database_name=self.settings.database_name,
             schema_file_path=str(schema_file_path),
+            backup_dir=str(mig_cfg.backup_dir),
             logger=self.logger,
         )
 

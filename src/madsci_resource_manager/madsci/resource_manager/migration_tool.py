@@ -46,6 +46,12 @@ class DatabaseMigrationSettings(
         title="Target Version",
         description="Target version to migrate to (defaults to current MADSci version)",
     )
+    backup_dir: PathLike = Field(
+        default=Path(".madsci/postgres/backups"),
+        title="Backup Directory",
+        description="Directory where database backups will be stored. "
+        "Relative to the current working directory unless absolute.",
+    )
     backup_only: bool = Field(
         default=False,
         title="Backup Only",
@@ -97,8 +103,12 @@ class DatabaseMigrator:
         # Get the package root directory for consistent file paths
         self.package_root = self._get_package_root()
 
-        # Parse database connection details for backup
-        self.backup_dir = self._get_backup_directory()
+        raw_backup = Path(self.settings.backup_dir)
+        self.backup_dir = (
+            raw_backup if raw_backup.is_absolute() else (Path.cwd() / raw_backup)
+        )
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.logger.info(f"Using backup directory: {self.backup_dir}")
 
         # Setup Alembic configuration
         self.alembic_cfg = self._setup_alembic_config()
@@ -133,37 +143,6 @@ class DatabaseMigrator:
         except Exception as e:
             self.logger.warning(f"Could not determine package root: {e}")
             return Path.cwd()
-
-    def _get_backup_directory(self) -> Path:
-        """Get the backup directory path that works consistently in both local and Docker environments."""
-        # Check if we're running in a Docker container
-        if self._is_running_in_docker():
-            # In Docker, use the mounted .madsci directory
-            backup_dir = Path("/home/madsci/.madsci/postgres/backups")
-        else:
-            # Local development - use current directory structure
-            current_dir = Path.cwd()
-            backup_dir = current_dir / ".madsci" / "postgres" / "backups"
-
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        self.logger.info(f"Using backup directory: {backup_dir}")
-        return backup_dir
-
-    def _is_running_in_docker(self) -> bool:
-        """Detect if running inside a Docker container."""
-        try:
-            # Check for .dockerenv file
-            if Path("/.dockerenv").exists():
-                return True
-
-            # Check cgroup for docker
-            if Path("/proc/1/cgroup").exists():
-                with open("/proc/1/cgroup") as f:  # noqa
-                    return "docker" in f.read() or "containerd" in f.read()
-
-            return False
-        except Exception:
-            return False
 
     def _setup_alembic_config(self) -> Config:
         """Setup Alembic configuration with proper paths."""
@@ -708,6 +687,11 @@ def main() -> None:
             help="Target version to migrate to (defaults to current MADSci version)",
         )
         parser.add_argument(
+            "--backup-dir",
+            type=str,
+            help="Directory for database backups (default: .madsci/postgres/backups)",
+        )
+        parser.add_argument(
             "--backup-only",
             action="store_true",
             help="Only create a backup, do not run migration",
@@ -726,13 +710,17 @@ def main() -> None:
         args = parser.parse_args()
 
         # Create settings with CLI arguments taking precedence
-        settings = DatabaseMigrationSettings(
+        kwargs = dict(  # noqa
             db_url=args.db_url,
             target_version=args.target_version,
             backup_only=args.backup_only,
             restore_from=args.restore_from,
             generate_migration=args.generate_migration,
         )
+        if args.backup_dir is not None:
+            kwargs["backup_dir"] = args.backup_dir  # only override if user passed it
+
+        settings = DatabaseMigrationSettings(**kwargs)
 
         migrator = DatabaseMigrator(settings, logger)
 

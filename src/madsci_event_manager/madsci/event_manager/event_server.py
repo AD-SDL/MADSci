@@ -20,6 +20,7 @@ from madsci.common.types.event_types import (
     EventManagerHealth,
     EventManagerSettings,
 )
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.event_manager.events_csv_exporter import CSVExporter
 from madsci.event_manager.notifications import EmailAlerts
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
@@ -65,10 +66,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
 
         schema_file_path = Path(__file__).parent / "schema.json"
 
+        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
         version_checker = MongoDBVersionChecker(
             db_url=str(self.settings.mongo_db_url),
             database_name=self.settings.database_name,
             schema_file_path=str(schema_file_path),
+            backup_dir=str(mig_cfg.backup_dir),
             logger=self.logger,
         )
 

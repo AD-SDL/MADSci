@@ -19,6 +19,7 @@ class MongoDBVersionChecker:
         db_url: str,
         database_name: str,
         schema_file_path: str,
+        backup_dir: Optional[str] = None,
         logger: Optional[EventClient] = None,
     ) -> None:
         """
@@ -28,11 +29,13 @@ class MongoDBVersionChecker:
             db_url: MongoDB connection URL
             database_name: Name of the database to check
             schema_file_path: Path to the schema.json file (used for validation only)
+            backup_dir: Optional backup directory for MongoDB backups
             logger: Optional logger instance
         """
         self.db_url = db_url
         self.database_name = database_name
         self.schema_file_path = Path(schema_file_path)
+        self.backup_dir = str(Path(backup_dir).expanduser()) if backup_dir else None
         self.logger = logger or EventClient()
 
         # Initialize MongoDB connection
@@ -45,6 +48,40 @@ class MongoDBVersionChecker:
             self.client.close()
             if hasattr(self, "logger") and self.logger:
                 self.logger.debug("MongoDB version checker client disposed")
+
+    def _build_migration_base_args(self) -> list[str]:
+        args = [
+            "python",
+            "-m",
+            "madsci.common.mongodb_migration_tool",
+            "--db-url",
+            self.db_url,
+            "--database",
+            self.database_name,
+            "--schema-file",
+            str(self.schema_file_path),
+        ]
+        if self.backup_dir:
+            args.extend(["--backup-dir", self.backup_dir])
+        return args
+
+    def _build_bare_command(self) -> str:
+        """Build bare metal command for migration tool."""
+        return " ".join(self._build_migration_base_args())
+
+    def _build_docker_compose_command(self) -> str:
+        """Build Docker Compose command for migration tool."""
+        service_placeholder = "<your_compose_service_name>"
+        return f"docker compose run --rm {service_placeholder} " + " ".join(
+            self._build_migration_base_args()
+        )
+
+    def get_migration_commands(self) -> dict[str, str]:
+        """Get migration commands for bare metal and Docker Compose."""
+        return {
+            "bare_metal": self._build_bare_command(),
+            "docker_compose": self._build_docker_compose_command(),
+        }
 
     def get_expected_schema_version(self) -> SemanticVersion:
         """Get the expected schema version from the schema.json file."""
@@ -148,36 +185,21 @@ class MongoDBVersionChecker:
         # If version tracking doesn't exist, no migration needed
         # User can manually run migration if they want to start tracking
         if not self.is_version_tracked():
-            is_docker = self._is_running_in_docker()
-
-            if is_docker:
-                container_name = self._get_container_name()
-                command = (
-                    f"docker-compose run --rm {container_name} python -m madsci.common.mongodb_migration_tool "
-                    f"--db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                )
-            else:
-                command = (
-                    f"python -m madsci.common.mongodb_migration_tool "
-                    f"--db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                )
-
+            cmds = self.get_migration_commands()
             self.logger.info(
                 f"No version tracking found for {self.database_name} - database will start without version validation."
             )
             self.logger.info(
-                "To enable version tracking, run the migration tool manually:"
+                "To enable version tracking, run the migration tool using one of the following:"
             )
-            self.logger.info(command)
+            self.logger.info(f"  • Bare metal:     {cmds['bare_metal']}")
+            self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
             return False, expected_schema_version, None
 
-        # Version IS tracked - check for exact match
-        # MongoDB uses exact version matching (not major.minor like PostgreSQL)
         if expected_schema_version != db_version:
             self.logger.warning(
                 f"Schema version mismatch in {self.database_name}: "
-                f"Expected schema v{expected_schema_version}, "
-                f"Database v{db_version}"
+                f"Expected schema v{expected_schema_version}, Database v{db_version}"
             )
             return True, expected_schema_version, db_version
 
@@ -196,73 +218,25 @@ class MongoDBVersionChecker:
         - If version tracking exists and versions match -> Allow server to start
         - If version tracking exists and versions mismatch -> Raise error, require migration
         """
-        needs_migration, expected_schema_version, db_version = (
-            self.is_migration_needed()
-        )
+        needs_migration, expected, current = self.is_migration_needed()
 
         if needs_migration:
-            # Only raise error if version IS tracked but mismatched
-            is_docker = self._is_running_in_docker()
-
-            if is_docker:
-                container_name = self._get_container_name()
-                command = (
-                    f"docker-compose run --rm {container_name} python -m madsci.common.mongodb_migration_tool "
-                    f"--db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                )
-            else:
-                command = (
-                    f"python -m madsci.common.mongodb_migration_tool "
-                    f"--db-url '{self.db_url}' --database '{self.database_name}' --schema-file '{self.schema_file_path}'"
-                )
-
+            cmds = self.get_migration_commands()
             self.logger.error(
                 f"Database schema version mismatch detected for {self.database_name}"
             )
-            self.logger.error(f"Expected schema version: {expected_schema_version}")
-            self.logger.error(f"Database version: {db_version}")
-            self.logger.error("Please run the migration tool:")
-            self.logger.error(command)
-
-            # Keep full message in exception for traceback
-            message = (
-                f"Database schema version mismatch detected for {self.database_name}!\n"
-                f"Expected schema version: {expected_schema_version}\n"
-                f"Database version: {db_version}\n"
-                f"Please run the migration tool:\n"
-                f"{command}"
+            self.logger.error(f"Expected schema version: {expected}")
+            self.logger.error(f"Database version: {current}")
+            self.logger.error(
+                "Please run the migration tool with one of the following:"
             )
-            raise RuntimeError(message)
-
-        self.logger.info(f"Database version validation passed for {self.database_name}")
-
-    def _is_running_in_docker(self) -> bool:
-        """Detect if the application is running inside a Docker container."""
-        try:
-            # Check for .dockerenv file
-            if Path("/.dockerenv").exists():
-                return True
-
-            # Check cgroup for docker
-            if Path("/proc/1/cgroup").exists():
-                with open("/proc/1/cgroup") as f:  # noqa
-                    return "docker" in f.read() or "containerd" in f.read()
-
-            return False
-        except Exception:
-            return False
-
-    def _get_container_name(self) -> str:
-        """Get the container name based on database name."""
-        if self.database_name == "madsci_events":
-            return "event_manager"
-        if self.database_name == "madsci_data":
-            return "data_manager"
-        if self.database_name == "madsci_experiments":
-            return "experiment_manager"
-        if self.database_name == "madsci_workcells":
-            return "workcell_manager"
-        return "container_name"
+            self.logger.error(f"  • Bare metal:     {cmds['bare_metal']}")
+            self.logger.error(f"  • Docker Compose: {cmds['docker_compose']}")
+            raise RuntimeError(
+                "Database schema version mismatch detected!\n"
+                f"Expected: {expected}\nCurrent: {current}\n"
+                f"Run one of:\n  • {cmds['bare_metal']}\n  • {cmds['docker_compose']}"
+            )
 
     def create_schema_versions_collection(self) -> None:
         """Create the schema_versions collection if it doesn't exist."""
