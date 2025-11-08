@@ -178,3 +178,7 @@ show-version:
     ui_version=$(grep '"version":' ui/package.json | sed 's/.*"version": "\(.*\)".*/\1/')
     echo "  - package.json: $ui_version"
   fi
+
+# Run the integration tests
+integration_tests:
+  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb

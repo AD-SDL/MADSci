@@ -512,6 +512,14 @@ class AdvancedExampleNode(RestNode):
 
         return analysis, files
 
+    @action
+    def arg_type_test(self, x: bool, y: int, z: float, w: str) -> None:
+        """Used to test that argument types are correctly passed to the node module."""
+        if type(x) is bool and type(y) is int and type(z) is float and type(w) is str:
+            self.logger.log(f"Value of x is {x} and type is {type(x)}")
+            return
+        raise ValueError("Argument types are incorrect")
+
     def get_location(self) -> AdminCommandResponse:
         """Get location for the advanced example node"""
         return AdminCommandResponse(data=[0, 0, 0, 0])

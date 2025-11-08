@@ -123,6 +123,7 @@ class RestNode(AbstractNode):
                 **getattr(self.config, "uvicorn_kwargs", {}),
             )
         else:
+            super().start_node()
             self.logger.debug("Running node in test mode")
             self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
             self._configure_routes()
