@@ -139,6 +139,19 @@ class MadsciBaseModel(BaseModel):
             raw_data = yaml.safe_load(fp)
         return cls.model_validate(raw_data)
 
+    def model_dump_yaml(self) -> str:
+        """
+        Convert the model to a YAML string.
+
+        Returns:
+            YAML string representation of the model
+        """
+        return yaml.dump(
+            self.model_dump(mode="json"),
+            indent=2,
+            sort_keys=False,
+        )
+
     def to_mongo(self) -> dict[str, Any]:
         """
         Convert the model to a MongoDB-compatible dictionary.
