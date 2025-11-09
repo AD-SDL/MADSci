@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">524 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">394<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">130<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">395<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">129<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_353a55192d621771_helpers_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-11-08 22:39 +0000
+            created at 2025-11-09 00:17 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -795,13 +795,13 @@
     <p class="run"><span class="n"><a id="t713" href="#t713">713</a></span><span class="t">            <span class="key">if</span> <span class="nam">arg_name</span> <span class="key">in</span> <span class="nam">parameters</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t714" href="#t714">714</a></span><span class="t">                <span class="nam">arg_dict</span><span class="op">[</span><span class="nam">arg_name</span><span class="op">]</span> <span class="op">=</span> <span class="nam">arg_value</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t715" href="#t715">715</a></span><span class="t">            <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t716" href="#t716">716</a></span><span class="t">                <span class="nam">EventClient</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">log_warning</span><span class="op">(</span><span class="fst">f"</span><span class="fst">Ignoring unexpected argument </span><span class="op">{</span><span class="nam">arg_name</span><span class="op">}</span><span class="fst">"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t716" href="#t716">716</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_warning</span><span class="op">(</span><span class="fst">f"</span><span class="fst">Ignoring unexpected argument </span><span class="op">{</span><span class="nam">arg_name</span><span class="op">}</span><span class="fst">"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t717" href="#t717">717</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t718" href="#t718">718</a></span><span class="t">        <span class="key">for</span> <span class="nam">file</span> <span class="key">in</span> <span class="nam">action_request</span><span class="op">.</span><span class="nam">files</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t719" href="#t719">719</a></span><span class="t">            <span class="key">if</span> <span class="nam">file</span> <span class="key">in</span> <span class="nam">parameters</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t720" href="#t720">720</a></span><span class="t">                <span class="nam">arg_dict</span><span class="op">[</span><span class="nam">file</span><span class="op">]</span> <span class="op">=</span> <span class="nam">action_request</span><span class="op">.</span><span class="nam">files</span><span class="op">[</span><span class="nam">file</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t721" href="#t721">721</a></span><span class="t">            <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t722" href="#t722">722</a></span><span class="t">                <span class="nam">EventClient</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">log_warning</span><span class="op">(</span><span class="fst">f"</span><span class="fst">Ignoring unexpected file </span><span class="op">{</span><span class="nam">file</span><span class="op">}</span><span class="fst">"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t722" href="#t722">722</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">logger</span><span class="op">.</span><span class="nam">log_warning</span><span class="op">(</span><span class="fst">f"</span><span class="fst">Ignoring unexpected file </span><span class="op">{</span><span class="nam">file</span><span class="op">}</span><span class="fst">"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t723" href="#t723">723</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t724" href="#t724">724</a></span><span class="t">    <span class="key">def</span> <span class="nam">_validate_var_args_compatibility</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t725" href="#t725">725</a></span><span class="t">        <span class="nam">self</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -1346,7 +1346,7 @@
             <a class="nav" href="z_353a55192d621771_helpers_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-11-08 22:39 +0000
+            created at 2025-11-09 00:17 +0000
         </p>
     </div>
 </footer>
