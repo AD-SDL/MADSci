@@ -345,7 +345,7 @@ class ResourceManager(
             self.logger.error(e)
             raise e
 
-    @post("/templates")
+    @post("/template/create")
     async def create_template(self, body: TemplateCreateBody) -> ResourceDataModels:
         """Create a new resource template from a resource."""
         try:
@@ -379,8 +379,8 @@ class ResourceManager(
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @get("/templates")
-    async def list_templates(self) -> list[ResourceDataModels]:
+    @get("/template/query_all")
+    async def query_all_templates(self) -> list[ResourceDataModels]:
         """List all templates."""
         try:
             return self._resource_interface.query_templates()
