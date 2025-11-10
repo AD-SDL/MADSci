@@ -1091,7 +1091,7 @@ class ResourceClient:
                 version=version,
             ).model_dump(mode="json")
             response = requests.post(
-                f"{self.resource_server_url}templates", json=payload, timeout=10
+                f"{self.resource_server_url}template/create", json=payload, timeout=10
             )
             response.raise_for_status()
             template = Resource.discriminate(response.json())
@@ -1174,7 +1174,7 @@ class ResourceClient:
             else:
                 # Use simple endpoint for no filtering
                 response = requests.get(
-                    f"{self.resource_server_url}templates", timeout=10
+                    f"{self.resource_server_url}template/query_all", timeout=10
                 )
 
             response.raise_for_status()
