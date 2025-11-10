@@ -4,8 +4,8 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Coverage for src/madsci_client/madsci/client/resource_client.py: 69%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_58284776.png">
-    <link rel="stylesheet" href="style_cb_6b508a39.css" type="text/css">
-    <script src="coverage_html_cb_6fb7b396.js" defer></script>
+    <link rel="stylesheet" href="style_cb_a37fa487.css" type="text/css">
+    <script src="coverage_html_cb_cadff66e.js" defer></script>
 </head>
 <body class="pyfile">
 <header>
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_56ae2df781c748f1_workcell_client_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-11-09 00:17 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.3">coverage.py v7.11.3</a>,
+            created at 2025-11-10 20:11 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1173,7 +1173,7 @@
     <p class="run run2"><span class="n"><a id="t1091" href="#t1091">1091</a></span><span class="t">                <span class="nam">version</span><span class="op">=</span><span class="nam">version</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1092" href="#t1092">1092</a></span><span class="t">            <span class="op">)</span><span class="op">.</span><span class="nam">model_dump</span><span class="op">(</span><span class="nam">mode</span><span class="op">=</span><span class="str">"json"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1093" href="#t1093">1093</a></span><span class="t">            <span class="nam">response</span> <span class="op">=</span> <span class="nam">requests</span><span class="op">.</span><span class="nam">post</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1094" href="#t1094">1094</a></span><span class="t">                <span class="fst">f"</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">resource_server_url</span><span class="op">}</span><span class="fst">templates</span><span class="fst">"</span><span class="op">,</span> <span class="nam">json</span><span class="op">=</span><span class="nam">payload</span><span class="op">,</span> <span class="nam">timeout</span><span class="op">=</span><span class="num">10</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1094" href="#t1094">1094</a></span><span class="t">                <span class="fst">f"</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">resource_server_url</span><span class="op">}</span><span class="fst">template/create</span><span class="fst">"</span><span class="op">,</span> <span class="nam">json</span><span class="op">=</span><span class="nam">payload</span><span class="op">,</span> <span class="nam">timeout</span><span class="op">=</span><span class="num">10</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1095" href="#t1095">1095</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1096" href="#t1096">1096</a></span><span class="t">            <span class="nam">response</span><span class="op">.</span><span class="nam">raise_for_status</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1097" href="#t1097">1097</a></span><span class="t">            <span class="nam">template</span> <span class="op">=</span> <span class="nam">Resource</span><span class="op">.</span><span class="nam">discriminate</span><span class="op">(</span><span class="nam">response</span><span class="op">.</span><span class="nam">json</span><span class="op">(</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -1254,9 +1254,9 @@
     <p class="run run2"><span class="n"><a id="t1172" href="#t1172">1172</a></span><span class="t">                    <span class="nam">timeout</span><span class="op">=</span><span class="num">10</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1173" href="#t1173">1173</a></span><span class="t">                <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1174" href="#t1174">1174</a></span><span class="t">            <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1175" href="#t1175">1175</a></span><span class="t">                <span class="com"># Use simple endpoint for no filtering</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1175" href="#t1175">1175</a></span><span class="t">                <span class="com"># Use query_all endpoint for no filtering</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1176" href="#t1176">1176</a></span><span class="t">                <span class="nam">response</span> <span class="op">=</span> <span class="nam">requests</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1177" href="#t1177">1177</a></span><span class="t">                    <span class="fst">f"</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">resource_server_url</span><span class="op">}</span><span class="fst">templates</span><span class="fst">"</span><span class="op">,</span> <span class="nam">timeout</span><span class="op">=</span><span class="num">10</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1177" href="#t1177">1177</a></span><span class="t">                    <span class="fst">f"</span><span class="op">{</span><span class="nam">self</span><span class="op">.</span><span class="nam">resource_server_url</span><span class="op">}</span><span class="fst">templates/query_all</span><span class="fst">"</span><span class="op">,</span> <span class="nam">timeout</span><span class="op">=</span><span class="num">10</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1178" href="#t1178">1178</a></span><span class="t">                <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1179" href="#t1179">1179</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1180" href="#t1180">1180</a></span><span class="t">            <span class="nam">response</span><span class="op">.</span><span class="nam">raise_for_status</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -1913,8 +1913,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_56ae2df781c748f1_workcell_client_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.0">coverage.py v7.11.0</a>,
-            created at 2025-11-09 00:17 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.11.3">coverage.py v7.11.3</a>,
+            created at 2025-11-10 20:11 +0000
         </p>
     </div>
 </footer>
