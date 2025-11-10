@@ -379,7 +379,7 @@ class ResourceManager(
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @get("/template/query_all")
+    @get("/templates/query_all")
     async def query_all_templates(self) -> list[ResourceDataModels]:
         """List all templates."""
         try:
