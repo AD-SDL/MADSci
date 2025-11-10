@@ -1172,9 +1172,9 @@ class ResourceClient:
                     timeout=10,
                 )
             else:
-                # Use simple endpoint for no filtering
+                # Use query_all endpoint for no filtering
                 response = requests.get(
-                    f"{self.resource_server_url}template/query_all", timeout=10
+                    f"{self.resource_server_url}templates/query_all", timeout=10
                 )
 
             response.raise_for_status()
