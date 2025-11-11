@@ -212,7 +212,7 @@ class RestNodeClient(AbstractNodeClient):
         rest_response.raise_for_status()
         return ActionStatus(rest_response.json())
 
-    def _find_file_by_key(self, temp_dir: Path, file_key: str) -> Path | None:
+    def _find_file_by_key(self, temp_dir: Path, file_key: str) -> Optional[Path]:
         """Find a file in the temp directory by its key."""
         # Look for file with matching label (with any extension)
         extracted_files = list(temp_dir.glob(f"{file_key}*"))
@@ -257,7 +257,7 @@ class RestNodeClient(AbstractNodeClient):
 
     def _fetch_files_from_keys(
         self, action_name: str, action_id: str, file_keys: list[str]
-    ) -> Path | ActionFiles | None:
+    ) -> Union[Path, ActionFiles, None]:
         """Fetch actual files from the server using the provided file keys."""
         try:
             # Download the ZIP file containing all files
