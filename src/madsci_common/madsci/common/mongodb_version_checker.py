@@ -54,15 +54,15 @@ class MongoDBVersionChecker:
             "python",
             "-m",
             "madsci.common.mongodb_migration_tool",
-            "--db-url",
+            "--db_url",
             self.db_url,
             "--database",
             self.database_name,
-            "--schema-file",
+            "--schema_file",
             str(self.schema_file_path),
         ]
         if self.backup_dir:
-            args.extend(["--backup-dir", self.backup_dir])
+            args.extend(["--backup_dir", self.backup_dir])
         return args
 
     def _build_bare_command(self) -> str:
