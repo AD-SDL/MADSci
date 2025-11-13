@@ -20,6 +20,7 @@ from madsci.common.types.event_types import (
 )
 from madsci.event_manager.events_csv_exporter import CSVExporter
 from madsci.event_manager.notifications import EmailAlerts
+from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
 from pymongo import MongoClient, errors
 from pymongo.synchronous.database import Database
@@ -215,6 +216,129 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
 
         return parsed_start, parsed_end
+
+    @get("/utilization/periods")
+    async def get_utilization_periods(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        analysis_type: str = Query(
+            "daily", description="Analysis type: hourly, daily, weekly, monthly"
+        ),
+        user_timezone: str = Query(
+            "America/Chicago", description="Timezone for day boundaries"
+        ),
+        include_users: bool = Query(True, description="Include user utilization data"),
+        csv_format: bool = Query(False, description="Return data in CSV format"),
+        save_to_file: bool = Query(False, description="Save CSV to server filesystem"),
+        output_path: Optional[str] = Query(
+            None, description="Server path to save CSV files"
+        ),
+    ) -> Union[Dict[str, Any], Response]:
+        """Generate time-series utilization analysis with periodic breakdowns."""
+        try:
+            # Create analyzer and time-series analyzer
+            analyzer = self._get_session_analyzer()
+            if analyzer is None:
+                return {"error": "Failed to create session analyzer"}
+
+            time_series_analyzer = TimeSeriesAnalyzer(analyzer)
+
+            # Generate report
+            report = time_series_analyzer.generate_utilization_report_with_times(
+                start_time, end_time, analysis_type, user_timezone
+            )
+
+            # Add user utilization if requested
+            if include_users and report and "error" not in report:
+                try:
+                    time_series_analyzer.add_user_utilization_to_report(report)
+                except Exception as e:
+                    self.logger.warning(f"Failed to add user utilization: {e}")
+
+            # Handle CSV export if requested
+            if csv_format and report and "error" not in report:
+                csv_result = CSVExporter.handle_api_csv_export(
+                    report, save_to_file, output_path
+                )
+
+                # Return error if CSV processing failed
+                if "error" in csv_result:
+                    return csv_result
+
+                # Return Response object for download or JSON for file save
+                if csv_result.get("is_download"):
+                    return Response(
+                        content=csv_result["csv_content"],
+                        media_type="text/csv",
+                        headers={
+                            "Content-Disposition": "attachment; filename=utilization_periods_report.csv"
+                        },
+                    )
+
+                # File save results as JSON
+                return csv_result
+
+            # Default JSON response
+            return report
+
+        except Exception as e:
+            self.logger.error(f"Error generating utilization periods report: {e}")
+            return {"error": f"Failed to generate report: {e!s}"}
+
+    @get("/utilization/user")
+    async def get_user_utilization_report(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        csv_format: bool = Query(False, description="Return data in CSV format"),
+        save_to_file: bool = Query(False, description="Save CSV to server filesystem"),
+        output_path: Optional[str] = Query(
+            None, description="Server path to save CSV files"
+        ),
+    ) -> Union[Dict[str, Any], Response]:
+        """Generate detailed user utilization report based on workflow authors."""
+        try:
+            # Create analyzer
+            analyzer = self._get_session_analyzer()
+            if analyzer is None:
+                return {"error": "Failed to create session analyzer"}
+
+            # Parse time parameters and generate user utilization report
+            parsed_start, parsed_end = self._parse_session_time_parameters(
+                start_time, end_time
+            )
+            report = analyzer.generate_user_utilization_report(parsed_start, parsed_end)
+
+            # Handle CSV export if requested
+            if csv_format and report and "error" not in report:
+                csv_result = CSVExporter.handle_user_csv_export(
+                    report, save_to_file, output_path
+                )
+
+                # Return error if CSV processing failed
+                if "error" in csv_result:
+                    return csv_result
+
+                # Return Response object for download or JSON for file save
+                if csv_result.get("is_download"):
+                    return Response(
+                        content=csv_result["csv_content"],
+                        media_type="text/csv",
+                        headers={
+                            "Content-Disposition": "attachment; filename=user_utilization_report.csv"
+                        },
+                    )
+
+                # File save results as JSON
+                return csv_result
+
+            # Default JSON response
+            return report
+
+        except Exception as e:
+            self.logger.error(f"Error generating user utilization report: {e}")
+            return {"error": f"Failed to generate report: {e!s}"}
 
 
 # Main entry point for running the server
