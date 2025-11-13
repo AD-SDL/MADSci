@@ -66,7 +66,7 @@ class DatabaseVersionChecker:
             "python",
             "-m",
             "madsci.resource_manager.migration_tool",
-            "--db-url",
+            "--db_url",
             f"'{self.db_url}'",
         ]
 
