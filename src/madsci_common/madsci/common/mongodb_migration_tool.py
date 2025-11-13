@@ -391,7 +391,7 @@ def main() -> None:  # noqa
 
         migrator = MongoDBMigrator(settings, logger)
 
-        if settings.validate_schema:
+        if getattr(settings, "validate_schema", False):
             validation_result = migrator.validate_schema()
 
             if validation_result["valid"]:
