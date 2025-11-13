@@ -61,6 +61,11 @@ class MongoDBMigrationSettings(
         title="Check Version Only",
         description="Only check version compatibility, do not migrate",
     )
+    validate_schema: bool = Field(
+        default=False,
+        title="Validate Schema",
+        description="Validate current database schema against expected schema",
+    )
 
     @field_validator("backup_dir", mode="before")
     @classmethod
