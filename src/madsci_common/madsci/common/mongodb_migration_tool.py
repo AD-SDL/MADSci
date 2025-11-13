@@ -1,7 +1,5 @@
 """MongoDB migration tool for MADSci databases with backup, schema management, and CLI."""
 
-import argparse
-import json
 import subprocess
 import sys
 import traceback
@@ -11,7 +9,10 @@ from typing import Any, Dict, List, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
-from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
+from madsci.common.types.mongodb_migration_types import (
+    MongoDBMigrationSettings,
+    MongoDBSchema,
+)
 from pydantic import AnyUrl
 from pymongo import MongoClient
 
@@ -72,7 +73,7 @@ class MongoDBMigrator:
             if hasattr(self, "logger") and self.logger:
                 self.logger.debug("MongoDB migrator client disposed")
 
-    def load_expected_schema(self) -> Dict[str, Any]:
+    def load_expected_schema(self) -> MongoDBSchema:
         """Load the expected schema from the schema.json file."""
         try:
             if not self.schema_file_path.exists():
@@ -80,15 +81,29 @@ class MongoDBMigrator:
                     f"Schema file not found: {self.schema_file_path}"
                 )
 
-            with open(self.schema_file_path) as f:  # noqa
-                schema = json.load(f)
-
+            schema = MongoDBSchema.from_file(str(self.schema_file_path))
             self.logger.info(f"Loaded schema from {self.schema_file_path}")
             return schema
 
         except Exception as e:
             self.logger.error(f"Error loading schema file: {e}")
             raise RuntimeError(f"Cannot load schema file: {e}") from e
+
+    def get_current_database_schema(self) -> MongoDBSchema:
+        """Get the current database schema using Pydantic models."""
+        try:
+            current_version = self.version_checker.get_database_version()
+            version_str = str(current_version) if current_version else "0.0.0"
+
+            return MongoDBSchema.from_mongodb_database(
+                database_name=self.database_name,
+                mongo_client=self.client,
+                schema_version=version_str,
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error getting current database schema: {e}")
+            raise
 
     def create_backup(self) -> Path:
         """Create a backup of the current database using mongodump."""
@@ -183,45 +198,6 @@ class MongoDBMigrator:
             self.logger.error(f"Restore failed: {e.stderr}")
             raise RuntimeError(f"Database restore failed: {e}") from e
 
-    def get_current_database_schema(self) -> Dict[str, Any]:
-        """Get the current database schema (collections and indexes)."""
-        current_schema = {"database": self.database_name, "collections": {}}
-
-        try:
-            # Get all collections except system collections
-            collection_names = [
-                name
-                for name in self.database.list_collection_names()
-                if not name.startswith("system.")
-            ]
-
-            for collection_name in collection_names:
-                collection = self.database[collection_name]
-                indexes = list(collection.list_indexes())
-
-                # Filter out the default _id index for comparison
-                filtered_indexes = []
-                for index in indexes:
-                    if index["name"] != "_id_":
-                        filtered_indexes.append(
-                            {
-                                "keys": list(index["key"].items()),
-                                "name": index["name"],
-                                "unique": index.get("unique", False),
-                                "background": index.get("background", False),
-                            }
-                        )
-
-                current_schema["collections"][collection_name] = {
-                    "indexes": filtered_indexes
-                }
-
-            return current_schema
-
-        except Exception as e:
-            self.logger.error(f"Error getting current database schema: {e}")
-            raise
-
     def apply_schema_migrations(self) -> None:
         """Apply schema migrations based on the expected schema."""
         try:
@@ -229,16 +205,10 @@ class MongoDBMigrator:
 
             self.logger.info("Applying schema migrations...")
 
-            # Create collections and indexes
-            for collection_name, collection_config in expected_schema[
-                "collections"
-            ].items():
+            for collection_name, collection_def in expected_schema.collections.items():
                 self._ensure_collection_exists(collection_name)
-                self._ensure_indexes_exist(
-                    collection_name, collection_config.get("indexes", [])
-                )
+                self._ensure_indexes_exist(collection_name, collection_def.indexes)
 
-            # Create/update schema versions collection
             self.version_checker.create_schema_versions_collection()
 
             self.logger.info("Schema migrations applied successfully")
@@ -260,29 +230,19 @@ class MongoDBMigrator:
             raise
 
     def _ensure_indexes_exist(
-        self, collection_name: str, expected_indexes: List[Dict[str, Any]]
+        self, collection_name: str, expected_indexes: List[Any]
     ) -> None:
         """Ensure all expected indexes exist on a collection."""
         try:
             collection = self.database[collection_name]
             existing_indexes = {idx["name"] for idx in collection.list_indexes()}
 
-            for index_config in expected_indexes:
-                index_name = index_config["name"]
+            for index_def in expected_indexes:
+                index_name = index_def.name
 
                 if index_name not in existing_indexes:
-                    # Convert keys format from [["field", direction]] to [("field", direction)]
-                    keys = [
-                        (field, direction) for field, direction in index_config["keys"]
-                    ]
-
-                    index_options = {
-                        "name": index_name,
-                        "background": index_config.get("background", True),
-                    }
-
-                    if index_config.get("unique", False):
-                        index_options["unique"] = True
+                    keys = index_def.get_keys_as_tuples()
+                    index_options = index_def.to_mongo_format()
 
                     collection.create_index(keys, **index_options)
                     self.logger.info(
@@ -297,6 +257,36 @@ class MongoDBMigrator:
             self.logger.error(
                 f"Error ensuring indexes for collection {collection_name}: {e}"
             )
+            raise
+
+    def validate_schema(self) -> Dict[str, Any]:
+        """
+        Validate current database schema against expected schema.
+
+        Returns:
+            Dictionary with validation results and differences
+        """
+        try:
+            expected_schema = self.load_expected_schema()
+            current_schema = self.get_current_database_schema()
+
+            differences = expected_schema.compare_with_database_schema(current_schema)
+
+            has_differences = (
+                bool(differences["missing_collections"])
+                or bool(differences["extra_collections"])
+                or bool(differences["collection_differences"])
+            )
+
+            return {
+                "valid": not has_differences,
+                "differences": differences,
+                "expected_version": str(expected_schema.schema_version),
+                "current_version": str(current_schema.schema_version),
+            }
+
+        except Exception as e:
+            self.logger.error(f"Schema validation failed: {e}")
             raise
 
     def run_migration(self, target_version: Optional[str] = None) -> None:
@@ -389,85 +379,60 @@ def handle_migration_commands(
         logger.info("Migration completed successfully")
 
 
-def main() -> None:
+def main() -> None:  # noqa
     """Command line interface for the MongoDB migration tool."""
     logger = EventClient()
 
     try:
-        # Parse command-line arguments
-        parser = argparse.ArgumentParser(
-            description="MADSci MongoDB migration tool for Event and Data Managers"
-        )
-        parser.add_argument(
-            "--db-url",
-            type=str,
-            help="MongoDB connection URL (e.g., mongodb://localhost:27017)",
-        )
-        parser.add_argument(
-            "--database",
-            type=str,
-            required=True,
-            help="Database name to migrate (e.g., madsci_events, madsci_data)",
-        )
-        parser.add_argument(
-            "--schema-file",
-            type=str,
-            required=True,
-            help="Path to schema.json file (auto-detects if not provided)",
-        )
-        parser.add_argument(
-            "--backup-dir",
-            type=str,
-            help="Directory for database backups (default: ~/.madsci/mongodb/backups)",
-        )
-        parser.add_argument(
-            "--target-version",
-            type=str,
-            help="Target version to migrate to (defaults to version in schema.json)",
-        )
-        parser.add_argument(
-            "--backup-only",
-            action="store_true",
-            help="Only create a backup, do not run migration",
-        )
-        parser.add_argument(
-            "--restore-from",
-            type=str,
-            help="Restore from specified backup directory instead of migrating",
-        )
-        parser.add_argument(
-            "--check-version",
-            action="store_true",
-            help="Only check version compatibility, do not migrate",
-        )
-
-        args = parser.parse_args()
-
-        # Create settings with CLI arguments (override only when provided)
-        kwargs = dict(  # noqa
-            mongo_db_url=args.db_url,
-            database=args.database,
-            schema_file=args.schema_file,
-            target_version=args.target_version,
-            backup_only=args.backup_only,
-            restore_from=args.restore_from,
-            check_version=args.check_version,
-        )
-        if args.backup_dir is not None and str(args.backup_dir).strip():
-            kwargs["backup_dir"] = (
-                args.backup_dir
-            )  # only override default if user passed it
-
-        settings = MongoDBMigrationSettings(**kwargs)
+        settings = MongoDBMigrationSettings()
 
         logger.info(f"Using database: {settings.database}")
         logger.info(f"Using schema file: {settings.get_effective_schema_file_path()}")
 
-        # Create migrator with settings
         migrator = MongoDBMigrator(settings, logger)
 
-        # Handle migration commands
-        handle_migration_commands(settings, migrator.version_checker, migrator, logger)
+        if settings.validate_schema:
+            validation_result = migrator.validate_schema()
+
+            if validation_result["valid"]:
+                logger.info(
+                    "Schema validation passed - database matches expected schema"
+                )
+            else:
+                logger.log_warning("Schema validation failed - differences detected:")
+                diff = validation_result["differences"]
+
+                if diff["missing_collections"]:
+                    logger.log_warning(
+                        f"Missing collections: {diff['missing_collections']}"
+                    )
+
+                if diff["extra_collections"]:
+                    logger.log_warning(
+                        f"Extra collections: {diff['extra_collections']}"
+                    )
+
+                if diff["collection_differences"]:
+                    for coll_name, coll_diff in diff["collection_differences"].items():
+                        logger.log_warning(f"Collection '{coll_name}' differences:")
+                        if coll_diff["missing_indexes"]:
+                            logger.log_warning(
+                                f"  Missing indexes: {coll_diff['missing_indexes']}"
+                            )
+                        if coll_diff["extra_indexes"]:
+                            logger.log_warning(
+                                f"  Extra indexes: {coll_diff['extra_indexes']}"
+                            )
+                        if coll_diff["different_indexes"]:
+                            logger.log_warning(
+                                f"  Different indexes: {len(coll_diff['different_indexes'])}"
+                            )
+
+                sys.exit(1)
+        else:
+            handle_migration_commands(
+                settings, migrator.version_checker, migrator, logger
+            )
 
     except KeyboardInterrupt:
         logger.info("Migration interrupted by user")
