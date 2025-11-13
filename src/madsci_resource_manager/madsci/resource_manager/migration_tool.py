@@ -1,6 +1,5 @@
 """Database migration tool for MADSci resources using Alembic with automatic type conversion handling."""
 
-import argparse
 import os
 import re
 import subprocess
@@ -14,7 +13,9 @@ from typing import Any, Optional
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
+from alembic.runtime.environment import EnvironmentContext
 from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from madsci.client.event_client import EventClient
 from madsci.common.types.base_types import MadsciBaseSettings, PathLike
 from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
@@ -333,6 +334,29 @@ class DatabaseMigrator:
             raw_conn.close()
             postgres_engine.dispose()
 
+    def _log_alembic_state(self, when: str) -> None:
+        try:
+            script = ScriptDirectory.from_config(self.alembic_cfg)
+            heads = list(script.get_heads())
+            self.logger.info(f"[{when}] Alembic script heads: {heads}")
+
+            # DB current revision(s)
+            curr = []
+
+            def _capture_current(
+                _rev: Any, context: Any
+            ) -> None:  # rev is head; context.get_current_revision() returns DB rev
+                curr.append(context.get_current_revision())
+                return []
+
+            with EnvironmentContext(self.alembic_cfg, script, fn=_capture_current):
+                pass
+            self.logger.info(
+                f"[{when}] Database current revision: {curr[0] if curr else None}"
+            )
+        except Exception as e:
+            self.logger.warning(f"[{when}] Could not log Alembic state: {e}")
+
     def apply_schema_migrations(self) -> None:
         """Apply schema migrations using Alembic with automatic migration generation."""
         try:
@@ -371,16 +395,18 @@ class DatabaseMigrator:
                     self.logger.info(
                         f"Generated and processed migration: {migration_message}"
                     )
-                else:
-                    self.logger.info("No model changes detected")
-
                 # Run Alembic upgrade to head
-                command.upgrade(self.alembic_cfg, "head")
+                try:
+                    self.logger.info("=== UPGRADE START ===")  # direct stdout sentinel
+                    command.upgrade(self.alembic_cfg, "head")
+                    self.logger.info("=== UPGRADE DONE ===")  # direct stdout sentinel
+                except Exception:
+                    self.logger.error("UPGRADE FAILED", exc_info=True)
+                    raise
+                self.logger.info("Alembic migrations applied successfully")
 
                 # Ensure our version tracking table exists (separate from Alembic)
                 SchemaVersionTable.metadata.create_all(self.engine)
-
-                self.logger.info("Alembic migrations applied successfully")
 
             finally:
                 # Always restore the original working directory
@@ -672,55 +698,7 @@ def main() -> None:
     logger = EventClient()
 
     try:
-        parser = argparse.ArgumentParser(
-            description="MADSci PostgreSQL database migration tool"
-        )
-
-        parser.add_argument(
-            "--db-url",
-            type=str,
-            help="PostgreSQL connection URL (e.g., postgresql://user:pass@localhost:5432/resources)",
-        )
-        parser.add_argument(
-            "--target-version",
-            type=str,
-            help="Target version to migrate to (defaults to current MADSci version)",
-        )
-        parser.add_argument(
-            "--backup-dir",
-            type=str,
-            help="Directory for database backups (default: .madsci/postgres/backups)",
-        )
-        parser.add_argument(
-            "--backup-only",
-            action="store_true",
-            help="Only create a backup, do not run migration",
-        )
-        parser.add_argument(
-            "--restore-from",
-            type=str,
-            help="Restore from specified backup file instead of migrating",
-        )
-        parser.add_argument(
-            "--generate-migration",
-            type=str,
-            help="Generate a new migration file with the given message",
-        )
-
-        args = parser.parse_args()
-
-        # Create settings with CLI arguments taking precedence
-        kwargs = dict(  # noqa
-            db_url=args.db_url,
-            target_version=args.target_version,
-            backup_only=args.backup_only,
-            restore_from=args.restore_from,
-            generate_migration=args.generate_migration,
-        )
-        if args.backup_dir is not None:
-            kwargs["backup_dir"] = args.backup_dir  # only override if user passed it
-
-        settings = DatabaseMigrationSettings(**kwargs)
+        settings = DatabaseMigrationSettings()
 
         migrator = DatabaseMigrator(settings, logger)
 
