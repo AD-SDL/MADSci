@@ -185,6 +185,55 @@ class EventClientConfig(
         default_factory=lambda: Path("~") / ".madsci" / "logs",
     )
 
+    # HTTP Client configuration fields
+    retry_enabled: bool = Field(
+        default=True,
+        description="Whether to enable automatic retries for failed HTTP requests",
+    )
+    retry_total: int = Field(
+        default=3,
+        ge=0,
+        description="Total number of retry attempts for HTTP requests",
+    )
+    retry_backoff_factor: float = Field(
+        default=0.3,
+        ge=0.0,
+        description="Backoff factor between retries in seconds for HTTP requests",
+    )
+    retry_status_forcelist: list[int] = Field(
+        default=[429, 500, 502, 503, 504],
+        description="HTTP status codes that should trigger a retry",
+    )
+    retry_allowed_methods: Optional[list[str]] = Field(
+        default=None,
+        description="HTTP methods allowed to be retried (None uses urllib3 defaults)",
+    )
+    timeout_default: float = Field(
+        default=10.0,
+        gt=0.0,
+        description="Default timeout in seconds for standard HTTP requests",
+    )
+    timeout_data_operations: float = Field(
+        default=30.0,
+        gt=0.0,
+        description="Timeout in seconds for data-heavy HTTP operations",
+    )
+    timeout_long_operations: float = Field(
+        default=60.0,
+        gt=0.0,
+        description="Timeout in seconds for long-running HTTP operations (utilization queries)",
+    )
+    pool_connections: int = Field(
+        default=10,
+        ge=1,
+        description="Number of HTTP connection pool entries",
+    )
+    pool_maxsize: int = Field(
+        default=10,
+        ge=1,
+        description="Maximum size of the HTTP connection pool",
+    )
+
 
 class EventType(str, Enum):
     """The type of an event."""
