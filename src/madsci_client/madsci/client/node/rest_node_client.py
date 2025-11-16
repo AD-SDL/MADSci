@@ -6,7 +6,6 @@ import zipfile
 from pathlib import Path
 from typing import Any, ClassVar, Optional, Union
 
-import requests
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
@@ -19,6 +18,7 @@ from madsci.common.types.action_types import (
     RestActionResult,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
+from madsci.common.types.client_types import NodeClientConfig
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
     AdminCommands,
@@ -28,6 +28,7 @@ from madsci.common.types.node_types import (
     NodeStatus,
 )
 from madsci.common.types.resource_types import ResourceDataModels
+from madsci.common.utils import create_http_session
 from pydantic import AnyUrl
 
 
@@ -77,49 +78,83 @@ class RestNodeClient(AbstractNodeClient):
         get_resources=False,
     )
 
-    def __init__(self, url: AnyUrl) -> "RestNodeClient":
-        """Initialize the client."""
+    def __init__(
+        self, url: AnyUrl, config: Optional[NodeClientConfig] = None
+    ) -> "RestNodeClient":
+        """
+        Initialize the client.
+
+        Args:
+            url: The URL of the node to connect to.
+            config: Client configuration for retry and timeout settings. If not provided, uses default NodeClientConfig.
+        """
         super().__init__(url)
         self.logger = EventClient()
+        self.config = config if config is not None else NodeClientConfig()
+        self.session = create_http_session(config=self.config)
 
     def send_action(
         self,
         action_request: ActionRequest,
         await_result: bool = True,
         timeout: Optional[float] = None,
+        request_timeout: Optional[float] = None,
     ) -> ActionResult:
-        """Perform the action defined by action_request on the specified node."""
+        """
+        Perform the action defined by action_request on the specified node.
+
+        Args:
+            action_request: The action request to send.
+            await_result: Whether to wait for the action to complete.
+            timeout: Optional timeout in seconds for waiting for the action to complete.
+            request_timeout: Optional timeout override for individual HTTP requests. If None, uses config defaults.
+        """
         try:
             # Step 1: Create the action
-            action_id = self._create_action(action_request)
+            action_id = self._create_action(action_request, timeout=request_timeout)
 
             # Step 2: Upload files if any
             if action_request.files:
                 self._upload_action_files(
-                    action_request.action_name, action_id, action_request.files
+                    action_request.action_name,
+                    action_id,
+                    action_request.files,
+                    timeout=request_timeout,
                 )
 
             # Step 3: Start the action
-            result = self._start_action(action_request.action_name, action_id)
+            result = self._start_action(
+                action_request.action_name, action_id, timeout=request_timeout
+            )
 
             # Step 4: Wait for completion if requested
             if await_result and not result.status.is_terminal:
                 result = self.await_action_result_by_name(
-                    action_request.action_name, action_id, timeout=timeout
+                    action_request.action_name,
+                    action_id,
+                    timeout=timeout,
+                    request_timeout=request_timeout,
                 )
 
             return result
 
-        except requests.HTTPError as e:
+        except Exception as e:
             if hasattr(e, "response") and e.response is not None:
                 self.logger.error(f"{e.response.status_code}: {e.response.text}")
             else:
                 self.logger.error(str(e))
             raise e
 
-    def _create_action(self, action_request: ActionRequest) -> str:
-        """Create a new action and return the action_id. REST-implementation specific"""
+    def _create_action(
+        self, action_request: ActionRequest, timeout: Optional[float] = None
+    ) -> str:
+        """
+        Create a new action and return the action_id. REST-implementation specific.
 
+        Args:
+            action_request: The action request to create.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        """
         # Convert ActionRequest to RestActionRequest format
         args = dict(action_request.args) if action_request.args else {}
 
@@ -142,19 +177,31 @@ class RestNodeClient(AbstractNodeClient):
         if serialized_var_kwargs is not None:
             request_data["var_kwargs"] = serialized_var_kwargs
 
-        rest_response = requests.post(
+        rest_response = self.session.post(
             f"{self.url}/action/{action_request.action_name}",
             json=request_data,
-            timeout=60,
+            timeout=timeout or self.config.timeout_data_operations,
         )
         rest_response.raise_for_status()
         response_data = rest_response.json()
         return response_data["action_id"]
 
     def _upload_action_files(
-        self, action_name: str, action_id: str, files: dict[str, Union[str, list[str]]]
+        self,
+        action_name: str,
+        action_id: str,
+        files: dict[str, Union[str, list[str]]],
+        timeout: Optional[float] = None,
     ) -> None:
-        """Upload files for an action. REST-implementation specific"""
+        """
+        Upload files for an action. REST-implementation specific.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            files: Dictionary of file keys to file paths.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        """
         for file_key, file_value in files.items():
             if isinstance(file_value, list):
                 # Handle list[Path] parameters - upload multiple files
@@ -169,10 +216,10 @@ class RestNodeClient(AbstractNodeClient):
                     )
 
                 try:
-                    rest_response = requests.post(
+                    rest_response = self.session.post(
                         f"{self.url}/action/{action_name}/{action_id}/upload/{file_key}",
                         files=files_to_upload,
-                        timeout=60,
+                        timeout=timeout or self.config.timeout_data_operations,
                     )
                     rest_response.raise_for_status()
                 finally:
@@ -183,31 +230,47 @@ class RestNodeClient(AbstractNodeClient):
             else:
                 # Handle single Path parameters
                 with Path(file_value).expanduser().open("rb") as file_handle:
-                    rest_response = requests.post(
+                    rest_response = self.session.post(
                         f"{self.url}/action/{action_name}/{action_id}/upload/{file_key}",
                         files={"file": file_handle},
-                        timeout=60,
+                        timeout=timeout or self.config.timeout_data_operations,
                     )
                     rest_response.raise_for_status()
 
-    def _start_action(self, action_name: str, action_id: str) -> ActionResult:
-        """Start an action that has been created. REST-implementation specific."""
-        rest_response = requests.post(
+    def _start_action(
+        self, action_name: str, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """
+        Start an action that has been created. REST-implementation specific.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        """
+        rest_response = self.session.post(
             f"{self.url}/action/{action_name}/{action_id}/start",
-            timeout=60,
+            timeout=timeout or self.config.timeout_data_operations,
         )
         rest_response.raise_for_status()
         return self._convert_rest_result_to_action_result(
-            rest_response.json(), action_name, action_id
+            rest_response.json(), action_name, action_id, timeout=timeout
         )
 
     def get_action_status_by_name(
-        self, action_name: str, action_id: str
+        self, action_name: str, action_id: str, timeout: Optional[float] = None
     ) -> ActionStatus:
-        """Get the status of an action by action name."""
-        rest_response = requests.get(
+        """
+        Get the status of an action by action name.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        rest_response = self.session.get(
             f"{self.url}/action/{action_name}/{action_id}/status",
-            timeout=10,
+            timeout=timeout or self.config.timeout_default,
         )
         rest_response.raise_for_status()
         return ActionStatus(rest_response.json())
@@ -229,12 +292,23 @@ class RestNodeClient(AbstractNodeClient):
         return all_files[0] if all_files else None
 
     def _convert_rest_result_to_action_result(
-        self, rest_result_data: dict, action_name: str, action_id: str
+        self,
+        rest_result_data: dict,
+        action_name: str,
+        action_id: str,
+        timeout: Optional[float] = None,
     ) -> ActionResult:
-        """Convert a REST API result (RestActionResult format) to ActionResult format.
+        """
+        Convert a REST API result (RestActionResult format) to ActionResult format.
 
         The REST API returns files as a list of strings (file keys), but ActionResult
         expects files to be Path objects or ActionFiles. This method handles the conversion.
+
+        Args:
+            rest_result_data: The REST result data.
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
         """
         # First validate as RestActionResult to ensure proper format
         rest_result = RestActionResult.model_validate(rest_result_data)
@@ -247,7 +321,7 @@ class RestNodeClient(AbstractNodeClient):
         if files_list:
             # Fetch the actual files using the file keys
             action_files = self._fetch_files_from_keys(
-                action_name, action_id, files_list
+                action_name, action_id, files_list, timeout=timeout
             )
             result_data["files"] = action_files
         else:
@@ -256,12 +330,26 @@ class RestNodeClient(AbstractNodeClient):
         return ActionResult.model_validate(result_data)
 
     def _fetch_files_from_keys(
-        self, action_name: str, action_id: str, file_keys: list[str]
+        self,
+        action_name: str,
+        action_id: str,
+        file_keys: list[str],
+        timeout: Optional[float] = None,
     ) -> Union[Path, ActionFiles, None]:
-        """Fetch actual files from the server using the provided file keys."""
+        """
+        Fetch actual files from the server using the provided file keys.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            file_keys: List of file keys to fetch.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        """
         try:
             # Download the ZIP file containing all files
-            zip_path = self._get_action_files_zip(action_name, action_id)
+            zip_path = self._get_action_files_zip(
+                action_name, action_id, timeout=timeout
+            )
 
             # Extract files from ZIP
             with zipfile.ZipFile(zip_path, "r") as zip_file:
@@ -297,12 +385,24 @@ class RestNodeClient(AbstractNodeClient):
                 zip_path.unlink(missing_ok=True)
 
     def get_action_result_by_name(
-        self, action_name: str, action_id: str, include_files: bool = True
+        self,
+        action_name: str,
+        action_id: str,
+        include_files: bool = True,
+        timeout: Optional[float] = None,
     ) -> ActionResult:
-        """Get the result of an action by name. REST-implementation specific."""
-        rest_response = requests.get(
+        """
+        Get the result of an action by name. REST-implementation specific.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            include_files: Whether to include files in the result.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        rest_response = self.session.get(
             f"{self.url}/action/{action_name}/{action_id}/result",
-            timeout=10,
+            timeout=timeout or self.config.timeout_default,
         )
         rest_response.raise_for_status()
 
@@ -313,18 +413,27 @@ class RestNodeClient(AbstractNodeClient):
             response_data = response_data.copy()
             response_data["files"] = None
             return self._convert_rest_result_to_action_result(
-                response_data, action_name, action_id
+                response_data, action_name, action_id, timeout=timeout
             )
 
         return self._convert_rest_result_to_action_result(
-            rest_response.json(), action_name, action_id
+            rest_response.json(), action_name, action_id, timeout=timeout
         )
 
-    def _get_action_files_zip(self, action_name: str, action_id: str) -> Path:
-        """Download all files from an action result as a ZIP. REST-implementation specific."""
-        rest_response = requests.get(
+    def _get_action_files_zip(
+        self, action_name: str, action_id: str, timeout: Optional[float] = None
+    ) -> Path:
+        """
+        Download all files from an action result as a ZIP. REST-implementation specific.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        """
+        rest_response = self.session.get(
             f"{self.url}/action/{action_name}/{action_id}/download",
-            timeout=60,
+            timeout=timeout or self.config.timeout_data_operations,
         )
         rest_response.raise_for_status()
 
@@ -334,33 +443,56 @@ class RestNodeClient(AbstractNodeClient):
             return Path(temp_file.name)
 
     def get_action_history(
-        self, action_id: Optional[str] = None
+        self, action_id: Optional[str] = None, timeout: Optional[float] = None
     ) -> dict[str, list[ActionResult]]:
-        """Get the history of a single action performed on the node, or every action, if no action_id is specified."""
-        response = requests.get(
-            f"{self.url}/action", params={"action_id": action_id}, timeout=10
+        """
+        Get the history of a single action performed on the node, or every action, if no action_id is specified.
+
+        Args:
+            action_id: Optional action ID to filter by.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        response = self.session.get(
+            f"{self.url}/action",
+            params={"action_id": action_id},
+            timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
         return response.json()
 
-    def get_action_status(self, action_id: str) -> ActionStatus:
-        """Get the status of an action on the node."""
-        rest_response = requests.get(
+    def get_action_status(
+        self, action_id: str, timeout: Optional[float] = None
+    ) -> ActionStatus:
+        """
+        Get the status of an action on the node.
+
+        Args:
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        rest_response = self.session.get(
             f"{self.url}/action/{action_id}/status",
-            timeout=10,
+            timeout=timeout or self.config.timeout_default,
         )
         rest_response.raise_for_status()
         return ActionStatus(rest_response.json())
 
-    def get_action_result(self, action_id: str) -> ActionResult:
-        """Get the result of an action on the node.
+    def get_action_result(
+        self, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """
+        Get the result of an action on the node.
 
         Note: This method uses the legacy API endpoint and cannot fetch files
         since it lacks the action_name needed for file download URLs.
+
+        Args:
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        rest_response = requests.get(
+        rest_response = self.session.get(
             f"{self.url}/action/{action_id}/result",
-            timeout=10,
+            timeout=timeout or self.config.timeout_default,
         )
         rest_response.raise_for_status()
 
@@ -369,37 +501,61 @@ class RestNodeClient(AbstractNodeClient):
 
         # Use dummy values for action_name since files won't be fetched
         return self._convert_rest_result_to_action_result(
-            response_data, "action_name", action_id
+            response_data, "action_name", action_id, timeout=timeout
         )
 
     def await_action_result(
-        self, action_id: str, timeout: Optional[float] = None
+        self,
+        action_id: str,
+        timeout: Optional[float] = None,
+        request_timeout: Optional[float] = None,
     ) -> ActionResult:
-        """Wait for an action to complete and return the result. Optionally, specify a timeout in seconds."""
+        """
+        Wait for an action to complete and return the result. Optionally, specify a timeout in seconds.
+
+        Args:
+            action_id: The ID of the action.
+            timeout: Optional timeout in seconds for waiting for the action to complete.
+            request_timeout: Optional timeout override for individual HTTP requests. If None, uses config defaults.
+        """
         start_time = time.time()
         interval = 0.25
         while True:
             if timeout is not None and time.time() - start_time > timeout:
                 raise TimeoutError("Timed out waiting for action to complete.")
-            status = self.get_action_status(action_id)
+            status = self.get_action_status(action_id, timeout=request_timeout)
             if not status.is_terminal:
                 time.sleep(interval)
                 interval = (
                     interval * 1.5 if interval < 5 else 5
                 )  # * Capped Exponential backoff
                 continue
-            return self.get_action_result(action_id)
+            return self.get_action_result(action_id, timeout=request_timeout)
 
     def await_action_result_by_name(
-        self, action_name: str, action_id: str, timeout: Optional[float] = None
+        self,
+        action_name: str,
+        action_id: str,
+        timeout: Optional[float] = None,
+        request_timeout: Optional[float] = None,
     ) -> ActionResult:
-        """Wait for an action to complete and return the result. Optionally, specify a timeout in seconds. REST-implementation specific."""
+        """
+        Wait for an action to complete and return the result. Optionally, specify a timeout in seconds. REST-implementation specific.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            timeout: Optional timeout in seconds for waiting for the action to complete.
+            request_timeout: Optional timeout override for individual HTTP requests. If None, uses config defaults.
+        """
         start_time = time.time()
         interval = 0.25
         while True:
             if timeout is not None and time.time() - start_time > timeout:
                 raise TimeoutError("Timed out waiting for action to complete.")
-            status = self.get_action_status_by_name(action_name, action_id)
+            status = self.get_action_status_by_name(
+                action_name, action_id, timeout=request_timeout
+            )
             if not status.is_terminal:
                 time.sleep(interval)
                 interval = (
@@ -409,42 +565,84 @@ class RestNodeClient(AbstractNodeClient):
 
             # Get the full result with data when the action is complete
             if status == ActionStatus.SUCCEEDED:
-                return self.get_action_result_by_name(action_name, action_id)
+                return self.get_action_result_by_name(
+                    action_name, action_id, timeout=request_timeout
+                )
 
             # For non-successful terminal states, create a basic ActionResult
             return ActionResult(action_id=action_id, status=status)
 
-    def get_status(self) -> NodeStatus:
-        """Get the status of the node."""
-        response = requests.get(f"{self.url}/status", timeout=10)
+    def get_status(self, timeout: Optional[float] = None) -> NodeStatus:
+        """
+        Get the status of the node.
+
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        response = self.session.get(
+            f"{self.url}/status", timeout=timeout or self.config.timeout_default
+        )
         response.raise_for_status()
         return NodeStatus.model_validate(response.json())
 
-    def get_state(self) -> dict[str, Any]:
-        """Get the state of the node."""
-        response = requests.get(f"{self.url}/state", timeout=10)
+    def get_state(self, timeout: Optional[float] = None) -> dict[str, Any]:
+        """
+        Get the state of the node.
+
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        response = self.session.get(
+            f"{self.url}/state", timeout=timeout or self.config.timeout_default
+        )
         response.raise_for_status()
         return response.json()
 
-    def get_info(self) -> NodeInfo:
-        """Get information about the node."""
-        response = requests.get(f"{self.url}/info", timeout=10)
+    def get_info(self, timeout: Optional[float] = None) -> NodeInfo:
+        """
+        Get information about the node.
+
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        response = self.session.get(
+            f"{self.url}/info", timeout=timeout or self.config.timeout_default
+        )
         response.raise_for_status()
         return NodeInfo.model_validate(response.json())
 
-    def set_config(self, new_config: dict[str, Any]) -> NodeSetConfigResponse:
-        """Update configuration values of the node."""
-        response = requests.post(
+    def set_config(
+        self, new_config: dict[str, Any], timeout: Optional[float] = None
+    ) -> NodeSetConfigResponse:
+        """
+        Update configuration values of the node.
+
+        Args:
+            new_config: Dictionary of configuration values to update.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        """
+        response = self.session.post(
             f"{self.url}/config",
             json=new_config,
-            timeout=60,
+            timeout=timeout or self.config.timeout_data_operations,
         )
         response.raise_for_status()
         return NodeSetConfigResponse.model_validate(response.json())
 
-    def send_admin_command(self, admin_command: AdminCommands) -> AdminCommandResponse:
-        """Perform an administrative command on the node."""
-        response = requests.post(f"{self.url}/admin/{admin_command}", timeout=10)
+    def send_admin_command(
+        self, admin_command: AdminCommands, timeout: Optional[float] = None
+    ) -> AdminCommandResponse:
+        """
+        Perform an administrative command on the node.
+
+        Args:
+            admin_command: The administrative command to send.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        response = self.session.post(
+            f"{self.url}/admin/{admin_command}",
+            timeout=timeout or self.config.timeout_default,
+        )
         response.raise_for_status()
         return AdminCommandResponse.model_validate(response.json())
 
@@ -455,8 +653,15 @@ class RestNodeClient(AbstractNodeClient):
         )
         # TODO: Implement get_resources endpoint
 
-    def get_log(self) -> dict[str, Event]:
-        """Get the log from the node"""
-        response = requests.get(f"{self.url}/log", timeout=10)
+    def get_log(self, timeout: Optional[float] = None) -> dict[str, Event]:
+        """
+        Get the log from the node.
+
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        response = self.session.get(
+            f"{self.url}/log", timeout=timeout or self.config.timeout_default
+        )
         response.raise_for_status()
         return response.json()

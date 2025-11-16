@@ -7,12 +7,11 @@ import re
 import sys
 import threading
 import time
-import typing
 import warnings
 from argparse import ArgumentTypeError
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any, Optional, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Annotated, Any, Optional, Union, get_args, get_origin
 
 from pydantic import ValidationError
 from pydantic_core._pydantic_core import PydanticUndefined
@@ -21,8 +20,10 @@ from ulid import ULID
 
 console = Console()
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    import requests
     from madsci.common.types.base_types import MadsciBaseModel, PathLike
+    from madsci.common.types.client_types import MadsciClientConfig
 
 
 def utcnow() -> datetime:
@@ -505,3 +506,87 @@ def extract_datapoint_ids(data: Any) -> list[str]:
 
     _extract_recursive(data)
     return list(ids)
+
+
+def create_http_session(
+    config: Optional["MadsciClientConfig"] = None,
+    retry_enabled: Optional[bool] = None,
+) -> "requests.Session":
+    """
+    Create a requests.Session with standardized configuration.
+
+    This function creates a properly configured requests session with retry
+    strategies, timeout defaults, and connection pooling based on the provided
+    client configuration. This ensures consistency across all MADSci HTTP clients.
+
+    Args:
+        config: Client configuration object. If None, uses default MadsciClientConfig.
+        retry_enabled: Override for retry_enabled from config. If None, uses config value.
+
+    Returns:
+        Configured requests.Session object
+
+    Example:
+        >>> from madsci.common.types.client_types import MadsciClientConfig
+        >>> from madsci.common.utils import create_http_session
+        >>>
+        >>> # Use default configuration
+        >>> session = create_http_session()
+        >>>
+        >>> # Use custom configuration
+        >>> config = MadsciClientConfig(retry_total=5, timeout_default=30.0)
+        >>> session = create_http_session(config=config)
+        >>>
+        >>> # Disable retry for a specific session
+        >>> session_no_retry = create_http_session(config=config, retry_enabled=False)
+    """
+    # Import here to avoid circular dependencies
+    import requests
+    from madsci.common.types.client_types import MadsciClientConfig
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
+    # Use default config if none provided
+    if config is None:
+        config = MadsciClientConfig()
+
+    # Determine if retry should be enabled
+    enable_retry = retry_enabled if retry_enabled is not None else config.retry_enabled
+
+    # Create the session
+    session = requests.Session()
+
+    # Configure retry strategy if enabled
+    if enable_retry:
+        retry_kwargs = {
+            "total": config.retry_total,
+            "status_forcelist": config.retry_status_forcelist,
+            "backoff_factor": config.retry_backoff_factor,
+        }
+
+        # Only add allowed_methods if specified (None means use urllib3 defaults)
+        if config.retry_allowed_methods is not None:
+            retry_kwargs["allowed_methods"] = config.retry_allowed_methods
+
+        retry_strategy = Retry(**retry_kwargs)
+
+        # Create adapter with retry strategy and connection pooling
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=config.pool_connections,
+            pool_maxsize=config.pool_maxsize,
+        )
+
+        # Mount adapter for both http and https
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+    else:
+        # Even without retry, configure connection pooling
+        adapter = HTTPAdapter(
+            pool_connections=config.pool_connections,
+            pool_maxsize=config.pool_maxsize,
+        )
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+    return session

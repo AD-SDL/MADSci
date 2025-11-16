@@ -5,7 +5,6 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Optional, Union
 
-import requests
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.object_storage_helpers import (
@@ -16,12 +15,13 @@ from madsci.common.object_storage_helpers import (
     upload_file_to_object_storage,
 )
 from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.client_types import DataClientConfig
 from madsci.common.types.datapoint_types import (
     DataPoint,
     DataPointTypeEnum,
     ObjectStorageSettings,
 )
-from madsci.common.utils import extract_datapoint_ids
+from madsci.common.utils import create_http_session, extract_datapoint_ids
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 from ulid import ULID
@@ -37,6 +37,7 @@ class DataClient:
         self,
         data_server_url: Optional[Union[str, AnyUrl]] = None,
         object_storage_settings: Optional[ObjectStorageSettings] = None,
+        config: Optional[DataClientConfig] = None,
     ) -> "DataClient":
         """
         Create a new Datapoint Client.
@@ -44,6 +45,7 @@ class DataClient:
         Args:
             data_server_url: The base URL of the Data Manager. If not provided, it will be taken from the current MadsciContext.
             object_storage_settings: Configuration for object storage (e.g., MinIO). If not provided, defaults will be used.
+            config: Client configuration for retry and timeout settings. If not provided, uses default DataClientConfig.
         """
         self.data_server_url = (
             AnyUrl(data_server_url)
@@ -64,24 +66,43 @@ class DataClient:
             object_storage_settings=self.object_storage_settings
         )
 
-    def get_datapoint(self, datapoint_id: Union[str, ULID]) -> DataPoint:
-        """Get a datapoint's metadata by ID, either from local storage or server."""
+        # Store config and create session
+        self.config = config if config is not None else DataClientConfig()
+        self.session = create_http_session(config=self.config)
+
+    def get_datapoint(
+        self, datapoint_id: Union[str, ULID], timeout: Optional[float] = None
+    ) -> DataPoint:
+        """Get a datapoint's metadata by ID, either from local storage or server.
+
+        Args:
+            datapoint_id: The ID of the datapoint to get.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         if self.data_server_url is None:
             if datapoint_id in self._local_datapoints:
                 return self._local_datapoints[datapoint_id]
             raise ValueError(f"Datapoint {datapoint_id} not found in local storage")
 
-        response = requests.get(
-            f"{self.data_server_url}datapoint/{datapoint_id}", timeout=10
+        response = self.session.get(
+            f"{self.data_server_url}datapoint/{datapoint_id}",
+            timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
         return DataPoint.discriminate(response.json())
 
-    def get_datapoint_value(self, datapoint_id: Union[str, ULID]) -> Any:
+    def get_datapoint_value(
+        self, datapoint_id: Union[str, ULID], timeout: Optional[float] = None
+    ) -> Any:
         """Get a datapoint value by ID. If the datapoint is JSON, returns the JSON data.
-        Otherwise, returns the raw data as bytes."""
+        Otherwise, returns the raw data as bytes.
+
+        Args:
+            datapoint_id: The ID of the datapoint to get.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        """
         # First get the datapoint metadata
-        datapoint = self.get_datapoint(datapoint_id)
+        datapoint = self.get_datapoint(datapoint_id, timeout=timeout)
         # Handle based on datapoint type (regardless of URL configuration)
         if self._minio_client is not None:
             # Use MinIO client if configured
@@ -114,8 +135,9 @@ class DataClient:
 
         # Fall back to server API if we have a URL
         if self.data_server_url is not None:
-            response = requests.get(
-                f"{self.data_server_url}datapoint/{datapoint_id}/value", timeout=10
+            response = self.session.get(
+                f"{self.data_server_url}datapoint/{datapoint_id}/value",
+                timeout=timeout or self.config.timeout_data_operations,
             )
             response.raise_for_status()
             try:
@@ -126,13 +148,22 @@ class DataClient:
         raise ValueError(f"Could not get value for datapoint {datapoint_id}")
 
     def save_datapoint_value(
-        self, datapoint_id: Union[str, ULID], output_filepath: str
+        self,
+        datapoint_id: Union[str, ULID],
+        output_filepath: str,
+        timeout: Optional[float] = None,
     ) -> None:
-        """Get an datapoint value by ID."""
+        """Get an datapoint value by ID.
+
+        Args:
+            datapoint_id: The ID of the datapoint to save.
+            output_filepath: Path where the datapoint value should be saved.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        """
         output_filepath = Path(output_filepath).expanduser()
         output_filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        datapoint = self.get_datapoint(datapoint_id)
+        datapoint = self.get_datapoint(datapoint_id, timeout=timeout)
         # Handle object storage datapoints specifically
         if (
             self._minio_client is not None
@@ -157,8 +188,9 @@ class DataClient:
                     f.write(str(self._local_datapoints[datapoint_id].value))
             return
 
-        response = requests.get(
-            f"{self.data_server_url}datapoint/{datapoint_id}/value", timeout=10
+        response = self.session.get(
+            f"{self.data_server_url}datapoint/{datapoint_id}/value",
+            timeout=timeout or self.config.timeout_data_operations,
         )
         response.raise_for_status()
         try:
@@ -170,30 +202,48 @@ class DataClient:
             with Path.open(output_filepath, "wb") as f:
                 f.write(response.content)
 
-    def get_datapoints(self, number: int = 10) -> list[DataPoint]:
-        """Get a list of the latest datapoints."""
+    def get_datapoints(
+        self, number: int = 10, timeout: Optional[float] = None
+    ) -> list[DataPoint]:
+        """Get a list of the latest datapoints.
+
+        Args:
+            number: Number of datapoints to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         if self.data_server_url is None:
             return list(self._local_datapoints.values()).sort(
                 key=lambda x: x.datapoint_id, reverse=True
             )[:number]
-        response = requests.get(
-            f"{self.data_server_url}datapoints", params={number: number}, timeout=10
+        response = self.session.get(
+            f"{self.data_server_url}datapoints",
+            params={number: number},
+            timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
         return [
             DataPoint.discriminate(datapoint) for datapoint in response.json().values()
         ]
 
-    def query_datapoints(self, selector: Any) -> dict[str, DataPoint]:
-        """Query datapoints based on a selector."""
+    def query_datapoints(
+        self, selector: Any, timeout: Optional[float] = None
+    ) -> dict[str, DataPoint]:
+        """Query datapoints based on a selector.
+
+        Args:
+            selector: Query selector for filtering datapoints.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         if self.data_server_url is None:
             return {
                 datapoint_id: datapoint
                 for datapoint_id, datapoint in self._local_datapoints.items()
                 if selector(datapoint)
             }
-        response = requests.post(
-            f"{self.data_server_url}datapoints/query", json=selector, timeout=10
+        response = self.session.post(
+            f"{self.data_server_url}datapoints/query",
+            json=selector,
+            timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
         return {
@@ -201,7 +251,9 @@ class DataClient:
             for datapoint_id, datapoint in response.json().items()
         }
 
-    def submit_datapoint(self, datapoint: DataPoint) -> DataPoint:
+    def submit_datapoint(
+        self, datapoint: DataPoint, timeout: Optional[float] = None
+    ) -> DataPoint:
         """Submit a Datapoint object.
 
         If object storage is configured and the datapoint is a file type,
@@ -209,7 +261,8 @@ class DataClient:
         of being sent to the Data Manager server.
 
         Args:
-            datapoint: The datapoint to submit
+            datapoint: The datapoint to submit.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
 
         Returns:
             The submitted datapoint with server-assigned IDs if applicable
@@ -229,6 +282,7 @@ class DataClient:
                     object_name=getattr(datapoint, "object_name", None),
                     bucket_name=getattr(datapoint, "bucket_name", None),
                     metadata=getattr(datapoint, "custom_metadata", None),
+                    timeout=timeout,
                 )
             except Exception as e:
                 self.logger.warn(
@@ -245,6 +299,7 @@ class DataClient:
                     file_path=datapoint.path,
                     label=datapoint.label,
                     metadata={"original_datapoint_id": datapoint.datapoint_id},
+                    timeout=timeout,
                 )
 
                 # If object storage upload was successful, return the result
@@ -274,11 +329,11 @@ class DataClient:
             }
         else:
             files = {}
-        response = requests.post(
+        response = self.session.post(
             f"{self.data_server_url}datapoint",
             data={"datapoint": datapoint.model_dump_json()},
             files=files,
-            timeout=10,
+            timeout=timeout or self.config.timeout_data_operations,
         )
         response.raise_for_status()
         return DataPoint.discriminate(response.json())
@@ -292,23 +347,25 @@ class DataClient:
         metadata: Optional[dict[str, str]] = None,
         label: Optional[str] = None,
         public_endpoint: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> DataPoint:
         """Internal method to upload a file to object storage and create a datapoint.
 
         Args:
-            file_path: Path to the file to upload
-            object_name: Name to use for the object in storage (defaults to file basename)
-            bucket_name: Name of the bucket (defaults to config default_bucket)
-            content_type: MIME type of the file (auto-detected if not provided)
-            metadata: Additional metadata to attach to the object
-            label: Label for the datapoint (defaults to file basename)
-            public_endpoint: Optional public endpoint for the object storage
+            file_path: Path to the file to upload.
+            object_name: Name to use for the object in storage (defaults to file basename).
+            bucket_name: Name of the bucket (defaults to config default_bucket).
+            content_type: MIME type of the file (auto-detected if not provided).
+            metadata: Additional metadata to attach to the object.
+            label: Label for the datapoint (defaults to file basename).
+            public_endpoint: Optional public endpoint for the object storage.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
 
         Returns:
-            A DataPoint referencing the uploaded file
+            A DataPoint referencing the uploaded file.
 
         Raises:
-            ValueError: If object storage is not configured or operation fails
+            ValueError: If object storage is not configured or operation fails.
         """
         if self._minio_client is None:
             raise ValueError("Object storage is not configured.")
@@ -344,11 +401,11 @@ class DataClient:
         # Submit the datapoint to the Data Manager (metadata only)
         if self.data_server_url is not None:
             # Use a direct POST instead of recursively calling submit_datapoint
-            response = requests.post(
+            response = self.session.post(
                 f"{self.data_server_url}datapoint",
                 data={"datapoint": datapoint.model_dump_json()},
                 files={},
-                timeout=10,
+                timeout=timeout or self.config.timeout_data_operations,
             )
             response.raise_for_status()
             return DataPoint.discriminate(response.json())
