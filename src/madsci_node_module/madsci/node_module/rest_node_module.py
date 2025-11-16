@@ -228,8 +228,23 @@ class RestNode(AbstractNode):
         """Set configuration values of the node."""
         return super().set_config(new_config=new_config)
 
-    def run_admin_command(self, admin_command: AdminCommands) -> AdminCommandResponse:
+    def run_admin_command(
+        self, admin_command: AdminCommands, background_tasks: Optional[BackgroundTasks] = None
+    ) -> AdminCommandResponse:
         """Perform an administrative command on the node."""
+        # Special handling for shutdown command which requires background_tasks
+        if admin_command == AdminCommands.SHUTDOWN:
+            if background_tasks is None:
+                return AdminCommandResponse(
+                    success=False,
+                    errors=[
+                        Error(
+                            message="Shutdown command requires background tasks context",
+                            error_type="MissingBackgroundTasks",
+                        )
+                    ],
+                )
+            return self.shutdown(background_tasks)
         return super().run_admin_command(admin_command)
 
     def reset(self) -> AdminCommandResponse:
