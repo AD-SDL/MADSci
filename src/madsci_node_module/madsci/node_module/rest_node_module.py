@@ -499,14 +499,13 @@ class RestNode(AbstractNode):
         self.router.add_api_route("/log", self.get_log, methods=["GET"])
 
         # Admin command endpoint with special handling for shutdown
+        shutdown_accepts_background_tasks = "background_tasks" in inspect.signature(self.shutdown).parameters
         def admin_command_handler(
             admin_command: AdminCommands, background_tasks: BackgroundTasks
         ) -> AdminCommandResponse:
             """Handle admin commands with BackgroundTasks support for shutdown."""
             if admin_command == AdminCommands.SHUTDOWN:
-                # Check if shutdown method accepts background_tasks parameter
-                shutdown_sig = inspect.signature(self.shutdown)
-                if "background_tasks" in shutdown_sig.parameters:
+                if shutdown_accepts_background_tasks:
                     return self.shutdown(background_tasks)
                 # For backwards compatibility with nodes that override shutdown without background_tasks
                 result = self.shutdown()
