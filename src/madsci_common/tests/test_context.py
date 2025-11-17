@@ -26,7 +26,9 @@ def test_global_context_across_threads() -> None:
     new_context = original_context.model_copy()
     new_context.lab_server_url = test_url
     GlobalMadsciContext.set_context(new_context)
-    assert str(GlobalMadsciContext.get_context().lab_server_url) == "http://test-lab:8000/"
+    assert (
+        str(GlobalMadsciContext.get_context().lab_server_url) == "http://test-lab:8000/"
+    )
 
     def check_context() -> None:
         """Function to check context in a separate thread."""
