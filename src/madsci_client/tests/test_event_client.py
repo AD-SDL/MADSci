@@ -130,6 +130,9 @@ class TestEventClientLogging:
 
         client.log(sample_event)
 
+        # Wait for the threaded task to complete (log sends events asynchronously)
+        time.sleep(0.1)
+
         # Verify event was sent to server
         mock_session.post.assert_called_once()
         call_args = mock_session.post.call_args
@@ -335,7 +338,9 @@ class TestEventClientEventRetrieval:
         assert result is None
 
     @patch("madsci.client.event_client.create_http_session")
-    def test_get_event_http_error(self, mock_create_session, config_with_server, temp_log_dir):
+    def test_get_event_http_error(
+        self, mock_create_session, config_with_server, temp_log_dir
+    ):
         """Test get_event with HTTP error from server."""
         config_with_server.log_dir = temp_log_dir
 
@@ -434,7 +439,9 @@ class TestEventClientEventRetrieval:
         assert len(result) == 3
 
     @patch("madsci.client.event_client.create_http_session")
-    def test_get_events_http_error(self, mock_create_session, config_with_server, temp_log_dir):
+    def test_get_events_http_error(
+        self, mock_create_session, config_with_server, temp_log_dir
+    ):
         """Test get_events with HTTP error from server."""
         config_with_server.log_dir = temp_log_dir
 
@@ -504,7 +511,9 @@ class TestEventClientQueryEvents:
         assert len(result) == 0
 
     @patch("madsci.client.event_client.create_http_session")
-    def test_query_events_http_error(self, mock_create_session, config_with_server, temp_log_dir):
+    def test_query_events_http_error(
+        self, mock_create_session, config_with_server, temp_log_dir
+    ):
         """Test query_events with HTTP error from server."""
         config_with_server.log_dir = temp_log_dir
 

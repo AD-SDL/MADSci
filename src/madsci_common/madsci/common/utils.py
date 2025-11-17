@@ -541,10 +541,10 @@ def create_http_session(
         >>> session_no_retry = create_http_session(config=config, retry_enabled=False)
     """
     # Import here to avoid circular dependencies
-    import requests
-    from madsci.common.types.client_types import MadsciClientConfig
-    from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
+    import requests  # noqa: PLC0415
+    from madsci.common.types.client_types import MadsciClientConfig  # noqa: PLC0415
+    from requests.adapters import HTTPAdapter  # noqa: PLC0415
+    from urllib3.util.retry import Retry  # noqa: PLC0415
 
     # Use default config if none provided
     if config is None:

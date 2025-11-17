@@ -18,8 +18,7 @@ from ulid import ULID
 @pytest.fixture
 def mock_session():
     """Create a mock session object."""
-    session = Mock()
-    return session
+    return Mock()
 
 
 @pytest.fixture
@@ -213,7 +212,9 @@ class TestExperimentClientStartExperiment:
     """Test ExperimentClient start_experiment method."""
 
     @patch("madsci.client.experiment_client.create_http_session")
-    def test_start_experiment_success(self, mock_create_session, experiment_design, experiment):
+    def test_start_experiment_success(
+        self, mock_create_session, experiment_design, experiment
+    ):
         """Test successful start_experiment call."""
         mock_response = Mock()
         mock_response.ok = True
@@ -245,7 +246,9 @@ class TestExperimentClientStartExperiment:
         assert result.run_name == experiment.run_name
 
     @patch("madsci.client.experiment_client.create_http_session")
-    def test_start_experiment_minimal(self, mock_create_session, experiment_design, experiment):
+    def test_start_experiment_minimal(
+        self, mock_create_session, experiment_design, experiment
+    ):
         """Test start_experiment with minimal parameters."""
         mock_response = Mock()
         mock_response.ok = True
