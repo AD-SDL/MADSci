@@ -3,7 +3,7 @@
 import contextlib
 import contextvars
 from collections.abc import Generator
-from typing import Any
+from typing import Any, Optional
 
 from madsci.common.types.context_types import MadsciContext
 
@@ -17,7 +17,7 @@ class GlobalMadsciContext:
     to temporarily override values in the context.
     """
 
-    _context: MadsciContext | None = None
+    _context: Optional[MadsciContext] = None
 
     @classmethod
     def get_context(cls) -> MadsciContext:
@@ -42,7 +42,7 @@ class GlobalMadsciContext:
         cls._context = context
 
 
-_current_madsci_context: contextvars.ContextVar[MadsciContext | None] = (
+_current_madsci_context: contextvars.ContextVar[Optional[MadsciContext]] = (
     contextvars.ContextVar(
         "current_madsci_context",
         default=None,
