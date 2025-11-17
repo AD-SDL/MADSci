@@ -7,16 +7,28 @@ from typing import Any
 
 from madsci.common.types.context_types import MadsciContext
 
-global_madsci_context = MadsciContext()
-"""
-Global MADSci context
-To change the context for a system component, set fields on this object.
-This is then used by the madsci_context context manager to create temporary contexts as needed.
-"""
+
+class GlobalMadsciContext:
+    """A global MadsciContext object that can be accessed and modified throughout the application. This is intended to be used as a singleton that can be accessed from anywhere in the codebase, but should not be modified directly. Instead, use the madsci_context context manager to temporarily override values in the context."""
+
+    _context = MadsciContext()
+
+    @property
+    @classmethod
+    def context(cls) -> MadsciContext:
+        """Returns the current MadsciContext object."""
+        return cls._context
+
+    @context.setter
+    @classmethod
+    def context(cls, value: MadsciContext) -> None:
+        """Sets the current MadsciContext object."""
+        cls._context = value
+
 
 _current_madsci_context = contextvars.ContextVar(
     "current_madsci_context",
-    default=global_madsci_context,
+    default=GlobalMadsciContext._context,
 )
 
 
