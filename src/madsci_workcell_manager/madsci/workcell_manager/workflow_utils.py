@@ -183,7 +183,6 @@ def create_workflow(
     workflow_def: WorkflowDefinition,
     workcell: WorkcellManagerDefinition,
     state_handler: WorkcellStateHandler,
-    data_client: DataClient,
     json_inputs: Optional[dict[str, Any]] = None,
     file_input_paths: Optional[dict[str, str]] = None,
     location_client: Optional[LocationClient] = None,
@@ -227,13 +226,7 @@ def create_workflow(
     for step in workflow_def.steps:
         steps.append(
             prepare_workflow_step(
-                workcell,
-                state_handler,
-                step,
-                wf,
-                data_client,
-                location_client,
-                running=False,
+                workcell, state_handler, step, wf, location_client=location_client
             )
         )
 
@@ -265,9 +258,8 @@ def prepare_workflow_step(
     state_handler: WorkcellStateHandler,
     step: Step,
     workflow: Workflow,
-    data_client: DataClient,
+    data_client: Optional[DataClient] = None,
     location_client: Optional[LocationClient] = None,
-    running: bool = True,
 ) -> Step:
     """Prepares a step for execution by replacing locations and validating it"""
     parameter_values = workflow.parameter_values
@@ -280,7 +272,7 @@ def prepare_workflow_step(
         state_handler=state_handler,
         feedforward_parameters=workflow.parameters.feed_forward,
     )
-    if running:
+    if data_client is not None:
         working_step = prepare_workflow_files(working_step, workflow, data_client)
     EventClient().info(validation_string)
     if not valid:
@@ -406,6 +398,7 @@ def save_workflow_files(
         suffixes = path.suffixes
         with tempfile.NamedTemporaryFile(delete=False, suffix="".join(suffixes)) as f:
             f.write(file_inputs[file.key].read())
+            f.flush()  # Ensure file contents are written to disk before submitting
             datapoint = FileDataPoint(
                 label=file.key,
                 ownership_info=workflow.ownership_info,

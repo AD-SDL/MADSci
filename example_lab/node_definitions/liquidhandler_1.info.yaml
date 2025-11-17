@@ -27,8 +27,14 @@ node_url: null
 actions:
   run_command:
     name: run_command
-    description: Run a command on the liquid handler. Shows returning both JSON and
-      file data.
+    description: "\n        Execute a direct hardware command on the liquid handler.\n\
+      \n        This action demonstrates basic command execution with string parameters\n\
+      \        and simple return values. Useful for debugging and low-level control.\n\
+      \n        Args:\n            command: Hardware-specific command string (e.g.,\
+      \ \"aspirate 100 ul\", \"dispense 50 ul\")\n\n        Returns:\n           \
+      \ str: Echo of the executed command for confirmation\n\n        Example:\n \
+      \           POST /actions/run_command {\"command\": \"aspirate 100 ul\"}\n \
+      \           Response: \"aspirate 100 ul\"\n        "
     args:
       command:
         name: command
@@ -60,7 +66,14 @@ actions:
     var_kwargs_schema: null
   run_protocol:
     name: run_protocol
-    description: Run a protocol on the liquid handler
+    description: "\n        Execute a protocol file on the liquid handler.\n\n   \
+      \     This action demonstrates file path handling and structured return data.\n\
+      \        In a real implementation, this would parse and execute protocol steps\n\
+      \        from the provided file.\n\n        Args:\n            protocol: Path\
+      \ to the protocol file to execute\n\n        Returns:\n            dict: Protocol\
+      \ execution results with metadata\n\n        Example:\n            POST /actions/run_protocol\
+      \ {\"protocol\": \"/protocols/pcr_setup.json\"}\n            Response: {\"protocol_name\"\
+      : \"pcr_setup.json\"}\n        "
     args: {}
     locations: {}
     files:
@@ -71,10 +84,20 @@ actions:
         required: true
         default: null
     results:
-      file:
-        result_label: file
+      json_result:
+        result_label: json_result
         description: null
-        result_type: file
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
     blocking: false
     asynchronous: true
     accepts_var_args: false
@@ -83,7 +106,19 @@ actions:
     var_kwargs_schema: null
   deck_transfer:
     name: deck_transfer
-    description: Transfer labware between deck locations on the liquid handler.
+    description: "\n        Transfer labware between deck locations on the liquid\
+      \ handler.\n\n        This action demonstrates:\n        - Location-based resource\
+      \ management\n        - Resource tracking with pop/push operations\n       \
+      \ - Integration between hardware actions and resource state\n\n        The resource\
+      \ system automatically tracks which items are at which\n        locations, enabling\
+      \ the workcell manager to coordinate transfers\n        between different instruments.\n\
+      \n        Args:\n            source_location: Location to transfer from (must\
+      \ contain a resource)\n            target_location: Destination location (must\
+      \ have available capacity)\n\n        Raises:\n            ResourceError: If\
+      \ source location is empty or target is full\n\n        Example:\n         \
+      \   POST /actions/deck_transfer {\n                \"source_location\": {\"\
+      resource_id\": \"deck1_id\"},\n                \"target_location\": {\"resource_id\"\
+      : \"deck2_id\"}\n            }\n        "
     args: {}
     locations:
       source_location:
@@ -106,44 +141,6 @@ actions:
     accepts_var_kwargs: false
     var_args_schema: null
     var_kwargs_schema: null
-  arg_type_test:
-    name: arg_type_test
-    description: Used to test that argument types are correctly passed to the node
-      module.
-    args:
-      x:
-        name: x
-        description: ''
-        argument_type: bool
-        required: true
-        default: null
-      y:
-        name: y
-        description: ''
-        argument_type: int
-        required: true
-        default: null
-      z:
-        name: z
-        description: ''
-        argument_type: float
-        required: true
-        default: null
-      w:
-        name: w
-        description: ''
-        argument_type: str
-        required: true
-        default: null
-    locations: {}
-    files: {}
-    results: {}
-    blocking: false
-    asynchronous: true
-    accepts_var_args: false
-    accepts_var_kwargs: false
-    var_args_schema: null
-    var_kwargs_schema: null
 config:
   node_definition: node_definitions/liquidhandler_1.node.yaml
   node_info_path: null
@@ -153,8 +150,13 @@ config:
   node_url: http://localhost:2000/
   uvicorn_kwargs: {}
   device_number: 0
+  wait_time: 2.0
 config_schema:
-  description: Configuration for the liquid handler node module.
+  description: "Configuration for the liquid handler node module.\n\nExtends RestNodeConfig\
+    \ to add liquid handler-specific settings.\nThese settings can be overridden via\
+    \ environment variables with\nthe node name prefix (e.g., LIQUIDHANDLER_1_DEVICE_NUMBER=1).\n\
+    \nAttributes:\n    device_number: Identifier for the physical/virtual liquid handler\
+    \ device\n    wait_time: Simulation delay for action execution (seconds)"
   properties:
     node_definition:
       anyOf:
@@ -215,5 +217,9 @@ config_schema:
       default: 0
       title: Device Number
       type: integer
+    wait_time:
+      default: 2.0
+      title: Wait Time
+      type: number
   title: LiquidHandlerConfig
   type: object

@@ -21,6 +21,25 @@ from madsci.common.types.node_types import NodeInfo, NodeSetConfigResponse, Node
 from madsci.common.utils import new_ulid_str
 
 
+def convert_to_rest_format(action_result: ActionResult) -> dict:
+    """Convert an ActionResult to RestActionResult format (what REST nodes actually return)."""
+    result_data = action_result.model_dump(mode="json")
+
+    # Convert files field to list of strings (file keys) as REST nodes return
+    if result_data.get("files"):
+        if isinstance(action_result.files, Path):
+            # Single file becomes ["file"]
+            result_data["files"] = ["file"]
+        else:
+            # Multiple files - use keys from ActionFiles
+            files_dict = action_result.files.model_dump() if action_result.files else {}
+            result_data["files"] = list(files_dict.keys())
+    else:
+        result_data["files"] = None
+
+    return result_data
+
+
 @pytest.fixture
 def rest_node_client() -> RestNodeClient:
     """Fixture to create a RestNodeClient instance."""
@@ -74,8 +93,8 @@ def test_send_action_no_await(
     # Mock start_action response
     start_response = MagicMock()
     start_response.ok = True
-    start_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
-        mode="json"
+    start_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(action_id=action_id)
     )
 
     mock_post.side_effect = [create_response, start_response]
@@ -119,8 +138,8 @@ def test_send_action_await(
     # Mock start_action response (returns running status)
     start_response = MagicMock()
     start_response.ok = True
-    start_response.json.return_value = ActionRunning(action_id=action_id).model_dump(
-        mode="json"
+    start_response.json.return_value = convert_to_rest_format(
+        ActionRunning(action_id=action_id)
     )
 
     mock_post.side_effect = [create_response, start_response]
@@ -137,9 +156,9 @@ def test_send_action_await(
     # Mock result data response (when action completes successfully)
     result_data_response = MagicMock()
     result_data_response.ok = True
-    result_data_response.json.return_value = ActionSucceeded(
-        action_id=action_id
-    ).model_dump(mode="json")
+    result_data_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(action_id=action_id)
+    )
 
     mock_get.side_effect = [running_response, completed_response, result_data_response]
 
@@ -168,7 +187,7 @@ def test_get_action_result(
     """Test the get_action_result method."""
     mock_response = MagicMock()
     mock_response.ok = True
-    mock_response.json.return_value = ActionSucceeded().model_dump(mode="json")
+    mock_response.json.return_value = convert_to_rest_format(ActionSucceeded())
     mock_get.return_value = mock_response
 
     result = rest_node_client.get_action_result(
@@ -372,8 +391,8 @@ def test_send_action_with_files(
     # Mock start_action response
     start_response = MagicMock()
     start_response.ok = True
-    start_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
-        mode="json"
+    start_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(action_id=action_id)
     )
 
     mock_post.side_effect = [
@@ -451,8 +470,8 @@ def test_send_action_file_response(
     # Mock start_action response
     start_response = MagicMock()
     start_response.ok = True
-    start_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
-        mode="json"
+    start_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(action_id=action_id)
     )
 
     mock_post.side_effect = [create_response, start_response]
@@ -509,8 +528,8 @@ def test_await_action_result_exponential_backoff(
     result_response = MagicMock()
     result_response.ok = True
     result_response.headers = {}
-    result_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
-        mode="json"
+    result_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(action_id=action_id)
     )
 
     mock_get.side_effect = [
@@ -643,8 +662,8 @@ def test_start_action(mock_post: MagicMock, rest_node_client: RestNodeClient) ->
     action_id = new_ulid_str()
     mock_response = MagicMock()
     mock_response.ok = True
-    mock_response.json.return_value = ActionRunning(action_id=action_id).model_dump(
-        mode="json"
+    mock_response.json.return_value = convert_to_rest_format(
+        ActionRunning(action_id=action_id)
     )
     mock_post.return_value = mock_response
 
@@ -688,8 +707,8 @@ def test_get_action_result_data(
     action_id = new_ulid_str()
     mock_response = MagicMock()
     mock_response.ok = True
-    mock_response.json.return_value = ActionSucceeded(action_id=action_id).model_dump(
-        mode="json"
+    mock_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(action_id=action_id)
     )
     mock_get.return_value = mock_response
 
@@ -801,9 +820,9 @@ def test_send_action_with_list_files(
         # Mock start action response
         start_response = MagicMock()
         start_response.ok = True
-        start_response.json.return_value = ActionSucceeded(
-            action_id=action_id, json_result="test result"
-        ).model_dump(mode="json")
+        start_response.json.return_value = convert_to_rest_format(
+            ActionSucceeded(action_id=action_id, json_result="test result")
+        )
 
         mock_post.side_effect = [create_response, upload_response, start_response]
 
@@ -840,9 +859,11 @@ def test_send_action_with_var_args(
     # Mock start action response
     start_response = MagicMock()
     start_response.ok = True
-    start_response.json.return_value = ActionSucceeded(
-        action_id=action_id, json_result={"var_args": ["arg1", "arg2", 123]}
-    ).model_dump(mode="json")
+    start_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(
+            action_id=action_id, json_result={"var_args": ["arg1", "arg2", 123]}
+        )
+    )
 
     mock_post.side_effect = [create_response, start_response]
 
@@ -885,10 +906,12 @@ def test_send_action_with_var_kwargs(
     # Mock start action response
     start_response = MagicMock()
     start_response.ok = True
-    start_response.json.return_value = ActionSucceeded(
-        action_id=action_id,
-        json_result={"var_kwargs": {"extra1": "value1", "extra2": 42}},
-    ).model_dump(mode="json")
+    start_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(
+            action_id=action_id,
+            json_result={"var_kwargs": {"extra1": "value1", "extra2": 42}},
+        )
+    )
 
     mock_post.side_effect = [create_response, start_response]
 
@@ -931,10 +954,15 @@ def test_send_action_with_var_args_and_kwargs(
     # Mock start action response
     start_response = MagicMock()
     start_response.ok = True
-    start_response.json.return_value = ActionSucceeded(
-        action_id=action_id,
-        json_result={"var_args": ["arg1", "arg2"], "var_kwargs": {"extra1": "value1"}},
-    ).model_dump(mode="json")
+    start_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(
+            action_id=action_id,
+            json_result={
+                "var_args": ["arg1", "arg2"],
+                "var_kwargs": {"extra1": "value1"},
+            },
+        )
+    )
 
     mock_post.side_effect = [create_response, start_response]
 
@@ -987,13 +1015,15 @@ def test_send_action_with_files_and_var_kwargs(
 
     start_response = MagicMock()
     start_response.ok = True
-    start_response.json.return_value = ActionSucceeded(
-        action_id=action_id,
-        json_result={
-            "file_processed": True,
-            "var_kwargs": {"processing_mode": "fast", "quality": "high"},
-        },
-    ).model_dump(mode="json")
+    start_response.json.return_value = convert_to_rest_format(
+        ActionSucceeded(
+            action_id=action_id,
+            json_result={
+                "file_processed": True,
+                "var_kwargs": {"processing_mode": "fast", "quality": "high"},
+            },
+        )
+    )
 
     mock_post.side_effect = [create_response, upload_response, start_response]
 

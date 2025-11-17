@@ -16,7 +16,7 @@ See the main [README](../../README.md#installation) for installation options. Th
 
 - PyPI: `pip install madsci.squid`
 - Docker: Use `ghcr.io/ad-sdl/madsci_dashboard` for complete setup with UI
-- **Example configuration**: See [example_lab/example_lab.lab.yaml](../../example_lab/example_lab.lab.yaml)
+- **Example configuration**: See [example_lab/managers/example_lab.manager.yaml](../../example_lab/managers/example_lab.manager.yaml)
 
 ## Usage
 
@@ -42,7 +42,7 @@ Create a lab definition file:
 name: My_Lab
 description: My MADSci-powered laboratory
 manager_type: lab_manager
-manager_id: 01JYKZDPANTNRYXF5TQKRJS0F2  # Generate with ulid
+manager_id: 01JVDFED2K18FVF0E7JM7SX09F  # Generate with ulid
 ```
 
 Run the lab manager:
@@ -69,7 +69,8 @@ The Lab Manager provides centralized coordination:
   "experiment_server_url": "http://localhost:8002",
   "resource_server_url": "http://localhost:8003",
   "data_server_url": "http://localhost:8004",
-  "workcell_server_url": "http://localhost:8005"
+  "workcell_server_url": "http://localhost:8005",
+  "location_server_url": "http://localhost:8006"
 }
 ```
 
@@ -100,31 +101,105 @@ For dashboard development, see [ui/README.md](../../ui/README.md).
 name: Production_Lab
 description: Production MADSci Laboratory
 manager_type: lab_manager
-manager_id: 01JYKZDPANTNRYXF5TQKRJS0F2
+manager_id: 01JVDFED2K18FVF0E7JM7SX09F
 ```
 
 ### Environment Variables
-```bash
-# Lab Manager settings
-LAB_SERVER_URL=http://localhost:8000
-LAB_DASHBOARD_FILES_PATH=./ui/dist
-LAB_DEFINITION=lab.yaml
 
-# Service URLs (for context endpoint)
-EVENT_SERVER_URL=http://localhost:8001
-WORKCELL_SERVER_URL=http://localhost:8005
-# ... etc for other services
+**Lab Manager Settings** (LAB_ prefix):
+```bash
+# Core Lab Manager Configuration
+LAB_SERVER_URL=http://localhost:8000              # Lab manager server URL
+LAB_DASHBOARD_FILES_PATH=./ui/dist                # Path to dashboard static files (set to None to disable)
+LAB_MANAGER_DEFINITION=lab.manager.yaml           # Path to lab definition file
+
+# Additional settings inherited from ManagerSettings:
+LAB_VERBOSE=false                                 # Enable verbose logging
+LAB_LOG_LEVEL=INFO                               # Logging level
+LAB_CORS_ALLOWED_ORIGINS=["*"]                   # CORS origins for dashboard
 ```
+
+**Service URLs** (for context endpoint - other manager settings):
+```bash
+# Manager Service URLs (used by /context endpoint)
+EVENT_SERVER_URL=http://localhost:8001          # Event manager
+EXPERIMENT_SERVER_URL=http://localhost:8002     # Experiment manager
+RESOURCE_SERVER_URL=http://localhost:8003       # Resource manager
+DATA_SERVER_URL=http://localhost:8004           # Data manager
+WORKCELL_SERVER_URL=http://localhost:8005       # Workcell manager
+LOCATION_SERVER_URL=http://localhost:8006       # Location manager
+```
+
+**Configuration Files** (alternative to environment variables):
+- `.env` or `lab.env` - Environment variable file
+- `settings.toml` or `lab.settings.toml` - TOML configuration
+- `settings.yaml` or `lab.settings.yaml` - YAML configuration
+- `settings.json` or `lab.settings.json` - JSON configuration
 
 ## API Endpoints
 
 The Lab Manager provides REST endpoints for lab coordination:
 
-- `GET /context`: Lab-wide service URLs and configuration
-- `GET /health`: Service health check
-- `GET /lab_health`: Collected health information for the lab
-- `GET /definition`: Lab definition and metadata
-- Dashboard files served at root when configured
+### Core Endpoints
+
+**`GET /context`** - Lab-wide service URLs and configuration
+```json
+{
+  "lab_server_url": "http://localhost:8000",
+  "event_server_url": "http://localhost:8001",
+  "experiment_server_url": "http://localhost:8002",
+  "resource_server_url": "http://localhost:8003",
+  "data_server_url": "http://localhost:8004",
+  "workcell_server_url": "http://localhost:8005",
+  "location_server_url": "http://localhost:8006"
+}
+```
+
+**`GET /health`** - Service health check
+```json
+{
+  "healthy": true,
+  "description": "Lab Manager is running"
+}
+```
+
+**`GET /lab_health`** - Comprehensive lab health status
+```json
+{
+  "healthy": true,
+  "description": "5/6 managers are healthy",
+  "managers": {
+    "event_manager": {"healthy": true, "description": "Event Manager is running"},
+    "experiment_manager": {"healthy": true, "description": "Experiment Manager is running"},
+    "resource_manager": {"healthy": false, "description": "Failed to connect: Connection refused"},
+    "data_manager": {"healthy": true, "description": "Data Manager is running"},
+    "workcell_manager": {"healthy": true, "description": "Workcell Manager is running"},
+    "location_manager": {"healthy": true, "description": "Location Manager is running"}
+  },
+  "total_managers": 6,
+  "healthy_managers": 5
+}
+```
+
+**`GET /definition`** - Lab definition and metadata
+```json
+{
+  "name": "Example_Lab_Manager",
+  "description": "A simple example of a lab manager definition",
+  "manager_id": "01JVDFED2K18FVF0E7JM7SX09F",
+  "manager_type": "lab_manager"
+}
+```
+
+### Static File Serving
+- Dashboard files served at root `/` when `LAB_DASHBOARD_FILES_PATH` is configured
+- HTML fallback routing for SPA navigation
+- API routes take precedence over static files
+
+### Health Check Details
+- **Lab Health Algorithm**: Lab considered healthy if >50% of configured managers are healthy
+- **Timeout**: 5-second timeout for health check requests to managers
+- **Error Handling**: Failed managers marked with specific error descriptions
 
 **Full API documentation**: Available at `http://localhost:8000/docs` when running
 

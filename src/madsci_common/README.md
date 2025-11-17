@@ -39,8 +39,10 @@ from madsci.common.types.datapoint_types import ValueDataPoint
 Common helper functions and validators:
 
 ```python
-from madsci.common.utils import utcnow, new_ulid_str
-from madsci.common.types.action_types import create_dynamic_model
+from madsci.common.utils import (
+    utcnow, new_ulid_str, is_valid_ulid, extract_datapoint_ids,
+    threaded_task, threaded_daemon, prompt_from_pydantic_model
+)
 from madsci.common.validators import ulid_validator
 from madsci.common.serializers import serialize_to_yaml
 
@@ -53,8 +55,36 @@ timestamp = utcnow()
 # YAML serialization
 yaml_content = serialize_to_yaml(my_pydantic_model)
 
-# Dynamic model creation for complex types
-DynamicModel = create_dynamic_model("MyModel", {"value": int})
+# ULID validation
+is_valid = ulid_validator(experiment_id)
+# Alternative validation
+is_valid_alt = is_valid_ulid(experiment_id)
+
+# Extract datapoint IDs from complex data structures
+data_with_ids = {"result": ["01ARZ3NDEKTSV4RRFFQ69G5FAV", "01BX5ZZKBKACTAV9WEVGEMMVRZ"]}
+datapoint_ids = extract_datapoint_ids(data_with_ids)
+
+# Threading decorators for background tasks
+@threaded_task
+def background_job(data):
+    # Long-running task
+    pass
+
+@threaded_daemon
+def daemon_process():
+    # Background daemon that stops when main thread exits
+    pass
+
+# Interactive model creation
+from madsci.common.types.base_types import MadsciBaseModel
+
+class MyModel(MadsciBaseModel):
+    name: str
+    value: int
+
+# Prompt user to fill model fields interactively
+user_data = prompt_from_pydantic_model(MyModel, "Enter model data")
+my_instance = MyModel(**user_data)
 ```
 
 ### Settings Framework
@@ -81,6 +111,98 @@ settings = MyManagerSettings()
 ![Settings Precedence](./assets/drawio/config_precedence.drawio.svg)
 
 **Configuration options**: See [Configuration.md](../../Configuration.md) and [example_lab/managers/](../../example_lab/managers/) for examples.
+
+### ULID Best Practices
+
+MADSci uses **ULID (Universally Unique Lexicographically Sortable Identifier)** for all ID generation throughout the system:
+
+```python
+from madsci.common.utils import new_ulid_str, is_valid_ulid
+
+# Generate new IDs
+resource_id = new_ulid_str()
+experiment_id = new_ulid_str()
+
+# Validate ULID format
+if is_valid_ulid(some_id):
+    # Process valid ULID
+    pass
+```
+
+**When to use ULIDs:**
+- All resource identifiers (experiments, workflows, datapoints, etc.)
+- Database primary keys
+- Event tracking and correlation
+- Any case requiring unique, sortable identifiers
+
+**Benefits over UUIDs:**
+- **Performance**: More efficient generation and comparison
+- **Lexicographical sorting**: Natural time-based ordering
+- **Timestamp preservation**: First 48 bits encode creation time
+- **URL-safe**: Uses Crockford's Base32 encoding
+- **Collision resistance**: 80 bits of randomness per millisecond
+
+**Validation patterns:**
+```python
+from madsci.common.validators import ulid_validator
+from pydantic import Field
+
+class MyModel(MadsciBaseModel):
+    id: str = Field(default_factory=new_ulid_str, title="Resource ID")
+    parent_id: Optional[str] = Field(None, title="Parent Resource ID")
+
+    @field_validator("parent_id")
+    @classmethod
+    def validate_parent_id(cls, v):
+        if v is not None:
+            return ulid_validator(v)
+        return v
+```
+
+### Error Handling
+
+MADSci provides standardized error handling patterns using the `Error` class and specific exceptions:
+
+```python
+from madsci.common.types.base_types import Error
+from madsci.common.exceptions import (
+    ActionNotImplementedError, WorkflowFailedError,
+    ExperimentCancelledError, LocationNotFoundError
+)
+
+# Create errors from exceptions
+try:
+    # Some operation that might fail
+    pass
+except ValueError as e:
+    error = Error.from_exception(e)
+    # Error has: message, error_type, logged_at
+
+# Create errors manually
+error = Error(
+    message="Custom error occurred",
+    error_type="ValidationError"
+)
+
+# MADSci-specific exceptions
+raise ActionNotImplementedError("Action 'analyze_sample' not implemented")
+raise WorkflowFailedError("Sample preparation workflow failed at step 3")
+raise ExperimentCancelledError("User cancelled experiment 'batch_synthesis'")
+raise LocationNotFoundError("Location 'sample_rack_1' not found in lab")
+```
+
+**Error handling in actions:**
+```python
+def my_action(self, sample_id: str) -> ActionResult:
+    try:
+        # Action implementation
+        result = process_sample(sample_id)
+        return self.request.succeeded(json_result=result)
+    except Exception as e:
+        # Convert exception to MADSci Error
+        error = Error.from_exception(e)
+        return self.request.failed(errors=[error])
+```
 
 ## Usage Patterns
 

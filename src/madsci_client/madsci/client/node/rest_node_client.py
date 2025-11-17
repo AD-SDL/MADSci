@@ -16,6 +16,7 @@ from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
     ActionStatus,
+    RestActionResult,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
@@ -196,7 +197,9 @@ class RestNodeClient(AbstractNodeClient):
             timeout=60,
         )
         rest_response.raise_for_status()
-        return ActionResult.model_validate(rest_response.json())
+        return self._convert_rest_result_to_action_result(
+            rest_response.json(), action_name, action_id
+        )
 
     def get_action_status_by_name(
         self, action_name: str, action_id: str
@@ -209,53 +212,89 @@ class RestNodeClient(AbstractNodeClient):
         rest_response.raise_for_status()
         return ActionStatus(rest_response.json())
 
-    def _get_result_files(
-        self, action_name: str, action_id: str, result: ActionResult
-    ) -> None:
-        """Return the files associated with an action result. REST-implementation specific."""
-        if result.files is None:
-            return
+    def _find_file_by_key(self, temp_dir: Path, file_key: str) -> Optional[Path]:
+        """Find a file in the temp directory by its key."""
+        # Look for file with matching label (with any extension)
+        extracted_files = list(temp_dir.glob(f"{file_key}*"))
+        if extracted_files:
+            return extracted_files[0]
 
-        # Always download as ZIP and extract files
-        zip_path = self._get_action_files_zip(action_name, action_id)
+        # Fallback: try exact name
+        exact_file = temp_dir / file_key
+        if exact_file.exists():
+            return exact_file
 
-        if isinstance(result.files, ActionFiles):
-            # Multiple files case - extract from ZIP
-            files_dict = result.files.model_dump()
-            downloaded_files = {}
+        # Last fallback: use any available file
+        all_files = list(temp_dir.iterdir())
+        return all_files[0] if all_files else None
+
+    def _convert_rest_result_to_action_result(
+        self, rest_result_data: dict, action_name: str, action_id: str
+    ) -> ActionResult:
+        """Convert a REST API result (RestActionResult format) to ActionResult format.
+
+        The REST API returns files as a list of strings (file keys), but ActionResult
+        expects files to be Path objects or ActionFiles. This method handles the conversion.
+        """
+        # First validate as RestActionResult to ensure proper format
+        rest_result = RestActionResult.model_validate(rest_result_data)
+
+        # Convert to ActionResult format
+        result_data = rest_result.model_dump()
+
+        # Handle files field - fetch actual files if file keys are present
+        files_list = result_data.get("files")
+        if files_list:
+            # Fetch the actual files using the file keys
+            action_files = self._fetch_files_from_keys(
+                action_name, action_id, files_list
+            )
+            result_data["files"] = action_files
+        else:
+            result_data["files"] = None
+
+        return ActionResult.model_validate(result_data)
+
+    def _fetch_files_from_keys(
+        self, action_name: str, action_id: str, file_keys: list[str]
+    ) -> Union[Path, ActionFiles, None]:
+        """Fetch actual files from the server using the provided file keys."""
+        try:
+            # Download the ZIP file containing all files
+            zip_path = self._get_action_files_zip(action_name, action_id)
 
             # Extract files from ZIP
             with zipfile.ZipFile(zip_path, "r") as zip_file:
                 temp_dir = Path(tempfile.mkdtemp())
                 zip_file.extractall(temp_dir)
 
-                # Map extracted files back to their labels
-                for file_key in files_dict:
-                    # Look for file with matching label (with any extension)
-                    extracted_files = list(temp_dir.glob(f"{file_key}*"))
-                    if extracted_files:
-                        downloaded_files[file_key] = extracted_files[0]
-                    else:
-                        # Fallback: use the first file if label matching fails
-                        all_files = list(temp_dir.iterdir())
-                        if all_files:
-                            downloaded_files[file_key] = all_files[0]
+                if len(file_keys) == 1 and file_keys[0] == "file":
+                    # Single file case
+                    extracted_files = list(temp_dir.iterdir())
+                    return extracted_files[0] if extracted_files else None
 
-            result.files = ActionFiles.model_validate(downloaded_files)
+                # Multiple files case
+                downloaded_files = {}
+                for file_key in file_keys:
+                    file_path = self._find_file_by_key(temp_dir, file_key)
+                    if file_path:
+                        downloaded_files[file_key] = file_path
 
-        elif isinstance(result.files, Path):
-            # Single file case - extract from ZIP
-            with zipfile.ZipFile(zip_path, "r") as zip_file:
-                temp_dir = Path(tempfile.mkdtemp())
-                zip_file.extractall(temp_dir)
+                return (
+                    ActionFiles.model_validate(downloaded_files)
+                    if downloaded_files
+                    else None
+                )
 
-                # Get the first (and likely only) file from the ZIP
-                extracted_files = list(temp_dir.iterdir())
-                if extracted_files:
-                    result.files = extracted_files[0]
-
-        # Clean up the ZIP file
-        zip_path.unlink(missing_ok=True)
+        except Exception:
+            self.logger.error(
+                f"Failed to fetch files for action {action_name} with ID {action_id}"
+            )
+            return None
+        finally:
+            # Clean up the ZIP file
+            if "zip_path" in locals():
+                zip_path.unlink(missing_ok=True)
 
     def get_action_result_by_name(
         self, action_name: str, action_id: str, include_files: bool = True
@@ -266,12 +305,20 @@ class RestNodeClient(AbstractNodeClient):
             timeout=10,
         )
         rest_response.raise_for_status()
-        result = ActionResult.model_validate(rest_response.json())
 
-        if result.files and include_files:
-            self._get_result_files(action_name, action_id, result)
+        # If include_files is False, we can convert directly without fetching files
+        if not include_files:
+            # Temporarily set files to None in the response data to avoid fetching
+            response_data = rest_response.json()
+            response_data = response_data.copy()
+            response_data["files"] = None
+            return self._convert_rest_result_to_action_result(
+                response_data, action_name, action_id
+            )
 
-        return result
+        return self._convert_rest_result_to_action_result(
+            rest_response.json(), action_name, action_id
+        )
 
     def _get_action_files_zip(self, action_name: str, action_id: str) -> Path:
         """Download all files from an action result as a ZIP. REST-implementation specific."""
@@ -306,13 +353,24 @@ class RestNodeClient(AbstractNodeClient):
         return ActionStatus(rest_response.json())
 
     def get_action_result(self, action_id: str) -> ActionResult:
-        """Get the result of an action on the node."""
+        """Get the result of an action on the node.
+
+        Note: This method uses the legacy API endpoint and cannot fetch files
+        since it lacks the action_name needed for file download URLs.
+        """
         rest_response = requests.get(
             f"{self.url}/action/{action_id}/result",
             timeout=10,
         )
         rest_response.raise_for_status()
-        return ActionResult.model_validate(rest_response.json())
+
+        response_data = rest_response.json()
+        response_data = response_data.copy()
+
+        # Use dummy values for action_name since files won't be fetched
+        return self._convert_rest_result_to_action_result(
+            response_data, "action_name", action_id
+        )
 
     def await_action_result(
         self, action_id: str, timeout: Optional[float] = None

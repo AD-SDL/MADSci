@@ -518,7 +518,6 @@ class WorkcellManager(
                     workcell=workcell,
                     json_inputs=json_inputs,
                     file_input_paths=file_input_paths,
-                    data_client=self.data_client,
                     state_handler=self.state_handler,
                     location_client=self.location_client,
                 )

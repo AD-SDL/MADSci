@@ -1233,6 +1233,44 @@ actions:
     accepts_var_kwargs: false
     var_args_schema: null
     var_kwargs_schema: null
+  arg_type_test:
+    name: arg_type_test
+    description: Used to test that argument types are correctly passed to the node
+      module.
+    args:
+      x:
+        name: x
+        description: ''
+        argument_type: bool
+        required: true
+        default: null
+      y:
+        name: y
+        description: ''
+        argument_type: int
+        required: true
+        default: null
+      z:
+        name: z
+        description: ''
+        argument_type: float
+        required: true
+        default: null
+      w:
+        name: w
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: node_definitions/advanced_example_node.node.yaml
   node_info_path: null

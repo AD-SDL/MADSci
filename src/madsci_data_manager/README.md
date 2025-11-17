@@ -34,7 +34,7 @@ docker compose up  # From repo root
 # Data Manager available at http://localhost:8004/docs
 
 # Or run standalone
-python -m madsci.data_manager.data_server
+python src/madsci_data_manager/madsci/data_manager/data_server.py
 ```
 
 ### Manager Setup
@@ -47,24 +47,24 @@ Use `DataClient` to store and retrieve experimental data:
 
 ```python
 from madsci.client.data_client import DataClient
-from madsci.common.types.datapoint_types import ValueDataPoint, FileDataPoint
+from madsci.common.types.datapoint_types import DataPoint, DataPointTypeEnum
 from datetime import datetime
 
-client = DataClient(url="http://localhost:8004")
+client = DataClient(data_server_url="http://localhost:8004")
 
 # Store JSON data
-value_dp = ValueDataPoint(
+value_dp = DataPoint(
     label="Temperature Reading",
-    value={"temperature": 23.5, "unit": "Celsius"},
-    data_timestamp=datetime.now()
+    data_type=DataPointTypeEnum.JSON,
+    value={"temperature": 23.5, "unit": "Celsius"}
 )
 submitted = client.submit_datapoint(value_dp)
 
 # Store files
-file_dp = FileDataPoint(
+file_dp = DataPoint(
     label="Experiment Log",
-    path="/path/to/data.txt",
-    data_timestamp=datetime.now()
+    data_type=DataPointTypeEnum.FILE,
+    path="/path/to/data.txt"
 )
 submitted_file = client.submit_datapoint(file_dp)
 
@@ -76,39 +76,32 @@ client.save_datapoint_value(submitted_file.datapoint_id, "/local/save/path.txt")
 ```
 
 **Examples**: See [example_lab/notebooks/experiment_notebook.ipynb](../../example_lab/notebooks/experiment_notebook.ipynb) for data management workflows.
-## Storage Options
+
+## Storage Configuration
 
 ### Local Storage (Default)
-- Files stored on filesystem
+- Files stored on filesystem with date-based hierarchy
 - Simple setup, no additional dependencies
-- File paths stored in database
+- File paths stored in MongoDB database
 
-### Object Storage (Optional)
-Supports S3-compatible storage (MinIO, AWS S3, Google Cloud Storage):
-- Automatic upload to object storage
-- Fallback to local storage if upload fails
-- Better for large files and distributed setups
-
-### Object Storage Configuration
-
-See [example_data.manager.yaml](../../example_lab/managers/example_data.manager.yaml) for MinIO configuration.
-
-**Quick setup with example_lab:**
-```bash
-docker compose up  # Includes pre-configured MinIO
-# MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
-```
-
-
-## Cloud Storage Integration
-
-Supports S3-compatible storage providers for large file handling:
-
-### Supported Providers
+### Object Storage (S3-Compatible)
+Supports cloud and self-hosted storage providers:
 - **AWS S3**
 - **Google Cloud Storage** (with HMAC keys)
 - **MinIO** (self-hosted or cloud)
 - **Any S3-compatible service**
+
+Benefits:
+- Automatic upload with fallback to local storage
+- Better for large files and distributed setups
+- Built-in metadata and versioning support
+
+### Quick Setup
+```bash
+# Use example_lab with pre-configured MinIO
+docker compose up  # From repo root
+# MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
+```
 
 ### Configuration Examples
 
@@ -140,10 +133,11 @@ gcs_config = ObjectStorageSettings(
 
 ### Direct Object Storage DataPoints
 ```python
-from madsci.common.types.datapoint_types import ObjectStorageDataPoint
+from madsci.common.types.datapoint_types import DataPoint, DataPointTypeEnum
 
-storage_dp = ObjectStorageDataPoint(
+storage_dp = DataPoint(
     label="Large Dataset",
+    data_type=DataPointTypeEnum.OBJECT_STORAGE,
     path="/path/to/data.parquet",
     bucket_name="my-bucket",
     object_name="datasets/data.parquet",
