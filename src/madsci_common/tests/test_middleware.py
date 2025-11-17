@@ -80,7 +80,7 @@ def test_request_tracking_headers(unlimited_client: TestClient) -> None:
 def test_rate_limiting_within_limit(rate_limited_client: TestClient) -> None:
     """Test that requests within the rate limit are allowed."""
     # Make 5 requests (within the limit)
-    for i in range(5):
+    for _i in range(5):
         response = rate_limited_client.get("/health")
         assert response.status_code == 200
         assert "X-RateLimit-Limit" in response.headers

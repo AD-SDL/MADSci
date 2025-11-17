@@ -45,7 +45,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.requests_limit = requests_limit
         self.time_window = time_window
-        # Storage: {client_ip: [timestamps]}
+        # Storage maps client IP addresses to lists of request timestamps
         self.storage: defaultdict[str, list[float]] = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
@@ -67,20 +67,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Clean up old timestamps outside the current window
         cutoff = now - self.time_window
-        self.storage[client_ip] = [
-            ts for ts in self.storage[client_ip] if ts > cutoff
-        ]
+        self.storage[client_ip] = [ts for ts in self.storage[client_ip] if ts > cutoff]
 
         # Check if client has exceeded rate limit
         if len(self.storage[client_ip]) >= self.requests_limit:
             return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={"detail": f"Rate limit exceeded: {self.requests_limit} requests per {self.time_window} seconds"},
+                content={
+                    "detail": f"Rate limit exceeded: {self.requests_limit} requests per {self.time_window} seconds"
+                },
                 headers={
                     "Retry-After": str(int(self.time_window)),
                     "X-RateLimit-Limit": str(self.requests_limit),
                     "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": str(int(self.storage[client_ip][0] + self.time_window)),
+                    "X-RateLimit-Reset": str(
+                        int(self.storage[client_ip][0] + self.time_window)
+                    ),
                 },
             )
 

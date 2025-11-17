@@ -274,7 +274,10 @@ class AbstractManagerBase(
 
         # Add rate limiting middleware if enabled
         # Check if settings has rate limiting configuration (ManagerSettings-based)
-        if isinstance(self._settings, ManagerSettings) and self._settings.rate_limit_enabled:
+        if (
+            isinstance(self._settings, ManagerSettings)
+            and self._settings.rate_limit_enabled
+        ):
             app.add_middleware(
                 RateLimitMiddleware,
                 requests_limit=self._settings.rate_limit_requests,
@@ -353,12 +356,20 @@ class AbstractManagerBase(
                 self.logger.info(f"Uvicorn workers: {self._settings.uvicorn_workers}")
 
             if self._settings.uvicorn_limit_concurrency is not None:
-                uvicorn_kwargs.setdefault("limit_concurrency", self._settings.uvicorn_limit_concurrency)
-                self.logger.info(f"Uvicorn concurrency limit: {self._settings.uvicorn_limit_concurrency}")
+                uvicorn_kwargs.setdefault(
+                    "limit_concurrency", self._settings.uvicorn_limit_concurrency
+                )
+                self.logger.info(
+                    f"Uvicorn concurrency limit: {self._settings.uvicorn_limit_concurrency}"
+                )
 
             if self._settings.uvicorn_limit_max_requests is not None:
-                uvicorn_kwargs.setdefault("limit_max_requests", self._settings.uvicorn_limit_max_requests)
-                self.logger.info(f"Uvicorn max requests per worker: {self._settings.uvicorn_limit_max_requests}")
+                uvicorn_kwargs.setdefault(
+                    "limit_max_requests", self._settings.uvicorn_limit_max_requests
+                )
+                self.logger.info(
+                    f"Uvicorn max requests per worker: {self._settings.uvicorn_limit_max_requests}"
+                )
 
         uvicorn.run(
             app,
