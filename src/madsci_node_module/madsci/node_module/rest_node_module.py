@@ -510,9 +510,14 @@ class RestNode(AbstractNode):
                     return self.shutdown(background_tasks)
                 # For backwards compatibility with nodes that override shutdown without background_tasks
                 result = self.shutdown()
-                if isinstance(result, AdminCommandResponse):
+                if result is None:
+                    return AdminCommandResponse(success=True, errors=[])
+                elif isinstance(result, bool):
+                    return AdminCommandResponse(success=result, errors=[])
+                elif isinstance(result, AdminCommandResponse):
                     return result
-                return AdminCommandResponse(success=bool(result), errors=[])
+                else:
+                    raise ValueError(f"Shutdown method returned an unexpected value: {result}")
             return self.run_admin_command(admin_command)
 
         self.router.add_api_route(
