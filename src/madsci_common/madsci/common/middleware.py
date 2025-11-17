@@ -9,8 +9,9 @@ import time
 from collections import defaultdict
 from typing import Callable
 
-from fastapi import HTTPException, Request, Response, status
+from fastapi import Request, Response, status
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -56,10 +57,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             call_next: The next middleware or endpoint handler
 
         Returns:
-            Response: The HTTP response
-
-        Raises:
-            HTTPException: 429 if rate limit is exceeded
+            Response: The HTTP response (429 if rate limit is exceeded)
         """
         # Get client IP address
         client_ip = request.client.host if request.client else "unknown"
@@ -75,9 +73,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Check if client has exceeded rate limit
         if len(self.storage[client_ip]) >= self.requests_limit:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded: {self.requests_limit} requests per {self.time_window} seconds",
+                content={"detail": f"Rate limit exceeded: {self.requests_limit} requests per {self.time_window} seconds"},
                 headers={
                     "Retry-After": str(int(self.time_window)),
                     "X-RateLimit-Limit": str(self.requests_limit),
