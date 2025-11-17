@@ -499,7 +499,10 @@ class RestNode(AbstractNode):
         self.router.add_api_route("/log", self.get_log, methods=["GET"])
 
         # Admin command endpoint with special handling for shutdown
-        shutdown_accepts_background_tasks = "background_tasks" in inspect.signature(self.shutdown).parameters
+        shutdown_accepts_background_tasks = (
+            "background_tasks" in inspect.signature(self.shutdown).parameters
+        )
+
         def admin_command_handler(
             admin_command: AdminCommands, background_tasks: BackgroundTasks
         ) -> AdminCommandResponse:
@@ -511,12 +514,13 @@ class RestNode(AbstractNode):
                 result = self.shutdown()
                 if result is None:
                     return AdminCommandResponse(success=True, errors=[])
-                elif isinstance(result, bool):
+                if isinstance(result, bool):
                     return AdminCommandResponse(success=result, errors=[])
-                elif isinstance(result, AdminCommandResponse):
+                if isinstance(result, AdminCommandResponse):
                     return result
-                else:
-                    raise ValueError(f"Shutdown method returned an unexpected value: {result}")
+                raise ValueError(
+                    f"Shutdown method returned an unexpected value: {result}"
+                )
             return self.run_admin_command(admin_command)
 
         self.router.add_api_route(
