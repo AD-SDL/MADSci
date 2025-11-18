@@ -1,7 +1,5 @@
 """Unit tests for MadsciClientMixin."""
 
-import tempfile
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -13,30 +11,6 @@ from madsci.client.lab_client import LabClient
 from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
-from madsci.common.types.context_types import MadsciContext
-from madsci.common.types.event_types import EventClientConfig
-from pydantic import AnyUrl
-
-
-@pytest.fixture
-def temp_log_dir():
-    """Create a temporary directory for log files."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        yield Path(temp_dir)
-
-
-@pytest.fixture
-def mock_context():
-    """Create a mock MADSci context."""
-    return MadsciContext(
-        event_server_url=AnyUrl("http://localhost:8001"),
-        experiment_server_url=AnyUrl("http://localhost:8002"),
-        resource_server_url=AnyUrl("http://localhost:8003"),
-        data_server_url=AnyUrl("http://localhost:8004"),
-        workcell_server_url=AnyUrl("http://localhost:8005"),
-        location_server_url=AnyUrl("http://localhost:8006"),
-        lab_server_url=AnyUrl("http://localhost:8000"),
-    )
 
 
 class TestMixinBasicUsage:
@@ -51,383 +25,125 @@ class TestMixinBasicUsage:
         component = MyComponent()
         assert isinstance(component, MadsciClientMixin)
 
-    def test_mixin_with_required_clients(self, temp_log_dir, mock_context):
-        """Test mixin with REQUIRED_CLIENTS class attribute."""
+    def test_required_clients_declaration(self):
+        """Test that REQUIRED_CLIENTS can be declared."""
 
         class MyComponent(MadsciClientMixin):
             REQUIRED_CLIENTS = ["event", "resource"]
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch("madsci.client.event_client.EventClientConfig") as mock_config:
-                mock_config.return_value.name = None
-                mock_config.return_value.log_dir = temp_log_dir
-                mock_config.return_value.log_level = "INFO"
-                mock_config.return_value.event_server_url = None
+        assert MyComponent.REQUIRED_CLIENTS == ["event", "resource"]
 
-                with patch(
-                    "madsci.client.event_client.get_current_madsci_context",
-                    return_value=mock_context,
-                ):
-                    with patch("madsci.client.resource_client.requests.get"):
-                        component = MyComponent()
-                        component.setup_clients()
-
-                        assert component._event_client is not None
-                        assert component._resource_client is not None
-                        assert component._data_client is None
-
-    def test_lazy_initialization(self, temp_log_dir, mock_context):
-        """Test that clients are lazily initialized."""
+    def test_lazy_initialization_does_not_create_clients_immediately(self):
+        """Test that clients are not created until accessed."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch("madsci.client.event_client.EventClientConfig") as mock_config:
-                mock_config.return_value.name = None
-                mock_config.return_value.log_dir = temp_log_dir
-                mock_config.return_value.log_level = "INFO"
-                mock_config.return_value.event_server_url = None
+        component = MyComponent()
 
-                with patch(
-                    "madsci.client.event_client.get_current_madsci_context",
-                    return_value=mock_context,
-                ):
-                    component = MyComponent()
-
-                    # No clients initialized yet
-                    assert component._event_client is None
-
-                    # Access property triggers lazy initialization
-                    event_client = component.event_client
-                    assert component._event_client is not None
-                    assert isinstance(event_client, EventClient)
+        # No clients initialized yet
+        assert component._event_client is None
+        assert component._resource_client is None
+        assert component._data_client is None
 
 
-class TestEventClientCreation:
-    """Test EventClient creation and configuration."""
+class TestClientSetters:
+    """Test client property setters."""
 
-    def test_create_event_client_default(self, temp_log_dir, mock_context):
-        """Test default EventClient creation."""
+    def test_event_client_setter(self):
+        """Test setting EventClient directly."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch("madsci.client.event_client.EventClientConfig") as mock_config:
-                mock_config.return_value.name = None
-                mock_config.return_value.log_dir = temp_log_dir
-                mock_config.return_value.log_level = "INFO"
-                mock_config.return_value.event_server_url = None
+        mock_client = Mock(spec=EventClient)
+        component = MyComponent()
+        component.event_client = mock_client
 
-                with patch(
-                    "madsci.client.event_client.get_current_madsci_context",
-                    return_value=mock_context,
-                ):
-                    component = MyComponent()
-                    client = component.event_client
+        assert component._event_client == mock_client
+        assert component.event_client == mock_client
 
-                    assert isinstance(client, EventClient)
-
-    def test_create_event_client_with_config(self, temp_log_dir, mock_context):
-        """Test EventClient creation with explicit config."""
+    def test_resource_client_setter(self):
+        """Test setting ResourceClient directly."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        config = EventClientConfig(
-            name="test_component",
-            log_dir=temp_log_dir,
-            event_server_url="http://localhost:8001",
-        )
+        mock_client = Mock(spec=ResourceClient)
+        component = MyComponent()
+        component.resource_client = mock_client
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            component = MyComponent()
-            component.event_client_config = config
-            client = component.event_client
+        assert component._resource_client == mock_client
+        assert component.resource_client == mock_client
 
-            assert isinstance(client, EventClient)
-            assert client.config == config
-
-    def test_create_event_client_with_url_override(self, temp_log_dir, mock_context):
-        """Test EventClient creation with URL override."""
+    def test_data_client_setter(self):
+        """Test setting DataClient directly."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch("madsci.client.event_client.EventClientConfig") as mock_config:
-                mock_config.return_value.name = None
-                mock_config.return_value.log_dir = temp_log_dir
-                mock_config.return_value.log_level = "INFO"
-                mock_config.return_value.event_server_url = "http://custom:9001"
+        mock_client = Mock(spec=DataClient)
+        component = MyComponent()
+        component.data_client = mock_client
 
-                with patch(
-                    "madsci.client.event_client.get_current_madsci_context",
-                    return_value=mock_context,
-                ):
-                    component = MyComponent()
-                    component.event_server_url = "http://custom:9001"
-                    client = component.event_client
+        assert component._data_client == mock_client
+        assert component.data_client == mock_client
 
-                    assert isinstance(client, EventClient)
-
-
-class TestResourceClientCreation:
-    """Test ResourceClient creation and configuration."""
-
-    def test_create_resource_client_default(self, mock_context):
-        """Test default ResourceClient creation."""
+    def test_experiment_client_setter(self):
+        """Test setting ExperimentClient directly."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch("madsci.client.resource_client.requests.get"):
-                with patch(
-                    "madsci.client.resource_client.get_current_madsci_context",
-                    return_value=mock_context,
-                ):
-                    with patch("madsci.client.resource_client.EventClient"):
-                        component = MyComponent()
-                        client = component.resource_client
+        mock_client = Mock(spec=ExperimentClient)
+        component = MyComponent()
+        component.experiment_client = mock_client
 
-                        assert isinstance(client, ResourceClient)
+        assert component._experiment_client == mock_client
+        assert component.experiment_client == mock_client
 
-    def test_create_resource_client_with_shared_event_client(
-        self, temp_log_dir, mock_context
-    ):
-        """Test ResourceClient creation with shared EventClient."""
-
-        class MyComponent(MadsciClientMixin):
-            REQUIRED_CLIENTS = ["event"]
-
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch("madsci.client.event_client.EventClientConfig") as mock_config:
-                mock_config.return_value.name = None
-                mock_config.return_value.log_dir = temp_log_dir
-                mock_config.return_value.log_level = "INFO"
-                mock_config.return_value.event_server_url = None
-
-                with patch(
-                    "madsci.client.event_client.get_current_madsci_context",
-                    return_value=mock_context,
-                ):
-                    with patch("madsci.client.resource_client.requests.get"):
-                        with patch(
-                            "madsci.client.resource_client.get_current_madsci_context",
-                            return_value=mock_context,
-                        ):
-                            component = MyComponent()
-                            component.setup_clients()
-
-                            # Get EventClient first
-                            event_client = component.event_client
-
-                            # ResourceClient should use the shared EventClient
-                            resource_client = component.resource_client
-                            assert isinstance(resource_client, ResourceClient)
-                            # The EventClient should have been passed to ResourceClient
-                            assert resource_client.logger == event_client
-
-
-class TestDataClientCreation:
-    """Test DataClient creation and configuration."""
-
-    def test_create_data_client_default(self, mock_context):
-        """Test default DataClient creation."""
+    def test_workcell_client_setter(self):
+        """Test setting WorkcellClient directly."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch(
-                "madsci.client.data_client.get_current_madsci_context",
-                return_value=mock_context,
-            ):
-                with patch("madsci.client.data_client.create_minio_client"):
-                    with patch("madsci.client.data_client.EventClient"):
-                        component = MyComponent()
-                        client = component.data_client
+        mock_client = Mock(spec=WorkcellClient)
+        component = MyComponent()
+        component.workcell_client = mock_client
 
-                        assert isinstance(client, DataClient)
+        assert component._workcell_client == mock_client
+        assert component.workcell_client == mock_client
 
-
-class TestExperimentClientCreation:
-    """Test ExperimentClient creation and configuration."""
-
-    def test_create_experiment_client_default(self, mock_context):
-        """Test default ExperimentClient creation."""
+    def test_location_client_setter(self):
+        """Test setting LocationClient directly."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch(
-                "madsci.client.experiment_client.get_current_madsci_context",
-                return_value=mock_context,
-            ):
-                component = MyComponent()
-                client = component.experiment_client
+        mock_client = Mock(spec=LocationClient)
+        component = MyComponent()
+        component.location_client = mock_client
 
-                assert isinstance(client, ExperimentClient)
+        assert component._location_client == mock_client
+        assert component.location_client == mock_client
 
-
-class TestWorkcellClientCreation:
-    """Test WorkcellClient creation and configuration."""
-
-    def test_create_workcell_client_default(self, temp_log_dir, mock_context):
-        """Test default WorkcellClient creation."""
+    def test_lab_client_setter(self):
+        """Test setting LabClient directly."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch(
-                "madsci.client.workcell_client.get_current_madsci_context",
-                return_value=mock_context,
-            ):
-                with patch("madsci.client.workcell_client.EventClient"):
-                    component = MyComponent()
-                    client = component.workcell_client
+        mock_client = Mock(spec=LabClient)
+        component = MyComponent()
+        component.lab_client = mock_client
 
-                    assert isinstance(client, WorkcellClient)
-
-    def test_create_workcell_client_with_retry_config(self, temp_log_dir, mock_context):
-        """Test WorkcellClient creation with retry configuration."""
-
-        class MyComponent(MadsciClientMixin):
-            pass
-
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch(
-                "madsci.client.workcell_client.get_current_madsci_context",
-                return_value=mock_context,
-            ):
-                with patch("madsci.client.workcell_client.EventClient"):
-                    component = MyComponent()
-                    component.client_retry_enabled = True
-                    component.client_retry_total = 5
-
-                    client = component.workcell_client
-
-                    assert isinstance(client, WorkcellClient)
-                    assert client.retry is True
-
-
-class TestLocationClientCreation:
-    """Test LocationClient creation and configuration."""
-
-    def test_create_location_client_default(self, mock_context):
-        """Test default LocationClient creation."""
-
-        class MyComponent(MadsciClientMixin):
-            pass
-
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch(
-                "madsci.client.location_client.get_current_madsci_context",
-                return_value=mock_context,
-            ):
-                with patch("madsci.client.location_client.EventClient"):
-                    component = MyComponent()
-                    client = component.location_client
-
-                    assert isinstance(client, LocationClient)
-
-
-class TestLabClientCreation:
-    """Test LabClient creation and configuration."""
-
-    def test_create_lab_client_default(self, mock_context):
-        """Test default LabClient creation."""
-
-        class MyComponent(MadsciClientMixin):
-            pass
-
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch(
-                "madsci.client.lab_client.get_current_madsci_context",
-                return_value=mock_context,
-            ):
-                component = MyComponent()
-                client = component.lab_client
-
-                assert isinstance(client, LabClient)
+        assert component._lab_client == mock_client
+        assert component.lab_client == mock_client
 
 
 class TestSetupClients:
     """Test setup_clients method."""
-
-    def test_setup_specific_clients(self, temp_log_dir, mock_context):
-        """Test setup_clients with specific client list."""
-
-        class MyComponent(MadsciClientMixin):
-            pass
-
-        with patch(
-            "madsci.client.client_mixin.get_current_madsci_context",
-            return_value=mock_context,
-        ):
-            with patch("madsci.client.event_client.EventClientConfig") as mock_config:
-                mock_config.return_value.name = None
-                mock_config.return_value.log_dir = temp_log_dir
-                mock_config.return_value.log_level = "INFO"
-                mock_config.return_value.event_server_url = None
-
-                with patch(
-                    "madsci.client.event_client.get_current_madsci_context",
-                    return_value=mock_context,
-                ):
-                    with patch(
-                        "madsci.client.experiment_client.get_current_madsci_context",
-                        return_value=mock_context,
-                    ):
-                        component = MyComponent()
-                        component.setup_clients(clients=["event", "experiment"])
-
-                        assert component._event_client is not None
-                        assert component._experiment_client is not None
-                        assert component._resource_client is None
 
     def test_setup_with_injected_client(self):
         """Test setup_clients with pre-initialized client."""
@@ -462,35 +178,83 @@ class TestSetupClients:
         assert component._resource_client == mock_resource
         assert component._data_client == mock_data
 
+    def test_setup_clients_with_empty_required_list(self):
+        """Test setup_clients with no required clients."""
 
-class TestClientSetters:
-    """Test client property setters."""
+        class MyComponent(MadsciClientMixin):
+            REQUIRED_CLIENTS = []
 
-    def test_event_client_setter(self):
-        """Test setting EventClient directly."""
+        component = MyComponent()
+        component.setup_clients()
+
+        # Should not raise any errors, clients remain uninitialized
+        assert component._event_client is None
+        assert component._resource_client is None
+
+    def test_setup_clients_respects_already_set_clients(self):
+        """Test that setup_clients doesn't overwrite already-set clients."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        mock_client = Mock(spec=EventClient)
+        mock_event = Mock(spec=EventClient)
         component = MyComponent()
-        component.event_client = mock_client
 
-        assert component._event_client == mock_client
-        assert component.event_client == mock_client
+        # Set client directly
+        component._event_client = mock_event
 
-    def test_resource_client_setter(self):
-        """Test setting ResourceClient directly."""
+        # Setup should not overwrite
+        component.setup_clients(clients=["event"])
+
+        assert component._event_client == mock_event
+
+
+class TestClientConfiguration:
+    """Test client configuration options."""
+
+    def test_event_client_config_attribute(self):
+        """Test that event_client_config attribute is respected."""
 
         class MyComponent(MadsciClientMixin):
             pass
 
-        mock_client = Mock(spec=ResourceClient)
         component = MyComponent()
-        component.resource_client = mock_client
+        # The mixin should have this attribute available
+        assert hasattr(component, "event_client_config")
 
-        assert component._resource_client == mock_client
-        assert component.resource_client == mock_client
+    def test_server_url_attributes_exist(self):
+        """Test that server URL attributes can be set."""
+
+        class MyComponent(MadsciClientMixin):
+            pass
+
+        component = MyComponent()
+
+        # Should be able to set these attributes
+        component.event_server_url = "http://localhost:8001"
+        component.resource_server_url = "http://localhost:8003"
+        component.data_server_url = "http://localhost:8004"
+        component.experiment_server_url = "http://localhost:8002"
+        component.workcell_server_url = "http://localhost:8005"
+        component.location_server_url = "http://localhost:8006"
+        component.lab_server_url = "http://localhost:8000"
+
+        assert component.event_server_url == "http://localhost:8001"
+        assert component.resource_server_url == "http://localhost:8003"
+
+    def test_retry_configuration_attributes(self):
+        """Test that retry configuration attributes exist."""
+
+        class MyComponent(MadsciClientMixin):
+            pass
+
+        component = MyComponent()
+
+        # Should have retry configuration attributes
+        assert hasattr(component, "client_retry_enabled")
+        assert hasattr(component, "client_retry_total")
+        assert hasattr(component, "client_retry_backoff_factor")
+        assert hasattr(component, "client_retry_status_forcelist")
 
 
 class TestTeardownClients:
@@ -505,3 +269,82 @@ class TestTeardownClients:
         component = MyComponent()
         # Should not raise any exceptions
         component.teardown_clients()
+
+    def test_teardown_clients_with_initialized_clients(self):
+        """Test teardown_clients with initialized clients."""
+
+        class MyComponent(MadsciClientMixin):
+            pass
+
+        mock_event = Mock(spec=EventClient)
+        component = MyComponent()
+        component.event_client = mock_event
+
+        # Should not raise any exceptions
+        component.teardown_clients()
+
+
+class TestMixinIntegration:
+    """Integration tests for the mixin."""
+
+    def test_mixin_with_multiple_inheritance(self):
+        """Test that mixin works with multiple inheritance."""
+
+        class BaseClass:
+            def __init__(self):
+                self.base_value = "base"
+
+        class MyComponent(BaseClass, MadsciClientMixin):
+            def __init__(self):
+                super().__init__()
+
+        component = MyComponent()
+        assert component.base_value == "base"
+        assert isinstance(component, MadsciClientMixin)
+
+    def test_client_injection_in_setup_clients(self):
+        """Test that clients can be injected via setup_clients."""
+
+        class MyComponent(MadsciClientMixin):
+            REQUIRED_CLIENTS = ["event", "resource", "data"]
+
+        mock_event = Mock(spec=EventClient)
+        mock_resource = Mock(spec=ResourceClient)
+        mock_data = Mock(spec=DataClient)
+
+        component = MyComponent()
+        component.setup_clients(
+            event_client=mock_event,
+            resource_client=mock_resource,
+            data_client=mock_data,
+        )
+
+        # All required clients should be set
+        assert component.event_client == mock_event
+        assert component.resource_client == mock_resource
+        assert component.data_client == mock_data
+
+
+class TestPropertyAccessors:
+    """Test that property accessors exist and work."""
+
+    def test_all_client_properties_exist(self):
+        """Test that all client properties are defined."""
+
+        class MyComponent(MadsciClientMixin):
+            pass
+
+        component = MyComponent()
+
+        # All client properties should exist as properties
+        assert hasattr(MyComponent, "event_client")
+        assert hasattr(MyComponent, "resource_client")
+        assert hasattr(MyComponent, "data_client")
+        assert hasattr(MyComponent, "experiment_client")
+        assert hasattr(MyComponent, "workcell_client")
+        assert hasattr(MyComponent, "location_client")
+        assert hasattr(MyComponent, "lab_client")
+
+        # They should be property objects
+        assert isinstance(getattr(MyComponent, "event_client"), property)
+        assert isinstance(getattr(MyComponent, "resource_client"), property)

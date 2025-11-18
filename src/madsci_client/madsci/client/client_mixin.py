@@ -173,25 +173,36 @@ class MadsciClientMixin:
         Args:
             clients_to_init: List of client names to initialize
         """
-        # Mapping of client names to their property accessors and private attributes
-        client_map = {
-            "resource": (self.resource_client, "_resource_client"),
-            "data": (self.data_client, "_data_client"),
-            "experiment": (self.experiment_client, "_experiment_client"),
-            "workcell": (self.workcell_client, "_workcell_client"),
-            "location": (self.location_client, "_location_client"),
-            "lab": (self.lab_client, "_lab_client"),
+        # Mapping of client names to their private attribute names
+        client_attr_map = {
+            "resource": "_resource_client",
+            "data": "_data_client",
+            "experiment": "_experiment_client",
+            "workcell": "_workcell_client",
+            "location": "_location_client",
+            "lab": "_lab_client",
+        }
+
+        # Mapping of client names to their property names
+        client_property_map = {
+            "resource": "resource_client",
+            "data": "data_client",
+            "experiment": "experiment_client",
+            "workcell": "workcell_client",
+            "location": "location_client",
+            "lab": "lab_client",
         }
 
         for client_name in clients_to_init:
             if client_name == "event":
                 continue  # Already handled in setup_clients
-            if (
-                client_name in client_map
-                and getattr(self, client_map[client_name][1]) is None
-            ):
-                # Access property to trigger lazy initialization
-                _ = client_map[client_name][0]
+
+            # Check if this client type exists and isn't already initialized
+            if client_name in client_attr_map:
+                attr_name = client_attr_map[client_name]
+                if getattr(self, attr_name, None) is None:
+                    # Access property to trigger lazy initialization
+                    _ = getattr(self, client_property_map[client_name])
 
     # EventClient property and factory
     @property
