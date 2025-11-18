@@ -147,11 +147,11 @@ class DatabaseVersionChecker:
         """
         Check if database migration is needed.
 
-        Migration is only needed if:
-        1. Version IS tracked in the database, AND
-        2. Major.minor version mismatch between MADSci and database
+        Migration is needed if:
+        1. Database exists but has no version tracking, OR
+        2. Database has version tracking with major.minor version mismatch
 
-        If version is NOT tracked, no migration is needed (server will start normally).
+        For fresh databases (no version tracking), migration is required to establish proper schema.
 
         Returns:
             tuple: (needs_migration, current_madsci_version, database_version)
@@ -159,12 +159,11 @@ class DatabaseVersionChecker:
         current_version = self.get_current_madsci_version()
         db_version = self.get_database_version()
 
-        # If version tracking doesn't exist, no migration needed
-        # User can manually run migration if they want to start tracking
+        # If version tracking doesn't exist, migration is needed to set up schema and tracking
         if not self.is_version_tracked():
             cmds = self._both_commands()
-            self.logger.info(
-                "No version tracking found, database will start without version validation."
+            self.logger.warning(
+                "No version tracking found. Database needs migration to establish proper schema."
             )
             self.logger.info(
                 "To enable version tracking, run the migration tool using one of:"
@@ -175,7 +174,7 @@ class DatabaseVersionChecker:
             self.logger.info(
                 "Backups default to .madsci/postgres/backups relative to the working directory."
             )
-            return False, current_version, None
+            return True, current_version, None
 
         # Version IS tracked - check for mismatch using major.minor comparison
         if not self.versions_match(current_version, db_version):
@@ -195,8 +194,33 @@ class DatabaseVersionChecker:
         """
         Validate database version compatibility or raise an exception.
         This should be called during server startup.
+
+        Behavior:
+        - If completely fresh database (no tables) -> Auto-initialize
+        - If version tracking exists and versions match -> Allow server to start
+        - If version tracking exists/missing with mismatch -> Raise error, require migration
         """
         needs_migration, madsci_version, db_version = self.is_migration_needed()
+
+        # Handle completely fresh database auto-initialization
+        if needs_migration and db_version is None and self.is_fresh_database():
+            self.logger.info(
+                f"Auto-initializing fresh database with MADSci version {madsci_version}"
+            )
+            try:
+                # Create schema version table and record initial version
+                self.create_version_table_if_not_exists()
+                self.record_version(
+                    madsci_version,
+                    f"Auto-initialized schema version {madsci_version}",
+                )
+                self.logger.info(
+                    f"Successfully auto-initialized database with version {madsci_version}"
+                )
+                return
+            except Exception as e:
+                self.logger.error(f"Failed to auto-initialize database: {e}")
+                raise RuntimeError(f"Failed to auto-initialize database: {e}") from e
 
         if needs_migration:
             cmds = self._both_commands()
@@ -254,3 +278,37 @@ class DatabaseVersionChecker:
         except Exception as e:
             self.logger.error(f"Error recording version: {e}")
             raise
+
+    def is_fresh_database(self) -> bool:
+        """
+        Check if this is a fresh database with no existing tables.
+
+        Returns True if the database has no tables or only system tables.
+        """
+        try:
+            inspector = inspect(self.engine)
+            existing_tables = inspector.get_table_names()
+
+            # Consider it fresh if no resource-related tables exist
+            resource_tables = [
+                "resource",
+                "resource_history",
+                "madsci_schema_version",
+                "alembic_version",
+            ]
+            has_resource_tables = any(
+                table in existing_tables for table in resource_tables
+            )
+
+            if not has_resource_tables:
+                self.logger.info(
+                    "No existing resource tables found, treating as fresh database"
+                )
+                return True
+
+            self.logger.info(f"Found existing tables: {existing_tables}")
+            return False
+
+        except Exception as e:
+            self.logger.warning(f"Could not check database tables: {e}")
+            return False

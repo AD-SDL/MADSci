@@ -112,18 +112,19 @@ class MongoDBVersionChecker:
 
         Returns:
             SemanticVersion if a valid semantic version is found
-            None if database/collection doesn't exist or no version records
+            SemanticVersion(0, 0, 0) if database exists but no version tracking
+            None if database doesn't exist or connection errors
         """
         try:
             collection_names = self.database.list_collection_names()
             if not collection_names:
-                # Database has no collections
+                # Database has no collections (completely fresh)
                 return None
 
             # Check if schema_versions collection exists
             if "schema_versions" not in collection_names:
-                # Database exists but no schema_versions collection
-                return None
+                # Database exists but no schema_versions collection - return 0.0.0
+                return SemanticVersion(0, 0, 0)
 
             # Check if collection has any records
             version_record = self.database["schema_versions"].find_one(
@@ -132,8 +133,8 @@ class MongoDBVersionChecker:
             )
 
             if not version_record:
-                # Collection exists but is empty
-                return None
+                # Collection exists but is empty - return 0.0.0
+                return SemanticVersion(0, 0, 0)
 
             # Get the latest version entry
             return SemanticVersion.parse(version_record["version"])
@@ -170,11 +171,11 @@ class MongoDBVersionChecker:
         """
         Check if database migration is needed.
 
-        Migration is only needed if:
-        1. Version IS tracked in the database, AND
-        2. Schema version mismatch between expected and database
+        Migration is needed if:
+        1. Database exists but has no version tracking (version 0.0.0), OR
+        2. Database has version tracking with version mismatch
 
-        If version is NOT tracked, no migration is needed (server will start normally).
+        If database doesn't exist at all (None), auto-initialization may be possible.
 
         Returns:
             tuple: (needs_migration, expected_schema_version, database_version)
@@ -182,25 +183,38 @@ class MongoDBVersionChecker:
         expected_schema_version = self.get_expected_schema_version()
         db_version = self.get_database_version()
 
-        # If version tracking doesn't exist, no migration needed
-        # User can manually run migration if they want to start tracking
-        if not self.is_version_tracked():
-            cmds = self.get_migration_commands()
-            self.logger.info(
-                f"No version tracking found for {self.database_name} - database will start without version validation."
-            )
-            self.logger.info(
-                "To enable version tracking, run the migration tool using one of the following:"
-            )
-            self.logger.info(f"  • Bare metal:     {cmds['bare_metal']}")
-            self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
-            return False, expected_schema_version, None
-
-        if expected_schema_version != db_version:
+        # If database doesn't exist at all (no collections)
+        if db_version is None:
+            collection_names = self.database.list_collection_names()
+            if not collection_names:
+                # Completely fresh database - needs migration (may be auto-initialized in validate_or_fail)
+                self.logger.info(
+                    f"Fresh database {self.database_name} detected - needs initialization"
+                )
+                return True, expected_schema_version, None
+            # Some other error occurred
             self.logger.warning(
-                f"Schema version mismatch in {self.database_name}: "
-                f"Expected schema v{expected_schema_version}, Database v{db_version}"
+                f"Cannot determine database version for {self.database_name}"
             )
+            return True, expected_schema_version, None
+
+        # Check for version mismatch (including 0.0.0 vs expected version)
+        if expected_schema_version != db_version:
+            if db_version == SemanticVersion(0, 0, 0):
+                cmds = self.get_migration_commands()
+                self.logger.warning(
+                    f"Database {self.database_name} exists but has no version tracking. Migration required."
+                )
+                self.logger.info(
+                    "To enable version tracking, run the migration tool using one of the following:"
+                )
+                self.logger.info(f"  • Bare metal:     {cmds['bare_metal']}")
+                self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
+            else:
+                self.logger.warning(
+                    f"Schema version mismatch in {self.database_name}: "
+                    f"Expected schema v{expected_schema_version}, Database v{db_version}"
+                )
             return True, expected_schema_version, db_version
 
         self.logger.info(
@@ -214,17 +228,44 @@ class MongoDBVersionChecker:
         This should be called during server startup.
 
         Behavior:
-        - If version tracking doesn't exist -> Do nothing, allow server to start
+        - If completely fresh database (no collections) -> Auto-initialize
         - If version tracking exists and versions match -> Allow server to start
-        - If version tracking exists and versions mismatch -> Raise error, require migration
+        - If version tracking exists/missing with mismatch -> Raise error, require migration
         """
         needs_migration, expected, current = self.is_migration_needed()
 
+        # Handle completely fresh database auto-initialization
+        if needs_migration and current is None:
+            collection_names = self.database.list_collection_names()
+            if not collection_names:
+                self.logger.info(
+                    f"Auto-initializing fresh database {self.database_name} with schema version {expected}"
+                )
+                try:
+                    # Create schema_versions collection and record initial version
+                    self.create_schema_versions_collection()
+                    self.record_version(
+                        expected, f"Auto-initialized schema version {expected}"
+                    )
+                    self.logger.info(
+                        f"Successfully auto-initialized database {self.database_name} with version {expected}"
+                    )
+                    return
+                except Exception as e:
+                    self.logger.error(f"Failed to auto-initialize database: {e}")
+                    raise RuntimeError(
+                        f"Failed to auto-initialize database: {e}"
+                    ) from e
+
         if needs_migration:
+            # Handle existing databases that need manual migration
+            if current == SemanticVersion(0, 0, 0):
+                error_msg = f"Database {self.database_name} needs version tracking initialization"
+            else:
+                error_msg = f"Database schema version mismatch detected for {self.database_name}"
+
             cmds = self.get_migration_commands()
-            self.logger.error(
-                f"Database schema version mismatch detected for {self.database_name}"
-            )
+            self.logger.error(error_msg)
             self.logger.error(f"Expected schema version: {expected}")
             self.logger.error(f"Database version: {current}")
             self.logger.error(
@@ -233,7 +274,7 @@ class MongoDBVersionChecker:
             self.logger.error(f"  • Bare metal:     {cmds['bare_metal']}")
             self.logger.error(f"  • Docker Compose: {cmds['docker_compose']}")
             raise RuntimeError(
-                "Database schema version mismatch detected!\n"
+                f"{error_msg}!\n"
                 f"Expected: {expected}\nCurrent: {current}\n"
                 f"Run one of:\n  • {cmds['bare_metal']}\n  • {cmds['docker_compose']}"
             )

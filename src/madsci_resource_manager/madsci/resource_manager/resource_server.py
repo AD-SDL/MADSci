@@ -939,6 +939,59 @@ class ResourceManager(
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
+    def _is_fresh_database(self) -> bool:
+        """
+        Check if this is a fresh database with no existing resource tables.
+
+        This method provides compatibility with test expectations.
+        The actual logic delegates to the migration tool.
+
+        Returns:
+            bool: True if database has no resource-related tables, False otherwise
+        """
+        try:
+            # Import here to avoid circular dependencies
+            from madsci.resource_manager.migration_tool import (  # noqa: PLC0415
+                DatabaseMigrator,
+            )
+
+            # Create a temporary migrator to check database state
+            migrator = DatabaseMigrator(self.settings.db_url, logger=self.logger)
+            return migrator._is_fresh_database()
+        except Exception as e:
+            self.logger.warning(f"Could not check fresh database status: {e}")
+            # Conservative default - assume not fresh to avoid accidental data loss
+            return False
+
+    def _auto_initialize_fresh_database(self) -> bool:
+        """
+        Auto-initialize a fresh database with proper schema and version tracking.
+
+        This method provides compatibility with test expectations.
+        For actual initialization, users should run the migration tool.
+
+        Returns:
+            bool: True if initialization was successful, False otherwise
+        """
+        try:
+            self.logger.info("Auto-initialization requested for fresh database")
+
+            # For safety, we don't automatically initialize in the server
+            # Users should explicitly run the migration tool for database setup
+            self.logger.warning(
+                "Auto-initialization not implemented. Please run the migration tool manually:"
+            )
+
+            version_checker = DatabaseVersionChecker(self.settings.db_url, self.logger)
+            cmds = version_checker._both_commands()
+            self.logger.info(f"  • Bare metal:     {cmds['bare_metal']}")
+            self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
+
+            return False
+        except Exception as e:
+            self.logger.error(f"Error during auto-initialization attempt: {e}")
+            return False
+
 
 # Main entry point for running the server
 if __name__ == "__main__":

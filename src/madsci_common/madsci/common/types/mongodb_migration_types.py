@@ -31,9 +31,10 @@ class MongoDBMigrationSettings(
         title="Database Name",
         description="Database name to migrate (e.g., madsci_events, madsci_data)",
     )
-    schema_file: PathLike = Field(
+    schema_file: Optional[PathLike] = Field(
+        default=None,
         title="Schema File Path",
-        description="Explicit path to schema.json (required).",
+        description="Explicit path to schema.json. If not provided, will auto-detect based on database name.",
         validation_alias=AliasChoices("schema_file", "MONGODB_SCHEMA_FILE"),
     )
     backup_dir: PathLike = Field(
@@ -76,10 +77,60 @@ class MongoDBMigrationSettings(
 
     def get_effective_schema_file_path(self) -> Path:
         """Get the effective schema file path as a Path object."""
-        p = Path(self.schema_file)
-        if not p.exists():
-            raise FileNotFoundError(f"Schema file not found: {p}")
-        return p
+        if self.schema_file is not None:
+            p = Path(self.schema_file)
+            if not p.exists():
+                raise FileNotFoundError(f"Schema file not found: {p}")
+            return p
+
+        # Auto-detect schema file based on database name
+        return self._auto_detect_schema_file()
+
+    def _auto_detect_schema_file(self) -> Path:
+        """Auto-detect schema file based on database name and current working directory."""
+        # Map database names to expected schema paths
+        database_to_manager = {
+            "madsci_data": "data_manager",
+            "madsci_events": "event_manager",
+            "madsci_experiments": "experiment_manager",
+            "madsci_workcell": "workcell_manager",
+            "madsci_workcells": "workcell_manager",  # Support plural form too
+            "madsci_resources": "resource_manager",
+            "madsci_locations": "location_manager",
+        }
+
+        manager_name = database_to_manager.get(self.database)
+        if not manager_name:
+            raise ValueError(
+                f"Cannot auto-detect schema file for database '{self.database}'. "
+                f"Please provide explicit schema_file path. Supported databases: {list(database_to_manager.keys())}"
+            )
+
+        # Try various common locations
+        possible_paths = [
+            # Direct manager directory
+            Path("madsci") / manager_name / "schema.json",
+            # Source structure
+            Path("src")
+            / f"madsci_{manager_name}"
+            / "madsci"
+            / manager_name
+            / "schema.json",
+            # Alternative source structure
+            Path("madsci") / manager_name / "schema.json",
+        ]
+
+        for path in possible_paths:
+            if path.exists():
+                return path
+
+        # If no schema file found, provide helpful error message
+        searched_paths = "\n".join(f"  - {p}" for p in possible_paths)
+        raise FileNotFoundError(
+            f"Could not auto-detect schema file for database '{self.database}' (manager: {manager_name}).\n"
+            f"Searched paths:\n{searched_paths}\n"
+            f"Please provide explicit schema_file path or ensure schema.json exists in expected location."
+        )
 
 
 class IndexKey(BaseModel):

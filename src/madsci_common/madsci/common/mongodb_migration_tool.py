@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from madsci.client.event_client import EventClient
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.mongodb_migration_types import (
+    IndexDefinition,
     MongoDBMigrationSettings,
     MongoDBSchema,
 )
@@ -238,11 +239,18 @@ class MongoDBMigrator:
             existing_indexes = {idx["name"] for idx in collection.list_indexes()}
 
             for index_def in expected_indexes:
-                index_name = index_def.name
+                # Handle both dict and IndexDefinition objects
+                if isinstance(index_def, dict):
+                    # Convert dict to IndexDefinition for consistent handling
+                    index_definition = IndexDefinition(**index_def)
+                else:
+                    index_definition = index_def
+
+                index_name = index_definition.name
 
                 if index_name not in existing_indexes:
-                    keys = index_def.get_keys_as_tuples()
-                    index_options = index_def.to_mongo_format()
+                    keys = index_definition.get_keys_as_tuples()
+                    index_options = index_definition.to_mongo_format()
 
                     collection.create_index(keys, **index_options)
                     self.logger.info(
@@ -355,12 +363,15 @@ def handle_migration_commands(
             version_checker.is_migration_needed()
         )
 
-        logger.log_warning(f"Expected schema version: {expected_schema_version}")
-        logger.log_warning(f"Database version: {db_version or 'None'}")
-        logger.log_warning(f"Migration needed: {needs_migration}")
+        logger.info(f"Expected schema version: {expected_schema_version}")
+        logger.info(f"Database version: {db_version or 'None'}")
+        logger.info(f"Migration needed: {needs_migration}")
 
         if needs_migration:
+            logger.info("Migration is required")
             sys.exit(1)  # Exit with error code if migration needed
+        else:
+            logger.info("No migration required")
 
     elif settings.restore_from:
         # Restore from backup
