@@ -3,14 +3,11 @@
 import json
 import traceback
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, AsyncGenerator, Optional, Union
+from typing import Annotated, Any, AsyncGenerator, ClassVar, Optional, Union
 
 from classy_fastapi import get, post
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.params import Body
-from madsci.client.data_client import DataClient
-from madsci.client.location_client import LocationClient
-from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.admin_command_types import AdminCommandResponse
@@ -45,10 +42,18 @@ LOOKUP_VAL_BODY = Body(...)
 class WorkcellManager(
     AbstractManagerBase[WorkcellManagerSettings, WorkcellManagerDefinition]
 ):
-    """MADSci Workcell Manager using the new AbstractManagerBase pattern."""
+    """
+    MADSci Workcell Manager using the new AbstractManagerBase pattern.
+
+    This manager uses MadsciClientMixin (via AbstractManagerBase) for client management.
+    Required clients: data, location
+    """
 
     SETTINGS_CLASS = WorkcellManagerSettings
     DEFINITION_CLASS = WorkcellManagerDefinition
+
+    # Declare required clients for the mixin
+    REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "data", "location"]
 
     def __init__(
         self,
@@ -72,7 +77,12 @@ class WorkcellManager(
         return WorkcellManagerDefinition(name=name)
 
     def initialize(self, **kwargs: Any) -> None:
-        """Initialize manager-specific components."""
+        """
+        Initialize manager-specific components.
+
+        This method sets up the workcell-specific state handler and clients.
+        Client initialization is handled by MadsciClientMixin via setup_clients().
+        """
         super().initialize(**kwargs)
 
         # Set up global ownership
@@ -86,10 +96,12 @@ class WorkcellManager(
             mongo_connection=self.mongo_connection,
         )
 
-        # Initialize clients
-        context = get_current_madsci_context()
-        self.data_client = DataClient(context.data_server_url)
-        self.location_client = LocationClient(context.location_server_url)
+        # Initialize clients using MadsciClientMixin
+        # This will create data_client and location_client from context
+        self.setup_clients()
+
+        # Clients are now available as self.data_client and self.location_client
+        # They will use URLs from get_current_madsci_context() by default
 
     def create_server(self, **kwargs: Any) -> FastAPI:
         """Create the FastAPI server application with lifespan."""
