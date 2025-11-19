@@ -1,14 +1,19 @@
 """Database migration tool for MADSci resources using Alembic with automatic type conversion handling."""
 
+import fcntl
+import hashlib
+import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 import traceback
 import urllib.parse as urlparse
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from alembic import command
 from alembic.autogenerate import compare_metadata
@@ -22,7 +27,7 @@ from madsci.resource_manager.database_version_checker import DatabaseVersionChec
 from madsci.resource_manager.resource_tables import ResourceTable, SchemaVersionTable
 from psycopg2 import sql
 from pydantic import Field
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlmodel import Session, create_engine, select
 
 
@@ -114,6 +119,10 @@ class DatabaseMigrator:
         # Setup Alembic configuration
         self.alembic_cfg = self._setup_alembic_config()
 
+        # Migration locking attributes
+        self.lock_file: Optional[Path] = None
+        self.lock_fd: Optional[int] = None
+
     def _get_package_root(self) -> Path:
         """Get the root directory of the madsci.resource_manager package."""
         try:
@@ -187,6 +196,100 @@ class DatabaseMigrator:
             "database": parsed.path.lstrip("/") if parsed.path else "resources",
         }
 
+    def _acquire_migration_lock(self) -> None:
+        """Acquire exclusive lock for migration operations."""
+        db_info = self._parse_db_url()
+        database_name = db_info["database"]
+
+        # Create lock file in system temp directory
+        temp_dir = Path(tempfile.gettempdir())
+        self.lock_file = temp_dir / f"madsci_migration_{database_name}.lock"
+
+        try:
+            # Open lock file for writing
+            self.lock_fd = os.open(
+                str(self.lock_file), os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o644
+            )
+
+            # Try to acquire exclusive lock (non-blocking)
+            fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            # Write process info to lock file
+            lock_info = f"pid={os.getpid()}\ntimestamp={time.time()}\ndatabase={database_name}\n"
+            os.write(self.lock_fd, lock_info.encode())
+
+            self.logger.info(f"Acquired migration lock: {self.lock_file}")
+
+        except BlockingIOError:
+            if self.lock_fd is not None:
+                os.close(self.lock_fd)
+                self.lock_fd = None
+            raise RuntimeError(
+                f"Another migration is already in progress for database '{database_name}'. "
+                f"Lock file: {self.lock_file}"
+            ) from None
+        except Exception as e:
+            if self.lock_fd is not None:
+                os.close(self.lock_fd)
+                self.lock_fd = None
+            raise RuntimeError(f"Failed to acquire migration lock: {e}") from e
+
+    def _release_migration_lock(self) -> None:
+        """Release migration lock."""
+        if self.lock_fd is not None:
+            try:
+                fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
+                os.close(self.lock_fd)
+                self.logger.info("Released migration lock")
+            except Exception as e:
+                self.logger.warning(f"Error releasing lock: {e}")
+            finally:
+                self.lock_fd = None
+
+        if self.lock_file and self.lock_file.exists():
+            try:
+                self.lock_file.unlink()
+                self.logger.info(f"Removed lock file: {self.lock_file}")
+            except Exception as e:
+                self.logger.warning(f"Error removing lock file: {e}")
+            finally:
+                self.lock_file = None
+
+    def _acquire_migration_lock_with_staleness_check(self) -> None:
+        """Acquire migration lock with stale lock detection and cleanup."""
+        db_info = self._parse_db_url()
+        database_name = db_info["database"]
+
+        temp_dir = Path(tempfile.gettempdir())
+        lock_file_path = temp_dir / f"madsci_migration_{database_name}.lock"
+
+        # Check for stale lock
+        if lock_file_path.exists():
+            try:
+                # Try to read lock file
+                with lock_file_path.open() as f:
+                    lock_content = f.read()
+
+                # Extract timestamp if available
+                timestamp = None
+                for line in lock_content.split("\n"):
+                    if line.startswith("timestamp="):
+                        timestamp = float(line.split("=", 1)[1])
+                        break
+
+                # Check if lock is stale (older than 1 hour)
+                if timestamp and (time.time() - timestamp) > 3600:
+                    self.logger.warning(
+                        f"Detected stale lock file, removing: {lock_file_path}"
+                    )
+                    lock_file_path.unlink()
+
+            except (OSError, ValueError) as e:
+                self.logger.warning(f"Error checking stale lock: {e}")
+
+        # Now try to acquire lock normally
+        self._acquire_migration_lock()
+
     def create_backup(self) -> Path:
         """Create a backup of the current database."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -226,6 +329,10 @@ class DatabaseMigrator:
                 self.logger.info(
                     f"Database backup completed successfully: {backup_path}"
                 )
+
+                # Validate backup integrity
+                self._validate_backup_integrity(backup_path)
+
                 return backup_path
             raise RuntimeError(f"pg_dump failed: {result.stderr}")
 
@@ -236,6 +343,193 @@ class DatabaseMigrator:
             raise RuntimeError(
                 "pg_dump command not found. Please ensure PostgreSQL client tools are installed. {fe}"
             ) from fe
+
+    def _verify_backup_completion(self, backup_file: Path) -> bool:
+        """Verify that backup was completed successfully."""
+        if not backup_file.exists():
+            return False
+
+        if backup_file.stat().st_size == 0:
+            return False
+
+        # Check if file has basic SQL structure
+        try:
+            content = backup_file.read_text(encoding="utf-8")
+            # Basic validation - should contain SQL commands
+            return any(
+                keyword in content.upper()
+                for keyword in ["CREATE", "INSERT", "COPY", "--"]
+            )
+        except Exception as e:
+            self.logger.error(f"Error reading backup file: {e}")
+            return False
+
+    def _generate_backup_checksum(self, backup_file: Path) -> str:
+        """Generate SHA256 checksum for backup file."""
+        sha256_hash = hashlib.sha256()
+
+        with backup_file.open("rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(chunk)
+
+        checksum = sha256_hash.hexdigest()
+
+        # Save checksum to file
+        checksum_file = backup_file.with_suffix(backup_file.suffix + ".checksum")
+        checksum_file.write_text(checksum)
+
+        self.logger.info(f"Generated backup checksum: {checksum}")
+        return checksum
+
+    def _validate_backup_checksum(self, backup_file: Path) -> bool:
+        """Validate backup file against its checksum."""
+        checksum_file = backup_file.with_suffix(backup_file.suffix + ".checksum")
+
+        if not checksum_file.exists():
+            self.logger.warning("No checksum file found for backup validation")
+            return False
+
+        try:
+            expected_checksum = checksum_file.read_text().strip()
+            actual_checksum = self._generate_backup_checksum_inline(backup_file)
+
+            if expected_checksum == actual_checksum:
+                self.logger.info("Backup checksum validation passed")
+                return True
+            self.logger.error(
+                f"Backup checksum validation failed: expected {expected_checksum}, got {actual_checksum}"
+            )
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Error validating backup checksum: {e}")
+            return False
+
+    def _generate_backup_checksum_inline(self, backup_file: Path) -> str:
+        """Generate checksum without saving to file (for validation)."""
+        sha256_hash = hashlib.sha256()
+
+        with backup_file.open("rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(chunk)
+
+        return sha256_hash.hexdigest()
+
+    def _test_backup_restore(self, backup_file: Path) -> bool:
+        """Test backup by attempting restore to temporary database."""
+        db_info = self._parse_db_url()
+        test_db_name = f"test_restore_{int(time.time())}"
+
+        try:
+            # Create temporary test database
+            self._create_test_database(test_db_name)
+
+            # Try to restore to test database
+            psql_cmd = [
+                "psql",
+                "-h",
+                db_info["host"] or "localhost",
+                "-p",
+                str(db_info["port"] or 5432),
+                "-U",
+                db_info["user"],
+                "-d",
+                test_db_name,
+                "-f",
+                str(backup_file),
+                "--quiet",
+            ]
+
+            env = dict(os.environ)
+            if db_info["password"]:
+                env["PGPASSWORD"] = db_info["password"]
+
+            result = subprocess.run(  # noqa: S603
+                psql_cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=300,
+            )
+
+            success = result.returncode == 0
+            if success:
+                self.logger.info("Backup restore test successful")
+            else:
+                self.logger.error(f"Backup restore test failed: {result.stderr}")
+
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Error testing backup restore: {e}")
+            return False
+        finally:
+            # Clean up test database
+            try:
+                self._drop_test_database(test_db_name)
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to clean up test database {test_db_name}: {e}"
+                )
+
+    def _create_test_database(self, test_db_name: str) -> None:
+        """Create temporary database for testing."""
+        postgres_url = self.db_url.replace(
+            f"/{self._parse_db_url()['database']}", "/postgres"
+        )
+        postgres_engine = create_engine(postgres_url, isolation_level="AUTOCOMMIT")
+
+        with postgres_engine.connect() as conn:
+            # Use quoted identifier for safety
+            conn.execute(text(f'CREATE DATABASE "{test_db_name}"'))
+
+    def _drop_test_database(self, test_db_name: str) -> None:
+        """Drop temporary test database."""
+        postgres_url = self.db_url.replace(
+            f"/{self._parse_db_url()['database']}", "/postgres"
+        )
+        postgres_engine = create_engine(postgres_url, isolation_level="AUTOCOMMIT")
+
+        with postgres_engine.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{test_db_name}"'))
+
+    def _create_backup_metadata(self, backup_file: Path) -> None:
+        """Create metadata file for backup."""
+        metadata = {
+            "timestamp": datetime.now().isoformat(),
+            "database_version": self.version_checker.get_database_version(),
+            "madsci_version": self.version_checker.get_current_madsci_version(),
+            "backup_size": backup_file.stat().st_size,
+            "checksum": self._generate_backup_checksum_inline(backup_file),
+            "database_name": self._parse_db_url()["database"],
+        }
+
+        metadata_file = backup_file.with_suffix(backup_file.suffix + ".metadata.json")
+        metadata_file.write_text(json.dumps(metadata, indent=2))
+
+        self.logger.info(f"Created backup metadata: {metadata_file}")
+
+    def _validate_backup_integrity(self, backup_file: Path) -> bool:
+        """Perform comprehensive backup validation."""
+        self.logger.info(f"Validating backup integrity: {backup_file}")
+
+        # Step 1: Verify backup completion
+        if not self._verify_backup_completion(backup_file):
+            raise RuntimeError(f"Backup completion verification failed: {backup_file}")
+
+        # Step 2: Generate and save checksum
+        self._generate_backup_checksum(backup_file)
+
+        # Step 3: Test restorability
+        if not self._test_backup_restore(backup_file):
+            raise RuntimeError(f"Backup restore test failed: {backup_file}")
+
+        # Step 4: Create metadata
+        self._create_backup_metadata(backup_file)
+
+        self.logger.info("Backup integrity validation passed")
+        return True
 
     def restore_from_backup(self, backup_path: Path) -> None:
         """Restore database from a backup file."""
@@ -281,6 +575,111 @@ class DatabaseMigrator:
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Restore failed: {e.stderr}")
             raise RuntimeError(f"Database restore failed: {e}") from e
+
+    def _verify_restore_success(self, backup_path: Path) -> bool:
+        """Verify that database restore was successful."""
+        try:
+            db_info = self._parse_db_url()
+
+            # Test database connection
+            test_engine = create_engine(self.db_url)
+            with test_engine.connect() as conn:
+                # Try a simple query to verify database is accessible
+                result = conn.execute(text("SELECT 1"))
+                if result.fetchone()[0] != 1:
+                    return False
+
+            # Compare with backup metadata if available
+            metadata_file = backup_path.with_suffix(
+                backup_path.suffix + ".metadata.json"
+            )
+            if metadata_file.exists():
+                try:
+                    metadata = json.loads(metadata_file.read_text())
+                    expected_db = metadata.get("database_name")
+                    if expected_db and expected_db != db_info["database"]:
+                        self.logger.error(
+                            f"Database name mismatch: expected {expected_db}, got {db_info['database']}"
+                        )
+                        return False
+                except Exception as e:
+                    self.logger.warning(f"Could not validate metadata: {e}")
+
+            self.logger.info("Database restore verification successful")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Database restore verification failed: {e}")
+            return False
+
+    def _cleanup_failed_restore(self, backup_path: Path) -> None:  # noqa: ARG002
+        """Clean up after a failed restore operation."""
+        try:
+            db_info = self._parse_db_url()
+
+            # Drop the corrupted database
+            self.logger.warning("Cleaning up corrupted database after failed restore")
+            self._recreate_database(db_info)
+
+            self.logger.info("Failed restore cleanup completed")
+
+        except Exception as e:
+            self.logger.error(f"Failed to clean up after restore failure: {e}")
+            raise RuntimeError(
+                f"Critical: Database may be in corrupted state: {e}"
+            ) from e
+
+    def _get_available_backups(self) -> List[Path]:
+        """Get list of available backup files sorted by modification time (newest first)."""
+        backup_files = []
+
+        for backup_file in self.backup_dir.glob("*.sql"):
+            # Check if backup has metadata and checksum files
+            metadata_file = backup_file.with_suffix(
+                backup_file.suffix + ".metadata.json"
+            )
+            checksum_file = backup_file.with_suffix(backup_file.suffix + ".checksum")
+
+            if metadata_file.exists() and checksum_file.exists():
+                backup_files.append(backup_file)
+
+        # Sort by modification time (newest first)
+        backup_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+        return backup_files
+
+    def _rotate_old_backups(self, max_backups: int = 10) -> None:
+        """Remove old backup files beyond the specified limit."""
+        available_backups = self._get_available_backups()
+
+        if len(available_backups) <= max_backups:
+            return
+
+        backups_to_remove = available_backups[max_backups:]
+
+        for backup_file in backups_to_remove:
+            try:
+                # Remove backup file and its associated files
+                backup_file.unlink()
+
+                # Remove metadata file
+                metadata_file = backup_file.with_suffix(
+                    backup_file.suffix + ".metadata.json"
+                )
+                if metadata_file.exists():
+                    metadata_file.unlink()
+
+                # Remove checksum file
+                checksum_file = backup_file.with_suffix(
+                    backup_file.suffix + ".checksum"
+                )
+                if checksum_file.exists():
+                    checksum_file.unlink()
+
+                self.logger.info(f"Removed old backup: {backup_file}")
+
+            except Exception as e:
+                self.logger.warning(f"Failed to remove old backup {backup_file}: {e}")
 
     def _recreate_database(self, db_info: dict) -> None:
         """Drop and recreate the database for restore."""
@@ -549,6 +948,9 @@ class DatabaseMigrator:
 
     def run_migration(self, target_version: Optional[str] = None) -> None:
         """Run the complete migration process using Alembic."""
+        # Acquire migration lock to prevent concurrent migrations
+        self._acquire_migration_lock()
+
         try:
             # Determine target version
             if target_version is None:
@@ -619,6 +1021,9 @@ class DatabaseMigrator:
         except Exception as e:
             self.logger.error(f"Migration process failed: {e}")
             raise
+        finally:
+            # Always release the migration lock
+            self._release_migration_lock()
 
     def _check_for_existing_version_record(self, version: str) -> bool:
         """Check if a version record already exists in the database."""

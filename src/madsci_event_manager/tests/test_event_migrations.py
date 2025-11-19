@@ -228,17 +228,21 @@ def test_event_backup_creation(mock_subprocess):
         )
         migrator = MongoDBMigrator(settings)
 
-        backup_path = migrator.create_backup()
+        # Mock the validation methods to bypass filesystem checks
+        with (
+            patch.object(migrator, "_validate_backup_integrity", return_value=True),
+        ):
+            backup_path = migrator.create_backup()
 
-        # Verify backup path format
-        assert "madsci_events_backup_" in backup_path.name
+            # Verify backup path format
+            assert "madsci_events_backup_" in backup_path.name
 
-        # Verify mongodump was called with events database
-        mock_subprocess.assert_called_once()
-        call_args = mock_subprocess.call_args[0][0]
-        assert "mongodump" in call_args
-        assert "--db" in call_args
-        assert "madsci_events" in call_args
+            # Verify mongodump was called with events database
+            mock_subprocess.assert_called_once()
+            call_args = mock_subprocess.call_args[0][0]
+            assert "mongodump" in call_args
+            assert "--db" in call_args
+            assert "madsci_events" in call_args
     finally:
         schema_file.unlink()
 

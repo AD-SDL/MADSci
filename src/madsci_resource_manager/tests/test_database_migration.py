@@ -167,8 +167,11 @@ def test_backup_creation(mock_subprocess, temp_alembic_dir: Path):
     test_url = "postgresql://test:test@localhost:5432/test"
     settings = DatabaseMigrationSettings(db_url=test_url)
 
-    with patch.object(
-        DatabaseMigrator, "_get_package_root", return_value=temp_alembic_dir
+    with (
+        patch.object(
+            DatabaseMigrator, "_get_package_root", return_value=temp_alembic_dir
+        ),
+        patch.object(DatabaseMigrator, "_validate_backup_integrity", return_value=True),
     ):
         migrator = DatabaseMigrator(settings)
         backup_path = migrator.create_backup()
