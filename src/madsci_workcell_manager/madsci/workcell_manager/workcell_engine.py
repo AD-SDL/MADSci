@@ -241,6 +241,7 @@ class Engine:
 
                     # * Periodically query the action status until complete, updating the workflow as needed
                     # * If the node or client supports get_action_result, query the action result
+                    node_lock.release()
                     self.monitor_action_progress(
                         wf, step, node, client, response, request, action_id
                     )
@@ -248,7 +249,8 @@ class Engine:
                     self.logger.log_info(
                         f"Released lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
                     )
-                    node_lock.release()
+                    if node_lock.locked():
+                        node_lock.release()
                 # * Finalize the step
             self.finalize_step(workflow_id, step)
             self.logger.info(f"Completed step {step.step_id} in workflow {workflow_id}")
