@@ -2,13 +2,41 @@
 
 import time
 from typing import Callable, Dict, Optional
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from madsci.client.event_client import EventClient
 from madsci.common.types.node_types import NodeDefinition
 from madsci.node_module.abstract_node_module import AbstractNode
+from rich.logging import RichHandler
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
+
+
+@pytest.fixture(autouse=True)
+def setup_test_logging():
+    """Configure logging for tests to suppress event client console output."""
+    # Get the original __init__ method before patching
+    original_init = EventClient.__init__
+
+    def mock_init(*args, **kwargs):
+        """Mock EventClient.__init__ to not add RichHandler."""
+        # Call the original __init__ but capture and remove RichHandler
+        original_init(*args, **kwargs)
+        # Remove only the RichHandler, keep the file handler
+        self = args[0]  # First argument is self
+        handlers_to_remove = [
+            handler
+            for handler in self.logger.handlers
+            if isinstance(handler, RichHandler)
+        ]
+        for handler in handlers_to_remove:
+            self.logger.removeHandler(handler)
+
+    # Patch the EventClient's __init__ method
+    with patch.object(EventClient, "__init__", mock_init):
+        yield
 
 
 @pytest.fixture
