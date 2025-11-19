@@ -2,6 +2,7 @@
 
 import tempfile
 import time
+import traceback
 import zipfile
 from pathlib import Path
 from typing import Any, ClassVar, Optional, Union
@@ -246,10 +247,17 @@ class RestNodeClient(AbstractNodeClient):
         files_list = result_data.get("files")
         if files_list:
             # Fetch the actual files using the file keys
-            action_files = self._fetch_files_from_keys(
-                action_name, action_id, files_list
-            )
-            result_data["files"] = action_files
+            try:
+                action_files = self._fetch_files_from_keys(
+                    action_name, action_id, files_list
+                )
+                result_data["files"] = action_files
+            except Exception as e:
+                result_data["errors"] = result_data.get("errors", [])
+                result_data["errors"].append(
+                    f"Error in Client: Failed to fetch files for action {action_name} with ID {action_id}: {e}"
+                )
+                result_data["files"] = None
         else:
             result_data["files"] = None
 
@@ -286,11 +294,11 @@ class RestNodeClient(AbstractNodeClient):
                     else None
                 )
 
-        except Exception:
+        except Exception as e:
             self.logger.error(
-                f"Failed to fetch files for action {action_name} with ID {action_id}"
+                f"Failed to fetch files for action {action_name} with ID {action_id}: {traceback.format_exc()}"
             )
-            return None
+            raise e
         finally:
             # Clean up the ZIP file
             if "zip_path" in locals():
@@ -320,10 +328,15 @@ class RestNodeClient(AbstractNodeClient):
             rest_response.json(), action_name, action_id
         )
 
-    def _get_action_files_zip(self, action_name: str, action_id: str) -> Path:
-        """Download all files from an action result as a ZIP. REST-implementation specific."""
+    def _get_action_files_zip(self, action_name: str, action_id: str) -> Path:  # noqa: ARG002
+        """Download all files from an action result as a ZIP. REST-implementation specific.
+
+        Args:
+            action_name: Action name (kept for backward compatibility, not used in endpoint)
+            action_id: Action ID used in the download endpoint
+        """
         rest_response = requests.get(
-            f"{self.url}/action/{action_name}/{action_id}/download",
+            f"{self.url}/action/{action_id}/download",
             timeout=60,
         )
         rest_response.raise_for_status()
