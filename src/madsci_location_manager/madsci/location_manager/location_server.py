@@ -72,7 +72,7 @@ class LocationManager(
             )
 
             # Handle resource creation/initialization if resource_template_name is provided
-            resource_id = None
+            resource_id = existing_location.resource_id if existing_location else None
             if location_def.resource_template_name:
                 if existing_location and existing_location.resource_id:
                     # Location exists and has a resource, validate it still exists and matches template
@@ -95,25 +95,7 @@ class LocationManager(
                 allow_transfers=location_def.allow_transfers,
             )
 
-            if existing_location is None:
-                # Location doesn't exist, create it
-                self.state_handler.set_location(location.location_id, location)
-            else:
-                # Location exists, update if there are changes
-                needs_update = False
-
-                if location.representations != existing_location.representations:
-                    existing_location.representations = location.representations
-                    needs_update = True
-
-                if resource_id != existing_location.resource_id:
-                    existing_location.resource_id = resource_id
-                    needs_update = True
-
-                if needs_update:
-                    self.state_handler.update_location(
-                        location.location_id, existing_location
-                    )
+            self.state_handler.set_location(location.location_id, location)
 
     def _initialize_location_resource(
         self, location_def: LocationDefinition
