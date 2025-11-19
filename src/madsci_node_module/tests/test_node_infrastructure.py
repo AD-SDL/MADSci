@@ -1,10 +1,13 @@
 """Test node infrastructure including lifecycle, configuration, and basic actions."""
 
+import contextlib
 import inspect
+import logging
 import time
 from pathlib import Path
 from typing import Annotated, Optional, Union, get_type_hints
 
+import pytest
 from fastapi.testclient import TestClient
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
@@ -14,7 +17,9 @@ from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
     ActionStatus,
+    ArgumentDefinition,
     FileArgumentDefinition,
+    LocationArgumentDefinition,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
@@ -36,6 +41,37 @@ from madsci_node_module.tests.test_rest_utils import (
     parametrize_admin_commands,
     validate_admin_command_response,
 )
+
+
+@pytest.fixture
+def dummy_node():
+    """Create a DummyNode instance for testing."""
+
+    class DummyNode(AbstractNode):
+        __test__ = False
+        config_model = TestNodeConfig
+
+        def __init__(self):
+            """Initialize without calling parent __init__ to avoid file dependencies."""
+            self.config = TestNodeConfig(test_required_param=42)
+            self.node_definition = NodeDefinition(
+                node_name="test_node",
+                node_id=new_ulid_str(),
+                module_name="test_module",
+                module_version="0.0.1",
+            )
+            self.node_info = NodeInfo.from_node_def_and_config(
+                self.node_definition, self.config
+            )
+            self.action_handlers = {}
+            self.action_history = {}
+            self.node_state = {}
+            self.logger = self.event_client = EventClient()
+            self.resource_client = ResourceClient(event_client=self.event_client)
+            self.data_client = DataClient()
+            self.node_status = NodeStatus(ready=True)
+
+    return DummyNode()
 
 
 class TestNodeLifecycle:
@@ -869,3 +905,178 @@ class TestAnnotatedPathInNode:
         )
         assert isinstance(action_def.files["optional_file"], FileArgumentDefinition)
         assert action_def.files["optional_file"].description == "An optional file"
+
+
+class TestLocationArgumentDetection:
+    """Test that Union types containing LocationArgument are properly detected as location arguments."""
+
+    def test_union_location_argument_detection(self, dummy_node) -> None:
+        """Test that Union[LocationArgument, str] is properly detected as a location argument."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Simulate a function signature with Union[LocationArgument, str]
+        def test_func(target: Union[LocationArgument, str] = "default"):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        dummy_node._parse_action_arg(
+            action_def, signature, "target", type_hints["target"]
+        )
+
+        # BUG: This currently fails because Union[LocationArgument, str] is not detected as location
+        # The parameter gets added to args instead of locations
+        assert "target" in action_def.locations, (
+            "target should be detected as a location argument because Union contains LocationArgument"
+        )
+        assert "target" not in action_def.args, (
+            "target should not be in regular args when Union contains LocationArgument"
+        )
+        assert isinstance(action_def.locations["target"], LocationArgumentDefinition)
+
+    def test_optional_location_argument_detection(self, dummy_node) -> None:
+        """Test that Optional[LocationArgument] is properly detected as a location argument."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Simulate a function signature with Optional[LocationArgument]
+        def test_func(target: Optional[LocationArgument] = None):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        dummy_node._parse_action_arg(
+            action_def, signature, "target", type_hints["target"]
+        )
+
+        # BUG: This currently fails because Optional[LocationArgument] is not detected as location
+        # after the Optional unwrapping, the type check fails
+        assert "target" in action_def.locations, (
+            "target should be detected as a location argument when Optional[LocationArgument]"
+        )
+        assert "target" not in action_def.args, (
+            "target should not be in regular args when Optional[LocationArgument]"
+        )
+        assert isinstance(action_def.locations["target"], LocationArgumentDefinition)
+
+    def test_complex_union_location_argument_detection(self, dummy_node) -> None:
+        """Test that Union[str, LocationArgument, int] is properly detected as a location argument."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Simulate a function signature with Union[str, LocationArgument, int]
+        def test_func(target: Union[str, LocationArgument, int] = "default"):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        dummy_node._parse_action_arg(
+            action_def, signature, "target", type_hints["target"]
+        )
+
+        # Should be detected as a location argument because Union contains LocationArgument
+        assert "target" in action_def.locations, (
+            "target should be detected as a location argument because Union contains LocationArgument"
+        )
+        assert "target" not in action_def.args, (
+            "target should not be in regular args when Union contains LocationArgument"
+        )
+        assert isinstance(action_def.locations["target"], LocationArgumentDefinition)
+
+    def test_union_without_location_argument(self, dummy_node) -> None:
+        """Test that Union[str, int] without LocationArgument is NOT detected as a location argument."""
+        # Create test action definition
+        action_def = ActionDefinition(
+            name="test_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Simulate a function signature with Union[str, int] (no LocationArgument)
+        def test_func(target: Union[str, int] = "default"):
+            pass
+
+        signature = inspect.signature(test_func)
+        type_hints = get_type_hints(test_func, include_extras=True)
+
+        dummy_node._parse_action_arg(
+            action_def, signature, "target", type_hints["target"]
+        )
+
+        # Should NOT be detected as a location argument because Union doesn't contain LocationArgument
+        assert "target" not in action_def.locations, (
+            "target should NOT be detected as a location argument when Union doesn't contain LocationArgument"
+        )
+        assert "target" in action_def.args, (
+            "target should be in regular args when Union doesn't contain LocationArgument"
+        )
+        assert isinstance(action_def.args["target"], ArgumentDefinition)
+
+
+class TestNodeLogging:
+    """Test node logging behavior to ensure no duplicate handlers."""
+
+    def test_no_double_logging_with_unexpected_args(self, dummy_node) -> None:
+        """Test that processing unexpected arguments doesn't create duplicate console handlers."""
+        # Get the initial number of handlers on the node's logger
+        initial_handler_count = len(dummy_node.logger.logger.handlers)
+
+        # Create a simple action for testing
+        @action(name="test_simple_action", description="Test action")
+        def simple_action(self, expected_arg: int) -> None:
+            pass
+
+        # Add the action to the node
+        dummy_node._add_action(
+            func=simple_action,
+            action_name="test_simple_action",
+            description="Test action",
+            blocking=False,
+        )
+
+        # Create an action request with unexpected arguments
+        action_request = ActionRequest(
+            action_id=new_ulid_str(),
+            action_name="test_simple_action",
+            args={
+                "expected_arg": 42,
+                "unexpected_arg": "value",
+                "another_unexpected": 123,
+            },
+            files={},
+        )
+
+        # Process the action arguments (this will log warnings about unexpected args)
+        with contextlib.suppress(Exception):
+            # We don't care if it fails, we just want to check logging
+            dummy_node._parse_action_args(action_request)
+
+        # Check that no new handlers were added
+        final_handler_count = len(dummy_node.logger.logger.handlers)
+        assert final_handler_count == initial_handler_count, (
+            f"Logger handler count increased from {initial_handler_count} to {final_handler_count}. "
+            "This indicates that new EventClient instances are being created and adding duplicate handlers."
+        )
+
+        # Also verify we're not creating multiple loggers with the same name
+        logger_name = dummy_node.logger.name
+        python_logger = logging.getLogger(logger_name)
+        assert python_logger is dummy_node.logger.logger, (
+            "Logger instance mismatch - multiple loggers with same name"
+        )

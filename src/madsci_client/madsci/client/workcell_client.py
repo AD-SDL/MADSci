@@ -242,7 +242,7 @@ class WorkcellClient:
         else:
             try:
                 workflow_definition_id = ULID.from_str(workflow_definition)
-            except ValueError:
+            except (ValueError, TypeError):
                 workflow_definition = WorkflowDefinition.from_yaml(workflow_definition)
                 workflow_definition_id = self.submit_workflow_definition(
                     workflow_definition

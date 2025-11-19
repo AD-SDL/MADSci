@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from madsci.client.resource_client import Resource
+from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.condition_types import (
     NoResourceInLocationCondition,
     ResourceInLocationCondition,
@@ -38,16 +39,22 @@ def mock_scheduler() -> Generator[Scheduler, None, None]:
                 resource_id=None,
             ),
         ],
+        nodes={"test_node": "http://test_node"},
     )
     mock_state_handler = MagicMock()
-    mock_state_handler.get_node.return_value = Node(
+    test_action = ActionDefinition(name="test_action", description="Test action")
+    node_info = NodeInfo(
+        node_name="test_node",
+        module_name="test_module",
+        actions={"test_action": test_action},
+    )
+    test_node = Node(
         node_url="http://test_node",
         status=NodeStatus(),
-        info=NodeInfo(
-            node_name="test_node",
-            module_name="test_module",
-        ),
+        info=node_info,
     )
+    mock_state_handler.get_node.return_value = test_node
+    mock_state_handler.get_nodes.return_value = {"test_node": test_node}
 
     # Mock the node_lock to return an unlocked lock by default
     mock_lock = MagicMock()
@@ -251,12 +258,14 @@ def test_node_status_abnormal(
     mock_scheduler: Scheduler, workflows: list[Workflow]
 ) -> None:
     """Test that workflows are not ready to run if the node is in an error state"""
+    test_action = ActionDefinition(name="test_action", description="Test action")
     mock_scheduler.state_handler.get_node.return_value = Node(
         node_url="http://test_node",
         status=NodeStatus(errored=True),
         info=NodeInfo(
             node_name="test_node",
             module_name="test_module",
+            actions={"test_action": test_action},
         ),
     )
     result: dict[str, SchedulerMetadata] = mock_scheduler.run_iteration(workflows)

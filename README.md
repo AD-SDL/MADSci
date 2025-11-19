@@ -155,8 +155,8 @@ result = client.submit_workflow("path/to/workflow.yaml")
 - **[PDM](https://pdm-project.org/)**: For dependency management and virtual environments
 - **[Docker](https://docs.docker.com/engine/install/)**: Required for services and integration tests
   - Alternatives: [Rancher Desktop](https://rancherdesktop.io/), [Podman](https://podman.io/)
-- **[just](https://github.com/casey/just)**: Task runner for development commands
-- **Node.js/npm**: Only needed for dashboard development
+- **[just](https://github.com/casey/just)**: Task runner for development commands (note: commands are defined in the hidden `.justfile` in the repository root)
+- **Node.js/yarn**: Only needed for dashboard development
 
 ### Quick Setup
 
@@ -193,8 +193,8 @@ just down               # Stop services
 
 # Dashboard Development
 cd ui/
-npm run dev             # Start Vue dev server
-npm run build           # Build for production
+yarn dev                # Start Vue dev server
+yarn build              # Build for production
 ```
 
 ### Development Patterns

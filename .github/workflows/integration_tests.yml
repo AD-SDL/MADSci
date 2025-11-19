@@ -1,0 +1,40 @@
+name: Integration Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: [ '*' ]
+  schedule: # Run on Tuesday's at 12:00
+    - cron: '0 12 * * 2'
+  workflow_dispatch: # Run manually
+
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ghcr.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+  DASHBOARD_IMAGE_NAME: ${{ github.repository }}_dashboard
+
+
+jobs:
+  docker-compose-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: extractions/setup-just@v2
+        name: Setup Just
+      - name: example.env to .env
+        run: cp .env.example .env
+      - name: Set USER_ID and GROUP_ID in .env
+        run: |
+          echo "USER_ID=$(id -u)" >> .env
+          echo "GROUP_ID=$(id -g)" >> .env
+      - name: Ensure .madsci directory exists
+        run: mkdir -p ./.madsci
+      - name: Build and start example lab services, and wait for startup
+        run: docker compose up --build -d && sleep 30
+      - name: Run the experiment notebook
+        run: timeout 10m just integration_tests
