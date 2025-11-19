@@ -1,7 +1,7 @@
 """Example Event Manager implementation using the new AbstractManagerBase class."""
 
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple, Union, Annotated
+from typing import Annotated, Any, Dict, Optional, Tuple, Union
 
 import pymongo
 from classy_fastapi import get, post
@@ -358,8 +358,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             return None
 
     def _parse_session_time_parameters(
-        self,
-        start_time: Optional[str], end_time: Optional[str]
+        self, start_time: Optional[str], end_time: Optional[str]
     ) -> Tuple[Optional[datetime], Optional[datetime]]:
         """Parse time parameters for session utilization reports."""
         parsed_start = None
