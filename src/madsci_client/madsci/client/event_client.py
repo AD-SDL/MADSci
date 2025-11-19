@@ -95,7 +95,7 @@ class EventClient:
         if self.event_server:
             response = requests.get(
                 str(self.event_server) + f"event/{event_id}",
-                timeout=10,
+                # timeout=10,
             )
             if not response.ok:
                 response.raise_for_status()
@@ -111,7 +111,7 @@ class EventClient:
         if self.event_server:
             response = requests.get(
                 str(self.event_server) + "events",
-                timeout=10,
+                # timeout=10,
                 params={"number": number, "level": level},
             )
             if not response.ok:
@@ -275,7 +275,7 @@ class EventClient:
             response = requests.get(
                 str(self.event_server) + "utilization/periods",
                 params=params,
-                timeout=30,
+                # timeout=30,
             )
             if not response.ok:
                 self.logger.error(
@@ -340,7 +340,7 @@ class EventClient:
             response = requests.get(
                 str(self.event_server) + "utilization/sessions",
                 params=params,
-                timeout=60,
+                # timeout=60,
             )
 
             if not response.ok:
@@ -400,7 +400,7 @@ class EventClient:
             response = requests.get(
                 str(self.event_server) + "utilization/users",
                 params=params,
-                timeout=60,
+                # timeout=60,
             )
 
             if not response.ok:
