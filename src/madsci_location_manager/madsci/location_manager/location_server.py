@@ -49,7 +49,7 @@ class LocationManager(
         """Initialize manager-specific components."""
 
         self.state_handler = LocationStateHandler(
-            self.settings, manager_id=self.definition.manager_id
+            settings=self.settings, manager_id=self.definition.manager_id
         )
 
         # Initialize resource client with resource server URL from context
