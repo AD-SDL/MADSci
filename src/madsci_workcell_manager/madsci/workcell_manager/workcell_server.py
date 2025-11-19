@@ -34,6 +34,7 @@ from madsci.workcell_manager.workflow_utils import (
     check_parameters,
     create_workflow,
     save_workflow_files,
+    cancel_workflow
 )
 from pymongo.synchronous.database import Database
 from ulid import ULID
@@ -305,11 +306,12 @@ class WorkcellManager(
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             if wf.status.running:
-                self.send_admin_command_to_node(
+                response = self.send_admin_command_to_node(
                     "cancel", wf.steps[wf.status.current_step_index].node
                 )
-            wf.status.cancelled = True
-            self.state_handler.set_active_workflow(wf)
+            if response.success:
+                wf = cancel_workflow(wf)
+                self.state_handler.set_active_workflow(wf)
         return self.state_handler.get_active_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/retry")

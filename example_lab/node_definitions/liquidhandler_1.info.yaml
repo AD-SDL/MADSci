@@ -18,6 +18,7 @@ capabilities:
   get_resources: false
   get_log: true
   admin_commands:
+  - cancel
   - get_location
   - lock
   - reset

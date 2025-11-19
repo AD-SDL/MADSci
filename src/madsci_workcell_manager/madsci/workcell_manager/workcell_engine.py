@@ -285,6 +285,12 @@ class Engine:
         interval = 0.25
         retry_count = 0
         while not response.status.is_terminal:
+            with self.state_handler.wc_state_lock():
+                current_wf = self.state_handler.get_active_workflow(wf.workflow_id)
+                if current_wf and current_wf.status.cancelled:
+                    cancelled_result = ActionResult(status=ActionStatus.CANCELLED)
+                    self.handle_response(current_wf, step, cancelled_result)
+                    break
             if not check_node_capability(
                 node_info=node.info, client=client, capability="get_action_result"
             ) and not check_node_capability(

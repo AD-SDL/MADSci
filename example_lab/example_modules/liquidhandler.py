@@ -1,8 +1,10 @@
 """A fake liquid handler module for testing."""
 
+import enum
 import time
 from pathlib import Path
 from typing import Any, Optional
+import threading
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import (
@@ -48,13 +50,31 @@ class LiquidHandlerInterface:
         """Initialize the liquid handler."""
         self.logger = logger or EventClient()
         self.device_number = device_number
+        self.sent_cancel = threading.Event()
+        self.received_cancel = threading.Event()
+    
+    def send_cancel(self) -> None:
+        self.sent_cancel.set()
+    
+    def clear_requests(self) -> None:
+        self.sent_cancel.clear()
+        self.received_cancel.clear()
+
+    def wait_for(self, timeout=10) -> bool:
+        return self.received_cancel.wait(timeout)
 
     def run_command(self, command: str) -> None:
         """Run a command on the liquid handler."""
-        self.logger.log(
-            f"Running command {command} on device number {self.device_number}."
-        )
-        time.sleep(2)  # Simulate command execution
+        self.clear_requests()
+        try:
+            for _ in range(10):
+                if self.sent_cancel.is_set():
+                    self.received_cancel.set()
+                    return
+                time.sleep(0.1)
+        finally:
+            if self.sent_cancel.is_set() and not self.received_cancel.is_set():
+                self.received_cancel.set()
 
 
 class LiquidHandlerNode(RestNode):
@@ -203,6 +223,17 @@ class LiquidHandlerNode(RestNode):
     def get_location(self) -> AdminCommandResponse:
         """Get location for the liquid handler"""
         return AdminCommandResponse(data=[0, 0, 0, 0])
+    
+    def cancel(self) -> AdminCommandResponse:
+        try:
+            self.liquid_handler.send_cancel()
+            response = self.liquid_handler.wait_for()
+            if not response:
+                return AdminCommandResponse(success=False)
+            return AdminCommandResponse()
+        except Exception as e:
+            return AdminCommandResponse(success=False)
+        
 
 
 if __name__ == "__main__":

@@ -61,9 +61,6 @@ function process_status(status: any) {
   else if(status.queued) {
     return "queued"
   }
-  else if(status.cancelled) {
-    return "cancelled"
-  }
 }
 </script>
 

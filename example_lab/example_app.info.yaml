@@ -1,5 +1,5 @@
 node_name: example_app
-node_id: 01K5KNT13D6TADM875N3PNH3KX
+node_id: 01KAEKF82701HZJCGXQQESA81G
 node_description: null
 node_type: device
 module_name: example_app
@@ -9,6 +9,7 @@ capabilities:
   get_state: true
   get_status: true
   send_action: true
+  get_action_status: true
   get_action_result: true
   get_action_history: true
   action_files: true
