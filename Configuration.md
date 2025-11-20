@@ -69,12 +69,18 @@ Settings for the MADSci Data Manager.
 
 **Environment Prefix**: `DATA_`
 
-| Name                      | Type               | Default                       | Description                                       | Example                       |
-|---------------------------|--------------------|-------------------------------|---------------------------------------------------|-------------------------------|
-| `DATA_SERVER_URL`         | `AnyUrl`           | `"http://localhost:8004/"`    | The URL of the data manager server.               | `"http://localhost:8004/"`    |
-| `DATA_MANAGER_DEFINITION` | `string` \| `Path` | `"data.manager.yaml"`         | Path to the data manager definition file to use.  | `"data.manager.yaml"`         |
-| `DATA_DB_URL`             | `string`           | `"mongodb://localhost:27017"` | The URL of the database used by the Data Manager. | `"mongodb://localhost:27017"` |
-| `DATA_FILE_STORAGE_PATH`  | `string` \| `Path` | `"~/.madsci/datapoints"`      | The path where files are stored on the server.    | `"~/.madsci/datapoints"`      |
+| Name                              | Type                    | Default                       | Description                                                                                     | Example                       |
+|-----------------------------------|-------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
+| `DATA_SERVER_URL`                 | `AnyUrl`                | `"http://localhost:8004/"`    | The URL of the data manager server.                                                             | `"http://localhost:8004/"`    |
+| `DATA_MANAGER_DEFINITION`         | `string` \| `Path`      | `"data.manager.yaml"`         | Path to the data manager definition file to use.                                                | `"data.manager.yaml"`         |
+| `DATA_RATE_LIMIT_ENABLED`         | `boolean`               | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
+| `DATA_RATE_LIMIT_REQUESTS`        | `integer`               | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
+| `DATA_RATE_LIMIT_WINDOW`          | `integer`               | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
+| `DATA_UVICORN_WORKERS`            | `integer` \| `NoneType` | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
+| `DATA_UVICORN_LIMIT_CONCURRENCY`  | `integer` \| `NoneType` | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
+| `DATA_UVICORN_LIMIT_MAX_REQUESTS` | `integer` \| `NoneType` | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
+| `DATA_DB_URL`                     | `string`                | `"mongodb://localhost:27017"` | The URL of the database used by the Data Manager.                                               | `"mongodb://localhost:27017"` |
+| `DATA_FILE_STORAGE_PATH`          | `string` \| `Path`      | `"~/.madsci/datapoints"`      | The path where files are stored on the server.                                                  | `"~/.madsci/datapoints"`      |
 
 ## EventManagerSettings
 
@@ -82,14 +88,20 @@ Handles settings and configuration for the Event Manager.
 
 **Environment Prefix**: `EVENT_`
 
-| Name                       | Type                              | Default                       | Description                                                 | Example                       |
-|----------------------------|-----------------------------------|-------------------------------|-------------------------------------------------------------|-------------------------------|
-| `EVENT_SERVER_URL`         | `AnyUrl` \| `NoneType`            | `"http://localhost:8001"`     | The URL of the Event Manager server.                        | `"http://localhost:8001"`     |
-| `EVENT_MANAGER_DEFINITION` | `string` \| `Path`                | `"event.manager.yaml"`        | Path to the event manager definition file to use.           | `"event.manager.yaml"`        |
-| `EVENT_DB_URL`             | `string`                          | `"mongodb://localhost:27017"` | The URL of the database used by the Event Manager.          | `"mongodb://localhost:27017"` |
-| `EVENT_COLLECTION_NAME`    | `string`                          | `"madsci_events"`             | The name of the MongoDB collection where events are stored. | `"madsci_events"`             |
-| `EVENT_ALERT_LEVEL`        | `EventLogLevel`                   | `40`                          | The log level at which to send an alert.                    | `40`                          |
-| `EVENT_EMAIL_ALERTS`       | `EmailAlertsConfig` \| `NoneType` | `null`                        | The configuration for sending email alerts.                 | `null`                        |
+| Name                               | Type                              | Default                       | Description                                                                                     | Example                       |
+|------------------------------------|-----------------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
+| `EVENT_SERVER_URL`                 | `AnyUrl` \| `NoneType`            | `"http://localhost:8001"`     | The URL of the Event Manager server.                                                            | `"http://localhost:8001"`     |
+| `EVENT_MANAGER_DEFINITION`         | `string` \| `Path`                | `"event.manager.yaml"`        | Path to the event manager definition file to use.                                               | `"event.manager.yaml"`        |
+| `EVENT_RATE_LIMIT_ENABLED`         | `boolean`                         | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
+| `EVENT_RATE_LIMIT_REQUESTS`        | `integer`                         | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
+| `EVENT_RATE_LIMIT_WINDOW`          | `integer`                         | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
+| `EVENT_UVICORN_WORKERS`            | `integer` \| `NoneType`           | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
+| `EVENT_UVICORN_LIMIT_CONCURRENCY`  | `integer` \| `NoneType`           | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
+| `EVENT_UVICORN_LIMIT_MAX_REQUESTS` | `integer` \| `NoneType`           | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
+| `EVENT_DB_URL`                     | `string`                          | `"mongodb://localhost:27017"` | The URL of the database used by the Event Manager.                                              | `"mongodb://localhost:27017"` |
+| `EVENT_COLLECTION_NAME`            | `string`                          | `"madsci_events"`             | The name of the MongoDB collection where events are stored.                                     | `"madsci_events"`             |
+| `EVENT_ALERT_LEVEL`                | `EventLogLevel`                   | `40`                          | The log level at which to send an alert.                                                        | `40`                          |
+| `EVENT_EMAIL_ALERTS`               | `EmailAlertsConfig` \| `NoneType` | `null`                        | The configuration for sending email alerts.                                                     | `null`                        |
 
 ## WorkcellManagerSettings
 
@@ -101,6 +113,12 @@ Settings for the MADSci Workcell Manager.
 |--------------------------------------------------------------------------------|----------------------------------|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
 | `WORKCELL_SERVER_URL`                                                          | `AnyUrl`                         | `"http://localhost:8005/"`                               | The URL of the workcell manager server.                                                                                                                            | `"http://localhost:8005/"`                               |
 | `WORKCELL_MANAGER_DEFINITION` \| `WORKCELL_DEFINITION` \| `MANAGER_DEFINITION` | `string` \| `Path`               | `"workcell.manager.yaml"`                                | Path to the workcell definition file to use.                                                                                                                       | `"workcell.manager.yaml"`                                |
+| `WORKCELL_RATE_LIMIT_ENABLED`                                                  | `boolean`                        | `true`                                                   | Enable rate limiting for API endpoints.                                                                                                                            | `true`                                                   |
+| `WORKCELL_RATE_LIMIT_REQUESTS`                                                 | `integer`                        | `100`                                                    | Maximum number of requests allowed per time window.                                                                                                                | `100`                                                    |
+| `WORKCELL_RATE_LIMIT_WINDOW`                                                   | `integer`                        | `60`                                                     | Time window for rate limiting in seconds.                                                                                                                          | `60`                                                     |
+| `WORKCELL_UVICORN_WORKERS`                                                     | `integer` \| `NoneType`          | `null`                                                   | Number of uvicorn worker processes. If None, uses uvicorn default (1).                                                                                             | `null`                                                   |
+| `WORKCELL_UVICORN_LIMIT_CONCURRENCY`                                           | `integer` \| `NoneType`          | `null`                                                   | Maximum number of concurrent connections. If None, no limit is enforced.                                                                                           | `null`                                                   |
+| `WORKCELL_UVICORN_LIMIT_MAX_REQUESTS`                                          | `integer` \| `NoneType`          | `null`                                                   | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks.                                                                    | `null`                                                   |
 | `WORKCELLS_DIRECTORY` \| `WORKCELLS_DIRECTORY`                                 | `string` \| `Path` \| `NoneType` | `"~/.madsci/workcells"`                                  | Directory used to store workcell-related files in. Defaults to ~/.madsci/workcells. Workcell-related filess will be stored in a sub-folder with the workcell name. | `"~/.madsci/workcells"`                                  |
 | `WORKCELL_REDIS_HOST`                                                          | `string`                         | `"localhost"`                                            | The hostname for the redis server .                                                                                                                                | `"localhost"`                                            |
 | `WORKCELL_REDIS_PORT`                                                          | `integer`                        | `6379`                                                   | The port for the redis server.                                                                                                                                     | `6379`                                                   |
@@ -118,11 +136,17 @@ Settings for the MADSci Experiment Manager.
 
 **Environment Prefix**: `EXPERIMENT_`
 
-| Name                            | Type               | Default                       | Description                                            | Example                       |
-|---------------------------------|--------------------|-------------------------------|--------------------------------------------------------|-------------------------------|
-| `EXPERIMENT_SERVER_URL`         | `AnyUrl`           | `"http://localhost:8002/"`    | The URL of the experiment manager server.              | `"http://localhost:8002/"`    |
-| `EXPERIMENT_MANAGER_DEFINITION` | `string` \| `Path` | `"experiment.manager.yaml"`   | Path to the experiment manager definition file to use. | `"experiment.manager.yaml"`   |
-| `EXPERIMENT_DB_URL`             | `string`           | `"mongodb://localhost:27017"` | The URL of the database for the experiment manager.    | `"mongodb://localhost:27017"` |
+| Name                                    | Type                    | Default                       | Description                                                                                     | Example                       |
+|-----------------------------------------|-------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
+| `EXPERIMENT_SERVER_URL`                 | `AnyUrl`                | `"http://localhost:8002/"`    | The URL of the experiment manager server.                                                       | `"http://localhost:8002/"`    |
+| `EXPERIMENT_MANAGER_DEFINITION`         | `string` \| `Path`      | `"experiment.manager.yaml"`   | Path to the experiment manager definition file to use.                                          | `"experiment.manager.yaml"`   |
+| `EXPERIMENT_RATE_LIMIT_ENABLED`         | `boolean`               | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
+| `EXPERIMENT_RATE_LIMIT_REQUESTS`        | `integer`               | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
+| `EXPERIMENT_RATE_LIMIT_WINDOW`          | `integer`               | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
+| `EXPERIMENT_UVICORN_WORKERS`            | `integer` \| `NoneType` | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
+| `EXPERIMENT_UVICORN_LIMIT_CONCURRENCY`  | `integer` \| `NoneType` | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
+| `EXPERIMENT_UVICORN_LIMIT_MAX_REQUESTS` | `integer` \| `NoneType` | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
+| `EXPERIMENT_DB_URL`                     | `string`                | `"mongodb://localhost:27017"` | The URL of the database for the experiment manager.                                             | `"mongodb://localhost:27017"` |
 
 ## ResourceManagerSettings
 
@@ -130,11 +154,17 @@ Settings for the MADSci Resource Manager.
 
 **Environment Prefix**: `RESOURCE_`
 
-| Name                          | Type               | Default                                                 | Description                                          | Example                                                 |
-|-------------------------------|--------------------|---------------------------------------------------------|------------------------------------------------------|---------------------------------------------------------|
-| `RESOURCE_SERVER_URL`         | `AnyUrl`           | `"http://localhost:8003"`                               | The URL of the resource manager server.              | `"http://localhost:8003"`                               |
-| `RESOURCE_MANAGER_DEFINITION` | `string` \| `Path` | `"resource.manager.yaml"`                               | Path to the resource manager definition file to use. | `"resource.manager.yaml"`                               |
-| `RESOURCE_DB_URL`             | `string`           | `"postgresql://madsci:madsci@localhost:5432/resources"` | The URL of the database for the resource manager.    | `"postgresql://madsci:madsci@localhost:5432/resources"` |
+| Name                                  | Type                    | Default                                                 | Description                                                                                     | Example                                                 |
+|---------------------------------------|-------------------------|---------------------------------------------------------|-------------------------------------------------------------------------------------------------|---------------------------------------------------------|
+| `RESOURCE_SERVER_URL`                 | `AnyUrl`                | `"http://localhost:8003"`                               | The URL of the resource manager server.                                                         | `"http://localhost:8003"`                               |
+| `RESOURCE_MANAGER_DEFINITION`         | `string` \| `Path`      | `"resource.manager.yaml"`                               | Path to the resource manager definition file to use.                                            | `"resource.manager.yaml"`                               |
+| `RESOURCE_RATE_LIMIT_ENABLED`         | `boolean`               | `true`                                                  | Enable rate limiting for API endpoints.                                                         | `true`                                                  |
+| `RESOURCE_RATE_LIMIT_REQUESTS`        | `integer`               | `100`                                                   | Maximum number of requests allowed per time window.                                             | `100`                                                   |
+| `RESOURCE_RATE_LIMIT_WINDOW`          | `integer`               | `60`                                                    | Time window for rate limiting in seconds.                                                       | `60`                                                    |
+| `RESOURCE_UVICORN_WORKERS`            | `integer` \| `NoneType` | `null`                                                  | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                                                  |
+| `RESOURCE_UVICORN_LIMIT_CONCURRENCY`  | `integer` \| `NoneType` | `null`                                                  | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                                                  |
+| `RESOURCE_UVICORN_LIMIT_MAX_REQUESTS` | `integer` \| `NoneType` | `null`                                                  | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                                                  |
+| `RESOURCE_DB_URL`                     | `string`                | `"postgresql://madsci:madsci@localhost:5432/resources"` | The URL of the database for the resource manager.                                               | `"postgresql://madsci:madsci@localhost:5432/resources"` |
 
 ## LabManagerSettings
 
@@ -142,8 +172,14 @@ Settings for the MADSci Lab.
 
 **Environment Prefix**: `LAB_`
 
-| Name                       | Type                             | Default                    | Description                                                                       | Example                    |
-|----------------------------|----------------------------------|----------------------------|-----------------------------------------------------------------------------------|----------------------------|
-| `LAB_SERVER_URL`           | `AnyUrl`                         | `"http://localhost:8000/"` | The URL of the lab manager.                                                       | `"http://localhost:8000/"` |
-| `LAB_MANAGER_DEFINITION`   | `string` \| `Path`               | `"lab.manager.yaml"`       | Path to the lab definition file to use.                                           | `"lab.manager.yaml"`       |
-| `LAB_DASHBOARD_FILES_PATH` | `string` \| `Path` \| `NoneType` | `"~/MADSci/ui/dist"`       | Path to the static files for the dashboard. Set to None to disable the dashboard. | `"~/MADSci/ui/dist"`       |
+| Name                             | Type                             | Default                    | Description                                                                                     | Example                    |
+|----------------------------------|----------------------------------|----------------------------|-------------------------------------------------------------------------------------------------|----------------------------|
+| `LAB_SERVER_URL`                 | `AnyUrl`                         | `"http://localhost:8000/"` | The URL of the lab manager.                                                                     | `"http://localhost:8000/"` |
+| `LAB_MANAGER_DEFINITION`         | `string` \| `Path`               | `"lab.manager.yaml"`       | Path to the lab definition file to use.                                                         | `"lab.manager.yaml"`       |
+| `LAB_RATE_LIMIT_ENABLED`         | `boolean`                        | `true`                     | Enable rate limiting for API endpoints.                                                         | `true`                     |
+| `LAB_RATE_LIMIT_REQUESTS`        | `integer`                        | `100`                      | Maximum number of requests allowed per time window.                                             | `100`                      |
+| `LAB_RATE_LIMIT_WINDOW`          | `integer`                        | `60`                       | Time window for rate limiting in seconds.                                                       | `60`                       |
+| `LAB_UVICORN_WORKERS`            | `integer` \| `NoneType`          | `null`                     | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                     |
+| `LAB_UVICORN_LIMIT_CONCURRENCY`  | `integer` \| `NoneType`          | `null`                     | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                     |
+| `LAB_UVICORN_LIMIT_MAX_REQUESTS` | `integer` \| `NoneType`          | `null`                     | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                     |
+| `LAB_DASHBOARD_FILES_PATH`       | `string` \| `Path` \| `NoneType` | `"~/MADSci/ui/dist"`       | Path to the static files for the dashboard. Set to None to disable the dashboard.               | `"~/MADSci/ui/dist"`       |
