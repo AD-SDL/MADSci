@@ -91,14 +91,18 @@ class TestLocationArgumentSerialization:
         )
         assert serialized_var_kwargs["regular_kwarg"] == "value"
 
-    @patch("requests.post")
-    def test_rest_client_serializes_location_arguments(self, mock_post):
+    @patch("madsci.client.node.rest_node_client.create_http_session")
+    def test_rest_client_serializes_location_arguments(self, mock_create_session):
         """Test that RestNodeClient properly serializes LocationArguments."""
         # Mock the response
         mock_response = MagicMock()
         mock_response.ok = True
         mock_response.json.return_value = {"action_id": "test_action_id"}
-        mock_post.return_value = mock_response
+        mock_response.raise_for_status.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.post.return_value = mock_response
+        mock_create_session.return_value = mock_session
 
         # Create client and LocationArgument
         client = RestNodeClient(url="http://localhost:8000")
@@ -121,8 +125,8 @@ class TestLocationArgumentSerialization:
         assert result == "test_action_id"
 
         # Verify the call was made correctly
-        assert mock_post.called
-        call_args = mock_post.call_args
+        assert mock_session.post.called
+        call_args = mock_session.post.call_args
 
         # Check the JSON payload structure
         json_payload = call_args[1]["json"]
@@ -143,16 +147,20 @@ class TestLocationArgumentSerialization:
         # Other args should be preserved
         assert args["speed"] == 75
 
-    @patch("requests.post")
+    @patch("madsci.client.node.rest_node_client.create_http_session")
     def test_rest_client_serializes_location_arguments_in_var_args_kwargs(
-        self, mock_post
+        self, mock_create_session
     ):
         """Test that RestNodeClient serializes LocationArguments in var_args and var_kwargs."""
         # Mock the response
         mock_response = MagicMock()
         mock_response.ok = True
         mock_response.json.return_value = {"action_id": "test_action_id"}
-        mock_post.return_value = mock_response
+        mock_response.raise_for_status.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.post.return_value = mock_response
+        mock_create_session.return_value = mock_session
 
         client = RestNodeClient(url="http://localhost:8000")
         location_arg = LocationArgument(
@@ -171,7 +179,7 @@ class TestLocationArgumentSerialization:
         client._create_action(action_request)
 
         # Verify the call
-        call_args = mock_post.call_args
+        call_args = mock_session.post.call_args
         json_payload = call_args[1]["json"]
 
         # Check var_args serialization

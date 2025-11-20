@@ -14,8 +14,12 @@ dev = [
     "pre-commit>=4.3.0",
     "pydantic-settings-export>=1.0.2",
     "ruff>=0.13.0",
-    "nbconvert>=7.16.6"
+    "nbconvert>=7.16.6",
+    "pytest-timeout>=2.4.0",
 ]
+
+[tool.pytest.ini_options]
+timeout = 10
 
 [tool.pydantic_settings_export]
 project_dir = "."

@@ -201,16 +201,11 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     # Create the client
     workcell_client = WorkcellClient(workcell_server_url="http://testserver")
 
-    # Mock both sessions to use the test client
+    # Mock session to use the test client
     workcell_client.session.get = get_no_timeout
     workcell_client.session.post = post_no_timeout
     workcell_client.session.delete = delete_no_timeout
     workcell_client.session.put = put_no_timeout
-
-    workcell_client.session_no_retry.get = get_no_timeout
-    workcell_client.session_no_retry.post = post_no_timeout
-    workcell_client.session_no_retry.delete = delete_no_timeout
-    workcell_client.session_no_retry.put = put_no_timeout
 
     yield workcell_client
 
