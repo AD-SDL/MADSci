@@ -137,7 +137,7 @@ def test_get_location_by_name_method_request(mock_create_session):
 
 
 @patch("madsci.client.location_client.create_http_session")
-def test_get_location_by_name_method_error_handling(mock_get, location_client):
+def test_get_location_by_name_method_error_handling(mock_create_session):
     """Test that get_location_by_name handles errors correctly."""
 
     # Mock 404 response
@@ -145,7 +145,13 @@ def test_get_location_by_name_method_error_handling(mock_get, location_client):
     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
         "404 Not Found"
     )
-    mock_get.return_value = mock_response
+
+    mock_session = Mock()
+    mock_session.get.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    # Create client with mocked session
+    location_client = LocationClient("http://localhost:8006")
 
     # Call the method and expect an exception
     with pytest.raises(requests.exceptions.HTTPError):
@@ -227,14 +233,20 @@ def test_get_location_resources_with_resource(mock_create_session):
 
 
 @patch("madsci.client.location_client.create_http_session")
-def test_get_location_resources_error_handling(mock_get, location_client):
+def test_get_location_resources_error_handling(mock_create_session):
     """Test that get_location_resources handles errors correctly."""
     # Mock 404 response
     mock_response = Mock()
     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
         "404 Not Found"
     )
-    mock_get.return_value = mock_response
+
+    mock_session = Mock()
+    mock_session.get.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    # Create client with mocked session
+    location_client = LocationClient("http://localhost:8006")
 
     # Call the method and expect an exception
     test_location_id = new_ulid_str()
@@ -306,14 +318,20 @@ def test_remove_representation_method_request(mock_create_session):
 
 
 @patch("madsci.client.location_client.create_http_session")
-def test_remove_representation_error_handling(mock_delete, location_client):
+def test_remove_representation_error_handling(mock_create_session):
     """Test that remove_representation handles errors correctly."""
     # Mock 404 response
     mock_response = Mock()
     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
         "404 Not Found"
     )
-    mock_delete.return_value = mock_response
+
+    mock_session = Mock()
+    mock_session.delete.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    # Create client with mocked session
+    location_client = LocationClient("http://localhost:8006")
 
     # Call the method and expect an exception
     test_location_id = new_ulid_str()
@@ -375,14 +393,20 @@ def test_detach_resource_method_request(mock_create_session):
 
 
 @patch("madsci.client.location_client.create_http_session")
-def test_detach_resource_error_handling(mock_delete, location_client):
+def test_detach_resource_error_handling(mock_create_session):
     """Test that detach_resource handles errors correctly."""
     # Mock 404 response
     mock_response = Mock()
     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
         "404 Not Found"
     )
-    mock_delete.return_value = mock_response
+
+    mock_session = Mock()
+    mock_session.delete.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    # Create client with mocked session
+    location_client = LocationClient("http://localhost:8006")
 
     # Call the method and expect an exception
     test_location_id = new_ulid_str()
