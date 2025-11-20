@@ -2,6 +2,7 @@
 
 import tempfile
 import time
+import traceback
 import zipfile
 from pathlib import Path
 from typing import Any, ClassVar, Optional, Union
@@ -320,10 +321,17 @@ class RestNodeClient(AbstractNodeClient):
         files_list = result_data.get("files")
         if files_list:
             # Fetch the actual files using the file keys
-            action_files = self._fetch_files_from_keys(
-                action_name, action_id, files_list, timeout=timeout
-            )
-            result_data["files"] = action_files
+            try:
+                action_files = self._fetch_files_from_keys(
+                    action_name, action_id, files_list, timeout=timeout
+                )
+                result_data["files"] = action_files
+            except Exception as e:
+                result_data["errors"] = result_data.get("errors", [])
+                result_data["errors"].append(
+                    f"Error in Client: Failed to fetch files for action {action_name} with ID {action_id}: {e}"
+                )
+                result_data["files"] = None
         else:
             result_data["files"] = None
 
@@ -347,9 +355,7 @@ class RestNodeClient(AbstractNodeClient):
         """
         try:
             # Download the ZIP file containing all files
-            zip_path = self._get_action_files_zip(
-                action_name, action_id, timeout=timeout
-            )
+            zip_path = self._get_action_files_zip(action_id, timeout=timeout)
 
             # Extract files from ZIP
             with zipfile.ZipFile(zip_path, "r") as zip_file:
@@ -374,11 +380,11 @@ class RestNodeClient(AbstractNodeClient):
                     else None
                 )
 
-        except Exception:
+        except Exception as e:
             self.logger.error(
-                f"Failed to fetch files for action {action_name} with ID {action_id}"
+                f"Failed to fetch files for action {action_name} with ID {action_id}: {traceback.format_exc()}"
             )
-            return None
+            raise e
         finally:
             # Clean up the ZIP file
             if "zip_path" in locals():
@@ -421,18 +427,17 @@ class RestNodeClient(AbstractNodeClient):
         )
 
     def _get_action_files_zip(
-        self, action_name: str, action_id: str, timeout: Optional[float] = None
+        self, action_id: str, timeout: Optional[float] = None
     ) -> Path:
         """
         Download all files from an action result as a ZIP. REST-implementation specific.
 
         Args:
-            action_name: The name of the action.
-            action_id: The ID of the action.
+            action_id: Action ID used in the download endpoint
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
         """
         rest_response = self.session.get(
-            f"{self.url}/action/{action_name}/{action_id}/download",
+            f"{self.url}/action/{action_id}/download",
             timeout=timeout or self.config.timeout_data_operations,
         )
         rest_response.raise_for_status()
