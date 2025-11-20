@@ -1,4 +1,4 @@
-name: Integration Tests
+name: End-to-End Tests
 
 on:
   pull_request:
@@ -37,4 +37,4 @@ jobs:
       - name: Build and start example lab services, and wait for startup
         run: docker compose up --build -d && sleep 30
       - name: Run the experiment notebook
-        run: timeout 10m just integration_tests
+        run: timeout 10m just e2e_tests

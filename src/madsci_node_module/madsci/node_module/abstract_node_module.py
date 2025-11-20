@@ -17,12 +17,11 @@ from typing import (
     get_type_hints,
 )
 
-from madsci.client.data_client import DataClient
+from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import (
     EventClient,
 )
 from madsci.client.node.abstract_node_client import AbstractNodeClient
-from madsci.client.resource_client import ResourceClient
 from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
@@ -67,12 +66,15 @@ from pydantic import BaseModel, ValidationError
 from semver import Version
 
 
-class AbstractNode:
+class AbstractNode(MadsciClientMixin):
     """
     Base Node implementation, protocol agnostic, all node class definitions should inherit from or be based on this.
 
     Note that this class is abstract: it is intended to be inherited from, not used directly.
     """
+
+    # Client configuration for MadsciClientMixin
+    REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "resource", "data"]
 
     node_definition: ClassVar[NodeDefinition] = None
     """The node definition."""
@@ -378,12 +380,23 @@ class AbstractNode:
     """------------------------------------------------------------------------------------------------"""
 
     def _configure_clients(self) -> None:
-        """Configure the event and resource clients."""
-        self.logger = self.event_client = EventClient(
-            name=f"node.{self.node_definition.node_name}",
-        )
-        self.resource_client = ResourceClient(event_client=self.event_client)
-        self.data_client = DataClient()
+        """
+        Configure the event and resource clients using MadsciClientMixin.
+
+        This method initializes the clients required for node operation:
+        - EventClient for logging
+        - ResourceClient for resource management
+        - DataClient for data storage
+        """
+        # Set the name for the EventClient
+        if hasattr(self, "node_definition") and self.node_definition:
+            self.name = f"node.{self.node_definition.node_name}"
+
+        # Initialize all required clients using the mixin
+        self.setup_clients()
+
+        # Maintain backward compatibility: logger is an alias for event_client
+        self.logger = self.event_client
 
     def _add_action(
         self,
