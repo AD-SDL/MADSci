@@ -58,7 +58,10 @@ class StepDefinition(MadsciBaseModel):
         default=None,
     )
     key: Optional[str] = Field(
-        title="Step Key", description="A unique key for the step.", default=None
+        title="Step Key",
+        description="A unique key for the step.",
+        default=None,
+        alias=AliasChoices("key", "step_key"),
     )
     description: Optional[str] = Field(
         title="Step Description",
