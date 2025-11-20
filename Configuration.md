@@ -147,3 +147,17 @@ Settings for the MADSci Lab.
 | `LAB_SERVER_URL`           | `AnyUrl`                         | `"http://localhost:8000/"` | The URL of the lab manager.                                                       | `"http://localhost:8000/"` |
 | `LAB_MANAGER_DEFINITION`   | `string` \| `Path`               | `"lab.manager.yaml"`       | Path to the lab definition file to use.                                           | `"lab.manager.yaml"`       |
 | `LAB_DASHBOARD_FILES_PATH` | `string` \| `Path` \| `NoneType` | `"~/MADSci/ui/dist"`       | Path to the static files for the dashboard. Set to None to disable the dashboard. | `"~/MADSci/ui/dist"`       |
+
+## LocationManagerSettings
+
+Settings for the LocationManager.
+
+**Environment Prefix**: `LOCATION_`
+
+| Name                          | Type                   | Default                    | Description                                          | Example                    |
+|-------------------------------|------------------------|----------------------------|------------------------------------------------------|----------------------------|
+| `LOCATION_SERVER_URL`         | `AnyUrl`               | `"http://localhost:8006/"` | The URL where this manager's server runs.            | `"http://localhost:8006/"` |
+| `LOCATION_MANAGER_DEFINITION` | `string` \| `Path`     | `"location.manager.yaml"`  | Path to the location manager definition file to use. | `"location.manager.yaml"`  |
+| `LOCATION_REDIS_HOST`         | `string`               | `"localhost"`              | The host of the Redis server for state storage.      | `"localhost"`              |
+| `LOCATION_REDIS_PORT`         | `integer`              | `6379`                     | The port of the Redis server for state storage.      | `6379`                     |
+| `LOCATION_REDIS_PASSWORD`     | `string` \| `NoneType` | `null`                     | The password for the Redis server (if required).     | `null`                     |
