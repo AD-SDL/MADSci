@@ -594,6 +594,8 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
+            if isinstance(resource, str):
+                resource = self.get_resource(resource)
             resource = resource.children.append(child)
             self.local_resources[resource.resource_id] = resource
         return self._wrap_resource(resource)

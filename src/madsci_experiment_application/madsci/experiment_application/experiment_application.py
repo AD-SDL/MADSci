@@ -129,8 +129,8 @@ class ExperimentApplication(RestNode):
         lab_server_url = lab_server_url or self.config.lab_server_url
         if lab_server_url:
             self.lab_server_url = lab_server_url
-            # Use the mixin's lab_client property
             set_current_madsci_context(self.lab_client.get_lab_context())
+            self.setup_clients()
 
         # Setup experiment design
         self.experiment_design = experiment_design or self.experiment_design

@@ -190,3 +190,6 @@ experiment_e2e_tests:
 
 # Run the integration tests
 e2e_tests: node_e2e_tests experiment_e2e_tests
+
+# Run the full pipeline including e2e tests
+all: pipeupd e2e_tests down
