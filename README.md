@@ -153,7 +153,7 @@ result = client.submit_workflow("path/to/workflow.yaml")
 
 - **Python 3.9+**: Required for all MADSci components
 - **[PDM](https://pdm-project.org/)**: For dependency management and virtual environments
-- **[Docker](https://docs.docker.com/engine/install/)**: Required for services and integration tests
+- **[Docker](https://docs.docker.com/engine/install/)**: Required for services, integration tests, and end-to-end tests
   - Alternatives: [Rancher Desktop](https://rancherdesktop.io/), [Podman](https://podman.io/)
 - **[just](https://github.com/casey/just)**: Task runner for development commands (note: commands are defined in the hidden `.justfile` in the repository root)
 - **Node.js/yarn**: Only needed for dashboard development
