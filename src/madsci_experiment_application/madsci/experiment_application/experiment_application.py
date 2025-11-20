@@ -10,6 +10,9 @@ from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
 from madsci.client.lab_client import LabClient
+from madsci.client.location_client import (
+    LocationClient,  # noqa: F401 - Needed for test patching
+)
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.context import set_current_madsci_context

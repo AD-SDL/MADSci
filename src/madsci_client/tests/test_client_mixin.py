@@ -1,8 +1,8 @@
 """Unit tests for MadsciClientMixin."""
 
-from unittest.mock import Mock, patch
+from typing import ClassVar
+from unittest.mock import Mock
 
-import pytest
 from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
@@ -29,7 +29,7 @@ class TestMixinBasicUsage:
         """Test that REQUIRED_CLIENTS can be declared."""
 
         class MyComponent(MadsciClientMixin):
-            REQUIRED_CLIENTS = ["event", "resource"]
+            REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "resource"]
 
         assert MyComponent.REQUIRED_CLIENTS == ["event", "resource"]
 
@@ -182,7 +182,7 @@ class TestSetupClients:
         """Test setup_clients with no required clients."""
 
         class MyComponent(MadsciClientMixin):
-            REQUIRED_CLIENTS = []
+            REQUIRED_CLIENTS: ClassVar[list[str]] = []
 
         component = MyComponent()
         component.setup_clients()
@@ -306,7 +306,7 @@ class TestMixinIntegration:
         """Test that clients can be injected via setup_clients."""
 
         class MyComponent(MadsciClientMixin):
-            REQUIRED_CLIENTS = ["event", "resource", "data"]
+            REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "resource", "data"]
 
         mock_event = Mock(spec=EventClient)
         mock_resource = Mock(spec=ResourceClient)
@@ -334,8 +334,6 @@ class TestPropertyAccessors:
         class MyComponent(MadsciClientMixin):
             pass
 
-        component = MyComponent()
-
         # All client properties should exist as properties
         assert hasattr(MyComponent, "event_client")
         assert hasattr(MyComponent, "resource_client")
@@ -346,5 +344,5 @@ class TestPropertyAccessors:
         assert hasattr(MyComponent, "lab_client")
 
         # They should be property objects
-        assert isinstance(getattr(MyComponent, "event_client"), property)
-        assert isinstance(getattr(MyComponent, "resource_client"), property)
+        assert isinstance(MyComponent.event_client, property)
+        assert isinstance(MyComponent.resource_client, property)

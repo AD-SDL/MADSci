@@ -8,6 +8,12 @@ from typing import Annotated, Any, AsyncGenerator, ClassVar, Optional, Union
 from classy_fastapi import get, post
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.params import Body
+from madsci.client.location_client import (
+    LocationClient,  # noqa: F401 - Needed for test patching
+)
+from madsci.common.context import (
+    get_current_madsci_context,  # noqa: F401 - Needed for test patching
+)
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.admin_command_types import AdminCommandResponse

@@ -4,7 +4,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -147,6 +147,9 @@ def test_client(
         patch(
             "madsci.workcell_manager.workcell_engine.LocationClient"
         ) as mock_engine_location_client,
+        patch(
+            "madsci.client.client_mixin.LocationClient"
+        ) as mock_mixin_location_client,
     ):
         # Configure the mock location clients to return empty location lists
         mock_location_client_instance = MagicMock()
@@ -156,6 +159,10 @@ def test_client(
         mock_engine_location_client_instance = MagicMock()
         mock_engine_location_client_instance.get_locations.return_value = []
         mock_engine_location_client.return_value = mock_engine_location_client_instance
+
+        mock_mixin_location_client_instance = MagicMock()
+        mock_mixin_location_client_instance.get_locations.return_value = []
+        mock_mixin_location_client.return_value = mock_mixin_location_client_instance
 
         manager = WorkcellManager(
             definition=workcell,
@@ -198,8 +205,13 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
         resp = test_client.put(*args, **kwargs)
         return add_ok_property(resp)
 
+    # Create a mock event client to prevent connection attempts
+    mock_event_client = Mock()
+
     # Create the client
-    workcell_client = WorkcellClient(workcell_server_url="http://testserver")
+    workcell_client = WorkcellClient(
+        workcell_server_url="http://testserver", event_client=mock_event_client
+    )
 
     # Mock both sessions to use the test client
     workcell_client.session.get = get_no_timeout
@@ -576,31 +588,44 @@ def test_handle_workflow_error_no_raise(
 # Client Initialization Tests
 def test_workcell_client_init_with_url() -> None:
     """Test WorkcellClient initialization with URL."""
-    client = WorkcellClient(workcell_server_url="http://test.com")
+    mock_event_client = Mock()
+    client = WorkcellClient(
+        workcell_server_url="http://test.com", event_client=mock_event_client
+    )
     assert str(client.workcell_server_url) == "http://test.com/"
 
 
 def test_workcell_client_init_with_trailing_slash() -> None:
     """Test WorkcellClient initialization with trailing slash removal."""
-    client = WorkcellClient(workcell_server_url="http://test.com/")
+    mock_event_client = Mock()
+    client = WorkcellClient(
+        workcell_server_url="http://test.com/", event_client=mock_event_client
+    )
     assert str(client.workcell_server_url) == "http://test.com/"
 
 
 def test_workcell_client_init_with_working_directory() -> None:
     """Test WorkcellClient initialization with working directory."""
     with tempfile.TemporaryDirectory() as temp_dir:
+        mock_event_client = Mock()
         client = WorkcellClient(
-            workcell_server_url="http://test.com", working_directory=temp_dir
+            workcell_server_url="http://test.com",
+            working_directory=temp_dir,
+            event_client=mock_event_client,
         )
         assert client.working_directory == Path(temp_dir)
 
 
 def test_workcell_client_init_no_url() -> None:
     """Test WorkcellClient initialization without URL raises error."""
-    with patch(
-        "madsci.client.workcell_client.get_current_madsci_context"
-    ) as mock_context:
+    with (
+        patch(
+            "madsci.client.workcell_client.get_current_madsci_context"
+        ) as mock_context,
+        patch("madsci.client.workcell_client.EventClient") as mock_event_client_class,
+    ):
         mock_context.return_value.workcell_server_url = None
+        mock_event_client_class.return_value = Mock()
 
         with pytest.raises(ValueError, match="Workcell server URL was not provided"):
             WorkcellClient()
