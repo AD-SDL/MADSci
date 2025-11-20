@@ -1,0 +1,1128 @@
+"""Database migration tool for MADSci resources using Alembic with automatic type conversion handling."""
+
+import fcntl
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+import traceback
+import urllib.parse as urlparse
+from datetime import datetime
+from pathlib import Path
+from typing import Any, List, Optional
+
+from alembic import command
+from alembic.autogenerate import compare_metadata
+from alembic.config import Config
+from alembic.runtime.environment import EnvironmentContext
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from madsci.client.event_client import EventClient
+from madsci.common.types.base_types import MadsciBaseSettings, PathLike
+from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
+from madsci.resource_manager.resource_tables import ResourceTable, SchemaVersionTable
+from psycopg2 import sql
+from pydantic import Field
+from sqlalchemy import inspect, text
+from sqlmodel import Session, create_engine, select
+
+
+class DatabaseMigrationSettings(
+    MadsciBaseSettings,
+    env_file=(".env", "resources.env", "migration.env"),
+    toml_file=("settings.toml", "resources.settings.toml", "migration.settings.toml"),
+    yaml_file=("settings.yaml", "resources.settings.yaml", "migration.settings.yaml"),
+    json_file=("settings.json", "resources.settings.json", "migration.settings.json"),
+    env_prefix="RESOURCES_MIGRATION_",
+):
+    """Configuration settings for PostgreSQL database migration operations."""
+
+    db_url: Optional[str] = Field(
+        default=None,
+        title="Database URL",
+        description="PostgreSQL connection URL (e.g., postgresql://user:pass@localhost:5432/resources). "
+        "If not provided, will try RESOURCES_DB_URL environment variable.",
+    )
+    target_version: Optional[str] = Field(
+        default=None,
+        title="Target Version",
+        description="Target version to migrate to (defaults to current MADSci version)",
+    )
+    backup_dir: PathLike = Field(
+        default=Path(".madsci/postgres/backups"),
+        title="Backup Directory",
+        description="Directory where database backups will be stored. "
+        "Relative to the current working directory unless absolute.",
+    )
+    backup_only: bool = Field(
+        default=False,
+        title="Backup Only",
+        description="Only create a backup, do not run migration",
+    )
+    restore_from: Optional[PathLike] = Field(
+        default=None,
+        title="Restore From",
+        description="Restore from specified backup file instead of migrating",
+    )
+    generate_migration: Optional[str] = Field(
+        default=None,
+        title="Generate Migration",
+        description="Generate a new migration file with the given message",
+    )
+
+    def get_effective_db_url(self) -> str:
+        """Get the effective database URL, trying fallback environment variables if needed."""
+        if self.db_url:
+            return self.db_url
+
+        # Try environment variable
+        db_url = os.getenv("RESOURCES_DB_URL")
+        if db_url:
+            return db_url
+
+        raise RuntimeError(
+            "No database URL provided and RESOURCES_DB_URL environment variable not found. "
+            "Please either:\n"
+            "1. Provide --db-url argument, or\n"
+            "2. Set RESOURCES_DB_URL in your environment/.env file\n"
+            "Example: RESOURCES_DB_URL=postgresql://user:pass@localhost:5432/resources"
+        )
+
+
+class DatabaseMigrator:
+    """Handles database schema migrations for MADSci using Alembic with automatic type conversion handling."""
+
+    def __init__(
+        self, settings: DatabaseMigrationSettings, logger: Optional[EventClient] = None
+    ) -> None:
+        """Initialize the migrator with settings and logger."""
+        self.settings = settings
+        self.db_url = settings.get_effective_db_url()
+        self.logger = logger or EventClient()
+        self.engine = create_engine(self.db_url)
+        self.version_checker = DatabaseVersionChecker(self.db_url, self.logger)
+
+        # Get the package root directory for consistent file paths
+        self.package_root = self._get_package_root()
+
+        raw_backup = Path(self.settings.backup_dir)
+        self.backup_dir = (
+            raw_backup if raw_backup.is_absolute() else (Path.cwd() / raw_backup)
+        )
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.logger.info(f"Using backup directory: {self.backup_dir}")
+
+        # Setup Alembic configuration
+        self.alembic_cfg = self._setup_alembic_config()
+
+        # Migration locking attributes
+        self.lock_file: Optional[Path] = None
+        self.lock_fd: Optional[int] = None
+
+    def _get_package_root(self) -> Path:
+        """Get the root directory of the madsci.resource_manager package."""
+        try:
+            # Get the directory where this migration_tool.py file is located
+            current_file = Path(__file__).resolve()
+
+            # Navigate up to find the package root
+            # This should be the directory containing alembic.ini
+            package_root = current_file.parent
+
+            # Look for alembic.ini to confirm we have the right directory
+            alembic_ini = package_root / "alembic.ini"
+
+            if not alembic_ini.exists():
+                # If not found, check parent directories
+                for parent in package_root.parents:
+                    potential_ini = parent / "alembic.ini"
+                    if potential_ini.exists():
+                        package_root = parent
+                        break
+                else:
+                    # Fall back to current working directory
+                    package_root = Path.cwd()
+
+            self.logger.info(f"Using package root: {package_root}")
+            return package_root
+
+        except Exception as e:
+            self.logger.warning(f"Could not determine package root: {e}")
+            return Path.cwd()
+
+    def _setup_alembic_config(self) -> Config:
+        """Setup Alembic configuration with proper paths."""
+        # Look for alembic.ini in the package root
+        alembic_ini_path = self.package_root / "alembic.ini"
+
+        if not alembic_ini_path.exists():
+            raise FileNotFoundError(
+                f"alembic.ini not found at {alembic_ini_path}. "
+                f"Please ensure the file exists in the package directory or run 'alembic init alembic' first."
+            )
+
+        # Create Alembic config with absolute path
+        alembic_cfg = Config(str(alembic_ini_path))
+
+        # Set the database URL for Alembic
+        alembic_cfg.set_main_option("sqlalchemy.url", self.db_url)
+
+        # Ensure Alembic script location is set to absolute path
+        script_location = self.package_root / "alembic"
+        alembic_cfg.set_main_option("script_location", str(script_location))
+
+        # Set prepend_sys_path to ensure imports work
+        alembic_cfg.set_main_option("prepend_sys_path", str(self.package_root))
+
+        self.logger.info(
+            f"Alembic config: ini={alembic_ini_path}, script_location={script_location}"
+        )
+
+        return alembic_cfg
+
+    def _parse_db_url(self) -> dict:
+        """Parse PostgreSQL connection details from database URL."""
+
+        parsed = urlparse.urlparse(self.db_url)
+        return {
+            "host": parsed.hostname,
+            "port": parsed.port,
+            "user": parsed.username,
+            "password": parsed.password,
+            "database": parsed.path.lstrip("/") if parsed.path else "resources",
+        }
+
+    def _acquire_migration_lock(self) -> None:
+        """Acquire exclusive lock for migration operations."""
+        db_info = self._parse_db_url()
+        database_name = db_info["database"]
+
+        # Create lock file in system temp directory
+        temp_dir = Path(tempfile.gettempdir())
+        self.lock_file = temp_dir / f"madsci_migration_{database_name}.lock"
+
+        try:
+            # Open lock file for writing
+            self.lock_fd = os.open(
+                str(self.lock_file), os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o644
+            )
+
+            # Try to acquire exclusive lock (non-blocking)
+            fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            # Write process info to lock file
+            lock_info = f"pid={os.getpid()}\ntimestamp={time.time()}\ndatabase={database_name}\n"
+            os.write(self.lock_fd, lock_info.encode())
+
+            self.logger.info(f"Acquired migration lock: {self.lock_file}")
+
+        except BlockingIOError:
+            if self.lock_fd is not None:
+                os.close(self.lock_fd)
+                self.lock_fd = None
+            raise RuntimeError(
+                f"Another migration is already in progress for database '{database_name}'. "
+                f"Lock file: {self.lock_file}"
+            ) from None
+        except Exception as e:
+            if self.lock_fd is not None:
+                os.close(self.lock_fd)
+                self.lock_fd = None
+            raise RuntimeError(f"Failed to acquire migration lock: {e}") from e
+
+    def _release_migration_lock(self) -> None:
+        """Release migration lock."""
+        if self.lock_fd is not None:
+            try:
+                fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
+                os.close(self.lock_fd)
+                self.logger.info("Released migration lock")
+            except Exception as e:
+                self.logger.warning(f"Error releasing lock: {e}")
+            finally:
+                self.lock_fd = None
+
+        if self.lock_file and self.lock_file.exists():
+            try:
+                self.lock_file.unlink()
+                self.logger.info(f"Removed lock file: {self.lock_file}")
+            except Exception as e:
+                self.logger.warning(f"Error removing lock file: {e}")
+            finally:
+                self.lock_file = None
+
+    def _acquire_migration_lock_with_staleness_check(self) -> None:
+        """Acquire migration lock with stale lock detection and cleanup."""
+        db_info = self._parse_db_url()
+        database_name = db_info["database"]
+
+        temp_dir = Path(tempfile.gettempdir())
+        lock_file_path = temp_dir / f"madsci_migration_{database_name}.lock"
+
+        # Check for stale lock
+        if lock_file_path.exists():
+            try:
+                # Try to read lock file
+                with lock_file_path.open() as f:
+                    lock_content = f.read()
+
+                # Extract timestamp if available
+                timestamp = None
+                for line in lock_content.split("\n"):
+                    if line.startswith("timestamp="):
+                        timestamp = float(line.split("=", 1)[1])
+                        break
+
+                # Check if lock is stale (older than 1 hour)
+                if timestamp and (time.time() - timestamp) > 3600:
+                    self.logger.warning(
+                        f"Detected stale lock file, removing: {lock_file_path}"
+                    )
+                    lock_file_path.unlink()
+
+            except (OSError, ValueError) as e:
+                self.logger.warning(f"Error checking stale lock: {e}")
+
+        # Now try to acquire lock normally
+        self._acquire_migration_lock()
+
+    def create_backup(self) -> Path:
+        """Create a backup of the current database."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        db_info = self._parse_db_url()
+
+        backup_filename = f"madsci_backup_{timestamp}.sql"
+        backup_path = self.backup_dir / backup_filename
+
+        # Set PGPASSWORD environment variable for pg_dump
+        env = os.environ.copy()
+        if db_info["password"]:
+            env["PGPASSWORD"] = db_info["password"]
+
+        pg_dump_cmd = [
+            "pg_dump",
+            "-h",
+            db_info["host"],
+            "-p",
+            str(db_info["port"]),
+            "-U",
+            db_info["user"],
+            "-d",
+            db_info["database"],
+            "--no-password",
+            "--verbose",
+            "--file",
+            str(backup_path),
+        ]
+
+        try:
+            self.logger.log_info(f"Creating database backup: {backup_path}")
+            result = subprocess.run(  # noqa: S603
+                pg_dump_cmd, env=env, capture_output=True, text=True, check=True
+            )
+
+            if result.returncode == 0:
+                self.logger.info(
+                    f"Database backup completed successfully: {backup_path}"
+                )
+
+                # Validate backup integrity
+                self._validate_backup_integrity(backup_path)
+
+                return backup_path
+            raise RuntimeError(f"pg_dump failed: {result.stderr}")
+
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Backup failed: {e.stderr}")
+            raise RuntimeError(f"Database backup failed: {e}") from e
+        except FileNotFoundError as fe:
+            raise RuntimeError(
+                "pg_dump command not found. Please ensure PostgreSQL client tools are installed. {fe}"
+            ) from fe
+
+    def _verify_backup_completion(self, backup_file: Path) -> bool:
+        """Verify that backup was completed successfully."""
+        if not backup_file.exists():
+            return False
+
+        if backup_file.stat().st_size == 0:
+            return False
+
+        # Check if file has basic SQL structure
+        try:
+            content = backup_file.read_text(encoding="utf-8")
+            # Basic validation - should contain SQL commands
+            return any(
+                keyword in content.upper()
+                for keyword in ["CREATE", "INSERT", "COPY", "--"]
+            )
+        except Exception as e:
+            self.logger.error(f"Error reading backup file: {e}")
+            return False
+
+    def _generate_backup_checksum(self, backup_file: Path) -> str:
+        """Generate SHA256 checksum for backup file."""
+        sha256_hash = hashlib.sha256()
+
+        with backup_file.open("rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(chunk)
+
+        checksum = sha256_hash.hexdigest()
+
+        # Save checksum to file
+        checksum_file = backup_file.with_suffix(backup_file.suffix + ".checksum")
+        checksum_file.write_text(checksum)
+
+        self.logger.info(f"Generated backup checksum: {checksum}")
+        return checksum
+
+    def _validate_backup_checksum(self, backup_file: Path) -> bool:
+        """Validate backup file against its checksum."""
+        checksum_file = backup_file.with_suffix(backup_file.suffix + ".checksum")
+
+        if not checksum_file.exists():
+            self.logger.warning("No checksum file found for backup validation")
+            return False
+
+        try:
+            expected_checksum = checksum_file.read_text().strip()
+            actual_checksum = self._generate_backup_checksum_inline(backup_file)
+
+            if expected_checksum == actual_checksum:
+                self.logger.info("Backup checksum validation passed")
+                return True
+            self.logger.error(
+                f"Backup checksum validation failed: expected {expected_checksum}, got {actual_checksum}"
+            )
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Error validating backup checksum: {e}")
+            return False
+
+    def _generate_backup_checksum_inline(self, backup_file: Path) -> str:
+        """Generate checksum without saving to file (for validation)."""
+        sha256_hash = hashlib.sha256()
+
+        with backup_file.open("rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(chunk)
+
+        return sha256_hash.hexdigest()
+
+    def _test_backup_restore(self, backup_file: Path) -> bool:
+        """Test backup by attempting restore to temporary database."""
+        db_info = self._parse_db_url()
+        test_db_name = f"test_restore_{int(time.time())}"
+
+        try:
+            # Create temporary test database
+            self._create_test_database(test_db_name)
+
+            # Try to restore to test database
+            psql_cmd = [
+                "psql",
+                "-h",
+                db_info["host"] or "localhost",
+                "-p",
+                str(db_info["port"] or 5432),
+                "-U",
+                db_info["user"],
+                "-d",
+                test_db_name,
+                "-f",
+                str(backup_file),
+                "--quiet",
+            ]
+
+            env = dict(os.environ)
+            if db_info["password"]:
+                env["PGPASSWORD"] = db_info["password"]
+
+            result = subprocess.run(  # noqa: S603
+                psql_cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=300,
+            )
+
+            success = result.returncode == 0
+            if success:
+                self.logger.info("Backup restore test successful")
+            else:
+                self.logger.error(f"Backup restore test failed: {result.stderr}")
+
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Error testing backup restore: {e}")
+            return False
+        finally:
+            # Clean up test database
+            try:
+                self._drop_test_database(test_db_name)
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to clean up test database {test_db_name}: {e}"
+                )
+
+    def _create_test_database(self, test_db_name: str) -> None:
+        """Create temporary database for testing."""
+        postgres_url = self.db_url.replace(
+            f"/{self._parse_db_url()['database']}", "/postgres"
+        )
+        postgres_engine = create_engine(postgres_url, isolation_level="AUTOCOMMIT")
+
+        with postgres_engine.connect() as conn:
+            # Use quoted identifier for safety
+            conn.execute(text(f'CREATE DATABASE "{test_db_name}"'))
+
+    def _drop_test_database(self, test_db_name: str) -> None:
+        """Drop temporary test database."""
+        postgres_url = self.db_url.replace(
+            f"/{self._parse_db_url()['database']}", "/postgres"
+        )
+        postgres_engine = create_engine(postgres_url, isolation_level="AUTOCOMMIT")
+
+        with postgres_engine.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{test_db_name}"'))
+
+    def _create_backup_metadata(self, backup_file: Path) -> None:
+        """Create metadata file for backup."""
+        metadata = {
+            "timestamp": datetime.now().isoformat(),
+            "database_version": self.version_checker.get_database_version(),
+            "madsci_version": self.version_checker.get_current_madsci_version(),
+            "backup_size": backup_file.stat().st_size,
+            "checksum": self._generate_backup_checksum_inline(backup_file),
+            "database_name": self._parse_db_url()["database"],
+        }
+
+        metadata_file = backup_file.with_suffix(backup_file.suffix + ".metadata.json")
+        metadata_file.write_text(json.dumps(metadata, indent=2))
+
+        self.logger.info(f"Created backup metadata: {metadata_file}")
+
+    def _validate_backup_integrity(self, backup_file: Path) -> bool:
+        """Perform comprehensive backup validation."""
+        self.logger.info(f"Validating backup integrity: {backup_file}")
+
+        # Step 1: Verify backup completion
+        if not self._verify_backup_completion(backup_file):
+            raise RuntimeError(f"Backup completion verification failed: {backup_file}")
+
+        # Step 2: Generate and save checksum
+        self._generate_backup_checksum(backup_file)
+
+        # Step 3: Test restorability
+        if not self._test_backup_restore(backup_file):
+            raise RuntimeError(f"Backup restore test failed: {backup_file}")
+
+        # Step 4: Create metadata
+        self._create_backup_metadata(backup_file)
+
+        self.logger.info("Backup integrity validation passed")
+        return True
+
+    def restore_from_backup(self, backup_path: Path) -> None:
+        """Restore database from a backup file."""
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+
+        db_info = self._parse_db_url()
+
+        # Set PGPASSWORD environment variable
+        env = os.environ.copy()
+        if db_info["password"]:
+            env["PGPASSWORD"] = db_info["password"]
+
+        # First, drop and recreate the database
+        self._recreate_database(db_info)
+
+        psql_cmd = [
+            "psql",
+            "-h",
+            db_info["host"],
+            "-p",
+            str(db_info["port"]),
+            "-U",
+            db_info["user"],
+            "-d",
+            db_info["database"],
+            "--no-password",
+            "--file",
+            str(backup_path),
+        ]
+
+        try:
+            self.logger.info(f"Restoring database from backup: {backup_path}")
+            result = subprocess.run(  # noqa: S603
+                psql_cmd, env=env, capture_output=True, text=True, check=True
+            )
+
+            if result.returncode == 0:
+                self.logger.info("Database restore completed successfully")
+            else:
+                raise RuntimeError(f"psql restore failed: {result.stderr}")
+
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Restore failed: {e.stderr}")
+            raise RuntimeError(f"Database restore failed: {e}") from e
+
+    def _verify_restore_success(self, backup_path: Path) -> bool:
+        """Verify that database restore was successful."""
+        try:
+            db_info = self._parse_db_url()
+
+            # Test database connection
+            test_engine = create_engine(self.db_url)
+            with test_engine.connect() as conn:
+                # Try a simple query to verify database is accessible
+                result = conn.execute(text("SELECT 1"))
+                if result.fetchone()[0] != 1:
+                    return False
+
+            # Compare with backup metadata if available
+            metadata_file = backup_path.with_suffix(
+                backup_path.suffix + ".metadata.json"
+            )
+            if metadata_file.exists():
+                try:
+                    metadata = json.loads(metadata_file.read_text())
+                    expected_db = metadata.get("database_name")
+                    if expected_db and expected_db != db_info["database"]:
+                        self.logger.error(
+                            f"Database name mismatch: expected {expected_db}, got {db_info['database']}"
+                        )
+                        return False
+                except Exception as e:
+                    self.logger.warning(f"Could not validate metadata: {e}")
+
+            self.logger.info("Database restore verification successful")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Database restore verification failed: {e}")
+            return False
+
+    def _cleanup_failed_restore(self, backup_path: Path) -> None:  # noqa: ARG002
+        """Clean up after a failed restore operation."""
+        try:
+            db_info = self._parse_db_url()
+
+            # Drop the corrupted database
+            self.logger.warning("Cleaning up corrupted database after failed restore")
+            self._recreate_database(db_info)
+
+            self.logger.info("Failed restore cleanup completed")
+
+        except Exception as e:
+            self.logger.error(f"Failed to clean up after restore failure: {e}")
+            raise RuntimeError(
+                f"Critical: Database may be in corrupted state: {e}"
+            ) from e
+
+    def _get_available_backups(self) -> List[Path]:
+        """Get list of available backup files sorted by modification time (newest first)."""
+        backup_files = []
+
+        for backup_file in self.backup_dir.glob("*.sql"):
+            # Check if backup has metadata and checksum files
+            metadata_file = backup_file.with_suffix(
+                backup_file.suffix + ".metadata.json"
+            )
+            checksum_file = backup_file.with_suffix(backup_file.suffix + ".checksum")
+
+            if metadata_file.exists() and checksum_file.exists():
+                backup_files.append(backup_file)
+
+        # Sort by modification time (newest first)
+        backup_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+        return backup_files
+
+    def _rotate_old_backups(self, max_backups: int = 10) -> None:
+        """Remove old backup files beyond the specified limit."""
+        available_backups = self._get_available_backups()
+
+        if len(available_backups) <= max_backups:
+            return
+
+        backups_to_remove = available_backups[max_backups:]
+
+        for backup_file in backups_to_remove:
+            try:
+                # Remove backup file and its associated files
+                backup_file.unlink()
+
+                # Remove metadata file
+                metadata_file = backup_file.with_suffix(
+                    backup_file.suffix + ".metadata.json"
+                )
+                if metadata_file.exists():
+                    metadata_file.unlink()
+
+                # Remove checksum file
+                checksum_file = backup_file.with_suffix(
+                    backup_file.suffix + ".checksum"
+                )
+                if checksum_file.exists():
+                    checksum_file.unlink()
+
+                self.logger.info(f"Removed old backup: {backup_file}")
+
+            except Exception as e:
+                self.logger.warning(f"Failed to remove old backup {backup_file}: {e}")
+
+    def _recreate_database(self, db_info: dict) -> None:
+        """Drop and recreate the database for restore."""
+        # Connect to postgres database to drop/create target database
+        postgres_url = self.db_url.replace(f"/{db_info['database']}", "/postgres")
+        postgres_engine = create_engine(postgres_url, isolation_level="AUTOCOMMIT")
+
+        # Get raw connection properly
+        raw_conn = postgres_engine.raw_connection()
+        try:
+            cursor = raw_conn.cursor()
+            try:
+                # Terminate existing connections to the target database
+                # Use parameterized query to avoid SQL injection warnings
+                cursor.execute(
+                    """
+                    SELECT pg_terminate_backend(pg_stat_activity.pid)
+                    FROM pg_stat_activity
+                    WHERE pg_stat_activity.datname = %s
+                    AND pid <> pg_backend_pid()
+                """,
+                    (db_info["database"],),
+                )
+
+                # For DROP/CREATE DATABASE, we need to use identifier quoting
+                # Since these can't be parameterized, we'll validate the database name first
+                db_name = db_info["database"]
+
+                # Basic validation: ensure database name contains only safe characters
+
+                if not re.match(r"^[a-zA-Z0-9_]+$", db_name):
+                    raise ValueError(
+                        f"Database name contains unsafe characters: {db_name}"
+                    )
+
+                # Use quoted identifiers for DROP/CREATE (these operations can't use parameters)
+
+                # Drop and recreate database using sql.Identifier for safe quoting
+                cursor.execute(
+                    sql.SQL("DROP DATABASE IF EXISTS {}").format(
+                        sql.Identifier(db_name)
+                    )
+                )
+                cursor.execute(
+                    sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name))
+                )
+
+            finally:
+                cursor.close()
+        finally:
+            raw_conn.close()
+            postgres_engine.dispose()
+
+    def _log_alembic_state(self, when: str) -> None:
+        try:
+            script = ScriptDirectory.from_config(self.alembic_cfg)
+            heads = list(script.get_heads())
+            self.logger.info(f"[{when}] Alembic script heads: {heads}")
+
+            # DB current revision(s)
+            curr = []
+
+            def _capture_current(
+                _rev: Any, context: Any
+            ) -> None:  # rev is head; context.get_current_revision() returns DB rev
+                curr.append(context.get_current_revision())
+                return []
+
+            with EnvironmentContext(self.alembic_cfg, script, fn=_capture_current):
+                pass
+            self.logger.info(
+                f"[{when}] Database current revision: {curr[0] if curr else None}"
+            )
+        except Exception as e:
+            self.logger.warning(f"[{when}] Could not log Alembic state: {e}")
+
+    def apply_schema_migrations(self) -> None:
+        """Apply schema migrations using Alembic with automatic migration generation."""
+        try:
+            self.logger.info("Applying schema migrations using Alembic...")
+
+            # Set environment variable for Alembic to use
+            os.environ["RESOURCES_DB_URL"] = self.db_url
+
+            # Change to the package root directory for Alembic operations
+            original_cwd = Path.cwd()
+            os.chdir(self.package_root)
+
+            try:
+                # Initialize Alembic if this is the first run
+                self._ensure_alembic_initialized()
+
+                # Auto-generate migration if there are model changes
+                if self._has_pending_model_changes():
+                    self.logger.info("Detected model changes, generating migration...")
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    migration_message = f"Auto-generated migration {timestamp}"
+                    command.revision(
+                        self.alembic_cfg, message=migration_message, autogenerate=True
+                    )
+
+                    # Post-process the generated migration file
+                    versions_dir = self.package_root / "alembic" / "versions"
+                    if versions_dir.exists():
+                        migration_files = list(versions_dir.glob("*.py"))
+                        if migration_files:
+                            latest_migration = max(
+                                migration_files, key=lambda p: p.stat().st_mtime
+                            )
+                            self._post_process_migration_file(latest_migration)
+
+                    self.logger.info(
+                        f"Generated and processed migration: {migration_message}"
+                    )
+                # Run Alembic upgrade to head
+                try:
+                    self.logger.info("=== UPGRADE START ===")  # direct stdout sentinel
+                    command.upgrade(self.alembic_cfg, "head")
+                    self.logger.info("=== UPGRADE DONE ===")  # direct stdout sentinel
+                except Exception:
+                    self.logger.error("UPGRADE FAILED", exc_info=True)
+                    raise
+                self.logger.info("Alembic migrations applied successfully")
+
+                # Ensure our version tracking table exists (separate from Alembic)
+                SchemaVersionTable.metadata.create_all(self.engine)
+
+            finally:
+                # Always restore the original working directory
+                os.chdir(original_cwd)
+
+        except Exception as e:
+            self.logger.error(f"Alembic migration failed: {traceback.format_exc()}")
+            raise RuntimeError(f"Schema migration failed: {e}") from e
+
+    def _post_process_migration_file(self, migration_file_path: Path) -> None:
+        """Post-process generated migration files to handle common type conversions."""
+        try:
+            with open(migration_file_path) as f:  # noqa: PTH123
+                content = f.read()
+
+            # Pattern to find VARCHAR to Float conversions
+
+            # Replace basic alter_column operations with safe conversions
+            varchar_to_float_pattern = r"op\.alter_column\('(\w+)', '(\w+)',\s*existing_type=sa\.VARCHAR\(\),\s*type_=sa\.Float\(\),\s*existing_nullable=True\)"
+
+            def replace_varchar_to_float(match: Any) -> str:
+                table_name = match.group(1)
+                column_name = match.group(2)
+                # Use triple quotes with raw string to avoid escape issues
+                return rf'''op.execute(r"""
+                            ALTER TABLE {table_name}
+                            ALTER COLUMN {column_name} TYPE FLOAT
+                            USING CASE
+                                WHEN {column_name} IS NULL THEN NULL
+                                WHEN {column_name} ~ '^-?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$' THEN {column_name}::float
+                                ELSE NULL
+                            END
+                        """)'''
+
+            # Apply the replacement
+            new_content = re.sub(
+                varchar_to_float_pattern, replace_varchar_to_float, content
+            )
+
+            # Also handle VARCHAR to Integer conversions
+            varchar_to_int_pattern = r"op\.alter_column\('(\w+)', '(\w+)',\s*existing_type=sa\.VARCHAR\(\),\s*type_=sa\.Integer\(\),\s*existing_nullable=True\)"
+
+            def replace_varchar_to_int(match: Any) -> str:
+                table_name = match.group(1)
+                column_name = match.group(2)
+                # Use triple quotes with raw string to avoid escape issues
+                return f'''op.execute(r"""
+                            ALTER TABLE {table_name}
+                            ALTER COLUMN {column_name} TYPE INTEGER
+                            USING CASE
+                                WHEN {column_name} IS NULL THEN NULL
+                                WHEN {column_name} ~ '^-?[0-9]+$' THEN {column_name}::integer
+                                ELSE NULL
+                            END
+                        """)'''
+
+            new_content = re.sub(
+                varchar_to_int_pattern, replace_varchar_to_int, new_content
+            )
+
+            # Only write back if changes were made
+            if new_content != content:
+                with open(migration_file_path, "w") as f:  # noqa: PTH123
+                    f.write(new_content)
+                self.logger.info(
+                    f"Post-processed migration file for safe type conversions: {migration_file_path}"
+                )
+            else:
+                self.logger.info("No type conversion post-processing needed")
+
+        except Exception as e:
+            self.logger.warning(f"Could not post-process migration file: {e}")
+
+    def _has_pending_model_changes(self) -> bool:
+        """Check if there are pending model changes by comparing current schema with models."""
+        try:
+            # Get current database metadata and compare with model metadata
+            with self.engine.connect() as connection:
+                context = MigrationContext.configure(connection)
+
+                # Compare database schema with model metadata
+                diff = compare_metadata(context, ResourceTable.metadata)
+
+                # Count ALL differences, don't filter too aggressively
+                relevant_changes = []
+                for change in diff:
+                    # Convert change to string to check for alembic_version table
+                    change_str = str(change)
+                    if "alembic_version" not in change_str:
+                        relevant_changes.append(change)
+
+                has_changes = len(relevant_changes) > 0
+
+                if has_changes:
+                    self.logger.info(
+                        f"Found {len(relevant_changes)} relevant schema differences"
+                    )
+                    for change in relevant_changes[:5]:  # Log first 5 changes
+                        self.logger.info(f"  - {change}")
+
+                return has_changes
+
+        except Exception as e:
+            self.logger.warning(f"Could not check for model changes: {e}")
+            return False
+
+    def _ensure_alembic_initialized(self) -> None:
+        """Ensure Alembic is properly initialized."""
+        try:
+            inspector = inspect(self.engine)
+
+            if "alembic_version" not in inspector.get_table_names():
+                self.logger.info("Initializing Alembic version tracking...")
+                # Stamp the database with the current revision
+                command.stamp(self.alembic_cfg, "head")
+
+        except Exception as e:
+            self.logger.warning(f"Could not initialize Alembic: {e}")
+            # This might be the first migration, which is OK
+
+    def generate_migration(self, message: str) -> None:
+        """Generate a new Alembic migration based on model changes."""
+        try:
+            self.logger.info(f"Generating new migration: {message}")
+            os.environ["RESOURCES_DB_URL"] = self.db_url
+
+            # Change to package root for generation
+            original_cwd = Path.cwd()
+            os.chdir(self.package_root)
+
+            try:
+                command.revision(self.alembic_cfg, message=message, autogenerate=True)
+                self.logger.info("Migration file generated successfully")
+            finally:
+                os.chdir(original_cwd)
+
+        except Exception as e:
+            self.logger.error(f"Migration generation failed: {e}")
+            raise
+
+    def run_migration(self, target_version: Optional[str] = None) -> None:
+        """Run the complete migration process using Alembic."""
+        # Acquire migration lock to prevent concurrent migrations
+        self._acquire_migration_lock()
+
+        try:
+            # Determine target version
+            if target_version is None:
+                target_version = self.version_checker.get_current_madsci_version()
+
+            current_db_version = self.version_checker.get_database_version()
+
+            self.logger.info(f"Starting migration to version {target_version}")
+            self.logger.info(
+                f"Current database version: {current_db_version or 'None'}"
+            )
+
+            # Check if this is a fresh database initialization
+            if self._is_fresh_database():
+                self.logger.info(
+                    "Fresh database detected, performing initialization without backup..."
+                )
+                try:
+                    # For fresh databases, just apply schema migrations and set up version tracking
+                    self.apply_schema_migrations()
+
+                    # Initialize version tracking for fresh database
+                    migration_notes = f"Fresh database initialized with MADSci version {target_version}"
+                    self.version_checker.record_version(target_version, migration_notes)
+
+                    self.logger.info(
+                        f"Fresh database initialization completed successfully with version {target_version}"
+                    )
+                    return
+
+                except Exception as init_error:
+                    self.logger.error(
+                        f"Fresh database initialization failed: {init_error}"
+                    )
+                    raise init_error
+
+            # EXISTING DATABASE - CREATE BACKUP FIRST
+            backup_path = self.create_backup()
+
+            # Apply schema migrations for existing database
+            try:
+                # Apply Alembic migrations (this will detect and apply any schema changes)
+                self.apply_schema_migrations()
+
+                # After successful migration, update version tracking
+                migration_notes = f"Alembic migration from {current_db_version or 'unversioned'} to {target_version}"
+                self.version_checker.record_version(target_version, migration_notes)
+
+                self.logger.info(
+                    f"Migration completed successfully to version {target_version}"
+                )
+
+            except Exception as migration_error:
+                self.logger.error(f"Migration failed: {migration_error}")
+                self.logger.info("Attempting to restore from backup...")
+
+                try:
+                    self.restore_from_backup(backup_path)
+                    self.logger.info("Database restored from backup successfully")
+                except Exception as restore_error:
+                    self.logger.error(
+                        f"CRITICAL: Backup restore also failed: {restore_error}"
+                    )
+                    self.logger.error("Manual intervention required!")
+
+                raise migration_error
+
+        except Exception as e:
+            self.logger.error(f"Migration process failed: {e}")
+            raise
+        finally:
+            # Always release the migration lock
+            self._release_migration_lock()
+
+    def _check_for_existing_version_record(self, version: str) -> bool:
+        """Check if a version record already exists in the database."""
+        try:
+            with Session(self.engine) as session:
+                statement = select(SchemaVersionTable).where(
+                    SchemaVersionTable.version == version
+                )
+                result = session.exec(statement).first()
+                return result is not None
+        except Exception as e:
+            self.logger.warning(f"Could not check for existing version record: {e}")
+            return False
+
+    def _mark_version_as_current(self, version: str) -> None:
+        """Update the version record to mark it as the current version."""
+        try:
+            with Session(self.engine) as session:
+                # Find the existing record for this version
+                statement = select(SchemaVersionTable).where(
+                    SchemaVersionTable.version == version
+                )
+                existing_record = session.exec(statement).first()
+
+                if existing_record:
+                    # Update the timestamp to make it the "current" version
+
+                    existing_record.applied_at = datetime.now()
+                    existing_record.migration_notes = (
+                        f"Version synchronized with MADSci package version {version}"
+                    )
+                    session.add(existing_record)
+                    session.commit()
+                    self.logger.info(
+                        f"Updated version record for {version} to current timestamp"
+                    )
+                else:
+                    # Create a new record if none exists
+                    self.version_checker.record_version(
+                        version,
+                        f"Version synchronized with MADSci package version {version}",
+                    )
+                    self.logger.info(f"Created new version record for {version}")
+
+        except Exception as e:
+            self.logger.error(f"Could not mark version as current: {e}")
+            raise
+
+    def _is_fresh_database(self) -> bool:
+        """Check if this is a fresh database with no existing tables."""
+        try:
+            inspector = inspect(self.engine)
+            existing_tables = inspector.get_table_names()
+
+            # Consider it fresh if no resource-related tables exist
+            resource_tables = ["resource", "resource_history", "madsci_schema_version"]
+            has_resource_tables = any(
+                table in existing_tables for table in resource_tables
+            )
+
+            if not has_resource_tables:
+                self.logger.info(
+                    "No existing resource tables found, treating as fresh database"
+                )
+                return True
+
+            self.logger.info(f"Found existing tables: {existing_tables}")
+            return False
+
+        except Exception as e:
+            self.logger.warning(f"Could not check database tables: {e}")
+            return False
+
+
+def main() -> None:
+    """Command line interface for the migration tool."""
+    logger = EventClient()
+
+    try:
+        settings = DatabaseMigrationSettings()
+
+        migrator = DatabaseMigrator(settings, logger)
+
+        if settings.generate_migration:
+            migrator.generate_migration(settings.generate_migration)
+        elif settings.restore_from:
+            backup_path = Path(settings.restore_from)
+            migrator.restore_from_backup(backup_path)
+        elif settings.backup_only:
+            backup_path = migrator.create_backup()
+            logger.info(f"Backup created: {backup_path}")
+        else:
+            migrator.run_migration(settings.target_version)
+
+    except Exception as e:
+        logger.error(f"Migration tool failed: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    """Entry point for the migration tool."""
+    main()

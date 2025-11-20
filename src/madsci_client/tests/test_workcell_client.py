@@ -13,7 +13,11 @@ from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
-from madsci.common.types.workcell_types import WorkcellManagerDefinition, WorkcellState
+from madsci.common.types.workcell_types import (
+    WorkcellManagerDefinition,
+    WorkcellManagerSettings,
+    WorkcellState,
+)
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
@@ -132,6 +136,18 @@ def test_client(
         location_server_url="http://localhost:8006/",
     )
 
+    # Create custom settings that use the test database
+    client = mongo_server.client
+    host = client.address[0] if client.address else "localhost"
+    port = client.address[1] if client.address else 27017
+    mongo_url = f"mongodb://{host}:{port}"
+    database_name = mongo_server.name
+
+    custom_settings = WorkcellManagerSettings(
+        mongo_db_url=mongo_url,
+        database_name=database_name,
+    )
+
     with (
         patch(
             "madsci.workcell_manager.workcell_server.get_current_madsci_context",
@@ -158,6 +174,7 @@ def test_client(
         mock_engine_location_client.return_value = mock_engine_location_client_instance
 
         manager = WorkcellManager(
+            settings=custom_settings,
             definition=workcell,
             redis_connection=redis_server,
             mongo_connection=mongo_server,

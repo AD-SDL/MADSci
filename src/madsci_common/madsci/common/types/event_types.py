@@ -62,13 +62,19 @@ class EventManagerSettings(
         description="Path to the event manager definition file to use.",
         default=Path("event.manager.yaml"),
     )
-    db_url: str = Field(
-        default="mongodb://localhost:27017",
-        title="Database URL",
-        description="The URL of the database used by the Event Manager.",
+    mongo_db_url: AnyUrl = Field(
+        default=AnyUrl("mongodb://localhost:27017"),
+        title="MongoDB URL",
+        description="The URL of the MongoDB database used by the Event Manager.",
+        validation_alias=AliasChoices("mongo_db_url", "EVENT_DB_URL", "db_url"),
+    )
+    database_name: str = Field(
+        default="madsci_events",
+        title="Database Name",
+        description="The name of the MongoDB database where events are stored.",
     )
     collection_name: str = Field(
-        default="madsci_events",
+        default="events",
         title="Collection Name",
         description="The name of the MongoDB collection where events are stored.",
     )

@@ -14,7 +14,8 @@ license = {text = "MIT"}
 dependencies = [
   "madsci.common",
   "madsci.client",
-  "psycopg2-binary"
+  "psycopg2-binary",
+  "alembic>=1.13.0",
 ]
 
 [project.urls]
