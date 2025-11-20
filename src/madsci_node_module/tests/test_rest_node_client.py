@@ -741,7 +741,7 @@ def test_get_action_files_zip(
 
         assert result == Path("/tmp/test_files.zip")  # noqa: S108
         mock_get.assert_called_once_with(
-            f"http://localhost:2000/action/test_action/{action_id}/download",
+            f"http://localhost:2000/action/{action_id}/download",
             timeout=60,
         )
 

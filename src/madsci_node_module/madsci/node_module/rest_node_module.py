@@ -487,6 +487,46 @@ class RestNode(AbstractNode):
                 headers={"content-type": "application/zip"},
             )
 
+    def get_action_files_zip_by_id(self, action_id: str) -> FileResponse:
+        """Get all files from an action as a ZIP file using only action_id."""
+        action_response = super().get_action_result(action_id)
+
+        if not action_response.files:
+            if action_response.status != ActionStatus.SUCCEEDED:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Action {action_id} did not succeed (status: {action_response.status}). Cannot download files from failed action.",
+                )
+            raise HTTPException(
+                status_code=404,
+                detail=f"Action {action_id} completed successfully but produced no file results",
+            )
+
+        # Always create a ZIP, even for single files for consistency
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip_file:
+            with ZipFile(temp_zip_file.name, "w") as zip_file:
+                if isinstance(action_response.files, Path):
+                    # Single file - add to ZIP with appropriate name
+                    if action_response.files.exists():
+                        zip_file.write(action_response.files, "file")
+                elif isinstance(action_response.files, ActionFiles):
+                    # Multiple files - add all to ZIP with their labels as names
+                    files_dict = action_response.files.model_dump()
+                    for file_label, file_path in files_dict.items():
+                        if Path(file_path).exists():
+                            # Use the file label as the filename in the ZIP
+                            file_extension = Path(file_path).suffix
+                            zip_filename = f"{file_label}{file_extension}"
+                            zip_file.write(file_path, zip_filename)
+                else:
+                    raise ValueError("Invalid file response")
+
+            return FileResponse(
+                path=temp_zip_file.name,
+                filename=f"{action_id}_files.zip",
+                headers={"content-type": "application/zip"},
+            )
+
     def _configure_routes(self) -> None:
         """Configure the routes for the REST API."""
         self.router = APIRouter()
@@ -537,6 +577,11 @@ class RestNode(AbstractNode):
         )
         self.router.add_api_route(
             "/action/{action_id}/result", self.get_action_result_dict, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/action/{action_id}/download",
+            self.get_action_files_zip_by_id,
+            methods=["GET"],
         )
 
         self.rest_api.include_router(self.router)
