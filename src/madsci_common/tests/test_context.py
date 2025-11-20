@@ -3,47 +3,67 @@
 import threading
 
 from madsci.common.context import (
+    GlobalMadsciContext,
     get_current_madsci_context,
-    global_madsci_context,
     madsci_context,
 )
 from madsci.common.types.context_types import MadsciContext
 
 
 def test_global_madsci_context_default() -> None:
-    """Test that global_madsci_context is an instance of MadsciContext by default."""
-    assert isinstance(global_madsci_context, MadsciContext)
+    """Test that GlobalMadsciContext returns a MadsciContext instance."""
+    context = GlobalMadsciContext.get_context()
+    assert isinstance(context, MadsciContext)
 
 
 def test_global_context_across_threads() -> None:
-    """Tests that changes to global_madsci_context are consistent across threads."""
-    original_url = global_madsci_context.lab_server_url
+    """Tests that changes to GlobalMadsciContext are consistent across threads."""
+    original_context = GlobalMadsciContext.get_context()
+    original_url = original_context.lab_server_url
     test_url = "http://test-lab:8000"
-    global_madsci_context.lab_server_url = test_url
-    assert str(global_madsci_context.lab_server_url) == "http://test-lab:8000/"
+
+    # Create a new context with modified URL
+    new_context = original_context.model_copy()
+    new_context.lab_server_url = test_url
+    GlobalMadsciContext.set_context(new_context)
+    assert (
+        str(GlobalMadsciContext.get_context().lab_server_url) == "http://test-lab:8000/"
+    )
 
     def check_context() -> None:
         """Function to check context in a separate thread."""
-        assert str(global_madsci_context.lab_server_url) == "http://test-lab:8000/"
-        global_madsci_context.lab_server_url = original_url
+        assert (
+            str(GlobalMadsciContext.get_context().lab_server_url)
+            == "http://test-lab:8000/"
+        )
+        # Restore original context
+        restore_context = GlobalMadsciContext.get_context().model_copy()
+        restore_context.lab_server_url = original_url
+        GlobalMadsciContext.set_context(restore_context)
 
     # Run the check in a separate thread
     thread = threading.Thread(target=check_context)
     thread.start()
     thread.join()
     # Ensure the original state is restored
-    global_madsci_context.lab_server_url = original_url
+    final_context = GlobalMadsciContext.get_context().model_copy()
+    final_context.lab_server_url = original_url
+    GlobalMadsciContext.set_context(final_context)
 
 
 def test_madsci_context_temporary_override() -> None:
     """Test that madsci_context temporarily overrides and restores context."""
-    original_lab_url = global_madsci_context.lab_server_url
-    original_event_url = global_madsci_context.event_server_url
+    original_context = GlobalMadsciContext.get_context()
+    original_lab_url = original_context.lab_server_url
+    original_event_url = original_context.event_server_url
     test_lab_url = "http://test-lab:8000"
     test_event_url = "http://test-event:8001"
 
-    global_madsci_context.lab_server_url = original_lab_url
-    global_madsci_context.event_server_url = original_event_url
+    # Ensure we start with known state
+    base_context = original_context.model_copy()
+    base_context.lab_server_url = original_lab_url
+    base_context.event_server_url = original_event_url
+    GlobalMadsciContext.set_context(base_context)
 
     with madsci_context(
         lab_server_url=test_lab_url, event_server_url=test_event_url
@@ -65,12 +85,16 @@ def test_madsci_context_temporary_override() -> None:
 
 def test_madsci_context_partial_override() -> None:
     """Test that madsci_context only overrides specified fields."""
-    original_lab_url = global_madsci_context.lab_server_url
-    original_event_url = global_madsci_context.event_server_url
+    original_context = GlobalMadsciContext.get_context()
+    original_lab_url = original_context.lab_server_url
+    original_event_url = original_context.event_server_url
     test_lab_url = "http://test-lab:8000"
 
-    global_madsci_context.lab_server_url = original_lab_url
-    global_madsci_context.event_server_url = original_event_url
+    # Ensure we start with known state
+    base_context = original_context.model_copy()
+    base_context.lab_server_url = original_lab_url
+    base_context.event_server_url = original_event_url
+    GlobalMadsciContext.set_context(base_context)
 
     with madsci_context(lab_server_url=test_lab_url):
         assert (
@@ -92,14 +116,18 @@ def test_get_current_madsci_context() -> None:
 
 def test_nested_madsci_context() -> None:
     """Test that nested context managers work correctly."""
-    original_lab_url = global_madsci_context.lab_server_url
-    original_event_url = global_madsci_context.event_server_url
+    original_context = GlobalMadsciContext.get_context()
+    original_lab_url = original_context.lab_server_url
+    original_event_url = original_context.event_server_url
     test_lab_url1 = "http://test-lab1:8000"
     test_lab_url2 = "http://test-lab2:8000"
     test_event_url = "http://test-event:8001"
 
-    global_madsci_context.lab_server_url = original_lab_url
-    global_madsci_context.event_server_url = original_event_url
+    # Ensure we start with known state
+    base_context = original_context.model_copy()
+    base_context.lab_server_url = original_lab_url
+    base_context.event_server_url = original_event_url
+    GlobalMadsciContext.set_context(base_context)
 
     with madsci_context(lab_server_url=test_lab_url1, event_server_url=test_event_url):
         assert (
