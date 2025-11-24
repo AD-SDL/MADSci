@@ -40,16 +40,20 @@ class BackupManager:
 
         backups = []
 
-        # Look for backup files (SQL files and MongoDB backup directories)
+        # Look for backup files (PostgreSQL and MongoDB backups)
         backup_files = []
-        backup_files.extend(backup_dir.glob("*.sql"))  # PostgreSQL backups
+        # PostgreSQL backup files
+        backup_files.extend(backup_dir.glob("*.sql"))  # Plain format
+        backup_files.extend(backup_dir.glob("*.dump"))  # Custom format
+        backup_files.extend(backup_dir.glob("*.tar"))  # Tar format
+        # MongoDB and PostgreSQL directory format backups
         backup_files.extend(
             [
                 d
                 for d in backup_dir.iterdir()
                 if d.is_dir() and not d.name.startswith(".")
             ]
-        )  # MongoDB backups
+        )
 
         for backup_path in backup_files:
             try:
