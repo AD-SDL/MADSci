@@ -36,6 +36,8 @@ checks:
   @pre-commit run --all-files || { echo "" && echo "Some checks failed! Running one more time to see if any automatic fixes worked:" && echo "" ; pre-commit run --all-files; }
 # Run the pre-commit checks
 check: checks
+ruff-unsafe:
+  @ruff check . --fix --unsafe-fixes
 
 # Build the project
 build: dcb
