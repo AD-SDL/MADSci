@@ -19,11 +19,9 @@ from alembic.runtime.environment import EnvironmentContext
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from madsci.client.event_client import EventClient
+from madsci.common.backup_tools.postgres_backup import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 from madsci.common.types.base_types import MadsciBaseSettings, PathLike
-from madsci.resource_manager.backup_tools.postgres_backup import (
-    PostgreSQLBackupSettings,
-    PostgreSQLBackupTool,
-)
 from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
 from madsci.resource_manager.resource_tables import ResourceTable, SchemaVersionTable
 from pydantic import Field

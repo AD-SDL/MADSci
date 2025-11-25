@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from madsci.client.event_client import EventClient
+from madsci.common.backup_tools.postgres_backup import PostgreSQLBackupTool
 from madsci.common.types.backup_types import PostgreSQLBackupSettings
-from madsci.resource_manager.backup_tools.postgres_backup import PostgreSQLBackupTool
 
 
 class TestPostgreSQLBackupTool:

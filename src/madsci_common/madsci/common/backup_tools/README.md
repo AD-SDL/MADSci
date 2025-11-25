@@ -16,27 +16,18 @@ MADSci provides standalone backup tools for PostgreSQL and MongoDB databases. Th
 
 ## Installation
 
-### For PostgreSQL Backups
-
-```bash
-pip install madsci-resource-manager
-```
-
-This provides both the PostgreSQL backup tool and the unified CLI.
-
-### For MongoDB Backups
+### For All Backup Tools (PostgreSQL and MongoDB)
 
 ```bash
 pip install madsci-common
 ```
 
-This provides the MongoDB backup tool and CLI.
+This provides:
+- PostgreSQL backup tool and CLI
+- MongoDB backup tool and CLI
+- Unified CLI that auto-detects database type
 
-### For Both
-
-```bash
-pip install madsci-common madsci-resource-manager
-```
+The `madsci-common` package now includes all database backup functionality for maximum convenience and reusability.
 
 ## Quick Start
 
@@ -82,11 +73,11 @@ For more control, use the database-specific CLI tools:
 ### PostgreSQL
 
 ```bash
-# Located in madsci-resource-manager package
-from madsci.resource_manager.backup_tools.cli import main_postgres_backup
-
-# Or use entry point (if configured)
+# Use the PostgreSQL-specific CLI
 madsci-postgres-backup create --db-url postgresql://localhost/db
+
+# Or with full options
+madsci-postgres-backup create --db-url postgresql://localhost/db --backup-dir /backups/prod
 ```
 
 ### MongoDB
@@ -102,10 +93,10 @@ madsci-mongodb-backup create --mongo-url mongodb://localhost/db --database mydb
 
 ```python
 from pathlib import Path
-from madsci.resource_manager.backup_tools import (
+from madsci.common.backup_tools import (
     PostgreSQLBackupTool,
-    PostgreSQLBackupSettings
 )
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 
 # Configure backup settings
 settings = PostgreSQLBackupSettings(
@@ -143,8 +134,8 @@ from pathlib import Path
 from pydantic import AnyUrl
 from madsci.common.backup_tools import (
     MongoDBBackupTool,
-    MongoDBBackupSettings
 )
+from madsci.common.types.backup_types import MongoDBBackupSettings
 
 # Configure backup settings
 settings = MongoDBBackupSettings(
@@ -495,10 +486,8 @@ This guide provides practical examples for common backup scenarios using MADSci'
 
 ```python
 from pathlib import Path
-from madsci.resource_manager.backup_tools import (
-    PostgreSQLBackupTool,
-    PostgreSQLBackupSettings
-)
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 
 # Configure and create backup
 settings = PostgreSQLBackupSettings(
@@ -540,7 +529,8 @@ print(f"✓ Critical data backed up: {backup_path}")
 
 ```python
 from pathlib import Path
-from madsci.resource_manager.backup_tools import PostgreSQLBackupTool, PostgreSQLBackupSettings
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 
 def perform_maintenance():
     # Create backup before maintenance
@@ -578,7 +568,8 @@ perform_maintenance()
 ```python
 from pathlib import Path
 from datetime import datetime
-from madsci.resource_manager.backup_tools import PostgreSQLBackupTool, PostgreSQLBackupSettings
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 
 class BackupStrategy:
     def __init__(self, db_url: str, base_dir: Path):
@@ -649,7 +640,8 @@ strategy.weekly_backup()  # Run Sunday at 3 AM
 
 ```python
 from pathlib import Path
-from madsci.resource_manager.backup_tools import PostgreSQLBackupTool, PostgreSQLBackupSettings
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 from madsci.client import EventClient
 
 def create_verified_backup(db_url: str) -> Path:
@@ -705,7 +697,8 @@ Schedule with cron: 0 2 * * * /path/to/backup_script.py
 import sys
 from pathlib import Path
 from datetime import datetime
-from madsci.resource_manager.backup_tools import PostgreSQLBackupTool, PostgreSQLBackupSettings
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 from madsci.common.backup_tools import MongoDBBackupTool, MongoDBBackupSettings
 from pydantic import AnyUrl
 
@@ -796,7 +789,8 @@ Place in .git/hooks/pre-push or deployment script.
 """
 
 from pathlib import Path
-from madsci.resource_manager.backup_tools import PostgreSQLBackupTool, PostgreSQLBackupSettings
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 
 def pre_deployment_backup():
     """Create backup before deployment."""
@@ -838,7 +832,8 @@ Disaster recovery script to restore all MADSci databases.
 """
 
 from pathlib import Path
-from madsci.resource_manager.backup_tools import PostgreSQLBackupTool, PostgreSQLBackupSettings
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 from madsci.common.backup_tools import MongoDBBackupTool, MongoDBBackupSettings
 from pydantic import AnyUrl
 
@@ -977,7 +972,8 @@ Example: Backup before and after experiment runs.
 """
 
 from pathlib import Path
-from madsci.resource_manager.backup_tools import PostgreSQLBackupTool, PostgreSQLBackupSettings
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 from madsci.common.backup_tools import MongoDBBackupTool, MongoDBBackupSettings
 from pydantic import AnyUrl
 
@@ -1103,7 +1099,8 @@ Monitor backup health and send alerts.
 
 from pathlib import Path
 from datetime import datetime, timedelta
-from madsci.resource_manager.backup_tools import PostgreSQLBackupTool, PostgreSQLBackupSettings
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 
 class BackupHealthMonitor:
     """Monitor backup health and integrity."""

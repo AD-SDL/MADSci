@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from click.testing import CliRunner
-from madsci.resource_manager.backup_tools.cli import (
+from madsci.common.backup_tools.postgres_cli import (
     main_postgres_backup,
     postgres_backup,
 )
@@ -38,7 +38,7 @@ class TestPostgreSQLBackupCLI:
         assert result.exit_code == 0
         assert "PostgreSQL backup management commands" in result.output
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_create_backup(
         self,
         mock_tool_class: Mock,
@@ -72,7 +72,7 @@ class TestPostgreSQLBackupCLI:
         # Verify backup creation was called
         mock_tool.create_backup.assert_called_once_with(None)
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_create_backup_with_name_suffix(
         self,
         mock_tool_class: Mock,
@@ -107,7 +107,7 @@ class TestPostgreSQLBackupCLI:
         # Verify backup creation was called with suffix
         mock_tool.create_backup.assert_called_once_with("pre_migration")
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_create_backup_no_validate(
         self,
         mock_tool_class: Mock,
@@ -141,7 +141,7 @@ class TestPostgreSQLBackupCLI:
         settings = mock_tool_class.call_args[0][0]
         assert settings.validate_integrity is False
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_create_backup_different_format(
         self,
         mock_tool_class: Mock,
@@ -176,7 +176,7 @@ class TestPostgreSQLBackupCLI:
         settings = mock_tool_class.call_args[0][0]
         assert settings.backup_format == "plain"
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_create_backup_failure(
         self,
         mock_tool_class: Mock,
@@ -199,7 +199,7 @@ class TestPostgreSQLBackupCLI:
         assert result.exit_code == 1
         assert "Backup failed: Backup failed" in result.output
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_list_backups(
         self,
         mock_tool_class: Mock,
@@ -228,7 +228,7 @@ class TestPostgreSQLBackupCLI:
         assert "2024-01-01 12:00:00" in result.output
         assert "1024" in result.output
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_list_backups_empty(
         self,
         mock_tool_class: Mock,
@@ -251,7 +251,7 @@ class TestPostgreSQLBackupCLI:
         assert result.exit_code == 0
         assert "No backups found" in result.output
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_restore_backup(
         self,
         mock_tool_class: Mock,
@@ -278,7 +278,7 @@ class TestPostgreSQLBackupCLI:
         # Verify restore was called
         mock_tool.restore_from_backup.assert_called_once_with(backup_path, None)
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_restore_backup_to_different_database(
         self,
         mock_tool_class: Mock,
@@ -315,7 +315,7 @@ class TestPostgreSQLBackupCLI:
             backup_path, "different_db"
         )
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_restore_backup_failure(
         self,
         mock_tool_class: Mock,
@@ -354,7 +354,7 @@ class TestPostgreSQLBackupCLI:
         assert result.exit_code == 1
         assert "Backup file does not exist" in result.output
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_validate_backup(
         self,
         mock_tool_class: Mock,
@@ -382,7 +382,7 @@ class TestPostgreSQLBackupCLI:
         # Verify validation was called
         mock_tool.validate_backup_integrity.assert_called_once_with(backup_path)
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_validate_backup_invalid(
         self,
         mock_tool_class: Mock,
@@ -407,7 +407,7 @@ class TestPostgreSQLBackupCLI:
         assert result.exit_code == 1
         assert "Backup is invalid" in result.output
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_delete_backup(
         self,
         mock_tool_class: Mock,
@@ -441,7 +441,7 @@ class TestPostgreSQLBackupCLI:
         # Verify deletion was called
         mock_tool.delete_backup.assert_called_once_with(backup_path)
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_delete_backup_failure(
         self,
         mock_tool_class: Mock,
@@ -490,7 +490,7 @@ class TestPostgreSQLBackupCLI:
         assert result.exit_code != 0
         assert "Invalid value for '--format'" in result.output
 
-    @patch("madsci.resource_manager.backup_tools.cli.PostgreSQLBackupTool")
+    @patch("madsci.common.backup_tools.postgres_cli.PostgreSQLBackupTool")
     def test_cli_with_configuration_options(
         self,
         mock_tool_class: Mock,

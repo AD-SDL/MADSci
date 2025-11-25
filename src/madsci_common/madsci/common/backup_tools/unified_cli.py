@@ -20,18 +20,10 @@ try:
 except ImportError:
     BackupRegistry = None  # type: ignore[assignment, misc]
 
-from .mongodb_backup import MongoDBBackupSettings, MongoDBBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
 
-# Import PostgreSQL tools from resource_manager package
-try:
-    from madsci.resource_manager.backup_tools.postgres_backup import (
-        PostgreSQLBackupSettings,
-        PostgreSQLBackupTool,
-    )
-except ImportError:
-    # Fallback for testing or when resource_manager not installed
-    PostgreSQLBackupSettings = None  # type: ignore[assignment, misc]
-    PostgreSQLBackupTool = None  # type: ignore[assignment, misc]
+from .mongodb_backup import MongoDBBackupSettings, MongoDBBackupTool
+from .postgres_backup import PostgreSQLBackupTool
 
 
 def detect_database_type(db_url: str) -> Literal["postgresql", "mongodb"]:
