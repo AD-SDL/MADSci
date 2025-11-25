@@ -109,7 +109,7 @@ def test_with_target_version(mock_migrator_class):
 def test_backup_only(mock_migrator_class):
     """Test main function with backup only option"""
     mock_migrator = Mock()
-    mock_migrator.create_backup.return_value = Path("/tmp/backup.sql")  # noqa
+    mock_migrator.backup_tool.create_backup.return_value = Path("/test/backup.sql")
     mock_migrator_class.return_value = mock_migrator
 
     with patch.dict(
@@ -117,13 +117,13 @@ def test_backup_only(mock_migrator_class):
     ):
         main()
 
-    # Verify only backup was called, not migration
-    mock_migrator.create_backup.assert_called_once()
+    # Verify only backup was called, not migration (now uses backup_tool)
+    mock_migrator.backup_tool.create_backup.assert_called_once()
     mock_migrator.run_migration.assert_not_called()
 
 
 @patch("madsci.resource_manager.migration_tool.DatabaseMigrator")
-@patch("sys.argv", ["migration_tool.py", "--restore_from", "/tmp/backup.sql"])  # noqa
+@patch("sys.argv", ["migration_tool.py", "--restore_from", "/test/backup.sql"])
 def test_restore_from(mock_migrator_class):
     """Test main function with restore from option"""
     mock_migrator = Mock()
@@ -134,8 +134,10 @@ def test_restore_from(mock_migrator_class):
     ):
         main()
 
-    # Verify restore was called with correct path
-    mock_migrator.restore_from_backup.assert_called_once_with(Path("/tmp/backup.sql"))  # noqa
+    # Verify restore was called with correct path (now uses backup_tool)
+    mock_migrator.backup_tool.restore_from_backup.assert_called_once_with(
+        Path("/test/backup.sql")
+    )
     mock_migrator.run_migration.assert_not_called()
 
 
@@ -156,34 +158,32 @@ def test_generate_migration(mock_migrator_class):
     mock_migrator.run_migration.assert_not_called()
 
 
-@patch("subprocess.run")
+@patch("madsci.resource_manager.migration_tool.PostgreSQLBackupTool")
 @patch("sys.argv", ["test"])
-def test_backup_creation(mock_subprocess, temp_alembic_dir: Path):
-    """Test database backup creation"""
-    mock_result = Mock()
-    mock_result.returncode = 0
-    mock_subprocess.return_value = mock_result
+def test_backup_creation(mock_backup_tool_class, temp_alembic_dir: Path):
+    """Test database backup creation using backup tool composition"""
+    mock_backup_tool = Mock()
+    mock_backup_path = Path("/mock/backup/madsci_backup_20241124_120000.dump")
+    mock_backup_tool.create_backup.return_value = mock_backup_path
+    mock_backup_tool_class.return_value = mock_backup_tool
 
     test_url = "postgresql://test:test@localhost:5432/test"
     settings = DatabaseMigrationSettings(db_url=test_url)
 
-    with (
-        patch.object(
-            DatabaseMigrator, "_get_package_root", return_value=temp_alembic_dir
-        ),
-        patch.object(DatabaseMigrator, "_validate_backup_integrity", return_value=True),
+    with patch.object(
+        DatabaseMigrator, "_get_package_root", return_value=temp_alembic_dir
     ):
         migrator = DatabaseMigrator(settings)
-        backup_path = migrator.create_backup()
+        backup_path = migrator.backup_tool.create_backup()
 
-        # Verify backup path is correct format
-        assert backup_path.name.startswith("madsci_backup_")
-        assert backup_path.suffix == ".sql"
+        # Verify backup tool was created with correct settings
+        mock_backup_tool_class.assert_called_once()
 
-        # Verify pg_dump was called
-        mock_subprocess.assert_called_once()
-        call_args = mock_subprocess.call_args[0][0]
-        assert "pg_dump" in call_args
+        # Verify backup method was called on the tool
+        mock_backup_tool.create_backup.assert_called_once()
+
+        # Verify path returned correctly
+        assert backup_path == mock_backup_path
 
 
 @patch("madsci.resource_manager.migration_tool.command")

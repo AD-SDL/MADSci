@@ -189,7 +189,7 @@ def test_experiment_backup_only_command(mock_migrator_class):
     """Test backup only command for experiments database"""
     mock_migrator = Mock()
     backup_dir = Path(tempfile.gettempdir()) / "madsci_experiments_backup"
-    mock_migrator.create_backup.return_value = backup_dir
+    mock_migrator.backup_tool.create_backup.return_value = backup_dir
     mock_migrator_class.return_value = mock_migrator
 
     with patch.dict(os.environ, {"MONGODB_URL": "mongodb://localhost:27017"}):
@@ -210,7 +210,7 @@ def test_experiment_backup_only_command(mock_migrator_class):
             os.chdir(original_cwd)
 
     # Verify only backup was called
-    mock_migrator.create_backup.assert_called_once()
+    mock_migrator.backup_tool.create_backup.assert_called_once()
     mock_migrator.run_migration.assert_not_called()
 
 
@@ -232,21 +232,19 @@ def test_experiment_backup_creation(mock_subprocess):
         )
         migrator = MongoDBMigrator(settings)
 
-        # Mock the validation methods to bypass filesystem checks
-        with (
-            patch.object(migrator, "_validate_backup_integrity", return_value=True),
-        ):
-            backup_path = migrator.create_backup()
+        # Mock the post-backup processing to bypass filesystem checks
+        with patch.object(migrator.backup_tool, "_post_backup_processing"):
+            backup_path = migrator.backup_tool.create_backup()
 
-            # Verify backup path format
-            assert "madsci_experiments_backup_" in backup_path.name
+        # Verify backup path format
+        assert "madsci_experiments_backup_" in backup_path.name
 
-            # Verify mongodump was called with experiments database
-            mock_subprocess.assert_called_once()
-            call_args = mock_subprocess.call_args[0][0]
-            assert "mongodump" in call_args
-            assert "--db" in call_args
-            assert "madsci_experiments" in call_args
+        # Verify mongodump was called with experiments database
+        mock_subprocess.assert_called_once()
+        call_args = mock_subprocess.call_args[0][0]
+        assert "mongodump" in call_args
+        assert "--db" in call_args
+        assert "madsci_experiments" in call_args
     finally:
         schema_file.unlink()
 
@@ -391,7 +389,7 @@ def test_experiment_restore_command(mock_migrator_class):
             os.chdir(original_cwd)
 
     # Verify restore was called with correct path
-    mock_migrator.restore_from_backup.assert_called_once_with(
+    mock_migrator.backup_tool.restore_from_backup.assert_called_once_with(
         Path("experiments_backup")
     )
     mock_migrator.run_migration.assert_not_called()
