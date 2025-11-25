@@ -325,3 +325,63 @@ class CustomManager(AbstractManagerBase[Settings, Definition]):
     ENABLE_ROOT_DEFINITION_ENDPOINT = False  # Disable root endpoint
     # Allows custom root endpoint implementation or static file serving for UIs
 ```
+
+### Database Backup Tools
+
+MADSci provides standalone backup tools for MongoDB databases that can be used independently or integrated with migration workflows:
+
+```python
+from pathlib import Path
+from pydantic import AnyUrl
+from madsci.common.backup_tools import (
+    MongoDBBackupTool,
+    MongoDBBackupSettings
+)
+
+# Configure backup settings
+settings = MongoDBBackupSettings(
+    mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+    database="events",
+    backup_dir=Path("./backups"),
+    max_backups=10,  # Keep last 10 backups
+    validate_integrity=True
+)
+
+# Create backup tool
+backup_tool = MongoDBBackupTool(settings)
+
+# Create a backup
+backup_path = backup_tool.create_backup("before_migration")
+print(f"Backup created: {backup_path}")
+
+# List available backups
+backups = backup_tool.list_available_backups()
+
+# Restore from backup
+backup_tool.restore_from_backup(backup_path)
+
+# Validate backup integrity
+is_valid = backup_tool.validate_backup_integrity(backup_path)
+```
+
+**Using the unified CLI:**
+```bash
+# Create MongoDB backup (auto-detects database type)
+madsci-backup create --db-url mongodb://localhost:27017/events
+
+# Restore from backup
+madsci-backup restore --backup /path/to/backup --db-url mongodb://localhost:27017/events
+
+# Validate backup integrity
+madsci-backup validate --backup /path/to/backup --db-url mongodb://localhost:27017/events
+```
+
+**Features:**
+- Standalone backup/restore operations
+- Automatic backup rotation and retention
+- SHA256 integrity validation
+- Support for specific collection filtering
+- Integration with MADSci migration tools
+- Unified CLI for both PostgreSQL and MongoDB
+
+For comprehensive documentation including examples, best practices, and advanced usage, see [backup_tools/README.md](./madsci/common/backup_tools/README.md).

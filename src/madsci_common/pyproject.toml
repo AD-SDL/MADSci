@@ -30,9 +30,13 @@ dependencies = [
     "pydantic-settings-export>=1.0.2",
     "regex>=2025.7.34",
     "classy-fastapi>=0.7.0",
-    "httpx>=0.28.1"
+    "httpx>=0.28.1",
+    "click>=8.1.0"
 ]
 
+[project.scripts]
+madsci-backup = "madsci.common.backup_tools.unified_cli:main"
+madsci-mongodb-backup = "madsci.common.backup_tools.cli:main_mongodb_backup"
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"
