@@ -1,5 +1,5 @@
 node_name: example_app
-node_id: 01KAEKF82701HZJCGXQQESA81G
+node_id: 01KB0X8HCE8H9Y9H5FQKY1TKZ7
 node_description: null
 node_type: device
 module_name: example_app
@@ -33,6 +33,7 @@ config:
   node_url: http://localhost:6000/
   uvicorn_kwargs: {}
   server_mode: false
+  lab_server_url: http://localhost:8000
   run_args: []
   run_kwargs: {}
 config_schema:
@@ -102,6 +103,15 @@ config_schema:
       default: false
       title: Server Mode
       type: boolean
+    lab_server_url:
+      anyOf:
+      - type: string
+      - format: uri
+        minLength: 1
+        type: string
+      - type: 'null'
+      default: null
+      title: Lab Server Url
     run_args:
       items: {}
       title: Run Args

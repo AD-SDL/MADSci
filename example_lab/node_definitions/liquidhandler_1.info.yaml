@@ -151,7 +151,7 @@ config:
   node_url: http://localhost:2000/
   uvicorn_kwargs: {}
   device_number: 0
-  wait_time: 2.0
+  wait_time: 20.0
 config_schema:
   description: "Configuration for the liquid handler node module.\n\nExtends RestNodeConfig\
     \ to add liquid handler-specific settings.\nThese settings can be overridden via\
@@ -219,7 +219,7 @@ config_schema:
       title: Device Number
       type: integer
     wait_time:
-      default: 2.0
+      default: 20.0
       title: Wait Time
       type: number
   title: LiquidHandlerConfig

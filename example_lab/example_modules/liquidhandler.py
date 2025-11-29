@@ -51,7 +51,7 @@ class LiquidHandlerConfig(RestNodeConfig):
     device_number: int = 0
     """The device number of the liquid handler (for multi-device setups)."""
 
-    wait_time: float = 2.0
+    wait_time: float = 20.0
     """Time to wait while running an action, in seconds (simulates real hardware timing)."""
 
 
@@ -105,11 +105,13 @@ class LiquidHandlerInterface:
             for _ in range(10):
                 if self.sent_cancel.is_set():
                     self.received_cancel.set()
+                    self.logger.log("Cancel acknowledged")
                     return
                 time.sleep(0.1)
         finally:
             if self.sent_cancel.is_set() and not self.received_cancel.is_set():
                 self.received_cancel.set()
+                self.logger.log("Cancel acknowledged")
 
 
 class LiquidHandlerNode(RestNode):
@@ -309,7 +311,16 @@ class LiquidHandlerNode(RestNode):
             Response: "aspirate 100 ul"
         """
         self.liquid_handler.run_command(command)
-        time.sleep(self.config.wait_time)
+        timeout = self.config.wait_time
+        interval = 0.1
+        elapsed = 0.0
+        while elapsed < timeout:
+            if self.liquid_handler.sent_cancel.is_set():
+                self.liquid_handler.received_cancel.set()
+                self.logger.log("Action cancelled")
+                return "cancelled"
+            time.sleep(interval)
+            elapsed += interval
         return command
 
     @action
@@ -394,6 +405,7 @@ class LiquidHandlerNode(RestNode):
         return AdminCommandResponse(data=[0, 0, 0, 0])
     
     def cancel(self) -> AdminCommandResponse:
+        self.logger.log(f"Cancel initiated.")
         try:
             self.liquid_handler.send_cancel()
             response = self.liquid_handler.wait_for()
