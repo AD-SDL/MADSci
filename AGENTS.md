@@ -126,6 +126,109 @@ The `AbstractManagerBase` class provides:
 - When generating new IDs, use `new_ulid_str()` from `madsci.common.utils`
 - Example usage: `resource_id = new_ulid_str()`
 
+### Database Patterns
+
+MADSci uses two database systems optimized for different use cases:
+
+#### Database Types
+- **PostgreSQL**: Used by Resource Manager for relational data with strict schemas
+- **MongoDB**: Used by Event, Data, Experiment, and Workcell Managers for flexible document storage
+
+#### Backup and Restore
+
+All backup tools are centralized in `madsci_common` for maximum reusability:
+
+```python
+# PostgreSQL backups
+from madsci.common.backup_tools import PostgreSQLBackupTool
+from madsci.common.types.backup_types import PostgreSQLBackupSettings
+
+settings = PostgreSQLBackupSettings(
+    db_url="postgresql://localhost/resources",
+    backup_dir=Path("./backups"),
+    max_backups=10,
+    validate_integrity=True
+)
+backup_tool = PostgreSQLBackupTool(settings)
+backup_path = backup_tool.create_backup("pre_migration")
+
+# MongoDB backups
+from madsci.common.backup_tools import MongoDBBackupTool
+from madsci.common.types.backup_types import MongoDBBackupSettings
+
+settings = MongoDBBackupSettings(
+    mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+    database="events",
+    backup_dir=Path("./backups"),
+    max_backups=10
+)
+backup_tool = MongoDBBackupTool(settings)
+backup_path = backup_tool.create_backup("hourly")
+```
+
+**CLI Usage:**
+```bash
+# Unified CLI (auto-detects database type)
+madsci-backup create --db-url postgresql://localhost/resources
+madsci-backup create --db-url mongodb://localhost:27017/events
+
+# Database-specific CLIs
+madsci-postgres-backup create --db-url postgresql://localhost/resources
+madsci-mongodb-backup create --mongo-url mongodb://localhost:27017 --database events
+```
+
+#### Database Connections
+
+**PostgreSQL** (using SQLModel):
+```python
+from sqlmodel import Session, create_engine
+
+engine = create_engine(
+    db_url,
+    pool_size=20,        # Connection pool size
+    pool_pre_ping=True   # Verify connections before use
+)
+
+with Session(engine) as session:
+    # Perform operations
+    session.commit()
+```
+
+**MongoDB** (using pymongo):
+```python
+from pymongo import MongoClient
+
+with MongoClient(mongo_url) as client:
+    db = client[database_name]
+    collection = db[collection_name]
+    # Perform operations
+```
+
+#### Database Migrations
+
+**PostgreSQL migrations** (Resource Manager):
+- Uses Alembic for schema version management
+- Automatic backups before migrations
+- Auto-restore on migration failure
+```bash
+python -m madsci.resource_manager.migration_tool --db-url postgresql://localhost/resources
+```
+
+**MongoDB migrations** (per manager):
+- Handle index creation and schema validation
+- Manager-specific migration tools
+- Automatic pre-migration backups
+
+#### Best Practices
+
+1. **Always use ULID for IDs**: `resource_id = new_ulid_str()`
+2. **Backup before migrations**: Automatic with migration tools
+3. **Use connection pooling**: Configure appropriate pool sizes
+4. **Environment variables for config**: Never hardcode connection strings
+5. **Validate backups**: Use `validate_backup_integrity()` for critical backups
+6. **Test migrations first**: Always test in development before production
+
+
 ### Node Development
 Laboratory instruments implement the Node interface:
 1. Inherit from `AbstractNodeModule`

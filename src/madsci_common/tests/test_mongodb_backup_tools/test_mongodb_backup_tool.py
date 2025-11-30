@@ -77,29 +77,42 @@ class TestMongoDBBackupTool:
 
     def test_create_backup_all_collections_success(self, backup_tool, temp_backup_dir):
         """Test successful backup creation for all collections."""
+
+        def mock_mongodump(*args, **_kwargs):
+            """Mock mongodump by creating expected directory structure."""
+            # Extract backup path from mongodump command
+            cmd = args[0]
+            out_index = cmd.index("--out") + 1
+            backup_path = Path(cmd[out_index])
+            db_name = cmd[cmd.index("--db") + 1]
+
+            # Create the directory structure that mongodump would create
+            db_backup_path = backup_path / db_name
+            db_backup_path.mkdir(parents=True, exist_ok=True)
+
+            # Create a mock collection file
+            (db_backup_path / "collection1.bson").touch()
+            (db_backup_path / "collection1.metadata.json").touch()
+
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
+
         # Mock subprocess.run for mongodump
         with (
-            patch("subprocess.run") as mock_run,
+            patch("subprocess.run", side_effect=mock_mongodump) as mock_run,
             patch(
                 "madsci.common.backup_tools.mongodb_backup.datetime"
             ) as mock_datetime,
         ):
-            mock_run.return_value.returncode = 0
-            mock_run.return_value.stderr = ""
-
             # Mock datetime to get predictable backup path
             mock_now = datetime(2024, 1, 1, 12, 0, 0, 0)
             mock_datetime.now.return_value = mock_now
             mock_datetime.strftime = mock_now.strftime
 
-            # Expected backup path based on mocked timestamp
-            (temp_backup_dir / "test_events_backup_20240101_120000_000000")
-
             # Mock the backup tool's internal methods
             with (
-                patch.object(
-                    backup_tool, "_verify_backup_completion", return_value=True
-                ),
                 patch.object(
                     backup_tool,
                     "_generate_backup_checksum",
@@ -122,30 +135,51 @@ class TestMongoDBBackupTool:
                 assert result_path.parent == temp_backup_dir
 
     def test_create_backup_specific_collections(
-        self, mongodb_backup_settings, temp_backup_dir
+        self,
+        mongodb_backup_settings,
+        temp_backup_dir,  # noqa: ARG002
     ):
         """Test backup creation for specific collections only."""
         # Update settings to specify collections
         mongodb_backup_settings.collections = ["collection1"]
 
-        with (
-            patch("madsci.common.backup_tools.mongodb_backup.MongoClient"),
-            patch("subprocess.run") as mock_run,
-        ):
-            mock_run.return_value.returncode = 0
-            mock_run.return_value.stderr = ""
+        def mock_mongodump(*args, **_kwargs):
+            """Mock mongodump by creating expected directory structure."""
+            # Extract backup path from mongodump command
+            cmd = args[0]
+            out_index = cmd.index("--out") + 1
+            backup_path = Path(cmd[out_index])
+            db_name = cmd[cmd.index("--db") + 1]
 
+            # Create the directory structure that mongodump would create
+            db_backup_path = backup_path / db_name
+            db_backup_path.mkdir(parents=True, exist_ok=True)
+
+            # Create a mock collection file for the specified collection
+            (db_backup_path / "collection1.bson").touch()
+            (db_backup_path / "collection1.metadata.json").touch()
+
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
+
+        # Create a mock MongoDB client
+        mock_client = Mock()
+        mock_database = Mock()
+        mock_client.__getitem__ = Mock(return_value=mock_database)
+        mock_database.list_collection_names.return_value = ["collection1"]
+
+        with (
+            patch(
+                "madsci.common.backup_tools.mongodb_backup.MongoClient",
+                return_value=mock_client,
+            ),
+            patch("subprocess.run", side_effect=mock_mongodump) as mock_run,
+        ):
             tool = MongoDBBackupTool(mongodb_backup_settings)
 
-            # Create mock backup structure
-            backup_path = temp_backup_dir / "test_backup"
-            backup_path.mkdir()
-            db_backup_path = backup_path / "test_events"
-            db_backup_path.mkdir()
-            (db_backup_path / "collection1.bson").touch()
-
             with (
-                patch.object(tool, "_verify_backup_completion", return_value=True),
                 patch.object(
                     tool, "_generate_backup_checksum", return_value="test_checksum"
                 ),
@@ -160,36 +194,43 @@ class TestMongoDBBackupTool:
                 assert "--collection" in args
                 assert "collection1" in args
 
-    def test_create_backup_with_custom_name(self, backup_tool, temp_backup_dir):
+    def test_create_backup_with_custom_name(self, backup_tool, temp_backup_dir):  # noqa: ARG002
         """Test backup creation with custom name suffix."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 0
-            mock_run.return_value.stderr = ""
 
-            backup_path = (
-                temp_backup_dir
-                / "test_events_backup_20240101_120000_000000_pre_migration"
-            )
-            backup_path.mkdir(parents=True)
-            db_backup_path = backup_path / "test_events"
-            db_backup_path.mkdir()
+        def mock_mongodump(*args, **_kwargs):
+            """Mock mongodump by creating expected directory structure."""
+            # Extract backup path from mongodump command
+            cmd = args[0]
+            out_index = cmd.index("--out") + 1
+            backup_path = Path(cmd[out_index])
+            db_name = cmd[cmd.index("--db") + 1]
+
+            # Create the directory structure that mongodump would create
+            db_backup_path = backup_path / db_name
+            db_backup_path.mkdir(parents=True, exist_ok=True)
+
+            # Create a mock collection file
             (db_backup_path / "collection1.bson").touch()
+            (db_backup_path / "collection1.metadata.json").touch()
 
-            with (
-                patch.object(
-                    backup_tool, "_verify_backup_completion", return_value=True
-                ),
-                patch.object(
-                    backup_tool,
-                    "_generate_backup_checksum",
-                    return_value="test_checksum",
-                ),
-                patch.object(backup_tool, "_test_backup_restore", return_value=True),
-                patch.object(backup_tool, "_create_backup_metadata"),
-            ):
-                result_path = backup_tool.create_backup("pre_migration")
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
 
-                assert "pre_migration" in result_path.name
+        with (
+            patch("subprocess.run", side_effect=mock_mongodump),
+            patch.object(
+                backup_tool,
+                "_generate_backup_checksum",
+                return_value="test_checksum",
+            ),
+            patch.object(backup_tool, "_test_backup_restore", return_value=True),
+            patch.object(backup_tool, "_create_backup_metadata"),
+        ):
+            result_path = backup_tool.create_backup("pre_migration")
+
+            assert "pre_migration" in result_path.name
 
     def test_backup_integrity_validation_success(self, backup_tool, temp_backup_dir):
         """Test backup integrity validation passes for valid backup."""
@@ -368,38 +409,46 @@ class TestMongoDBBackupTool:
         assert backup_tool.settings.database == "test_events"
         assert backup_tool.backup_dir.exists()
 
-    def test_backup_with_indexes(self, backup_tool, temp_backup_dir):
+    def test_backup_with_indexes(self, backup_tool, temp_backup_dir):  # noqa: ARG002
         """Test that indexes are included in backup."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value.returncode = 0
-            mock_run.return_value.stderr = ""
 
-            # Create backup structure with metadata files (which contain index info)
-            backup_path = temp_backup_dir / "test_backup"
-            backup_path.mkdir()
-            db_backup_path = backup_path / "test_events"
-            db_backup_path.mkdir()
+        def mock_mongodump(*args, **_kwargs):
+            """Mock mongodump by creating expected directory structure."""
+            # Extract backup path from mongodump command
+            cmd = args[0]
+            out_index = cmd.index("--out") + 1
+            backup_path = Path(cmd[out_index])
+            db_name = cmd[cmd.index("--db") + 1]
+
+            # Create the directory structure that mongodump would create
+            db_backup_path = backup_path / db_name
+            db_backup_path.mkdir(parents=True, exist_ok=True)
+
+            # Create backup with metadata files (which contain index info)
             (db_backup_path / "collection1.bson").touch()
             (db_backup_path / "collection1.metadata.json").write_text('{"indexes":[]}')
 
-            with (
-                patch.object(
-                    backup_tool, "_verify_backup_completion", return_value=True
-                ),
-                patch.object(
-                    backup_tool,
-                    "_generate_backup_checksum",
-                    return_value="test_checksum",
-                ),
-                patch.object(backup_tool, "_test_backup_restore", return_value=True),
-                patch.object(backup_tool, "_create_backup_metadata"),
-            ):
-                backup_tool.create_backup()
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
 
-                # Verify mongodump was called (indexes are included by default)
-                mock_run.assert_called_once()
-                args = mock_run.call_args[0][0]
-                assert "mongodump" in args
+        with (
+            patch("subprocess.run", side_effect=mock_mongodump) as mock_run,
+            patch.object(
+                backup_tool,
+                "_generate_backup_checksum",
+                return_value="test_checksum",
+            ),
+            patch.object(backup_tool, "_test_backup_restore", return_value=True),
+            patch.object(backup_tool, "_create_backup_metadata"),
+        ):
+            backup_tool.create_backup()
+
+            # Verify mongodump was called (indexes are included by default)
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "mongodump" in args
 
     def test_backup_validation_with_bson_corruption(self, backup_tool, temp_backup_dir):
         """Test backup validation detects BSON corruption."""

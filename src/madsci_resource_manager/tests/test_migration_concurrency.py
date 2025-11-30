@@ -239,6 +239,27 @@ class TestConcurrentBackupHandling:
             schema_file=self.temp_schema_file,
         )
 
+        def mock_mongodump(*args, **_kwargs):
+            """Mock mongodump by creating expected directory structure."""
+            # Extract backup path from mongodump command
+            cmd = args[0]
+            out_index = cmd.index("--out") + 1
+            backup_path = Path(cmd[out_index])
+            db_name = cmd[cmd.index("--db") + 1]
+
+            # Create the directory structure that mongodump would create
+            db_backup_path = backup_path / db_name
+            db_backup_path.mkdir(parents=True, exist_ok=True)
+
+            # Create a mock collection file
+            (db_backup_path / "test_collection.bson").touch()
+            (db_backup_path / "test_collection.metadata.json").touch()
+
+            mock_result = mock.Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
+
         # Mock the MongoClient to avoid actual connection
         with (
             mock.patch("pymongo.MongoClient"),
@@ -251,10 +272,9 @@ class TestConcurrentBackupHandling:
 
             def create_backup(migrator):
                 with (
-                    mock.patch("subprocess.run") as mock_run,
+                    mock.patch("subprocess.run", side_effect=mock_mongodump),
                     mock.patch.object(migrator.backup_tool, "_post_backup_processing"),
                 ):
-                    mock_run.return_value.returncode = 0
                     path = migrator.backup_tool.create_backup()
                     backup_paths.append(path)
 
@@ -282,6 +302,27 @@ class TestConcurrentBackupHandling:
             schema_file=self.temp_schema_file,
         )
 
+        def mock_mongodump(*args, **_kwargs):
+            """Mock mongodump by creating expected directory structure."""
+            # Extract backup path from mongodump command
+            cmd = args[0]
+            out_index = cmd.index("--out") + 1
+            backup_path = Path(cmd[out_index])
+            db_name = cmd[cmd.index("--db") + 1]
+
+            # Create the directory structure that mongodump would create
+            db_backup_path = backup_path / db_name
+            db_backup_path.mkdir(parents=True, exist_ok=True)
+
+            # Create a mock collection file
+            (db_backup_path / "test_collection.bson").touch()
+            (db_backup_path / "test_collection.metadata.json").touch()
+
+            mock_result = mock.Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
+
         with (
             mock.patch("pymongo.MongoClient"),
             mock.patch("madsci.common.mongodb_version_checker.MongoDBVersionChecker"),
@@ -290,11 +331,9 @@ class TestConcurrentBackupHandling:
 
             # Test backup creation with proper mocking
             with (
-                mock.patch("subprocess.run") as mock_run,
+                mock.patch("subprocess.run", side_effect=mock_mongodump),
                 mock.patch.object(migrator.backup_tool, "_post_backup_processing"),
             ):
-                mock_run.return_value.returncode = 0
-
                 # Should create backup successfully
                 backup_path = migrator.backup_tool.create_backup()
                 assert backup_path is not None

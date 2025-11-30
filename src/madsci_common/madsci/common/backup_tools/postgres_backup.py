@@ -225,6 +225,11 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         metadata_path = self.validator.save_metadata(backup_path, metadata)
         self.logger.info(f"Created backup metadata: {metadata_path}")
 
+        # Save checksum to separate file (required for validation)
+        checksum = metadata["checksum"]
+        checksum_path = self.validator.save_checksum(backup_path, checksum)
+        self.logger.info(f"Created backup checksum: {checksum_path}")
+
     def _get_database_version(self) -> Optional[str]:
         """Get PostgreSQL database version."""
         try:
@@ -314,15 +319,15 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                 # Create the backup
                 self._execute_pg_dump(backup_path)
 
+                # Create backup metadata (must be done before validation)
+                self._create_backup_metadata(backup_path)
+
                 # Validate backup integrity if requested
                 if (
                     self.settings.validate_integrity
                     and not self.validate_backup_integrity(backup_path)
                 ):
                     raise RuntimeError("Backup integrity validation failed")
-
-                # Create backup metadata
-                self._create_backup_metadata(backup_path)
 
                 # Rotate old backups if limit is set
                 if self.settings.max_backups > 0:

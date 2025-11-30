@@ -215,9 +215,29 @@ def test_workcell_backup_only_command(mock_migrator_class):
 @patch("subprocess.run")
 def test_workcell_backup_creation(mock_subprocess):
     """Test workcells database backup creation using mongodump"""
-    mock_result = Mock()
-    mock_result.returncode = 0
-    mock_subprocess.return_value = mock_result
+
+    def mock_mongodump(*args, **_kwargs):
+        """Mock mongodump by creating expected directory structure."""
+        # Extract backup path from mongodump command
+        cmd = args[0]
+        out_index = cmd.index("--out") + 1
+        backup_path = Path(cmd[out_index])
+        db_name = cmd[cmd.index("--db") + 1]
+
+        # Create the directory structure that mongodump would create
+        db_backup_path = backup_path / db_name
+        db_backup_path.mkdir(parents=True, exist_ok=True)
+
+        # Create a mock collection file
+        (db_backup_path / "workcells.bson").touch()
+        (db_backup_path / "workcells.metadata.json").touch()
+
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stderr = ""
+        return mock_result
+
+    mock_subprocess.side_effect = mock_mongodump
 
     schema_file = Path("workcell_schema.json")
     schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))

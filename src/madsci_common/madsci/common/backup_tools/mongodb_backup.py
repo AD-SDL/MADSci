@@ -65,18 +65,25 @@ class MongoDBBackupTool(AbstractBackupTool):
         backup_path = self._generate_backup_path(name_suffix)
         mongodump_cmd = self._build_mongodump_command(backup_path)
 
+        # Execute mongodump command
         try:
             self._execute_backup_command(mongodump_cmd, backup_path)
-            self._post_backup_processing(backup_path)
-            return backup_path
-
+        except FileNotFoundError as fe:
+            raise RuntimeError(
+                "mongodump command not found. Please ensure MongoDB tools are installed."
+            ) from fe
         except subprocess.CalledProcessError as e:
             self._cleanup_failed_backup(backup_path, e)
             raise RuntimeError(f"Database backup failed: {e}") from e
-        except FileNotFoundError as fe:
-            raise RuntimeError(
-                f"mongodump command not found. Please ensure MongoDB tools are installed. {fe}"
-            ) from fe
+
+        # Post-process backup (metadata, validation, rotation)
+        try:
+            self._post_backup_processing(backup_path)
+        except Exception as e:
+            self._cleanup_failed_backup(backup_path, e)
+            raise RuntimeError(f"Backup post-processing failed: {e}") from e
+
+        return backup_path
 
     def _generate_backup_path(self, name_suffix: Optional[str]) -> Path:
         """Generate backup path with timestamp and optional suffix."""
@@ -117,6 +124,9 @@ class MongoDBBackupTool(AbstractBackupTool):
         self, mongodump_cmd: List[str], backup_path: Path
     ) -> None:
         """Execute the mongodump command and validate success."""
+        # Ensure backup directory exists (mongodump requires parent directory to exist)
+        backup_path.mkdir(parents=True, exist_ok=True)
+
         self.logger.info(f"Creating database backup: {backup_path}")
         result = subprocess.run(  # noqa: S603
             mongodump_cmd, capture_output=True, text=True, check=True
@@ -124,17 +134,47 @@ class MongoDBBackupTool(AbstractBackupTool):
 
         if result.returncode == 0:
             self.logger.info(f"Database backup completed successfully: {backup_path}")
+
+            # Verify backup directory was created
+            if not backup_path.exists():
+                raise RuntimeError(
+                    f"mongodump reported success but backup directory was not created: {backup_path}. "
+                    f"This may indicate a connection issue or empty database."
+                )
+
+            # Verify database subdirectory exists
+            db_backup_path = backup_path / self.settings.database
+            if not db_backup_path.exists():
+                # Check if database is empty
+                try:
+                    collections = list(self.database.list_collection_names())
+                    if not collections:
+                        raise RuntimeError(
+                            f"Cannot backup database '{self.settings.database}': database is empty (no collections). "
+                            f"MongoDB does not create backup files for empty databases."
+                        )
+                except RuntimeError:
+                    # Re-raise our own RuntimeError about empty database
+                    raise
+                except Exception as e:
+                    # Log connection errors but continue with generic message
+                    self.logger.warning(f"Could not check if database is empty: {e}")
+
+                raise RuntimeError(
+                    f"mongodump created backup directory but database subdirectory is missing: {db_backup_path}. "
+                    f"Check that database '{self.settings.database}' exists and is accessible."
+                )
         else:
             raise RuntimeError(f"mongodump failed: {result.stderr}")
 
     def _post_backup_processing(self, backup_path: Path) -> None:
         """Handle post-backup validation, metadata creation, and rotation."""
+        # Create metadata first (required for validation)
+        self._create_backup_metadata(backup_path)
+
         # Validate backup integrity if enabled
         if self.settings.validate_integrity:
             self._validate_backup_integrity(backup_path)
-
-        # Create metadata
-        self._create_backup_metadata(backup_path)
 
         # Rotate old backups
         if self.settings.max_backups > 0:
@@ -445,13 +485,15 @@ class MongoDBBackupTool(AbstractBackupTool):
 
     def _create_backup_metadata(self, backup_path: Path) -> None:
         """Create metadata file for MongoDB backup."""
+        checksum = self._generate_backup_checksum_inline(backup_path)
+
         metadata = {
             "timestamp": datetime.now().isoformat(),
             "database_version": None,  # MongoDB doesn't have schema versions like PostgreSQL
             "backup_size": sum(
                 f.stat().st_size for f in backup_path.rglob("*") if f.is_file()
             ),
-            "checksum": self._generate_backup_checksum_inline(backup_path),
+            "checksum": checksum,
             "database_name": self.settings.database,
             "collections_count": len(
                 list((backup_path / self.settings.database).glob("*.bson"))
@@ -462,6 +504,11 @@ class MongoDBBackupTool(AbstractBackupTool):
         metadata_file.write_text(json.dumps(metadata, indent=2))
 
         self.logger.info(f"Created backup metadata: {metadata_file}")
+
+        # Save checksum to separate file (required for validation)
+        checksum_file = backup_path / "backup.checksum"
+        checksum_file.write_text(checksum)
+        self.logger.info(f"Created backup checksum: {checksum_file}")
 
     def _verify_restore_success(self, backup_path: Path) -> bool:
         """Verify that MongoDB restore operation was successful."""
