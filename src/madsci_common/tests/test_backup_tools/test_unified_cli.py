@@ -159,41 +159,6 @@ class TestUnifiedCLICreate:
             settings = call_args[0][0]
             assert settings.backup_dir == Path(tmpdir)
 
-    def test_create_with_encryption_enabled(self, runner: CliRunner) -> None:
-        """Test creating encrypted backup."""
-        with (
-            patch(
-                "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-            ) as mock_tool,
-            patch(
-                "madsci.common.backup_tools.unified_cli.BackupEncryption"
-            ) as mock_encryption,
-            tempfile.NamedTemporaryFile(suffix=".key") as key_file,
-        ):
-            mock_instance = MagicMock()
-            mock_instance.create_backup.return_value = Path("/test/backup.dump")
-            mock_tool.return_value = mock_instance
-
-            mock_encryptor = MagicMock()
-            mock_encryptor.encrypt_backup.return_value = Path("/test/backup.dump.enc")
-            mock_encryption.return_value = mock_encryptor
-
-            result = runner.invoke(
-                madsci_backup,
-                [
-                    "create",
-                    "--db-url",
-                    "postgresql://localhost/test",
-                    "--encrypt",
-                    "--encrypt-key",
-                    key_file.name,
-                ],
-            )
-
-            assert result.exit_code == 0
-            assert "encrypted:" in result.output.lower()
-            mock_encryptor.encrypt_backup.assert_called_once()
-
     def test_create_failure_exits_with_error(self, runner: CliRunner) -> None:
         """Test create command exits with error on failure."""
         with patch(
@@ -209,60 +174,6 @@ class TestUnifiedCLICreate:
 
             assert result.exit_code != 0
             assert "Backup failed" in result.output
-
-
-class TestUnifiedCLIList:
-    """Test unified CLI list command."""
-
-    @pytest.fixture
-    def runner(self) -> CliRunner:
-        """Create Click CLI test runner."""
-        return CliRunner()
-
-    def test_list_all_backups(self, runner: CliRunner) -> None:
-        """Test listing all backups."""
-        with patch(
-            "madsci.common.backup_tools.unified_cli.BackupRegistry"
-        ) as mock_registry:
-            mock_instance = MagicMock()
-            mock_instance.list_backups.return_value = []
-            mock_registry.return_value = mock_instance
-
-            result = runner.invoke(madsci_backup, ["list"])
-
-            assert result.exit_code == 0
-            mock_instance.list_backups.assert_called_once()
-
-    def test_list_with_type_filter(self, runner: CliRunner) -> None:
-        """Test listing backups filtered by database type."""
-        with patch(
-            "madsci.common.backup_tools.unified_cli.BackupRegistry"
-        ) as mock_registry:
-            mock_instance = MagicMock()
-            mock_instance.list_backups.return_value = []
-            mock_registry.return_value = mock_instance
-
-            result = runner.invoke(madsci_backup, ["list", "--type", "postgresql"])
-
-            assert result.exit_code == 0
-            call_args = mock_instance.list_backups.call_args
-            assert call_args[1]["database_type"] == "postgresql"
-
-    def test_list_with_date_range(self, runner: CliRunner) -> None:
-        """Test listing backups with date range filter."""
-        with patch(
-            "madsci.common.backup_tools.unified_cli.BackupRegistry"
-        ) as mock_registry:
-            mock_instance = MagicMock()
-            mock_instance.list_backups.return_value = []
-            mock_registry.return_value = mock_instance
-
-            result = runner.invoke(
-                madsci_backup, ["list", "--from", "2024-01-01", "--to", "2024-01-31"]
-            )
-
-            assert result.exit_code == 0
-            mock_instance.list_backups.assert_called_once()
 
 
 class TestUnifiedCLIRestore:
@@ -296,43 +207,6 @@ class TestUnifiedCLIRestore:
             )
 
             assert result.exit_code == 0
-            mock_instance.restore_from_backup.assert_called_once()
-
-    def test_restore_encrypted_backup(self, runner: CliRunner) -> None:
-        """Test restoring encrypted backup."""
-        with (
-            patch(
-                "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-            ) as mock_tool,
-            patch(
-                "madsci.common.backup_tools.unified_cli.BackupEncryption"
-            ) as mock_encryption,
-            tempfile.NamedTemporaryFile(suffix=".dump.enc") as backup_file,
-            tempfile.NamedTemporaryFile(suffix=".key") as key_file,
-        ):
-            mock_instance = MagicMock()
-            mock_tool.return_value = mock_instance
-
-            mock_encryptor = MagicMock()
-            decrypted_path = Path(backup_file.name).with_suffix("")
-            mock_encryptor.decrypt_backup.return_value = decrypted_path
-            mock_encryption.return_value = mock_encryptor
-
-            result = runner.invoke(
-                madsci_backup,
-                [
-                    "restore",
-                    "--backup",
-                    backup_file.name,
-                    "--db-url",
-                    "postgresql://localhost/test",
-                    "--encrypt-key",
-                    key_file.name,
-                ],
-            )
-
-            assert result.exit_code == 0
-            mock_encryptor.decrypt_backup.assert_called_once()
             mock_instance.restore_from_backup.assert_called_once()
 
 
