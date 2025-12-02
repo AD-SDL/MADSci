@@ -124,8 +124,18 @@ def test_concurrent_requests(stress_test_client: TestClient) -> None:
     # Calculate statistics
     response_times = [r["response_time"] for r in results if r["success"]]
     if response_times:
-        sum(response_times) / len(response_times)
-        max(response_times)
+        avg_response_time = sum(response_times) / len(response_times)
+        max_response_time = max(response_times)
+
+        # Assert reasonable performance characteristics
+        # Average response time should be under 1 second for health checks
+        assert avg_response_time < 1.0, (
+            f"Average response time too high: {avg_response_time:.3f}s"
+        )
+        # Max response time should be under 2 seconds
+        assert max_response_time < 2.0, (
+            f"Max response time too high: {max_response_time:.3f}s"
+        )
 
 
 def test_sustained_load(stress_test_client: TestClient) -> None:
@@ -171,11 +181,25 @@ def test_burst_traffic(stress_test_client: TestClient) -> None:
 
         for future in as_completed(futures):
             results.append(future.result())
-    time.time() - start_time
+    total_duration = time.time() - start_time
 
     # Analyze results
-    sum(1 for r in results if r["success"])
-    sum(1 for r in results if r["rate_limited"])
+    successes = sum(1 for r in results if r["success"])
+    rate_limited_count = sum(1 for r in results if r["rate_limited"])
+
+    # Assert that burst was handled efficiently
+    # With 200 requests, at least some should succeed before rate limiting kicks in
+    assert successes > 0, "No requests succeeded during burst"
+
+    # Total duration should be reasonable (not excessively long)
+    assert total_duration < 10.0, (
+        f"Burst took too long to process: {total_duration:.2f}s"
+    )
+
+    # With proper rate limiting, we expect some requests to be limited
+    assert rate_limited_count > 0, (
+        "Expected some requests to be rate limited during burst"
+    )
 
     # With rate limiting, we expect some requests to be limited
     # but none should cause the server to crash
@@ -254,9 +278,29 @@ def test_extended_stress_test(stress_test_client: TestClient) -> None:
         iteration += 1
 
     # Analyze results
-    sum(1 for r in results if r["success"])
-    sum(1 for r in results if r["rate_limited"])
-    sum(1 for r in results if not r["success"] and not r["rate_limited"])
+    successes = sum(1 for r in results if r["success"])
+    rate_limited_count = sum(1 for r in results if r["rate_limited"])
+    errors = sum(1 for r in results if not r["success"] and not r["rate_limited"])
+
+    # Assert that the extended stress test was handled properly
+    assert successes > 0, "No requests succeeded during extended stress test"
+
+    # Error rate should be low (less than 5% excluding rate limiting)
+    total_requests = len(results)
+    error_rate = errors / total_requests if total_requests > 0 else 0
+    assert error_rate < 0.05, (
+        f"Error rate too high: {error_rate:.2%} ({errors}/{total_requests})"
+    )
+
+    # Most requests should either succeed or be properly rate limited
+    handled_requests = successes + rate_limited_count
+    assert handled_requests >= total_requests * 0.95, (
+        f"Too many unhandled requests: {total_requests - handled_requests} "
+        f"out of {total_requests}"
+    )
+
+    # Wait for rate limit window to expire before final health check
+    time.sleep(11)  # Rate limit window is 10 seconds + 1 for safety
 
     # Server should remain healthy
     final_health = make_request(stress_test_client, "/health")

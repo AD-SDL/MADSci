@@ -94,6 +94,26 @@ class RestNodeConfig(NodeConfig):
         description="Configuration for the Uvicorn server that runs the REST API.",
         default_factory=dict,
     )
+    enable_rate_limiting: bool = Field(
+        title="Enable Rate Limiting",
+        description="Enable rate limiting middleware for the REST API.",
+        default=False,
+    )
+    rate_limit_requests: int = Field(
+        title="Rate Limit Requests",
+        description="Maximum number of requests allowed per time window (only used if enable_rate_limiting is True).",
+        default=100,
+    )
+    rate_limit_window: int = Field(
+        title="Rate Limit Window",
+        description="Time window in seconds for rate limiting (only used if enable_rate_limiting is True).",
+        default=60,
+    )
+    rate_limit_cleanup_interval: int = Field(
+        title="Rate Limit Cleanup Interval",
+        description="Interval in seconds between cleanup operations to prevent memory leaks (only used if enable_rate_limiting is True).",
+        default=300,
+    )
 
 
 class NodeClientCapabilities(MadsciBaseModel):

@@ -1,10 +1,13 @@
 """Tests for MADSci middleware including rate limiting and request tracking."""
 
+import asyncio
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import ClassVar
 
 import pytest
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.middleware import RateLimitMiddleware
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerSettings,
@@ -147,3 +150,90 @@ def test_rate_limit_headers_values(rate_limited_client: TestClient) -> None:
     assert response.status_code == 200
     remaining = int(response.headers["X-RateLimit-Remaining"])
     assert remaining == 3
+
+
+def test_race_condition_concurrent_access(
+    test_manager_with_rate_limiting: TestManager,
+) -> None:
+    """
+    Test that concurrent requests don't cause race conditions in storage access.
+
+    This test exposes the race condition where multiple threads access the
+    storage dictionary simultaneously without synchronization, leading to
+    inaccurate request counts.
+    """
+    app = test_manager_with_rate_limiting.create_server()
+
+    # Create multiple clients to simulate different threads
+    def make_concurrent_request(_client_num: int) -> tuple[int, int]:
+        """Make a request and return status code and remaining count."""
+        client = TestClient(app)
+        response = client.get("/health")
+        remaining = int(response.headers.get("X-RateLimit-Remaining", -1))
+        return (response.status_code, remaining)
+
+    # Make 5 concurrent requests (exactly at the limit)
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(make_concurrent_request, i) for i in range(5)]
+        results = [future.result() for future in futures]
+
+    # All requests should succeed (we're at the limit, not over)
+    status_codes = [r[0] for r in results]
+    assert all(code == 200 for code in status_codes), (
+        f"Expected all 200 status codes, got: {status_codes}"
+    )
+
+    # The remaining counts should be monotonically decreasing
+    # Without proper synchronization, we might see duplicate or incorrect counts
+    remaining_counts = [r[1] for r in results]
+    # Sort the remaining counts to check they form a proper sequence
+    sorted_remaining = sorted(remaining_counts, reverse=True)
+    # Should see [4, 3, 2, 1, 0] in some order
+    expected = [4, 3, 2, 1, 0]
+    assert sorted_remaining == expected, (
+        f"Race condition detected: remaining counts are {remaining_counts}, "
+        f"sorted to {sorted_remaining}, expected {expected}"
+    )
+
+
+def test_memory_leak_prevention(test_manager_with_rate_limiting: TestManager) -> None:
+    """
+    Test that storage dictionary doesn't grow unbounded.
+
+    This test verifies that inactive client IPs are periodically cleaned up
+    from the storage dictionary to prevent memory leaks.
+    """
+    # Create middleware with short cleanup interval for testing
+    rate_limit_middleware = RateLimitMiddleware(
+        app=None,  # type: ignore
+        requests_limit=test_manager_with_rate_limiting.settings.rate_limit_requests,
+        time_window=test_manager_with_rate_limiting.settings.rate_limit_window,
+        cleanup_interval=1,  # Very short interval for testing
+    )
+
+    # Simulate requests from many different IPs (old timestamps)
+    num_unique_ips = 100
+    old_timestamp = time.time() - 20  # 20 seconds ago (older than time window)
+    for i in range(num_unique_ips):
+        fake_ip = f"192.168.1.{i}"
+        rate_limit_middleware.storage[fake_ip].append(old_timestamp)
+
+    # Check that storage has grown
+    initial_size = len(rate_limit_middleware.storage)
+    assert initial_size == num_unique_ips, (
+        f"Expected {num_unique_ips} entries, got {initial_size}"
+    )
+
+    # Wait for cleanup interval to pass
+    time.sleep(2)
+
+    # Trigger cleanup by calling the cleanup method with a current timestamp
+    asyncio.run(rate_limit_middleware._cleanup_inactive_clients(time.time()))
+
+    # Storage should be empty now since all entries are old
+    final_size = len(rate_limit_middleware.storage)
+
+    # Verify cleanup happened
+    assert final_size == 0, (
+        f"Memory leak detected: storage should be 0 after cleanup, but is {final_size}"
+    )
