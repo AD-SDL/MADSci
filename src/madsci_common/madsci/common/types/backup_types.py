@@ -41,10 +41,19 @@ class BaseBackupSettings(MadsciBaseSettings):
         return v
 
 
-class PostgreSQLBackupSettings(BaseBackupSettings):
+class PostgreSQLBackupSettings(
+    BaseBackupSettings,
+    env_file=(".env", "postgresql_backup.env"),
+    toml_file=("settings.toml", "postgresql_backup.settings.toml"),
+    yaml_file=("settings.yaml", "postgresql_backup.settings.yaml"),
+    json_file=("settings.json", "postgresql_backup.settings.json"),
+    env_prefix="POSTGRES_",
+):
     """PostgreSQL-specific backup settings."""
 
-    db_url: str = Field(title="Database URL", description="PostgreSQL connection URL")
+    db_url: str = Field(
+        title="Database URL", description="PostgreSQL connection URL", alias="db_url"
+    )
     backup_format: str = Field(
         default="custom",
         title="Backup Format",
@@ -52,11 +61,20 @@ class PostgreSQLBackupSettings(BaseBackupSettings):
     )
 
 
-class MongoDBBackupSettings(BaseBackupSettings):
+class MongoDBBackupSettings(
+    BaseBackupSettings,
+    env_file=(".env", "mongodb_backup.env"),
+    toml_file=("settings.toml", "mongodb_backup.settings.toml"),
+    yaml_file=("settings.yaml", "mongodb_backup.settings.yaml"),
+    json_file=("settings.json", "mongodb_backup.settings.json"),
+    env_prefix="MONGODB_",
+):
     """MongoDB-specific backup settings."""
 
     mongo_db_url: AnyUrl = Field(
-        title="MongoDB URL", description="MongoDB connection URL"
+        title="MongoDB URL",
+        description="MongoDB connection URL",
+        alias="mongo_db_url",  # avoid double prefixing
     )
     database: str = Field(title="Database Name", description="Database name to backup")
     collections: Optional[List[str]] = Field(

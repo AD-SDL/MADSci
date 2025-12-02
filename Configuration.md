@@ -170,3 +170,34 @@ Settings for the LocationManager.
 | `LOCATION_REDIS_HOST`         | `string`               | `"localhost"`              | The host of the Redis server for state storage.      | `"localhost"`              |
 | `LOCATION_REDIS_PORT`         | `integer`              | `6379`                     | The port of the Redis server for state storage.      | `6379`                     |
 | `LOCATION_REDIS_PASSWORD`     | `string` \| `NoneType` | `null`                     | The password for the Redis server (if required).     | `null`                     |
+
+## PostgreSQLBackupSettings
+
+PostgreSQL-specific backup settings.
+
+**Environment Prefix**: `POSTGRES_`
+
+| Name                          | Type      | Default             | Description                                   | Example             |
+|-------------------------------|-----------|---------------------|-----------------------------------------------|---------------------|
+| `POSTGRES_BACKUP_DIR`         | `Path`    | `".madsci/backups"` | Directory for storing backups                 | `".madsci/backups"` |
+| `POSTGRES_MAX_BACKUPS`        | `integer` | `10`                | Maximum number of backups to retain           | `10`                |
+| `POSTGRES_VALIDATE_INTEGRITY` | `boolean` | `true`              | Perform integrity validation after backup     | `true`              |
+| `POSTGRES_COMPRESSION`        | `boolean` | `true`              | Enable backup compression                     | `true`              |
+| `DB_URL` \| `DB_URL`          | `string`  | *required*          | PostgreSQL connection URL                     |                     |
+| `POSTGRES_BACKUP_FORMAT`      | `string`  | `"custom"`          | pg_dump format: custom, plain, directory, tar | `"custom"`          |
+
+## MongoDBBackupSettings
+
+MongoDB-specific backup settings.
+
+**Environment Prefix**: `MONGODB_`
+
+| Name                             | Type                  | Default             | Description                                  | Example             |
+|----------------------------------|-----------------------|---------------------|----------------------------------------------|---------------------|
+| `MONGODB_BACKUP_DIR`             | `Path`                | `".madsci/backups"` | Directory for storing backups                | `".madsci/backups"` |
+| `MONGODB_MAX_BACKUPS`            | `integer`             | `10`                | Maximum number of backups to retain          | `10`                |
+| `MONGODB_VALIDATE_INTEGRITY`     | `boolean`             | `true`              | Perform integrity validation after backup    | `true`              |
+| `MONGODB_COMPRESSION`            | `boolean`             | `true`              | Enable backup compression                    | `true`              |
+| `MONGO_DB_URL` \| `MONGO_DB_URL` | `AnyUrl`              | *required*          | MongoDB connection URL                       |                     |
+| `MONGODB_DATABASE`               | `string`              | *required*          | Database name to backup                      |                     |
+| `MONGODB_COLLECTIONS`            | `array` \| `NoneType` | `null`              | Specific collections to backup (all if None) | `null`              |
