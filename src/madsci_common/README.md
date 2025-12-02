@@ -325,3 +325,67 @@ class CustomManager(AbstractManagerBase[Settings, Definition]):
     ENABLE_ROOT_DEFINITION_ENDPOINT = False  # Disable root endpoint
     # Allows custom root endpoint implementation or static file serving for UIs
 ```
+
+### Middleware
+
+MADSci provides middleware components for enhancing server resilience and monitoring:
+
+#### Rate Limiting
+
+The `RateLimitMiddleware` protects services from overload by enforcing request rate limits per client IP:
+
+```python
+from madsci.common.middleware import RateLimitMiddleware
+from fastapi import FastAPI
+
+app = FastAPI()
+
+# Add rate limiting (100 requests per 60 seconds)
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_limit=100,
+    time_window=60,
+    cleanup_interval=300  # Clean up inactive clients every 5 minutes
+)
+```
+
+**Key features:**
+- **Thread-safe**: Uses asyncio locks to prevent race conditions in concurrent request handling
+- **Sliding window**: Rate limiting based on moving time window algorithm
+- **Memory efficient**: Automatic cleanup of inactive client tracking data
+- **Standard headers**: Returns `X-RateLimit-*` headers and `Retry-After` on limit exceeded
+- **429 responses**: Returns HTTP 429 Too Many Requests when limit is exceeded
+
+**Configuration parameters:**
+- `requests_limit`: Maximum requests allowed per time window (default: 100)
+- `time_window`: Time window in seconds (default: 60)
+- `cleanup_interval`: Interval between cleanup operations in seconds (default: 300)
+
+**Response headers:**
+- `X-RateLimit-Limit`: Maximum requests allowed in the time window
+- `X-RateLimit-Remaining`: Number of requests remaining in current window
+- `X-RateLimit-Reset`: Unix timestamp when the rate limit resets
+- `Retry-After`: Seconds to wait before retrying (included in 429 responses)
+
+**Example 429 response:**
+```json
+{
+  "detail": "Rate limit exceeded: 100 requests per 60 seconds"
+}
+```
+
+**Integration with managers:**
+```python
+from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.middleware import RateLimitMiddleware
+
+class MyManager(AbstractManagerBase[MySettings, MyDefinition]):
+    def __init__(self, settings: MySettings):
+        super().__init__(settings)
+        # Add rate limiting to protect the service
+        self.app.add_middleware(
+            RateLimitMiddleware,
+            requests_limit=200,  # Allow 200 requests
+            time_window=60,      # Per minute
+        )
+```

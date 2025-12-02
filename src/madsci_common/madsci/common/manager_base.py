@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.middleware import RateLimitMiddleware, RequestTrackingMiddleware
+from madsci.common.middleware import RateLimitMiddleware
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
 from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
@@ -269,9 +269,6 @@ class AbstractManagerBase(
         Args:
             app: The FastAPI application instance
         """
-        # Add request tracking middleware
-        app.add_middleware(RequestTrackingMiddleware)
-
         # Add rate limiting middleware if enabled
         # Check if settings has rate limiting configuration (ManagerSettings-based)
         if (

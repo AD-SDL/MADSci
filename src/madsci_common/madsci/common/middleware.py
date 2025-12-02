@@ -180,34 +180,3 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             response.headers["X-RateLimit-Reset"] = str(reset_time)
 
         return response
-
-
-class RequestTrackingMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware for tracking request statistics.
-
-    This middleware logs information about incoming requests and their
-    processing times, which can be useful for monitoring and debugging.
-    """
-
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """
-        Process each request and track timing information.
-
-        Args:
-            request: The incoming HTTP request
-            call_next: The next middleware or endpoint handler
-
-        Returns:
-            Response: The HTTP response with timing headers
-        """
-        start_time = time.time()
-
-        # Process the request
-        response = await call_next(request)
-
-        # Calculate processing time
-        process_time = time.time() - start_time
-        response.headers["X-Process-Time"] = str(process_time)
-
-        return response
