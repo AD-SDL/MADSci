@@ -18,8 +18,8 @@ from .postgres_backup import PostgreSQLBackupTool
 )
 @click.option(
     "--backup-dir",
-    default=".madsci/postgres/backups",
-    help="Backup directory (default: .madsci/postgres/backups)",
+    default=".madsci/postgresql/backups",
+    help="Backup directory (default: .madsci/postgresql/backups)",
     type=click.Path(),
 )
 @click.option(

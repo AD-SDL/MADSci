@@ -43,7 +43,7 @@ chown $USER_ID:$GROUP_ID /home/${CONTAINER_USER}/.madsci/logs || true
 # Prepare writable dirs used at runtime (no recursive chown)
 # Backups
 install -d -m 0775 -o "${USER_ID}" -g "${GROUP_ID}" /home/${CONTAINER_USER}/.madsci/mongodb/backups || true
-install -d -m 0775 -o "${USER_ID}" -g "${GROUP_ID}" /home/${CONTAINER_USER}/.madsci/postgres/backups || true
+install -d -m 0775 -o "${USER_ID}" -g "${GROUP_ID}" /home/${CONTAINER_USER}/.madsci/postgresql/backups || true
 
 # Alembic revisions (repo location) — make ONLY this dir writable
 ALEMBIC_VERSIONS_DIR="${ALEMBIC_VERSIONS_DIR:-/home/${CONTAINER_USER}/MADSci/src/madsci_resource_manager/madsci/resource_manager/alembic/versions}"
