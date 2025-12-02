@@ -97,14 +97,6 @@ def create(
         backup_path: Path
 
         if db_type == "postgresql":
-            if not PostgreSQLBackupTool or not PostgreSQLBackupSettings:
-                click.echo(
-                    "ERROR: PostgreSQL backup tools not available. "
-                    "Please install with: pip install madsci-resource-manager",
-                    err=True,
-                )
-                sys.exit(1)
-
             settings = PostgreSQLBackupSettings(
                 db_url=db_url, backup_dir=Path(backup_dir)
             )
