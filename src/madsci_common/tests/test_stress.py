@@ -5,10 +5,12 @@ These tests simulate high-load scenarios to ensure servers remain
 resilient under stress conditions like request storms and high concurrency.
 """
 
+import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import ClassVar
 
+import httpx
 import pytest
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.types.manager_types import (
@@ -60,7 +62,7 @@ def stress_test_client(stress_test_manager: TestManager) -> TestClient:
 
 def make_request(client: TestClient, endpoint: str = "/health") -> dict:
     """
-    Make a single request and return status and timing info.
+    Make a single synchronous request and return status and timing info.
 
     Args:
         client: The test client
@@ -90,20 +92,52 @@ def make_request(client: TestClient, endpoint: str = "/health") -> dict:
         }
 
 
-def test_concurrent_requests(stress_test_client: TestClient) -> None:
-    """Test server handles concurrent requests without crashing."""
+async def make_async_request(app, endpoint: str = "/health") -> dict:
+    """
+    Make a single async request and return status and timing info.
+
+    Args:
+        app: The FastAPI application
+        endpoint: The endpoint to request
+
+    Returns:
+        Dictionary with status_code, success, and response_time
+    """
+    start_time = time.time()
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.get(endpoint)
+            response_time = time.time() - start_time
+            return {
+                "status_code": response.status_code,
+                "success": response.status_code == 200,
+                "response_time": response_time,
+                "rate_limited": response.status_code == 429,
+            }
+    except Exception as e:
+        response_time = time.time() - start_time
+        return {
+            "status_code": 0,
+            "success": False,
+            "response_time": response_time,
+            "error": str(e),
+            "rate_limited": False,
+        }
+
+
+@pytest.mark.anyio
+async def test_concurrent_requests(stress_test_manager: TestManager) -> None:
+    """Test server handles concurrent async requests without crashing."""
     num_requests = 50
-    results = []
+    app = stress_test_manager.create_server()
 
-    # Use ThreadPoolExecutor for concurrent requests
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [
-            executor.submit(make_request, stress_test_client)
-            for _ in range(num_requests)
-        ]
-
-        for future in as_completed(futures):
-            results.append(future.result())
+    # Make concurrent async requests using asyncio.gather
+    results = await asyncio.gather(
+        *[make_async_request(app) for _ in range(num_requests)]
+    )
 
     # Check that we got responses for all requests
     assert len(results) == num_requests
@@ -167,20 +201,18 @@ def test_sustained_load(stress_test_client: TestClient) -> None:
     assert final_health["success"], "Server became unhealthy after sustained load"
 
 
-def test_burst_traffic(stress_test_client: TestClient) -> None:
-    """Test server handles sudden traffic bursts."""
+@pytest.mark.anyio
+async def test_burst_traffic(stress_test_manager: TestManager) -> None:
+    """Test server handles sudden traffic bursts with concurrent async requests."""
     # Send a burst of requests
     burst_size = 200
-    results = []
+    app = stress_test_manager.create_server()
 
     start_time = time.time()
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [
-            executor.submit(make_request, stress_test_client) for _ in range(burst_size)
-        ]
-
-        for future in as_completed(futures):
-            results.append(future.result())
+    # Make concurrent async requests using asyncio.gather
+    results = await asyncio.gather(
+        *[make_async_request(app) for _ in range(burst_size)]
+    )
     total_duration = time.time() - start_time
 
     # Analyze results
@@ -209,29 +241,27 @@ def test_burst_traffic(stress_test_client: TestClient) -> None:
 
     # Server should still be responsive after burst
     # Wait for rate limit window to expire so we can verify server is still functioning
-    time.sleep(11)  # Wait for rate limit window (10s) + buffer
-    health_check = make_request(stress_test_client, "/health")
+    await asyncio.sleep(11)  # Wait for rate limit window (10s) + buffer
+    health_check = await make_async_request(app, "/health")
     assert health_check["success"] or health_check["rate_limited"], (
         "Server became completely unresponsive after burst traffic"
     )
 
 
-def test_multiple_endpoints_under_load(stress_test_client: TestClient) -> None:
-    """Test that multiple endpoints handle load simultaneously."""
+@pytest.mark.anyio
+async def test_multiple_endpoints_under_load(stress_test_manager: TestManager) -> None:
+    """Test that multiple endpoints handle concurrent async load simultaneously."""
     endpoints = ["/health", "/definition", "/"]
     num_requests_per_endpoint = 20
-    results = []
+    app = stress_test_manager.create_server()
 
-    with ThreadPoolExecutor(max_workers=15) as executor:
-        futures = []
-        for endpoint in endpoints:
-            for _ in range(num_requests_per_endpoint):
-                futures.append(
-                    executor.submit(make_request, stress_test_client, endpoint)
-                )
+    # Create tasks for all endpoints concurrently
+    tasks = []
+    for endpoint in endpoints:
+        for _ in range(num_requests_per_endpoint):
+            tasks.append(make_async_request(app, endpoint))
 
-        for future in as_completed(futures):
-            results.append(future.result())
+    results = await asyncio.gather(*tasks)
 
     total_requests = len(endpoints) * num_requests_per_endpoint
     assert len(results) == total_requests

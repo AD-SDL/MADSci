@@ -23,8 +23,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     rate limits based on a sliding window algorithm. When a client
     exceeds the rate limit, a 429 Too Many Requests response is returned.
 
-    Thread-safe implementation using asyncio locks to prevent race conditions
-    in concurrent request handling. Includes periodic cleanup to prevent
+    Async-safe implementation using asyncio locks to prevent race conditions
+    in concurrent coroutine handling. Includes periodic cleanup to prevent
     memory leaks from inactive client IPs.
 
     Attributes:

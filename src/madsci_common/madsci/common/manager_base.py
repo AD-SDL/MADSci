@@ -279,6 +279,7 @@ class AbstractManagerBase(
                 RateLimitMiddleware,
                 requests_limit=self._settings.rate_limit_requests,
                 time_window=self._settings.rate_limit_window,
+                cleanup_interval=self._settings.rate_limit_cleanup_interval,
             )
             self.logger.info(
                 f"Rate limiting enabled: {self._settings.rate_limit_requests} requests "

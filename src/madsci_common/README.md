@@ -350,7 +350,7 @@ app.add_middleware(
 ```
 
 **Key features:**
-- **Thread-safe**: Uses asyncio locks to prevent race conditions in concurrent request handling
+- **Async-safe**: Uses asyncio locks to prevent race conditions in concurrent coroutine handling
 - **Sliding window**: Rate limiting based on moving time window algorithm
 - **Memory efficient**: Automatic cleanup of inactive client tracking data
 - **Standard headers**: Returns `X-RateLimit-*` headers and `Retry-After` on limit exceeded

@@ -2,9 +2,9 @@
 
 import asyncio
 import time
-from concurrent.futures import ThreadPoolExecutor
 from typing import ClassVar
 
+import httpx
 import pytest
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.middleware import RateLimitMiddleware
@@ -138,30 +138,32 @@ def test_rate_limit_headers_values(rate_limited_client: TestClient) -> None:
     assert remaining == 3
 
 
-def test_race_condition_concurrent_access(
+@pytest.mark.anyio
+async def test_race_condition_concurrent_access(
     test_manager_with_rate_limiting: TestManager,
 ) -> None:
     """
-    Test that concurrent requests don't cause race conditions in storage access.
+    Test that concurrent async requests are properly synchronized and do not cause race conditions.
 
-    This test exposes the race condition where multiple threads access the
-    storage dictionary simultaneously without synchronization, leading to
-    inaccurate request counts.
+    This test uses httpx.AsyncClient to create truly concurrent async requests,
+    verifying that asyncio locks correctly prevent race conditions in the storage
+    dictionary. All requests should succeed and remaining counts should form a
+    proper monotonically decreasing sequence.
     """
     app = test_manager_with_rate_limiting.create_server()
 
-    # Create multiple clients to simulate different threads
-    def make_concurrent_request(_client_num: int) -> tuple[int, int]:
-        """Make a request and return status code and remaining count."""
-        client = TestClient(app)
-        response = client.get("/health")
-        remaining = int(response.headers.get("X-RateLimit-Remaining", -1))
-        return (response.status_code, remaining)
+    async def make_concurrent_request(_request_num: int) -> tuple[int, int]:
+        """Make an async request and return status code and remaining count."""
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.get("/health")
+            remaining = int(response.headers.get("X-RateLimit-Remaining", -1))
+            return (response.status_code, remaining)
 
-    # Make 5 concurrent requests (exactly at the limit)
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(make_concurrent_request, i) for i in range(5)]
-        results = [future.result() for future in futures]
+    # Make 5 concurrent async requests (exactly at the limit)
+    results = await asyncio.gather(*[make_concurrent_request(i) for i in range(5)])
 
     # All requests should succeed (we're at the limit, not over)
     status_codes = [r[0] for r in results]

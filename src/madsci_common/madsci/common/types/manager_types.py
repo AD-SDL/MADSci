@@ -72,6 +72,12 @@ class ManagerSettings(MadsciBaseSettings):
         default=60,
         ge=1,
     )
+    rate_limit_cleanup_interval: int = Field(
+        title="Rate Limit Cleanup Interval",
+        description="Interval in seconds between cleanup operations to prevent memory leaks.",
+        default=300,
+        ge=1,
+    )
 
     # Server resource constraints
     uvicorn_workers: Optional[int] = Field(
