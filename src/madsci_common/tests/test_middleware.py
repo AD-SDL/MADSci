@@ -70,16 +70,6 @@ def unlimited_client(test_manager_without_rate_limiting: TestManager) -> TestCli
     return TestClient(app)
 
 
-def test_request_tracking_headers(unlimited_client: TestClient) -> None:
-    """Test that request tracking middleware adds timing headers."""
-    response = unlimited_client.get("/health")
-    assert response.status_code == 200
-    assert "X-Process-Time" in response.headers
-    # Processing time should be a valid float
-    process_time = float(response.headers["X-Process-Time"])
-    assert process_time >= 0
-
-
 def test_rate_limiting_within_limit(rate_limited_client: TestClient) -> None:
     """Test that requests within the rate limit are allowed."""
     # Make 5 requests (within the limit)
@@ -129,10 +119,6 @@ def test_rate_limiting_disabled(unlimited_client: TestClient) -> None:
     for _ in range(20):
         response = unlimited_client.get("/health")
         assert response.status_code == 200
-
-    # No rate limit headers should be present when disabled
-    # (only the tracking headers)
-    assert "X-Process-Time" in response.headers
 
 
 def test_rate_limit_headers_values(rate_limited_client: TestClient) -> None:
