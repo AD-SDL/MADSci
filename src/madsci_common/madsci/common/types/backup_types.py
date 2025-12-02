@@ -52,7 +52,10 @@ class PostgreSQLBackupSettings(
     """PostgreSQL-specific backup settings."""
 
     db_url: str = Field(
-        title="Database URL", description="PostgreSQL connection URL", alias="db_url"
+        title="Database URL",
+        description="PostgreSQL connection URL",
+        alias="db_url",
+        default="postgresql://madsci:madsci@localhost:5432/resources",
     )
     backup_format: str = Field(
         default="custom",
@@ -75,6 +78,7 @@ class MongoDBBackupSettings(
         title="MongoDB URL",
         description="MongoDB connection URL",
         alias="mongo_db_url",  # avoid double prefixing
+        default="mongodb://localhost:27017",
     )
     database: str = Field(title="Database Name", description="Database name to backup")
     collections: Optional[List[str]] = Field(
