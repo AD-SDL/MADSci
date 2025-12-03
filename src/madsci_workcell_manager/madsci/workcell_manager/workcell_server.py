@@ -38,6 +38,8 @@ from madsci.workcell_manager.workflow_utils import (
 )
 from pymongo.synchronous.database import Database
 from ulid import ULID
+import threading
+import time
 
 # Module-level constants for Body() calls to avoid B008 linting errors
 LOOKUP_VAL_BODY = Body(...)
@@ -300,18 +302,64 @@ class WorkcellManager(
                 self.state_handler.enqueue_workflow(wf.workflow_id)
         return self.state_handler.get_active_workflow(workflow_id)
 
+    # @post("/workflow/{workflow_id}/cancel")
+    # def cancel_workflow(self, workflow_id: str) -> Workflow:
+    #     """Cancel a specific workflow."""
+    #     with self.state_handler.wc_state_lock():
+    #         wf = self.state_handler.get_workflow(workflow_id)
+    #         response = self.send_admin_command_to_node(
+    #             "cancel", wf.steps[wf.status.current_step_index].node
+    #         )
+    #         if response.success:
+    #             wf = cancel_workflow(wf)
+    #             self.state_handler.set_active_workflow(wf)
+    #     return self.state_handler.get_active_workflow(workflow_id)
+
     @post("/workflow/{workflow_id}/cancel")
     def cancel_workflow(self, workflow_id: str) -> Workflow:
-        """Cancel a specific workflow."""
-        with self.state_handler.wc_state_lock():
-            wf = self.state_handler.get_workflow(workflow_id)
-            response = self.send_admin_command_to_node(
-                "cancel", wf.steps[wf.status.current_step_index].node
-            )
-            if response.success:
-                wf = cancel_workflow(wf)
-                self.state_handler.set_active_workflow(wf)
-        return self.state_handler.get_active_workflow(workflow_id)
+        """Test background polling"""
+        cancel_thread = threading.Thread(
+            target=self._cancel_workflow_background,
+            args=(workflow_id,),
+            daemon=True
+        )
+        cancel_thread.start()
+        return self.state_handler.get_workflow(workflow_id)
+    
+    def _cancel_workflow_background(self, workflow_id: str) -> None:
+        max_retries = 100
+        retry_count = 0
+        poll_interval = 0.5
+
+        while retry_count < max_retries:
+            try:
+                with self.state_handler.wc_state_lock():
+                    wf = self.state_handler.get_workflow(workflow_id)
+                    if wf.status.terminal:
+                        self.logger.log(f"Workflow {workflow_id} already terminal. Cancel complete.")
+                        return
+                    if wf.status.active and 0 <= wf.status.current_step_index < len(wf.steps):
+                        current_node = wf.steps[wf.status.current_step_index].node
+                        try:
+                            response = self.send_admin_command_to_node("cancel", current_node)
+                            if response.success:
+                                wf = cancel_workflow(wf)
+                                self.state_handler.set_active_workflow(wf)
+                                self.logger.log(f"Workflow {workflow_id} cancelled on node {current_node}.")
+                                return
+                            else:
+                                self.logger.log(f"Cancel on node {current_node} failed: {response.errors}.")
+                        except Exception as e:
+                            self.logger.error(f"Error sending cancel to node {current_node}: {e}.")
+                        retry_count += 1
+                    else:
+                        self.logger.log(f"Workflow {workflow_id} not active. Stopping cancel attempts.")
+                        return
+            except Exception as e:
+                self.logger.error(f"Error in cancel background task: {e}.")
+                retry_count += 1
+            time.sleep(poll_interval)
+        self.logger.warning(f"Workflow {workflow_id} exceeded max cancel retries.")
 
     @post("/workflow/{workflow_id}/retry")
     def retry_workflow(self, workflow_id: str, index: int = -1) -> Workflow:

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Annotated, Optional, Union
+import time
 
 from madsci.common.types.action_types import (
     ActionFiles,
@@ -63,6 +64,9 @@ class AdvancedExampleConfig(RestNodeConfig):
     device_number: int = 0
     """The device number of the advanced example node."""
 
+    wait_time: float = 30.0
+    """Time to wait while running an action, in seconds (simulates real hardware timing)."""
+
 
 class AdvancedExampleNode(RestNode):
     """A fake advanced example node module for testing."""
@@ -74,6 +78,11 @@ class AdvancedExampleNode(RestNode):
     def return_none(self) -> None:
         """Run a protocol on the liquid handler"""
         self.logger.log("returning none")
+
+    @action
+    def stall(self) -> None:
+        """Stall a set amount of time."""
+        time.sleep(self.config.wait_time)
 
     @action
     def return_json(self) -> int:

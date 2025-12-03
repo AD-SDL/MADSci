@@ -39,6 +39,19 @@ actions:
     accepts_var_kwargs: false
     var_args_schema: null
     var_kwargs_schema: null
+  stall:
+    name: stall
+    description: Stall a set amount of time.
+    args: {}
+    locations: {}
+    files: {}
+    results: {}
+    blocking: false
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_json:
     name: return_json
     description: Return a JSON object
@@ -1280,6 +1293,7 @@ config:
   node_url: http://localhost:2004/
   uvicorn_kwargs: {}
   device_number: 0
+  wait_time: 30.0
 config_schema:
   description: Configuration for the advanced example node module.
   properties:
@@ -1342,5 +1356,9 @@ config_schema:
       default: 0
       title: Device Number
       type: integer
+    wait_time:
+      default: 30.0
+      title: Wait Time
+      type: number
   title: AdvancedExampleConfig
   type: object

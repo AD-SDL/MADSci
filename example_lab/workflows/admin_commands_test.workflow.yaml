@@ -13,5 +13,26 @@ steps:
       command : Admin Cancel Test
     locations : 
       checks : null 
-    comment: Test workflow step to test cancelling a workflow with liquidhandler.
-    
+    comment: Test workflow step to test cancelling a workflow with liquidhandler. Action is cancellable, should work immediately.
+  - name : stall
+    node : advanced_example_node
+    action : stall
+    args : 
+      locations : 
+      checks : null 
+    comment: Stall while running an uncancellable action on a node w/out cancel abilities.
+  - name : run_command
+    node : liquidhandler_1
+    action : run_command
+    args : 
+      command : Admin Cancel Test
+    locations : 
+      checks : null 
+    comment: Run cancellable action to test admin capability polling for cancel_wf.
+  - name : stall
+    node : advanced_example_node
+    action : stall
+    args : 
+      locations : 
+      checks : null 
+    comment: Stall while running an uncancellable action on a node w/out cancel abilities.
