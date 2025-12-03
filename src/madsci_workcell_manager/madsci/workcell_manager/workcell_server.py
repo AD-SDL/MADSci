@@ -305,10 +305,9 @@ class WorkcellManager(
         """Cancel a specific workflow."""
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
-            if wf.status.running:
-                response = self.send_admin_command_to_node(
-                    "cancel", wf.steps[wf.status.current_step_index].node
-                )
+            response = self.send_admin_command_to_node(
+                "cancel", wf.steps[wf.status.current_step_index].node
+            )
             if response.success:
                 wf = cancel_workflow(wf)
                 self.state_handler.set_active_workflow(wf)
