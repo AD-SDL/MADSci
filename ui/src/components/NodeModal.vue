@@ -15,7 +15,7 @@
 
           <CancelButton
             :node="modal_title"
-            :node_status="wc_state.nodes[modal_title].state.status"
+            :node_status="get_status(wc_state.nodes[modal_title].status)" 
             class="ml-2" />
 
           <ResetButton
@@ -43,7 +43,8 @@
           </template>
         </div>
         <v-sheet class="pa-2 rounded-lg text-md-center" :class="'node_status_' + get_status(wc_state.nodes[modal_title].status)">
-          {{ Object.entries(wc_state.nodes[modal_title].status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }}
+          <!-- {{ Object.entries(wc_state.nodes[modal_title].status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }} -->
+            {{ get_status(wc_state.nodes[modal_title].status )}}
         </v-sheet>
       </v-card-title>
 

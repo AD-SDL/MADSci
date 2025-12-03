@@ -13,7 +13,8 @@
                   <h3 wrap>{{ node_name }}</h3>
 
                   <p wrap class="text-caption">
-                    status: {{ Object.entries(value.status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }}
+                    <!-- status: {{ Object.entries(value.status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }} -->
+                    status: {{ get_status(value.status) }}
                   </p>
                 </v-card-text>
               </v-card>

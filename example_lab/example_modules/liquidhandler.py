@@ -20,20 +20,45 @@ Key Concepts Demonstrated:
 This serves as a template for creating real instrument drivers.
 """
 
-import enum
 import time
 from pathlib import Path
 from typing import Any, Optional
 import threading
+import functools
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types import Pool, Slot
+from madsci.common.types.action_types import ActionCancelled
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
+# ***
+class CancelledError(Exception):
+    pass
+
+def cancellable(action_fn):
+    @functools.wraps(action_fn)
+    def wrapper(self, *args, **kwargs):
+        self._cancel_event.clear()
+        result_container = {"value": None}
+        def run():
+            try:
+                result_container["value"] = action_fn(self, *args, **kwargs)
+            except CancelledError:
+                result_container["value"] = self._cancel_result()
+            except Exception as e:
+                result_container["value"] = e
+        t = threading.Thread(target=run)
+        t.start()
+        while t.is_alive():
+            if self._cancel_event.is_set():
+                return self._cancel_result()
+            time.sleep(0.05)
+        return result_container["value"]
+    return wrapper
 
 class LiquidHandlerConfig(RestNodeConfig):
     """
@@ -85,33 +110,11 @@ class LiquidHandlerInterface:
         """
         self.logger = logger or EventClient()
         self.device_number = device_number
-        self.sent_cancel = threading.Event()
-        self.received_cancel = threading.Event()
-    
-    def send_cancel(self) -> None:
-        self.sent_cancel.set()
-    
-    def clear_requests(self) -> None:
-        self.sent_cancel.clear()
-        self.received_cancel.clear()
-
-    def wait_for(self, timeout=10) -> bool:
-        return self.received_cancel.wait(timeout)
 
     def run_command(self, command: str) -> None:
         """Run a command on the liquid handler."""
-        self.clear_requests()
-        try:
-            for _ in range(10):
-                if self.sent_cancel.is_set():
-                    self.received_cancel.set()
-                    self.logger.log("Cancel acknowledged")
-                    return
-                time.sleep(0.1)
-        finally:
-            if self.sent_cancel.is_set() and not self.received_cancel.is_set():
-                self.received_cancel.set()
-                self.logger.log("Cancel acknowledged")
+        self.logger.log(f"Executing hardware command: {command}")
+        time.sleep(0.1)
 
 
 class LiquidHandlerNode(RestNode):
@@ -154,6 +157,14 @@ class LiquidHandlerNode(RestNode):
 
     # Pydantic model class for configuration validation
     config_model = LiquidHandlerConfig
+
+    def __init__(self):
+        super().__init__()
+        self._cancel_event = threading.Event()
+    
+    def _cancel_result(self):
+        action_response = ActionCancelled()
+        return action_response
 
     def startup_handler(self) -> None:
         """
@@ -293,6 +304,7 @@ class LiquidHandlerNode(RestNode):
             }
 
     @action
+    @cancellable
     def run_command(self, command: str) -> str:
         """
         Execute a direct hardware command on the liquid handler.
@@ -311,16 +323,7 @@ class LiquidHandlerNode(RestNode):
             Response: "aspirate 100 ul"
         """
         self.liquid_handler.run_command(command)
-        timeout = self.config.wait_time
-        interval = 0.1
-        elapsed = 0.0
-        while elapsed < timeout:
-            if self.liquid_handler.sent_cancel.is_set():
-                self.liquid_handler.received_cancel.set()
-                self.logger.log("Action cancelled")
-                return "cancelled"
-            time.sleep(interval)
-            elapsed += interval
+        time.sleep(self.config.wait_time)
         return command
 
     @action
@@ -405,15 +408,8 @@ class LiquidHandlerNode(RestNode):
         return AdminCommandResponse(data=[0, 0, 0, 0])
     
     def cancel(self) -> AdminCommandResponse:
-        self.logger.log(f"Cancel initiated.")
-        try:
-            self.liquid_handler.send_cancel()
-            response = self.liquid_handler.wait_for()
-            if not response:
-                return AdminCommandResponse(success=False)
-            return AdminCommandResponse()
-        except Exception as e:
-            return AdminCommandResponse(success=False)
+        self._cancel_event.set()
+        return AdminCommandResponse()
         
 
 
