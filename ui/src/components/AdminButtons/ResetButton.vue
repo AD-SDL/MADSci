@@ -28,6 +28,8 @@ import { ref, watchEffect } from 'vue';
     const props = defineProps<{
         node?: string;
         node_status?: any;
+        wf_id?: string;
+        wf_status?: any;
     }>();
 
     const reset_url = ref('')
@@ -39,6 +41,10 @@ import { ref, watchEffect } from 'vue';
         if (props.node) {
             reset_url.value = urls.value.workcell_server_url.concat('admin/reset/'.concat(props.node))
             hoverText.value = "Reset Node"
+        }
+        else if (props.wf_id) {
+            reset_url.value = urls.value.workcell_server_url.concat('workflow/'.concat(props.wf_id).concat('/retry'))
+            hoverText.value = "Retry Workflow"
         }
         else {
             reset_url.value = urls.value.workcell_server_url.concat('admin/reset')
@@ -55,6 +61,14 @@ import { ref, watchEffect } from 'vue';
             }
             else {
                 canReset.value = true
+            }
+        }
+        else if (props.wf_id) {
+            if (props.wf_status["terminal"]) {
+                canReset.value = true
+            }
+            else {
+                canReset.value = false
             }
         }
         else {

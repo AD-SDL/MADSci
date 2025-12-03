@@ -5,8 +5,11 @@
         <div class="d-flex align-center w-100">
           <h2 class="title py-3 my-3">Workflow: {{ modal_title }}</h2>
           <!-- {{modal_text.run_id}} -->
-          <!-- <v-spacer></v-spacer> -->
           <CancelButton
+            :wf_id="modal_text.workflow_id"
+            :wf_status="modal_text.status"
+            class="ml-2" />
+          <ResetButton
             :wf_id="modal_text.workflow_id"
             :wf_status="modal_text.status"
             class="ml-2" />
@@ -27,6 +30,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import CancelButton from './AdminButtons/CancelButton.vue';
+import ResetButton from './AdminButtons/ResetButton.vue';
 const props = defineProps(['modal_title', 'modal_text'])
 const flowdef = ref(false)
 

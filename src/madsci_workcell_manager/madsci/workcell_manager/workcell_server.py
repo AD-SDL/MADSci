@@ -369,6 +369,8 @@ class WorkcellManager(
             if wf.status.terminal:
                 if index < 0:
                     index = wf.status.current_step_index
+                if wf.status.completed:
+                    index = 0 # *** If workflow is done and completed (not cancelled/failed...), retry wf from beginning.
                 wf.status.reset(index)
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.delete_archived_workflow(wf.workflow_id)
