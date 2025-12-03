@@ -1,0 +1,17 @@
+name: Admin Commands Test
+
+metadata:
+  author: Aileen Cleary
+  info: A workflow for testing admin command functionality on workflows/nodes through liquidhandler.
+  version: 0.1
+
+steps:
+  - name : run_command
+    node : liquidhandler_2
+    action : run_command
+    args : 
+      command : Admin Cancel Test
+    locations : 
+      checks : null 
+    comment: Test workflow step to test cancelling a workflow with liquidhandler.
+    
