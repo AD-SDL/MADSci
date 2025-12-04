@@ -101,14 +101,26 @@ class RestNodeConfig(NodeConfig):
     )
     rate_limit_requests: int = Field(
         title="Rate Limit Requests",
-        description="Maximum number of requests allowed per time window (only used if enable_rate_limiting is True).",
+        description="Maximum number of requests allowed per long time window (only used if enable_rate_limiting is True).",
         default=100,
         ge=1,
     )
     rate_limit_window: int = Field(
         title="Rate Limit Window",
-        description="Time window in seconds for rate limiting (only used if enable_rate_limiting is True).",
+        description="Long time window in seconds for rate limiting (only used if enable_rate_limiting is True).",
         default=60,
+        ge=1,
+    )
+    rate_limit_short_requests: Optional[int] = Field(
+        title="Rate Limit Short Requests",
+        description="Maximum number of requests allowed per short time window for burst protection (only used if enable_rate_limiting is True). If None, short window limiting is disabled.",
+        default=50,
+        ge=1,
+    )
+    rate_limit_short_window: Optional[int] = Field(
+        title="Rate Limit Short Window",
+        description="Short time window for burst protection in seconds (only used if enable_rate_limiting is True). If None, short window limiting is disabled.",
+        default=1,
         ge=1,
     )
     rate_limit_cleanup_interval: int = Field(

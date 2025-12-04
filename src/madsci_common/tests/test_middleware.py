@@ -57,6 +57,20 @@ def test_manager_without_rate_limiting() -> TestManager:
 
 
 @pytest.fixture
+def test_manager_with_dual_rate_limiting() -> TestManager:
+    """Create a test manager instance with dual rate limiting enabled."""
+    settings = TestManagerSettings(
+        rate_limit_enabled=True,
+        rate_limit_requests=20,  # Long window: 20 requests per 10 seconds
+        rate_limit_window=10,
+        rate_limit_short_requests=5,  # Short window: 5 requests per 1 second (burst) - intentionally low for testing
+        rate_limit_short_window=1,
+    )
+    definition = TestManagerDefinition(name="Dual Rate Limited Manager")
+    return TestManager(settings=settings, definition=definition)
+
+
+@pytest.fixture
 def rate_limited_client(test_manager_with_rate_limiting: TestManager) -> TestClient:
     """Create a test client with rate limiting."""
     app = test_manager_with_rate_limiting.create_server()
@@ -67,6 +81,15 @@ def rate_limited_client(test_manager_with_rate_limiting: TestManager) -> TestCli
 def unlimited_client(test_manager_without_rate_limiting: TestManager) -> TestClient:
     """Create a test client without rate limiting."""
     app = test_manager_without_rate_limiting.create_server()
+    return TestClient(app)
+
+
+@pytest.fixture
+def dual_rate_limited_client(
+    test_manager_with_dual_rate_limiting: TestManager,
+) -> TestClient:
+    """Create a test client with dual rate limiting."""
+    app = test_manager_with_dual_rate_limiting.create_server()
     return TestClient(app)
 
 
@@ -225,3 +248,138 @@ def test_memory_leak_prevention(test_manager_with_rate_limiting: TestManager) ->
     assert final_size == 0, (
         f"Memory leak detected: storage should be 0 after cleanup, but is {final_size}"
     )
+
+
+def test_dual_rate_limiting_burst_protection(
+    dual_rate_limited_client: TestClient,
+) -> None:
+    """Test that burst limit (short window) prevents rapid request bursts."""
+    # Make 5 requests rapidly (at the burst limit: 5 per second)
+    for i in range(5):
+        response = dual_rate_limited_client.get("/health")
+        assert response.status_code == 200, f"Request {i + 1} should succeed"
+        # Check that burst headers are present
+        assert "X-RateLimit-Burst-Limit" in response.headers
+        assert response.headers["X-RateLimit-Burst-Limit"] == "5"
+        assert "X-RateLimit-Burst-Remaining" in response.headers
+
+    # The 6th rapid request should be rejected by burst limit
+    response = dual_rate_limited_client.get("/health")
+    assert response.status_code == 429
+    assert "burst limit" in response.json()["detail"]
+    assert "X-RateLimit-Burst-Limit" in response.headers
+    assert response.headers["X-RateLimit-Burst-Remaining"] == "0"
+
+
+def test_dual_rate_limiting_long_window_protection(
+    dual_rate_limited_client: TestClient,
+) -> None:
+    """Test that long window limit prevents sustained high load."""
+    # Make requests slowly to avoid burst limit (20 requests over ~4 seconds)
+    # Burst limit is 5/second, so we'll space them out
+    for i in range(20):
+        response = dual_rate_limited_client.get("/health")
+        assert response.status_code == 200, f"Request {i + 1} should succeed"
+        # Small delay to avoid burst limit (every 5th request, wait a bit longer)
+        if (i + 1) % 5 == 0:
+            time.sleep(1.1)  # Wait for burst window to reset
+
+    # The 21st request should be rejected by long window limit
+    response = dual_rate_limited_client.get("/health")
+    assert response.status_code == 429
+    # Should mention the long window (10 seconds), not burst
+    assert "burst limit" not in response.json()["detail"]
+    assert "20 requests per 10 seconds" in response.json()["detail"]
+
+
+def test_dual_rate_limiting_headers(dual_rate_limited_client: TestClient) -> None:
+    """Test that dual rate limiting includes both burst and long window headers."""
+    # First request
+    response = dual_rate_limited_client.get("/health")
+    assert response.status_code == 200
+
+    # Check long window headers
+    assert "X-RateLimit-Limit" in response.headers
+    assert response.headers["X-RateLimit-Limit"] == "20"
+    assert "X-RateLimit-Remaining" in response.headers
+    assert int(response.headers["X-RateLimit-Remaining"]) == 19
+
+    # Check burst window headers
+    assert "X-RateLimit-Burst-Limit" in response.headers
+    assert response.headers["X-RateLimit-Burst-Limit"] == "5"
+    assert "X-RateLimit-Burst-Remaining" in response.headers
+    assert int(response.headers["X-RateLimit-Burst-Remaining"]) == 4
+
+    # Check reset header
+    assert "X-RateLimit-Reset" in response.headers
+
+
+@pytest.mark.anyio
+async def test_dual_rate_limiting_concurrent_burst(
+    test_manager_with_dual_rate_limiting: TestManager,
+) -> None:
+    """
+    Test that concurrent requests properly enforce burst limiting.
+
+    This test verifies that the burst limit correctly handles concurrent
+    async requests and prevents more than the burst limit from succeeding
+    in a single burst.
+    """
+    app = test_manager_with_dual_rate_limiting.create_server()
+
+    async def make_concurrent_request(_request_num: int) -> tuple[int, str]:
+        """Make an async request and return status code and detail."""
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.get("/health")
+            detail = (
+                response.json().get("detail", "") if response.status_code == 429 else ""
+            )
+            return (response.status_code, detail)
+
+    # Make 10 concurrent async requests (burst limit is 5)
+    results = await asyncio.gather(*[make_concurrent_request(i) for i in range(10)])
+
+    # Count successful and rate-limited requests
+    status_codes = [r[0] for r in results]
+    success_count = sum(1 for code in status_codes if code == 200)
+    rate_limited_count = sum(1 for code in status_codes if code == 429)
+
+    # Exactly 5 should succeed (burst limit), rest should be rate limited
+    assert success_count == 5, (
+        f"Expected 5 successful requests (burst limit), got {success_count}"
+    )
+    assert rate_limited_count == 5, (
+        f"Expected 5 rate limited requests, got {rate_limited_count}"
+    )
+
+    # Check that rate limited responses mention burst limit
+    rate_limited_details = [r[1] for r in results if r[0] == 429]
+    assert all("burst limit" in detail for detail in rate_limited_details), (
+        "Rate limited responses should mention burst limit"
+    )
+
+
+def test_dual_rate_limiting_burst_reset(dual_rate_limited_client: TestClient) -> None:
+    """Test that burst limit resets after the short window expires."""
+    # Make 5 requests to hit burst limit
+    for _ in range(5):
+        response = dual_rate_limited_client.get("/health")
+        assert response.status_code == 200
+
+    # Next request should be burst limited
+    response = dual_rate_limited_client.get("/health")
+    assert response.status_code == 429
+    assert "burst limit" in response.json()["detail"]
+
+    # Wait for burst window to reset (1 second + margin)
+    time.sleep(1.5)
+
+    # Should be able to make more requests now (burst limit reset)
+    for i in range(5):
+        response = dual_rate_limited_client.get("/health")
+        assert response.status_code == 200, (
+            f"Request {i + 1} after burst reset should succeed"
+        )

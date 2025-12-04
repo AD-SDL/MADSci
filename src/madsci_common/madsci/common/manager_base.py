@@ -279,12 +279,24 @@ class AbstractManagerBase(
                 RateLimitMiddleware,
                 requests_limit=self._settings.rate_limit_requests,
                 time_window=self._settings.rate_limit_window,
+                short_requests_limit=self._settings.rate_limit_short_requests,
+                short_time_window=self._settings.rate_limit_short_window,
                 cleanup_interval=self._settings.rate_limit_cleanup_interval,
             )
-            self.logger.info(
+            # Build log message with both long and short window info
+            log_msg = (
                 f"Rate limiting enabled: {self._settings.rate_limit_requests} requests "
                 f"per {self._settings.rate_limit_window} seconds"
             )
+            if (
+                self._settings.rate_limit_short_requests is not None
+                and self._settings.rate_limit_short_window is not None
+            ):
+                log_msg += (
+                    f", burst limit: {self._settings.rate_limit_short_requests} requests "
+                    f"per {self._settings.rate_limit_short_window} seconds"
+                )
+            self.logger.info(log_msg)
 
         # Add CORS middleware by default
         app.add_middleware(

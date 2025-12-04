@@ -332,7 +332,7 @@ MADSci provides middleware components for enhancing server resilience and monito
 
 #### Rate Limiting
 
-The `RateLimitMiddleware` protects services from overload by enforcing request rate limits per client IP:
+The `RateLimitMiddleware` protects services from overload by enforcing request rate limits per client IP with support for dual window limiting (burst + sustained):
 
 ```python
 from madsci.common.middleware import RateLimitMiddleware
@@ -340,16 +340,19 @@ from fastapi import FastAPI
 
 app = FastAPI()
 
-# Add rate limiting (100 requests per 60 seconds)
+# Add rate limiting with dual windows
 app.add_middleware(
     RateLimitMiddleware,
-    requests_limit=100,
+    requests_limit=100,              # Long window: 100 requests per 60 seconds
     time_window=60,
-    cleanup_interval=300  # Clean up inactive clients every 5 minutes
+    short_requests_limit=50,         # Short window: 50 requests per 1 second (burst protection)
+    short_time_window=1,
+    cleanup_interval=300             # Clean up inactive clients every 5 minutes
 )
 ```
 
 **Key features:**
+- **Dual rate limiting**: Separate limits for burst (short window) and sustained (long window) traffic
 - **Async-safe**: Uses asyncio locks to prevent race conditions in concurrent coroutine handling
 - **Sliding window**: Rate limiting based on moving time window algorithm
 - **Memory efficient**: Automatic cleanup of inactive client tracking data
@@ -357,18 +360,28 @@ app.add_middleware(
 - **429 responses**: Returns HTTP 429 Too Many Requests when limit is exceeded
 
 **Configuration parameters:**
-- `requests_limit`: Maximum requests allowed per time window (default: 100)
-- `time_window`: Time window in seconds (default: 60)
+- `requests_limit`: Maximum requests allowed per long time window (default: 100)
+- `time_window`: Long time window in seconds (default: 60)
+- `short_requests_limit`: Maximum requests per short window for burst protection (default: 50, optional)
+- `short_time_window`: Short time window in seconds (default: 1, optional)
 - `cleanup_interval`: Interval between cleanup operations in seconds (default: 300)
 
 **Response headers:**
-- `X-RateLimit-Limit`: Maximum requests allowed in the time window
-- `X-RateLimit-Remaining`: Number of requests remaining in current window
-- `X-RateLimit-Reset`: Unix timestamp when the rate limit resets
+- `X-RateLimit-Limit`: Maximum requests allowed in the long time window
+- `X-RateLimit-Remaining`: Number of requests remaining in current long window
+- `X-RateLimit-Reset`: Unix timestamp when the long window rate limit resets
+- `X-RateLimit-Burst-Limit`: Maximum requests allowed in the short time window (if configured)
+- `X-RateLimit-Burst-Remaining`: Number of requests remaining in current short window (if configured)
 - `Retry-After`: Seconds to wait before retrying (included in 429 responses)
 
-**Example 429 response:**
+**Example 429 responses:**
 ```json
+// Burst limit exceeded
+{
+  "detail": "Rate limit exceeded: 50 requests per 1 seconds (burst limit)"
+}
+
+// Long window limit exceeded
 {
   "detail": "Rate limit exceeded: 100 requests per 60 seconds"
 }
@@ -382,12 +395,36 @@ from madsci.common.middleware import RateLimitMiddleware
 class MyManager(AbstractManagerBase[MySettings, MyDefinition]):
     def __init__(self, settings: MySettings):
         super().__init__(settings)
-        # Add rate limiting to protect the service
-        self.app.add_middleware(
-            RateLimitMiddleware,
-            requests_limit=200,  # Allow 200 requests
-            time_window=60,      # Per minute
-        )
+        # Rate limiting is automatically configured from ManagerSettings
+        # To customize, modify settings before initialization:
+        # settings.rate_limit_requests = 200
+        # settings.rate_limit_short_requests = 20
+```
+
+**How dual rate limiting works:**
+
+Dual rate limiting protects against both burst traffic and sustained high load:
+
+1. **Burst protection (short window)**: Prevents rapid request bursts that could overwhelm the service
+   - Example: 50 requests per second limit prevents a client from sending 100 requests instantly
+
+2. **Sustained load protection (long window)**: Prevents continuous high request rates over time
+   - Example: 100 requests per minute limit prevents sustained abuse
+
+Both limits must be satisfied for a request to succeed. If either limit is exceeded, a 429 response is returned with appropriate `Retry-After` guidance.
+
+**Single window mode:**
+
+To use only long window limiting (no burst protection), set `short_requests_limit` and `short_time_window` to `None`:
+
+```python
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_limit=100,
+    time_window=60,
+    short_requests_limit=None,  # Disable burst protection
+    short_time_window=None,
+)
 ```
 ### Database Backup Tools
 

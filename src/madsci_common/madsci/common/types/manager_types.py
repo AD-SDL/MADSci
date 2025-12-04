@@ -62,14 +62,26 @@ class ManagerSettings(MadsciBaseSettings):
     )
     rate_limit_requests: int = Field(
         title="Rate Limit Requests",
-        description="Maximum number of requests allowed per time window.",
+        description="Maximum number of requests allowed per long time window.",
         default=100,
         ge=1,
     )
     rate_limit_window: int = Field(
         title="Rate Limit Window",
-        description="Time window for rate limiting in seconds.",
+        description="Long time window for rate limiting in seconds.",
         default=60,
+        ge=1,
+    )
+    rate_limit_short_requests: Optional[int] = Field(
+        title="Rate Limit Short Requests",
+        description="Maximum number of requests allowed per short time window for burst protection. If None, short window limiting is disabled.",
+        default=50,
+        ge=1,
+    )
+    rate_limit_short_window: Optional[int] = Field(
+        title="Rate Limit Short Window",
+        description="Short time window for burst protection in seconds. If None, short window limiting is disabled.",
+        default=1,
         ge=1,
     )
     rate_limit_cleanup_interval: int = Field(
