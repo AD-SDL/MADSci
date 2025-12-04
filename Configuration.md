@@ -69,19 +69,21 @@ Settings for the MADSci Data Manager.
 
 **Environment Prefix**: `DATA_`
 
-| Name                               | Type                    | Default                       | Description                                                                                     | Example                       |
-|------------------------------------|-------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
-| `DATA_SERVER_URL`                  | `AnyUrl`                | `"http://localhost:8004/"`    | The URL of the data manager server.                                                             | `"http://localhost:8004/"`    |
-| `DATA_MANAGER_DEFINITION`          | `string` \| `Path`      | `"data.manager.yaml"`         | Path to the data manager definition file to use.                                                | `"data.manager.yaml"`         |
-| `DATA_RATE_LIMIT_ENABLED`          | `boolean`               | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
-| `DATA_RATE_LIMIT_REQUESTS`         | `integer`               | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
-| `DATA_RATE_LIMIT_WINDOW`           | `integer`               | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
-| `DATA_RATE_LIMIT_CLEANUP_INTERVAL` | `integer`               | `300`                         | Interval in seconds between cleanup operations to prevent memory leaks.                         | `300`                         |
-| `DATA_UVICORN_WORKERS`             | `integer` \| `NoneType` | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
-| `DATA_UVICORN_LIMIT_CONCURRENCY`   | `integer` \| `NoneType` | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
-| `DATA_UVICORN_LIMIT_MAX_REQUESTS`  | `integer` \| `NoneType` | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
-| `DATA_DB_URL`                      | `string`                | `"mongodb://localhost:27017"` | The URL of the database used by the Data Manager.                                               | `"mongodb://localhost:27017"` |
-| `DATA_FILE_STORAGE_PATH`           | `string` \| `Path`      | `"~/.madsci/datapoints"`      | The path where files are stored on the server.                                                  | `"~/.madsci/datapoints"`      |
+| Name                                        | Type                    | Default                       | Description                                                                                     | Example                       |
+|---------------------------------------------|-------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
+| `DATA_SERVER_URL`                           | `AnyUrl`                | `"http://localhost:8004/"`    | The URL of the data manager server.                                                             | `"http://localhost:8004/"`    |
+| `DATA_MANAGER_DEFINITION`                   | `string` \| `Path`      | `"data.manager.yaml"`         | Path to the data manager definition file to use.                                                | `"data.manager.yaml"`         |
+| `DATA_RATE_LIMIT_ENABLED`                   | `boolean`               | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
+| `DATA_RATE_LIMIT_REQUESTS`                  | `integer`               | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
+| `DATA_RATE_LIMIT_WINDOW`                    | `integer`               | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
+| `DATA_RATE_LIMIT_CLEANUP_INTERVAL`          | `integer`               | `300`                         | Interval in seconds between cleanup operations to prevent memory leaks.                         | `300`                         |
+| `DATA_UVICORN_WORKERS`                      | `integer` \| `NoneType` | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
+| `DATA_UVICORN_LIMIT_CONCURRENCY`            | `integer` \| `NoneType` | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
+| `DATA_UVICORN_LIMIT_MAX_REQUESTS`           | `integer` \| `NoneType` | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
+| `DATA_DATABASE_NAME`                        | `string`                | `"madsci_data"`               | The name of the MongoDB database where events are stored.                                       | `"madsci_data"`               |
+| `DATA_COLLECTION_NAME`                      | `string`                | `"datapoints"`                | The name of the MongoDB collection where data are stored.                                       | `"datapoints"`                |
+| `MONGO_DB_URL` \| `DATA_DB_URL` \| `DB_URL` | `AnyUrl`                | `"mongodb://localhost:27017"` | The URL of the MongoDB database used by the Data Manager.                                       | `"mongodb://localhost:27017"` |
+| `DATA_FILE_STORAGE_PATH`                    | `string` \| `Path`      | `"~/.madsci/datapoints"`      | The path where files are stored on the server.                                                  | `"~/.madsci/datapoints"`      |
 
 ## EventManagerSettings
 
@@ -89,21 +91,22 @@ Handles settings and configuration for the Event Manager.
 
 **Environment Prefix**: `EVENT_`
 
-| Name                                | Type                              | Default                       | Description                                                                                     | Example                       |
-|-------------------------------------|-----------------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
-| `EVENT_SERVER_URL`                  | `AnyUrl` \| `NoneType`            | `"http://localhost:8001"`     | The URL of the Event Manager server.                                                            | `"http://localhost:8001"`     |
-| `EVENT_MANAGER_DEFINITION`          | `string` \| `Path`                | `"event.manager.yaml"`        | Path to the event manager definition file to use.                                               | `"event.manager.yaml"`        |
-| `EVENT_RATE_LIMIT_ENABLED`          | `boolean`                         | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
-| `EVENT_RATE_LIMIT_REQUESTS`         | `integer`                         | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
-| `EVENT_RATE_LIMIT_WINDOW`           | `integer`                         | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
-| `EVENT_RATE_LIMIT_CLEANUP_INTERVAL` | `integer`                         | `300`                         | Interval in seconds between cleanup operations to prevent memory leaks.                         | `300`                         |
-| `EVENT_UVICORN_WORKERS`             | `integer` \| `NoneType`           | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
-| `EVENT_UVICORN_LIMIT_CONCURRENCY`   | `integer` \| `NoneType`           | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
-| `EVENT_UVICORN_LIMIT_MAX_REQUESTS`  | `integer` \| `NoneType`           | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
-| `EVENT_DB_URL`                      | `string`                          | `"mongodb://localhost:27017"` | The URL of the database used by the Event Manager.                                              | `"mongodb://localhost:27017"` |
-| `EVENT_COLLECTION_NAME`             | `string`                          | `"madsci_events"`             | The name of the MongoDB collection where events are stored.                                     | `"madsci_events"`             |
-| `EVENT_ALERT_LEVEL`                 | `EventLogLevel`                   | `40`                          | The log level at which to send an alert.                                                        | `40`                          |
-| `EVENT_EMAIL_ALERTS`                | `EmailAlertsConfig` \| `NoneType` | `null`                        | The configuration for sending email alerts.                                                     | `null`                        |
+| Name                                         | Type                              | Default                       | Description                                                                                     | Example                       |
+|----------------------------------------------|-----------------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
+| `EVENT_SERVER_URL`                           | `AnyUrl` \| `NoneType`            | `"http://localhost:8001"`     | The URL of the Event Manager server.                                                            | `"http://localhost:8001"`     |
+| `EVENT_MANAGER_DEFINITION`                   | `string` \| `Path`                | `"event.manager.yaml"`        | Path to the event manager definition file to use.                                               | `"event.manager.yaml"`        |
+| `EVENT_RATE_LIMIT_ENABLED`                   | `boolean`                         | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
+| `EVENT_RATE_LIMIT_REQUESTS`                  | `integer`                         | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
+| `EVENT_RATE_LIMIT_WINDOW`                    | `integer`                         | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
+| `EVENT_RATE_LIMIT_CLEANUP_INTERVAL`          | `integer`                         | `300`                         | Interval in seconds between cleanup operations to prevent memory leaks.                         | `300`                         |
+| `EVENT_UVICORN_WORKERS`                      | `integer` \| `NoneType`           | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
+| `EVENT_UVICORN_LIMIT_CONCURRENCY`            | `integer` \| `NoneType`           | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
+| `EVENT_UVICORN_LIMIT_MAX_REQUESTS`           | `integer` \| `NoneType`           | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
+| `MONGO_DB_URL` \| `EVENT_DB_URL` \| `DB_URL` | `AnyUrl`                          | `"mongodb://localhost:27017"` | The URL of the MongoDB database used by the Event Manager.                                      | `"mongodb://localhost:27017"` |
+| `EVENT_DATABASE_NAME`                        | `string`                          | `"madsci_events"`             | The name of the MongoDB database where events are stored.                                       | `"madsci_events"`             |
+| `EVENT_COLLECTION_NAME`                      | `string`                          | `"events"`                    | The name of the MongoDB collection where events are stored.                                     | `"events"`                    |
+| `EVENT_ALERT_LEVEL`                          | `EventLogLevel`                   | `40`                          | The log level at which to send an alert.                                                        | `40`                          |
+| `EVENT_EMAIL_ALERTS`                         | `EmailAlertsConfig` \| `NoneType` | `null`                        | The configuration for sending email alerts.                                                     | `null`                        |
 
 ## WorkcellManagerSettings
 
@@ -130,7 +133,9 @@ Settings for the MADSci Workcell Manager.
 | `WORKCELL_NODE_UPDATE_INTERVAL`                                                | `number`                         | `1.0`                                                    | The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval                                                      | `1.0`                                                    |
 | `WORKCELL_COLD_START_DELAY`                                                    | `integer`                        | `0`                                                      | How long the Workcell engine should sleep on startup                                                                                                               | `0`                                                      |
 | `WORKCELL_SCHEDULER`                                                           | `string`                         | `"madsci.workcell_manager.schedulers.default_scheduler"` | Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use                                                                       | `"madsci.workcell_manager.schedulers.default_scheduler"` |
-| `WORKCELL_MONGO_URL`                                                           | `string` \| `NoneType`           | `null`                                                   | The URL for the mongo database.                                                                                                                                    | `null`                                                   |
+| `MONGO_DB_URL` \| `WORKCELL_MONGO_URL` \| `MONGO_URL`                          | `AnyUrl` \| `NoneType`           | `"mongodb://localhost:27017"`                            | The URL for the MongoDB database.                                                                                                                                  | `"mongodb://localhost:27017"`                            |
+| `WORKCELL_DATABASE_NAME`                                                       | `string`                         | `"madsci_workcells"`                                     | The name of the MongoDB database where events are stored.                                                                                                          | `"madsci_workcells"`                                     |
+| `WORKCELL_COLLECTION_NAME`                                                     | `string`                         | `"archived_workflows"`                                   | The name of the MongoDB collection where events are stored.                                                                                                        | `"archived_workflows"`                                   |
 | `WORKCELL_GET_ACTION_RESULT_RETRIES`                                           | `integer`                        | `3`                                                      | Number of times to retry getting an action result                                                                                                                  | `3`                                                      |
 
 ## ExperimentManagerSettings
@@ -139,18 +144,20 @@ Settings for the MADSci Experiment Manager.
 
 **Environment Prefix**: `EXPERIMENT_`
 
-| Name                                     | Type                    | Default                       | Description                                                                                     | Example                       |
-|------------------------------------------|-------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
-| `EXPERIMENT_SERVER_URL`                  | `AnyUrl`                | `"http://localhost:8002/"`    | The URL of the experiment manager server.                                                       | `"http://localhost:8002/"`    |
-| `EXPERIMENT_MANAGER_DEFINITION`          | `string` \| `Path`      | `"experiment.manager.yaml"`   | Path to the experiment manager definition file to use.                                          | `"experiment.manager.yaml"`   |
-| `EXPERIMENT_RATE_LIMIT_ENABLED`          | `boolean`               | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
-| `EXPERIMENT_RATE_LIMIT_REQUESTS`         | `integer`               | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
-| `EXPERIMENT_RATE_LIMIT_WINDOW`           | `integer`               | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
-| `EXPERIMENT_RATE_LIMIT_CLEANUP_INTERVAL` | `integer`               | `300`                         | Interval in seconds between cleanup operations to prevent memory leaks.                         | `300`                         |
-| `EXPERIMENT_UVICORN_WORKERS`             | `integer` \| `NoneType` | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
-| `EXPERIMENT_UVICORN_LIMIT_CONCURRENCY`   | `integer` \| `NoneType` | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
-| `EXPERIMENT_UVICORN_LIMIT_MAX_REQUESTS`  | `integer` \| `NoneType` | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
-| `EXPERIMENT_DB_URL`                      | `string`                | `"mongodb://localhost:27017"` | The URL of the database for the experiment manager.                                             | `"mongodb://localhost:27017"` |
+| Name                                              | Type                    | Default                       | Description                                                                                     | Example                       |
+|---------------------------------------------------|-------------------------|-------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------|
+| `EXPERIMENT_SERVER_URL`                           | `AnyUrl`                | `"http://localhost:8002/"`    | The URL of the experiment manager server.                                                       | `"http://localhost:8002/"`    |
+| `EXPERIMENT_MANAGER_DEFINITION`                   | `string` \| `Path`      | `"experiment.manager.yaml"`   | Path to the experiment manager definition file to use.                                          | `"experiment.manager.yaml"`   |
+| `EXPERIMENT_RATE_LIMIT_ENABLED`                   | `boolean`               | `true`                        | Enable rate limiting for API endpoints.                                                         | `true`                        |
+| `EXPERIMENT_RATE_LIMIT_REQUESTS`                  | `integer`               | `100`                         | Maximum number of requests allowed per time window.                                             | `100`                         |
+| `EXPERIMENT_RATE_LIMIT_WINDOW`                    | `integer`               | `60`                          | Time window for rate limiting in seconds.                                                       | `60`                          |
+| `EXPERIMENT_RATE_LIMIT_CLEANUP_INTERVAL`          | `integer`               | `300`                         | Interval in seconds between cleanup operations to prevent memory leaks.                         | `300`                         |
+| `EXPERIMENT_UVICORN_WORKERS`                      | `integer` \| `NoneType` | `null`                        | Number of uvicorn worker processes. If None, uses uvicorn default (1).                          | `null`                        |
+| `EXPERIMENT_UVICORN_LIMIT_CONCURRENCY`            | `integer` \| `NoneType` | `null`                        | Maximum number of concurrent connections. If None, no limit is enforced.                        | `null`                        |
+| `EXPERIMENT_UVICORN_LIMIT_MAX_REQUESTS`           | `integer` \| `NoneType` | `null`                        | Maximum number of requests a worker will process before restarting. Helps prevent memory leaks. | `null`                        |
+| `MONGO_DB_URL` \| `EXPERIMENT_DB_URL` \| `DB_URL` | `AnyUrl`                | `"mongodb://localhost:27017"` | The URL of the MongoDB database for the experiment manager.                                     | `"mongodb://localhost:27017"` |
+| `EXPERIMENT_DATABASE_NAME`                        | `string`                | `"madsci_experiments"`        | The name of the MongoDB database where events are stored.                                       | `"madsci_experiments"`        |
+| `EXPERIMENT_COLLECTION_NAME`                      | `string`                | `"experiments"`               | The name of the MongoDB collection where events are stored.                                     | `"experiments"`               |
 
 ## ResourceManagerSettings
 
@@ -210,3 +217,34 @@ Settings for the LocationManager.
 | `LOCATION_REDIS_HOST`                  | `string`                | `"localhost"`              | The host of the Redis server for state storage.                                                 | `"localhost"`              |
 | `LOCATION_REDIS_PORT`                  | `integer`               | `6379`                     | The port of the Redis server for state storage.                                                 | `6379`                     |
 | `LOCATION_REDIS_PASSWORD`              | `string` \| `NoneType`  | `null`                     | The password for the Redis server (if required).                                                | `null`                     |
+
+## PostgreSQLBackupSettings
+
+PostgreSQL-specific backup settings.
+
+**Environment Prefix**: `POSTGRES_`
+
+| Name                          | Type      | Default                                                 | Description                                   | Example                                                 |
+|-------------------------------|-----------|---------------------------------------------------------|-----------------------------------------------|---------------------------------------------------------|
+| `POSTGRES_BACKUP_DIR`         | `Path`    | `".madsci/backups"`                                     | Directory for storing backups                 | `".madsci/backups"`                                     |
+| `POSTGRES_MAX_BACKUPS`        | `integer` | `10`                                                    | Maximum number of backups to retain           | `10`                                                    |
+| `POSTGRES_VALIDATE_INTEGRITY` | `boolean` | `true`                                                  | Perform integrity validation after backup     | `true`                                                  |
+| `POSTGRES_COMPRESSION`        | `boolean` | `true`                                                  | Enable backup compression                     | `true`                                                  |
+| `DB_URL` \| `DB_URL`          | `string`  | `"postgresql://madsci:madsci@localhost:5432/resources"` | PostgreSQL connection URL                     | `"postgresql://madsci:madsci@localhost:5432/resources"` |
+| `POSTGRES_BACKUP_FORMAT`      | `string`  | `"custom"`                                              | pg_dump format: custom, plain, directory, tar | `"custom"`                                              |
+
+## MongoDBBackupSettings
+
+MongoDB-specific backup settings.
+
+**Environment Prefix**: `MONGODB_`
+
+| Name                             | Type                  | Default                       | Description                                  | Example                       |
+|----------------------------------|-----------------------|-------------------------------|----------------------------------------------|-------------------------------|
+| `MONGODB_BACKUP_DIR`             | `Path`                | `".madsci/backups"`           | Directory for storing backups                | `".madsci/backups"`           |
+| `MONGODB_MAX_BACKUPS`            | `integer`             | `10`                          | Maximum number of backups to retain          | `10`                          |
+| `MONGODB_VALIDATE_INTEGRITY`     | `boolean`             | `true`                        | Perform integrity validation after backup    | `true`                        |
+| `MONGODB_COMPRESSION`            | `boolean`             | `true`                        | Enable backup compression                    | `true`                        |
+| `MONGO_DB_URL` \| `MONGO_DB_URL` | `AnyUrl`              | `"mongodb://localhost:27017"` | MongoDB connection URL                       | `"mongodb://localhost:27017"` |
+| `MONGODB_DATABASE`               | `string`              | *required*                    | Database name to backup                      |                               |
+| `MONGODB_COLLECTIONS`            | `array` \| `NoneType` | `null`                        | Specific collections to backup (all if None) | `null`                        |

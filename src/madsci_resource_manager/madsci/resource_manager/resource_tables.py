@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
+from madsci.common.types.base_types import MadsciSQLModel
 from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
     CustomResourceAttributeDefinition,  # noqa: F401
@@ -410,4 +411,31 @@ class ResourceTemplateTable(ResourceTableBase, table=True):
             "server_default": text("CURRENT_TIMESTAMP"),
             "server_onupdate": FetchedValue(),
         },
+    )
+
+
+class SchemaVersionTable(MadsciSQLModel, table=True):
+    """Table to track the current schema version of the MADSci database."""
+
+    __tablename__ = "madsci_schema_version"
+
+    version: str = Field(
+        title="MADSci Version",
+        description="The MADSci version this database schema corresponds to.",
+        primary_key=True,
+    )
+    applied_at: Optional[datetime] = Field(
+        title="Applied At",
+        description="When this version was applied to the database.",
+        default=None,
+        sa_type=TIMESTAMP(timezone=True),
+        sa_column_kwargs={
+            "nullable": False,
+            "server_default": text("CURRENT_TIMESTAMP"),
+        },
+    )
+    migration_notes: Optional[str] = Field(
+        title="Migration Notes",
+        description="Notes about what was migrated in this version.",
+        default=None,
     )

@@ -36,6 +36,8 @@ checks:
   @pre-commit run --all-files || { echo "" && echo "Some checks failed! Running one more time to see if any automatic fixes worked:" && echo "" ; pre-commit run --all-files; }
 # Run the pre-commit checks
 check: checks
+ruff-unsafe:
+  @ruff check . --fix --unsafe-fixes
 
 # Build the project
 build: dcb
@@ -187,6 +189,8 @@ node_integration_tests:
 experiment_integration_tests:
   docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
 
+backup_integration_tests:
+  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/backup_and_migration.ipynb
 
 # Run the integration tests
-integration_tests: node_integration_tests experiment_integration_tests
+integration_tests: node_integration_tests experiment_integration_tests backup_integration_tests
