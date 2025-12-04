@@ -42,10 +42,21 @@ class ExperimentManagerSettings(
         description="Path to the experiment manager definition file to use.",
         default="experiment.manager.yaml",
     )
-    db_url: str = Field(
-        title="Database URL",
-        description="The URL of the database for the experiment manager.",
-        default="mongodb://localhost:27017",
+    mongo_db_url: AnyUrl = Field(
+        title="MongoDB URL",
+        description="The URL of the MongoDB database for the experiment manager.",
+        default=AnyUrl("mongodb://localhost:27017"),
+        validation_alias=AliasChoices("mongo_db_url", "EXPERIMENT_DB_URL", "db_url"),
+    )
+    database_name: str = Field(
+        default="madsci_experiments",
+        title="Database Name",
+        description="The name of the MongoDB database where events are stored.",
+    )
+    collection_name: str = Field(
+        default="experiments",
+        title="Collection Name",
+        description="The name of the MongoDB collection where events are stored.",
     )
 
 
