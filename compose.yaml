@@ -63,7 +63,7 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - ${REPO_PATH:-.}/.madsci/postgres:/var/lib/postgresql/data
+      - ${REPO_PATH:-.}/.madsci/postgresql/data:/var/lib/postgresql/data
   minio:
     container_name: minio
     image: minio/minio
