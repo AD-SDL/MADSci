@@ -1,7 +1,6 @@
 """Location types for MADSci."""
 
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
@@ -317,25 +316,15 @@ class LocationManagerSettings(
 ):
     """Settings for the LocationManager."""
 
-    server_host: str = Field(
-        title="Server Host",
-        description="The host to run the server on.",
-        default="localhost",
-    )
-    manager_definition: PathLike = Field(
-        title="Location Manager Definition File",
-        description="Path to the location manager definition file to use.",
-        default=Path("location.manager.yaml"),
-    )
-    server_port: int = Field(
-        title="Server Port",
-        description="The port to run the server on.",
-        default=8006,
-    )
     server_url: AnyUrl = Field(
         title="Server URL",
         description="The URL where this manager's server runs.",
         default="http://localhost:8006/",
+    )
+    manager_definition: PathLike = Field(
+        title="Location Manager Definition File",
+        description="Path to the location manager definition file to use.",
+        default="location.manager.yaml",
     )
     redis_host: str = Field(
         title="Redis Host",
