@@ -7,27 +7,28 @@ from madsci.common.types.resource_types import (
     Pool,
     Queue,
     Stack,
+    Slot,
 )
 
 # Initialize the ResourcesClient with the database URL
 base_url = "http://localhost:8003"
 client = ResourceClient(resource_server_url=base_url)
 
-# stack = Stack(
-#     resource_name="stack", resource_class="stack", capacity=10, ownership=None
-# )
-# stack = client.add_resource(stack)
-# # # Add assets to the stack and push them
-# for i in range(5):
-#     asset = Asset(resource_name=f"Test plate {i}", resource_class="asset")
-#     asset = client.add_resource(asset)
-#     stack = client.push(stack, asset)
+stack = Stack(
+    resource_name="stack", resource_class="stack", capacity=10, ownership=None
+)
+stack = client.add_resource(stack)
+# # Add assets to the stack and push them
+for i in range(5):
+    asset = Asset(resource_name=f"Test plate {i}", resource_class="asset")
+    asset = client.add_resource(asset)
+    stack = client.push(stack, asset)
 
-# # # # Retrieve the stack and pop two assets
-# retrieved_stack = client.query_resource(resource_id=stack.resource_id)
-# for _ in range(2):
-#     popped_asset, retrieved_stack = client.pop(retrieved_stack)
-#     print(popped_asset)
+# # # Retrieve the stack and pop two assets
+retrieved_stack = client.query_resource(resource=stack.resource_id)
+for _ in range(2):
+    popped_asset, retrieved_stack = client.pop(retrieved_stack)
+    print(popped_asset)
 
 # # # Create and add a queue
 # queue = Queue(
@@ -58,31 +59,31 @@ client = ResourceClient(resource_server_url=base_url)
 # consumable = client.add_resource(consumable)
 
 # # Create and add a pool resource with the consumable as a child
-pool = Pool(
-    resource_name="Vial_1",
-    resource_class="pool",
-    capacity=500.0,
-    # children={"Water": consumable},
-)
-pool = client.add_resource(pool)
+# pool = Pool(
+#     resource_name="Vial_1",
+#     resource_class="pool",
+#     capacity=500.0,
+#     # children={"Water": consumable},
+# )
+# pool = client.add_resource(pool)
 
 # # Perform operations on the pool
-print(f"Initial Pool Quantity: {pool.quantity}")
-pool = client.increase_quantity(pool, 50.0)
-print(f"After Increase: {pool.quantity}")
+# print(f"Initial Pool Quantity: {pool.quantity}")
+# pool = client.increase_quantity(pool, 50.0)
+# print(f"After Increase: {pool.quantity}")
 
-pool = client.decrease_quantity(pool, 20.0)
-print(f"After Decrease: {pool.quantity}")
+# pool = client.decrease_quantity(pool, 20.0)
+# print(f"After Decrease: {pool.quantity}")
 
-pool = client.fill(pool)
-print(f"After Fill: {pool.quantity}")
+# pool = client.fill(pool)
+# print(f"After Fill: {pool.quantity}")
 
-pool = client.empty(pool)
-print(f"After Empty: {pool.quantity}")
+# pool = client.empty(pool)
+# print(f"After Empty: {pool.quantity}")
 
 # Add another pool resource
-pool1 = Pool(resource_name="Pool1", resource_class="pool", capacity=100, quantity=50)
-pool1 = client.add_resource(pool1)
+# pool1 = Pool(resource_name="Pool1", resource_class="pool", capacity=100, quantity=50)
+# pool1 = client.add_resource(pool1)
 
 # # Create and add a plate resource with an initial child pool
 # plate = Collection(
