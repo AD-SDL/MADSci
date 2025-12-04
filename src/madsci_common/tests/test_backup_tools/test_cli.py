@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
-from madsci.common.backup_tools.unified_cli import (
+from madsci.common.backup_tools.cli import (
     detect_database_type,
     madsci_backup,
 )
@@ -50,9 +50,7 @@ class TestUnifiedCLICreate:
 
     def test_create_postgres_backup_auto_detect(self, runner: CliRunner) -> None:
         """Test creating PostgreSQL backup with auto-detection."""
-        with patch(
-            "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-        ) as mock_tool:
+        with patch("madsci.common.backup_tools.cli.PostgreSQLBackupTool") as mock_tool:
             mock_instance = MagicMock()
             mock_instance.create_backup.return_value = Path("/test/backup.dump")
             mock_tool.return_value = mock_instance
@@ -68,9 +66,7 @@ class TestUnifiedCLICreate:
 
     def test_create_mongodb_backup_auto_detect(self, runner: CliRunner) -> None:
         """Test creating MongoDB backup with auto-detection."""
-        with patch(
-            "madsci.common.backup_tools.unified_cli.MongoDBBackupTool"
-        ) as mock_tool:
+        with patch("madsci.common.backup_tools.cli.MongoDBBackupTool") as mock_tool:
             mock_instance = MagicMock()
             mock_instance.create_backup.return_value = Path("/test/backup")
             mock_tool.return_value = mock_instance
@@ -86,9 +82,7 @@ class TestUnifiedCLICreate:
 
     def test_create_with_explicit_type(self, runner: CliRunner) -> None:
         """Test creating backup with explicit database type."""
-        with patch(
-            "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-        ) as mock_tool:
+        with patch("madsci.common.backup_tools.cli.PostgreSQLBackupTool") as mock_tool:
             mock_instance = MagicMock()
             mock_instance.create_backup.return_value = Path("/test/backup.dump")
             mock_tool.return_value = mock_instance
@@ -109,9 +103,7 @@ class TestUnifiedCLICreate:
 
     def test_create_with_custom_name(self, runner: CliRunner) -> None:
         """Test creating backup with custom name suffix."""
-        with patch(
-            "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-        ) as mock_tool:
+        with patch("madsci.common.backup_tools.cli.PostgreSQLBackupTool") as mock_tool:
             mock_instance = MagicMock()
             mock_instance.create_backup.return_value = Path("/test/backup_custom.dump")
             mock_tool.return_value = mock_instance
@@ -133,9 +125,7 @@ class TestUnifiedCLICreate:
     def test_create_with_custom_backup_dir(self, runner: CliRunner) -> None:
         """Test creating backup with custom backup directory."""
         with (
-            patch(
-                "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-            ) as mock_tool,
+            patch("madsci.common.backup_tools.cli.PostgreSQLBackupTool") as mock_tool,
             tempfile.TemporaryDirectory() as tmpdir,
         ):
             mock_instance = MagicMock()
@@ -161,9 +151,7 @@ class TestUnifiedCLICreate:
 
     def test_create_failure_exits_with_error(self, runner: CliRunner) -> None:
         """Test create command exits with error on failure."""
-        with patch(
-            "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-        ) as mock_tool:
+        with patch("madsci.common.backup_tools.cli.PostgreSQLBackupTool") as mock_tool:
             mock_instance = MagicMock()
             mock_instance.create_backup.side_effect = RuntimeError("Backup failed")
             mock_tool.return_value = mock_instance
@@ -187,9 +175,7 @@ class TestUnifiedCLIRestore:
     def test_restore_postgres_backup(self, runner: CliRunner) -> None:
         """Test restoring PostgreSQL backup."""
         with (
-            patch(
-                "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-            ) as mock_tool,
+            patch("madsci.common.backup_tools.cli.PostgreSQLBackupTool") as mock_tool,
             tempfile.NamedTemporaryFile(suffix=".dump") as backup_file,
         ):
             mock_instance = MagicMock()
@@ -221,9 +207,7 @@ class TestUnifiedCLIValidate:
     def test_validate_backup(self, runner: CliRunner) -> None:
         """Test validating backup integrity."""
         with (
-            patch(
-                "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-            ) as mock_tool,
+            patch("madsci.common.backup_tools.cli.PostgreSQLBackupTool") as mock_tool,
             tempfile.NamedTemporaryFile(suffix=".dump") as backup_file,
         ):
             mock_instance = MagicMock()
@@ -248,9 +232,7 @@ class TestUnifiedCLIValidate:
     def test_validate_invalid_backup(self, runner: CliRunner) -> None:
         """Test validation fails for invalid backup."""
         with (
-            patch(
-                "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
-            ) as mock_tool,
+            patch("madsci.common.backup_tools.cli.PostgreSQLBackupTool") as mock_tool,
             tempfile.NamedTemporaryFile(suffix=".dump") as backup_file,
         ):
             mock_instance = MagicMock()
@@ -294,7 +276,7 @@ class TestUnifiedCLIConfigFile:
 
             try:
                 with patch(
-                    "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
+                    "madsci.common.backup_tools.cli.PostgreSQLBackupTool"
                 ) as mock_tool:
                     mock_instance = MagicMock()
                     mock_instance.create_backup.return_value = Path("/test/backup.dump")
@@ -324,7 +306,7 @@ class TestUnifiedCLIConfigFile:
 
             try:
                 with patch(
-                    "madsci.common.backup_tools.unified_cli.PostgreSQLBackupTool"
+                    "madsci.common.backup_tools.cli.PostgreSQLBackupTool"
                 ) as mock_tool:
                     mock_instance = MagicMock()
                     mock_instance.create_backup.return_value = Path("/test/backup.dump")

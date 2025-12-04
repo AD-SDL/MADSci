@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import pytest
 from click.testing import CliRunner
 from madsci.common.backup_tools.base_backup import BackupInfo
-from madsci.common.backup_tools.cli import mongodb_backup
+from madsci.common.backup_tools.mongo_cli import mongodb_backup
 
 
 class TestMongoDBBackupCLI:
@@ -41,7 +41,7 @@ class TestMongoDBBackupCLI:
         """Test CLI backup creation command."""
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.create_backup.return_value = Path(
@@ -69,7 +69,7 @@ class TestMongoDBBackupCLI:
         """Test CLI backup creation with custom name suffix."""
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -94,10 +94,10 @@ class TestMongoDBBackupCLI:
 
         with (
             patch(
-                "madsci.common.backup_tools.cli.MongoDBBackupTool"
+                "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
             ) as mock_tool_class,
             patch(
-                "madsci.common.backup_tools.cli.MongoDBBackupSettings"
+                "madsci.common.backup_tools.mongo_cli.MongoDBBackupSettings"
             ) as mock_settings,
         ):
             mock_tool_class.return_value = mock_backup_tool
@@ -125,10 +125,10 @@ class TestMongoDBBackupCLI:
 
         with (
             patch(
-                "madsci.common.backup_tools.cli.MongoDBBackupTool"
+                "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
             ) as mock_tool_class,
             patch(
-                "madsci.common.backup_tools.cli.MongoDBBackupSettings"
+                "madsci.common.backup_tools.mongo_cli.MongoDBBackupSettings"
             ) as mock_settings,
         ):
             mock_tool_class.return_value = mock_backup_tool
@@ -168,7 +168,7 @@ class TestMongoDBBackupCLI:
         mock_backup_tool.list_available_backups.return_value = [mock_backup_info]
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -195,7 +195,7 @@ class TestMongoDBBackupCLI:
         mock_backup_tool.list_available_backups.return_value = []
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -220,7 +220,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -251,7 +251,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -281,7 +281,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.validate_backup_integrity.return_value = True
@@ -313,7 +313,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.validate_backup_integrity.return_value = False
@@ -340,7 +340,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -371,7 +371,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -402,7 +402,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -427,7 +427,7 @@ class TestMongoDBBackupCLI:
         """Test CLI error handling for backup creation failure."""
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.create_backup.side_effect = RuntimeError("Backup failed")
@@ -455,7 +455,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.restore_from_backup.side_effect = RuntimeError(
@@ -481,7 +481,7 @@ class TestMongoDBBackupCLI:
         """Test CLI with non-existent backup path."""
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -517,9 +517,9 @@ class TestMongoDBBackupCLI:
 
         with (
             patch(
-                "madsci.common.backup_tools.cli.MongoDBBackupTool"
+                "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
             ) as mock_tool_class,
-            patch("madsci.common.backup_tools.cli.MongoDBBackupSettings"),
+            patch("madsci.common.backup_tools.mongo_cli.MongoDBBackupSettings"),
         ):
             mock_tool_class.return_value = mock_backup_tool
 
@@ -579,7 +579,7 @@ class TestMongoDBBackupCLI:
         """Test CLI verbose output option."""
 
         with patch(
-            "madsci.common.backup_tools.cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
@@ -602,10 +602,10 @@ class TestMongoDBBackupCLI:
 
         with (
             patch(
-                "madsci.common.backup_tools.cli.MongoDBBackupTool"
+                "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
             ) as mock_tool_class,
             patch(
-                "madsci.common.backup_tools.cli.MongoDBBackupSettings"
+                "madsci.common.backup_tools.mongo_cli.MongoDBBackupSettings"
             ) as mock_settings,
         ):
             mock_tool_class.return_value = mock_backup_tool
