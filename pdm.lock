@@ -1546,7 +1546,7 @@ files = [
 
 [[package]]
 name = "madsci-client"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_client"
@@ -1561,7 +1561,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_common"
@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-data-manager"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_data_manager"
@@ -1606,7 +1606,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-event-manager"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_event_manager"
@@ -1621,7 +1621,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-application"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_experiment_application"
@@ -1638,7 +1638,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-manager"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_experiment_manager"
@@ -1651,7 +1651,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-location-manager"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_location_manager"
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-node-module"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_node_module"
@@ -1679,7 +1679,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_resource_manager"
@@ -1694,7 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_squid"
@@ -1708,7 +1708,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-workcell-manager"
-version = "0.5.4"
+version = "0.5.5"
 requires_python = ">=3.9.1"
 editable = true
 path = "./src/madsci_workcell_manager"
