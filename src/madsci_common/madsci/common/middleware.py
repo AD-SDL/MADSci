@@ -8,7 +8,7 @@ including rate limiting and request tracking.
 import asyncio
 import time
 from collections import defaultdict
-from typing import Callable
+from typing import Callable, Optional
 
 from fastapi import Request, Response, status
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -47,8 +47,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         app: Callable,
         requests_limit: int = 100,
         time_window: int = 60,
-        short_requests_limit: int | None = None,
-        short_time_window: int | None = None,
+        short_requests_limit: Optional[int] = None,
+        short_time_window: Optional[int] = None,
         cleanup_interval: int = 300,
     ) -> None:
         """
