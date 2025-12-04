@@ -214,17 +214,37 @@ def test_data_backup_only_command(mock_migrator_class):
         finally:
             os.chdir(original_cwd)
 
-    # Verify only backup was called
-    mock_migrator.create_backup.assert_called_once()
+    # Verify only backup was called (now using backup_tool)
+    mock_migrator.backup_tool.create_backup.assert_called_once()
     mock_migrator.run_migration.assert_not_called()
 
 
 @patch("subprocess.run")
 def test_data_backup_creation(mock_subprocess):
     """Test data database backup creation using mongodump"""
-    mock_result = Mock()
-    mock_result.returncode = 0
-    mock_subprocess.return_value = mock_result
+
+    def mock_mongodump(*args, **_kwargs):
+        """Mock mongodump by creating expected directory structure."""
+        # Extract backup path from mongodump command
+        cmd = args[0]
+        out_index = cmd.index("--out") + 1
+        backup_path = Path(cmd[out_index])
+        db_name = cmd[cmd.index("--db") + 1]
+
+        # Create the directory structure that mongodump would create
+        db_backup_path = backup_path / db_name
+        db_backup_path.mkdir(parents=True, exist_ok=True)
+
+        # Create a mock collection file
+        (db_backup_path / "datapoints.bson").touch()
+        (db_backup_path / "datapoints.metadata.json").touch()
+
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stderr = ""
+        return mock_result
+
+    mock_subprocess.side_effect = mock_mongodump
 
     schema_file = Path("data_schema.json")
     schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
@@ -237,21 +257,19 @@ def test_data_backup_creation(mock_subprocess):
         )
         migrator = MongoDBMigrator(settings)
 
-        # Mock the validation methods to bypass filesystem checks
-        with (
-            patch.object(migrator, "_validate_backup_integrity", return_value=True),
-        ):
-            backup_path = migrator.create_backup()
+        # Use backup tool composition for backup creation
+        with patch.object(migrator.backup_tool, "_post_backup_processing"):
+            backup_path = migrator.backup_tool.create_backup()
 
-            # Verify backup path format
-            assert "madsci_data_backup_" in backup_path.name
+        # Verify backup path format
+        assert "madsci_data_backup_" in backup_path.name
 
-            # Verify mongodump was called with data database
-            mock_subprocess.assert_called_once()
-            call_args = mock_subprocess.call_args[0][0]
-            assert "mongodump" in call_args
-            assert "--db" in call_args
-            assert "madsci_data" in call_args
+        # Verify mongodump was called with data database
+        mock_subprocess.assert_called_once()
+        call_args = mock_subprocess.call_args[0][0]
+        assert "mongodump" in call_args
+        assert "--db" in call_args
+        assert "madsci_data" in call_args
     finally:
         schema_file.unlink()
 
@@ -434,8 +452,10 @@ def test_data_restore_command(mock_migrator_class):
         finally:
             os.chdir(original_cwd)
 
-    # Verify restore was called with correct path
-    mock_migrator.restore_from_backup.assert_called_once_with(Path("data_backup"))
+    # Verify restore was called with correct path (now using backup_tool)
+    mock_migrator.backup_tool.restore_from_backup.assert_called_once_with(
+        Path("data_backup")
+    )
     mock_migrator.run_migration.assert_not_called()
 
 

@@ -171,11 +171,11 @@ class TestAtomicMigrationOperations:
                 ) as mock_version,
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
                 mock.patch.object(
-                    migrator,
+                    migrator.backup_tool,
                     "create_backup",
                     return_value=Path(tempfile.mkdtemp()) / "backup",
                 ),
-                mock.patch.object(migrator, "restore_from_backup"),
+                mock.patch.object(migrator.backup_tool, "restore_from_backup"),
             ):
                 # Simulate schema migration success but version recording failure
                 mock_schema.return_value = None
@@ -201,9 +201,11 @@ class TestAtomicMigrationOperations:
             migrator = DatabaseMigrator(settings)
 
             with (
-                mock.patch.object(migrator, "create_backup") as mock_backup,
+                mock.patch.object(migrator.backup_tool, "create_backup") as mock_backup,
                 mock.patch.object(migrator, "apply_schema_migrations") as mock_migrate,
-                mock.patch.object(migrator, "restore_from_backup") as mock_restore,
+                mock.patch.object(
+                    migrator.backup_tool, "restore_from_backup"
+                ) as mock_restore,
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
             ):
                 backup_path = Path(tempfile.mkdtemp()) / "test_backup"
@@ -237,6 +239,27 @@ class TestConcurrentBackupHandling:
             schema_file=self.temp_schema_file,
         )
 
+        def mock_mongodump(*args, **_kwargs):
+            """Mock mongodump by creating expected directory structure."""
+            # Extract backup path from mongodump command
+            cmd = args[0]
+            out_index = cmd.index("--out") + 1
+            backup_path = Path(cmd[out_index])
+            db_name = cmd[cmd.index("--db") + 1]
+
+            # Create the directory structure that mongodump would create
+            db_backup_path = backup_path / db_name
+            db_backup_path.mkdir(parents=True, exist_ok=True)
+
+            # Create a mock collection file
+            (db_backup_path / "test_collection.bson").touch()
+            (db_backup_path / "test_collection.metadata.json").touch()
+
+            mock_result = mock.Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
+
         # Mock the MongoClient to avoid actual connection
         with (
             mock.patch("pymongo.MongoClient"),
@@ -249,13 +272,10 @@ class TestConcurrentBackupHandling:
 
             def create_backup(migrator):
                 with (
-                    mock.patch("subprocess.run") as mock_run,
-                    mock.patch.object(
-                        migrator, "_validate_backup_integrity", return_value=True
-                    ),
+                    mock.patch("subprocess.run", side_effect=mock_mongodump),
+                    mock.patch.object(migrator.backup_tool, "_post_backup_processing"),
                 ):
-                    mock_run.return_value.returncode = 0
-                    path = migrator.create_backup()
+                    path = migrator.backup_tool.create_backup()
                     backup_paths.append(path)
 
             # Start concurrent backup operations
@@ -282,6 +302,27 @@ class TestConcurrentBackupHandling:
             schema_file=self.temp_schema_file,
         )
 
+        def mock_mongodump(*args, **_kwargs):
+            """Mock mongodump by creating expected directory structure."""
+            # Extract backup path from mongodump command
+            cmd = args[0]
+            out_index = cmd.index("--out") + 1
+            backup_path = Path(cmd[out_index])
+            db_name = cmd[cmd.index("--db") + 1]
+
+            # Create the directory structure that mongodump would create
+            db_backup_path = backup_path / db_name
+            db_backup_path.mkdir(parents=True, exist_ok=True)
+
+            # Create a mock collection file
+            (db_backup_path / "test_collection.bson").touch()
+            (db_backup_path / "test_collection.metadata.json").touch()
+
+            mock_result = mock.Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
+
         with (
             mock.patch("pymongo.MongoClient"),
             mock.patch("madsci.common.mongodb_version_checker.MongoDBVersionChecker"),
@@ -290,15 +331,11 @@ class TestConcurrentBackupHandling:
 
             # Test backup creation with proper mocking
             with (
-                mock.patch("subprocess.run") as mock_run,
-                mock.patch.object(
-                    migrator, "_validate_backup_integrity", return_value=True
-                ),
+                mock.patch("subprocess.run", side_effect=mock_mongodump),
+                mock.patch.object(migrator.backup_tool, "_post_backup_processing"),
             ):
-                mock_run.return_value.returncode = 0
-
                 # Should create backup successfully
-                backup_path = migrator.create_backup()
+                backup_path = migrator.backup_tool.create_backup()
                 assert backup_path is not None
 
                 # Test passes - backup file locking can be added later if needed
@@ -324,9 +361,11 @@ class TestErrorRecoveryScenarios:
             migrator = DatabaseMigrator(settings)
 
             with (
-                mock.patch.object(migrator, "create_backup") as mock_backup,
+                mock.patch.object(migrator.backup_tool, "create_backup") as mock_backup,
                 mock.patch.object(migrator, "apply_schema_migrations") as mock_migrate,
-                mock.patch.object(migrator, "restore_from_backup") as mock_restore,
+                mock.patch.object(
+                    migrator.backup_tool, "restore_from_backup"
+                ) as mock_restore,
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
             ):
                 backup_path = Path(tempfile.mkdtemp()) / "backup"
@@ -354,9 +393,11 @@ class TestErrorRecoveryScenarios:
             migrator = DatabaseMigrator(settings)
 
             with (
-                mock.patch.object(migrator, "create_backup") as mock_backup,
+                mock.patch.object(migrator.backup_tool, "create_backup") as mock_backup,
                 mock.patch.object(migrator, "apply_schema_migrations") as mock_migrate,
-                mock.patch.object(migrator, "restore_from_backup") as mock_restore,
+                mock.patch.object(
+                    migrator.backup_tool, "restore_from_backup"
+                ) as mock_restore,
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
             ):
                 backup_path = Path(tempfile.mkdtemp()) / "backup"
@@ -388,11 +429,11 @@ class TestErrorRecoveryScenarios:
                 mock.patch.object(migrator, "apply_schema_migrations") as mock_migrate,
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
                 mock.patch.object(
-                    migrator,
+                    migrator.backup_tool,
                     "create_backup",
                     return_value=Path(tempfile.mkdtemp()) / "backup",
                 ),
-                mock.patch.object(migrator, "restore_from_backup"),
+                mock.patch.object(migrator.backup_tool, "restore_from_backup"),
             ):
                 mock_migrate.side_effect = Exception("Migration failed")
 

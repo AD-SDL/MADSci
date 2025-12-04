@@ -20,6 +20,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
     "pymongo>=4.10.1",
+    "psycopg2-binary>=2.9.0",
     "fastapi>=0.115.4",
     "uvicorn[standard]>=0.32.0",
     "python-multipart>=0.0.17",
@@ -30,9 +31,14 @@ dependencies = [
     "pydantic-settings-export>=1.0.2",
     "regex>=2025.7.34",
     "classy-fastapi>=0.7.0",
-    "httpx>=0.28.1"
+    "httpx>=0.28.1",
+    "click>=8.1.0"
 ]
 
+[project.scripts]
+madsci-backup = "madsci.common.backup_tools.cli:main"
+madsci-mongodb-backup = "madsci.common.backup_tools.cli:main_mongodb_backup"
+madsci-postgres-backup = "madsci.common.backup_tools.postgres_cli:main_postgres_backup"
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"

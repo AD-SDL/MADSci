@@ -172,7 +172,7 @@ class DatabaseVersionChecker:
             self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
             # Optional: explain default backup location without printing a user path
             self.logger.info(
-                "Backups default to .madsci/postgres/backups relative to the working directory."
+                "Backups default to .madsci/postgresql/backups relative to the working directory."
             )
             return True, current_version, None
 
@@ -231,7 +231,7 @@ class DatabaseVersionChecker:
                 "Run one of:\n"
                 f"  • Bare metal:     {cmds['bare_metal']}\n"
                 f"  • Docker Compose: {cmds['docker_compose']}\n"
-                "Note: backups default to .madsci/postgres/backups relative to the working directory."
+                "Note: backups default to .madsci/postgresql/backups relative to the working directory."
             )
             self.logger.error("Database schema version mismatch detected")
             self.logger.error(message)

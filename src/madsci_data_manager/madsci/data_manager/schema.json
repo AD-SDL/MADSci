@@ -1,19 +1,11 @@
 {
     "database": "madsci_data",
-    "schema_version": "1.0.0",
+    "schema_version": "1.0.1",
     "description": "Schema definition for MADSci Data Manager MongoDB",
     "collections": {
       "datapoints": {
         "description": "Main datapoints collection for storing all data references and metadata",
-        "indexes": [
-          {
-            "keys": [["datapoint_id", 1]],
-            "name": "datapoint_id_1",
-            "background": true,
-            "unique": true,
-            "description": "Unique constraint on datapoint_id for fast lookups"
-          }
-        ]
+        "indexes": []
       },
       "schema_versions": {
         "description": "Version tracking for schema migrations",
