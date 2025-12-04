@@ -30,6 +30,8 @@ default_settings = [
     "madsci.common.types.resource_types.definitions:ResourceManagerSettings",
     "madsci.common.types.lab_types:LabManagerSettings",
     "madsci.common.types.location_types:LocationManagerSettings",
+    "madsci.common.types.backup_types:PostgreSQLBackupSettings",
+    "madsci.common.types.backup_types:MongoDBBackupSettings",
 ]
 
 # Generate Markdown docs
