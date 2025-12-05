@@ -32,3 +32,5 @@ jobs:
       - run: pdm publish -p src/madsci_workcell_manager
       - run: pdm publish -p src/madsci_data_manager
       - run: pdm publish -p src/madsci_experiment_application
+      - run: pdm publish -p src/madsci_location_manager
+      - run: pdm publish -p src/madsci_squid
