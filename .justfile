@@ -196,4 +196,4 @@ backup_e2e_tests:
 e2e_tests: node_e2e_tests experiment_e2e_tests backup_e2e_tests
 
 # Run the full pipeline including e2e tests
-all: pipeupd e2e_tests down
+all: down pipeupd e2e_tests down

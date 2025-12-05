@@ -515,7 +515,9 @@ class Engine:
         with ownership_context(
             workcell_id=self.workcell_definition.manager_id,
             workflow_id=wf.workflow_id,
-            node_id=self.state_handler.get_node(step.node).info.node_id,
+            node_id=self.state_handler.get_node(step.node).info.node_id
+            if self.state_handler.get_node(step.node).info
+            else None,
             step_id=step.step_id,
         ):
             # Upload JSON result as ValueDataPoint if present
@@ -608,7 +610,7 @@ class Engine:
         try:
             client = find_node_client(node.node_url)
             node.status = client.get_status()
-            if update_info:
+            if update_info or node.info is None:
                 node.info = client.get_info()
             node.state = client.get_state()
             with state_manager.wc_state_lock():
