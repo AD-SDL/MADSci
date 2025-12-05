@@ -92,9 +92,6 @@ def sample_location():
     )
 
 
-# RED PHASE: Write failing tests
-
-
 def test_add_location_persists_to_yaml(client, sample_location, definition_file):
     """Test that adding a location persists it to the YAML definition file.
 
