@@ -27,9 +27,10 @@ class MongoDBMigrationSettings(
             "mongo_db_url", "MONGODB_URL", "MONGO_URL", "DATABASE_URL", "db_url"
         ),
     )
-    database: str = Field(
+    database: Optional[str] = Field(
         title="Database Name",
         description="Database name to migrate (e.g., madsci_events, madsci_data)",
+        default=None,
     )
     schema_file: Optional[PathLike] = Field(
         default=None,

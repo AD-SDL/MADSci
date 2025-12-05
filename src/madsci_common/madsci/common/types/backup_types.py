@@ -80,7 +80,9 @@ class MongoDBBackupSettings(
         alias="mongo_db_url",  # avoid double prefixing
         default="mongodb://localhost:27017",
     )
-    database: str = Field(title="Database Name", description="Database name to backup")
+    database: Optional[str] = Field(
+        title="Database Name", description="Database name to backup", default=None
+    )
     collections: Optional[List[str]] = Field(
         default=None,
         title="Collections",
