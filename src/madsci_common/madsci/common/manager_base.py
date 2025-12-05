@@ -15,9 +15,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.middleware import RateLimitMiddleware
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
-from madsci.common.types.manager_types import ManagerHealth
+from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
 
 # Type variables for generic typing
 SettingsT = TypeVar("SettingsT", bound=MadsciBaseSettings)
@@ -268,6 +269,35 @@ class AbstractManagerBase(
         Args:
             app: The FastAPI application instance
         """
+        # Add rate limiting middleware if enabled
+        # Check if settings has rate limiting configuration (ManagerSettings-based)
+        if (
+            isinstance(self._settings, ManagerSettings)
+            and self._settings.rate_limit_enabled
+        ):
+            app.add_middleware(
+                RateLimitMiddleware,
+                requests_limit=self._settings.rate_limit_requests,
+                time_window=self._settings.rate_limit_window,
+                short_requests_limit=self._settings.rate_limit_short_requests,
+                short_time_window=self._settings.rate_limit_short_window,
+                cleanup_interval=self._settings.rate_limit_cleanup_interval,
+            )
+            # Build log message with both long and short window info
+            log_msg = (
+                f"Rate limiting enabled: {self._settings.rate_limit_requests} requests "
+                f"per {self._settings.rate_limit_window} seconds"
+            )
+            if (
+                self._settings.rate_limit_short_requests is not None
+                and self._settings.rate_limit_short_window is not None
+            ):
+                log_msg += (
+                    f", burst limit: {self._settings.rate_limit_short_requests} requests "
+                    f"per {self._settings.rate_limit_short_window} seconds"
+                )
+            self.logger.info(log_msg)
+
         # Add CORS middleware by default
         app.add_middleware(
             CORSMiddleware,
@@ -328,6 +358,28 @@ class AbstractManagerBase(
         else:
             default_host = "localhost"
             default_port = 8000
+
+        # Apply resource constraints from settings if available (ManagerSettings-based)
+        if isinstance(self._settings, ManagerSettings):
+            if self._settings.uvicorn_workers is not None:
+                uvicorn_kwargs.setdefault("workers", self._settings.uvicorn_workers)
+                self.logger.info(f"Uvicorn workers: {self._settings.uvicorn_workers}")
+
+            if self._settings.uvicorn_limit_concurrency is not None:
+                uvicorn_kwargs.setdefault(
+                    "limit_concurrency", self._settings.uvicorn_limit_concurrency
+                )
+                self.logger.info(
+                    f"Uvicorn concurrency limit: {self._settings.uvicorn_limit_concurrency}"
+                )
+
+            if self._settings.uvicorn_limit_max_requests is not None:
+                uvicorn_kwargs.setdefault(
+                    "limit_max_requests", self._settings.uvicorn_limit_max_requests
+                )
+                self.logger.info(
+                    f"Uvicorn max requests per worker: {self._settings.uvicorn_limit_max_requests}"
+                )
 
         uvicorn.run(
             app,
