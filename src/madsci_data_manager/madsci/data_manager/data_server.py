@@ -12,6 +12,7 @@ from fastapi import Form, Response, UploadFile
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
     create_minio_client,
@@ -51,18 +52,46 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
 
         # Initialize database and storage
         self._setup_database()
-        self._setup_storage()
+        self._setup_object_storage()
+
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize manager-specific components."""
+        super().initialize(**kwargs)
+
+        # Skip version validation if an external db_client was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self._db_client is not None:
+            return
+
+        self.logger.info("Validating MongoDB schema version...")
+
+        schema_file_path = Path(__file__).parent / "schema.json"
+        version_checker = MongoDBVersionChecker(
+            db_url=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+            schema_file_path=str(schema_file_path),
+            logger=self.logger,
+        )
+
+        try:
+            version_checker.validate_or_fail()
+            self.logger.info("MongoDB version validation completed successfully")
+        except RuntimeError as e:
+            self.logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+            )
+            raise e
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
         if self._db_client is None:
-            self._db_client = MongoClient(self.settings.db_url)
+            self._db_client = MongoClient(str(self.settings.mongo_db_url))
 
-        self.datapoints_db = self._db_client["madsci_data"]
-        self.datapoints = self.datapoints_db["datapoints"]
+        datapoints_db = self._db_client[self.settings.database_name]
+        self.datapoints = datapoints_db[self.settings.collection_name]
 
-    def _setup_storage(self) -> None:
-        """Setup MinIO client if configuration is provided."""
+    def _setup_object_storage(self) -> None:
+        """Setup MinIO object storage client."""
         self.minio_client = create_minio_client(
             object_storage_settings=self._object_storage_settings
         )
@@ -76,30 +105,33 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
             self._db_client.admin.command("ping")
             health.db_connected = True
 
-            # Test storage accessibility
-            storage_path = Path(self.settings.file_storage_path).expanduser()
-            storage_path.mkdir(parents=True, exist_ok=True)
-            test_file = storage_path / ".health_check"
-            test_file.touch(exist_ok=True)
-            test_file.write_text("health_check")
-            test_file.unlink()
-            health.storage_accessible = True
-
             # Get total datapoints count
             health.total_datapoints = self.datapoints.count_documents({})
+
+            # Test storage accessibility
+            try:
+                if self.minio_client:
+                    # Try to list buckets to verify MinIO connectivity
+                    list(self.minio_client.list_buckets())
+                    health.storage_accessible = True
+                else:
+                    # No object storage configured, but file storage should be accessible
+                    storage_path = Path(self.settings.file_storage_path).expanduser()
+                    storage_path.mkdir(parents=True, exist_ok=True)
+                    health.storage_accessible = (
+                        storage_path.exists() and storage_path.is_dir()
+                    )
+            except Exception:
+                health.storage_accessible = False
 
             health.healthy = True
             health.description = "Data Manager is running normally"
 
         except Exception as e:
             health.healthy = False
-            if hasattr(e, "__contains__") and "mongo" in str(e).lower():
-                health.db_connected = False
-            if hasattr(e, "__contains__") and (
-                "file" in str(e).lower() or "path" in str(e).lower()
-            ):
-                health.storage_accessible = False
-            health.description = f"Health check failed: {e!s}"
+            health.db_connected = False
+            health.storage_accessible = False
+            health.description = f"Database connection failed: {e!s}"
 
         return health
 
