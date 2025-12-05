@@ -11,6 +11,7 @@ import requests
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.client_types import ResourceClientConfig
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -30,7 +31,7 @@ from madsci.common.types.resource_types.server_types import (
     TemplateGetQuery,
     TemplateUpdateBody,
 )
-from madsci.common.utils import new_ulid_str
+from madsci.common.utils import create_http_session, new_ulid_str
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 
@@ -212,18 +213,33 @@ class ResourceClient:
         self,
         resource_server_url: Optional[Union[str, AnyUrl]] = None,
         event_client: Optional[EventClient] = None,
+        config: Optional[ResourceClientConfig] = None,
     ) -> None:
-        """Initialize the resource client."""
+        """Initialize the resource client.
+
+        Args:
+            resource_server_url: The URL of the resource server. If not provided, will use the URL from the current MADSci context.
+            event_client: Optional EventClient for logging. If not provided, creates a new one.
+            config: Client configuration for retry and timeout settings. If not provided, uses default ResourceClientConfig.
+        """
         self.resource_server_url = (
             AnyUrl(resource_server_url)
             if resource_server_url
             else get_current_madsci_context().resource_server_url
         )
+
+        # Store config and create session
+        self.config = config if config is not None else ResourceClientConfig()
+        self.session = create_http_session(config=self.config)
+
         if self.resource_server_url is not None:
             start_time = time.time()
             while time.time() - start_time < 20:
                 try:
-                    requests.get(f"{self.resource_server_url}definition", timeout=10)
+                    self.session.get(
+                        f"{self.resource_server_url}definition",
+                        timeout=self.config.timeout_default,
+                    )
                     break
                 except Exception:
                     time.sleep(1)
@@ -254,21 +270,24 @@ class ResourceClient:
             return resource.unwrap
         return resource
 
-    def add_resource(self, resource: Resource) -> Resource:
+    def add_resource(
+        self, resource: Resource, timeout: Optional[float] = None
+    ) -> Resource:
         """
         Add a resource to the server.
 
         Args:
             resource (Resource): The resource to add.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             Resource: The added resource as returned by the server.
         """
         if self.resource_server_url:
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/add",
                 json=resource.model_dump(mode="json"),
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -280,13 +299,14 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def init_resource(
-        self, resource_definition: ResourceDefinitions
+        self, resource_definition: ResourceDefinitions, timeout: Optional[float] = None
     ) -> ResourceDataModels:
         """
         Initializes a resource with the resource manager based on a definition, either creating a new resource if no matching one exists, or returning an existing match.
 
         Args:
             resource (Resource): The resource to initialize.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The initialized resource as returned by the server.
@@ -295,10 +315,10 @@ class ResourceClient:
             "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION! Use Template methods instead."
         )
         if self.resource_server_url:
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/init",
                 json=resource_definition.model_dump(mode="json"),
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
 
@@ -314,12 +334,15 @@ class ResourceClient:
             self.local_resources[resource.resource_id] = resource
         return self._wrap_resource(resource)
 
-    def add_or_update_resource(self, resource: Resource) -> Resource:
+    def add_or_update_resource(
+        self, resource: Resource, timeout: Optional[float] = None
+    ) -> Resource:
         """
         Add a resource to the server.
 
         Args:
             resource (Resource): The resource to add.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             Resource: The added resource as returned by the server.
@@ -327,10 +350,10 @@ class ResourceClient:
         resource = self._unwrap(resource)
 
         if self.resource_server_url:
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/add_or_update",
                 json=resource.model_dump(mode="json"),
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -341,12 +364,15 @@ class ResourceClient:
             self.local_resources[resource.resource_id] = resource
         return self._wrap_resource(resource)
 
-    def update_resource(self, resource: ResourceDataModels) -> ResourceDataModels:
+    def update_resource(
+        self, resource: ResourceDataModels, timeout: Optional[float] = None
+    ) -> ResourceDataModels:
         """
         Update or refresh a resource, including its children, on the server.
 
         Args:
             resource (ResourceDataModels): The resource to update.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource as returned by the server.
@@ -354,10 +380,10 @@ class ResourceClient:
         resource = self._unwrap(resource)
 
         if self.resource_server_url:
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/update",
                 json=resource.model_dump(mode="json"),
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -375,21 +401,23 @@ class ResourceClient:
         resource: Optional[
             Union[str, ResourceDataModels]
         ] = None,  # Accept Resource object or ID
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Retrieve a resource from the server.
 
         Args:
             resource (Optional[Union[str, ResourceDataModels]]): The resource object or ID to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The retrieved resource.
         """
         resource_id = resource if isinstance(resource, str) else resource.resource_id
         if self.resource_server_url:
-            response = requests.get(
+            response = self.session.get(
                 f"{self.resource_server_url}resource/{resource_id}",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -412,6 +440,7 @@ class ResourceClient:
         base_type: Optional[str] = None,
         unique: Optional[bool] = False,
         multiple: Optional[bool] = False,
+        timeout: Optional[float] = None,
     ) -> Union[ResourceDataModels, list[ResourceDataModels]]:
         """
         Query for one or more resources matching specific properties.
@@ -424,6 +453,7 @@ class ResourceClient:
             base_type (str): The base type of the resource.
             unique (bool): Whether to require a unique resource or not.
             multiple (bool): Whether to return multiple resources or just the first.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             Resource: The retrieved resource.
@@ -443,8 +473,10 @@ class ResourceClient:
                 unique=unique,
                 multiple=multiple,
             ).model_dump(mode="json")
-            response = requests.post(
-                f"{self.resource_server_url}resource/query", json=payload, timeout=10
+            response = self.session.post(
+                f"{self.resource_server_url}resource/query",
+                json=payload,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             response_json = response.json()
@@ -469,16 +501,21 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def remove_resource(
-        self, resource: Union[str, ResourceDataModels]
+        self, resource: Union[str, ResourceDataModels], timeout: Optional[float] = None
     ) -> ResourceDataModels:
         """
         Remove a resource by moving it to the history table with `removed=True`.
+
+        Args:
+            resource: The resource or resource ID to remove.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         if isinstance(resource, Resource):
             resource = resource.resource_id
         if self.resource_server_url:
-            response = requests.delete(
-                f"{self.resource_server_url}resource/{resource}", timeout=10
+            response = self.session.delete(
+                f"{self.resource_server_url}resource/{resource}",
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -501,9 +538,20 @@ class ResourceClient:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         limit: Optional[int] = 100,
+        timeout: Optional[float] = None,
     ) -> list[dict[str, Any]]:
         """
         Retrieve the history of a resource with flexible filters.
+
+        Args:
+            resource: The resource or resource ID to query history for.
+            version: Filter by specific version number.
+            change_type: Filter by change type.
+            removed: Filter by removed status.
+            start_date: Filter by start date.
+            end_date: Filter by end date.
+            limit: Maximum number of history entries to return.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         if self.resource_server_url:
             resource_id = (
@@ -518,8 +566,10 @@ class ResourceClient:
                 end_date=end_date,
                 limit=limit,
             ).model_dump(mode="json")
-            response = requests.post(
-                f"{self.resource_server_url}history/query", json=query, timeout=10
+            response = self.session.post(
+                f"{self.resource_server_url}history/query",
+                json=query,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
         else:
@@ -533,15 +583,20 @@ class ResourceClient:
         return response.json()
 
     def restore_deleted_resource(
-        self, resource: Union[str, ResourceDataModels]
+        self, resource: Union[str, ResourceDataModels], timeout: Optional[float] = None
     ) -> ResourceDataModels:
         """
         Restore a deleted resource from the history table.
+
+        Args:
+            resource: The resource or resource ID to restore.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         resource_id = resource if isinstance(resource, str) else resource.resource_id
         if self.resource_server_url:
-            response = requests.post(
-                f"{self.resource_server_url}history/{resource_id}/restore", timeout=10
+            response = self.session.post(
+                f"{self.resource_server_url}history/{resource_id}/restore",
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -561,6 +616,7 @@ class ResourceClient:
         self,
         resource: Union[ResourceDataModels, str],
         child: Union[ResourceDataModels, str],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Push a child resource onto a parent stack or queue.
@@ -568,6 +624,7 @@ class ResourceClient:
         Args:
             resource (Union[ResourceDataModels, str]): The parent resource or its ID.
             child (Union[ResourceDataModels, str]): The child resource or its ID.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated parent resource.
@@ -583,10 +640,10 @@ class ResourceClient:
                 child=child if isinstance(child, Resource) else None,
                 child_id=child.resource_id if isinstance(child, Resource) else child,
             ).model_dump(mode="json")
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/push",
                 json=payload,
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -601,13 +658,14 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def pop(
-        self, resource: Union[str, ResourceDataModels]
+        self, resource: Union[str, ResourceDataModels], timeout: Optional[float] = None
     ) -> tuple[ResourceDataModels, ResourceDataModels]:
         """
         Pop an asset from a stack or queue resource.
 
         Args:
             resource (Union[str, ResourceDataModels]): The parent resource or its ID.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             tuple[ResourceDataModels, ResourceDataModels]: The popped asset and updated parent.
@@ -618,8 +676,9 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.post(
-                f"{self.resource_server_url}resource/{resource_id}/pop", timeout=10
+            response = self.session.post(
+                f"{self.resource_server_url}resource/{resource_id}/pop",
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             result = response.json()
@@ -642,6 +701,7 @@ class ResourceClient:
         resource: Union[str, ResourceDataModels],
         key: Union[str, GridIndex2D, GridIndex3D],
         child: Union[str, ResourceDataModels],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Set a child resource in a parent container resource.
@@ -650,6 +710,7 @@ class ResourceClient:
             resource (Union[str, ResourceDataModels]): The parent container resource or its ID.
             key (Union[str, GridIndex2D, GridIndex3D]): The key to identify the child resource's location in the parent container.
             child (Union[str, ResourceDataModels]): The child resource or its ID.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated parent container resource.
@@ -663,10 +724,10 @@ class ResourceClient:
                 key=key,
                 child=child,
             ).model_dump(mode="json")
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/child/set",
                 json=payload,
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -682,6 +743,7 @@ class ResourceClient:
         self,
         resource: Union[str, ResourceDataModels],
         key: Union[str, GridIndex2D, GridIndex3D],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Remove a child resource from a parent container resource.
@@ -689,6 +751,7 @@ class ResourceClient:
         Args:
             resource (Union[str, ResourceDataModels]): The parent container resource or its ID.
             key (Union[str, GridIndex2D, GridIndex3D]): The key to identify the child resource's location in the parent container.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated parent container resource.
@@ -701,10 +764,10 @@ class ResourceClient:
             payload = RemoveChildBody(
                 key=key,
             ).model_dump(mode="json")
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/child/remove",
                 json=payload,
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -717,7 +780,10 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def set_quantity(
-        self, resource: Union[str, ResourceDataModels], quantity: Union[float, int]
+        self,
+        resource: Union[str, ResourceDataModels],
+        quantity: Union[float, int],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Set the quantity of a resource.
@@ -725,6 +791,7 @@ class ResourceClient:
         Args:
             resource (Union[str, ResourceDataModels]): The resource or its ID.
             quantity (Union[float, int]): The quantity to set.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -734,10 +801,10 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/quantity",
                 params={"quantity": quantity},
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -749,7 +816,10 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def change_quantity_by(
-        self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
+        self,
+        resource: Union[str, ResourceDataModels],
+        amount: Union[float, int],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Change the quantity of a resource by a given amount.
@@ -757,6 +827,7 @@ class ResourceClient:
         Args:
             resource (Union[str, ResourceDataModels]): The resource or its ID.
             amount (Union[float, int]): The quantity to change by.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -766,10 +837,10 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/quantity/change_by",
                 params={"amount": amount},
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -782,7 +853,10 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def increase_quantity(
-        self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
+        self,
+        resource: Union[str, ResourceDataModels],
+        amount: Union[float, int],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Increase the quantity of a resource by a given amount.
@@ -790,6 +864,7 @@ class ResourceClient:
         Args:
             resource (Union[str, ResourceDataModels]): The resource or its ID.
             amount (Union[float, int]): The quantity to increase by. Note that this is a magnitude, so negative and positive values will have the same effect.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -799,10 +874,10 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/quantity/increase",
                 params={"amount": amount},
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -815,7 +890,10 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def decrease_quantity(
-        self, resource: Union[str, ResourceDataModels], amount: Union[float, int]
+        self,
+        resource: Union[str, ResourceDataModels],
+        amount: Union[float, int],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Decrease the quantity of a resource by a given amount.
@@ -823,6 +901,7 @@ class ResourceClient:
         Args:
             resource (Union[str, ResourceDataModels]): The resource or its ID.
             amount (Union[float, int]): The quantity to decrease by. Note that this is a magnitude, so negative and positive values will have the same effect.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -832,10 +911,10 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/quantity/decrease",
                 params={"amount": amount},
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -848,7 +927,10 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def set_capacity(
-        self, resource: Union[str, ResourceDataModels], capacity: Union[float, int]
+        self,
+        resource: Union[str, ResourceDataModels],
+        capacity: Union[float, int],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Set the capacity of a resource.
@@ -856,6 +938,7 @@ class ResourceClient:
         Args:
             resource (Union[str, ResourceDataModels]): The resource or its ID.
             capacity (Union[float, int]): The capacity to set.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -865,10 +948,10 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/capacity",
                 params={"capacity": capacity},
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -881,13 +964,14 @@ class ResourceClient:
         return self._wrap_resource(resource)
 
     def remove_capacity_limit(
-        self, resource: Union[str, ResourceDataModels]
+        self, resource: Union[str, ResourceDataModels], timeout: Optional[float] = None
     ) -> ResourceDataModels:
         """
         Remove the capacity limit of a resource.
 
         Args:
             resource (Union[str, ResourceDataModels]): The resource or its ID.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -897,8 +981,9 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.delete(
-                f"{self.resource_server_url}resource/{resource_id}/capacity", timeout=10
+            response = self.session.delete(
+                f"{self.resource_server_url}resource/{resource_id}/capacity",
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -910,12 +995,15 @@ class ResourceClient:
             resource = self.local_resources[resource.resource_id]
         return self._wrap_resource(resource)
 
-    def empty(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
+    def empty(
+        self, resource: Union[str, ResourceDataModels], timeout: Optional[float] = None
+    ) -> ResourceDataModels:
         """
         Empty the contents of a container or consumable resource.
 
         Args:
             resource (Union[str, ResourceDataModels]): The resource or its ID.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -925,9 +1013,9 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/empty",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -943,12 +1031,15 @@ class ResourceClient:
             self.local_resources[resource.resource_id] = resource
         return self._wrap_resource(resource)
 
-    def fill(self, resource: Union[str, ResourceDataModels]) -> ResourceDataModels:
+    def fill(
+        self, resource: Union[str, ResourceDataModels], timeout: Optional[float] = None
+    ) -> ResourceDataModels:
         """
         Fill a consumable resource to capacity.
 
         Args:
             resource (Union[str, ResourceDataModels]): The resource or its ID.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated resource.
@@ -958,9 +1049,9 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/fill",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -1065,6 +1156,7 @@ class ResourceClient:
         tags: Optional[list[str]] = None,
         created_by: Optional[str] = None,
         version: str = "1.0.0",
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Create a new resource template from a resource.
@@ -1077,6 +1169,7 @@ class ResourceClient:
             tags (Optional[list[str]]): Tags for categorization.
             created_by (Optional[str]): Creator identifier.
             version (str): Template version.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The created template resource.
@@ -1092,8 +1185,10 @@ class ResourceClient:
                 created_by=created_by,
                 version=version,
             ).model_dump(mode="json")
-            response = requests.post(
-                f"{self.resource_server_url}template/create", json=payload, timeout=10
+            response = self.session.post(
+                f"{self.resource_server_url}template/create",
+                json=payload,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             template = Resource.discriminate(response.json())
@@ -1115,20 +1210,24 @@ class ResourceClient:
             template = resource  # Return the original resource as template
         return self._wrap_resource(template)
 
-    def get_template(self, template_name: str) -> Optional[ResourceDataModels]:
+    def get_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> Optional[ResourceDataModels]:
         """
         Get a template by name.
 
         Args:
             template_name (str): Name of the template to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             Optional[ResourceDataModels]: The template resource if found, None otherwise.
         """
 
         if self.resource_server_url:
-            response = requests.get(
-                f"{self.resource_server_url}template/{template_name}", timeout=10
+            response = self.session.get(
+                f"{self.resource_server_url}template/{template_name}",
+                timeout=timeout or self.config.timeout_default,
             )
             if response.status_code == 404:
                 return None
@@ -1148,6 +1247,7 @@ class ResourceClient:
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
         created_by: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> list[ResourceDataModels]:
         """
         List templates with optional filtering.
@@ -1156,6 +1256,7 @@ class ResourceClient:
             base_type (Optional[str]): Filter by base resource type.
             tags (Optional[list[str]]): Filter by templates that have any of these tags.
             created_by (Optional[str]): Filter by creator.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             list[ResourceDataModels]: List of template resources.
@@ -1168,15 +1269,16 @@ class ResourceClient:
                     tags=tags,
                     created_by=created_by,
                 ).model_dump(mode="json")
-                response = requests.post(
+                response = self.session.post(
                     f"{self.resource_server_url}templates/query",
                     json=payload,
-                    timeout=10,
+                    timeout=timeout or self.config.timeout_default,
                 )
             else:
                 # Use query_all endpoint for no filtering
-                response = requests.get(
-                    f"{self.resource_server_url}templates/query_all", timeout=10
+                response = self.session.get(
+                    f"{self.resource_server_url}templates/query_all",
+                    timeout=timeout or self.config.timeout_default,
                 )
 
             response.raise_for_status()
@@ -1201,19 +1303,23 @@ class ResourceClient:
             templates.append(template_data["resource"])
         return [self._wrap_resource(t) for t in templates]
 
-    def get_template_info(self, template_name: str) -> Optional[dict[str, Any]]:
+    def get_template_info(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> Optional[dict[str, Any]]:
         """
         Get detailed template metadata.
 
         Args:
             template_name (str): Name of the template.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             Optional[dict[str, Any]]: Template metadata if found, None otherwise.
         """
         if self.resource_server_url:
-            response = requests.get(
-                f"{self.resource_server_url}template/{template_name}/info", timeout=10
+            response = self.session.get(
+                f"{self.resource_server_url}template/{template_name}/info",
+                timeout=timeout or self.config.timeout_default,
             )
             if response.status_code == 404:
                 return None
@@ -1233,7 +1339,10 @@ class ResourceClient:
         return None
 
     def update_template(
-        self, template_name: str, updates: dict[str, Any]
+        self,
+        template_name: str,
+        updates: dict[str, Any],
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Update an existing template.
@@ -1241,16 +1350,17 @@ class ResourceClient:
         Args:
             template_name (str): Name of the template to update.
             updates (dict[str, Any]): Fields to update.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The updated template resource.
         """
         if self.resource_server_url:
             payload = TemplateUpdateBody(updates=updates).model_dump(mode="json")
-            response = requests.put(
+            response = self.session.put(
                 f"{self.resource_server_url}template/{template_name}",
                 json=payload,
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             template = Resource.discriminate(response.json())
@@ -1267,19 +1377,23 @@ class ResourceClient:
             return self._wrap_resource(template_data["resource"])
         return None
 
-    def delete_template(self, template_name: str) -> bool:
+    def delete_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> bool:
         """
         Delete a template from the database.
 
         Args:
             template_name (str): Name of the template to delete.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             bool: True if template was deleted, False if not found.
         """
         if self.resource_server_url:
-            response = requests.delete(
-                f"{self.resource_server_url}template/{template_name}", timeout=10
+            response = self.session.delete(
+                f"{self.resource_server_url}template/{template_name}",
+                timeout=timeout or self.config.timeout_default,
             )
             if response.status_code == 404:
                 return False
@@ -1296,6 +1410,7 @@ class ResourceClient:
         resource_name: str,
         overrides: Optional[dict[str, Any]] = None,
         add_to_database: bool = True,
+        timeout: Optional[float] = None,
     ) -> ResourceDataModels:
         """
         Create a resource from a template.
@@ -1305,6 +1420,7 @@ class ResourceClient:
             resource_name (str): Name for the new resource.
             overrides (Optional[dict[str, Any]]): Values to override template defaults.
             add_to_database (bool): Whether to add the resource to the database.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceDataModels: The created resource.
@@ -1326,10 +1442,10 @@ class ResourceClient:
                 overrides=overrides,
                 add_to_database=add_to_database,
             ).model_dump(mode="json")
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}template/{template_name}/create_resource",
                 json=payload,
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -1364,16 +1480,22 @@ class ResourceClient:
             self.local_resources[new_resource.resource_id] = new_resource
         return self._wrap_resource(new_resource)
 
-    def get_templates_by_category(self) -> dict[str, list[str]]:
+    def get_templates_by_category(
+        self, timeout: Optional[float] = None
+    ) -> dict[str, list[str]]:
         """
         Get templates organized by base_type category.
+
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             dict[str, list[str]]: Dictionary mapping base_type to template names.
         """
         if self.resource_server_url:
-            response = requests.get(
-                f"{self.resource_server_url}templates/categories", timeout=10
+            response = self.session.get(
+                f"{self.resource_server_url}templates/categories",
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             return response.json()
@@ -1390,6 +1512,7 @@ class ResourceClient:
         resource: Union[str, ResourceDataModels],
         lock_duration: float = 300.0,
         client_id: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> bool:
         """
         Acquire a lock on a resource.
@@ -1398,6 +1521,7 @@ class ResourceClient:
             resource: Resource object or resource ID
             lock_duration: Lock duration in seconds (default 5 minutes)
             client_id: Client identifier (auto-generated if not provided)
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             bool: True if lock was acquired, False otherwise
@@ -1410,13 +1534,13 @@ class ResourceClient:
         )
 
         if self.resource_server_url:
-            response = requests.post(
+            response = self.session.post(
                 f"{self.resource_server_url}resource/{resource_id}/lock",
                 params={
                     "lock_duration": lock_duration,
                     "client_id": self._client_id,
                 },
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             if response.status_code == 200 and response.json():
@@ -1462,6 +1586,7 @@ class ResourceClient:
         self,
         resource: Union[str, ResourceDataModels],
         client_id: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> bool:
         """
         Release a lock on a resource.
@@ -1469,6 +1594,7 @@ class ResourceClient:
         Args:
             resource: Resource object or resource ID
             client_id: Client identifier
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             bool: True if lock was released, False otherwise
@@ -1482,10 +1608,10 @@ class ResourceClient:
 
         if self.resource_server_url:
             try:
-                response = requests.delete(
+                response = self.session.delete(
                     f"{self.resource_server_url}resource/{resource_id}/unlock",
                     params={"client_id": self._client_id} if self._client_id else {},
-                    timeout=10,
+                    timeout=timeout or self.config.timeout_default,
                 )
                 response.raise_for_status()
                 if response.status_code == 200 and response.json():
@@ -1541,12 +1667,14 @@ class ResourceClient:
     def is_locked(
         self,
         resource: Union[str, ResourceDataModels],
+        timeout: Optional[float] = None,
     ) -> tuple[bool, Optional[str]]:
         """
         Check if a resource is currently locked.
 
         Args:
             resource: Resource object or resource ID
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             tuple[bool, Optional[str]]: (is_locked, locked_by)
@@ -1557,9 +1685,9 @@ class ResourceClient:
         )
 
         if self.resource_server_url:
-            response = requests.get(
+            response = self.session.get(
                 f"{self.resource_server_url}resource/{resource_id}/check_lock",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             result = response.json()
@@ -1754,7 +1882,9 @@ class ResourceClient:
                 f"Error refreshing resource before release: {refresh_error}"
             )
 
-    def query_resource_hierarchy(self, resource_id: str) -> ResourceHierarchy:
+    def query_resource_hierarchy(
+        self, resource_id: str, timeout: Optional[float] = None
+    ) -> ResourceHierarchy:
         """
         Query the hierarchical relationships of a resource.
 
@@ -1763,6 +1893,7 @@ class ResourceClient:
 
         Args:
             resource_id (str): The ID of the resource to query hierarchy for.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns:
             ResourceHierarchy: Hierarchy information with ancestor_ids, resource_id, and descendant_ids.
@@ -1772,9 +1903,9 @@ class ResourceClient:
             requests.HTTPError: If server request fails.
         """
         if self.resource_server_url:
-            response = requests.get(
+            response = self.session.get(
                 f"{self.resource_server_url}resource/{resource_id}/hierarchy",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             response.raise_for_status()
             return ResourceHierarchy.model_validate(response.json())

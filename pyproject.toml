@@ -14,24 +14,38 @@ dev = [
     "pre-commit>=4.3.0",
     "pydantic-settings-export>=1.0.2",
     "ruff>=0.13.0",
-    "nbconvert>=7.16.6"
+    "nbconvert>=7.16.6",
+    "pytest-timeout>=2.4.0",
 ]
+
+[tool.pytest.ini_options]
+timeout = 10
 
 [tool.pydantic_settings_export]
 project_dir = "."
 default_settings = [
     "madsci.common.types.context_types:MadsciContext",
-    "madsci.common.types.event_types:EventClientConfig",
-    "madsci.common.types.datapoint_types:ObjectStorageSettings",
     "madsci.common.types.datapoint_types:DataManagerSettings",
+    "madsci.common.types.datapoint_types:ObjectStorageSettings",
     "madsci.common.types.event_types:EventManagerSettings",
     "madsci.common.types.workcell_types:WorkcellManagerSettings",
     "madsci.common.types.experiment_types:ExperimentManagerSettings",
     "madsci.common.types.resource_types.definitions:ResourceManagerSettings",
     "madsci.common.types.lab_types:LabManagerSettings",
     "madsci.common.types.location_types:LocationManagerSettings",
+    "madsci.common.types.event_types:EventClientConfig",
+    "madsci.common.types.client_types:RestNodeClientConfig",
+    "madsci.common.types.client_types:ResourceClientConfig",
+    "madsci.common.types.client_types:ExperimentClientConfig",
+    "madsci.common.types.client_types:DataClientConfig",
+    "madsci.common.types.client_types:MadsciClientConfig",
+    "madsci.common.types.client_types:LocationClientConfig",
+    "madsci.common.types.client_types:WorkcellClientConfig",
+    "madsci.common.types.client_types:LabClientConfig",
     "madsci.common.types.backup_types:PostgreSQLBackupSettings",
     "madsci.common.types.backup_types:MongoDBBackupSettings",
+    "madsci.common.types.mongodb_migration_types:MongoDBMigrationSettings",
+    "madsci.resource_manager.migration_tool:DatabaseMigrationSettings",
 ]
 
 # Generate Markdown docs
