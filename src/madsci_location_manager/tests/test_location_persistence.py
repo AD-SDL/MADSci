@@ -1,7 +1,6 @@
 """Tests for location persistence to YAML definition files."""
 
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,16 +29,9 @@ redis_server = create_redis_fixture()
 
 
 @pytest.fixture
-def temp_dir():
-    """Create a temporary directory for test files."""
-    with TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
-
-
-@pytest.fixture
-def definition_file(temp_dir):
+def definition_file(tmp_path):
     """Create a test definition file."""
-    def_path = temp_dir / "location.manager.yaml"
+    def_path = tmp_path / "location.manager.yaml"
 
     # Create initial definition with some locations
     initial_definition = LocationManagerDefinition(
@@ -226,14 +218,14 @@ def test_initial_locations_preserved_after_add(
     assert sample_location.location_id in reloaded_location_ids
 
 
-def test_transfer_capabilities_preserved_during_sync(temp_dir):
+def test_transfer_capabilities_preserved_during_sync(tmp_path):
     """Test that transfer_capabilities in the definition are preserved when syncing locations.
 
     This ensures that non-location parts of the definition (like transfer_capabilities)
     are not overwritten when updating the location list.
     """
     # Create a definition with transfer capabilities
-    def_path = temp_dir / "location_with_transfers.yaml"
+    def_path = tmp_path / "location_with_transfers.yaml"
 
     transfer_template = TransferStepTemplate(
         node_name="test_node",
@@ -266,7 +258,7 @@ def test_transfer_capabilities_preserved_during_sync(temp_dir):
     )
 
 
-def test_startup_sync_redis_only_locations_to_yaml(redis_server: Redis, temp_dir: Path):
+def test_startup_sync_redis_only_locations_to_yaml(redis_server: Redis, tmp_path: Path):
     """Test that locations existing only in Redis are immediately synced to YAML on startup.
 
     This test verifies that when the server starts up with locations in Redis
@@ -276,7 +268,7 @@ def test_startup_sync_redis_only_locations_to_yaml(redis_server: Redis, temp_dir
     RED PHASE: This test should fail initially because startup sync is not yet implemented.
     """
     # Create a definition file with one initial location
-    def_path = temp_dir / "location.manager.yaml"
+    def_path = tmp_path / "location.manager.yaml"
     initial_location_id = new_ulid_str()
 
     initial_definition = LocationManagerDefinition(
