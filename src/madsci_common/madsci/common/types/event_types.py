@@ -11,7 +11,8 @@ from typing import Any, Literal, Optional, Union
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
+from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.client_types import MadsciClientConfig
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -21,6 +22,7 @@ from madsci.common.types.manager_types import (
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
+from pydantic_settings import SettingsConfigDict
 
 
 class EventLogLevel(int, Enum):
@@ -154,15 +156,29 @@ class Event(MadsciBaseModel):
         return str(v)
 
 
-class EventClientConfig(
-    MadsciBaseSettings,
-    env_file=(".env", "event_client.env"),
-    toml_file="event_client.toml",
-    yaml_file="event_client.yaml",
-    json_file="event_client.json",
-    env_prefix="EVENT_CLIENT_",
-):
-    """Configuration for an Event Client."""
+class EventClientConfig(MadsciClientConfig):
+    """Configuration for an Event Client.
+
+    Inherits all HTTP client configuration from MadsciClientConfig including:
+    - Retry configuration (retry_enabled, retry_total, retry_backoff_factor, etc.)
+    - Timeout configuration (timeout_default, timeout_data_operations, etc.)
+    - Connection pooling (pool_connections, pool_maxsize)
+    - Rate limiting (rate_limit_tracking_enabled, rate_limit_warning_threshold, etc.)
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="EVENT_CLIENT_",
+        env_file=(".env", "event_client.env"),
+        toml_file="event_client.toml",
+        yaml_file="event_client.yaml",
+        json_file="event_client.json",
+        env_file_encoding="utf-8",
+        validate_assignment=True,
+        validate_default=True,
+        env_nested_delimiter="__",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     name: Optional[str] = Field(
         title="Event Client Name",
