@@ -182,15 +182,18 @@ show-version:
   fi
 
 # Run the node notebook
-node_integration_tests:
+node_e2e_tests:
   docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/node_notebook.ipynb
 
 # Run the experiment notebook
-experiment_integration_tests:
-  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
+experiment_e2e_tests:
+  docker compose run --rm workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
 
-backup_integration_tests:
+backup_e2e_tests:
   docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/backup_and_migration.ipynb
 
 # Run the integration tests
-integration_tests: node_integration_tests experiment_integration_tests backup_integration_tests
+e2e_tests: node_e2e_tests experiment_e2e_tests backup_e2e_tests
+
+# Run the full pipeline including e2e tests
+all: down pipeupd e2e_tests down

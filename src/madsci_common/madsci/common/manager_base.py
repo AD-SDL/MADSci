@@ -13,6 +13,7 @@ import uvicorn
 from classy_fastapi import Routable, get
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.middleware import RateLimitMiddleware
@@ -31,7 +32,10 @@ class ManagerBaseMeta(ABCMeta, type(Routable)):
 
 
 class AbstractManagerBase(
-    Generic[SettingsT, DefinitionT], Routable, metaclass=ManagerBaseMeta
+    MadsciClientMixin,
+    Generic[SettingsT, DefinitionT],
+    Routable,
+    metaclass=ManagerBaseMeta,
 ):
     """
     Abstract base class for MADSci manager services using classy-fastapi.
@@ -173,8 +177,19 @@ class AbstractManagerBase(
         """
 
     def setup_logging(self) -> None:
-        """Setup logging for the manager."""
-        self._logger = EventClient(name=f"{self._definition.name}")
+        """
+        Setup logging for the manager using MadsciClientMixin.
+
+        This method initializes the EventClient for manager logging.
+        The EventClient is created via the mixin's lazy initialization.
+        """
+        # Set the name for the EventClient
+        if hasattr(self, "_definition") and self._definition:
+            self.name = f"{self._definition.name}"
+
+        # Use the mixin's event_client property (lazy initialization)
+        # This creates the EventClient if it doesn't exist
+        self._logger = self.event_client
 
     def setup_ownership(self) -> None:
         """Setup ownership context for the manager."""
