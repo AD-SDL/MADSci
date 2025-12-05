@@ -4,13 +4,15 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
 
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.experiment_client import ExperimentClient
 from madsci.client.lab_client import LabClient
-from madsci.client.location_client import LocationClient
+from madsci.client.location_client import (
+    LocationClient,  # noqa: F401 - Needed for test patching
+)
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.context import set_current_madsci_context
@@ -64,8 +66,21 @@ class ExperimentApplication(RestNode):
     """
     An experiment application that helps manage the execution of an experiment.
 
-    You can either use this class as a base class for your own application class, or create an instance of it to manage the execution of an experiment.
+    You can either use this class as a base class for your own application class,
+    or create an instance of it to manage the execution of an experiment.
+
+    This class extends AbstractNode (via RestNode) and inherits client management
+    from MadsciClientMixin. In addition to the standard node clients (event, resource, data),
+    it also uses experiment, workcell, location, and optionally lab clients.
     """
+
+    # Extend the required clients from AbstractNode to include experiment-specific clients
+    OPTIONAL_CLIENTS: ClassVar[list[str]] = [
+        "experiment",
+        "workcell",
+        "location",
+        "lab",
+    ]
 
     experiment: Optional[Experiment] = None
     """The current experiment being run."""
@@ -97,27 +112,36 @@ class ExperimentApplication(RestNode):
         *args: Any,
         **kwargs: Any,
     ) -> "ExperimentApplication":
-        """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
+        """
+        Initialize the experiment application.
+
+        You can provide an experiment design to use for creating new experiments,
+        or an existing experiment to continue.
+
+        Note: Client initialization is handled by the parent AbstractNode class
+        via MadsciClientMixin. All manager clients (experiment, workcell, location,
+        data, resource) are available as properties and will be lazily initialized
+        when first accessed.
+        """
         super().__init__(*args, **kwargs)
 
+        # Setup lab client and context if provided
         lab_server_url = lab_server_url or self.config.lab_server_url
         if lab_server_url:
-            self.lab_client = LabClient(lab_server_url=lab_server_url)
+            self.lab_server_url = lab_server_url
             set_current_madsci_context(self.lab_client.get_lab_context())
-        self.logger = self.event_client = EventClient()
+            self.setup_clients()
+
+        # Setup experiment design
         self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
 
         self.experiment = experiment if experiment else self.experiment
 
-        # * Re-initialize experiment client in-case user provided a different server URL
-        self.experiment_client = ExperimentClient()
-        self.workcell_client = WorkcellClient()
-        self.location_client = LocationClient()
-        self.data_client = DataClient()
-        self.resource_client = ResourceClient()
-        self.event_client = self.logger = EventClient()
+        # Note: All clients (experiment_client, workcell_client, location_client,
+        # data_client, resource_client, event_client) are inherited from AbstractNode
+        # via MadsciClientMixin and will be initialized lazily when accessed
 
     @classmethod
     def start_new(
