@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_ccee3f9be15274d0_workcell_actions_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-12-02 12:39 +0000
+            created at 2025-12-05 00:26 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -132,7 +132,7 @@
     <p class="run"><span class="n"><a id="t50" href="#t50">50</a></span><span class="t">        <span class="key">if</span> <span class="nam">mongo_connection</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t51" href="#t51">51</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">db_connection</span> <span class="op">=</span> <span class="nam">mongo_connection</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t52" href="#t52">52</a></span><span class="t">        <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t53" href="#t53">53</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">db_client</span> <span class="op">=</span> <span class="nam">MongoClient</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">workcell_settings</span><span class="op">.</span><span class="nam">mongo_url</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t53" href="#t53">53</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">db_client</span> <span class="op">=</span> <span class="nam">MongoClient</span><span class="op">(</span><span class="nam">str</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">workcell_settings</span><span class="op">.</span><span class="nam">mongo_db_url</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t54" href="#t54">54</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">db_connection</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">db_client</span><span class="op">[</span><span class="str">"workcell_manager"</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t55" href="#t55">55</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">archived_workflows</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">db_connection</span><span class="op">[</span><span class="str">"archived_workflows"</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t56" href="#t56">56</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">workflow_definitions</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">db_connection</span><span class="op">[</span><span class="str">"workflow_definitions"</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
@@ -521,7 +521,7 @@
             <a class="nav" href="z_ccee3f9be15274d0_workcell_actions_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.12.0">coverage.py v7.12.0</a>,
-            created at 2025-12-02 12:39 +0000
+            created at 2025-12-05 00:26 +0000
         </p>
     </div>
 </footer>
