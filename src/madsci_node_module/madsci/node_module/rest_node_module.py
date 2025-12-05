@@ -24,6 +24,7 @@ from fastapi.background import BackgroundTasks
 from fastapi.datastructures import UploadFile
 from fastapi.routing import APIRouter
 from madsci.client.node.rest_node_client import RestNodeClient
+from madsci.common.middleware import RateLimitMiddleware
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.action_types import (
     ActionFiles,
@@ -107,6 +108,15 @@ class RestNode(AbstractNode):
 
             self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
 
+            # Add rate limiting middleware if enabled
+            if self.config.enable_rate_limiting:
+                self.rest_api.add_middleware(
+                    RateLimitMiddleware,
+                    requests_limit=self.config.rate_limit_requests,
+                    time_window=self.config.rate_limit_window,
+                    cleanup_interval=self.config.rate_limit_cleanup_interval,
+                )
+
             # Middleware to set ownership context for each request
             @self.rest_api.middleware("http")
             async def ownership_middleware(
@@ -126,6 +136,16 @@ class RestNode(AbstractNode):
             super().start_node()
             self.logger.debug("Running node in test mode")
             self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
+
+            # Add rate limiting middleware if enabled
+            if self.config.enable_rate_limiting:
+                self.rest_api.add_middleware(
+                    RateLimitMiddleware,
+                    requests_limit=self.config.rate_limit_requests,
+                    time_window=self.config.rate_limit_window,
+                    cleanup_interval=self.config.rate_limit_cleanup_interval,
+                )
+
             self._configure_routes()
 
     def get_action_status(self, action_id: str) -> ActionStatus:
