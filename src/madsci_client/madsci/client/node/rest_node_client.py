@@ -19,7 +19,7 @@ from madsci.common.types.action_types import (
     RestActionResult,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.client_types import NodeClientConfig
+from madsci.common.types.client_types import RestNodeClientConfig
 from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import (
     AdminCommands,
@@ -80,7 +80,7 @@ class RestNodeClient(AbstractNodeClient):
     )
 
     def __init__(
-        self, url: AnyUrl, config: Optional[NodeClientConfig] = None
+        self, url: AnyUrl, config: Optional[RestNodeClientConfig] = None
     ) -> "RestNodeClient":
         """
         Initialize the client.
@@ -91,7 +91,7 @@ class RestNodeClient(AbstractNodeClient):
         """
         super().__init__(url)
         self.logger = EventClient()
-        self.config = config if config is not None else NodeClientConfig()
+        self.config = config if config is not None else RestNodeClientConfig()
         self.session = create_http_session(config=self.config)
 
     def send_action(

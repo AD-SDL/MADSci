@@ -202,7 +202,7 @@ class LabClientConfig(MadsciClientConfig):
     )
 
 
-class NodeClientConfig(MadsciClientConfig):
+class RestNodeClientConfig(MadsciClientConfig):
     """
     Configuration for Node REST clients.
 
