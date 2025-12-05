@@ -62,6 +62,10 @@ class LocationManager(
             self.state_handler, self.definition, self.resource_client
         )
 
+        # Sync any Redis-only locations to the definition file on startup
+        # This ensures locations added via API are persisted immediately
+        self._sync_locations_to_definition()
+
     def _initialize_locations_from_definition(self) -> None:
         """Initialize locations from the definition, creating or updating them in the state handler."""
 
@@ -174,6 +178,72 @@ class LocationManager(
         # Existing resource doesn't exist, create a new one
         return self._initialize_location_resource(location_def)
 
+    def _sync_locations_to_definition(self) -> None:
+        """Sync current runtime locations back to the definition file.
+
+        This method reads all locations from Redis state, converts them to
+        LocationDefinition objects, and writes them back to the YAML definition file.
+        It preserves other definition settings like transfer_capabilities.
+        It also preserves resource_template_name and resource_template_overrides for
+        locations that were originally defined with them.
+        """
+        try:
+            # Get current locations from state
+            runtime_locations = self.state_handler.get_locations()
+
+            # Create a map of original location definitions by ID to preserve template info
+            original_location_map = {
+                loc.location_id: loc for loc in self.definition.locations
+            }
+
+            # Convert runtime Location objects to LocationDefinition objects
+            location_definitions = []
+            for location in runtime_locations:
+                # Check if this location was originally defined with resource template info
+                original_location = original_location_map.get(location.location_id)
+
+                # Preserve resource_template_name and resource_template_overrides if they exist
+                resource_template_name = (
+                    original_location.resource_template_name
+                    if original_location
+                    else None
+                )
+                resource_template_overrides = (
+                    original_location.resource_template_overrides
+                    if original_location
+                    else None
+                )
+
+                # Create LocationDefinition from Location
+                # Note: We don't persist resource_id as it's runtime-only
+                location_def = LocationDefinition(
+                    location_id=location.location_id,
+                    location_name=location.location_name,
+                    description=location.description,
+                    representations=location.representations
+                    if location.representations
+                    else {},
+                    allow_transfers=location.allow_transfers,
+                    resource_template_name=resource_template_name,
+                    resource_template_overrides=resource_template_overrides,
+                )
+                location_definitions.append(location_def)
+
+            # Update the definition with new locations
+            self.definition.locations = location_definitions
+
+            # Write to file, preserving other definition fields
+            definition_path = self.get_definition_path()
+            self.definition.to_yaml(definition_path)
+
+            self.logger.debug(
+                f"Synced {len(location_definitions)} locations to definition file: {definition_path}"
+            )
+
+        except Exception as e:
+            # Log error but don't fail the operation - persistence is best-effort
+            self.logger.warning(f"Failed to sync locations to definition file: {e}")
+
     def get_health(self) -> LocationManagerHealth:
         """Get the health status of the Location Manager."""
         health = LocationManagerHealth()
@@ -217,6 +287,8 @@ class LocationManager(
             result = self.state_handler.set_location(location.location_id, location)
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
+            # Sync locations to definition file
+            self._sync_locations_to_definition()
             return result
 
     @get("/location", tags=["Locations"])
@@ -272,6 +344,8 @@ class LocationManager(
                 )
             # Rebuild transfer graph since deleted location affects transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
+            # Sync locations to definition file
+            self._sync_locations_to_definition()
             return {"message": f"Location {location_id} deleted successfully"}
 
     @post("/location/{location_id}/set_representation/{node_name}", tags=["Locations"])
@@ -297,6 +371,8 @@ class LocationManager(
             result = self.state_handler.update_location(location_id, location)
             # Rebuild transfer graph since representations affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
+            # Sync locations to definition file
+            self._sync_locations_to_definition()
             return result
 
     @delete(
@@ -335,6 +411,8 @@ class LocationManager(
             result = self.state_handler.update_location(location_id, location)
             # Rebuild transfer graph since representations affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
+            # Sync locations to definition file
+            self._sync_locations_to_definition()
             return result
 
     @post("/location/{location_id}/attach_resource", tags=["Locations"])
@@ -353,6 +431,8 @@ class LocationManager(
 
             location.resource_id = resource_id
 
+            # Note: We don't sync resource_id changes to definition as resource_id is runtime-only
+            # The definition uses resource_template_name for resource initialization
             return self.state_handler.update_location(location_id, location)
 
     @delete("/location/{location_id}/detach_resource", tags=["Locations"])
@@ -378,6 +458,8 @@ class LocationManager(
             # Detach the resource
             location.resource_id = None
 
+            # Note: We don't sync resource_id changes to definition as resource_id is runtime-only
+            # The definition uses resource_template_name for resource initialization
             return self.state_handler.update_location(location_id, location)
 
     @post("/transfer/plan", tags=["Transfer"])
