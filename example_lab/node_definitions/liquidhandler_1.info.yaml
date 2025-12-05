@@ -149,6 +149,12 @@ config:
   state_update_interval: 2.0
   node_url: http://localhost:2000/
   uvicorn_kwargs: {}
+  enable_rate_limiting: true
+  rate_limit_requests: 100
+  rate_limit_window: 60
+  rate_limit_short_requests: 50
+  rate_limit_short_window: 1
+  rate_limit_cleanup_interval: 300
   device_number: 0
   wait_time: 2.0
 config_schema:
@@ -213,6 +219,51 @@ config_schema:
       description: Configuration for the Uvicorn server that runs the REST API.
       title: Uvicorn Configuration
       type: object
+    enable_rate_limiting:
+      default: true
+      description: Enable rate limiting middleware for the REST API.
+      title: Enable Rate Limiting
+      type: boolean
+    rate_limit_requests:
+      default: 100
+      description: Maximum number of requests allowed per long time window (only used
+        if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Requests
+      type: integer
+    rate_limit_window:
+      default: 60
+      description: Long time window in seconds for rate limiting (only used if enable_rate_limiting
+        is True).
+      minimum: 1
+      title: Rate Limit Window
+      type: integer
+    rate_limit_short_requests:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 50
+      description: Maximum number of requests allowed per short time window for burst
+        protection (only used if enable_rate_limiting is True). If None, short window
+        limiting is disabled.
+      title: Rate Limit Short Requests
+    rate_limit_short_window:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 1
+      description: Short time window for burst protection in seconds (only used if
+        enable_rate_limiting is True). If None, short window limiting is disabled.
+      title: Rate Limit Short Window
+    rate_limit_cleanup_interval:
+      default: 300
+      description: Interval in seconds between cleanup operations to prevent memory
+        leaks (only used if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Cleanup Interval
+      type: integer
     device_number:
       default: 0
       title: Device Number
