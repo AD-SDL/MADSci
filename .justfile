@@ -187,7 +187,7 @@ node_e2e_tests:
 
 # Run the experiment notebook
 experiment_e2e_tests:
-  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
+  docker compose run --rm workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
 
 backup_e2e_tests:
   docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/backup_and_migration.ipynb

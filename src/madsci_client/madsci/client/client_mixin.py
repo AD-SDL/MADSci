@@ -14,6 +14,7 @@ from madsci.client.lab_client import LabClient
 from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
+from madsci.common.types.client_types import LocationClientConfig, WorkcellClientConfig
 from madsci.common.types.datapoint_types import ObjectStorageSettings
 from madsci.common.types.event_types import EventClientConfig
 from pydantic import AnyUrl
@@ -408,18 +409,23 @@ class MadsciClientMixin:
         if self._event_client is not None:
             kwargs["event_client"] = self._event_client
 
-        # Retry configuration
+        # Build config object with retry configuration if any custom settings exist
+        config_kwargs: dict[str, Any] = {}
         if hasattr(self, "client_retry_enabled"):
-            kwargs["retry"] = self.client_retry_enabled
+            config_kwargs["retry_enabled"] = self.client_retry_enabled
         if hasattr(self, "client_retry_total"):
-            kwargs["retry_total"] = self.client_retry_total
+            config_kwargs["retry_total"] = self.client_retry_total
         if hasattr(self, "client_retry_backoff_factor"):
-            kwargs["retry_backoff_factor"] = self.client_retry_backoff_factor
+            config_kwargs["retry_backoff_factor"] = self.client_retry_backoff_factor
         if (
             hasattr(self, "client_retry_status_forcelist")
             and self.client_retry_status_forcelist is not None
         ):
-            kwargs["retry_status_forcelist"] = self.client_retry_status_forcelist
+            config_kwargs["retry_status_forcelist"] = self.client_retry_status_forcelist
+
+        # Only create config if there are custom settings
+        if config_kwargs:
+            kwargs["config"] = WorkcellClientConfig(**config_kwargs)
 
         return WorkcellClient(**kwargs)
 
@@ -461,18 +467,23 @@ class MadsciClientMixin:
         if self._event_client is not None:
             kwargs["event_client"] = self._event_client
 
-        # Retry configuration
+        # Build config object with retry configuration if any custom settings exist
+        config_kwargs: dict[str, Any] = {}
         if hasattr(self, "client_retry_enabled"):
-            kwargs["retry"] = self.client_retry_enabled
+            config_kwargs["retry_enabled"] = self.client_retry_enabled
         if hasattr(self, "client_retry_total"):
-            kwargs["retry_total"] = self.client_retry_total
+            config_kwargs["retry_total"] = self.client_retry_total
         if hasattr(self, "client_retry_backoff_factor"):
-            kwargs["retry_backoff_factor"] = self.client_retry_backoff_factor
+            config_kwargs["retry_backoff_factor"] = self.client_retry_backoff_factor
         if (
             hasattr(self, "client_retry_status_forcelist")
             and self.client_retry_status_forcelist is not None
         ):
-            kwargs["retry_status_forcelist"] = self.client_retry_status_forcelist
+            config_kwargs["retry_status_forcelist"] = self.client_retry_status_forcelist
+
+        # Only create config if there are custom settings
+        if config_kwargs:
+            kwargs["config"] = LocationClientConfig(**config_kwargs)
 
         return LocationClient(**kwargs)
 
