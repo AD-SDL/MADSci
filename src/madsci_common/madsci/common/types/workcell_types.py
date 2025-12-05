@@ -191,14 +191,19 @@ class WorkcellManagerSettings(
         description="The password for the redis server.",
     )
     scheduler_update_interval: float = Field(
-        default=2.0,
+        default=5.0,
         title="Scheduler Update Interval",
         description="The interval at which the scheduler runs, in seconds. Must be >= node_update_interval",
     )
     node_update_interval: float = Field(
-        default=1.0,
+        default=2.0,
         title="Node Update Interval",
-        description="The interval at which the workcell queries its node's states, in seconds.Must be <= scheduler_update_interval",
+        description="The interval at which the workcell queries its node's states and status, in seconds. Must be <= scheduler_update_interval",
+    )
+    node_info_update_interval: float = Field(
+        default=60.0,
+        title="Node Info Update Interval",
+        description="The interval at which the workcell queries its node's info, in seconds. Node info changes infrequently, so this can be much larger than node_update_interval to reduce network overhead.",
     )
     cold_start_delay: int = Field(
         default=0,

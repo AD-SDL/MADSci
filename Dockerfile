@@ -57,7 +57,7 @@ COPY pyproject.toml pdm.lock README.md /home/${CONTAINER_USER}/MADSci/
 COPY src/ /home/${CONTAINER_USER}/MADSci/src
 WORKDIR /home/${CONTAINER_USER}/MADSci
 RUN --mount=type=cache,target=/root/.cache \
- 	pdm install -G:all -g -p . --check
+ 	pdm install -G:all -g -p . --no-lock
 
 # * Fix ownership of all MADSci files and ensure alembic directories exist with correct permissions
 RUN chown -R ${USER_ID}:${GROUP_ID} /home/${CONTAINER_USER}/MADSci && \
