@@ -152,7 +152,7 @@ The example lab includes several pre-configured workflows demonstrating differen
 python -c "
 from madsci.client.workcell_client import WorkcellClient
 client = WorkcellClient()
-result = client.execute_workflow('workflows/simple_transfer.workflow.yaml')
+result = client.start_workflow('workflows/simple_transfer.workflow.yaml')
 print(f'Workflow result: {result}')
 "
 ```
@@ -163,7 +163,7 @@ print(f'Workflow result: {result}')
 python -c "
 from madsci.client.workcell_client import WorkcellClient
 client = WorkcellClient()
-result = client.execute_workflow('workflows/multistep_transfer.workflow.yaml')
+result = client.start_workflow('workflows/multistep_transfer.workflow.yaml')
 print(f'Workflow result: {result}')
 "
 ```
@@ -174,7 +174,7 @@ print(f'Workflow result: {result}')
 python -c "
 from madsci.client.workcell_client import WorkcellClient
 client = WorkcellClient()
-result = client.execute_workflow('workflows/minimal_test.workflow.yaml')
+result = client.start_workflow('workflows/minimal_test.workflow.yaml')
 print(f'Workflow result: {result}')
 "
 ```
