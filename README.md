@@ -28,8 +28,8 @@
 | src/madsci\_common/madsci/common/context.py                                                   |       22 |        2 |     91% |    11, 44 |
 | src/madsci\_common/madsci/common/data\_manipulation.py                                        |       43 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/exceptions.py                                                |       23 |        2 |     91% |     30-31 |
-| src/madsci\_common/madsci/common/manager\_base.py                                             |      132 |       35 |     73% |94, 162-166, 216-217, 262-275, 366-399, 423-424 |
-| src/madsci\_common/madsci/common/middleware.py                                                |       72 |        2 |     97% |  132, 161 |
+| src/madsci\_common/madsci/common/manager\_base.py                                             |      136 |       35 |     74% |94, 162-166, 216-217, 262-275, 381-414, 438-439 |
+| src/madsci\_common/madsci/common/middleware.py                                                |       75 |        2 |     97% |  137, 170 |
 | src/madsci\_common/madsci/common/mongodb\_migration\_tool.py                                  |      187 |       82 |     56% |81, 87, 95-107, 111-123, 127-142, 151-154, 170, 183-191, 200-221, 228, 263-267, 294-295, 312-313, 329-365, 371-376, 380-381 |
 | src/madsci\_common/madsci/common/mongodb\_version\_checker.py                                 |      146 |       31 |     79% |65, 90, 99, 104-108, 137, 155-166, 254-256, 265, 301-303, 329-330, 338-340, 344, 348-350 |
 | src/madsci\_common/madsci/common/nodes.py                                                     |        7 |        0 |    100% |           |
@@ -49,7 +49,7 @@
 | src/madsci\_common/madsci/common/types/experiment\_types.py                                   |       74 |        6 |     92% |119, 136, 138, 140, 142, 144 |
 | src/madsci\_common/madsci/common/types/lab\_types.py                                          |       20 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/location\_types.py                                     |       98 |        9 |     91% |30, 32, 34, 36, 41, 46, 51, 98, 170 |
-| src/madsci\_common/madsci/common/types/manager\_types.py                                      |       45 |        5 |     89% |     27-31 |
+| src/madsci\_common/madsci/common/types/manager\_types.py                                      |       46 |        5 |     89% |     27-31 |
 | src/madsci\_common/madsci/common/types/mongodb\_migration\_types.py                           |      214 |      116 |     46% |84, 105, 129-130, 150, 159, 165, 191, 197, 200-203, 206, 218-227, 248-262, 266-271, 293-297, 303-319, 323-333, 338-348, 352-359, 363, 367, 371, 385-441, 458-490 |
 | src/madsci\_common/madsci/common/types/node\_types.py                                         |      144 |        7 |     95% |398, 406, 410, 419, 425, 429, 459 |
 | src/madsci\_common/madsci/common/types/parameter\_types.py                                    |       37 |        8 |     78% |14, 23, 47, 49, 51, 68, 70, 72 |
@@ -101,7 +101,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                    |      264 |       67 |     75% |86-87, 123-158, 183-184, 231, 243-247, 271-272, 284, 292, 302-305, 313-317, 348, 363, 377, 391, 397, 426-428, 432-437, 462-464, 501-503, 518, 529, 560-565, 572-573 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                     |        9 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                     |      199 |       67 |     66% |40-41, 48-58, 72-77, 95, 113, 131, 144, 160, 165-176, 244, 251-252, 268, 279, 300, 305, 313, 330-342, 358-380, 396, 419-426, 433, 438-441, 447-448 |
-|                                                                                     **TOTAL** | **13974** | **4545** | **67%** |           |
+|                                                                                     **TOTAL** | **13982** | **4545** | **67%** |           |
 
 
 ## Setup coverage badge
