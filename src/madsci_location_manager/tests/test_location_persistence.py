@@ -264,8 +264,6 @@ def test_startup_sync_redis_only_locations_to_yaml(redis_server: Redis, tmp_path
     This test verifies that when the server starts up with locations in Redis
     that are not in the definition file, those Redis-only locations are immediately
     written to the YAML file during initialization.
-
-    RED PHASE: This test should fail initially because startup sync is not yet implemented.
     """
     # Create a definition file with one initial location
     def_path = tmp_path / "location.manager.yaml"
