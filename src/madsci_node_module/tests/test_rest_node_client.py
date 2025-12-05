@@ -579,9 +579,11 @@ def test_send_action_file_response(mock_create_session: MagicMock) -> None:
 
 
 @patch("time.sleep")
+@patch("madsci.client.node.rest_node_client.EventClient")
 @patch("madsci.client.node.rest_node_client.create_http_session")
 def test_await_action_result_timeout(
     mock_create_session: MagicMock,
+    mock_event_client: MagicMock,  # noqa: ARG001
     mock_sleep: MagicMock,  # noqa: ARG001
 ) -> None:
     """Test await_action_result with timeout."""
@@ -606,9 +608,11 @@ def test_await_action_result_timeout(
 
 
 @patch("time.sleep")
+@patch("madsci.client.node.rest_node_client.EventClient")
 @patch("madsci.client.node.rest_node_client.create_http_session")
 def test_await_action_result_exponential_backoff(
     mock_create_session: MagicMock,
+    mock_event_client: MagicMock,  # noqa: ARG001 Need to patch event client to avoid real calls
     mock_sleep: MagicMock,
 ) -> None:
     """Test await_action_result with exponential backoff."""
