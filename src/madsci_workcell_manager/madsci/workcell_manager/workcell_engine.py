@@ -83,18 +83,30 @@ class Engine:
         Continuously loop, updating node states every Config.update_interval seconds.
         If the state of the workcell has changed, update the active modules and run the scheduler.
         """
-        self.update_active_nodes(self.state_handler)
+        self.update_active_nodes(self.state_handler, update_info=True)
         node_tick = time.time()
+        info_tick = time.time()
         scheduler_tick = time.time()
         while True and not self.state_handler.shutdown:
             try:
                 self.workcell_definition = self.state_handler.get_workcell_definition()
+
+                # Check if it's time to update node info (less frequent)
+                should_update_info = (
+                    time.time() - info_tick
+                    > self.workcell_settings.node_info_update_interval
+                )
+
                 if (
                     time.time() - node_tick
                     > self.workcell_settings.node_update_interval
                 ):
-                    self.update_active_nodes(self.state_handler)
+                    self.update_active_nodes(
+                        self.state_handler, update_info=should_update_info
+                    )
                     node_tick = time.time()
+                    if should_update_info:
+                        info_tick = time.time()
                 if (
                     time.time() - scheduler_tick
                     > self.workcell_settings.scheduler_update_interval
@@ -284,7 +296,7 @@ class Engine:
         action_id: str,
     ) -> None:
         """Monitor the progress of the action, querying the action result until it is terminal"""
-        interval = 0.25
+        interval = 1.0
         retry_count = 0
         while not response.status.is_terminal:
             if not check_node_capability(
@@ -298,7 +310,7 @@ class Engine:
                 break
             try:
                 time.sleep(interval)  # * Exponential backoff with cap
-                interval = interval * 1.5 if interval < 5 else 5
+                interval = interval * 1.5 if interval < 10.0 else 10.0
                 response = client.get_action_result(action_id)
                 self.handle_response(wf, step, response)
                 if (
@@ -557,13 +569,20 @@ class Engine:
 
             return response
 
-    def update_active_nodes(self, state_manager: WorkcellStateHandler) -> None:
-        """Update all active nodes in the workcell."""
+    def update_active_nodes(
+        self, state_manager: WorkcellStateHandler, update_info: bool = False
+    ) -> None:
+        """Update all active nodes in the workcell.
+
+        Args:
+            state_manager: The workcell state handler
+            update_info: Whether to update node info in addition to status and state (default: False)
+        """
         with concurrent.futures.ThreadPoolExecutor() as executor:
             node_futures = []
             for node_name, node in state_manager.get_nodes().items():
                 node_future = executor.submit(
-                    self.update_node, node_name, node, state_manager
+                    self.update_node, node_name, node, state_manager, update_info
                 )
                 node_futures.append(node_future)
 
@@ -571,13 +590,26 @@ class Engine:
             concurrent.futures.wait(node_futures)
 
     def update_node(
-        self, node_name: str, node: Node, state_manager: WorkcellStateHandler
+        self,
+        node_name: str,
+        node: Node,
+        state_manager: WorkcellStateHandler,
+        update_info: bool = False,
     ) -> None:
-        """Update a single node's state and about information."""
+        """Update a single node's status, state, and optionally info.
+
+        Args:
+            node_name: The name of the node to update
+            node: The node object to update
+            state_manager: The workcell state handler
+            update_info: Whether to update node info (default: False). Node info changes
+                        infrequently, so it's updated less often to reduce network overhead.
+        """
         try:
             client = find_node_client(node.node_url)
             node.status = client.get_status()
-            node.info = client.get_info()
+            if update_info:
+                node.info = client.get_info()
             node.state = client.get_state()
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
