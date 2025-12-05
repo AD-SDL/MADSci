@@ -35,6 +35,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         time_window: Long time window in seconds for rate limiting
         short_requests_limit: Maximum number of requests allowed per short time window (optional)
         short_time_window: Short time window in seconds for burst protection (optional)
+        exempt_ips: Set of IP addresses exempt from rate limiting (defaults to localhost)
         storage: Dictionary tracking request timestamps per client IP
         locks: Dictionary of locks for thread-safe access per client IP
         _global_lock: Lock for managing the locks dictionary itself (created lazily)
@@ -50,6 +51,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         short_requests_limit: Optional[int] = None,
         short_time_window: Optional[int] = None,
         cleanup_interval: int = 300,
+        exempt_ips: Optional[set[str]] = None,
     ) -> None:
         """
         Initialize the rate limiting middleware.
@@ -61,6 +63,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             short_requests_limit: Maximum number of requests per short window (optional, for burst protection)
             short_time_window: Short time window in seconds (optional, typically 1 second)
             cleanup_interval: Interval in seconds between cleanup operations (default: 300)
+            exempt_ips: Set of IP addresses exempt from rate limiting (default: localhost IPs)
         """
         super().__init__(app)
         self.requests_limit = requests_limit
@@ -68,6 +71,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.short_requests_limit = short_requests_limit
         self.short_time_window = short_time_window
         self.cleanup_interval = cleanup_interval
+        # Default to exempting localhost if not specified
+        self.exempt_ips = exempt_ips if exempt_ips is not None else {"127.0.0.1", "::1"}
         # Storage maps client IP addresses to lists of request timestamps
         self.storage: defaultdict[str, list[float]] = defaultdict(list)
         # Per-client locks for thread-safe access
@@ -152,6 +157,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """
         # Get client IP address
         client_ip = request.client.host if request.client else "unknown"
+
+        # Skip rate limiting for exempt IPs (e.g., localhost)
+        if client_ip in self.exempt_ips:
+            return await call_next(request)
 
         # Get current timestamp
         now = time.time()
