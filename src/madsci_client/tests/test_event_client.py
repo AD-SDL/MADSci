@@ -571,7 +571,7 @@ class TestEventClientUtilizationMethods:
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time": "2025-01-02T00:00:00Z",
             },
-            timeout=30.0,
+            timeout=60.0,
         )
         assert result == {"utilization_data": "test"}
 
@@ -610,7 +610,7 @@ class TestEventClientUtilizationMethods:
             mock_session.get.assert_called_once_with(
                 "http://localhost:8001/utilization/sessions",
                 params=expected_params,
-                timeout=60.0,
+                timeout=100.0,
             )
             assert result == "date,utilization\\n2025-01-01,50%"
 
@@ -651,7 +651,7 @@ class TestEventClientUtilizationMethods:
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time": "2025-01-02T00:00:00Z",
             },
-            timeout=60.0,
+            timeout=100.0,
         )
         assert result == {"sessions": []}
 
@@ -689,7 +689,7 @@ class TestEventClientUtilizationMethods:
             mock_session.get.assert_called_once_with(
                 "http://localhost:8001/utilization/sessions",
                 params=expected_params,
-                timeout=60.0,
+                timeout=100.0,
             )
             assert result == "session,start,end\\nsession1,2025-01-01,2025-01-02"
 
@@ -730,7 +730,7 @@ class TestEventClientUtilizationMethods:
                 "start_time": "2025-01-01T00:00:00Z",
                 "end_time": "2025-01-02T00:00:00Z",
             },
-            timeout=60.0,
+            timeout=100.0,
         )
         assert result == {"users": {}}
 

@@ -20,24 +20,33 @@ Base class for MADSci context settings.
 
 Configuration for an Event Client.
 
+Inherits all HTTP client configuration from MadsciClientConfig including:
+- Retry configuration (retry_enabled, retry_total, retry_backoff_factor, etc.)
+- Timeout configuration (timeout_default, timeout_data_operations, etc.)
+- Connection pooling (pool_connections, pool_maxsize)
+- Rate limiting (rate_limit_tracking_enabled, rate_limit_warning_threshold, etc.)
+
 **Environment Prefix**: `EVENT_CLIENT_`
 
-| Name                                     | Type                         | Default                 | Description                                                               | Example                 |
-|------------------------------------------|------------------------------|-------------------------|---------------------------------------------------------------------------|-------------------------|
-| `EVENT_CLIENT_NAME`                      | `string` \| `NoneType`       | `null`                  | The name of the event client.                                             | `null`                  |
-| `EVENT_SERVER_URL` \| `EVENT_SERVER_URL` | `AnyUrl` \| `NoneType`       | `null`                  | The URL of the event server.                                              | `null`                  |
-| `EVENT_CLIENT_LOG_LEVEL`                 | `integer` \| `EventLogLevel` | `20`                    | The log level of the event client.                                        | `20`                    |
-| `EVENT_CLIENT_LOG_DIR`                   | `string` \| `Path`           | `"~/.madsci/logs"`      | The directory to store logs in.                                           | `"~/.madsci/logs"`      |
-| `EVENT_CLIENT_RETRY_ENABLED`             | `boolean`                    | `true`                  | Whether to enable automatic retries for failed HTTP requests              | `true`                  |
-| `EVENT_CLIENT_RETRY_TOTAL`               | `integer`                    | `3`                     | Total number of retry attempts for HTTP requests                          | `3`                     |
-| `EVENT_CLIENT_RETRY_BACKOFF_FACTOR`      | `number`                     | `0.3`                   | Backoff factor between retries in seconds for HTTP requests               | `0.3`                   |
-| `EVENT_CLIENT_RETRY_STATUS_FORCELIST`    | `array`                      | `[429,500,502,503,504]` | HTTP status codes that should trigger a retry                             | `[429,500,502,503,504]` |
-| `EVENT_CLIENT_RETRY_ALLOWED_METHODS`     | `array` \| `NoneType`        | `null`                  | HTTP methods allowed to be retried (None uses urllib3 defaults)           | `null`                  |
-| `EVENT_CLIENT_TIMEOUT_DEFAULT`           | `number`                     | `10.0`                  | Default timeout in seconds for standard HTTP requests                     | `10.0`                  |
-| `EVENT_CLIENT_TIMEOUT_DATA_OPERATIONS`   | `number`                     | `30.0`                  | Timeout in seconds for data-heavy HTTP operations                         | `30.0`                  |
-| `EVENT_CLIENT_TIMEOUT_LONG_OPERATIONS`   | `number`                     | `60.0`                  | Timeout in seconds for long-running HTTP operations (utilization queries) | `60.0`                  |
-| `EVENT_CLIENT_POOL_CONNECTIONS`          | `integer`                    | `10`                    | Number of HTTP connection pool entries                                    | `10`                    |
-| `EVENT_CLIENT_POOL_MAXSIZE`              | `integer`                    | `10`                    | Maximum size of the HTTP connection pool                                  | `10`                    |
+| Name                                        | Type                         | Default                 | Description                                                                             | Example                 |
+|---------------------------------------------|------------------------------|-------------------------|-----------------------------------------------------------------------------------------|-------------------------|
+| `EVENT_CLIENT_RETRY_ENABLED`                | `boolean`                    | `true`                  | Whether to enable automatic retries for failed requests                                 | `true`                  |
+| `EVENT_CLIENT_RETRY_TOTAL`                  | `integer`                    | `3`                     | Total number of retry attempts                                                          | `3`                     |
+| `EVENT_CLIENT_RETRY_BACKOFF_FACTOR`         | `number`                     | `0.3`                   | Backoff factor between retries in seconds                                               | `0.3`                   |
+| `EVENT_CLIENT_RETRY_STATUS_FORCELIST`       | `array`                      | `[429,500,502,503,504]` | HTTP status codes that should trigger a retry                                           | `[429,500,502,503,504]` |
+| `EVENT_CLIENT_RETRY_ALLOWED_METHODS`        | `array` \| `NoneType`        | `null`                  | HTTP methods allowed to be retried (None uses urllib3 defaults)                         | `null`                  |
+| `EVENT_CLIENT_TIMEOUT_DEFAULT`              | `number`                     | `10.0`                  | Default timeout in seconds for standard requests                                        | `10.0`                  |
+| `EVENT_CLIENT_TIMEOUT_DATA_OPERATIONS`      | `number`                     | `60.0`                  | Timeout in seconds for data-heavy operations                                            | `60.0`                  |
+| `EVENT_CLIENT_TIMEOUT_LONG_OPERATIONS`      | `number`                     | `100.0`                 | Timeout in seconds for long-running operations                                          | `100.0`                 |
+| `EVENT_CLIENT_POOL_CONNECTIONS`             | `integer`                    | `10`                    | Number of connection pool entries                                                       | `10`                    |
+| `EVENT_CLIENT_POOL_MAXSIZE`                 | `integer`                    | `10`                    | Maximum size of the connection pool                                                     | `10`                    |
+| `EVENT_CLIENT_RATE_LIMIT_TRACKING_ENABLED`  | `boolean`                    | `true`                  | Whether to track rate limit headers from server responses                               | `true`                  |
+| `EVENT_CLIENT_RATE_LIMIT_WARNING_THRESHOLD` | `number`                     | `0.8`                   | Threshold (as fraction of limit) at which to log warnings about approaching rate limits | `0.8`                   |
+| `EVENT_CLIENT_RATE_LIMIT_RESPECT_LIMITS`    | `boolean`                    | `false`                 | Whether to proactively delay requests when approaching rate limits                      | `false`                 |
+| `EVENT_CLIENT_NAME`                         | `string` \| `NoneType`       | `null`                  | The name of the event client.                                                           | `null`                  |
+| `EVENT_SERVER_URL` \| `EVENT_SERVER_URL`    | `AnyUrl` \| `NoneType`       | `null`                  | The URL of the event server.                                                            | `null`                  |
+| `EVENT_CLIENT_LOG_LEVEL`                    | `integer` \| `EventLogLevel` | `20`                    | The log level of the event client.                                                      | `20`                    |
+| `EVENT_CLIENT_LOG_DIR`                      | `string` \| `Path`           | `"~/.madsci/logs"`      | The directory to store logs in.                                                         | `"~/.madsci/logs"`      |
 
 ### OwnershipInfo
 

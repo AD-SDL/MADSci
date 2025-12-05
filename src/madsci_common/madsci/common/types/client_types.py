@@ -45,6 +45,12 @@ class MadsciClientConfig(MadsciBaseSettings):
         Number of connection pool entries for the session. Default: 10.
     pool_maxsize : int
         Maximum size of the connection pool. Default: 10.
+    rate_limit_tracking_enabled : bool
+        Whether to track rate limit headers from server responses. Default: True.
+    rate_limit_warning_threshold : float
+        Threshold (0.0 to 1.0) at which to log warnings about approaching rate limits. Default: 0.8.
+    rate_limit_respect_limits : bool
+        Whether to proactively delay requests when approaching rate limits. Default: False.
     """
 
     model_config = SettingsConfigDict(
@@ -109,6 +115,22 @@ class MadsciClientConfig(MadsciBaseSettings):
         default=10,
         ge=1,
         description="Maximum size of the connection pool",
+    )
+
+    # Rate limit handling configuration
+    rate_limit_tracking_enabled: bool = Field(
+        default=True,
+        description="Whether to track rate limit headers from server responses",
+    )
+    rate_limit_warning_threshold: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Threshold (as fraction of limit) at which to log warnings about approaching rate limits",
+    )
+    rate_limit_respect_limits: bool = Field(
+        default=False,
+        description="Whether to proactively delay requests when approaching rate limits",
     )
 
 

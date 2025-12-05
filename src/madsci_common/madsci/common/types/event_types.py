@@ -11,7 +11,8 @@ from typing import Any, Literal, Optional, Union
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
+from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.client_types import MadsciClientConfig
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -21,6 +22,7 @@ from madsci.common.types.manager_types import (
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
+from pydantic_settings import SettingsConfigDict
 
 
 class EventLogLevel(int, Enum):
@@ -154,15 +156,29 @@ class Event(MadsciBaseModel):
         return str(v)
 
 
-class EventClientConfig(
-    MadsciBaseSettings,
-    env_file=(".env", "event_client.env"),
-    toml_file="event_client.toml",
-    yaml_file="event_client.yaml",
-    json_file="event_client.json",
-    env_prefix="EVENT_CLIENT_",
-):
-    """Configuration for an Event Client."""
+class EventClientConfig(MadsciClientConfig):
+    """Configuration for an Event Client.
+
+    Inherits all HTTP client configuration from MadsciClientConfig including:
+    - Retry configuration (retry_enabled, retry_total, retry_backoff_factor, etc.)
+    - Timeout configuration (timeout_default, timeout_data_operations, etc.)
+    - Connection pooling (pool_connections, pool_maxsize)
+    - Rate limiting (rate_limit_tracking_enabled, rate_limit_warning_threshold, etc.)
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="EVENT_CLIENT_",
+        env_file=(".env", "event_client.env"),
+        toml_file="event_client.toml",
+        yaml_file="event_client.yaml",
+        json_file="event_client.json",
+        env_file_encoding="utf-8",
+        validate_assignment=True,
+        validate_default=True,
+        env_nested_delimiter="__",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     name: Optional[str] = Field(
         title="Event Client Name",
@@ -189,55 +205,6 @@ class EventClientConfig(
         title="Log Directory",
         description="The directory to store logs in.",
         default_factory=lambda: Path("~") / ".madsci" / "logs",
-    )
-
-    # HTTP Client configuration fields
-    retry_enabled: bool = Field(
-        default=True,
-        description="Whether to enable automatic retries for failed HTTP requests",
-    )
-    retry_total: int = Field(
-        default=3,
-        ge=0,
-        description="Total number of retry attempts for HTTP requests",
-    )
-    retry_backoff_factor: float = Field(
-        default=0.3,
-        ge=0.0,
-        description="Backoff factor between retries in seconds for HTTP requests",
-    )
-    retry_status_forcelist: list[int] = Field(
-        default=[429, 500, 502, 503, 504],
-        description="HTTP status codes that should trigger a retry",
-    )
-    retry_allowed_methods: Optional[list[str]] = Field(
-        default=None,
-        description="HTTP methods allowed to be retried (None uses urllib3 defaults)",
-    )
-    timeout_default: float = Field(
-        default=10.0,
-        gt=0.0,
-        description="Default timeout in seconds for standard HTTP requests",
-    )
-    timeout_data_operations: float = Field(
-        default=30.0,
-        gt=0.0,
-        description="Timeout in seconds for data-heavy HTTP operations",
-    )
-    timeout_long_operations: float = Field(
-        default=60.0,
-        gt=0.0,
-        description="Timeout in seconds for long-running HTTP operations (utilization queries)",
-    )
-    pool_connections: int = Field(
-        default=10,
-        ge=1,
-        description="Number of HTTP connection pool entries",
-    )
-    pool_maxsize: int = Field(
-        default=10,
-        ge=1,
-        description="Maximum size of the HTTP connection pool",
     )
 
 

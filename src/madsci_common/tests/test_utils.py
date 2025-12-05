@@ -12,8 +12,12 @@ from unittest.mock import patch
 
 import pytest
 from madsci.common.types.action_types import ActionDatapoints
+from madsci.common.types.client_types import MadsciClientConfig
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.utils import (
+    RateLimitHTTPAdapter,
+    RateLimitTracker,
+    create_http_session,
     extract_datapoint_ids,
     is_annotated,
     is_optional,
@@ -447,3 +451,187 @@ class TestActionDatapoints:
         file_dp = FileDataPoint(path="/test/file.txt", label="test_file")
         datapoints = ActionDatapoints.model_validate({"file_result": file_dp})
         assert datapoints.file_result == file_dp.datapoint_id
+
+
+class TestRateLimitTracker:
+    """Test cases for RateLimitTracker functionality."""
+
+    def test_initialization(self):
+        """Test RateLimitTracker initialization."""
+        tracker = RateLimitTracker(warning_threshold=0.9, respect_limits=True)
+        assert tracker.warning_threshold == 0.9
+        assert tracker.respect_limits is True
+        assert tracker.limit is None
+        assert tracker.remaining is None
+        assert tracker.reset is None
+
+    def test_update_from_headers(self):
+        """Test updating rate limit state from headers."""
+        tracker = RateLimitTracker()
+        headers = {
+            "X-RateLimit-Limit": "100",
+            "X-RateLimit-Remaining": "75",
+            "X-RateLimit-Reset": str(int(time.time()) + 60),
+        }
+        tracker.update_from_headers(headers)
+
+        assert tracker.limit == 100
+        assert tracker.remaining == 75
+        assert tracker.reset is not None
+
+    def test_update_from_headers_with_burst(self):
+        """Test updating rate limit state with burst headers."""
+        tracker = RateLimitTracker()
+        headers = {
+            "X-RateLimit-Limit": "100",
+            "X-RateLimit-Remaining": "75",
+            "X-RateLimit-Reset": str(int(time.time()) + 60),
+            "X-RateLimit-Burst-Limit": "10",
+            "X-RateLimit-Burst-Remaining": "5",
+        }
+        tracker.update_from_headers(headers)
+
+        assert tracker.limit == 100
+        assert tracker.remaining == 75
+        assert tracker.burst_limit == 10
+        assert tracker.burst_remaining == 5
+
+    def test_get_status(self):
+        """Test getting rate limit status."""
+        tracker = RateLimitTracker()
+        reset_time = int(time.time()) + 60
+        headers = {
+            "X-RateLimit-Limit": "100",
+            "X-RateLimit-Remaining": "50",
+            "X-RateLimit-Reset": str(reset_time),
+        }
+        tracker.update_from_headers(headers)
+
+        status = tracker.get_status()
+        assert status["limit"] == 100
+        assert status["remaining"] == 50
+        assert status["reset"] == reset_time
+        assert status["reset_datetime"] is not None
+
+    def test_get_delay_seconds_no_respect_limits(self):
+        """Test that no delay is returned when respect_limits is False."""
+        tracker = RateLimitTracker(respect_limits=False)
+        headers = {
+            "X-RateLimit-Limit": "100",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": str(int(time.time()) + 60),
+        }
+        tracker.update_from_headers(headers)
+
+        delay = tracker.get_delay_seconds()
+        assert delay == 0.0
+
+    def test_get_delay_seconds_with_respect_limits(self):
+        """Test delay calculation when respect_limits is True."""
+        tracker = RateLimitTracker(respect_limits=True)
+        future_reset = int(time.time()) + 5
+        headers = {
+            "X-RateLimit-Limit": "100",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": str(future_reset),
+        }
+        tracker.update_from_headers(headers)
+
+        delay = tracker.get_delay_seconds()
+        assert delay > 0
+        assert delay <= 5
+
+    def test_get_delay_seconds_burst_limit(self):
+        """Test delay for burst limit exhaustion."""
+        tracker = RateLimitTracker(respect_limits=True)
+        headers = {
+            "X-RateLimit-Limit": "100",
+            "X-RateLimit-Remaining": "50",
+            "X-RateLimit-Burst-Limit": "10",
+            "X-RateLimit-Burst-Remaining": "0",
+        }
+        tracker.update_from_headers(headers)
+
+        delay = tracker.get_delay_seconds()
+        assert delay == 1.0
+
+    def test_warning_threshold(self):
+        """Test that warnings are logged when approaching limits."""
+        with patch("madsci.common.utils.logger") as mock_logger:
+            tracker = RateLimitTracker(warning_threshold=0.8)
+            headers = {
+                "X-RateLimit-Limit": "100",
+                "X-RateLimit-Remaining": "15",  # 85% usage
+                "X-RateLimit-Reset": str(int(time.time()) + 60),
+            }
+            tracker.update_from_headers(headers)
+
+            # Check that a warning was logged
+            mock_logger.warning.assert_called()
+
+
+class TestRateLimitHTTPAdapter:
+    """Test cases for RateLimitHTTPAdapter functionality."""
+
+    def test_initialization(self):
+        """Test RateLimitHTTPAdapter initialization."""
+        tracker = RateLimitTracker()
+        adapter = RateLimitHTTPAdapter(
+            rate_limit_tracker=tracker,
+            pool_connections=10,
+            pool_maxsize=10,
+        )
+        assert adapter.rate_limit_tracker is tracker
+
+    def test_adapter_delegation(self):
+        """Test that adapter properly delegates to underlying HTTPAdapter."""
+        tracker = RateLimitTracker()
+        adapter = RateLimitHTTPAdapter(
+            rate_limit_tracker=tracker,
+            pool_connections=10,
+        )
+        # Test that we can access HTTPAdapter attributes
+        assert hasattr(adapter, "_adapter")
+        assert hasattr(adapter, "close")
+
+
+class TestCreateHTTPSession:
+    """Test cases for create_http_session with rate limit tracking."""
+
+    def test_default_session_creation(self):
+        """Test creating session with default config."""
+        session = create_http_session()
+        assert session is not None
+        # Default config has rate limit tracking enabled
+        assert hasattr(session, "rate_limit_tracker")
+
+    def test_session_with_rate_limit_disabled(self):
+        """Test creating session with rate limit tracking disabled."""
+        config = MadsciClientConfig(rate_limit_tracking_enabled=False)
+        session = create_http_session(config=config)
+        assert session is not None
+        assert not hasattr(session, "rate_limit_tracker")
+
+    def test_session_with_rate_limit_enabled(self):
+        """Test creating session with rate limit tracking enabled."""
+        config = MadsciClientConfig(
+            rate_limit_tracking_enabled=True,
+            rate_limit_warning_threshold=0.9,
+            rate_limit_respect_limits=True,
+        )
+        session = create_http_session(config=config)
+        assert session is not None
+        assert hasattr(session, "rate_limit_tracker")
+        assert session.rate_limit_tracker.warning_threshold == 0.9
+        assert session.rate_limit_tracker.respect_limits is True
+
+    def test_session_rate_limit_status_access(self):
+        """Test accessing rate limit status from session."""
+        config = MadsciClientConfig(rate_limit_tracking_enabled=True)
+        session = create_http_session(config=config)
+
+        status = session.rate_limit_tracker.get_status()
+        assert isinstance(status, dict)
+        assert "limit" in status
+        assert "remaining" in status
+        assert "reset" in status
