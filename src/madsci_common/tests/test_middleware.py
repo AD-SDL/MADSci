@@ -3,6 +3,7 @@
 import asyncio
 import time
 from typing import ClassVar
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
@@ -415,14 +416,90 @@ def test_custom_exempt_ips() -> None:
     assert middleware.exempt_ips == custom_ips
 
 
-@pytest.fixture
-def test_manager_with_exempt_ips() -> TestManager:
-    """Create a test manager instance with custom exempt IPs."""
-    settings = TestManagerSettings(
-        rate_limit_enabled=True,
-        rate_limit_requests=5,
-        rate_limit_window=10,
-        rate_limit_exempt_ips=["192.168.1.100"],
+def test_exempt_ips_bypass_rate_limiting() -> None:
+    """
+    Test that exempt IPs bypass rate limiting by directly checking middleware logic.
+
+    This test verifies that when an IP is in the exempt list, the middleware's
+    dispatch method returns early without applying rate limiting.
+    """
+    # Create middleware with specific exempt IP
+    exempt_ip = "192.168.1.100"
+    middleware = RateLimitMiddleware(
+        app=None,  # type: ignore
+        requests_limit=5,
+        time_window=10,
+        exempt_ips={exempt_ip},
     )
-    definition = TestManagerDefinition(name="Manager with Exempt IPs")
-    return TestManager(settings=settings, definition=definition)
+
+    # Create a mock request from the exempt IP
+    mock_request = Mock()
+    mock_request.client = Mock()
+    mock_request.client.host = exempt_ip
+
+    # Create a mock call_next that just returns a response
+    mock_response = Mock()
+    mock_call_next = AsyncMock(return_value=mock_response)
+
+    # Call dispatch
+    async def test_dispatch():
+        return await middleware.dispatch(mock_request, mock_call_next)
+
+    # Run the async test
+    result = asyncio.run(test_dispatch())
+
+    # Verify that call_next was called (exempt IP bypasses rate limiting)
+    assert mock_call_next.called, "call_next should be called for exempt IP"
+    # Verify the response was returned directly
+    assert result == mock_response, "Response should be returned without modification"
+    # Verify that no rate limiting storage was created for this IP
+    assert exempt_ip not in middleware.storage, (
+        "Exempt IP should not have entries in rate limiting storage"
+    )
+
+
+def test_non_exempt_ips_are_rate_limited() -> None:
+    """
+    Test that non-exempt IPs are subject to rate limiting.
+
+    This test verifies that IPs not in the exempt list go through
+    the normal rate limiting logic.
+    """
+    # Create middleware with exempt IP (but we'll test with a different IP)
+    middleware = RateLimitMiddleware(
+        app=None,  # type: ignore
+        requests_limit=2,
+        time_window=10,
+        exempt_ips={"192.168.1.100"},  # Only this IP is exempt
+    )
+
+    # Create a mock request from a NON-exempt IP
+    non_exempt_ip = "192.168.1.200"
+    mock_request = Mock()
+    mock_request.client = Mock()
+    mock_request.client.host = non_exempt_ip
+
+    # Create a mock call_next
+    mock_response = Mock()
+    mock_response.headers = {}
+    mock_call_next = AsyncMock(return_value=mock_response)
+
+    # Call dispatch multiple times
+    async def test_dispatch():
+        responses = []
+        for _ in range(3):  # One more than the limit
+            result = await middleware.dispatch(mock_request, mock_call_next)
+            responses.append(result)
+        return responses
+
+    # Run the async test
+    asyncio.run(test_dispatch())
+
+    # Verify that the non-exempt IP has entries in storage
+    assert non_exempt_ip in middleware.storage, (
+        "Non-exempt IP should have entries in rate limiting storage"
+    )
+    # Verify that rate limiting was applied (3rd request should be limited)
+    assert len(middleware.storage[non_exempt_ip]) == 2, (
+        "Only 2 requests should be recorded (3rd was rate limited)"
+    )
