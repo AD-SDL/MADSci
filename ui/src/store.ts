@@ -61,11 +61,11 @@ watchEffect(async () => {
 
     updateResources()
     updateLocations()
-    setInterval(updateWorkcellState, 1000)
-    setInterval(updateWorkflows, 1000)
-    setInterval(updateResources, 1000)
-    setInterval(updateLocations, 1000)
-    setInterval(updateExperiments, 1000);
+    setInterval(updateWorkcellState, 5000)
+    setInterval(updateWorkflows, 5000)
+    setInterval(updateResources, 5000)
+    setInterval(updateLocations, 5000)
+    setInterval(updateExperiments, 5000);
     // setInterval(updateEvents, 10000);
 
     async function updateResources() {
