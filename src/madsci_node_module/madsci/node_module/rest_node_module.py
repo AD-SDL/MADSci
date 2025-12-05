@@ -1,5 +1,6 @@
 """REST-based Node Module helper classes."""
 
+import inspect
 import os
 import signal
 import tempfile
@@ -556,9 +557,35 @@ class RestNode(AbstractNode):
         self.router.add_api_route("/state", self.get_state, methods=["GET"])
         self.router.add_api_route("/config", self.set_config, methods=["POST"])
         self.router.add_api_route("/log", self.get_log, methods=["GET"])
+
+        # Admin command endpoint with special handling for shutdown
+        shutdown_accepts_background_tasks = (
+            "background_tasks" in inspect.signature(self.shutdown).parameters
+        )
+
+        def admin_command_handler(
+            admin_command: AdminCommands, background_tasks: BackgroundTasks
+        ) -> AdminCommandResponse:
+            """Handle admin commands with BackgroundTasks support for shutdown."""
+            if admin_command == AdminCommands.SHUTDOWN:
+                if shutdown_accepts_background_tasks:
+                    return self.shutdown(background_tasks)
+                # For backwards compatibility with nodes that override shutdown without background_tasks
+                result = self.shutdown()
+                if result is None:
+                    return AdminCommandResponse(success=True, errors=[])
+                if isinstance(result, bool):
+                    return AdminCommandResponse(success=result, errors=[])
+                if isinstance(result, AdminCommandResponse):
+                    return result
+                raise ValueError(
+                    f"Shutdown method returned an unexpected value: {result}"
+                )
+            return self.run_admin_command(admin_command)
+
         self.router.add_api_route(
             "/admin/{admin_command}",
-            self.run_admin_command,
+            admin_command_handler,
             methods=["POST"],
         )
 
