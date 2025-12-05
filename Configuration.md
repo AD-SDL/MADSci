@@ -2,6 +2,16 @@
 
 Here you can find all available configuration options using ENV variables.
 
+## DockerComposeSettings
+
+These environment variables are used to configure the default Docker Compose in the MADSci example lab.
+
+| Name        | Type      | Default | Description                                                                                                                                                                                              | Example |
+|-------------|-----------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| `USER_ID`   | `integer` | `1000`  | The user ID to use for the MADSci services inside Docker containers. This should match your host user ID to avoid file permission issues. If not set, the default value used by the container is 9999.   | `1000`  |
+| `GROUP_ID`  | `integer` | `1000`  | The group ID to use for the MADSci services inside Docker containers. This should match your host group ID to avoid file permission issues. If not set, the default value used by the container is 9999. | `1000`  |
+| `REPO_PATH` | `string`  | `"./"`  | The path to the MADSci repository on the host machine. This is mounted into the Docker containers to provide access to the codebase.                                                                     | `"./"`  |
+
 ## MadsciContext
 
 Base class for MADSci context settings.

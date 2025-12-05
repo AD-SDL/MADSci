@@ -33,6 +33,7 @@ class EventClient:
     _buffer_lock = Lock()
     _retry_thread = None
     _retrying = False
+    _shutdown = False
 
     def __init__(
         self,
@@ -80,6 +81,21 @@ class EventClient:
 
         # Create HTTP session for requests to event server
         self.session = create_http_session(config=self.config)
+
+    def __del__(self) -> None:
+        """Clean up retry thread on destruction."""
+        with self._buffer_lock:
+            self._shutdown = True
+
+        # Wait for retry thread to finish if it exists
+        if self._retry_thread is not None and self._retry_thread.is_alive():
+            # Give the thread a reasonable time to finish (5 seconds)
+            self._retry_thread.join(timeout=5.0)
+            if self._retry_thread.is_alive():
+                # Log warning if thread didn't finish cleanly
+                self.logger.warning(
+                    "Retry thread did not terminate within timeout during cleanup"
+                )
 
     def get_log(self) -> dict[str, Event]:
         """Read the log"""
@@ -465,7 +481,7 @@ class EventClient:
     def _retry_buffered_events(self) -> None:
         backoff = 2
         max_backoff = 60
-        while not self._event_buffer.empty():
+        while not self._event_buffer.empty() and not self._shutdown:
             try:
                 event = self._event_buffer.get()
                 self._send_event_to_event_server(event, retrying=True)

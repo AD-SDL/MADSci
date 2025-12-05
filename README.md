@@ -147,78 +147,21 @@ client = WorkcellClient("http://localhost:8005")
 result = client.submit_workflow("path/to/workflow.yaml")
 ```
 
-## Developer Guide
+## Contributing
 
-### Prerequisites
+Interested in contributing to MADSci? We welcome all contributions, from bug reports to new features!
 
-- **Python 3.9+**: Required for all MADSci components
-- **[PDM](https://pdm-project.org/)**: For dependency management and virtual environments
-- **[Docker](https://docs.docker.com/engine/install/)**: Required for services and integration tests
-  - Alternatives: [Rancher Desktop](https://rancherdesktop.io/), [Podman](https://podman.io/)
-- **[just](https://github.com/casey/just)**: Task runner for development commands (note: commands are defined in the hidden `.justfile` in the repository root)
-- **Node.js/yarn**: Only needed for dashboard development
+See our [Contributing Guide](./CONTRIBUTING.md) for:
+- Development setup and prerequisites
+- Development commands and workflows
+- How to report bugs and request features
+- Pull request guidelines
+- Configuration best practices
 
-### Quick Setup
-
+For quick development setup:
 ```bash
-# Clone and initialize
 git clone https://github.com/AD-SDL/MADSci.git
 cd MADSci
-just init  # Installs all dependencies and sets up pre-commit hooks
-
-# See all available commands
-just list
-
-# Start example lab for testing
-just up
+just init  # Installs dependencies and sets up pre-commit hooks
+just up    # Start example lab for testing
 ```
-
-### Development Commands
-
-```bash
-# Testing
-pytest                    # Run all tests
-just test                 # Alternative test runner
-pytest -k workcell        # Run specific component tests
-
-# Code Quality
-just checks               # Run all pre-commit checks (ruff, formatting, etc.)
-ruff check               # Manual linting
-ruff format              # Manual formatting
-
-# Services
-just build               # Build Docker images
-just up                  # Start example lab
-just down               # Stop services
-
-# Dashboard Development
-cd ui/
-yarn dev                # Start Vue dev server
-yarn build              # Build for production
-```
-
-### Development Patterns
-
-**Manager Implementation:**
-Each manager service follows this structure:
-- Settings class inheriting from `MadsciBaseSettings`
-- FastAPI server with REST endpoints
-- Client class for programmatic interaction
-- Database models (SQLModel/Pydantic)
-
-**Testing:**
-- Integration tests use Docker containers via pytest-mock-resources
-- Component tests are in each package's `tests/` directory
-- Use `pytest -k EXPRESSION` to filter tests
-
-**Configuration:**
-- Environment variables with hierarchical precedence
-- Each manager has unique prefix (e.g., `WORKCELL_`, `EVENT_`)
-- See [Configuration.md](./Configuration.md) for full details
-
-### Dev Container Support
-
-For VS Code users, use the included [.devcontainer](./.devcontainer) for instant setup:
-- Automatic dependency installation
-- Pre-configured development environment
-- Docker services ready to run
