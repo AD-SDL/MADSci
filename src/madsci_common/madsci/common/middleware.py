@@ -37,7 +37,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         short_time_window: Short time window in seconds for burst protection (optional)
         storage: Dictionary tracking request timestamps per client IP
         locks: Dictionary of locks for thread-safe access per client IP
-        global_lock: Lock for managing the locks dictionary itself
+        _global_lock: Lock for managing the locks dictionary itself (created lazily)
         cleanup_interval: Interval in seconds between cleanup operations
         last_cleanup: Timestamp of last cleanup operation
     """
@@ -72,10 +72,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.storage: defaultdict[str, list[float]] = defaultdict(list)
         # Per-client locks for thread-safe access
         self.locks: dict[str, asyncio.Lock] = {}
-        # Global lock for managing the locks dictionary
-        self.global_lock = asyncio.Lock()
+        # Global lock for managing the locks dictionary (created lazily in async context)
+        self._global_lock: Optional[asyncio.Lock] = None
         # Track last cleanup time
         self.last_cleanup = time.time()
+
+    def _get_or_create_global_lock(self) -> asyncio.Lock:
+        """
+        Get or create the global lock.
+
+        Must be called from an async context where an event loop is running.
+        The lock is created lazily on first access to avoid requiring an
+        event loop during __init__.
+
+        Returns:
+            asyncio.Lock: The global lock for managing the locks dictionary
+        """
+        if self._global_lock is None:
+            self._global_lock = asyncio.Lock()
+        return self._global_lock
 
     async def _get_client_lock(self, client_ip: str) -> asyncio.Lock:
         """
@@ -88,7 +103,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             asyncio.Lock: The lock for this client
         """
         # Use global lock to safely manage the locks dictionary
-        async with self.global_lock:
+        async with self._get_or_create_global_lock():
             if client_ip not in self.locks:
                 self.locks[client_ip] = asyncio.Lock()
             return self.locks[client_ip]
@@ -103,7 +118,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         Args:
             now: Current timestamp
         """
-        async with self.global_lock:
+        async with self._get_or_create_global_lock():
             cutoff = now - self.time_window
             inactive_clients = [
                 client_ip
