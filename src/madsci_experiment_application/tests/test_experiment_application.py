@@ -881,24 +881,20 @@ class TestClassMethods:
         )
 
         with (
+            patch("madsci.client.client_mixin.EventClient") as mock_event_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.EventClient"
-            ) as mock_event_client_class,
-            patch(
-                "madsci.experiment_application.experiment_application.ExperimentClient"
+                "madsci.client.client_mixin.ExperimentClient"
             ) as mock_experiment_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.WorkcellClient"
+                "madsci.client.client_mixin.WorkcellClient"
             ) as mock_workcell_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.LocationClient"
+                "madsci.client.client_mixin.LocationClient"
             ) as mock_location_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.ResourceClient"
+                "madsci.client.client_mixin.ResourceClient"
             ) as mock_resource_client_class,
-            patch(
-                "madsci.experiment_application.experiment_application.DataClient"
-            ) as mock_data_client_class,
+            patch("madsci.client.client_mixin.DataClient") as mock_data_client_class,
             patch("builtins.input", return_value="n"),
             patch("builtins.print"),
         ):
@@ -934,24 +930,20 @@ class TestClassMethods:
         mock_experiment_client = Mock()
 
         with (
+            patch("madsci.client.client_mixin.EventClient") as mock_event_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.EventClient"
-            ) as mock_event_client_class,
-            patch(
-                "madsci.experiment_application.experiment_application.ExperimentClient"
+                "madsci.client.client_mixin.ExperimentClient"
             ) as mock_experiment_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.WorkcellClient"
+                "madsci.client.client_mixin.WorkcellClient"
             ) as mock_workcell_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.LocationClient"
+                "madsci.client.client_mixin.LocationClient"
             ) as mock_location_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.ResourceClient"
+                "madsci.client.client_mixin.ResourceClient"
             ) as mock_resource_client_class,
-            patch(
-                "madsci.experiment_application.experiment_application.DataClient"
-            ) as mock_data_client_class,
+            patch("madsci.client.client_mixin.DataClient") as mock_data_client_class,
         ):
             # Set up client class mocks to return configured instances
             mock_experiment_client_class.return_value = mock_experiment_client
