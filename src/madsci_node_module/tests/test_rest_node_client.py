@@ -1,6 +1,7 @@
 """Comprehensive unit tests for the RestNodeClient class."""
 
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -578,11 +579,11 @@ def test_send_action_file_response(mock_create_session: MagicMock) -> None:
     assert result.action_id == action_id
 
 
-@patch("time.sleep")
+@patch("madsci.client.node.rest_node_client.EventClient")
 @patch("madsci.client.node.rest_node_client.create_http_session")
 def test_await_action_result_timeout(
     mock_create_session: MagicMock,
-    mock_sleep: MagicMock,  # noqa: ARG001
+    mock_event_client: MagicMock,  # noqa: ARG001 Need to patch event client to avoid real calls
 ) -> None:
     """Test await_action_result with timeout."""
     action_id = new_ulid_str()
@@ -601,18 +602,26 @@ def test_await_action_result_timeout(
     # Create a new client to use mocked session
     client = RestNodeClient(url="http://localhost:2000")
 
+    # Use a very short timeout to make the test fast
     with pytest.raises(TimeoutError, match="Timed out waiting for action to complete"):
-        client.await_action_result(action_id, timeout=0.1)
+        client.await_action_result(action_id, timeout=0.5)
 
 
-@patch("time.sleep")
+@patch("madsci.client.node.rest_node_client.EventClient")
 @patch("madsci.client.node.rest_node_client.create_http_session")
 def test_await_action_result_exponential_backoff(
     mock_create_session: MagicMock,
-    mock_sleep: MagicMock,
+    mock_event_client: MagicMock,  # noqa: ARG001 Need to patch event client to avoid real calls
 ) -> None:
-    """Test await_action_result with exponential backoff."""
+    """Test await_action_result with exponential backoff.
+
+    This test verifies that the polling interval increases with each retry
+    by measuring the actual time between status checks.
+    """
     action_id = new_ulid_str()
+
+    # Track when each GET call happens to verify exponential backoff
+    call_times = []
 
     # Mock responses: running status -> running status -> succeeded status -> result
     running_status_response = MagicMock()
@@ -636,12 +645,26 @@ def test_await_action_result_exponential_backoff(
     result_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.side_effect = [
-        running_status_response,
-        running_status_response,
-        succeeded_status_response,
-        result_response,
-    ]
+    # Use a side_effect function to track call timing
+    get_call_count = {"count": 0}
+
+    def mock_get(*args, **kwargs):  # noqa: ARG001 kwargs needed for mock signature compatibility
+        get_call_count["count"] += 1
+        call_times.append(time.time())
+
+        if get_call_count["count"] == 1 or get_call_count["count"] == 2:
+            return running_status_response
+        if get_call_count["count"] == 3:
+            return succeeded_status_response
+        if get_call_count["count"] == 4:
+            return result_response
+        # This should not happen - fail with a clear error
+        raise AssertionError(
+            f"Unexpected GET call #{get_call_count['count']}. "
+            f"Test expected only 4 GET calls. URL: {args[0] if args else 'unknown'}"
+        )
+
+    mock_session.get.side_effect = mock_get
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -651,11 +674,30 @@ def test_await_action_result_exponential_backoff(
     assert result.status == ActionStatus.SUCCEEDED
     assert result.action_id == action_id
 
-    # Verify exponential backoff
-    assert mock_sleep.call_count == 2
-    # First sleep: 0.25, second sleep: 0.25 * 1.5 = 0.375
-    mock_sleep.assert_any_call(0.25)
-    mock_sleep.assert_any_call(0.375)
+    # Verify we made exactly 4 GET calls
+    assert get_call_count["count"] == 4, (
+        f"Expected 4 GET calls, got {get_call_count['count']}"
+    )
+
+    # Verify exponential backoff by checking the intervals between calls
+    # First interval (between call 1 and 2): ~0.25s
+    # Second interval (between call 2 and 3): ~0.375s (0.25 * 1.5)
+    interval_1 = call_times[1] - call_times[0]
+    interval_2 = call_times[2] - call_times[1]
+
+    # Allow some tolerance for timing variations (±50ms)
+    assert 0.20 < interval_1 < 0.30, (
+        f"First interval should be ~0.25s, got {interval_1:.3f}s"
+    )
+    assert 0.325 < interval_2 < 0.425, (
+        f"Second interval should be ~0.375s, got {interval_2:.3f}s"
+    )
+
+    # Verify exponential growth: second interval should be ~1.5x the first
+    backoff_factor = interval_2 / interval_1
+    assert 1.3 < backoff_factor < 1.7, (
+        f"Backoff factor should be ~1.5, got {backoff_factor:.2f}"
+    )
 
 
 @patch("madsci.client.node.rest_node_client.create_http_session")
