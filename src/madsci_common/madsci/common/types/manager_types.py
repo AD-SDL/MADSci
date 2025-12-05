@@ -90,6 +90,11 @@ class ManagerSettings(MadsciBaseSettings):
         default=300,
         ge=1,
     )
+    rate_limit_exempt_ips: Optional[list[str]] = Field(
+        title="Rate Limit Exempt IPs",
+        description="List of IP addresses exempt from rate limiting. Defaults to localhost IPs (127.0.0.1, ::1) if not specified.",
+        default=None,
+    )
 
     # Server resource constraints
     uvicorn_workers: Optional[int] = Field(

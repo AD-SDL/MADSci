@@ -43,6 +43,7 @@ def test_manager_with_rate_limiting() -> TestManager:
         rate_limit_enabled=True,
         rate_limit_requests=5,
         rate_limit_window=10,
+        rate_limit_exempt_ips=[],  # Disable localhost exemption for testing
     )
     definition = TestManagerDefinition(name="Rate Limited Manager")
     return TestManager(settings=settings, definition=definition)
@@ -65,6 +66,7 @@ def test_manager_with_dual_rate_limiting() -> TestManager:
         rate_limit_window=10,
         rate_limit_short_requests=5,  # Short window: 5 requests per 1 second (burst) - intentionally low for testing
         rate_limit_short_window=1,
+        rate_limit_exempt_ips=[],  # Disable localhost exemption for testing
     )
     definition = TestManagerDefinition(name="Dual Rate Limited Manager")
     return TestManager(settings=settings, definition=definition)
@@ -383,3 +385,44 @@ def test_dual_rate_limiting_burst_reset(dual_rate_limited_client: TestClient) ->
         assert response.status_code == 200, (
             f"Request {i + 1} after burst reset should succeed"
         )
+
+
+def test_localhost_exempt_by_default() -> None:
+    """Test that localhost IPs are exempt from rate limiting by default."""
+    # Create middleware with default exempt IPs
+    middleware = RateLimitMiddleware(
+        app=None,  # type: ignore
+        requests_limit=5,
+        time_window=10,
+    )
+
+    # Check that localhost IPs are in exempt_ips by default
+    assert "127.0.0.1" in middleware.exempt_ips
+    assert "::1" in middleware.exempt_ips
+
+
+def test_custom_exempt_ips() -> None:
+    """Test that custom exempt IPs can be configured."""
+    custom_ips = {"192.168.1.100", "10.0.0.1"}
+    middleware = RateLimitMiddleware(
+        app=None,  # type: ignore
+        requests_limit=5,
+        time_window=10,
+        exempt_ips=custom_ips,
+    )
+
+    # Check that custom IPs are set correctly
+    assert middleware.exempt_ips == custom_ips
+
+
+@pytest.fixture
+def test_manager_with_exempt_ips() -> TestManager:
+    """Create a test manager instance with custom exempt IPs."""
+    settings = TestManagerSettings(
+        rate_limit_enabled=True,
+        rate_limit_requests=5,
+        rate_limit_window=10,
+        rate_limit_exempt_ips=["192.168.1.100"],
+    )
+    definition = TestManagerDefinition(name="Manager with Exempt IPs")
+    return TestManager(settings=settings, definition=definition)

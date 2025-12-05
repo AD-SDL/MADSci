@@ -290,6 +290,14 @@ class AbstractManagerBase(
             isinstance(self._settings, ManagerSettings)
             and self._settings.rate_limit_enabled
         ):
+            # Convert exempt IPs list to set, or use None to get defaults
+            # Note: empty list [] should create empty set, not None
+            exempt_ips = (
+                set(self._settings.rate_limit_exempt_ips)
+                if self._settings.rate_limit_exempt_ips is not None
+                else None
+            )
+
             app.add_middleware(
                 RateLimitMiddleware,
                 requests_limit=self._settings.rate_limit_requests,
@@ -297,6 +305,7 @@ class AbstractManagerBase(
                 short_requests_limit=self._settings.rate_limit_short_requests,
                 short_time_window=self._settings.rate_limit_short_window,
                 cleanup_interval=self._settings.rate_limit_cleanup_interval,
+                exempt_ips=exempt_ips,
             )
             # Build log message with both long and short window info
             log_msg = (
@@ -311,6 +320,12 @@ class AbstractManagerBase(
                     f", burst limit: {self._settings.rate_limit_short_requests} requests "
                     f"per {self._settings.rate_limit_short_window} seconds"
                 )
+            # Add exempt IPs info to log message
+            actual_exempt_ips = (
+                exempt_ips if exempt_ips is not None else {"127.0.0.1", "::1"}
+            )
+            if actual_exempt_ips:
+                log_msg += f", exempt IPs: {', '.join(sorted(actual_exempt_ips))}"
             self.logger.info(log_msg)
 
         # Add CORS middleware by default
