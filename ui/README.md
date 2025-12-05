@@ -45,6 +45,20 @@ yarn build      # Build for production
 yarn preview    # Preview production build locally
 ```
 
+### Testing Commands
+
+```bash
+yarn test              # Run unit and component tests in watch mode
+yarn test:unit         # Run tests once and exit
+yarn test:ui           # Open Vitest UI for interactive testing
+yarn test:coverage     # Run tests with coverage report
+yarn test:e2e          # Run end-to-end tests with Playwright
+yarn test:e2e:ui       # Run E2E tests with Playwright UI
+yarn test:e2e:debug    # Debug E2E tests
+```
+
+For detailed testing documentation, see [TESTING.md](./TESTING.md).
+
 ## Architecture
 
 ### Technology Stack
@@ -54,6 +68,13 @@ yarn preview    # Preview production build locally
 - **TypeScript**: Type-safe JavaScript development
 - **Vite**: Fast build tool and dev server
 - **Vue Reactivity**: State management using Vue's built-in reactivity system (via `store.ts`)
+
+### Testing Stack
+- **Vitest**: Fast unit testing framework with native Vite integration
+- **Vue Test Utils**: Official Vue.js component testing utilities
+- **Testing Library**: User-centric testing approach
+- **Playwright**: End-to-end testing framework
+- **happy-dom**: Lightweight DOM implementation for tests
 
 > **UI Framework Note**: The dashboard primarily uses Vuetify for the main interface, with PrimeVue providing additional specialized components where needed. Both frameworks are configured in `vite.config.mts` with auto-import resolvers.
 
@@ -69,9 +90,16 @@ ui/
 │   ├── store.ts            # Global state management
 │   ├── main.ts             # Application entry point
 │   └── App.vue             # Root component
+├── tests/
+│   ├── unit/               # Unit tests
+│   ├── components/         # Component tests
+│   ├── e2e/               # End-to-end tests
+│   └── setup.ts           # Test setup
 ├── public/                 # Static assets
 ├── package.json            # Dependencies and scripts
-└── vite.config.mts         # Vite configuration
+├── vite.config.mts         # Vite configuration
+├── vitest.config.ts        # Vitest configuration
+└── playwright.config.ts    # Playwright configuration
 ```
 
 ## Core Components

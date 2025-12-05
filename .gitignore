@@ -314,6 +314,12 @@ htmlcov/
 coverage.xml
 .coverage
 
+# UI test artifacts
+ui/coverage/
+ui/playwright-report/
+ui/test-results/
+ui/.nyc_output/
+
 .mcp.json
 
 # Alembic migration versions (environment-specific)
