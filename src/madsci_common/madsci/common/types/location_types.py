@@ -362,6 +362,14 @@ class LocationManagerDefinition(ManagerDefinition):
         default=None,
     )
 
+    @field_validator("locations", mode="after")
+    @classmethod
+    def sort_locations(
+        cls, locations: list[LocationDefinition]
+    ) -> list[LocationDefinition]:
+        """Sort locations by name after validation."""
+        return sorted(locations, key=lambda loc: loc.location_name)
+
 
 class LocationManagerHealth(ManagerHealth):
     """Health status for the Location Manager."""

@@ -5,60 +5,11 @@ description: An example location manager for the example lab, managing deck loca
 manager_id: 01JK7069DXAKAMWE0PDX6EY1PD
 manager_type: location_manager
 locations:
-- location_name: liquidhandler_2.deck_3
-  location_id: 01K5HDZZCF27YHD2WDGSXFPPKN
-  description: Deck 3 on liquidhandler_2 - accessible by robotarm_1
-  representations:
-    liquidhandler_2:
-      deck_position: 3
-      deck_type: standard
-      max_plates: 1
-    robotarm_1:
-      gripper_config: standard
-      max_payload: 2.0
-      position:
-      - 25
-      - 15
-      - 5
-  resource_template_name: plate_nest
-  resource_template_overrides:
-    resource_class: deck_slot
-    resource_description: Deck position accessible by liquid handler and robot arm
-  allow_transfers: true
-- location_name: platereader_1.plate_carriage
-  location_id: 01K5HDZZCF27YHD2WDGSXFPPKQ
-  description: Plate carriage - accessible by robotarm_1 for plate transport
-  representations:
-    robotarm_1:
-      gripper_config: wide
-      max_payload: 3.0
-      position:
-      - 15
-      - 10
-      - 8
-  resource_template_name: plate_nest
-  resource_template_overrides:
-    resource_class: plate_carriage
-    resource_description: Plate carriage for platereader_1
-  allow_transfers: true
-- location_name: liquidhandler_1.deck_4
-  location_id: 01K5HDZZCF27YHD2WDGSXFPPKJ
-  description: Deck 4 on liquidhandler_1 - liquid handler only
+- location_name: liquidhandler_1.deck_1
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKF
+  description: Deck 1 on liquidhandler_1 - accessible by robotarm_1
   representations:
     liquidhandler_1:
-      deck_position: 4
-      deck_type: standard
-      max_plates: 1
-  resource_template_name: plate_nest
-  resource_template_overrides:
-    resource_class: deck_slot
-    resource_description: Deck position accessible by liquid handler only
-  allow_transfers: true
-- location_name: liquidhandler_2.deck_1
-  location_id: 01K5HDZZCF27YHD2WDGSXFPPKK
-  description: Deck 1 on liquidhandler_2 - accessible by robotarm_1
-  representations:
-    liquidhandler_2:
       deck_position: 1
       deck_type: standard
       max_plates: 1
@@ -66,30 +17,13 @@ locations:
       gripper_config: standard
       max_payload: 2.0
       position:
-      - 5
+      - 10
       - 15
       - 5
   resource_template_name: plate_nest
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler and robot arm
-  allow_transfers: true
-- location_name: storage_rack
-  location_id: 01K5HDZZCF27YHD2WDGSXFPPKR
-  description: Storage Rack - High-capacity storage accessible only by robot arm
-  representations:
-    robotarm_1:
-      gripper_config: wide
-      max_payload: 10.0
-      position:
-      - 30
-      - 25
-      - 10
-  resource_template_name: storage_stack
-  resource_template_overrides:
-    resource_class: storage
-    resource_description: High-capacity storage stack for materials
-    capacity: 16
   allow_transfers: true
 - location_name: liquidhandler_1.deck_2
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKG
@@ -124,11 +58,11 @@ locations:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler and robot arm
   allow_transfers: true
-- location_name: liquidhandler_2.deck_4
-  location_id: 01K5HDZZCF27YHD2WDGSXFPPKP
-  description: Deck 4 on liquidhandler_2 - liquid handler only
+- location_name: liquidhandler_1.deck_4
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKJ
+  description: Deck 4 on liquidhandler_1 - liquid handler only
   representations:
-    liquidhandler_2:
+    liquidhandler_1:
       deck_position: 4
       deck_type: standard
       max_plates: 1
@@ -136,6 +70,26 @@ locations:
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler only
+  allow_transfers: true
+- location_name: liquidhandler_2.deck_1
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKK
+  description: Deck 1 on liquidhandler_2 - accessible by robotarm_1
+  representations:
+    liquidhandler_2:
+      deck_position: 1
+      deck_type: standard
+      max_plates: 1
+    robotarm_1:
+      gripper_config: standard
+      max_payload: 2.0
+      position:
+      - 5
+      - 15
+      - 5
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler and robot arm
   allow_transfers: true
 - location_name: liquidhandler_2.deck_2
   location_id: 01K5HDZZCF27YHD2WDGSXFPPKM
@@ -150,25 +104,71 @@ locations:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler only
   allow_transfers: true
-- location_name: liquidhandler_1.deck_1
-  location_id: 01K5HDZZCF27YHD2WDGSXFPPKF
-  description: Deck 1 on liquidhandler_1 - accessible by robotarm_1
+- location_name: liquidhandler_2.deck_3
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKN
+  description: Deck 3 on liquidhandler_2 - accessible by robotarm_1
   representations:
-    liquidhandler_1:
-      deck_position: 1
+    liquidhandler_2:
+      deck_position: 3
       deck_type: standard
       max_plates: 1
     robotarm_1:
       gripper_config: standard
       max_payload: 2.0
       position:
-      - 10
+      - 25
       - 15
       - 5
   resource_template_name: plate_nest
   resource_template_overrides:
     resource_class: deck_slot
     resource_description: Deck position accessible by liquid handler and robot arm
+  allow_transfers: true
+- location_name: liquidhandler_2.deck_4
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKP
+  description: Deck 4 on liquidhandler_2 - liquid handler only
+  representations:
+    liquidhandler_2:
+      deck_position: 4
+      deck_type: standard
+      max_plates: 1
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: deck_slot
+    resource_description: Deck position accessible by liquid handler only
+  allow_transfers: true
+- location_name: platereader_1.plate_carriage
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKQ
+  description: Plate carriage - accessible by robotarm_1 for plate transport
+  representations:
+    robotarm_1:
+      gripper_config: wide
+      max_payload: 3.0
+      position:
+      - 15
+      - 10
+      - 8
+  resource_template_name: plate_nest
+  resource_template_overrides:
+    resource_class: plate_carriage
+    resource_description: Plate carriage for platereader_1
+  allow_transfers: true
+- location_name: storage_rack
+  location_id: 01K5HDZZCF27YHD2WDGSXFPPKR
+  description: Storage Rack - High-capacity storage accessible only by robot arm
+  representations:
+    robotarm_1:
+      gripper_config: wide
+      max_payload: 10.0
+      position:
+      - 30
+      - 25
+      - 10
+  resource_template_name: storage_stack
+  resource_template_overrides:
+    resource_class: storage
+    resource_description: High-capacity storage stack for materials
+    capacity: 16
   allow_transfers: true
 transfer_capabilities:
   transfer_templates:
