@@ -78,6 +78,8 @@ We provide pre-built Docker images for easy deployment:
 - **[ghcr.io/ad-sdl/madsci](https://github.com/orgs/AD-SDL/packages/container/package/madsci)**: Base image with all MADSci packages. Use as foundation for custom services.
 - **[ghcr.io/ad-sdl/madsci_dashboard](https://github.com/orgs/AD-SDL/packages/container/package/madsci_dashboard)**: Extends base image with web dashboard for lab management.
 
+For users new to docker, we recommend checking out our [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide)
+
 ### Quick Start
 
 Try MADSci with our complete example lab:
@@ -106,7 +108,6 @@ See [Configuration.md](./Configuration.md) for comprehensive options and [exampl
 We're working on bringing the following additional components to MADSci:
 
 - **Auth Manager**: For handling authentication and user and group management for an autonomous lab.
-- **Transfer Manager**: For coordinating resource movement in a lab.
 
 ## Getting Started
 
