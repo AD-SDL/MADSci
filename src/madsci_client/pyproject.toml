@@ -1,6 +1,6 @@
 [project]
 name = "madsci.client"
-version = "0.6.0-rc.4"
+version = "0.6.0-rc.5"
 description = "The Modular Autonomous Discovery for Science (MADSci) Python Clients."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},

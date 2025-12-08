@@ -1,6 +1,6 @@
 [project]
 name = "madsci.experiment_application"
-version = "0.6.0-rc.4"
+version = "0.6.0-rc.5"
 description = "The Modular Autonomous Discovery for Science (MADSci) Experiment Application framework."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
