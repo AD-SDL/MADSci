@@ -1,10 +1,4 @@
 import { afterEach, vi } from 'vitest'
-import { cleanup } from '@vue/test-utils'
-
-// Cleanup after each test
-afterEach(() => {
-  cleanup()
-})
 
 // Mock fetch globally for tests
 global.fetch = vi.fn()
@@ -15,4 +9,8 @@ Object.defineProperty(window, 'location', {
     host: 'localhost:3000',
   },
   writable: true,
+})
+
+afterEach(() => {
+  vi.clearAllMocks()
 })

@@ -197,3 +197,48 @@ e2e_tests: node_e2e_tests experiment_e2e_tests backup_e2e_tests
 
 # Run the full pipeline including e2e tests
 all: down pipeupd e2e_tests down
+
+# UI tasks
+
+# Install UI dependencies
+ui-install:
+  @cd ui && yarn install
+
+# Run UI unit tests in watch mode
+ui-test:
+  @cd ui && yarn test
+
+# Run UI unit tests once
+ui-test-run:
+  @cd ui && yarn test:unit
+
+# Run UI unit tests with interactive UI
+ui-test-ui:
+  @cd ui && yarn test:ui
+
+# Run UI unit tests with coverage report
+ui-test-coverage:
+  @cd ui && yarn test:coverage
+
+# Run UI E2E tests
+ui-test-e2e:
+  @cd ui && yarn test:e2e
+
+# Run UI E2E tests with Playwright UI
+ui-test-e2e-ui:
+  @cd ui && yarn test:e2e:ui
+
+# Run UI E2E tests in debug mode
+ui-test-e2e-debug:
+  @cd ui && yarn test:e2e:debug
+
+# Run all UI tests (unit + e2e)
+ui-test-all: ui-test-run ui-test-e2e
+
+# Build the UI for production
+ui-build:
+  @cd ui && yarn build
+
+# Start UI development server
+ui-dev:
+  @cd ui && yarn dev
