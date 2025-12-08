@@ -91,8 +91,8 @@ class RestNodeConfig(NodeConfig):
     )
     uvicorn_kwargs: dict[str, Any] = Field(
         title="Uvicorn Configuration",
-        description="Configuration for the Uvicorn server that runs the REST API.",
-        default_factory=dict,
+        description="Configuration for the Uvicorn server that runs the REST API. By default, sets limit_concurrency=10 to protect against connection exhaustion attacks.",
+        default_factory=lambda: {"limit_concurrency": 10},
     )
     enable_rate_limiting: bool = Field(
         title="Enable Rate Limiting",

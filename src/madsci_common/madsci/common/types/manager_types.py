@@ -63,7 +63,7 @@ class ManagerSettings(MadsciBaseSettings):
     rate_limit_requests: int = Field(
         title="Rate Limit Requests",
         description="Maximum number of requests allowed per long time window.",
-        default=100,
+        default=300,
         ge=1,
     )
     rate_limit_window: int = Field(

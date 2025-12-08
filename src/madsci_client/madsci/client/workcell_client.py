@@ -475,6 +475,7 @@ Options:
         prompt_on_error: bool = True,
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
+        query_frequency: float = 2.0,
     ) -> Workflow:
         """
         Wait for a workflow to complete.
@@ -489,6 +490,8 @@ Options:
             If True, raise an exception if the workflow fails, by default True.
         raise_on_cancelled : bool, optional
             If True, raise an exception if the workflow is cancelled, by default True.
+        query_frequency : float, optional
+            How often to query the workflow status in seconds, by default 2.0.
 
         Returns
         -------
@@ -514,7 +517,7 @@ Options:
                 )
             else:
                 print(".", end="", flush=True)
-            time.sleep(1)
+            time.sleep(query_frequency)
             if wf.status.terminal:
                 print()
                 break

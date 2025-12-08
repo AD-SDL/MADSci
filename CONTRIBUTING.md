@@ -16,6 +16,7 @@ Thank you for your interest in contributing to MADSci! This guide will help you 
 - **[PDM](https://pdm-project.org/)**: For dependency management and virtual environments
 - **[Docker](https://docs.docker.com/engine/install/)**: Required for services, integration tests, and end-to-end tests
   - Alternatives: [Rancher Desktop](https://rancherdesktop.io/), [Podman](https://podman.io/)
+  - If you're new to Docker, please see our [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide).
 - **[just](https://github.com/casey/just)**: Task runner for development commands
    - Commands are defined in the hidden `.justfile` in the repository root, and can be used without `just` if desired
    - Run `just` without a subcommand for a list of all available commands
