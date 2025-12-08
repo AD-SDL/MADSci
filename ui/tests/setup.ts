@@ -1,4 +1,4 @@
-import { afterEach } from 'vitest'
+import { afterEach, vi } from 'vitest'
 import { cleanup } from '@vue/test-utils'
 
 // Cleanup after each test

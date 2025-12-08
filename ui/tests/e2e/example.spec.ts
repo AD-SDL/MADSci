@@ -9,7 +9,7 @@ test('basic navigation test', async ({ page }) => {
   await page.goto('/')
 
   // Check that the page loaded
-  await expect(page).toHaveURL('http://localhost:3000/')
+  await expect(page).toHaveURL('/')
 
   // Verify the app container is present
   const app = page.locator('#app')
