@@ -48,7 +48,7 @@
 | src/madsci\_common/madsci/common/types/event\_types.py                                        |      140 |        9 |     94% |41-44, 262-266 |
 | src/madsci\_common/madsci/common/types/experiment\_types.py                                   |       74 |        6 |     92% |119, 136, 138, 140, 142, 144 |
 | src/madsci\_common/madsci/common/types/lab\_types.py                                          |       20 |        0 |    100% |           |
-| src/madsci\_common/madsci/common/types/location\_types.py                                     |       98 |        9 |     91% |30, 32, 34, 36, 41, 46, 51, 98, 170 |
+| src/madsci\_common/madsci/common/types/location\_types.py                                     |      102 |        9 |     91% |30, 32, 34, 36, 41, 46, 51, 98, 170 |
 | src/madsci\_common/madsci/common/types/manager\_types.py                                      |       46 |        5 |     89% |     27-31 |
 | src/madsci\_common/madsci/common/types/mongodb\_migration\_types.py                           |      214 |      116 |     46% |84, 105, 129-130, 150, 159, 165, 191, 197, 200-203, 206, 218-227, 248-262, 266-271, 293-297, 303-319, 323-333, 338-348, 352-359, 363, 367, 371, 385-441, 458-490 |
 | src/madsci\_common/madsci/common/types/node\_types.py                                         |      144 |        7 |     95% |398, 406, 410, 419, 425, 429, 459 |
@@ -101,7 +101,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                    |      264 |       67 |     75% |86-87, 123-158, 183-184, 231, 243-247, 271-272, 284, 292, 302-305, 313-317, 348, 363, 377, 391, 397, 426-428, 432-437, 462-464, 501-503, 518, 529, 560-565, 572-573 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                     |        9 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                     |      199 |       67 |     66% |40-41, 48-58, 72-77, 95, 113, 131, 144, 160, 165-176, 244, 251-252, 268, 279, 300, 305, 313, 330-342, 358-380, 396, 419-426, 433, 438-441, 447-448 |
-|                                                                                     **TOTAL** | **13996** | **4545** | **68%** |           |
+|                                                                                     **TOTAL** | **14000** | **4545** | **68%** |           |
 
 
 ## Setup coverage badge
