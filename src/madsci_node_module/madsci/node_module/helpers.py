@@ -14,6 +14,7 @@ from madsci.common.types.action_types import (
     FileActionResultDefinition,
     JSONActionResultDefinition,
 )
+from madsci.node_module.type_analyzer import analyze_type
 from pydantic import BaseModel, create_model
 
 
@@ -187,31 +188,43 @@ def _extract_underlying_type(type_hint: Any) -> Any:
 
 
 def parse_result(returned: Any) -> list[ActionResultDefinition]:
-    """Parse a single result from an Action"""
+    """Parse a single result from an Action.
 
-    # First extract the underlying type if it's an Annotated type
-    returned = _extract_underlying_type(returned)
+    Now uses TypeAnalyzer for robust type analysis.
+    ActionResult subclasses are recognized and return empty list
+    as they are handled by the MADSci framework.
+    """
+    # Use TypeAnalyzer to get complete type information
+    type_info = analyze_type(returned)
+
+    # Handle ActionResult types specially - they're handled by the framework
+    if type_info.special_type == "action_result":
+        return []
 
     # Handle tuple types by recursively parsing each element
-    if getattr(returned, "__origin__", None) is tuple:
+    # Note: We check is_tuple on the TypeInfo, not the unwrapped base_type
+    if type_info.is_tuple and type_info.tuple_element_types:
         result_definitions = []
-        for result in returned.__args__:
-            result_definitions.extend(parse_result(result))
+        for element_type in type_info.tuple_element_types:
+            result_definitions.extend(parse_result(element_type))
         return result_definitions
 
+    # For all other types, work with the base_type (fully unwrapped)
+    base_type = type_info.base_type
+
     # Handle Path type specifically
-    if returned is Path:
+    if type_info.special_type == "file":
         return [FileActionResultDefinition(result_label="file")]
 
     # Handle ActionFiles, ActionJSON, ActionDatapoints, and custom pydantic subclasses
     try:
-        return _parse_pydantic_class(returned)
+        return _parse_pydantic_class(base_type)
     except TypeError:
         # issubclass() raises TypeError if returned is not a class
         pass
 
     # Handle basic types
-    return _parse_basic_type(returned)
+    return _parse_basic_type(base_type)
 
 
 def _parse_pydantic_class(returned: Any) -> list[ActionResultDefinition]:

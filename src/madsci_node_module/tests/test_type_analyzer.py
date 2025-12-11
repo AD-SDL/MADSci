@@ -5,6 +5,7 @@ covering all aspects of recursive type unwrapping, special type detection,
 and error handling.
 """
 
+import sys
 from pathlib import Path, PosixPath, PurePath, WindowsPath
 from typing import Annotated, Any, Optional, TypeVar, Union
 
@@ -481,6 +482,9 @@ def test_analyze_union_types_list():
     assert float in info.union_types
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 10), reason="Pipe operator requires Python 3.10+"
+)
 def test_analyze_pipe_operator():
     """Test analysis using | operator (Python 3.10+)."""
     info = analyze_type(int | str)
@@ -488,6 +492,9 @@ def test_analyze_pipe_operator():
     assert set(info.union_types) == {int, str}
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 10), reason="Pipe operator requires Python 3.10+"
+)
 def test_analyze_pipe_with_none():
     """Test analysis of str | None."""
     info = analyze_type(str | None)

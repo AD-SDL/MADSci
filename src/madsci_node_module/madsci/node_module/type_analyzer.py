@@ -20,7 +20,7 @@ ActionResult, etc., at any nesting level.
 - **Metadata Preservation**: Collects and preserves metadata from Annotated types
   throughout the type hierarchy
 - **Union Validation**: Detects and reports conflicting special types in unions
-- **Python 3.10+ Support**: Handles both typing.Union and types.UnionType (| operator)
+- **Python 3.9+ Support**: Handles typing.Union and types.UnionType (| operator in Python 3.10+)
 - **Depth Protection**: Prevents infinite recursion with configurable depth limits
 
 ## Usage Examples
@@ -103,7 +103,7 @@ All errors include detailed messages with the problematic type hint for debuggin
 
 from __future__ import annotations
 
-import types
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Annotated, Any, Optional, Union, get_args, get_origin
@@ -115,6 +115,13 @@ from madsci.common.types.action_types import (
     ActionResult,
 )
 from madsci.common.types.location_types import LocationArgument
+
+# Python 3.10+ has types.UnionType for the | operator
+# In Python 3.9, we only have typing.Union
+if sys.version_info >= (3, 10):
+    from types import UnionType
+else:
+    UnionType = None  # type: ignore[assignment, misc]
 
 
 @dataclass
@@ -204,7 +211,8 @@ def analyze_type(type_hint: Any, depth: int = 0, max_depth: int = 20) -> TypeInf
 
     # Handle Union types (including Optional)
     # Note: Python 3.10+ uses types.UnionType for | operator
-    if origin is Union or isinstance(type_hint, types.UnionType):
+    is_union_type = UnionType is not None and isinstance(type_hint, UnionType)
+    if origin is Union or is_union_type:
         if not args:  # For types.UnionType, get_args works directly
             args = get_args(type_hint)
         return _analyze_union_type(type_hint, args, depth, max_depth)

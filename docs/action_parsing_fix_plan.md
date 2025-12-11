@@ -2,7 +2,7 @@
 
 **Issues**: [#199](https://github.com/AD-SDL/MADSci/issues/199), [#184](https://github.com/AD-SDL/MADSci/issues/184)
 
-**Status**: Phase 1 Complete
+**Status**: Phase 2 Complete
 
 **Date**: 2025-12-11
 **Last Updated**: 2025-12-11
@@ -631,6 +631,38 @@ Phase 1 of the action parsing fix has been successfully completed with full TDD 
 
 ---
 
+### Phase 2 Completion Summary
+
+**Completed**: 2025-12-11
+
+Phase 2 of the action parsing fix has been successfully completed with full TDD methodology:
+
+- ✅ **25 tests passing** (all Phase 2 tests)
+- ✅ **64 total tests passing** in test_helpers.py (including all existing tests)
+- ✅ Refactored `parse_result()` in helpers.py to use `TypeAnalyzer`
+- ✅ ActionResult subclasses now properly recognized and return empty list
+- ✅ Full backward compatibility maintained - all existing tests pass
+- ✅ Code quality checks passed (ruff check, ruff format)
+- ✅ Handles all ActionResult types: ActionFailed, ActionSucceeded, ActionRunning, ActionNotReady, ActionCancelled, ActionPaused
+- ✅ Supports Optional, Union, and Annotated wrappers around ActionResult types
+
+**Key Features Implemented**:
+- ActionResult detection at any nesting level (Optional[Annotated[ActionFailed, ...]])
+- Empty list returned for ActionResult types (handled by MADSci framework)
+- Mixed tuples work correctly (tuple[ActionFailed, Path] returns only Path result)
+- Integration with parse_results() function working correctly
+- All existing functionality preserved (Path, ActionFiles, ActionJSON, basic types, custom Pydantic models)
+
+**Files Modified**:
+- `src/madsci_node_module/madsci/node_module/helpers.py`: Added TypeAnalyzer import and refactored parse_result()
+- `src/madsci_node_module/tests/test_helpers.py`: Added 25 comprehensive Phase 2 tests
+
+**Issue #199 Status**: ✅ **RESOLVED** - `Optional[ActionFailed]` and similar return types now parse correctly
+
+**Ready for Phase 3**: Argument parsing with complex nested type hints support.
+
+---
+
 ### Step-by-Step Execution
 
 #### Step 1: Type Analyzer Foundation (TDD Red Phase) ✅
@@ -652,17 +684,17 @@ Phase 1 of the action parsing fix has been successfully completed with full TDD 
 - [x] Ensure all tests still pass
 - [x] Commit: "Refactor and document TypeAnalyzer"
 
-#### Step 4: Return Type Parsing Tests (TDD Red Phase)
-- [ ] Add 25 new tests to `tests/test_helpers.py` (they will fail)
-- [ ] Commit: "Add failing tests for ActionResult return type parsing"
+#### Step 4: Return Type Parsing Tests (TDD Red Phase) ✅
+- [x] Add 25 new tests to `tests/test_helpers.py` (they will fail)
+- [x] Commit: "Add failing tests for ActionResult return type parsing"
 
-#### Step 5: Return Type Parsing Implementation (TDD Green Phase)
-- [ ] Import `TypeAnalyzer` in `helpers.py`
-- [ ] Refactor `parse_result()` to use `analyze_type()`
-- [ ] Handle ActionResult special case
-- [ ] Run tests until all Phase 2 tests pass
-- [ ] Ensure backward compatibility (existing tests still pass)
-- [ ] Commit: "Fix ActionResult return type parsing using TypeAnalyzer"
+#### Step 5: Return Type Parsing Implementation (TDD Green Phase) ✅
+- [x] Import `TypeAnalyzer` in `helpers.py`
+- [x] Refactor `parse_result()` to use `analyze_type()`
+- [x] Handle ActionResult special case
+- [x] Run tests until all Phase 2 tests pass
+- [x] Ensure backward compatibility (existing tests still pass)
+- [x] Commit: "Fix ActionResult return type parsing using TypeAnalyzer"
 
 #### Step 6: Argument Parsing Tests (TDD Red Phase)
 - [ ] Create `tests/test_argument_parsing.py`
@@ -820,10 +852,11 @@ The implementation will be considered successful when:
 - [x] Approach approved
 - [x] Ready to begin implementation
 - [x] Phase 1 (Type Analyzer) completed
+- [x] Phase 2 (Return Type Parsing) completed
 
 ---
 
-**Document Version**: 1.1
+**Document Version**: 1.2
 **Last Updated**: 2025-12-11
 **Author**: Claude (AI Assistant)
-**Status**: Phase 1 Complete - Ready for Phase 2
+**Status**: Phase 2 Complete - Ready for Phase 3
