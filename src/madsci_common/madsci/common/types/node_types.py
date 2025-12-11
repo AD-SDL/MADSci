@@ -368,6 +368,11 @@ class NodeStatus(MadsciBaseModel):
         title="Node Errored",
         description="Whether the node is in an errored state.",
     )
+    disconnected: bool = Field(
+        default=False,
+        title="Node Disconnected",
+        description="Whether the node is disconnected from the workcell manager",
+    )
     errors: list[Error] = Field(
         default_factory=list,
         title="Node Errors",

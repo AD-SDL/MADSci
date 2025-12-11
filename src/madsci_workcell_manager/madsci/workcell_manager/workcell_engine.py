@@ -583,10 +583,11 @@ class Engine:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             node_futures = []
             for node_name, node in state_manager.get_nodes().items():
-                node_future = executor.submit(
-                    self.update_node, node_name, node, state_manager, update_info
-                )
-                node_futures.append(node_future)
+                if node.status is None or not node.status.disconnected:
+                    node_future = executor.submit(
+                        self.update_node, node_name, node, state_manager, update_info
+                    )
+                    node_futures.append(node_future)
 
             # Wait for all node updates to complete
             concurrent.futures.wait(node_futures)
@@ -618,6 +619,9 @@ class Engine:
         except Exception as e:
             error = Error.from_exception(e)
             node.status = NodeStatus(errored=True, errors=[error])
+            for error in node.status.errors:
+                if error.error_type == "ConnectionError":
+                    node.status.disconnected = True
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
             with ownership_context(
