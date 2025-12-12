@@ -25,7 +25,7 @@ class MockNodeClient(AbstractNodeClient):
     def get_status(self):
         return {"status": "ok"}
 
-    def execute_action(self, action: str, **kwargs):  # noqa: ARG002
+    def execute_action(self, action: str, **kwargs):
         return {"result": f"executed {action}"}
 
 
@@ -42,7 +42,7 @@ class AnotherMockNodeClient(AbstractNodeClient):
     def get_status(self):
         return {"status": "ok"}
 
-    def execute_action(self, action: str, **kwargs):  # noqa: ARG002
+    def execute_action(self, action: str, **kwargs):
         return {"result": f"executed {action}"}
 
 

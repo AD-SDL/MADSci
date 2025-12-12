@@ -24,12 +24,14 @@ class TestConfig(RestNodeConfig):
 
     __test__ = False
     test_param: int = 1
+    update_node_files: bool = False
 
 
 class TestArgumentParsingNode(RestNode):
     """Test node for argument parsing tests."""
 
     __test__ = False
+    config: TestConfig = TestConfig()
     config_model = TestConfig
 
     def startup_handler(self) -> None:

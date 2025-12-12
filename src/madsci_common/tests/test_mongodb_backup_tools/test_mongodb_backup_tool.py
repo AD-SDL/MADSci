@@ -137,7 +137,7 @@ class TestMongoDBBackupTool:
     def test_create_backup_specific_collections(
         self,
         mongodb_backup_settings,
-        temp_backup_dir,  # noqa: ARG002
+        temp_backup_dir,
     ):
         """Test backup creation for specific collections only."""
         # Update settings to specify collections
@@ -194,7 +194,7 @@ class TestMongoDBBackupTool:
                 assert "--collection" in args
                 assert "collection1" in args
 
-    def test_create_backup_with_custom_name(self, backup_tool, temp_backup_dir):  # noqa: ARG002
+    def test_create_backup_with_custom_name(self, backup_tool, temp_backup_dir):
         """Test backup creation with custom name suffix."""
 
         def mock_mongodump(*args, **_kwargs):
@@ -409,7 +409,7 @@ class TestMongoDBBackupTool:
         assert backup_tool.settings.database == "test_events"
         assert backup_tool.backup_dir.exists()
 
-    def test_backup_with_indexes(self, backup_tool, temp_backup_dir):  # noqa: ARG002
+    def test_backup_with_indexes(self, backup_tool, temp_backup_dir):
         """Test that indexes are included in backup."""
 
         def mock_mongodump(*args, **_kwargs):

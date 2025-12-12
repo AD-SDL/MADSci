@@ -2,7 +2,7 @@
 
 import inspect
 from pathlib import Path
-from typing import Annotated, Any, Callable, Type, get_args, get_origin
+from typing import Annotated, Any, Callable, ClassVar, Type, get_args, get_origin
 
 import regex
 from madsci.common.types.action_types import (
@@ -137,14 +137,19 @@ def get_named_input(main_string: str, plural: str) -> list[str]:
 
 def _parse_action_files(returned: Any) -> list[ActionResultDefinition]:
     """Parse ActionFiles subclass into result definitions."""
-    for key, value in returned.__annotations__.items():
+    # Filter out ClassVar fields (like _mongo_excluded_fields)
+    instance_fields = {
+        key: value
+        for key, value in returned.__annotations__.items()
+        if get_origin(value) is not ClassVar
+    }
+
+    for key, value in instance_fields.items():
         if value is not Path:
             raise ValueError(
                 f"All fields in an ActionFiles subclass must be of type Path, but field {key} is of type {value}",
             )
-    return [
-        FileActionResultDefinition(result_label=key) for key in returned.__annotations__
-    ]
+    return [FileActionResultDefinition(result_label=key) for key in instance_fields]
 
 
 def _parse_action_json(returned: Any) -> list[ActionResultDefinition]:

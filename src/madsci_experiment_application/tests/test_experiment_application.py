@@ -39,7 +39,7 @@ class TestExperimentApplication(ExperimentApplication):
         resource_conditions=[],
     )
 
-    def run_experiment(self, *args: Any, **kwargs: Any) -> str:  # noqa: ARG002
+    def run_experiment(self, *args: Any, **kwargs: Any) -> str:
         """Test experiment implementation."""
         return "test_result"
 
@@ -307,8 +307,8 @@ class TestExperimentLifecycle:
     @patch("builtins.print")
     def test_start_experiment_run(
         self,
-        mock_print: Any,  # noqa: ARG002
-        mock_input: Any,  # noqa: ARG002
+        mock_print: Any,
+        mock_input: Any,
         experiment_app_with_mocks: TestExperimentApplication,
     ) -> None:
         """Test starting an experiment run."""
