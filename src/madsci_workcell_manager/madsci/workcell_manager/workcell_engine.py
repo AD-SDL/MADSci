@@ -656,4 +656,5 @@ class Engine:
         with self.state_handler.wc_state_lock():
             for name, node in self.state_handler.get_nodes().items():
                 node.status = NodeStatus()
+                node.status.initializing = True
                 self.state_handler.set_node(name, node)
