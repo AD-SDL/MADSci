@@ -86,6 +86,7 @@ class Engine:
         self.update_active_nodes(self.state_handler, update_info=True)
         node_tick = time.time()
         info_tick = time.time()
+        reconnect_tick = time.time()
         scheduler_tick = time.time()
         while True and not self.state_handler.shutdown:
             try:
@@ -107,6 +108,13 @@ class Engine:
                     node_tick = time.time()
                     if should_update_info:
                         info_tick = time.time()
+                if (
+                    time.time() - reconnect_tick
+                    > self.workcell_settings.reconnect_attempt_interval
+                ):
+                    self.reset_disconnects()
+                    reconnect_tick = time.time()
+
                 if (
                     time.time() - scheduler_tick
                     > self.workcell_settings.scheduler_update_interval
@@ -634,3 +642,18 @@ class Engine:
                         event_data=node.status,
                     )
                 )
+
+    def reset_disconnects(self) -> None:
+        """Update a single node's status, state, and optionally info.
+
+        Args:
+            node_name: The name of the node to update
+            node: The node object to update
+            state_manager: The workcell state handler
+            update_info: Whether to update node info (default: False). Node info changes
+                        infrequently, so it's updated less often to reduce network overhead.
+        """
+        with self.state_handler.wc_state_lock():
+            for name, node in self.state_handler.get_nodes().items():
+                node.status = NodeStatus()
+                self.state_handler.set_node(name, node)
