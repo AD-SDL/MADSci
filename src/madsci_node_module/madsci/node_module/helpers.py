@@ -195,7 +195,7 @@ def _extract_underlying_type(type_hint: Any) -> Any:
 def parse_result(returned: Any) -> list[ActionResultDefinition]:
     """Parse a single result from an Action.
 
-    Now uses TypeAnalyzer for robust type analysis.
+    Uses TypeAnalyzer for robust type analysis.
     ActionResult subclasses are recognized and return empty list
     as they are handled by the MADSci framework.
     """

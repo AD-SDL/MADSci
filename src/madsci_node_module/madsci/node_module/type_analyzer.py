@@ -48,7 +48,7 @@ assert info.special_type == "location"
 ```python
 from typing import Annotated, Optional
 
-# Deeply nested type (the motivating use case for this module)
+# Deeply nested type
 info = analyze_type(Optional[Annotated[LocationArgument, "Transfer source"]])
 assert info.base_type == LocationArgument
 assert info.is_optional

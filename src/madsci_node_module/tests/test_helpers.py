@@ -598,7 +598,7 @@ def test_extract_file_parameters_with_annotated_path():
 
 
 # =============================================================================
-# PHASE 2: ActionResult Return Types (Issue #199)
+# ActionResult Return Types
 # =============================================================================
 
 
@@ -722,12 +722,12 @@ def test_parse_result_all_action_result_subclasses():
 
 
 # =============================================================================
-# PHASE 2: Backward Compatibility Tests
+# Backward Compatibility Tests
 # =============================================================================
 
 
 def test_parse_result_path_still_works():
-    """Verify existing Path parsing still works after ActionResult changes."""
+    """Verify existing Path parsing works correctly."""
     result = parse_result(Path)
     assert len(result) == 1
     assert isinstance(result[0], FileActionResultDefinition)
@@ -770,7 +770,7 @@ def test_parse_result_tuples_still_work():
 
 
 # =============================================================================
-# PHASE 2: Integration with parse_results()
+# Integration with parse_results()
 # =============================================================================
 
 

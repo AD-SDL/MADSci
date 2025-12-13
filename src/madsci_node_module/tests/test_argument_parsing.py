@@ -1,7 +1,6 @@
 """
 Comprehensive tests for action argument parsing with complex type hints.
 
-Phase 3 of action parsing fix (Issue #184).
 Tests handling of complex nested type hints in action arguments.
 """
 

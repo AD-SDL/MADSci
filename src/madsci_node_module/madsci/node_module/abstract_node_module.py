@@ -456,7 +456,7 @@ class AbstractNode(MadsciClientMixin):
     def _is_file_type(self, type_hint: Any) -> bool:
         """Check if a type hint represents a file parameter.
 
-        Now uses TypeAnalyzer for robust type detection at any nesting level.
+        Uses TypeAnalyzer for robust type detection at any nesting level.
 
         Args:
             type_hint: The type hint to check
@@ -473,7 +473,7 @@ class AbstractNode(MadsciClientMixin):
     def _contains_location_argument(self, type_hint: Any) -> bool:
         """Check if a type hint contains LocationArgument.
 
-        Now uses TypeAnalyzer for robust type detection at any nesting level.
+        Uses TypeAnalyzer for robust type detection at any nesting level.
 
         Args:
             type_hint: The type hint to check
@@ -496,7 +496,7 @@ class AbstractNode(MadsciClientMixin):
     ) -> None:
         """Parse a function argument into a MADSci ArgumentDefinition.
 
-        Now uses TypeAnalyzer for robust handling of complex nested type hints.
+        Uses TypeAnalyzer for robust handling of complex nested type hints.
         Supports arbitrary nesting of Optional, Annotated, Union, list, etc.
         """
         # Analyze the type hint to get complete information
