@@ -534,11 +534,15 @@ class AbstractNode(MadsciClientMixin):
         # Extract description from metadata
         # Priority: definition.description > string metadata > ""
         description = ""
-        if annotated_as_file and file_definition.description:
+        if annotated_as_file and file_definition and file_definition.description:
             description = file_definition.description
-        elif annotated_as_location and location_definition.description:
+        elif (
+            annotated_as_location
+            and location_definition
+            and location_definition.description
+        ):
             description = location_definition.description
-        elif annotated_as_arg and arg_definition.description:
+        elif annotated_as_arg and arg_definition and arg_definition.description:
             description = arg_definition.description
         else:
             # Fall back to first string in metadata

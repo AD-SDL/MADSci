@@ -182,7 +182,7 @@ def analyze_type(type_hint: Any, depth: int = 0, max_depth: int = 20) -> TypeInf
                    combinations are found
     """
     # Check recursion depth
-    if depth > max_depth:
+    if depth >= max_depth:
         raise ValueError(
             f"Type analysis exceeded maximum recursion depth of {max_depth}. "
             f"Type hint may be too complex or circular: {type_hint}"
@@ -248,7 +248,7 @@ def is_optional_type(type_hint: Any) -> bool:
         True if the type is Optional[T] or Union[T, None]
     """
     origin = get_origin(type_hint)
-    if origin is Union:
+    if origin is Union or (UnionType is not None and origin is UnionType):
         args = get_args(type_hint)
         return type(None) in args
     return False
@@ -356,6 +356,7 @@ def _classify_special_type(type_hint: Any) -> Optional[str]:  # noqa: PLR0911
         ):
             return "action_files"
     except TypeError:
+        # type_hint is not a class, so issubclass() raises TypeError; not ActionFiles
         pass
 
     # Check for ActionJSON
@@ -365,6 +366,7 @@ def _classify_special_type(type_hint: Any) -> Optional[str]:  # noqa: PLR0911
         ):
             return "action_json"
     except TypeError:
+        # type_hint is not a class, so issubclass() raises TypeError; not ActionJSON
         pass
 
     # Check for ActionDatapoints
@@ -374,6 +376,7 @@ def _classify_special_type(type_hint: Any) -> Optional[str]:  # noqa: PLR0911
         ):
             return "action_datapoints"
     except TypeError:
+        # type_hint is not a class, so issubclass() raises TypeError; not ActionDatapoints
         pass
 
     return None

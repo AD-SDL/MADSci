@@ -973,14 +973,16 @@ def test_action_definition_complete():
 def test_error_union_location_path():
     """Test 162: Union[LocationArgument, Path] should raise error."""
     # This is an unsupported combination - a parameter can't be both a location and a file
+    with pytest.raises(
+        ValueError, match=r"(location and a file|conflicting special types)"
+    ):
 
-    class Node(TestArgumentParsingNode):
-        @action
-        def test_action(self, param: Union[LocationArgument, Path]) -> None:
-            pass
+        class Node(TestArgumentParsingNode):
+            @action
+            def test_action(self, param: Union[LocationArgument, Path]) -> None:
+                pass
 
-    # Should raise ValueError during node creation
-    # TODO: Implement proper error handling for conflicting special types
+        Node()
 
 
 def test_error_union_conflicting_specials():

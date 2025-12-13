@@ -1037,7 +1037,7 @@ def test_validation_wrong_type_arg():
         action_name="test_action",
         args={"value": "not_an_int"},
     )
-    result = node.run_action(invalid_request)
+    node.run_action(invalid_request)
     # Action runs in background thread, wait for it to complete
     time.sleep(0.1)
     # Get the final result after the action completes
