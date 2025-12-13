@@ -125,6 +125,17 @@ def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
     assert workflow is None
 
 
+def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
+    """Test run_next_step when no workflows are ready."""
+    with patch(
+        "madsci.client.node_client.get_status",
+        side_effect=Exception("Connection failed"),
+    ):
+        engine.update_active_nodes()
+        for node in engine.state_handler.get_nodes().values():
+            assert node.status.disconnected is True
+
+
 def test_run_next_step_with_ready_workflow(
     engine: Engine, state_handler: WorkcellStateHandler
 ) -> None:
