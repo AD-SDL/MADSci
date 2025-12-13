@@ -626,10 +626,7 @@ class Engine:
                 state_manager.set_node(node_name, node)
         except Exception as e:
             error = Error.from_exception(e)
-            node.status = NodeStatus(errored=True, errors=[error])
-            for error in node.status.errors:
-                if error.error_type == "ConnectionError":
-                    node.status.disconnected = True
+            node.status = NodeStatus(errored=True, errors=[error], disconnected=True)
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
             with ownership_context(
@@ -644,15 +641,7 @@ class Engine:
                 )
 
     def reset_disconnects(self) -> None:
-        """Update a single node's status, state, and optionally info.
-
-        Args:
-            node_name: The name of the node to update
-            node: The node object to update
-            state_manager: The workcell state handler
-            update_info: Whether to update node info (default: False). Node info changes
-                        infrequently, so it's updated less often to reduce network overhead.
-        """
+        """Reset all disconnected nodes to initializing state."""
         with self.state_handler.wc_state_lock():
             for name, node in self.state_handler.get_nodes().items():
                 node.status = NodeStatus()
