@@ -318,8 +318,8 @@ class WorkcellManager(
                 node_object.status.disconnected = False
                 node_object.status.errors = []
                 self.state_handler.set_node(node_name=node, node=node_object)
-        if command in node.info.capabilities.admin_commands:
-            client = find_node_client(node.node_url)
+        if command in node_object.info.capabilities.admin_commands:
+            client = find_node_client(node_object.node_url)
             return client.send_admin_command(command)
         raise HTTPException(
             status_code=400, detail="Node cannot perform that admin command"
