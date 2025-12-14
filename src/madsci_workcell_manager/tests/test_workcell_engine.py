@@ -131,7 +131,7 @@ def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
         "madsci.client.node.rest_node_client.RestNodeClient.get_status",
         side_effect=Exception("Connection failed"),
     ):
-        engine.update_active_nodes()
+        engine.update_active_nodes(engine.state_handler)
         for node in engine.state_handler.get_nodes().values():
             assert node.status.disconnected is True
 
