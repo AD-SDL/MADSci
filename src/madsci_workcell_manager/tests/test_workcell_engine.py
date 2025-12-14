@@ -128,7 +128,7 @@ def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
 def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
     """Test run_next_step when no workflows are ready."""
     with patch(
-        "madsci.client.rest_node_client.get_status",
+        "madsci.client.node.rest_node_client.get_status",
         side_effect=Exception("Connection failed"),
     ):
         engine.update_active_nodes()
