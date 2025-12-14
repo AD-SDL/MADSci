@@ -134,6 +134,9 @@ def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
         engine.update_active_nodes(engine.state_handler)
         for node in engine.state_handler.get_nodes().values():
             assert node.status.disconnected is True
+        engine.reset_disconnects()
+        for node in engine.state_handler.get_nodes().values():
+            assert node.status.disconnected is True
 
 
 def test_run_next_step_with_ready_workflow(
