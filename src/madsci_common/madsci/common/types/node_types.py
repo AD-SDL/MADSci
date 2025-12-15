@@ -368,6 +368,11 @@ class NodeStatus(MadsciBaseModel):
         title="Node Errored",
         description="Whether the node is in an errored state.",
     )
+    disconnected: bool = Field(
+        default=False,
+        title="Node Disconnected",
+        description="Whether the node is disconnected from the workcell manager",
+    )
     errors: list[Error] = Field(
         default_factory=list,
         title="Node Errors",
@@ -406,6 +411,8 @@ class NodeStatus(MadsciBaseModel):
             ready = False
         if self.paused:
             ready = False
+        if self.disconnected:
+            ready = False
         if len(self.waiting_for_config) > 0:
             ready = False
         return ready
@@ -421,6 +428,8 @@ class NodeStatus(MadsciBaseModel):
             reasons.append("Node is locked")
         if self.errored:
             reasons.append("Node is in an error state")
+        if self.disconnected:
+            reasons.append("Node is disconnected")
         if self.initializing:
             reasons.append("Node is initializing")
         if self.paused:
