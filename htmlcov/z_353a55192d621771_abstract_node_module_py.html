@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">521 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">396<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">125<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">398<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">123<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_353a55192d621771_helpers_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.0">coverage.py v7.13.0</a>,
-            created at 2025-12-15 17:37 +0000
+            created at 2025-12-15 20:42 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -1136,7 +1136,7 @@
     <p class="run run2"><span class="n"><a id="t1054" href="#t1054">1054</a></span><span class="t">            <span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1055" href="#t1055">1055</a></span><span class="t">                <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1056" href="#t1056">1056</a></span><span class="t">                    <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">node_info</span><span class="op">.</span><span class="nam">actions</span><span class="op">[</span><span class="nam">action_request</span><span class="op">.</span><span class="nam">action_name</span><span class="op">]</span><span class="op">.</span><span class="nam">blocking</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1057" href="#t1057">1057</a></span><span class="t">                        <span class="nam">self</span><span class="op">.</span><span class="nam">node_status</span><span class="op">.</span><span class="nam">busy</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1057" href="#t1057">1057</a></span><span class="t">                        <span class="nam">self</span><span class="op">.</span><span class="nam">node_status</span><span class="op">.</span><span class="nam">busy</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1058" href="#t1058">1058</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1059" href="#t1059">1059</a></span><span class="t">                    <span class="com"># Handle var_args specially if present</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1060" href="#t1060">1060</a></span><span class="t">                    <span class="key">if</span> <span class="str">"__madsci_var_args__"</span> <span class="key">in</span> <span class="nam">arg_dict</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -1149,7 +1149,7 @@
     <p class="run"><span class="n"><a id="t1067" href="#t1067">1067</a></span><span class="t">                    <span class="nam">result</span> <span class="op">=</span> <span class="nam">action_request</span><span class="op">.</span><span class="nam">failed</span><span class="op">(</span><span class="nam">errors</span><span class="op">=</span><span class="nam">Error</span><span class="op">.</span><span class="nam">from_exception</span><span class="op">(</span><span class="nam">e</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1068" href="#t1068">1068</a></span><span class="t">                <span class="key">finally</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1069" href="#t1069">1069</a></span><span class="t">                    <span class="key">if</span> <span class="nam">self</span><span class="op">.</span><span class="nam">node_info</span><span class="op">.</span><span class="nam">actions</span><span class="op">[</span><span class="nam">action_request</span><span class="op">.</span><span class="nam">action_name</span><span class="op">]</span><span class="op">.</span><span class="nam">blocking</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1070" href="#t1070">1070</a></span><span class="t">                        <span class="nam">self</span><span class="op">.</span><span class="nam">node_status</span><span class="op">.</span><span class="nam">busy</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1070" href="#t1070">1070</a></span><span class="t">                        <span class="nam">self</span><span class="op">.</span><span class="nam">node_status</span><span class="op">.</span><span class="nam">busy</span> <span class="op">=</span> <span class="key">False</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1071" href="#t1071">1071</a></span><span class="t">        <span class="key">finally</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1072" href="#t1072">1072</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">node_status</span><span class="op">.</span><span class="nam">running_actions</span><span class="op">.</span><span class="nam">discard</span><span class="op">(</span><span class="nam">action_request</span><span class="op">.</span><span class="nam">action_id</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1073" href="#t1073">1073</a></span><span class="t">        <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -1366,7 +1366,7 @@
             <a class="nav" href="z_353a55192d621771_helpers_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.0">coverage.py v7.13.0</a>,
-            created at 2025-12-15 17:37 +0000
+            created at 2025-12-15 20:42 +0000
         </p>
     </div>
 </footer>
