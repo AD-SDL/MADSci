@@ -86,6 +86,7 @@ class Engine:
         self.update_active_nodes(self.state_handler, update_info=True)
         node_tick = time.time()
         info_tick = time.time()
+        reconnect_tick = time.time()
         scheduler_tick = time.time()
         while True and not self.state_handler.shutdown:
             try:
@@ -107,6 +108,13 @@ class Engine:
                     node_tick = time.time()
                     if should_update_info:
                         info_tick = time.time()
+                if (
+                    time.time() - reconnect_tick
+                    > self.workcell_settings.reconnect_attempt_interval
+                ):
+                    self.reset_disconnects()
+                    reconnect_tick = time.time()
+
                 if (
                     time.time() - scheduler_tick
                     > self.workcell_settings.scheduler_update_interval
@@ -583,10 +591,11 @@ class Engine:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             node_futures = []
             for node_name, node in state_manager.get_nodes().items():
-                node_future = executor.submit(
-                    self.update_node, node_name, node, state_manager, update_info
-                )
-                node_futures.append(node_future)
+                if node.status is None or not node.status.disconnected:
+                    node_future = executor.submit(
+                        self.update_node, node_name, node, state_manager, update_info
+                    )
+                    node_futures.append(node_future)
 
             # Wait for all node updates to complete
             concurrent.futures.wait(node_futures)
@@ -617,7 +626,7 @@ class Engine:
                 state_manager.set_node(node_name, node)
         except Exception as e:
             error = Error.from_exception(e)
-            node.status = NodeStatus(errored=True, errors=[error])
+            node.status = NodeStatus(errored=True, errors=[error], disconnected=True)
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
             with ownership_context(
@@ -630,3 +639,11 @@ class Engine:
                         event_data=node.status,
                     )
                 )
+
+    def reset_disconnects(self) -> None:
+        """Reset all disconnected nodes to initializing state."""
+        with self.state_handler.wc_state_lock():
+            for name, node in self.state_handler.get_nodes().items():
+                node.status = NodeStatus()
+                node.status.initializing = True
+                self.state_handler.set_node(name, node)

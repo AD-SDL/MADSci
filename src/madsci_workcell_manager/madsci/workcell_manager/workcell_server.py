@@ -310,9 +310,16 @@ class WorkcellManager(
         self, command: str, node: str
     ) -> AdminCommandResponse:
         """Send admin command to a node."""
-        node = self.state_handler.get_node(node)
-        if command in node.info.capabilities.admin_commands:
-            client = find_node_client(node.node_url)
+        node_object = self.state_handler.get_node(node)
+        if command == "reset":
+            with self.state_handler.wc_state_lock():
+                # Clear errors on reset command
+                node_object.status.errored = False
+                node_object.status.disconnected = False
+                node_object.status.errors = []
+                self.state_handler.set_node(node_name=node, node=node_object)
+        if command in node_object.info.capabilities.admin_commands:
+            client = find_node_client(node_object.node_url)
             return client.send_admin_command(command)
         raise HTTPException(
             status_code=400, detail="Node cannot perform that admin command"

@@ -200,6 +200,11 @@ class WorkcellManagerSettings(
         title="Node Update Interval",
         description="The interval at which the workcell queries its node's states and status, in seconds. Must be <= scheduler_update_interval",
     )
+    reconnect_attempt_interval: float = Field(
+        default=1200.0,
+        title="Reconnect Attempt Interval",
+        description="The interval at which the workcell resets disconnected nodes, in seconds.",
+    )
     node_info_update_interval: float = Field(
         default=60.0,
         title="Node Info Update Interval",

@@ -122,6 +122,9 @@ def test_send_admin_command(test_client: TestClient) -> None:
         response = client.post("/admin/reset")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+        for node in client.get("/nodes").json().values():
+            valid_node = Node.model_validate(node)
+            assert valid_node.status.initializing
 
 
 def test_get_active_workflows(test_client: TestClient) -> None:
