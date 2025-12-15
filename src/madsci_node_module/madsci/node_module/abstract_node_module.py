@@ -42,9 +42,6 @@ from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import DataPoint, FileDataPoint, ValueDataPoint
 from madsci.common.types.event_types import Event, EventType
-from madsci.common.types.location_types import (
-    LocationArgument,
-)
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeCapabilities,
@@ -56,12 +53,12 @@ from madsci.common.types.node_types import (
     NodeStatus,
 )
 from madsci.common.utils import (
-    is_optional,
     pretty_type_repr,
     repeat_on_interval,
     threaded_daemon,
     to_snake_case,
 )
+from madsci.node_module.type_analyzer import analyze_type
 from pydantic import BaseModel, ValidationError
 from semver import Version
 
@@ -457,59 +454,38 @@ class AbstractNode(MadsciClientMixin):
         self.node_info.actions[action_name] = action_def
 
     def _is_file_type(self, type_hint: Any) -> bool:
-        """Check if a type hint represents a file parameter (Path or list[Path]).
+        """Check if a type hint represents a file parameter.
+
+        Uses TypeAnalyzer for robust type detection at any nesting level.
 
         Args:
-            type_hint: The type hint to check (after extracting from Annotated/Optional)
+            type_hint: The type hint to check
 
         Returns:
             True if the type represents a file parameter (Path, list[Path], etc.)
         """
-        # Direct Path type
-        if getattr(type_hint, "__name__", None) in [
-            "Path",
-            "PurePath",
-            "PosixPath",
-            "WindowsPath",
-        ]:
-            return True
-
-        # Check for list[Path] - get_origin returns list, get_args returns (Path,)
-        origin = get_origin(type_hint)
-        if origin is list:
-            args = get_args(type_hint)
-            if args and getattr(args[0], "__name__", None) in [
-                "Path",
-                "PurePath",
-                "PosixPath",
-                "WindowsPath",
-            ]:
-                return True
-
-        return False
+        try:
+            type_info = analyze_type(type_hint)
+            return type_info.special_type == "file"
+        except (ValueError, TypeError):
+            return False
 
     def _contains_location_argument(self, type_hint: Any) -> bool:
-        """Check if a type hint contains LocationArgument either directly or within a Union.
+        """Check if a type hint contains LocationArgument.
+
+        Uses TypeAnalyzer for robust type detection at any nesting level.
 
         Args:
-            type_hint: The type hint to check. Caller must unwrap Optional and Annotated types
-                      before calling this method.
+            type_hint: The type hint to check
 
         Returns:
-            True if the type is LocationArgument or a Union containing LocationArgument
+            True if the type is or contains LocationArgument
         """
-        # Direct LocationArgument type
-        if type_hint is LocationArgument:
-            return True
-
-        # Check for Union types that contain LocationArgument
-        origin = get_origin(type_hint)
-        if origin is Union:
-            args = get_args(type_hint)
-            # Check if any of the Union arguments is LocationArgument
-            return any(arg is LocationArgument for arg in args)
-
-        return False
+        try:
+            type_info = analyze_type(type_hint)
+            return type_info.special_type == "location"
+        except (ValueError, TypeError):
+            return False
 
     def _parse_action_arg(
         self,
@@ -518,81 +494,112 @@ class AbstractNode(MadsciClientMixin):
         parameter_name: str,
         parameter_type: Any,
     ) -> None:
-        """Parses a function argument of an action handler into a MADSci ArgumentDefinition"""
-        type_hint = parameter_type
+        """Parse a function argument into a MADSci ArgumentDefinition.
+
+        Uses TypeAnalyzer for robust handling of complex nested type hints.
+        Supports arbitrary nesting of Optional, Annotated, Union, list, etc.
+        """
+        # Analyze the type hint to get complete information
+        type_info = analyze_type(parameter_type)
+
+        # Check for special definition metadata
+        file_definition = next(
+            (m for m in type_info.metadata if isinstance(m, FileArgumentDefinition)),
+            None,
+        )
+        location_definition = next(
+            (
+                m
+                for m in type_info.metadata
+                if isinstance(m, LocationArgumentDefinition)
+            ),
+            None,
+        )
+        arg_definition = next(
+            (
+                m
+                for m in type_info.metadata
+                if isinstance(m, ArgumentDefinition)
+                and not isinstance(
+                    m, (FileArgumentDefinition, LocationArgumentDefinition)
+                )
+            ),
+            None,
+        )
+
+        annotated_as_file = file_definition is not None
+        annotated_as_location = location_definition is not None
+        annotated_as_arg = arg_definition is not None
+
+        # Extract description from metadata
+        # Priority: definition.description > string metadata > ""
         description = ""
-        annotated_as_file = False
-        annotated_as_arg = False
-        annotated_as_location = False
-        # * If the type hint is Optional, extract the inner type
-        if is_optional(type_hint):
-            type_hint = get_args(type_hint)[0]
-            # * If the type hint is an Annotated type, extract the type and description
-            # * Description here means the first string metadata in the Annotated type
-        if get_origin(type_hint) == Annotated:
+        if annotated_as_file and file_definition and file_definition.description:
+            description = file_definition.description
+        elif (
+            annotated_as_location
+            and location_definition
+            and location_definition.description
+        ):
+            description = location_definition.description
+        elif annotated_as_arg and arg_definition and arg_definition.description:
+            description = arg_definition.description
+        else:
+            # Fall back to first string in metadata
             description = next(
-                (
-                    metadata
-                    for metadata in type_hint.__metadata__
-                    if isinstance(metadata, str)
-                ),
+                (m for m in type_info.metadata if isinstance(m, str)),
                 "",
             )
-            annotated_as_file = any(
-                isinstance(metadata, FileArgumentDefinition)
-                for metadata in type_hint.__metadata__
+
+        # Validate that parameter isn't annotated as multiple types
+        if sum([annotated_as_file, annotated_as_arg, annotated_as_location]) > 1:
+            raise ValueError(
+                f"Parameter '{parameter_name}' is annotated as multiple types of argument. "
+                f"This is not allowed.",
             )
-            annotated_as_location = any(
-                isinstance(metadata, LocationArgumentDefinition)
-                for metadata in type_hint.__metadata__
-            )
-            annotated_as_arg = any(
-                isinstance(metadata, ArgumentDefinition)
-                for metadata in type_hint.__metadata__
-            )
-            if sum([annotated_as_file, annotated_as_arg, annotated_as_location]) > 1:
-                raise ValueError(
-                    f"Parameter '{parameter_name}' is annotated as multiple types of argument. This is not allowed.",
-                )
-            type_hint = get_args(type_hint)[0]
-            # * Another Optional check after Annotated type extraction
-        if is_optional(type_hint):
-            type_hint = get_args(type_hint)[0]
-            # * If the type hint is a file type, add it to the files list
+
+        # Get parameter info for default value and required status
+        parameter_info = signature.parameters[parameter_name]
+        default = (
+            None
+            if parameter_info.default == inspect.Parameter.empty
+            else parameter_info.default
+        )
+
+        # Determine if parameter is required:
+        # - If type is Optional and parameter has a default, it's not required
+        # - If type is Optional but no default, it's still required (explicit None must be passed)
+        # - If type is not Optional but has a default, it's not required
+        # - If type is not Optional and no default, it's required
+        has_default = parameter_info.default != inspect.Parameter.empty
+        is_required = not (type_info.is_optional or has_default)
+
+        # Classify parameter based on special type or annotation
         if annotated_as_file or (
-            self._is_file_type(type_hint) and not annotated_as_arg
+            type_info.special_type == "file" and not annotated_as_arg
         ):
-            # * Add a file parameter to the action
+            # File parameter (Path, list[Path], etc.)
             action_def.files[parameter_name] = FileArgumentDefinition(
                 name=parameter_name,
-                required=True,
+                required=is_required,
                 description=description,
             )
-        # * Otherwise, add it to the args list
-        else:
-            parameter_info = signature.parameters[parameter_name]
-            # * Add an arg to the action
-            default = (
-                None
-                if parameter_info.default == inspect.Parameter.empty
-                else parameter_info.default
+        elif annotated_as_location or type_info.special_type == "location":
+            # Location parameter (LocationArgument)
+            action_def.locations[parameter_name] = LocationArgumentDefinition(
+                name=parameter_name,
+                required=is_required,
+                description=description,
             )
-            is_required = parameter_info.default == inspect.Parameter.empty
-
-            if annotated_as_location or self._contains_location_argument(type_hint):
-                action_def.locations[parameter_name] = LocationArgumentDefinition(
-                    name=parameter_name,
-                    required=is_required,
-                    description=description,
-                )
-            else:
-                action_def.args[parameter_name] = ArgumentDefinition(
-                    name=parameter_name,
-                    argument_type=pretty_type_repr(type_hint),
-                    default=default,
-                    required=is_required,
-                    description=description,
-                )
+        else:
+            # Regular argument
+            action_def.args[parameter_name] = ArgumentDefinition(
+                name=parameter_name,
+                argument_type=pretty_type_repr(type_info.base_type),
+                default=default,
+                required=is_required,
+                description=description,
+            )
 
     def _parse_action_args(
         self,

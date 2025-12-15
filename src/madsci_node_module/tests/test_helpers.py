@@ -5,8 +5,15 @@ from typing import Annotated, Dict, List, Optional, Union
 
 import pytest
 from madsci.common.types.action_types import (
+    ActionCancelled,
+    ActionFailed,
     ActionFiles,
     ActionJSON,
+    ActionNotReady,
+    ActionPaused,
+    ActionResult,
+    ActionRunning,
+    ActionSucceeded,
     FileActionResultDefinition,
     JSONActionResultDefinition,
     _analyze_file_parameter_type,
@@ -588,3 +595,247 @@ def test_extract_file_parameters_with_annotated_path():
     )
     assert file_params["optional_file"]["required"] is False
     assert file_params["optional_file"]["is_list"] is False
+
+
+# =============================================================================
+# ActionResult Return Types
+# =============================================================================
+
+
+def test_parse_result_action_result_base():
+    """Test parse_result with ActionResult base class."""
+    result = parse_result(ActionResult)
+    # ActionResult types should return empty list (handled by framework)
+    assert result == []
+
+
+def test_parse_result_action_failed():
+    """Test parse_result with ActionFailed."""
+    result = parse_result(ActionFailed)
+    assert result == []
+
+
+def test_parse_result_action_succeeded():
+    """Test parse_result with ActionSucceeded."""
+    result = parse_result(ActionSucceeded)
+    assert result == []
+
+
+def test_parse_result_action_running():
+    """Test parse_result with ActionRunning."""
+    result = parse_result(ActionRunning)
+    assert result == []
+
+
+def test_parse_result_action_not_ready():
+    """Test parse_result with ActionNotReady."""
+    result = parse_result(ActionNotReady)
+    assert result == []
+
+
+def test_parse_result_action_cancelled():
+    """Test parse_result with ActionCancelled."""
+    result = parse_result(ActionCancelled)
+    assert result == []
+
+
+def test_parse_result_action_paused():
+    """Test parse_result with ActionPaused."""
+    result = parse_result(ActionPaused)
+    assert result == []
+
+
+def test_parse_result_optional_action_failed():
+    """Test parse_result with Optional[ActionFailed]."""
+    result = parse_result(Optional[ActionFailed])
+    # Should still return empty list - ActionResult wrapped in Optional
+    assert result == []
+
+
+def test_parse_result_union_action_failed_none():
+    """Test parse_result with Union[ActionFailed, None]."""
+    result = parse_result(Union[ActionFailed, None])
+    assert result == []
+
+
+def test_parse_result_annotated_action_failed():
+    """Test parse_result with Annotated[ActionFailed, 'description']."""
+    result = parse_result(Annotated[ActionFailed, "Action failure result"])
+    assert result == []
+
+
+def test_parse_result_annotated_optional_action_failed():
+    """Test parse_result with Annotated[Optional[ActionFailed], ...]."""
+    result = parse_result(
+        Annotated[Optional[ActionFailed], "Optional action failure result"]
+    )
+    assert result == []
+
+
+def test_parse_result_optional_annotated_action_failed():
+    """Test parse_result with Optional[Annotated[ActionFailed, ...]]."""
+    result = parse_result(Optional[Annotated[ActionFailed, "Action failure result"]])
+    assert result == []
+
+
+def test_parse_result_returns_empty_for_action_result():
+    """Verify that all ActionResult subclasses return empty list."""
+    action_result_types = [
+        ActionResult,
+        ActionFailed,
+        ActionSucceeded,
+        ActionRunning,
+        ActionNotReady,
+        ActionCancelled,
+        ActionPaused,
+    ]
+
+    for action_type in action_result_types:
+        result = parse_result(action_type)
+        assert result == [], f"{action_type.__name__} should return empty list"
+
+
+def test_parse_result_mixed_tuple_with_action_result():
+    """Test parse_result with tuple[ActionFailed, Path]."""
+    result = parse_result(tuple[ActionFailed, Path])
+    # Should get 1 result: ActionFailed returns [], Path returns file definition
+    assert len(result) == 1
+    assert isinstance(result[0], FileActionResultDefinition)
+    assert result[0].result_label == "file"
+
+
+def test_parse_result_all_action_result_subclasses():
+    """Test that all ActionResult subclasses are properly handled."""
+    # Test each subclass individually
+    for action_class in [
+        ActionResult,
+        ActionFailed,
+        ActionSucceeded,
+        ActionRunning,
+        ActionNotReady,
+        ActionCancelled,
+        ActionPaused,
+    ]:
+        result = parse_result(action_class)
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+
+# =============================================================================
+# Backward Compatibility Tests
+# =============================================================================
+
+
+def test_parse_result_path_still_works():
+    """Verify existing Path parsing works correctly."""
+    result = parse_result(Path)
+    assert len(result) == 1
+    assert isinstance(result[0], FileActionResultDefinition)
+    assert result[0].result_label == "file"
+
+
+def test_parse_result_basic_types_still_work():
+    """Verify existing basic type parsing still works."""
+    for basic_type in [int, str, float, bool, dict, list]:
+        result = parse_result(basic_type)
+        assert len(result) == 1
+        assert isinstance(result[0], JSONActionResultDefinition)
+        assert result[0].result_label == "json_result"
+
+
+def test_parse_result_action_json_still_works():
+    """Verify existing ActionJSON parsing still works."""
+    result = parse_result(ExampleJSONData)
+    assert len(result) == 1
+    assert isinstance(result[0], JSONActionResultDefinition)
+    assert result[0].result_label == "json_result"
+
+
+def test_parse_result_action_files_still_works():
+    """Verify existing ActionFiles parsing still works."""
+    result = parse_result(ExampleFileData)
+    assert len(result) == 2
+    labels = [r.result_label for r in result]
+    assert "file1" in labels
+    assert "file2" in labels
+
+
+def test_parse_result_tuples_still_work():
+    """Verify existing tuple parsing still works."""
+    result = parse_result(tuple[int, Path])
+    assert len(result) == 2
+    result_types = [type(r) for r in result]
+    assert JSONActionResultDefinition in result_types
+    assert FileActionResultDefinition in result_types
+
+
+# =============================================================================
+# Integration with parse_results()
+# =============================================================================
+
+
+def dummy_function_action_failed() -> ActionFailed:
+    """Dummy function for testing parse_results with ActionFailed return."""
+    return ActionFailed(error="Test error")
+
+
+def dummy_function_optional_action_failed() -> Optional[ActionFailed]:
+    """Dummy function for testing parse_results with Optional[ActionFailed] return."""
+    return ActionFailed(error="Test error")
+
+
+def dummy_function_annotated_action_failed() -> Annotated[
+    ActionFailed, "Action failure result"
+]:
+    """Dummy function for testing parse_results with Annotated ActionFailed return."""
+    return ActionFailed(error="Test error")
+
+
+def dummy_function_tuple_with_action_result() -> tuple[ActionFailed, Path]:
+    """Dummy function for testing parse_results with tuple containing ActionResult."""
+    return ActionFailed(error="Test error"), Path("/test")
+
+
+def test_parse_results_action_failed_function():
+    """Test parse_results with function returning ActionFailed."""
+    result = parse_results(dummy_function_action_failed)
+    assert result == []
+
+
+def test_parse_results_optional_action_failed_function():
+    """Test parse_results with function returning Optional[ActionFailed]."""
+    result = parse_results(dummy_function_optional_action_failed)
+    assert result == []
+
+
+def test_parse_results_annotated_action_failed_function():
+    """Test parse_results with function returning Annotated[ActionFailed, ...]."""
+    result = parse_results(dummy_function_annotated_action_failed)
+    assert result == []
+
+
+def test_parse_results_tuple_with_action_result():
+    """Test parse_results with function returning tuple with ActionResult."""
+    result = parse_results(dummy_function_tuple_with_action_result)
+    # Should get 1 result: ActionFailed returns [], Path returns file definition
+    assert len(result) == 1
+    assert isinstance(result[0], FileActionResultDefinition)
+
+
+def test_parse_results_empty_list_for_action_results():
+    """Verify parse_results returns empty list for ActionResult types."""
+
+    # Test with various ActionResult types
+    def func1() -> ActionResult:
+        return ActionResult()
+
+    def func2() -> ActionFailed:
+        return ActionFailed(error="error")
+
+    def func3() -> Optional[ActionSucceeded]:
+        return ActionSucceeded()
+
+    for func in [func1, func2, func3]:
+        result = parse_results(func)
+        assert isinstance(result, list)
+        assert len(result) == 0

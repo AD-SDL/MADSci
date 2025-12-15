@@ -96,13 +96,13 @@ class TestAbstractBackupTool:
         class ConcreteBackupTool(AbstractBackupTool):
             """Complete implementation of backup tool."""
 
-            def create_backup(self, name_suffix=None):  # noqa: ARG002
+            def create_backup(self, name_suffix=None):
                 return Path("/fake/backup")
 
             def restore_from_backup(self, backup_path, target_db=None):
                 pass
 
-            def validate_backup_integrity(self, backup_path):  # noqa: ARG002
+            def validate_backup_integrity(self, backup_path):
                 return True
 
             def list_available_backups(self):
@@ -125,7 +125,7 @@ class TestAbstractBackupTool:
                     return Path(f"/backups/backup_{name_suffix}.dump")
                 return Path("/backups/backup.dump")
 
-            def restore_from_backup(self, backup_path, target_db=None):  # noqa: ARG002
+            def restore_from_backup(self, backup_path, target_db=None):
                 # Should accept Path object
                 assert isinstance(backup_path, Path)
 
@@ -169,13 +169,13 @@ class TestAbstractBackupTool:
         """Test backup metadata format and content."""
 
         class TestBackupTool(AbstractBackupTool):
-            def create_backup(self, name_suffix=None):  # noqa: ARG002
+            def create_backup(self, name_suffix=None):
                 return Path("/test/backup.dump")
 
             def restore_from_backup(self, backup_path, target_db=None):
                 pass
 
-            def validate_backup_integrity(self, backup_path):  # noqa: ARG002
+            def validate_backup_integrity(self, backup_path):
                 return True
 
             def list_available_backups(self):
