@@ -1,6 +1,6 @@
 [project]
 name = "madsci.data_manager"
-version = "0.6.0-rc.6"
+version = "0.6.0-rc.7"
 description = "The Modular Autonomous Discovery for Science (MADSci) Data Manager."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},

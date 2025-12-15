@@ -49,7 +49,7 @@ def action(
             name = kwargs.get("action_name", func.__name__)
         # * Use provided description or function docstring
         description = kwargs.get("description", func.__doc__)
-        blocking = kwargs.get("blocking", False)
+        blocking = kwargs.get("blocking", True)
         func.__madsci_action_name__ = name
         func.__madsci_action_description__ = description
         func.__madsci_action_blocking__ = blocking

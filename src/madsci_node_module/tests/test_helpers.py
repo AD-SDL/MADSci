@@ -19,7 +19,12 @@ from madsci.common.types.action_types import (
     _analyze_file_parameter_type,
     extract_file_parameters,
 )
-from madsci.node_module.helpers import create_dynamic_model, parse_result, parse_results
+from madsci.node_module.helpers import (
+    action,
+    create_dynamic_model,
+    parse_result,
+    parse_results,
+)
 from pydantic import BaseModel, ValidationError
 
 
@@ -839,3 +844,88 @@ def test_parse_results_empty_list_for_action_results():
         result = parse_results(func)
         assert isinstance(result, list)
         assert len(result) == 0
+
+
+# =============================================================================
+# Action Decorator Blocking Behavior Tests
+# =============================================================================
+
+
+def test_action_decorator_default_blocking():
+    """Test that actions are blocking by default when blocking argument is not specified."""
+
+    @action
+    def default_action(param: int) -> str:
+        """Action without explicit blocking parameter."""
+        return param
+
+    # Verify the action is marked as blocking by default
+    assert hasattr(default_action, "__madsci_action_blocking__")
+    assert default_action.__madsci_action_blocking__ is True, (
+        "Actions should be blocking by default when blocking parameter is not specified"
+    )
+
+
+def test_action_decorator_explicit_blocking_true():
+    """Test that actions are blocking when explicitly set to blocking=True."""
+
+    @action(blocking=True)
+    def blocking_action(param: int) -> str:
+        """Action explicitly set to blocking."""
+        return param
+
+    # Verify the action is marked as blocking
+    assert hasattr(blocking_action, "__madsci_action_blocking__")
+    assert blocking_action.__madsci_action_blocking__ is True, (
+        "Actions should be blocking when explicitly set with blocking=True"
+    )
+
+
+def test_action_decorator_explicit_non_blocking():
+    """Test that actions are non-blocking only when explicitly set to blocking=False."""
+
+    @action(blocking=False)
+    def non_blocking_action(param: int) -> str:
+        """Action explicitly set to non-blocking."""
+        return param
+
+    # Verify the action is marked as non-blocking
+    assert hasattr(non_blocking_action, "__madsci_action_blocking__")
+    assert non_blocking_action.__madsci_action_blocking__ is False, (
+        "Actions should be non-blocking only when explicitly set with blocking=False"
+    )
+
+
+def test_action_decorator_blocking_with_other_args():
+    """Test that blocking default works correctly when other decorator args are used."""
+
+    @action(name="custom_name", description="Custom description")
+    def action_with_other_args(param: int) -> str:
+        """Action with custom name and description but no blocking parameter."""
+        return param
+
+    # Verify the action is still blocking by default even with other args
+    assert hasattr(action_with_other_args, "__madsci_action_blocking__")
+    assert action_with_other_args.__madsci_action_blocking__ is True, (
+        "Actions should be blocking by default even when other decorator arguments are specified"
+    )
+    assert action_with_other_args.__madsci_action_name__ == "custom_name"
+    assert action_with_other_args.__madsci_action_description__ == "Custom description"
+
+
+def test_action_decorator_blocking_false_with_other_args():
+    """Test that blocking=False works correctly when other decorator args are used."""
+
+    @action(name="custom_name", description="Custom description", blocking=False)
+    def non_blocking_with_other_args(param: int) -> str:
+        """Non-blocking action with custom name and description."""
+        return param
+
+    # Verify the action is non-blocking and other args are preserved
+    assert hasattr(non_blocking_with_other_args, "__madsci_action_blocking__")
+    assert non_blocking_with_other_args.__madsci_action_blocking__ is False
+    assert non_blocking_with_other_args.__madsci_action_name__ == "custom_name"
+    assert (
+        non_blocking_with_other_args.__madsci_action_description__
+        == "Custom description"
+    )
