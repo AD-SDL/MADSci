@@ -6,9 +6,6 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
 
-from madsci.client.location_client import (
-    LocationClient,  # noqa: F401 - Needed for test patching
-)
 from madsci.common.context import set_current_madsci_context
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.base_types import PathLike

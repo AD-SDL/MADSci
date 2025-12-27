@@ -206,28 +206,27 @@ class TestExperimentApplicationInit:
 
         # Check that ExperimentApplication class attributes don't shadow the mixin properties
         # If they do, accessing these attributes will return the class itself, not trigger the property
-        assert (
-            not hasattr(ExperimentApplication, "__dict__")
-            or "experiment_client" not in ExperimentApplication.__dict__
-        ), (
+        assert "experiment_client" not in ExperimentApplication.__dict__, (
             "experiment_client should not be a class attribute - it should be inherited as a property from MadsciClientMixin"
         )
-        assert (
-            not hasattr(ExperimentApplication, "__dict__")
-            or "workcell_client" not in ExperimentApplication.__dict__
-        ), (
+        assert "workcell_client" not in ExperimentApplication.__dict__, (
             "workcell_client should not be a class attribute - it should be inherited as a property from MadsciClientMixin"
         )
 
-        # Verify that the properties are actually properties from the mixin
+        # Verify that the attributes resolve to properties (inherited from the mixin or base classes)
+        experiment_client_attr = getattr(
+            ExperimentApplication, "experiment_client", None
+        )
+        workcell_client_attr = getattr(ExperimentApplication, "workcell_client", None)
+
         assert isinstance(
-            type(ExperimentApplication).__dict__.get("experiment_client"),
-            (property, type(None)),
-        ), "experiment_client should be a property or inherited"
+            experiment_client_attr,
+            property,
+        ), "experiment_client should be a property (possibly inherited)"
         assert isinstance(
-            type(ExperimentApplication).__dict__.get("workcell_client"),
-            (property, type(None)),
-        ), "workcell_client should be a property or inherited"
+            workcell_client_attr,
+            property,
+        ), "workcell_client should be a property (possibly inherited)"
 
     def test_all_client_properties_accessible_on_instances(
         self, experiment_app: TestExperimentApplication
