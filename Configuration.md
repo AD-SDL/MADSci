@@ -6,11 +6,16 @@ Here you can find all available configuration options using ENV variables.
 
 These environment variables are used to configure the default Docker Compose in the MADSci example lab.
 
-| Name        | Type      | Default | Description                                                                                                                                                                                              | Example |
-|-------------|-----------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
-| `USER_ID`   | `integer` | `1000`  | The user ID to use for the MADSci services inside Docker containers. This should match your host user ID to avoid file permission issues. If not set, the default value used by the container is 9999.   | `1000`  |
-| `GROUP_ID`  | `integer` | `1000`  | The group ID to use for the MADSci services inside Docker containers. This should match your host group ID to avoid file permission issues. If not set, the default value used by the container is 9999. | `1000`  |
-| `REPO_PATH` | `string`  | `"./"`  | The path to the MADSci repository on the host machine. This is mounted into the Docker containers to provide access to the codebase.                                                                     | `"./"`  |
+| Name                 | Type      | Default | Description                                                                                                                                                                                              | Example |
+|----------------------|-----------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| `USER_ID`            | `integer` | `1000`  | The user ID to use for the MADSci services inside Docker containers. This should match your host user ID to avoid file permission issues. If not set, the default value used by the container is 9999.   | `1000`  |
+| `GROUP_ID`           | `integer` | `1000`  | The group ID to use for the MADSci services inside Docker containers. This should match your host group ID to avoid file permission issues. If not set, the default value used by the container is 9999. | `1000`  |
+| `REPO_PATH`          | `string`  | `"./"`  | The path to the MADSci repository on the host machine. This is mounted into the Docker containers to provide access to the codebase.                                                                     | `"./"`  |
+| `REDIS_PORT`         | `integer` | `6379`  | The port on the host machine to bind the Redis service to. This allows other services to connect to Redis running inside the Docker container.                                                           | `6379`  |
+| `MONGODB_PORT`       | `integer` | `27017` | The port on the host machine to bind the MongoDB service to. This allows other services to connect to MongoDB running inside the Docker container.                                                       | `27017` |
+| `POSTGRES_PORT`      | `integer` | `5432`  | The port on the host machine to bind the PostgreSQL service to. This allows other services to connect to PostgreSQL running inside the Docker container.                                                 | `5432`  |
+| `MINIO_PORT`         | `integer` | `9000`  | The port on the host machine to bind the MinIO service to. This allows other services to connect to MinIO running inside the Docker container.                                                           | `9000`  |
+| `MINIO_CONSOLE_PORT` | `integer` | `9001`  | The port on the host machine to bind the MinIO console to. This allows other services to connect to the MinIO console running inside the Docker container.                                               | `9001`  |
 
 ## MadsciContext
 
