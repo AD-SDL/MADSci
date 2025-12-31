@@ -1,5 +1,6 @@
 """Unit tests for ExperimentApplication class."""
 
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -25,6 +26,30 @@ from madsci.experiment_application import (
     ExperimentApplicationConfig,
 )
 from pydantic import AnyUrl
+
+
+@contextmanager
+def mock_all_clients():
+    """Context manager to mock all MADSci clients at the module level."""
+    with (
+        patch("madsci.client.event_client.EventClient") as mock_event_client,
+        patch(
+            "madsci.client.experiment_client.ExperimentClient"
+        ) as mock_experiment_client,
+        patch("madsci.client.workcell_client.WorkcellClient") as mock_workcell_client,
+        patch("madsci.client.location_client.LocationClient") as mock_location_client,
+        patch("madsci.client.resource_client.ResourceClient") as mock_resource_client,
+        patch("madsci.client.data_client.DataClient") as mock_data_client,
+    ):
+        # Set up mock instances
+        mock_event_client.return_value = Mock()
+        mock_experiment_client.return_value = Mock()
+        mock_workcell_client.return_value = Mock()
+        mock_location_client.return_value = Mock()
+        mock_resource_client.return_value = Mock()
+        mock_data_client.return_value = Mock()
+
+        yield
 
 
 class TestExperimentApplication(ExperimentApplication):
@@ -131,15 +156,7 @@ def experiment_app(
     experiment_design: ExperimentDesign,
 ) -> TestExperimentApplication:
     """Create a test ExperimentApplication instance."""
-    with patch.multiple(
-        "madsci.experiment_application.experiment_application",
-        EventClient=Mock,
-        ExperimentClient=Mock,
-        WorkcellClient=Mock,
-        LocationClient=Mock,
-        ResourceClient=Mock,
-        DataClient=Mock,
-    ):
+    with mock_all_clients():
         app = TestExperimentApplication(
             node_definition=node_definition,
             node_config=app_config,
@@ -182,17 +199,76 @@ def experiment_app_with_mocks(
 class TestExperimentApplicationInit:
     """Test ExperimentApplication initialization."""
 
+    def test_client_attributes_are_not_shadowed_by_type_annotations(
+        self,
+    ) -> None:
+        """Test that type annotations don't shadow MadsciClientMixin properties (issue #205)."""
+
+        # Check that ExperimentApplication class attributes don't shadow the mixin properties
+        # If they do, accessing these attributes will return the class itself, not trigger the property
+        assert "experiment_client" not in ExperimentApplication.__dict__, (
+            "experiment_client should not be a class attribute - it should be inherited as a property from MadsciClientMixin"
+        )
+        assert "workcell_client" not in ExperimentApplication.__dict__, (
+            "workcell_client should not be a class attribute - it should be inherited as a property from MadsciClientMixin"
+        )
+
+        # Verify that the attributes resolve to properties (inherited from the mixin or base classes)
+        experiment_client_attr = getattr(
+            ExperimentApplication, "experiment_client", None
+        )
+        workcell_client_attr = getattr(ExperimentApplication, "workcell_client", None)
+
+        assert isinstance(
+            experiment_client_attr,
+            property,
+        ), "experiment_client should be a property (possibly inherited)"
+        assert isinstance(
+            workcell_client_attr,
+            property,
+        ), "workcell_client should be a property (possibly inherited)"
+
+    def test_all_client_properties_accessible_on_instances(
+        self, experiment_app: TestExperimentApplication
+    ) -> None:
+        """Test that all client properties are accessible on instances (issue #205).
+
+        This is an integration test that verifies the fix for issue #205 where
+        ExperimentApplication instances were getting AttributeError when accessing
+        experiment_client and workcell_client.
+        """
+        # Test that all clients are accessible and return instances (not classes)
+        clients_to_test = [
+            ("event_client", "info"),
+            ("experiment_client", "start_experiment"),
+            ("workcell_client", "submit_workflow"),
+            ("resource_client", "get_resource"),
+            ("data_client", "save_datapoint"),
+            ("location_client", "get_location"),
+        ]
+
+        for client_name, expected_method in clients_to_test:
+            # Should have the attribute
+            assert hasattr(experiment_app, client_name), (
+                f"App should have {client_name} attribute"
+            )
+
+            # Accessing should work without AttributeError
+            client = getattr(experiment_app, client_name)
+
+            # Should be an instance, not a class
+            assert not isinstance(client, type), (
+                f"{client_name} should be an instance, not a class"
+            )
+
+            # Should have expected methods (validates it's the right type)
+            assert hasattr(client, expected_method), (
+                f"{client_name} should have {expected_method} method"
+            )
+
     def test_init_basic(self, node_definition: NodeDefinition) -> None:
         """Test basic initialization."""
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            LocationClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
+        with mock_all_clients():
             app = TestExperimentApplication(node_definition=node_definition)
 
             assert app.experiment is None
@@ -205,15 +281,7 @@ class TestExperimentApplicationInit:
         self, node_definition: NodeDefinition, experiment_design: ExperimentDesign
     ) -> None:
         """Test initialization with experiment design."""
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            LocationClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
+        with mock_all_clients():
             app = TestExperimentApplication(
                 node_definition=node_definition,
                 experiment_design=experiment_design,
@@ -234,15 +302,7 @@ resource_conditions: []
         yaml_file.write_text(yaml_content.strip())
 
         with (
-            patch.multiple(
-                "madsci.experiment_application.experiment_application",
-                EventClient=Mock,
-                ExperimentClient=Mock,
-                WorkcellClient=Mock,
-                LocationClient=Mock,
-                ResourceClient=Mock,
-                DataClient=Mock,
-            ),
+            mock_all_clients(),
             patch(
                 "madsci.common.types.experiment_types.ExperimentDesign.from_yaml"
             ) as mock_from_yaml,
@@ -262,15 +322,7 @@ resource_conditions: []
         self, node_definition: NodeDefinition, mock_experiment: Experiment
     ) -> None:
         """Test initialization with existing experiment."""
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            LocationClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
+        with mock_all_clients():
             app = TestExperimentApplication(
                 node_definition=node_definition,
                 experiment=mock_experiment,
