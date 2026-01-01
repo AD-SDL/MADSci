@@ -1,15 +1,4 @@
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: check-yaml
-      - id: check-toml
-      - id: check-ast
-      - id: check-merge-conflict
-      - id: check-added-large-files
-      - id: mixed-line-ending
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
   - repo: https://github.com/kynan/nbstripout
     rev: 0.8.2
     hooks:
@@ -35,3 +24,14 @@ repos:
        entry: pdm run pydantic-settings-export
        language: system
        files: ^src/madsci_common/madsci/common/types/.*\.py$
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-ast
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: mixed-line-ending
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
