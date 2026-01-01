@@ -116,6 +116,17 @@ Built on PostgreSQL, it supports diverse asset types and hierarchical organizati
 It maintains automated histories and locking mechanisms for provenance and reliability.
 Laboratories without such needs can utilize other MADSci components independently.
 
+### Location Management
+
+The Location Manager provides optional tracking of physical laboratory locations and their associations with resources.
+Locations represent positions such as instrument slots, storage areas, or transfer stations within the laboratory environment.
+
+This manager integrates with the Resource Manager to enable attachment of resources to specific locations, facilitating automated tracking of sample positions and consumable storage.
+Workflows can reference locations symbolically, with the Workcell Manager resolving these references at runtime based on current attachments and states.
+This abstraction separates physical laboratory layout from workflow logic, improving workflow portability across different laboratory configurations.
+
+Laboratories not requiring location tracking can utilize other MADSci components independently.
+
 ### Event Management and Logging
 
 The Event Manager enables nodes and managers to log JSON events to a central MongoDB-backed system supporting advanced queries.
