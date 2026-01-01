@@ -39,6 +39,11 @@ check: checks
 ruff-unsafe:
   @ruff check . --fix --unsafe-fixes
 
+# Generate API documentation with pdoc
+docs:
+  @pdm run pdoc --output-dir api/ --force madsci
+  @echo "✅ API documentation generated in api/"
+
 # Build the project
 build: dcb
 

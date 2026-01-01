@@ -1,0 +1,131 @@
+# See docs at: https://mystmd.org/guide/frontmatter
+version: 1
+project:
+  id: 28284e97-73d9-4530-8b03-07590bc53b3d
+  title: MADSci Documentation
+  description: >
+    MADSci (Modular Autonomous Discovery for Science) is an open-source framework for building modular, autonomous
+    scientific laboratories. It provides a suite of services and tools to
+    facilitate experiment design, execution, data management, and analysis,
+    enabling researchers to automate and accelerate their scientific workflows.
+  keywords: [MADSci, autonomous labs, self-driving labs, scientific automation, experiment management, data analysis, robotics]
+  authors:
+    - name: Rapid Prototyping Lab, Argonne National Laboratory
+  github: https://github.com/AD-SDL/MADSci
+
+  # Exclude common files that shouldn't be built
+  exclude:
+    - '**/__pycache__/**'
+    - '**/.pytest_cache/**'
+    - '**/.ruff_cache/**'
+    - '**/.venv/**'
+    - '**/.pdm-build/**'
+    - '**/node_modules/**'
+    - '**/.git/**'
+    - '**/dist/**'
+    - '**/build/**'
+    - '**/*.pyc'
+    - 'CLAUDE.md'
+    - '**/CLAUDE.md'
+    - 'AGENTS.md'
+    - '**/AGENTS.md'
+    - 'skills/**'
+
+  toc:
+    - file: README.md
+    - file: Configuration.md
+
+    - title: Example Lab
+      children:
+        - file: example_lab/README.md
+        - file: example_lab/NODE_DEVELOPMENT_GUIDE.md
+        - file: example_lab/WORKFLOW_GUIDE.md
+        - file: example_lab/TROUBLESHOOTING.md
+        # Automatically include all notebooks
+        - pattern: example_lab/notebooks/*.ipynb
+
+    - title: Core Packages
+      children:
+        # Automatically include all package READMEs - titles from frontmatter/headings
+        - file: src/madsci_common/README.md
+          children:
+            - pattern: src/madsci_common/**/README.md
+        - file: src/madsci_client/README.md
+        - file: src/madsci_squid/README.md
+        - file: src/madsci_node_module/README.md
+        - file: src/madsci_experiment_application/README.md
+
+    - title: Manager Services
+      children:
+        # Automatically include all manager READMEs - titles from frontmatter/headings
+        - file: src/madsci_event_manager/README.md
+        - file: src/madsci_experiment_manager/README.md
+        - file: src/madsci_resource_manager/README.md
+        - file: src/madsci_data_manager/README.md
+        - file: src/madsci_workcell_manager/README.md
+        - file: src/madsci_location_manager/README.md
+
+    - title: User Interface
+      children:
+        - file: ui/README.md
+        # Automatically include UI documentation - titles from frontmatter/headings
+        - pattern: ui/src/*/README.md
+
+    - file: CONTRIBUTING.md
+
+    - title: API Documentation
+      children:
+        # Main API index
+        - file: api/madsci/index.md
+
+        # Client APIs
+        - file: api/madsci/client/index.md
+          children:
+            - pattern: api/madsci/client/*.md
+            - pattern: api/madsci/client/node/*.md
+
+        # Common utilities and types
+        - file: api/madsci/common/index.md
+          children:
+            - pattern: api/madsci/common/**/*.md
+
+        # Core Packages
+        - title: Core Packages
+          children:
+            - file: api/madsci/squid/index.md
+              children:
+                - pattern: api/madsci/squid/*.md
+            - file: api/madsci/node_module/index.md
+              children:
+                - pattern: api/madsci/node_module/*.md
+            - file: api/madsci/experiment_application/index.md
+              children:
+                - pattern: api/madsci/experiment_application/*.md
+
+        # Manager Services
+        - title: Manager Services
+          children:
+            - file: api/madsci/event_manager/index.md
+              children:
+                - pattern: api/madsci/event_manager/*.md
+            - file: api/madsci/experiment_manager/index.md
+              children:
+                - pattern: api/madsci/experiment_manager/*.md
+            - file: api/madsci/resource_manager/index.md
+              children:
+                - pattern: api/madsci/resource_manager/*.md
+            - file: api/madsci/data_manager/index.md
+              children:
+                - pattern: api/madsci/data_manager/*.md
+            - file: api/madsci/workcell_manager/index.md
+              children:
+                - pattern: api/madsci/workcell_manager/**/*.md
+            - file: api/madsci/location_manager/index.md
+              children:
+                - pattern: api/madsci/location_manager/*.md
+
+site:
+  template: book-theme
+  options:
+    favicon: ui/public/favicon.ico
+    logo: assets/madsci_logo.svg
