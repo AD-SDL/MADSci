@@ -6,6 +6,7 @@ from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     ConfigDict,
+    MadsciBaseModel,
     MadsciSQLModel,
     PathLike,
     PositiveInt,
@@ -102,10 +103,10 @@ class ResourceManagerDefinition(ManagerDefinition):
         description="The type of the resource manager",
         default=ManagerType.RESOURCE_MANAGER,
     )
-    custom_types: dict[str, "ResourceDefinitions"] = Field(
-        default_factory=dict,
-        title="Custom Types",
-        description="Custom Types for this resource manager",
+    default_templates: list["TemplateDefinition"] = Field(
+        default_factory=list,
+        title="Default Templates",
+        description="Resource templates to create or update on manager startup",
     )
 
 
@@ -131,6 +132,40 @@ class CustomResourceAttributeDefinition(MadsciSQLModel, extra="allow"):
         title="Default Value",
         description="The default value of the attribute.",
         sa_type=JSON,
+    )
+
+
+class TemplateDefinition(MadsciBaseModel):
+    """Definition for a Resource Template to be created on manager startup."""
+
+    template_name: str = Field(
+        title="Template Name",
+        description="Unique identifier and display name for the template.",
+    )
+    description: Optional[str] = Field(
+        title="Template Description",
+        description="Detailed description of what this template creates.",
+        default=None,
+    )
+    base_resource: "ResourceDefinitions" = Field(
+        title="Base Resource",
+        description="The base resource definition that this template is based on.",
+        discriminator="base_type",
+    )
+    required_overrides: Optional[list[str]] = Field(
+        title="Required Overrides",
+        description="List of fields that must be provided when using this template.",
+        default_factory=list,
+    )
+    tags: Optional[list[str]] = Field(
+        title="Template Tags",
+        description="Tags for categorizing and searching templates.",
+        default_factory=list,
+    )
+    version: str = Field(
+        title="Template Version",
+        description="Version string for template compatibility tracking.",
+        default="1.0.0",
     )
 
 

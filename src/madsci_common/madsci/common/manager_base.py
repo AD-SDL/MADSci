@@ -10,14 +10,16 @@ from pathlib import Path
 from typing import Any, Generic, Optional, TypeVar
 
 import uvicorn
-from classy_fastapi import Routable
+from classy_fastapi import Routable, get
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.middleware import RateLimitMiddleware
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
-from madsci.common.types.manager_types import ManagerHealth
+from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
 
 # Type variables for generic typing
 SettingsT = TypeVar("SettingsT", bound=MadsciBaseSettings)
@@ -30,7 +32,10 @@ class ManagerBaseMeta(ABCMeta, type(Routable)):
 
 
 class AbstractManagerBase(
-    Routable, Generic[SettingsT, DefinitionT], metaclass=ManagerBaseMeta
+    MadsciClientMixin,
+    Generic[SettingsT, DefinitionT],
+    Routable,
+    metaclass=ManagerBaseMeta,
 ):
     """
     Abstract base class for MADSci manager services using classy-fastapi.
@@ -50,11 +55,48 @@ class AbstractManagerBase(
     Class Attributes:
         SETTINGS_CLASS: The settings class for this manager (set by subclasses)
         DEFINITION_CLASS: The definition class for this manager (set by subclasses)
+        ENABLE_ROOT_DEFINITION_ENDPOINT: Whether to enable the root definition endpoint (default: True)
     """
 
     # Class attributes to be set by subclasses
     SETTINGS_CLASS: Optional[type[MadsciBaseSettings]] = None
     DEFINITION_CLASS: Optional[type[MadsciBaseModel]] = None
+    ENABLE_ROOT_DEFINITION_ENDPOINT: bool = True
+
+    def __init_subclass__(cls) -> None:
+        """
+        Initialize subclass and collect endpoints.
+
+        This override handles the __abstractmethods__ issue that occurs when
+        combining ABC with classy-fastapi's Routable in generic classes.
+        Also conditionally excludes the root endpoint based on ENABLE_ROOT_DEFINITION_ENDPOINT.
+        """
+        # Import here to avoid circular dependencies and to match classy-fastapi's pattern
+        import inspect  # noqa: PLC0415
+
+        from classy_fastapi.decorators import EndpointDefinition  # noqa: PLC0415
+
+        endpoints: list[EndpointDefinition] = []
+        for obj_name in dir(cls):
+            # Skip __abstractmethods__ to avoid AttributeError during ABC construction
+            if obj_name == "__abstractmethods__":
+                continue
+            try:
+                obj = getattr(cls, obj_name)
+                if inspect.isfunction(obj) and hasattr(obj, "_endpoint"):
+                    endpoint = obj._endpoint
+                    # Skip root definition endpoint if disabled
+                    if (
+                        not cls.ENABLE_ROOT_DEFINITION_ENDPOINT
+                        and obj_name == "get_definition_root"
+                        and endpoint.path == "/"
+                    ):
+                        continue
+                    endpoints.append(endpoint)
+            except AttributeError:
+                # Some attributes may not be accessible during class construction
+                pass
+        cls._endpoints = endpoints
 
     def __init__(
         self,
@@ -78,9 +120,9 @@ class AbstractManagerBase(
 
         # Setup logging
         self.setup_logging()
-        self.logger.log_info(self._settings)
-        self.logger.log_info(self._definition)
-        self.logger.log_info(get_current_madsci_context())
+        self.logger.info(self._settings)
+        self.logger.info(self._definition)
+        self.logger.info(get_current_madsci_context())
 
         # Setup ownership context
         self.setup_ownership()
@@ -121,7 +163,7 @@ class AbstractManagerBase(
             raise NotImplementedError(
                 f"{self.__class__.__name__} must set DEFINITION_CLASS class attribute"
             )
-        return self.DEFINITION_CLASS()
+        return self.DEFINITION_CLASS(name=f"Default {self.__class__.__name__}")
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -133,12 +175,21 @@ class AbstractManagerBase(
         Args:
             **kwargs: Additional arguments from __init__
         """
-        # Base implementation does nothing, subclasses can override
-        _ = kwargs  # Mark kwargs as used to avoid lint warning
 
     def setup_logging(self) -> None:
-        """Setup logging for the manager."""
-        self._logger = EventClient(name=f"{self._definition.name}")
+        """
+        Setup logging for the manager using MadsciClientMixin.
+
+        This method initializes the EventClient for manager logging.
+        The EventClient is created via the mixin's lazy initialization.
+        """
+        # Set the name for the EventClient
+        if hasattr(self, "_definition") and self._definition:
+            self.name = f"{self._definition.name}"
+
+        # Use the mixin's event_client property (lazy initialization)
+        # This creates the EventClient if it doesn't exist
+        self._logger = self.event_client
 
     def setup_ownership(self) -> None:
         """Setup ownership context for the manager."""
@@ -160,12 +211,50 @@ class AbstractManagerBase(
             # the manager is at least partially functional
             return ManagerHealth(
                 healthy=True,
-                description="Manager is running and responding to requests",
+                description="Manager is running normally.",
             )
         except Exception as e:
             return ManagerHealth(
                 healthy=False, description=f"Health check failed: {e!s}"
             )
+
+    @get("/health")
+    def health_endpoint(self) -> ManagerHealth:
+        """
+        Health check endpoint for the manager.
+
+        This endpoint is automatically inherited by all manager subclasses.
+        Managers that override get_health() will automatically have their
+        custom health checks exposed through this endpoint.
+
+        Returns:
+            ManagerHealth: The current health status
+        """
+        return self.get_health()
+
+    @get("/")
+    def get_definition_root(self) -> DefinitionT:
+        """
+        Return the manager definition at the root endpoint.
+
+        This endpoint is automatically inherited by all manager subclasses.
+
+        Returns:
+            DefinitionT: The manager definition
+        """
+        return self.definition
+
+    @get("/definition")
+    def get_definition_alt(self) -> DefinitionT:
+        """
+        Return the manager definition at the /definition endpoint.
+
+        This endpoint is automatically inherited by all manager subclasses.
+
+        Returns:
+            DefinitionT: The manager definition
+        """
+        return self.definition
 
     def load_or_create_definition(self) -> DefinitionT:
         """Load definition from file or create default."""
@@ -181,7 +270,7 @@ class AbstractManagerBase(
 
         # Only log if logger is initialized
         if hasattr(self, "_logger"):
-            self.logger.log_info(f"Writing to definition file: {def_path}")
+            self.logger.info(f"Writing to definition file: {def_path}")
         definition.to_yaml(def_path)
         return definition
 
@@ -195,6 +284,50 @@ class AbstractManagerBase(
         Args:
             app: The FastAPI application instance
         """
+        # Add rate limiting middleware if enabled
+        # Check if settings has rate limiting configuration (ManagerSettings-based)
+        if (
+            isinstance(self._settings, ManagerSettings)
+            and self._settings.rate_limit_enabled
+        ):
+            # Convert exempt IPs list to set, or use None to get defaults
+            # Note: empty list [] should create empty set, not None
+            exempt_ips = (
+                set(self._settings.rate_limit_exempt_ips)
+                if self._settings.rate_limit_exempt_ips is not None
+                else None
+            )
+
+            app.add_middleware(
+                RateLimitMiddleware,
+                requests_limit=self._settings.rate_limit_requests,
+                time_window=self._settings.rate_limit_window,
+                short_requests_limit=self._settings.rate_limit_short_requests,
+                short_time_window=self._settings.rate_limit_short_window,
+                cleanup_interval=self._settings.rate_limit_cleanup_interval,
+                exempt_ips=exempt_ips,
+            )
+            # Build log message with both long and short window info
+            log_msg = (
+                f"Rate limiting enabled: {self._settings.rate_limit_requests} requests "
+                f"per {self._settings.rate_limit_window} seconds"
+            )
+            if (
+                self._settings.rate_limit_short_requests is not None
+                and self._settings.rate_limit_short_window is not None
+            ):
+                log_msg += (
+                    f", burst limit: {self._settings.rate_limit_short_requests} requests "
+                    f"per {self._settings.rate_limit_short_window} seconds"
+                )
+            # Add exempt IPs info to log message
+            actual_exempt_ips = (
+                exempt_ips if exempt_ips is not None else {"127.0.0.1", "::1"}
+            )
+            if actual_exempt_ips:
+                log_msg += f", exempt IPs: {', '.join(sorted(actual_exempt_ips))}"
+            self.logger.info(log_msg)
+
         # Add CORS middleware by default
         app.add_middleware(
             CORSMiddleware,
@@ -255,6 +388,28 @@ class AbstractManagerBase(
         else:
             default_host = "localhost"
             default_port = 8000
+
+        # Apply resource constraints from settings if available (ManagerSettings-based)
+        if isinstance(self._settings, ManagerSettings):
+            if self._settings.uvicorn_workers is not None:
+                uvicorn_kwargs.setdefault("workers", self._settings.uvicorn_workers)
+                self.logger.info(f"Uvicorn workers: {self._settings.uvicorn_workers}")
+
+            if self._settings.uvicorn_limit_concurrency is not None:
+                uvicorn_kwargs.setdefault(
+                    "limit_concurrency", self._settings.uvicorn_limit_concurrency
+                )
+                self.logger.info(
+                    f"Uvicorn concurrency limit: {self._settings.uvicorn_limit_concurrency}"
+                )
+
+            if self._settings.uvicorn_limit_max_requests is not None:
+                uvicorn_kwargs.setdefault(
+                    "limit_max_requests", self._settings.uvicorn_limit_max_requests
+                )
+                self.logger.info(
+                    f"Uvicorn max requests per worker: {self._settings.uvicorn_limit_max_requests}"
+                )
 
         uvicorn.run(
             app,

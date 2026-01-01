@@ -1,6 +1,6 @@
 [project]
 name = "madsci.resource_manager"
-version = "0.4.7"
+version = "0.6.1"
 description = "The Modular Autonomous Discovery for Science (MADSci) Resource Manager."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -14,7 +14,8 @@ license = {text = "MIT"}
 dependencies = [
   "madsci.common",
   "madsci.client",
-  "psycopg2-binary"
+  "psycopg2-binary",
+  "alembic>=1.13.0",
 ]
 
 [project.urls]

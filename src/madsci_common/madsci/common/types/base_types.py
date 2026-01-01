@@ -40,7 +40,7 @@ class MadsciBaseSettings(BaseSettings):
         extra="ignore",
         cli_parse_args=True,
         cli_ignore_unknown_args=True,
-        _env_parse_none_str="None",
+        _env_parse_none_str="null",
     )
     """Configuration for the settings model."""
 
@@ -138,6 +138,19 @@ class MadsciBaseModel(BaseModel):
         with Path(path).expanduser().open() as fp:
             raw_data = yaml.safe_load(fp)
         return cls.model_validate(raw_data)
+
+    def model_dump_yaml(self) -> str:
+        """
+        Convert the model to a YAML string.
+
+        Returns:
+            YAML string representation of the model
+        """
+        return yaml.dump(
+            self.model_dump(mode="json"),
+            indent=2,
+            sort_keys=False,
+        )
 
     def to_mongo(self) -> dict[str, Any]:
         """

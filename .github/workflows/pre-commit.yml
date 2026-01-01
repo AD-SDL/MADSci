@@ -1,9 +1,12 @@
 name: Pre-Commit Checks
 
 on:
-  push: # Run for every push
-    branches: ["*"]
-    tags: ["*"]
+  pull_request:
+  push:
+    branches: [main]
+    tags: [ '*' ]
+  schedule: # Run on Tuesday's at 12:00
+    - cron: '0 12 * * 2'
   workflow_dispatch: # Run manually
 
 jobs:

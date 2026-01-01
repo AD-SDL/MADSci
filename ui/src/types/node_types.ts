@@ -12,7 +12,7 @@ export type EventType =
   | "unknown"
   | "log"
   | "log_debug"
-  | "log_info"
+  | "info"
   | "log_warning"
   | "log_error"
   | "log_critical"

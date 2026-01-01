@@ -1,5 +1,6 @@
 """Unit tests for ExperimentApplication class."""
 
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -27,6 +28,30 @@ from madsci.experiment_application import (
 from pydantic import AnyUrl
 
 
+@contextmanager
+def mock_all_clients():
+    """Context manager to mock all MADSci clients at the module level."""
+    with (
+        patch("madsci.client.event_client.EventClient") as mock_event_client,
+        patch(
+            "madsci.client.experiment_client.ExperimentClient"
+        ) as mock_experiment_client,
+        patch("madsci.client.workcell_client.WorkcellClient") as mock_workcell_client,
+        patch("madsci.client.location_client.LocationClient") as mock_location_client,
+        patch("madsci.client.resource_client.ResourceClient") as mock_resource_client,
+        patch("madsci.client.data_client.DataClient") as mock_data_client,
+    ):
+        # Set up mock instances
+        mock_event_client.return_value = Mock()
+        mock_experiment_client.return_value = Mock()
+        mock_workcell_client.return_value = Mock()
+        mock_location_client.return_value = Mock()
+        mock_resource_client.return_value = Mock()
+        mock_data_client.return_value = Mock()
+
+        yield
+
+
 class TestExperimentApplication(ExperimentApplication):
     """Test subclass of ExperimentApplication."""
 
@@ -39,7 +64,7 @@ class TestExperimentApplication(ExperimentApplication):
         resource_conditions=[],
     )
 
-    def run_experiment(self, *args: Any, **kwargs: Any) -> str:  # noqa: ARG002
+    def run_experiment(self, *args: Any, **kwargs: Any) -> str:
         """Test experiment implementation."""
         return "test_result"
 
@@ -131,14 +156,7 @@ def experiment_app(
     experiment_design: ExperimentDesign,
 ) -> TestExperimentApplication:
     """Create a test ExperimentApplication instance."""
-    with patch.multiple(
-        "madsci.experiment_application.experiment_application",
-        EventClient=Mock,
-        ExperimentClient=Mock,
-        WorkcellClient=Mock,
-        ResourceClient=Mock,
-        DataClient=Mock,
-    ):
+    with mock_all_clients():
         app = TestExperimentApplication(
             node_definition=node_definition,
             node_config=app_config,
@@ -150,6 +168,7 @@ def experiment_app(
         app.logger = app.event_client
         app.experiment_client = Mock()
         app.workcell_client = Mock()
+        app.location_client = Mock()
         app.resource_client = Mock()
         app.data_client = Mock()
 
@@ -171,7 +190,8 @@ def experiment_app_with_mocks(
     experiment_app.experiment_client.cancel_experiment.return_value = mock_experiment
     experiment_app.experiment_client.get_experiment.return_value = mock_experiment
     experiment_app.experiment_client.continue_experiment.return_value = mock_experiment
-    experiment_app.workcell_client.get_locations.return_value = [mock_location]
+    experiment_app.location_client.get_locations.return_value = [mock_location]
+    experiment_app.location_client.get_location.return_value = mock_location
     experiment_app.resource_client.get_resource.return_value = mock_resource
     return experiment_app
 
@@ -179,16 +199,76 @@ def experiment_app_with_mocks(
 class TestExperimentApplicationInit:
     """Test ExperimentApplication initialization."""
 
+    def test_client_attributes_are_not_shadowed_by_type_annotations(
+        self,
+    ) -> None:
+        """Test that type annotations don't shadow MadsciClientMixin properties (issue #205)."""
+
+        # Check that ExperimentApplication class attributes don't shadow the mixin properties
+        # If they do, accessing these attributes will return the class itself, not trigger the property
+        assert "experiment_client" not in ExperimentApplication.__dict__, (
+            "experiment_client should not be a class attribute - it should be inherited as a property from MadsciClientMixin"
+        )
+        assert "workcell_client" not in ExperimentApplication.__dict__, (
+            "workcell_client should not be a class attribute - it should be inherited as a property from MadsciClientMixin"
+        )
+
+        # Verify that the attributes resolve to properties (inherited from the mixin or base classes)
+        experiment_client_attr = getattr(
+            ExperimentApplication, "experiment_client", None
+        )
+        workcell_client_attr = getattr(ExperimentApplication, "workcell_client", None)
+
+        assert isinstance(
+            experiment_client_attr,
+            property,
+        ), "experiment_client should be a property (possibly inherited)"
+        assert isinstance(
+            workcell_client_attr,
+            property,
+        ), "workcell_client should be a property (possibly inherited)"
+
+    def test_all_client_properties_accessible_on_instances(
+        self, experiment_app: TestExperimentApplication
+    ) -> None:
+        """Test that all client properties are accessible on instances (issue #205).
+
+        This is an integration test that verifies the fix for issue #205 where
+        ExperimentApplication instances were getting AttributeError when accessing
+        experiment_client and workcell_client.
+        """
+        # Test that all clients are accessible and return instances (not classes)
+        clients_to_test = [
+            ("event_client", "info"),
+            ("experiment_client", "start_experiment"),
+            ("workcell_client", "submit_workflow"),
+            ("resource_client", "get_resource"),
+            ("data_client", "save_datapoint"),
+            ("location_client", "get_location"),
+        ]
+
+        for client_name, expected_method in clients_to_test:
+            # Should have the attribute
+            assert hasattr(experiment_app, client_name), (
+                f"App should have {client_name} attribute"
+            )
+
+            # Accessing should work without AttributeError
+            client = getattr(experiment_app, client_name)
+
+            # Should be an instance, not a class
+            assert not isinstance(client, type), (
+                f"{client_name} should be an instance, not a class"
+            )
+
+            # Should have expected methods (validates it's the right type)
+            assert hasattr(client, expected_method), (
+                f"{client_name} should have {expected_method} method"
+            )
+
     def test_init_basic(self, node_definition: NodeDefinition) -> None:
         """Test basic initialization."""
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
+        with mock_all_clients():
             app = TestExperimentApplication(node_definition=node_definition)
 
             assert app.experiment is None
@@ -197,39 +277,11 @@ class TestExperimentApplicationInit:
             assert app.logger is not None
             assert app.event_client is not None
 
-    def test_init_with_experiment_server_url(
-        self, node_definition: NodeDefinition
-    ) -> None:
-        """Test initialization with experiment server URL."""
-        server_url = AnyUrl("http://localhost:8002")
-
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
-            app = TestExperimentApplication(
-                node_definition=node_definition,
-                experiment_server_url=server_url,
-            )
-
-            assert app.experiment_client.experiment_server_url == server_url
-
     def test_init_with_experiment_design_dict(
         self, node_definition: NodeDefinition, experiment_design: ExperimentDesign
     ) -> None:
         """Test initialization with experiment design."""
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
+        with mock_all_clients():
             app = TestExperimentApplication(
                 node_definition=node_definition,
                 experiment_design=experiment_design,
@@ -250,14 +302,7 @@ resource_conditions: []
         yaml_file.write_text(yaml_content.strip())
 
         with (
-            patch.multiple(
-                "madsci.experiment_application.experiment_application",
-                EventClient=Mock,
-                ExperimentClient=Mock,
-                WorkcellClient=Mock,
-                ResourceClient=Mock,
-                DataClient=Mock,
-            ),
+            mock_all_clients(),
             patch(
                 "madsci.common.types.experiment_types.ExperimentDesign.from_yaml"
             ) as mock_from_yaml,
@@ -277,14 +322,7 @@ resource_conditions: []
         self, node_definition: NodeDefinition, mock_experiment: Experiment
     ) -> None:
         """Test initialization with existing experiment."""
-        with patch.multiple(
-            "madsci.experiment_application.experiment_application",
-            EventClient=Mock,
-            ExperimentClient=Mock,
-            WorkcellClient=Mock,
-            ResourceClient=Mock,
-            DataClient=Mock,
-        ):
+        with mock_all_clients():
             app = TestExperimentApplication(
                 node_definition=node_definition,
                 experiment=mock_experiment,
@@ -321,8 +359,8 @@ class TestExperimentLifecycle:
     @patch("builtins.print")
     def test_start_experiment_run(
         self,
-        mock_print: Any,  # noqa: ARG002
-        mock_input: Any,  # noqa: ARG002
+        mock_print: Any,
+        mock_input: Any,
         experiment_app_with_mocks: TestExperimentApplication,
     ) -> None:
         """Test starting an experiment run."""
@@ -335,7 +373,7 @@ class TestExperimentLifecycle:
             run_name="test_run",
             run_description="test description",
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_end_experiment(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -347,7 +385,7 @@ class TestExperimentLifecycle:
             experiment_id=experiment_app_with_mocks.experiment.experiment_id,
             status=ExperimentStatus.COMPLETED,
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_end_experiment_default_status(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -369,7 +407,7 @@ class TestExperimentLifecycle:
         experiment_app_with_mocks.experiment_client.pause_experiment.assert_called_once_with(
             experiment_id=experiment_app_with_mocks.experiment.experiment_id
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_cancel_experiment(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -380,7 +418,7 @@ class TestExperimentLifecycle:
         experiment_app_with_mocks.experiment_client.cancel_experiment.assert_called_once_with(
             experiment_id=experiment_app_with_mocks.experiment.experiment_id
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_fail_experiment(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -392,7 +430,7 @@ class TestExperimentLifecycle:
             experiment_id=experiment_app_with_mocks.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
         )
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
 
     def test_handle_exception(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -402,7 +440,7 @@ class TestExperimentLifecycle:
 
         experiment_app_with_mocks.handle_exception(test_exception)
 
-        experiment_app_with_mocks.logger.log_info.assert_called()
+        experiment_app_with_mocks.logger.info.assert_called()
         experiment_app_with_mocks.experiment_client.end_experiment.assert_called_once_with(
             experiment_id=experiment_app_with_mocks.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
@@ -431,7 +469,7 @@ class TestExperimentLifecycle:
         with pytest.raises(ExperimentCancelledError):
             experiment_app_with_mocks.check_experiment_status()
 
-        experiment_app_with_mocks.logger.log_error.assert_called()
+        experiment_app_with_mocks.logger.error.assert_called()
 
     def test_check_experiment_status_failed(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -446,7 +484,7 @@ class TestExperimentLifecycle:
         with pytest.raises(ExperimentFailedError):
             experiment_app_with_mocks.check_experiment_status()
 
-        experiment_app_with_mocks.logger.log_error.assert_called()
+        experiment_app_with_mocks.logger.error.assert_called()
 
     @patch("time.sleep")
     def test_check_experiment_status_paused_then_resumed(
@@ -470,7 +508,7 @@ class TestExperimentLifecycle:
         assert (
             experiment_app_with_mocks.experiment_client.get_experiment.call_count == 3
         )
-        experiment_app_with_mocks.logger.log_warning.assert_called()
+        experiment_app_with_mocks.logger.warning.assert_called()
         mock_sleep.assert_called_with(5)
 
 
@@ -672,7 +710,7 @@ class TestConditionEvaluation:
             condition_name="test_condition",
             location_name=mock_location.location_name,
         )
-        experiment_app_with_mocks.workcell_client.get_locations.return_value = [
+        experiment_app_with_mocks.location_client.get_locations.return_value = [
             mock_location
         ]
 
@@ -690,14 +728,14 @@ class TestConditionEvaluation:
             condition_name="test_condition",
             location_id=mock_location.location_id,
         )
-        experiment_app_with_mocks.workcell_client.get_location.return_value = (
+        experiment_app_with_mocks.location_client.get_location.return_value = (
             mock_location
         )
 
         result = experiment_app_with_mocks.get_location_from_condition(condition)
 
         assert result == mock_location
-        experiment_app_with_mocks.workcell_client.get_location.assert_called_once_with(
+        experiment_app_with_mocks.location_client.get_location.assert_called_once_with(
             mock_location.location_id
         )
 
@@ -708,8 +746,8 @@ class TestConditionEvaluation:
         condition = ResourceInLocationCondition(
             condition_name="test_condition",
         )
-        experiment_app_with_mocks.workcell_client.get_locations.return_value = []
-        experiment_app_with_mocks.workcell_client.get_location.return_value = None
+        experiment_app_with_mocks.location_client.get_locations.return_value = []
+        experiment_app_with_mocks.location_client.get_location.return_value = None
 
         with pytest.raises(Exception, match="Invalid Identifier for Location"):
             experiment_app_with_mocks.get_location_from_condition(condition)
@@ -869,7 +907,6 @@ class TestClassMethods:
 
     def test_start_new(self, experiment_design: ExperimentDesign) -> None:
         """Test start_new class method."""
-        server_url = AnyUrl("http://localhost:8002")
 
         # Mock the experiment client to return a mock experiment
         mock_experiment_client = Mock()
@@ -896,28 +933,28 @@ class TestClassMethods:
         )
 
         with (
+            patch("madsci.client.client_mixin.EventClient") as mock_event_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.EventClient"
-            ) as mock_event_client_class,
-            patch(
-                "madsci.experiment_application.experiment_application.ExperimentClient"
+                "madsci.client.client_mixin.ExperimentClient"
             ) as mock_experiment_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.WorkcellClient"
+                "madsci.client.client_mixin.WorkcellClient"
             ) as mock_workcell_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.ResourceClient"
-            ) as mock_resource_client_class,
+                "madsci.client.client_mixin.LocationClient"
+            ) as mock_location_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.DataClient"
-            ) as mock_data_client_class,
+                "madsci.client.client_mixin.ResourceClient"
+            ) as mock_resource_client_class,
+            patch("madsci.client.client_mixin.DataClient") as mock_data_client_class,
             patch("builtins.input", return_value="n"),
             patch("builtins.print"),
         ):
             # Set up client class mocks to return configured instances
             mock_experiment_client_class.return_value = mock_experiment_client
             mock_workcell_client_class.return_value = Mock()
-            mock_workcell_client_class.return_value.get_locations.return_value = [
+            mock_location_client_class.return_value = Mock()
+            mock_location_client_class.return_value.get_locations.return_value = [
                 mock_location
             ]
             mock_resource_client_class.return_value = Mock()
@@ -928,14 +965,11 @@ class TestClassMethods:
             mock_data_client_class.return_value = Mock()
 
             app = TestExperimentApplication.start_new(
-                experiment_server_url=server_url,
                 experiment_design=experiment_design,
             )
 
         # Verify the experiment client was instantiated with the correct URL
-        mock_experiment_client_class.assert_called_once_with(
-            experiment_server_url=server_url
-        )
+        mock_experiment_client_class.assert_called_once_with()
 
         # Verify the experiment was started and the app has the right state
         assert app.experiment == mock_experiment
@@ -943,44 +977,40 @@ class TestClassMethods:
 
     def test_continue_experiment(self, mock_experiment: Experiment) -> None:
         """Test continue_experiment class method."""
-        server_url = AnyUrl("http://localhost:8002")
 
         # Mock the experiment client
         mock_experiment_client = Mock()
 
         with (
+            patch("madsci.client.client_mixin.EventClient") as mock_event_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.EventClient"
-            ) as mock_event_client_class,
-            patch(
-                "madsci.experiment_application.experiment_application.ExperimentClient"
+                "madsci.client.client_mixin.ExperimentClient"
             ) as mock_experiment_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.WorkcellClient"
+                "madsci.client.client_mixin.WorkcellClient"
             ) as mock_workcell_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.ResourceClient"
-            ) as mock_resource_client_class,
+                "madsci.client.client_mixin.LocationClient"
+            ) as mock_location_client_class,
             patch(
-                "madsci.experiment_application.experiment_application.DataClient"
-            ) as mock_data_client_class,
+                "madsci.client.client_mixin.ResourceClient"
+            ) as mock_resource_client_class,
+            patch("madsci.client.client_mixin.DataClient") as mock_data_client_class,
         ):
             # Set up client class mocks to return configured instances
             mock_experiment_client_class.return_value = mock_experiment_client
             mock_workcell_client_class.return_value = Mock()
+            mock_location_client_class.return_value = Mock()
             mock_resource_client_class.return_value = Mock()
             mock_event_client_class.return_value = Mock()
             mock_data_client_class.return_value = Mock()
 
             app = TestExperimentApplication.continue_experiment(
                 experiment=mock_experiment,
-                experiment_server_url=server_url,
             )
 
         # Verify the experiment client was instantiated with the correct URL
-        mock_experiment_client_class.assert_called_once_with(
-            experiment_server_url=server_url
-        )
+        mock_experiment_client_class.assert_called_once_with()
 
         # Verify the experiment was continued and the app has the right state
         assert app.experiment == mock_experiment
@@ -1062,7 +1092,7 @@ class TestConditionEvaluationIntegration:
             resource_class="child_class",
         )
 
-        experiment_app_with_mocks.workcell_client.get_locations.return_value = [
+        experiment_app_with_mocks.location_client.get_locations.return_value = [
             mock_location
         ]
         experiment_app_with_mocks.resource_client.get_resource.return_value = (
@@ -1072,7 +1102,7 @@ class TestConditionEvaluationIntegration:
         result = experiment_app_with_mocks.evaluate_condition(condition)
 
         assert result is True
-        experiment_app_with_mocks.workcell_client.get_locations.assert_called_once()
+        experiment_app_with_mocks.location_client.get_locations.assert_called_once()
         experiment_app_with_mocks.resource_client.get_resource.assert_called_once_with(
             mock_location.resource_id
         )
@@ -1090,7 +1120,7 @@ class TestConditionEvaluationIntegration:
             key="nonexistent_slot",
         )
 
-        experiment_app_with_mocks.workcell_client.get_locations.return_value = [
+        experiment_app_with_mocks.location_client.get_locations.return_value = [
             mock_location
         ]
         experiment_app_with_mocks.resource_client.get_resource.return_value = (

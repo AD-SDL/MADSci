@@ -20,6 +20,7 @@ class ManagerType(str, Enum):
     TRANSFER_MANAGER = "transfer_manager"
     EXPERIMENT_MANAGER = "experiment_manager"
     LAB_MANAGER = "lab_manager"
+    LOCATION_MANAGER = "location_manager"
 
     @classmethod
     def _missing_(cls, value: str) -> "ManagerType":
@@ -51,6 +52,68 @@ class ManagerSettings(MadsciBaseSettings):
         title="Manager Definition File",
         description="Path to the manager definition file to use.",
         default=Path("manager.yaml"),
+    )
+
+    # Rate limiting settings
+    rate_limit_enabled: bool = Field(
+        title="Rate Limiting Enabled",
+        description="Enable rate limiting for API endpoints.",
+        default=True,
+    )
+    rate_limit_requests: int = Field(
+        title="Rate Limit Requests",
+        description="Maximum number of requests allowed per long time window.",
+        default=300,
+        ge=1,
+    )
+    rate_limit_window: int = Field(
+        title="Rate Limit Window",
+        description="Long time window for rate limiting in seconds.",
+        default=60,
+        ge=1,
+    )
+    rate_limit_short_requests: Optional[int] = Field(
+        title="Rate Limit Short Requests",
+        description="Maximum number of requests allowed per short time window for burst protection. If None, short window limiting is disabled.",
+        default=50,
+        ge=1,
+    )
+    rate_limit_short_window: Optional[int] = Field(
+        title="Rate Limit Short Window",
+        description="Short time window for burst protection in seconds. If None, short window limiting is disabled.",
+        default=1,
+        ge=1,
+    )
+    rate_limit_cleanup_interval: int = Field(
+        title="Rate Limit Cleanup Interval",
+        description="Interval in seconds between cleanup operations to prevent memory leaks.",
+        default=300,
+        ge=1,
+    )
+    rate_limit_exempt_ips: Optional[list[str]] = Field(
+        title="Rate Limit Exempt IPs",
+        description="List of IP addresses exempt from rate limiting. Defaults to localhost IPs (127.0.0.1, ::1) if not specified.",
+        default=None,
+    )
+
+    # Server resource constraints
+    uvicorn_workers: Optional[int] = Field(
+        title="Uvicorn Workers",
+        description="Number of uvicorn worker processes. If None, uses uvicorn default (1).",
+        default=None,
+        ge=1,
+    )
+    uvicorn_limit_concurrency: Optional[int] = Field(
+        title="Uvicorn Limit Concurrency",
+        description="Maximum number of concurrent connections. If None, no limit is enforced.",
+        default=None,
+        ge=1,
+    )
+    uvicorn_limit_max_requests: Optional[int] = Field(
+        title="Uvicorn Limit Max Requests",
+        description="Maximum number of requests a worker will process before restarting. Helps prevent memory leaks.",
+        default=None,
+        ge=1,
     )
 
 

@@ -139,7 +139,7 @@
                     <tr>
                       <td>{{ item.result_label }}</td>
                       <td>{{ item.result_type }}</td>
-                      <td>{{ item.description }}</td>
+                      <td>{{ item.data_type }}</td>
                     </tr>
                   </template>
                 </v-data-table>
@@ -203,7 +203,7 @@ const locations_headers = [
 const result_headers = [
   { title: 'Default Label', key: 'name' },
   { title: 'Type', key: 'type' },
-  { title: 'Description', key: 'description' },
+  { title: 'JSON Data Type', key: 'data_type' },
 ]
 const text = ref()
 const json_text = ref()

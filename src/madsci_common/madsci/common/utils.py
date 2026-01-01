@@ -2,17 +2,17 @@
 
 import functools
 import json
+import logging
 import random
 import re
 import sys
 import threading
 import time
-import typing
 import warnings
 from argparse import ArgumentTypeError
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any, Optional, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Annotated, Any, Optional, Union, get_args, get_origin
 
 from pydantic import ValidationError
 from pydantic_core._pydantic_core import PydanticUndefined
@@ -20,9 +20,12 @@ from rich.console import Console
 from ulid import ULID
 
 console = Console()
+logger = logging.getLogger(__name__)
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    import requests
     from madsci.common.types.base_types import MadsciBaseModel, PathLike
+    from madsci.common.types.client_types import MadsciClientConfig
 
 
 def utcnow() -> datetime:
@@ -222,7 +225,7 @@ def new_name_str(prefix: str = "") -> str:
         "elk",
     ]
 
-    name = f"{random.choice(adjectives)}_{random.choice(nouns)}"  # noqa: S311
+    name = f"{random.choice(adjectives)}_{random.choice(nouns)}"
     if prefix:
         name = f"{prefix}_{name}"
     return name
@@ -459,3 +462,364 @@ def new_ulid_str() -> str:
     Generate a new ULID string.
     """
     return str(ULID())
+
+
+def is_valid_ulid(value: str) -> bool:
+    """Check if a string is a valid ULID.
+
+    Args:
+        value: String to validate
+
+    Returns:
+        True if the string is a valid ULID format
+    """
+    if not isinstance(value, str) or len(value) != 26:
+        return False
+    # ULID uses Crockford's Base32: 0-9, A-Z (excluding I, L, O, U)
+    allowed_chars = set("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
+    return all(c.upper() in allowed_chars for c in value)
+
+
+def extract_datapoint_ids(data: Any) -> list[str]:
+    """Extract all datapoint IDs from a data structure.
+
+    Recursively searches through dictionaries, lists, and objects to find
+    datapoint IDs (ULID strings that are likely datapoints).
+
+    Args:
+        data: Data structure to search
+
+    Returns:
+        List of unique datapoint IDs found
+    """
+    ids = set()
+
+    def _extract_recursive(obj: Any) -> None:
+        if isinstance(obj, str) and is_valid_ulid(obj):
+            ids.add(obj)
+        elif isinstance(obj, dict):
+            for value in obj.values():
+                _extract_recursive(value)
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                _extract_recursive(item)
+        elif hasattr(obj, "datapoint_id"):
+            ids.add(obj.datapoint_id)
+
+    _extract_recursive(data)
+    return list(ids)
+
+
+class RateLimitTracker:
+    """
+    Track rate limit state from HTTP response headers.
+
+    This class maintains rate limit information from server responses and provides
+    utilities for logging warnings and determining if requests should be delayed.
+
+    Attributes:
+        limit: Maximum number of requests allowed in the time window
+        remaining: Number of requests remaining in the current window
+        reset: Unix timestamp when the rate limit resets
+        burst_limit: Maximum number of requests allowed in short burst window (optional)
+        burst_remaining: Number of burst requests remaining (optional)
+        warning_threshold: Fraction of limit at which to warn (0.0 to 1.0)
+        respect_limits: Whether to enforce delays when approaching limits
+    """
+
+    def __init__(
+        self,
+        warning_threshold: float = 0.8,
+        respect_limits: bool = False,
+    ) -> None:
+        """
+        Initialize the rate limit tracker.
+
+        Args:
+            warning_threshold: Threshold (0.0 to 1.0) at which to log warnings
+            respect_limits: Whether to enforce delays when approaching limits
+        """
+        self.limit: Optional[int] = None
+        self.remaining: Optional[int] = None
+        self.reset: Optional[int] = None
+        self.burst_limit: Optional[int] = None
+        self.burst_remaining: Optional[int] = None
+        self.warning_threshold = warning_threshold
+        self.respect_limits = respect_limits
+        self._lock = threading.Lock()
+
+    def update_from_headers(self, headers: dict[str, str]) -> None:
+        """
+        Update rate limit state from response headers.
+
+        Args:
+            headers: HTTP response headers dictionary
+        """
+        with self._lock:
+            # Parse long window rate limit headers
+            if "X-RateLimit-Limit" in headers:
+                self.limit = int(headers["X-RateLimit-Limit"])
+            if "X-RateLimit-Remaining" in headers:
+                self.remaining = int(headers["X-RateLimit-Remaining"])
+            if "X-RateLimit-Reset" in headers:
+                self.reset = int(headers["X-RateLimit-Reset"])
+
+            # Parse burst window rate limit headers if present
+            if "X-RateLimit-Burst-Limit" in headers:
+                self.burst_limit = int(headers["X-RateLimit-Burst-Limit"])
+            if "X-RateLimit-Burst-Remaining" in headers:
+                self.burst_remaining = int(headers["X-RateLimit-Burst-Remaining"])
+
+            # Log warnings if approaching limits
+            self._check_and_warn()
+
+    def _check_and_warn(self) -> None:
+        """Check if we're approaching rate limits and log warnings."""
+        if self.limit is not None and self.remaining is not None:
+            usage_fraction = 1.0 - (self.remaining / self.limit)
+            if usage_fraction >= self.warning_threshold:
+                logger.warning(
+                    f"Approaching rate limit: {self.remaining}/{self.limit} requests remaining "
+                    f"(resets at {datetime.fromtimestamp(self.reset, tz=timezone.utc) if self.reset else 'unknown'})"
+                )
+
+        if self.burst_limit is not None and self.burst_remaining is not None:
+            burst_usage_fraction = 1.0 - (self.burst_remaining / self.burst_limit)
+            if burst_usage_fraction >= self.warning_threshold:
+                logger.warning(
+                    f"Approaching burst rate limit: {self.burst_remaining}/{self.burst_limit} requests remaining"
+                )
+
+    def get_delay_seconds(self) -> float:
+        """
+        Calculate delay in seconds before next request if respect_limits is enabled.
+
+        Returns:
+            Number of seconds to delay, or 0.0 if no delay needed
+        """
+        if not self.respect_limits:
+            return 0.0
+
+        with self._lock:
+            # Check if we've exhausted our limits
+            if (
+                self.remaining is not None
+                and self.remaining <= 0
+                and self.reset is not None
+            ):
+                delay = max(0.0, self.reset - time.time())
+                logger.info(f"Rate limit exhausted, delaying {delay:.2f} seconds")
+                return delay
+
+            if self.burst_remaining is not None and self.burst_remaining <= 0:
+                # For burst limits, wait 1 second for the window to slide
+                logger.info("Burst rate limit exhausted, delaying 1 second")
+                return 1.0
+
+        return 0.0
+
+    def get_status(self) -> dict[str, Any]:
+        """
+        Get current rate limit status.
+
+        Returns:
+            Dictionary with current rate limit information
+        """
+        with self._lock:
+            return {
+                "limit": self.limit,
+                "remaining": self.remaining,
+                "reset": self.reset,
+                "reset_datetime": (
+                    datetime.fromtimestamp(self.reset, tz=timezone.utc).isoformat()
+                    if self.reset
+                    else None
+                ),
+                "burst_limit": self.burst_limit,
+                "burst_remaining": self.burst_remaining,
+            }
+
+
+class RateLimitHTTPAdapter:
+    """
+    HTTP adapter that handles rate limit headers and delays.
+
+    This adapter extends HTTPAdapter to add rate limit tracking and
+    automatic delay enforcement when approaching or exceeding rate limits.
+    """
+
+    def __init__(
+        self,
+        rate_limit_tracker: RateLimitTracker,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Initialize the rate limit adapter.
+
+        Args:
+            rate_limit_tracker: Tracker to update with rate limit information
+            *args: Positional arguments for HTTPAdapter
+            **kwargs: Keyword arguments for HTTPAdapter
+        """
+        from requests.adapters import HTTPAdapter  # noqa: PLC0415
+
+        # Create a real HTTPAdapter instance that we'll delegate to
+        self._adapter = HTTPAdapter(*args, **kwargs)
+        self.rate_limit_tracker = rate_limit_tracker
+
+    def send(self, request: Any, **kwargs: Any) -> Any:
+        """
+        Send a request with rate limit checking and tracking.
+
+        Args:
+            request: The request to send
+            **kwargs: Additional arguments for the adapter
+
+        Returns:
+            The response from the adapter
+        """
+        # Check if we should delay before sending
+        delay = self.rate_limit_tracker.get_delay_seconds()
+        if delay > 0:
+            time.sleep(delay)
+
+        # Send the request using the underlying adapter
+        response = self._adapter.send(request, **kwargs)
+
+        # Update rate limit tracking from response headers
+        self.rate_limit_tracker.update_from_headers(dict(response.headers))
+
+        return response
+
+    def close(self) -> None:
+        """Close the underlying adapter."""
+        self._adapter.close()
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate all other attributes to the underlying adapter."""
+        return getattr(self._adapter, name)
+
+
+def create_http_session(
+    config: Optional["MadsciClientConfig"] = None,
+    retry_enabled: Optional[bool] = None,
+) -> "requests.Session":
+    """
+    Create a requests.Session with standardized configuration.
+
+    This function creates a properly configured requests session with retry
+    strategies, timeout defaults, connection pooling, and rate limit tracking
+    based on the provided client configuration. This ensures consistency across
+    all MADSci HTTP clients.
+
+    The session includes rate limit tracking if enabled in the config. Rate limit
+    information is tracked from X-RateLimit-* headers and can be accessed via
+    the session.rate_limit_tracker attribute.
+
+    Args:
+        config: Client configuration object. If None, uses default MadsciClientConfig.
+        retry_enabled: Override for retry_enabled from config. If None, uses config value.
+
+    Returns:
+        Configured requests.Session object with optional rate_limit_tracker attribute
+
+    Example:
+        >>> from madsci.common.types.client_types import MadsciClientConfig
+        >>> from madsci.common.utils import create_http_session
+        >>>
+        >>> # Use default configuration
+        >>> session = create_http_session()
+        >>>
+        >>> # Use custom configuration
+        >>> config = MadsciClientConfig(retry_total=5, timeout_default=30.0)
+        >>> session = create_http_session(config=config)
+        >>>
+        >>> # Disable retry for a specific session
+        >>> session_no_retry = create_http_session(config=config, retry_enabled=False)
+        >>>
+        >>> # Check rate limit status
+        >>> if hasattr(session, 'rate_limit_tracker'):
+        ...     status = session.rate_limit_tracker.get_status()
+        ...     print(f"Remaining requests: {status['remaining']}/{status['limit']}")
+    """
+    # Import here to avoid circular dependencies
+    import requests  # noqa: PLC0415
+    from madsci.common.types.client_types import MadsciClientConfig  # noqa: PLC0415
+    from requests.adapters import HTTPAdapter  # noqa: PLC0415
+    from urllib3.util.retry import Retry  # noqa: PLC0415
+
+    # Use default config if none provided
+    if config is None:
+        config = MadsciClientConfig()
+
+    # Determine if retry should be enabled
+    enable_retry = retry_enabled if retry_enabled is not None else config.retry_enabled
+
+    # Create the session
+    session = requests.Session()
+
+    # Create rate limit tracker if enabled
+    # Check if config has rate limit fields (only MadsciClientConfig has them)
+    rate_limit_tracker = None
+    if getattr(config, "rate_limit_tracking_enabled", False):
+        rate_limit_tracker = RateLimitTracker(
+            warning_threshold=getattr(config, "rate_limit_warning_threshold", 0.8),
+            respect_limits=getattr(config, "rate_limit_respect_limits", False),
+        )
+        # Attach tracker to session for user access
+        session.rate_limit_tracker = rate_limit_tracker  # type: ignore[attr-defined]
+
+    # Configure retry strategy if enabled
+    if enable_retry:
+        retry_kwargs = {
+            "total": config.retry_total,
+            "status_forcelist": config.retry_status_forcelist,
+            "backoff_factor": config.retry_backoff_factor,
+        }
+
+        # Only add allowed_methods if specified (None means use urllib3 defaults)
+        if config.retry_allowed_methods is not None:
+            retry_kwargs["allowed_methods"] = config.retry_allowed_methods
+
+        retry_strategy = Retry(**retry_kwargs)
+
+        # Create adapter with retry strategy and connection pooling
+        if rate_limit_tracker:
+            # Use rate limit aware adapter
+            adapter = RateLimitHTTPAdapter(
+                rate_limit_tracker=rate_limit_tracker,
+                max_retries=retry_strategy,
+                pool_connections=config.pool_connections,
+                pool_maxsize=config.pool_maxsize,
+            )
+        else:
+            # Use standard adapter
+            adapter = HTTPAdapter(
+                max_retries=retry_strategy,
+                pool_connections=config.pool_connections,
+                pool_maxsize=config.pool_maxsize,
+            )
+
+        # Mount adapter for both http and https
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+    else:
+        # Even without retry, configure connection pooling
+        if rate_limit_tracker:
+            # Use rate limit aware adapter
+            adapter = RateLimitHTTPAdapter(
+                rate_limit_tracker=rate_limit_tracker,
+                pool_connections=config.pool_connections,
+                pool_maxsize=config.pool_maxsize,
+            )
+        else:
+            # Use standard adapter
+            adapter = HTTPAdapter(
+                pool_connections=config.pool_connections,
+                pool_maxsize=config.pool_maxsize,
+            )
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+    return session

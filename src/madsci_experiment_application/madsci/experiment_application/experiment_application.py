@@ -4,13 +4,9 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
 
-from madsci.client.data_client import DataClient
-from madsci.client.event_client import EventClient
-from madsci.client.experiment_client import ExperimentClient
-from madsci.client.resource_client import ResourceClient
-from madsci.client.workcell_client import WorkcellClient
+from madsci.common.context import set_current_madsci_context
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
@@ -49,6 +45,8 @@ class ExperimentApplicationConfig(
 
     server_mode: bool = False
     """Whether the application should start a REST Server acting as a MADSci node or not."""
+    lab_server_url: Optional[Union[str, AnyUrl]] = None
+    """The URL of the lab server to connect to."""
     run_args: list[Any] = Field(default_factory=list)
     """Arguments to pass to the run_experiment function when not running in server mode."""
     run_kwargs: dict[str, Any] = Field(default_factory=dict)
@@ -59,65 +57,87 @@ class ExperimentApplication(RestNode):
     """
     An experiment application that helps manage the execution of an experiment.
 
-    You can either use this class as a base class for your own application class, or create an instance of it to manage the execution of an experiment.
+    You can either use this class as a base class for your own application class,
+    or create an instance of it to manage the execution of an experiment.
+
+    This class extends AbstractNode (via RestNode) and inherits client management
+    from MadsciClientMixin. In addition to the standard node clients (event, resource, data),
+    it also uses experiment, workcell, location, and optionally lab clients.
     """
 
+    # Extend the required clients from AbstractNode to include experiment-specific clients
+    OPTIONAL_CLIENTS: ClassVar[list[str]] = [
+        "experiment",
+        "workcell",
+        "location",
+        "lab",
+    ]
+
+    # Experiment-specific attributes
     experiment: Optional[Experiment] = None
     """The current experiment being run."""
     experiment_design: Optional[Union[ExperimentDesign, PathLike]] = None
     """The design of the experiment."""
-    logger: EventClient
-    event_client: EventClient
-    """The event logger for the experiment."""
-    workcell_client: WorkcellClient
-    """Client for managing workcells."""
-    resource_client: ResourceClient
-    """Client for managing resources."""
-    data_client: DataClient
-    """Client for managing data."""
-    experiment_client: ExperimentClient
-    """Client for managing experiments."""
+
+    # Configuration
     config: ExperimentApplicationConfig = ExperimentApplicationConfig()
     """Configuration for the ExperimentApplication."""
     config_model = ExperimentApplicationConfig
     """The Pydantic model for the configuration of the ExperimentApplication."""
 
+    # Note: All client properties (event_client, experiment_client, workcell_client,
+    # location_client, data_client, resource_client, lab_client, logger) are inherited
+    # from AbstractNode via MadsciClientMixin and are available as properties with
+    # lazy initialization. They do not need to be redeclared here.
+
     def __init__(
         self,
-        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
+        lab_server_url: Optional[Union[str, AnyUrl]] = None,
         experiment_design: Optional[Union[str, Path, ExperimentDesign]] = None,
         experiment: Optional[Experiment] = None,
         *args: Any,
         **kwargs: Any,
     ) -> "ExperimentApplication":
-        """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
+        """
+        Initialize the experiment application.
+
+        You can provide an experiment design to use for creating new experiments,
+        or an existing experiment to continue.
+
+        Note: Client initialization is handled by the parent AbstractNode class
+        via MadsciClientMixin. All manager clients (experiment, workcell, location,
+        data, resource) are available as properties and will be lazily initialized
+        when first accessed.
+        """
         super().__init__(*args, **kwargs)
 
-        self.logger = self.event_client = EventClient()
+        # Setup lab client and context if provided
+        lab_server_url = lab_server_url or self.config.lab_server_url
+        if lab_server_url:
+            self.lab_server_url = lab_server_url
+            set_current_madsci_context(self.lab_client.get_lab_context())
+            self.setup_clients()
+
+        # Setup experiment design
         self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
 
         self.experiment = experiment if experiment else self.experiment
 
-        # * Re-initialize experiment client in-case user provided a different server URL
-        self.experiment_client = ExperimentClient(
-            experiment_server_url=experiment_server_url
-        )
-        self.workcell_client = WorkcellClient()
-        self.data_client = DataClient()
-        self.resource_client = ResourceClient()
-        self.event_client = self.logger = EventClient()
+        # Note: All clients (experiment_client, workcell_client, location_client,
+        # data_client, resource_client, event_client) are inherited from AbstractNode
+        # via MadsciClientMixin and will be initialized lazily when accessed
 
     @classmethod
     def start_new(
         cls,
-        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
+        lab_server_url: Optional[Union[str, AnyUrl]] = None,
         experiment_design: Optional[ExperimentDesign] = None,
     ) -> "ExperimentApplication":
         """Create a new experiment application with a new experiment."""
         self = cls(
-            experiment_server_url=experiment_server_url,
+            lab_server_url=lab_server_url,
             experiment_design=experiment_design,
         )
         self.start_experiment_run()
@@ -127,10 +147,10 @@ class ExperimentApplication(RestNode):
     def continue_experiment(
         cls,
         experiment: Experiment,
-        experiment_server_url: Optional[Union[str, AnyUrl]] = None,
+        lab_server_url: Optional[Union[str, AnyUrl]] = None,
     ) -> "ExperimentApplication":
         """Create a new experiment application with an existing experiment."""
-        self = cls(experiment_server_url=experiment_server_url, experiment=experiment)
+        self = cls(lab_server_url=lab_server_url, experiment=experiment)
         self.experiment_client.continue_experiment(
             experiment_id=experiment.experiment_id
         )
@@ -146,7 +166,7 @@ class ExperimentApplication(RestNode):
             run_name=run_name,
             run_description=run_description,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Started run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
         passed_checks = False
@@ -167,7 +187,7 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id,
             status=status,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Ended run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -176,7 +196,7 @@ class ExperimentApplication(RestNode):
         self.experiment = self.experiment_client.pause_experiment(
             experiment_id=self.experiment.experiment_id
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Paused run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -185,7 +205,7 @@ class ExperimentApplication(RestNode):
         self.experiment = self.experiment_client.cancel_experiment(
             experiment_id=self.experiment.experiment_id
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Cancelled run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
@@ -195,13 +215,13 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
         )
-        self.logger.log_info(
+        self.logger.info(
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
         )
 
     def handle_exception(self, exception: Exception) -> None:
         """Exception handler that makes experiment fail by default, can be overwritten"""
-        self.logger.log_info(
+        self.logger.info(
             f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}' with exception {exception!s}"
         )
         self.end_experiment(ExperimentStatus.FAILED)
@@ -241,7 +261,7 @@ class ExperimentApplication(RestNode):
         )
         exception = None
         if self.experiment.status == ExperimentStatus.PAUSED:
-            self.logger.log_warning(
+            self.logger.warning(
                 f"Experiment '{self.experiment.experiment_design.experiment_name}' has been paused."
             )
             while True:
@@ -261,7 +281,7 @@ class ExperimentApplication(RestNode):
             )
 
         if exception:
-            self.logger.log_error(exception.message)
+            self.logger.error(exception.message)
             raise exception
 
     def get_resource_from_condition(self, condition: Condition) -> Optional[Resource]:
@@ -295,13 +315,17 @@ class ExperimentApplication(RestNode):
         """get the location referenced by a condition"""
         location = None
         if condition.location_name:
+            locations = self.location_client.get_locations()
             location = next(
-                location
-                for location in self.workcell_client.get_locations()
-                if location.location_name == condition.location_name
+                (
+                    location
+                    for location in locations
+                    if location.name == condition.location_name
+                ),
+                None,
             )
         elif condition.location_id:
-            location = self.workcell_client.get_location(condition.location_id)
+            location = self.location_client.get_location(condition.location_id)
         if location is None:
             raise (Exception("Invalid Identifier for Location"))
         return location

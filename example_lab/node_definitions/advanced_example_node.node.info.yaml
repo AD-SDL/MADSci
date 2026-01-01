@@ -1,0 +1,1400 @@
+node_name: advanced_example_node.node
+node_id: 01K5W0W665KJNT9RC6JD9N4BEN
+node_description: Advanced example node demonstrating various action types and result
+  formats
+node_type: device
+module_name: advanced_example_node
+module_version: 0.0.1
+capabilities:
+  get_info: true
+  get_state: true
+  get_status: true
+  send_action: true
+  get_action_status: true
+  get_action_result: true
+  get_action_history: true
+  action_files: true
+  send_admin_commands: true
+  set_config: true
+  get_resources: false
+  get_log: true
+  admin_commands:
+  - get_location
+  - lock
+  - reset
+  - shutdown
+  - unlock
+node_url: null
+actions:
+  return_none:
+    name: return_none
+    description: Run a protocol on the liquid handler
+    args: {}
+    locations: {}
+    files: {}
+    results: {}
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_json:
+    name: return_json
+    description: Return a JSON object
+    args: {}
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: integer
+          required:
+          - data
+          title: intModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_dict:
+    name: return_dict
+    description: Return a JSON object
+    args: {}
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_file:
+    name: return_file
+    description: Return a file
+    args: {}
+    locations: {}
+    files: {}
+    results:
+      file:
+        result_label: file
+        description: null
+        result_type: file
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_file_and_json:
+    name: return_file_and_json
+    description: Return data and a file
+    args: {}
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: integer
+          required:
+          - data
+          title: intModel
+          type: object
+      file:
+        result_label: file
+        description: null
+        result_type: file
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_labeled_json_values:
+    name: return_labeled_json_values
+    description: Return labeled JSON values
+    args: {}
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_labeled_file_values:
+    name: return_labeled_file_values
+    description: Return labeled file values
+    args: {}
+    locations: {}
+    files: {}
+    results:
+      log_file_1:
+        result_label: log_file_1
+        description: null
+        result_type: file
+      log_file_2:
+        result_label: log_file_2
+        description: null
+        result_type: file
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_labeled_file_and_json_values:
+    name: return_labeled_file_and_json_values
+    description: Return labeled file and json values
+    args: {}
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+      log_file_1:
+        result_label: log_file_1
+        description: null
+        result_type: file
+      log_file_2:
+        result_label: log_file_2
+        description: null
+        result_type: file
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_analysis_result:
+    name: return_analysis_result
+    description: Return a custom pydantic model with analysis results
+    args:
+      sample_id:
+        name: sample_id
+        description: ''
+        argument_type: str
+        required: false
+        default: SAMPLE_001
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          description: Example custom pydantic model for analysis results
+          properties:
+            sample_id:
+              description: Unique identifier for the sample
+              title: Sample Id
+              type: string
+            concentration:
+              description: Measured concentration in mg/mL
+              title: Concentration
+              type: number
+            ph_level:
+              description: pH level of the sample
+              title: Ph Level
+              type: number
+            temperature:
+              description: Temperature in Celsius during measurement
+              title: Temperature
+              type: number
+            quality_score:
+              description: Quality score from 0-100
+              maximum: 100
+              minimum: 0
+              title: Quality Score
+              type: integer
+            notes:
+              default: ''
+              description: Additional notes about the analysis
+              title: Notes
+              type: string
+          required:
+          - sample_id
+          - concentration
+          - ph_level
+          - temperature
+          - quality_score
+          title: AnalysisResult
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_experiment_metadata:
+    name: return_experiment_metadata
+    description: Return complex experiment metadata as a custom pydantic model
+    args:
+      experiment_id:
+        name: experiment_id
+        description: ''
+        argument_type: str
+        required: false
+        default: EXP_001
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          description: Example complex pydantic model with nested data
+          properties:
+            experiment_id:
+              description: Unique experiment identifier
+              title: Experiment Id
+              type: string
+            start_time:
+              description: ISO timestamp when experiment started
+              title: Start Time
+              type: string
+            conditions:
+              additionalProperties:
+                type: number
+              description: Experimental conditions
+              title: Conditions
+              type: object
+            parameters:
+              description: List of measured parameters
+              items:
+                type: string
+              title: Parameters
+              type: array
+            status:
+              description: Current experiment status
+              title: Status
+              type: string
+            results_summary:
+              additionalProperties:
+                type: integer
+              description: Summary of results count
+              title: Results Summary
+              type: object
+          required:
+          - experiment_id
+          - start_time
+          - conditions
+          - parameters
+          - status
+          - results_summary
+          title: ExperimentMetadata
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  return_mixed_custom_and_files:
+    name: return_mixed_custom_and_files
+    description: Return a custom pydantic model and a file
+    args:
+      sample_id:
+        name: sample_id
+        description: ''
+        argument_type: str
+        required: false
+        default: SAMPLE_002
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          description: Example custom pydantic model for analysis results
+          properties:
+            sample_id:
+              description: Unique identifier for the sample
+              title: Sample Id
+              type: string
+            concentration:
+              description: Measured concentration in mg/mL
+              title: Concentration
+              type: number
+            ph_level:
+              description: pH level of the sample
+              title: Ph Level
+              type: number
+            temperature:
+              description: Temperature in Celsius during measurement
+              title: Temperature
+              type: number
+            quality_score:
+              description: Quality score from 0-100
+              maximum: 100
+              minimum: 0
+              title: Quality Score
+              type: integer
+            notes:
+              default: ''
+              description: Additional notes about the analysis
+              title: Notes
+              type: string
+          required:
+          - sample_id
+          - concentration
+          - ph_level
+          - temperature
+          - quality_score
+          title: AnalysisResult
+          type: object
+      file:
+        result_label: file
+        description: null
+        result_type: file
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_simple_string:
+    name: test_simple_string
+    description: Test action with a simple string argument
+    args:
+      message:
+        name: message
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: string
+          required:
+          - data
+          title: strModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_simple_int:
+    name: test_simple_int
+    description: Test action with a simple integer argument
+    args:
+      number:
+        name: number
+        description: ''
+        argument_type: int
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: integer
+          required:
+          - data
+          title: intModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_simple_float:
+    name: test_simple_float
+    description: Test action with a simple float argument
+    args:
+      value:
+        name: value
+        description: ''
+        argument_type: float
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: number
+          required:
+          - data
+          title: floatModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_simple_bool:
+    name: test_simple_bool
+    description: Test action with a simple boolean argument
+    args:
+      flag:
+        name: flag
+        description: ''
+        argument_type: bool
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: boolean
+          required:
+          - data
+          title: boolModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_multiple_simple_args:
+    name: test_multiple_simple_args
+    description: Test action with multiple simple arguments of different types
+    args:
+      name:
+        name: name
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+      age:
+        name: age
+        description: ''
+        argument_type: int
+        required: true
+        default: null
+      height:
+        name: height
+        description: ''
+        argument_type: float
+        required: true
+        default: null
+      active:
+        name: active
+        description: ''
+        argument_type: bool
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_optional_string:
+    name: test_optional_string
+    description: Test action with optional string argument
+    args:
+      message:
+        name: message
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+      prefix:
+        name: prefix
+        description: ''
+        argument_type: str
+        required: false
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: string
+          required:
+          - data
+          title: strModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_optional_with_defaults:
+    name: test_optional_with_defaults
+    description: Test action with various optional parameters and defaults
+    args:
+      required_param:
+        name: required_param
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+      optional_int:
+        name: optional_int
+        description: ''
+        argument_type: int
+        required: false
+        default: null
+      default_string:
+        name: default_string
+        description: ''
+        argument_type: str
+        required: false
+        default: default_value
+      default_float:
+        name: default_float
+        description: ''
+        argument_type: float
+        required: false
+        default: 1.0
+      default_bool:
+        name: default_bool
+        description: ''
+        argument_type: bool
+        required: false
+        default: false
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_annotated_args:
+    name: test_annotated_args
+    description: Test action with annotated type parameters
+    args:
+      annotated_int:
+        name: annotated_int
+        description: An annotated integer parameter
+        argument_type: int
+        required: false
+        default: 42
+      annotated_str:
+        name: annotated_str
+        description: An annotated string parameter
+        argument_type: str
+        required: false
+        default: default
+      optional_annotated:
+        name: optional_annotated
+        description: Optional annotated float
+        argument_type: float
+        required: false
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_list_args:
+    name: test_list_args
+    description: Test action with list arguments
+    args:
+      string_list:
+        name: string_list
+        description: ''
+        argument_type: list[str]
+        required: true
+        default: null
+      number_list:
+        name: number_list
+        description: ''
+        argument_type: list[int]
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_dict_args:
+    name: test_dict_args
+    description: Test action with dictionary argument
+    args:
+      config:
+        name: config
+        description: ''
+        argument_type: dict[str, Union[str, int, float]]
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_nested_structures:
+    name: test_nested_structures
+    description: Test action with complex nested data structures
+    args:
+      nested_data:
+        name: nested_data
+        description: ''
+        argument_type: dict[str, list[dict[str, Union[str, int]]]]
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_pydantic_input:
+    name: test_pydantic_input
+    description: Test action with pydantic model as input
+    args:
+      request:
+        name: request
+        description: ''
+        argument_type: SampleProcessingRequest
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_optional_pydantic_input:
+    name: test_optional_pydantic_input
+    description: Test action with optional pydantic model input
+    args:
+      sample_id:
+        name: sample_id
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+      request:
+        name: request
+        description: ''
+        argument_type: SampleProcessingRequest
+        required: false
+        default: null
+    locations: {}
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          description: Example custom pydantic model for analysis results
+          properties:
+            sample_id:
+              description: Unique identifier for the sample
+              title: Sample Id
+              type: string
+            concentration:
+              description: Measured concentration in mg/mL
+              title: Concentration
+              type: number
+            ph_level:
+              description: pH level of the sample
+              title: Ph Level
+              type: number
+            temperature:
+              description: Temperature in Celsius during measurement
+              title: Temperature
+              type: number
+            quality_score:
+              description: Quality score from 0-100
+              maximum: 100
+              minimum: 0
+              title: Quality Score
+              type: integer
+            notes:
+              default: ''
+              description: Additional notes about the analysis
+              title: Notes
+              type: string
+          required:
+          - sample_id
+          - concentration
+          - ph_level
+          - temperature
+          - quality_score
+          title: AnalysisResult
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_file_input:
+    name: test_file_input
+    description: Test action with file path input
+    args: {}
+    locations: {}
+    files:
+      input_file:
+        name: input_file
+        description: ''
+        argument_type: file
+        required: true
+        default: null
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: string
+          required:
+          - data
+          title: strModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_optional_file_input:
+    name: test_optional_file_input
+    description: Test action with optional file input
+    args:
+      data:
+        name: data
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+    locations: {}
+    files:
+      config_file:
+        name: config_file
+        description: ''
+        argument_type: file
+        required: false
+        default: null
+    results:
+      file:
+        result_label: file
+        description: null
+        result_type: file
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_multiple_file_inputs:
+    name: test_multiple_file_inputs
+    description: Test action with multiple file inputs
+    args: {}
+    locations: {}
+    files:
+      primary_file:
+        name: primary_file
+        description: ''
+        argument_type: file
+        required: true
+        default: null
+      secondary_files:
+        name: secondary_files
+        description: ''
+        argument_type: file
+        required: true
+        default: null
+    results:
+      log_file_1:
+        result_label: log_file_1
+        description: null
+        result_type: file
+      log_file_2:
+        result_label: log_file_2
+        description: null
+        result_type: file
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_location_input:
+    name: test_location_input
+    description: Test action with location argument
+    args: {}
+    locations:
+      target_location:
+        name: target_location
+        description: ''
+        argument_type: location
+        required: true
+        default: null
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_multiple_locations:
+    name: test_multiple_locations
+    description: Test action with multiple location arguments
+    args: {}
+    locations:
+      source:
+        name: source
+        description: ''
+        argument_type: location
+        required: true
+        default: null
+      destination:
+        name: destination
+        description: ''
+        argument_type: location
+        required: true
+        default: null
+      waypoints:
+        name: waypoints
+        description: ''
+        argument_type: location
+        required: false
+        default: null
+    files: {}
+    results: {}
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_location_with_resource_interaction:
+    name: test_location_with_resource_interaction
+    description: Test action that simulates resource movement between locations
+    args: {}
+    locations:
+      pick_location:
+        name: pick_location
+        description: ''
+        argument_type: location
+        required: true
+        default: null
+      place_location:
+        name: place_location
+        description: ''
+        argument_type: location
+        required: true
+        default: null
+    files: {}
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  test_everything_mixed:
+    name: test_everything_mixed
+    description: Test action with a mix of all argument types
+    args:
+      sample_request:
+        name: sample_request
+        description: ''
+        argument_type: SampleProcessingRequest
+        required: true
+        default: null
+      config:
+        name: config
+        description: ''
+        argument_type: dict[str, Union[str, int, float]]
+        required: true
+        default: null
+      optional_notes:
+        name: optional_notes
+        description: ''
+        argument_type: str
+        required: false
+        default: null
+      priority_override:
+        name: priority_override
+        description: ''
+        argument_type: bool
+        required: false
+        default: false
+    locations:
+      target_location:
+        name: target_location
+        description: ''
+        argument_type: location
+        required: true
+        default: null
+    files:
+      data_files:
+        name: data_files
+        description: ''
+        argument_type: file
+        required: true
+        default: null
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          description: Example custom pydantic model for analysis results
+          properties:
+            sample_id:
+              description: Unique identifier for the sample
+              title: Sample Id
+              type: string
+            concentration:
+              description: Measured concentration in mg/mL
+              title: Concentration
+              type: number
+            ph_level:
+              description: pH level of the sample
+              title: Ph Level
+              type: number
+            temperature:
+              description: Temperature in Celsius during measurement
+              title: Temperature
+              type: number
+            quality_score:
+              description: Quality score from 0-100
+              maximum: 100
+              minimum: 0
+              title: Quality Score
+              type: integer
+            notes:
+              default: ''
+              description: Additional notes about the analysis
+              title: Notes
+              type: string
+          required:
+          - sample_id
+          - concentration
+          - ph_level
+          - temperature
+          - quality_score
+          title: AnalysisResult
+          type: object
+      log_file_1:
+        result_label: log_file_1
+        description: null
+        result_type: file
+      log_file_2:
+        result_label: log_file_2
+        description: null
+        result_type: file
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  arg_type_test:
+    name: arg_type_test
+    description: Used to test that argument types are correctly passed to the node
+      module.
+    args:
+      x:
+        name: x
+        description: ''
+        argument_type: bool
+        required: true
+        default: null
+      y:
+        name: y
+        description: ''
+        argument_type: int
+        required: true
+        default: null
+      z:
+        name: z
+        description: ''
+        argument_type: float
+        required: true
+        default: null
+      w:
+        name: w
+        description: ''
+        argument_type: str
+        required: true
+        default: null
+    locations: {}
+    files: {}
+    results: {}
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+config:
+  node_definition: node_definitions/advanced_example_node.node.yaml
+  node_info_path: null
+  update_node_files: true
+  status_update_interval: 2.0
+  state_update_interval: 2.0
+  node_url: http://localhost:2004/
+  uvicorn_kwargs:
+    limit_concurrency: 10
+  enable_rate_limiting: true
+  rate_limit_requests: 100
+  rate_limit_window: 60
+  rate_limit_short_requests: 50
+  rate_limit_short_window: 1
+  rate_limit_cleanup_interval: 300
+  device_number: 0
+config_schema:
+  description: Configuration for the advanced example node module.
+  properties:
+    node_definition:
+      anyOf:
+      - type: string
+      - format: path
+        type: string
+      - type: 'null'
+      default: default.node.yaml
+      description: Path to the node definition file to use. If set, the node will
+        load the definition from this file on startup. Otherwise, a default configuration
+        will be created.
+      title: Node Definition File
+    node_info_path:
+      anyOf:
+      - type: string
+      - format: path
+        type: string
+      - type: 'null'
+      default: null
+      description: Path to export the generated node info file. If not set, will use
+        the node name and the node_definition's path.
+      title: Node Info Path
+    update_node_files:
+      default: true
+      description: Whether to update the node definition and info files on startup.
+        If set to False, the node will not update the files even if they are out of
+        date.
+      title: Update Node Files
+      type: boolean
+    status_update_interval:
+      anyOf:
+      - type: number
+      - type: 'null'
+      default: 2.0
+      description: The interval in seconds at which the node should update its status.
+      title: Status Update Interval
+    state_update_interval:
+      anyOf:
+      - type: number
+      - type: 'null'
+      default: 2.0
+      description: The interval in seconds at which the node should update its state.
+      title: State Update Interval
+    node_url:
+      default: http://127.0.0.1:2000/
+      description: The URL used to communicate with the node. This is the base URL
+        for the REST API.
+      format: uri
+      minLength: 1
+      title: Node URL
+      type: string
+    uvicorn_kwargs:
+      additionalProperties: true
+      description: Configuration for the Uvicorn server that runs the REST API. By
+        default, sets limit_concurrency=10 to protect against connection exhaustion
+        attacks.
+      title: Uvicorn Configuration
+      type: object
+    enable_rate_limiting:
+      default: true
+      description: Enable rate limiting middleware for the REST API.
+      title: Enable Rate Limiting
+      type: boolean
+    rate_limit_requests:
+      default: 100
+      description: Maximum number of requests allowed per long time window (only used
+        if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Requests
+      type: integer
+    rate_limit_window:
+      default: 60
+      description: Long time window in seconds for rate limiting (only used if enable_rate_limiting
+        is True).
+      minimum: 1
+      title: Rate Limit Window
+      type: integer
+    rate_limit_short_requests:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 50
+      description: Maximum number of requests allowed per short time window for burst
+        protection (only used if enable_rate_limiting is True). If None, short window
+        limiting is disabled.
+      title: Rate Limit Short Requests
+    rate_limit_short_window:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 1
+      description: Short time window for burst protection in seconds (only used if
+        enable_rate_limiting is True). If None, short window limiting is disabled.
+      title: Rate Limit Short Window
+    rate_limit_cleanup_interval:
+      default: 300
+      description: Interval in seconds between cleanup operations to prevent memory
+        leaks (only used if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Cleanup Interval
+      type: integer
+    device_number:
+      default: 0
+      title: Device Number
+      type: integer
+  title: AdvancedExampleConfig
+  type: object

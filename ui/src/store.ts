@@ -33,6 +33,8 @@ const resources = ref()
 const labContext = ref<any>(null)
 const labHealth = ref<any>(null)
 const isRefreshing = ref<boolean>(false)
+const locations = ref<Record<string, any>>({})
+const locations_url = ref<string>("")
 main_url.value = "http://".concat(window.location.host)
 interface ExperimentInfo {
     experiment_id?: string;
@@ -55,12 +57,15 @@ watchEffect(async () => {
     active_workflows_url.value = urls.value.workcell_server_url.concat("workflows/active")
     archived_workflows_url.value = urls.value.workcell_server_url.concat("workflows/archived")
     events_url.value = urls.value.event_server_url.concat("events")
+    locations_url.value = urls.value.location_server_url?.concat("locations") || ""
 
     updateResources()
-    setInterval(updateWorkcellState, 1000)
-    setInterval(updateWorkflows, 1000)
-    setInterval(updateResources, 1000)
-    setInterval(updateExperiments, 1000);
+    updateLocations()
+    setInterval(updateWorkcellState, 5000)
+    setInterval(updateWorkflows, 5000)
+    setInterval(updateResources, 5000)
+    setInterval(updateLocations, 5000)
+    setInterval(updateExperiments, 5000);
     // setInterval(updateEvents, 10000);
 
     async function updateResources() {
@@ -71,6 +76,18 @@ watchEffect(async () => {
                 'Content-Type': 'application/json'
             }
           })).json());
+    }
+
+    async function updateLocations() {
+        if (locations_url.value) {
+            try {
+                locations.value = await ((await fetch(locations_url.value)).json());
+            } catch (error) {
+                console.error("Failed to fetch locations from LocationManager:", error);
+                // Fallback to workcell state locations if LocationManager is not available
+                locations.value = workcell_state.value?.locations || {};
+            }
+        }
     }
 
     async function updateExperiments() {
@@ -132,6 +149,18 @@ async function refreshLabInfo() {
     }
 }
 
+async function refreshLocations() {
+    if (locations_url.value) {
+        try {
+            locations.value = await ((await fetch(locations_url.value)).json());
+        } catch (error) {
+            console.error("Failed to fetch locations from LocationManager:", error);
+            // Fallback to workcell state locations if LocationManager is not available
+            locations.value = workcell_state.value?.locations || {};
+        }
+    }
+}
+
 function get_status(value: any) {
     if(value["errored"] === true)  {
         return "errored"
@@ -169,8 +198,11 @@ export {
   isRefreshing,
   labContext,
   labHealth,
+  locations,
+  locations_url,
   main_url,
   refreshLabInfo,
+  refreshLocations,
   resources,
   state_url,
   urls,

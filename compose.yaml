@@ -25,6 +25,7 @@ x-madsci-service: &madsci-service
     - GROUP_ID=${GROUP_ID:-1000}
   network_mode: host
   env_file:
+    - example_lab/.env # Load environment variables from the example_lab directory
     - .env # Optional: Load environment variables from a .env file
   volumes:
     - ${REPO_PATH:-.}/example_lab:/home/madsci/example_lab
@@ -34,24 +35,25 @@ x-madsci-service: &madsci-service
   working_dir: /home/madsci/example_lab
 
 services:
-  mongodb:
-    container_name: mongodb
+  madsci_mongodb:
+    container_name: madsci_mongodb
     image: mongo:8.0
     restart: unless-stopped
     ports:
-      - 27017:27017
+      - ${MONGODB_PORT:-27017}:27017
     volumes:
       - ${REPO_PATH:-.}/.madsci/mongodb:/data/db
-  redis:
-    container_name: redis
+  madsci_redis:
+    container_name: madsci_redis
     image: redis:7.4
     restart: unless-stopped
     ports:
-      - 6379:6379
+      - ${REDIS_PORT:-6379}:6379
     volumes:
       - ${REPO_PATH:-.}/.madsci/redis:/data
-  postgres:
-    container_name: postgres
+    command: redis-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
+  madsci_postgres:
+    container_name: madsci_postgres
     image: postgres:17
     restart: unless-stopped
     environment:
@@ -59,19 +61,19 @@ services:
       - POSTGRES_PASSWORD=madsci
       - POSTGRES_DB=resources
     ports:
-      - 5432:5432
+      - ${POSTGRES_PORT:-5432}:5432
     volumes:
-      - ${REPO_PATH:-.}/.madsci/postgres:/var/lib/postgresql/data
-  minio:
-    container_name: minio
+      - ${REPO_PATH:-.}/.madsci/postgresql/data:/var/lib/postgresql/data
+  madsci_minio:
+    container_name: madsci_minio
     image: minio/minio
     restart: unless-stopped
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     ports:
-      - 9000:9000
-      - 9001:9001
+      - ${MINIO_PORT:-9000}:9000
+      - ${MINIO_CONSOLE_PORT:-9001}:9001
     volumes:
       - ${REPO_PATH:-.}/.madsci/minio:/home/madsci/.madsci/minio
     command: server /home/madsci/.madsci/minio --console-address ":9001"
@@ -89,6 +91,12 @@ services:
         - ghcr.io/ad-sdl/madsci_dashboard:latest
         - ghcr.io/ad-sdl/madsci_dashboard:dev
     command: python -m madsci.squid.lab_server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "${LAB_SERVER_URL:-http://localhost:8000}/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
     depends_on:
       - event_manager
 
@@ -97,14 +105,14 @@ services:
     container_name: event_manager
     command: python -m madsci.event_manager.event_server
     depends_on:
-        - mongodb
+        - madsci_mongodb
 
   experiment_manager:
     <<: *madsci-service
     container_name: experiment_manager
     command: python -m madsci.experiment_manager.experiment_server
     depends_on:
-      - mongodb
+      - madsci_mongodb
       - lab_manager
 
   resource_manager:
@@ -112,7 +120,7 @@ services:
     container_name: resource_manager
     command: python -m madsci.resource_manager.resource_server
     depends_on:
-      - postgres
+      - madsci_postgres
       - event_manager
 
   data_manager:
@@ -120,42 +128,67 @@ services:
     container_name: data_manager
     command: python -m madsci.data_manager.data_server
     depends_on:
-      - mongodb
+      - madsci_mongodb
       - event_manager
+
+  location_manager:
+    <<: *madsci-service
+    container_name: location_manager
+    command: python -m madsci.location_manager.location_server
+    depends_on:
+      - madsci_redis
+      - event_manager
+      - resource_manager
+
   workcell_manager:
     <<: *madsci-service
     container_name: workcell_manager
     command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 0
     depends_on:
-      - redis
-      - mongodb
+      - madsci_redis
+      - madsci_mongodb
       - resource_manager
       - event_manager
-      - postgres
+      - location_manager
 
 
    # *Nodes
-  liquidhandler:
+  liquidhandler_1:
     <<: *madsci-service
-    container_name: liquidhandler
+    container_name: liquidhandler_1
     environment:
       - NODE_DEFINITION=node_definitions/liquidhandler_1.node.yaml
       - NODE_URL=http://localhost:2000
     command: python example_modules/liquidhandler.py
 
-  robotarm:
+  liquidhandler_2:
     <<: *madsci-service
-    container_name: robotarm
+    container_name: liquidhandler_2
+    environment:
+      - NODE_DEFINITION=node_definitions/liquidhandler_2.node.yaml
+      - NODE_URL=http://localhost:2001
+    command: python example_modules/liquidhandler.py
+
+  robotarm_1:
+    <<: *madsci-service
+    container_name: robotarm_1
     environment:
       - NODE_DEFINITION=node_definitions/robotarm_1.node.yaml
-      - NODE_URL=http://localhost:2001
+      - NODE_URL=http://localhost:2002
     command: python example_modules/robotarm.py
 
-
-  platereader:
+  platereader_1:
     <<: *madsci-service
-    container_name: platereader
+    container_name: platereader_1
     environment:
       - NODE_DEFINITION=node_definitions/platereader_1.node.yaml
-      - NODE_URL=http://localhost:2002
+      - NODE_URL=http://localhost:2003
     command: python example_modules/platereader.py
+
+  advanced_example_node:
+    <<: *madsci-service
+    container_name: advanced_example_node
+    environment:
+      - NODE_DEFINITION=node_definitions/advanced_example_node.node.yaml
+      - NODE_URL=http://localhost:2004
+    command: python example_modules/advanced_example_module.py

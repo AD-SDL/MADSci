@@ -3,19 +3,26 @@
 import json
 import traceback
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, AsyncGenerator, Optional, Union
+from pathlib import Path
+from typing import Annotated, Any, AsyncGenerator, ClassVar, Optional, Union
 
-from classy_fastapi import delete, get, post
+from classy_fastapi import get, post
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.params import Body
 from madsci.client.data_client import DataClient
-from madsci.client.resource_client import ResourceClient
-from madsci.common.context import get_current_madsci_context
+from madsci.client.location_client import (
+    LocationClient,
+)
+from madsci.common.context import (
+    get_current_madsci_context,
+)
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import global_ownership_info, ownership_context
+from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.event_types import Event, EventType
-from madsci.common.types.location_types import Location
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
     WorkcellManagerDefinition,
@@ -45,10 +52,18 @@ LOOKUP_VAL_BODY = Body(...)
 class WorkcellManager(
     AbstractManagerBase[WorkcellManagerSettings, WorkcellManagerDefinition]
 ):
-    """MADSci Workcell Manager using the new AbstractManagerBase pattern."""
+    """
+    MADSci Workcell Manager using the new AbstractManagerBase pattern.
+
+    This manager uses MadsciClientMixin (via AbstractManagerBase) for client management.
+    Required clients: data, location
+    """
 
     SETTINGS_CLASS = WorkcellManagerSettings
     DEFINITION_CLASS = WorkcellManagerDefinition
+
+    # Declare required clients for the mixin
+    REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "data", "location"]
 
     def __init__(
         self,
@@ -72,8 +87,59 @@ class WorkcellManager(
         return WorkcellManagerDefinition(name=name)
 
     def initialize(self, **kwargs: Any) -> None:
-        """Initialize manager-specific components."""
+        """
+        Initialize manager-specific components.
+
+        This method sets up the workcell-specific state handler and clients.
+        Client initialization is handled by MadsciClientMixin via setup_clients().
+        """
         super().initialize(**kwargs)
+
+        # Skip version validation if external mongo_connection was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self.mongo_connection is not None:
+            # External connection provided, likely in test context - skip version validation
+            self.logger.info(
+                "External mongo_connection provided, skipping MongoDB version validation"
+            )
+            # Continue with the rest of initialization (ownership, state handler, clients)
+            global_ownership_info.workcell_id = self.definition.manager_id
+            global_ownership_info.manager_id = self.definition.manager_id
+
+            # Initialize state handler
+            self.state_handler = WorkcellStateHandler(
+                self.definition,
+                workcell_settings=self.settings,
+                redis_connection=self.redis_connection,
+                mongo_connection=self.mongo_connection,
+            )
+
+            # Initialize clients
+            context = get_current_madsci_context()
+            self.data_client = DataClient(context.data_server_url)
+            self.location_client = LocationClient(context.location_server_url)
+            return
+
+        self.logger.info("Validating MongoDB schema version...")
+
+        schema_file_path = Path(__file__).parent / "schema.json"
+        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
+        version_checker = MongoDBVersionChecker(
+            db_url=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+            schema_file_path=str(schema_file_path),
+            backup_dir=str(mig_cfg.backup_dir),
+            logger=self.logger,
+        )
+
+        try:
+            version_checker.validate_or_fail()
+            self.logger.info("MongoDB version validation completed successfully")
+        except RuntimeError as e:
+            self.logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+            )
+            raise e
 
         # Set up global ownership
         global_ownership_info.workcell_id = self.definition.manager_id
@@ -82,13 +148,17 @@ class WorkcellManager(
         # Initialize state handler
         self.state_handler = WorkcellStateHandler(
             self.definition,
+            workcell_settings=self.settings,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
         )
 
-        # Initialize data client
-        context = get_current_madsci_context()
-        self.data_client = DataClient(context.data_server_url)
+        # Initialize clients using MadsciClientMixin
+        # This will create data_client and location_client from context
+        self.setup_clients()
+
+        # Clients are now available as self.data_client and self.location_client
+        # They will use URLs from get_current_madsci_context() by default
 
     def create_server(self, **kwargs: Any) -> FastAPI:
         """Create the FastAPI server application with lifespan."""
@@ -114,9 +184,7 @@ class WorkcellManager(
                 engine.spin()
             else:
                 with self.state_handler.wc_state_lock():
-                    self.state_handler.initialize_workcell_state(
-                        resource_client=ResourceClient()
-                    )
+                    self.state_handler.initialize_workcell_state()
             try:
                 yield
             finally:
@@ -180,18 +248,6 @@ class WorkcellManager(
 
         return health
 
-    @get("/health")
-    def health_endpoint(self) -> WorkcellManagerHealth:
-        """Health check endpoint for the Workcell Manager."""
-        return self.get_health()
-
-    @get("/")
-    @get("/info")
-    @get("/definition")
-    def get_definition(self) -> WorkcellManagerDefinition:
-        """Return the manager definition."""
-        return self._definition
-
     @get("/workcell")
     def get_workcell(self) -> WorkcellManagerDefinition:
         """Get the currently running workcell (backward compatibility)."""
@@ -250,15 +306,24 @@ class WorkcellManager(
         return responses
 
     @post("/admin/{command}/{node}")
-    def send_admin_command_to_node(self, command: str, node: str) -> list:
+    def send_admin_command_to_node(
+        self, command: str, node: str
+    ) -> AdminCommandResponse:
         """Send admin command to a node."""
-        responses = []
-        node = self.state_handler.get_node(node)
-        if command in node.info.capabilities.admin_commands:
-            client = find_node_client(node.node_url)
-            response = client.send_admin_command(command)
-            responses.append(response)
-        return responses
+        node_object = self.state_handler.get_node(node)
+        if command == "reset":
+            with self.state_handler.wc_state_lock():
+                # Clear errors on reset command
+                node_object.status.errored = False
+                node_object.status.disconnected = False
+                node_object.status.errors = []
+                self.state_handler.set_node(node_name=node, node=node_object)
+        if command in node_object.info.capabilities.admin_commands:
+            client = find_node_client(node_object.node_url)
+            return client.send_admin_command(command)
+        raise HTTPException(
+            status_code=400, detail="Node cannot perform that admin command"
+        )
 
     @get("/workflows/active")
     def get_active_workflows(self) -> dict[str, Workflow]:
@@ -368,7 +433,6 @@ class WorkcellManager(
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
-            # TODO: Validation
             return self.state_handler.save_workflow_definition(
                 workflow_definition=wf_def,
             )
@@ -480,8 +544,8 @@ class WorkcellManager(
                     workcell=workcell,
                     json_inputs=json_inputs,
                     file_input_paths=file_input_paths,
-                    data_client=self.data_client,
                     state_handler=self.state_handler,
+                    location_client=self.location_client,
                 )
 
                 wf = save_workflow_files(
@@ -509,74 +573,6 @@ class WorkcellManager(
                 status_code=500,
                 detail=f"Error starting workflow: {e}",
             ) from e
-
-    @get("/locations")
-    def get_locations(self) -> dict[str, Location]:
-        """Get the locations of the workcell."""
-        return self.state_handler.get_locations()
-
-    @post("/location")
-    def add_location(self, location: Location, permanent: bool = True) -> Location:
-        """Add a location to the workcell's location list"""
-        with self.state_handler.wc_state_lock():
-            self.state_handler.set_location(location)
-        if permanent:
-            workcell = self.state_handler.get_workcell_definition()
-            workcell.locations.append(location)
-            workcell_path = self.get_definition_path()
-            if workcell_path.exists():
-                workcell.to_yaml(workcell_path)
-        return self.state_handler.get_location(location.location_id)
-
-    @get("/location/{location_id}")
-    def get_location(self, location_id: str) -> Location:
-        """Get information about about a specific location."""
-        return self.state_handler.get_location(location_id)
-
-    @delete("/location/{location_id}")
-    def delete_location(self, location_id: str) -> dict:
-        """Delete a location from the workcell's location list"""
-        with self.state_handler.wc_state_lock():
-            self.state_handler.delete_location(location_id)
-            workcell = self.state_handler.get_workcell_definition()
-            workcell.locations = list(
-                filter(
-                    lambda location: location.location_id != location_id,
-                    workcell.locations,
-                )
-            )
-            workcell_path = self.get_definition_path()
-            if workcell_path.exists():
-                workcell.to_yaml(workcell_path)
-            self.state_handler.set_workcell_definition(workcell)
-        return {"status": "deleted"}
-
-    @post("/location/{location_id}/add_lookup/{node_name}")
-    def add_or_update_location_lookup(
-        self,
-        location_id: str,
-        node_name: str,
-        lookup_val: Any = LOOKUP_VAL_BODY,
-    ) -> Location:
-        """Add a lookup value to a locations lookup list"""
-        with self.state_handler.wc_state_lock():
-            location = self.state_handler.get_location(location_id)
-            location.lookup[node_name] = lookup_val["lookup_val"]
-            self.state_handler.set_location(location)
-        return self.state_handler.get_location(location.location_id)
-
-    @post("/location/{location_id}/attach_resource")
-    def add_resource_to_location(
-        self,
-        location_id: str,
-        resource_id: str,
-    ) -> Location:
-        """Attach a resource container to a location."""
-        with self.state_handler.wc_state_lock():
-            location = self.state_handler.get_location(location_id)
-            location.resource_id = resource_id
-            self.state_handler.set_location(location)
-        return self.state_handler.get_location(location_id)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,15 @@
 """A Node implementation to use in automated tests."""
 
-from typing import Annotated, Optional
+import tempfile
+from pathlib import Path
+from typing import Annotated, Optional, Union
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionFailed, ActionResult, ActionSucceeded
+from madsci.common.types.action_types import ActionFiles
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
+from pydantic import BaseModel, Field
 
 
 class TestNodeConfig(RestNodeConfig):
@@ -21,6 +24,17 @@ class TestNodeConfig(RestNodeConfig):
     test_default_param: int = 42
     """A parameter with a default value."""
     update_node_files: bool = False
+
+
+class TestResults(BaseModel):
+    """Test custom pydantic model for results"""
+
+    test_id: str = Field(description="Test identifier")
+    value: float = Field(description="Test measurement value")
+    status: str = Field(description="Test status")
+    metadata: dict[str, Union[str, bool, int]] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
 
 
 class TestNodeInterface:
@@ -75,28 +89,24 @@ class TestNode(RestNode):
             }
 
     @action
-    def test_action(self, test_param: int) -> bool:
+    def test_action(self, test_param: int) -> None:
         """A test action."""
         result = self.test_interface.run_command(
             f"Test action with param {test_param}."
         )
         if result:
-            return ActionSucceeded()
-        return ActionFailed(
-            errors=f"`run_command` returned '{result}'. Expected 'True'."
-        )
+            return
+        raise ValueError(f"`run_command` returned '{result}'. Expected 'True'.")
 
     @action(name="test_fail", description="A test action that fails.")
-    def test_action_fail(self, test_param: int) -> bool:
+    def test_action_fail(self, test_param: int) -> None:
         """A doc string, but not the actual description of the action."""
         result = self.test_interface.run_command(
             f"Test action with param {test_param}.", fail=True
         )
         if result:
-            return ActionSucceeded()
-        return ActionFailed(
-            errors=f"`run_command` returned '{result}'. Expected 'True'."
-        )
+            return
+        raise ValueError(f"`run_command` returned '{result}'. Expected 'True'.")
 
     def pause(self) -> None:
         """Pause the node."""
@@ -141,13 +151,13 @@ class TestNode(RestNode):
     @action
     def test_optional_param_action(
         self, test_param: int, optional_param: Optional[str] = ""
-    ) -> bool:
+    ) -> None:
         """A test action with an optional parameter."""
         result = self.test_interface.run_command(
             f"Test action with param {test_param}."
         )
         if not result:
-            return ActionFailed(
+            raise ValueError(
                 errors=f"`run_command` returned '{result}'. Expected 'True'."
             )
         if optional_param:
@@ -155,10 +165,8 @@ class TestNode(RestNode):
                 f"Test action with optional param {optional_param}."
             )
         if result:
-            return ActionSucceeded()
-        return ActionFailed(
-            errors=f"`run_command` returned '{result}'. Expected 'True'."
-        )
+            return
+        raise ValueError(errors=f"`run_command` returned '{result}'. Expected 'True'.")
 
     @action
     def test_annotation_action(
@@ -166,12 +174,245 @@ class TestNode(RestNode):
         test_param: Annotated[int, "Description"] = 1,
         test_param_2: Optional[Annotated[int, "Description 2"]] = 2,
         test_param_3: Annotated[Optional[int], "Description 3"] = 3,
-    ) -> ActionResult:
+    ) -> None:
         """A no-op action to test argument parsing"""
         self.logger.log(
             f"Test annotation action with params {test_param}, {test_param_2}, {test_param_3}"
         )
-        return ActionSucceeded()
+
+    @action
+    def file_action(
+        self, config_file: Path, optional_file: Optional[Path] = None
+    ) -> str:
+        """Test action that requires a file parameter.
+
+        Args:
+            config_file: A required configuration file
+            optional_file: An optional file parameter
+        """
+        self.logger.log(f"Processing file action with config_file: {config_file}")
+        if optional_file:
+            self.logger.log(f"Also processing optional_file: {optional_file}")
+
+        # Simple file processing - just return the file name
+        return config_file.name if config_file else "no_file"
+
+    @action
+    def file_result_action(self, data: str = "test") -> Path:
+        """Test action that returns a single file.
+
+        Args:
+            data: Data to write to the result file
+
+        Returns:
+            Path: A temporary file containing the data
+        """
+        self.logger.log(f"Creating file result with data: {data}")
+
+        # Create a temporary file with the data
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".txt"
+        ) as temp_file:
+            temp_file.write(f"Result data: {data}")
+            return Path(temp_file.name)
+
+    class FileResults(ActionFiles):
+        """Multiple file results for testing."""
+
+        output_file: Path
+        log_file: Path
+
+    @action
+    def multiple_file_result_action(self, data: str = "test") -> FileResults:
+        """Test action that returns multiple files.
+
+        Args:
+            data: Data to write to the result files
+
+        Returns:
+            FileResults: Multiple files containing the processed data
+        """
+        self.logger.log(f"Creating multiple file results with data: {data}")
+
+        # Create output file
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".out"
+        ) as output_file:
+            output_file.write(f"Output: {data}")
+            output_path = Path(output_file.name)
+
+        # Create log file
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".log"
+        ) as log_file:
+            log_file.write(f"Log: Processing {data}")
+            log_path = Path(log_file.name)
+
+        return self.FileResults(output_file=output_path, log_file=log_path)
+
+    @action
+    def custom_pydantic_result_action(self, test_id: str = "test_001") -> TestResults:
+        """Test action that returns a custom pydantic model.
+
+        Args:
+            test_id: Identifier for the test
+
+        Returns:
+            TestResults: Custom pydantic model with test results
+        """
+        self.logger.log(f"Creating custom pydantic result for test: {test_id}")
+
+        return TestResults(
+            test_id=test_id,
+            value=42.5,
+            status="completed",
+            metadata={"instrument": "test_instrument", "operator": "test_user"},
+        )
+
+    @action
+    def mixed_pydantic_and_file_action(
+        self, test_id: str = "mixed_001"
+    ) -> tuple[TestResults, Path]:
+        """Test action that returns both a custom pydantic model and a file.
+
+        Args:
+            test_id: Identifier for the test
+
+        Returns:
+            tuple[TestResults, Path]: Custom model and a file
+        """
+        self.logger.log(f"Creating mixed result for test: {test_id}")
+
+        # Create the file
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".json"
+        ) as temp_file:
+            temp_file.write(f'{{"test_id": "{test_id}", "raw_data": [1.0, 2.0, 3.0]}}')
+            file_path = Path(temp_file.name)
+
+        # Create the pydantic model
+        result = TestResults(
+            test_id=test_id,
+            value=123.45,
+            status="completed",
+            metadata={"type": "mixed_return", "file_created": True},
+        )
+
+        return result, file_path
+
+    @action
+    def list_file_action(self, files: list[Path], prefix: str = "processed") -> str:
+        """Test action that takes a list of files as input.
+
+        Args:
+            files: A list of input files to process
+            prefix: Prefix for processing results
+
+        Returns:
+            str: Summary of processing results
+        """
+        self.logger.log(f"Processing {len(files)} files with prefix: {prefix}")
+
+        total_size = 0
+        file_names = []
+        for file_path in files:
+            if file_path.exists():
+                total_size += file_path.stat().st_size
+                file_names.append(file_path.name)
+                self.logger.log(f"Processed file: {file_path.name}")
+
+        return f"{prefix}: processed {len(files)} files ({', '.join(file_names)}) totaling {total_size} bytes"
+
+    @action
+    def optional_file_action(
+        self, required_param: str, optional_file: Optional[Path] = None
+    ) -> str:
+        """Test action with an optional file parameter.
+
+        Args:
+            required_param: A required string parameter
+            optional_file: An optional file parameter
+
+        Returns:
+            str: Processing result message
+        """
+        self.logger.log(f"Processing action with param: {required_param}")
+
+        if optional_file is not None:
+            self.logger.log(f"Processing optional file: {optional_file}")
+            if optional_file.exists():
+                content = optional_file.read_text()
+                return (
+                    f"{required_param}: processed file with {len(content)} characters"
+                )
+            return f"{required_param}: file does not exist"
+        return f"{required_param}: no optional file provided"
+
+    @action
+    def optional_list_file_action(
+        self, required_param: str, optional_files: Optional[list[Path]] = None
+    ) -> str:
+        """Test action with an optional list of files parameter.
+
+        Args:
+            required_param: A required string parameter
+            optional_files: An optional list of files
+
+        Returns:
+            str: Processing result message
+        """
+        self.logger.log(f"Processing action with param: {required_param}")
+
+        if optional_files is not None:
+            self.logger.log(f"Processing {len(optional_files)} optional files")
+            total_size = 0
+            file_names = []
+            for file_path in optional_files:
+                if file_path.exists():
+                    total_size += file_path.stat().st_size
+                    file_names.append(file_path.name)
+
+            return f"{required_param}: processed {len(optional_files)} files ({', '.join(file_names)}) totaling {total_size} bytes"
+        return f"{required_param}: no optional files provided"
+
+    @action
+    def test_dict_str_str_return(self, key: str = "test") -> dict[str, str]:
+        """Test action that returns dict[str, str] to demonstrate the type annotation bug.
+
+        Args:
+            key: Key to use in the returned dictionary
+
+        Returns:
+            dict[str, str]: A dictionary with string keys and values
+        """
+        return {key: f"value_for_{key}", "status": "completed"}
+
+    @action
+    def test_list_int_return(self, size: int = 3) -> list[int]:
+        """Test action that returns list[int] to demonstrate the type annotation bug.
+
+        Args:
+            size: Number of integers to return
+
+        Returns:
+            list[int]: A list of integers
+        """
+        return list(range(size))
+
+    @action
+    def test_nested_dict_return(self, prefix: str = "test") -> dict[str, list[int]]:
+        """Test action that returns deeply nested types.
+
+        Args:
+            prefix: Prefix for dictionary keys
+
+        Returns:
+            dict[str, list[int]]: A dictionary mapping strings to lists of integers
+        """
+        return {
+            f"{prefix}_data": [1, 2, 3],
+            f"{prefix}_values": [10, 20, 30],
+        }
 
 
 if __name__ == "__main__":

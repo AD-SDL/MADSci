@@ -9,6 +9,7 @@ capabilities:
   get_state: true
   get_status: true
   send_action: true
+  get_action_status: true
   get_action_result: true
   get_action_history: true
   action_files: true
@@ -26,7 +27,14 @@ node_url: null
 actions:
   run_command:
     name: run_command
-    description: Run a command on the liquid handler.
+    description: "\n        Execute a direct hardware command on the liquid handler.\n\
+      \n        This action demonstrates basic command execution with string parameters\n\
+      \        and simple return values. Useful for debugging and low-level control.\n\
+      \n        Args:\n            command: Hardware-specific command string (e.g.,\
+      \ \"aspirate 100 ul\", \"dispense 50 ul\")\n\n        Returns:\n           \
+      \ str: Echo of the executed command for confirmation\n\n        Example:\n \
+      \           POST /actions/run_command {\"command\": \"aspirate 100 ul\"}\n \
+      \           Response: \"aspirate 100 ul\"\n        "
     args:
       command:
         name: command
@@ -36,12 +44,36 @@ actions:
         default: null
     locations: {}
     files: {}
-    results: {}
-    blocking: false
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              title: Data
+              type: string
+          required:
+          - data
+          title: strModel
+          type: object
+    blocking: true
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   run_protocol:
     name: run_protocol
-    description: Run a protocol on the liquid handler
+    description: "\n        Execute a protocol file on the liquid handler.\n\n   \
+      \     This action demonstrates file path handling and structured return data.\n\
+      \        In a real implementation, this would parse and execute protocol steps\n\
+      \        from the provided file.\n\n        Args:\n            protocol: Path\
+      \ to the protocol file to execute\n\n        Returns:\n            dict: Protocol\
+      \ execution results with metadata\n\n        Example:\n            POST /actions/run_protocol\
+      \ {\"protocol\": \"/protocols/pcr_setup.json\"}\n            Response: {\"protocol_name\"\
+      : \"pcr_setup.json\"}\n        "
     args: {}
     locations: {}
     files:
@@ -51,43 +83,64 @@ actions:
         argument_type: file
         required: true
         default: null
-    results: {}
-    blocking: false
+    results:
+      json_result:
+        result_label: json_result
+        description: null
+        result_type: json
+        json_schema:
+          properties:
+            data:
+              additionalProperties: true
+              title: Data
+              type: object
+          required:
+          - data
+          title: dictModel
+          type: object
+    blocking: true
     asynchronous: true
-  arg_type_test:
-    name: arg_type_test
-    description: Used to test that argument types are correctly passed to the node
-      module.
-    args:
-      x:
-        name: x
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
+  deck_transfer:
+    name: deck_transfer
+    description: "\n        Transfer labware between deck locations on the liquid\
+      \ handler.\n\n        This action demonstrates:\n        - Location-based resource\
+      \ management\n        - Resource tracking with pop/push operations\n       \
+      \ - Integration between hardware actions and resource state\n\n        The resource\
+      \ system automatically tracks which items are at which\n        locations, enabling\
+      \ the workcell manager to coordinate transfers\n        between different instruments.\n\
+      \n        Args:\n            source_location: Location to transfer from (must\
+      \ contain a resource)\n            target_location: Destination location (must\
+      \ have available capacity)\n\n        Raises:\n            ResourceError: If\
+      \ source location is empty or target is full\n\n        Example:\n         \
+      \   POST /actions/deck_transfer {\n                \"source_location\": {\"\
+      resource_id\": \"deck1_id\"},\n                \"target_location\": {\"resource_id\"\
+      : \"deck2_id\"}\n            }\n        "
+    args: {}
+    locations:
+      source_location:
+        name: source_location
         description: ''
-        argument_type: bool
+        argument_type: location
         required: true
         default: null
-      y:
-        name: y
+      target_location:
+        name: target_location
         description: ''
-        argument_type: int
+        argument_type: location
         required: true
         default: null
-      z:
-        name: z
-        description: ''
-        argument_type: float
-        required: true
-        default: null
-      w:
-        name: w
-        description: ''
-        argument_type: str
-        required: true
-        default: null
-    locations: {}
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: node_definitions/liquidhandler_1.node.yaml
   node_info_path: null
@@ -95,10 +148,22 @@ config:
   status_update_interval: 2.0
   state_update_interval: 2.0
   node_url: http://localhost:2000/
-  uvicorn_kwargs: {}
+  uvicorn_kwargs:
+    limit_concurrency: 10
+  enable_rate_limiting: true
+  rate_limit_requests: 100
+  rate_limit_window: 60
+  rate_limit_short_requests: 50
+  rate_limit_short_window: 1
+  rate_limit_cleanup_interval: 300
   device_number: 0
+  wait_time: 2.0
 config_schema:
-  description: Configuration for the liquid handler node module.
+  description: "Configuration for the liquid handler node module.\n\nExtends RestNodeConfig\
+    \ to add liquid handler-specific settings.\nThese settings can be overridden via\
+    \ environment variables with\nthe node name prefix (e.g., LIQUIDHANDLER_1_DEVICE_NUMBER=1).\n\
+    \nAttributes:\n    device_number: Identifier for the physical/virtual liquid handler\
+    \ device\n    wait_time: Simulation delay for action execution (seconds)"
   properties:
     node_definition:
       anyOf:
@@ -152,12 +217,63 @@ config_schema:
       type: string
     uvicorn_kwargs:
       additionalProperties: true
-      description: Configuration for the Uvicorn server that runs the REST API.
+      description: Configuration for the Uvicorn server that runs the REST API. By
+        default, sets limit_concurrency=10 to protect against connection exhaustion
+        attacks.
       title: Uvicorn Configuration
       type: object
+    enable_rate_limiting:
+      default: true
+      description: Enable rate limiting middleware for the REST API.
+      title: Enable Rate Limiting
+      type: boolean
+    rate_limit_requests:
+      default: 100
+      description: Maximum number of requests allowed per long time window (only used
+        if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Requests
+      type: integer
+    rate_limit_window:
+      default: 60
+      description: Long time window in seconds for rate limiting (only used if enable_rate_limiting
+        is True).
+      minimum: 1
+      title: Rate Limit Window
+      type: integer
+    rate_limit_short_requests:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 50
+      description: Maximum number of requests allowed per short time window for burst
+        protection (only used if enable_rate_limiting is True). If None, short window
+        limiting is disabled.
+      title: Rate Limit Short Requests
+    rate_limit_short_window:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 1
+      description: Short time window for burst protection in seconds (only used if
+        enable_rate_limiting is True). If None, short window limiting is disabled.
+      title: Rate Limit Short Window
+    rate_limit_cleanup_interval:
+      default: 300
+      description: Interval in seconds between cleanup operations to prevent memory
+        leaks (only used if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Cleanup Interval
+      type: integer
     device_number:
       default: 0
       title: Device Number
       type: integer
+    wait_time:
+      default: 2.0
+      title: Wait Time
+      type: number
   title: LiquidHandlerConfig
   type: object

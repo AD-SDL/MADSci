@@ -1,0 +1,16 @@
+name: Simple Transfer Test
+
+metadata:
+  author: Ryan D. Lewis
+  info: Simple workflow to test basic transfer functionality
+  version: 1.0
+
+steps:
+  # Step 1: Transfer a specific resource from one location to another
+  - name: Move Resource to Robot Station
+    key: move_resource
+    action: transfer
+    args:
+      source: liquidhandler_1.deck_1
+      target: liquidhandler_2.deck_1
+    description: "Transfer resource from liquidhandler_1.deck_1 to liquidhandler_2.deck_1"

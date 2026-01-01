@@ -24,7 +24,7 @@ services:
     volumes:
       - /path/to/your/managers/directory:/home/madsci/managers/
       - .madsci:/home/madsci/.madsci/
-    command: python -m madsci.workcell_manager.workcell_server --definition /home/madsci/managers/example_wc.workcell.yaml
+    command: python -m madsci.workcell_manager --definition /home/madsci/managers/example_wc.workcell.yaml
     depends_on:
       - mongodb
       - redis

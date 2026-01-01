@@ -9,6 +9,7 @@ capabilities:
   get_state: true
   get_status: true
   send_action: true
+  get_action_status: true
   get_action_result: true
   get_action_history: true
   action_files: true
@@ -26,35 +27,55 @@ node_url: null
 actions:
   transfer:
     name: transfer
-    description: Run a command on the robot arm.
-    args: {}
+    description: Transfer a plate from one location to another, at the specified speed.
+    args:
+      speed:
+        name: speed
+        description: The speed of the transfer, in 1-100 mm/s
+        argument_type: float
+        required: false
+        default: null
     locations:
       source:
         name: source
         description: The source location
         argument_type: location
-        required: false
+        required: true
         default: null
       target:
         name: target
         description: the target location
         argument_type: location
-        required: false
+        required: true
         default: null
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
 config:
   node_definition: node_definitions/robotarm_1.node.yaml
   node_info_path: null
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://localhost:2001/
-  uvicorn_kwargs: {}
+  node_url: http://localhost:2002/
+  uvicorn_kwargs:
+    limit_concurrency: 10
+  enable_rate_limiting: true
+  rate_limit_requests: 100
+  rate_limit_window: 60
+  rate_limit_short_requests: 50
+  rate_limit_short_window: 1
+  rate_limit_cleanup_interval: 300
+  device_number: 0
+  speed: 50.0
+  wait_time: 2.0
 config_schema:
-  description: Default Configuration for a MADSci Node that communicates over REST.
+  description: Configuration for the robot arm node module.
   properties:
     node_definition:
       anyOf:
@@ -108,8 +129,71 @@ config_schema:
       type: string
     uvicorn_kwargs:
       additionalProperties: true
-      description: Configuration for the Uvicorn server that runs the REST API.
+      description: Configuration for the Uvicorn server that runs the REST API. By
+        default, sets limit_concurrency=10 to protect against connection exhaustion
+        attacks.
       title: Uvicorn Configuration
       type: object
-  title: RestNodeConfig
+    enable_rate_limiting:
+      default: true
+      description: Enable rate limiting middleware for the REST API.
+      title: Enable Rate Limiting
+      type: boolean
+    rate_limit_requests:
+      default: 100
+      description: Maximum number of requests allowed per long time window (only used
+        if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Requests
+      type: integer
+    rate_limit_window:
+      default: 60
+      description: Long time window in seconds for rate limiting (only used if enable_rate_limiting
+        is True).
+      minimum: 1
+      title: Rate Limit Window
+      type: integer
+    rate_limit_short_requests:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 50
+      description: Maximum number of requests allowed per short time window for burst
+        protection (only used if enable_rate_limiting is True). If None, short window
+        limiting is disabled.
+      title: Rate Limit Short Requests
+    rate_limit_short_window:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 1
+      description: Short time window for burst protection in seconds (only used if
+        enable_rate_limiting is True). If None, short window limiting is disabled.
+      title: Rate Limit Short Window
+    rate_limit_cleanup_interval:
+      default: 300
+      description: Interval in seconds between cleanup operations to prevent memory
+        leaks (only used if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Cleanup Interval
+      type: integer
+    device_number:
+      default: 0
+      title: Device Number
+      type: integer
+    speed:
+      anyOf:
+      - maximum: 100.0
+        minimum: 1.0
+        type: number
+      - type: 'null'
+      default: 50.0
+      title: Speed
+    wait_time:
+      default: 2.0
+      title: Wait Time
+      type: number
+  title: RobotArmConfig
   type: object

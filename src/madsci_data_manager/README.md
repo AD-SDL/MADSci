@@ -34,7 +34,7 @@ docker compose up  # From repo root
 # Data Manager available at http://localhost:8004/docs
 
 # Or run standalone
-python -m madsci.data_manager.data_server
+python src/madsci_data_manager/madsci/data_manager/data_server.py
 ```
 
 ### Manager Setup
@@ -47,24 +47,24 @@ Use `DataClient` to store and retrieve experimental data:
 
 ```python
 from madsci.client.data_client import DataClient
-from madsci.common.types.datapoint_types import ValueDataPoint, FileDataPoint
+from madsci.common.types.datapoint_types import DataPoint, DataPointTypeEnum
 from datetime import datetime
 
-client = DataClient(url="http://localhost:8004")
+client = DataClient(data_server_url="http://localhost:8004")
 
 # Store JSON data
-value_dp = ValueDataPoint(
+value_dp = DataPoint(
     label="Temperature Reading",
-    value={"temperature": 23.5, "unit": "Celsius"},
-    data_timestamp=datetime.now()
+    data_type=DataPointTypeEnum.JSON,
+    value={"temperature": 23.5, "unit": "Celsius"}
 )
 submitted = client.submit_datapoint(value_dp)
 
 # Store files
-file_dp = FileDataPoint(
+file_dp = DataPoint(
     label="Experiment Log",
-    path="/path/to/data.txt",
-    data_timestamp=datetime.now()
+    data_type=DataPointTypeEnum.FILE,
+    path="/path/to/data.txt"
 )
 submitted_file = client.submit_datapoint(file_dp)
 
@@ -76,39 +76,32 @@ client.save_datapoint_value(submitted_file.datapoint_id, "/local/save/path.txt")
 ```
 
 **Examples**: See [example_lab/notebooks/experiment_notebook.ipynb](../../example_lab/notebooks/experiment_notebook.ipynb) for data management workflows.
-## Storage Options
+
+## Storage Configuration
 
 ### Local Storage (Default)
-- Files stored on filesystem
+- Files stored on filesystem with date-based hierarchy
 - Simple setup, no additional dependencies
-- File paths stored in database
+- File paths stored in MongoDB database
 
-### Object Storage (Optional)
-Supports S3-compatible storage (MinIO, AWS S3, Google Cloud Storage):
-- Automatic upload to object storage
-- Fallback to local storage if upload fails
-- Better for large files and distributed setups
-
-### Object Storage Configuration
-
-See [example_data.manager.yaml](../../example_lab/managers/example_data.manager.yaml) for MinIO configuration.
-
-**Quick setup with example_lab:**
-```bash
-docker compose up  # Includes pre-configured MinIO
-# MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
-```
-
-
-## Cloud Storage Integration
-
-Supports S3-compatible storage providers for large file handling:
-
-### Supported Providers
+### Object Storage (S3-Compatible)
+Supports cloud and self-hosted storage providers:
 - **AWS S3**
 - **Google Cloud Storage** (with HMAC keys)
 - **MinIO** (self-hosted or cloud)
 - **Any S3-compatible service**
+
+Benefits:
+- Automatic upload with fallback to local storage
+- Better for large files and distributed setups
+- Built-in metadata and versioning support
+
+### Quick Setup
+```bash
+# Use example_lab with pre-configured MinIO
+docker compose up  # From repo root
+# MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
+```
 
 ### Configuration Examples
 
@@ -140,10 +133,11 @@ gcs_config = ObjectStorageSettings(
 
 ### Direct Object Storage DataPoints
 ```python
-from madsci.common.types.datapoint_types import ObjectStorageDataPoint
+from madsci.common.types.datapoint_types import DataPoint, DataPointTypeEnum
 
-storage_dp = ObjectStorageDataPoint(
+storage_dp = DataPoint(
     label="Large Dataset",
+    data_type=DataPointTypeEnum.OBJECT_STORAGE,
     path="/path/to/data.parquet",
     bucket_name="my-bucket",
     object_name="datasets/data.parquet",
@@ -153,3 +147,80 @@ uploaded = client.submit_datapoint(storage_dp)
 ```
 
 **Authentication**: Use IAM users/service accounts with appropriate storage permissions. See cloud provider documentation for detailed setup.
+
+## Database Migration Tools
+
+MADSci Data Manager includes automated MongoDB migration tools that handle schema changes and version tracking for the data management system.
+
+### Features
+
+- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and MongoDB schema version
+- **Automated Backup**: Creates MongoDB dumps using `mongodump` before applying migrations to enable rollback on failure
+- **Schema Management**: Creates collections and indexes based on schema definitions
+- **Index Management**: Ensures required indexes exist for optimal query performance
+- **Location Independence**: Auto-detects schema files or accepts explicit paths
+- **Safe Migration**: All changes are applied transactionally with automatic rollback on failure
+
+### Usage
+
+#### Standard Usage
+```bash
+# Run migration for data database (auto-detects schema file)
+python -m madsci.common.mongodb_migration_tool --database madsci_data
+
+# Migrate with explicit database URL
+python -m madsci.common.mongodb_migration_tool --db-url mongodb://localhost:27017 --database madsci_data
+
+# Use custom schema file
+python -m madsci.common.mongodb_migration_tool --database madsci_data --schema-file /path/to/schema.json
+
+# Create backup only
+python -m madsci.common.mongodb_migration_tool --database madsci_data --backup-only
+
+# Restore from backup
+python -m madsci.common.mongodb_migration_tool --database madsci_data --restore-from /path/to/backup
+
+# Check version compatibility without migrating
+python -m madsci.common.mongodb_migration_tool --database madsci_data --check-version
+```
+
+#### Docker Usage
+When running in Docker containers, use docker-compose to execute migration commands:
+
+```bash
+# Run migration for data database in Docker
+docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json'
+
+# Create backup only in Docker
+docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json' --backup-only
+
+# Check version compatibility in Docker
+docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json' --check-version
+```
+
+### Server Integration
+
+The Data Manager server automatically checks for version compatibility on startup. If a mismatch is detected, the server will refuse to start and display migration instructions:
+
+```bash
+DATABASE INITIALIZATION REQUIRED! SERVER STARTUP ABORTED!
+The database exists but needs version tracking setup.
+To resolve this issue, run the migration tool and restart the server.
+```
+
+### Schema File Location
+
+The migration tool automatically searches for schema files in:
+- `madsci/data_manager/schema.json`
+
+### Backup Location
+
+Backups are stored in `.madsci/mongodb/backups/` with timestamped filenames:
+- Format: `madsci_data_backup_YYYYMMDD_HHMMSS`
+- Can be restored using the `--restore-from` option
+
+### Requirements
+
+- MongoDB server running and accessible
+- MongoDB tools (`mongodump`, `mongorestore`) installed
+- Appropriate database permissions for the specified user

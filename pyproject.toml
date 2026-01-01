@@ -1,10 +1,15 @@
 [project]
 name = "madsci"
-version = "0.4.7"
+version = "0.6.1"
 dependencies = ["pre-commit>=4.3.0"]
 readme="README.md"
 requires-python = ">=3.9.1"
 
+[project.optional-dependencies]
+docs = [
+    "mystmd>=1.7.1",
+    "pdoc3>=0.11.6",
+]
 [dependency-groups]
 dev = [
     "pytest>=8.3.4",
@@ -13,21 +18,40 @@ dev = [
     "ipykernel>=6.29.5",
     "pre-commit>=4.3.0",
     "pydantic-settings-export>=1.0.2",
-    "ruff>=0.13.0",
+    "nbconvert>=7.16.6",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.14.9",
 ]
+
+[tool.pytest.ini_options]
+timeout = 10
 
 [tool.pydantic_settings_export]
 project_dir = "."
 default_settings = [
+    "madsci.common.types.docker_types:DockerComposeSettings",
     "madsci.common.types.context_types:MadsciContext",
-    "madsci.common.types.event_types:EventClientConfig",
-    "madsci.common.types.datapoint_types:ObjectStorageSettings",
     "madsci.common.types.datapoint_types:DataManagerSettings",
+    "madsci.common.types.datapoint_types:ObjectStorageSettings",
     "madsci.common.types.event_types:EventManagerSettings",
     "madsci.common.types.workcell_types:WorkcellManagerSettings",
     "madsci.common.types.experiment_types:ExperimentManagerSettings",
     "madsci.common.types.resource_types.definitions:ResourceManagerSettings",
     "madsci.common.types.lab_types:LabManagerSettings",
+    "madsci.common.types.location_types:LocationManagerSettings",
+    "madsci.common.types.event_types:EventClientConfig",
+    "madsci.common.types.client_types:RestNodeClientConfig",
+    "madsci.common.types.client_types:ResourceClientConfig",
+    "madsci.common.types.client_types:ExperimentClientConfig",
+    "madsci.common.types.client_types:DataClientConfig",
+    "madsci.common.types.client_types:MadsciClientConfig",
+    "madsci.common.types.client_types:LocationClientConfig",
+    "madsci.common.types.client_types:WorkcellClientConfig",
+    "madsci.common.types.client_types:LabClientConfig",
+    "madsci.common.types.backup_types:PostgreSQLBackupSettings",
+    "madsci.common.types.backup_types:MongoDBBackupSettings",
+    "madsci.common.types.mongodb_migration_types:MongoDBMigrationSettings",
+    "madsci.resource_manager.migration_tool:DatabaseMigrationSettings",
 ]
 
 # Generate Markdown docs
@@ -49,6 +73,7 @@ dev = [
     "-e madsci.workcell_manager @ file:///${PROJECT_ROOT}/src/madsci_workcell_manager",
     "-e madsci.experiment_manager @ file:///${PROJECT_ROOT}/src/madsci_experiment_manager",
     "-e madsci.data_manager @ file:///${PROJECT_ROOT}/src/madsci_data_manager",
+    "-e madsci.location_manager @ file:///${PROJECT_ROOT}/src/madsci_location_manager",
     "-e madsci.experiment_application @ file:///${PROJECT_ROOT}/src/madsci_experiment_application",
 ]
 

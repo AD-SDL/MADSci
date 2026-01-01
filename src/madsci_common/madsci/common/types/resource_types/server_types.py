@@ -146,3 +146,14 @@ class CreateResourceFromTemplateBody(ResourceRequestBase):
     """Values to override template defaults."""
     add_to_database: Optional[bool] = True
     """Whether to add the resource to the database."""
+
+
+class ResourceHierarchy(MadsciBaseModel):
+    """Represents the hierarchical relationships of a resource."""
+
+    ancestor_ids: list[str]
+    """List of all direct ancestors from closest to furthest (parent, grandparent, great-grandparent, etc.)."""
+    resource_id: str
+    """The ID of the queried resource."""
+    descendant_ids: dict[str, list[str]]
+    """Dictionary mapping parent IDs to their direct child IDs, recursively including all descendant generations (children, grandchildren, great-grandchildren, etc.)."""

@@ -1,22 +1,21 @@
 """Helper methods used by the MADSci node module implementations."""
 
 import inspect
-import json
-import re
-import tempfile
-from pathlib import PureWindowsPath
-from typing import Any, Callable
-from zipfile import ZipFile
+from pathlib import Path
+from typing import Annotated, Any, Callable, ClassVar, Type, get_args, get_origin
 
 import regex
 from madsci.common.types.action_types import (
-    ActionResult,
+    ActionDatapoints,
+    ActionFiles,
+    ActionJSON,
     ActionResultDefinition,
     DatapointActionResultDefinition,
     FileActionResultDefinition,
     JSONActionResultDefinition,
 )
-from starlette.responses import FileResponse
+from madsci.node_module.type_analyzer import analyze_type
+from pydantic import BaseModel, create_model
 
 
 def action(
@@ -50,7 +49,7 @@ def action(
             name = kwargs.get("action_name", func.__name__)
         # * Use provided description or function docstring
         description = kwargs.get("description", func.__doc__)
-        blocking = kwargs.get("blocking", False)
+        blocking = kwargs.get("blocking", True)
         func.__madsci_action_name__ = name
         func.__madsci_action_description__ = description
         func.__madsci_action_blocking__ = blocking
@@ -136,62 +135,202 @@ def get_named_input(main_string: str, plural: str) -> list[str]:
     return result_list
 
 
-def parse_results(func: Callable) -> list[ActionResultDefinition]:
-    """get the resulting data from an Action"""
-    source_code = inspect.getsource(func).replace(" ", "")
-    results = re.findall(r"ActionSucceeded\(.*\)", source_code)
-    result_list = []
-    for result in results:
-        for file in get_named_input(result, "files"):
-            result_list.append(FileActionResultDefinition(result_label=file))
-        for datum in get_named_input(result, "data"):
-            result_list.append(JSONActionResultDefinition(result_label=datum))
-        for datapoint in get_named_input(result, "datapoints"):
-            result_list.append(DatapointActionResultDefinition(result_label=datapoint))
-    return result_list
-
-
-def action_response_to_headers(action_response: ActionResult) -> dict[str, str]:
-    """Converts the response to a dictionary of headers"""
-    for key in action_response.files:
-        action_response.files[key] = str(action_response.files[key])
-    return {
-        "x-madsci-action-id": action_response.action_id,
-        "x-madsci-status": action_response.status.value,
-        "x-madsci-datapoints": json.dumps(action_response.datapoints),
-        "x-madsci-errors": json.dumps(action_response.errors),
-        "x-madsci-files": json.dumps(action_response.files),
-        "x-madsci-data": json.dumps(action_response.data),
+def _parse_action_files(returned: Any) -> list[ActionResultDefinition]:
+    """Parse ActionFiles subclass into result definitions."""
+    # Filter out ClassVar fields (like _mongo_excluded_fields)
+    instance_fields = {
+        key: value
+        for key, value in returned.__annotations__.items()
+        if get_origin(value) is not ClassVar
     }
 
-
-class ActionResultWithFiles(FileResponse):
-    """Action response from a REST-based node."""
-
-    @classmethod
-    def from_action_response(cls, action_response: ActionResult) -> ActionResult:
-        """Create an ActionResultWithFiles from an ActionResult."""
-        if len(action_response.files) == 1:
-            return ActionResultWithFiles(
-                path=next(iter(action_response.files.values())),
-                headers=action_response_to_headers(action_response),
+    for key, value in instance_fields.items():
+        if value is not Path:
+            raise ValueError(
+                f"All fields in an ActionFiles subclass must be of type Path, but field {key} is of type {value}",
             )
+    return [FileActionResultDefinition(result_label=key) for key in instance_fields]
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".zip",
-            delete=False,
-        ) as temp_zipfile_path:
-            temp_zip = ZipFile(temp_zipfile_path.name, "w")
-            for file in action_response.files:
-                temp_zip.write(
-                    action_response.files[file],
-                    PureWindowsPath(action_response.files[file]).name,
-                )
-                action_response.files[file] = str(
-                    PureWindowsPath(action_response.files[file]).name,
-                )
 
-            return ActionResultWithFiles(
-                path=temp_zipfile_path.name,
-                headers=action_response_to_headers(action_response),
+def _parse_action_json(returned: Any) -> list[ActionResultDefinition]:
+    """Parse ActionJSON subclass into result definitions."""
+    model = create_dynamic_model(
+        returned, field_name="data", model_name=returned.__name__
+    )
+    json_schema = model.model_json_schema()
+    return [
+        JSONActionResultDefinition(result_label="json_result", json_schema=json_schema)
+    ]
+
+
+def _parse_action_datapoints(returned: Any) -> list[ActionResultDefinition]:
+    """Parse ActionDatapoints subclass into result definitions."""
+    for key, value in returned.__annotations__.items():
+        if value is not str:
+            raise ValueError(
+                f"All fields in an ActionDatapoints subclass must be str (datapoint IDs) but field {key} is of type {value}",
             )
+    return [
+        DatapointActionResultDefinition(result_label=key)
+        for key in returned.__annotations__
+    ]
+
+
+def _parse_custom_pydantic_model(returned: Any) -> list[ActionResultDefinition]:
+    """Parse custom pydantic model into result definitions."""
+    json_schema = returned.model_json_schema()
+    return [
+        JSONActionResultDefinition(result_label="json_result", json_schema=json_schema)
+    ]
+
+
+def _extract_underlying_type(type_hint: Any) -> Any:
+    """Extract the underlying type from Annotated types."""
+    if get_origin(type_hint) is Annotated:
+        # Return the first type argument from Annotated[T, metadata...]
+        return get_args(type_hint)[0]
+    return type_hint
+
+
+def parse_result(returned: Any) -> list[ActionResultDefinition]:
+    """Parse a single result from an Action.
+
+    Uses TypeAnalyzer for robust type analysis.
+    ActionResult subclasses are recognized and return empty list
+    as they are handled by the MADSci framework.
+    """
+    # Use TypeAnalyzer to get complete type information
+    type_info = analyze_type(returned)
+
+    # Handle ActionResult types specially - they're handled by the framework
+    if type_info.special_type == "action_result":
+        return []
+
+    # Handle tuple types by recursively parsing each element
+    # Note: We check is_tuple on the TypeInfo, not the unwrapped base_type
+    if type_info.is_tuple and type_info.tuple_element_types:
+        result_definitions = []
+        for element_type in type_info.tuple_element_types:
+            result_definitions.extend(parse_result(element_type))
+        return result_definitions
+
+    # For all other types, work with the base_type (fully unwrapped)
+    base_type = type_info.base_type
+
+    # Handle Path type specifically
+    if type_info.special_type == "file":
+        return [FileActionResultDefinition(result_label="file")]
+
+    # Handle ActionFiles, ActionJSON, ActionDatapoints, and custom pydantic subclasses
+    try:
+        return _parse_pydantic_class(base_type)
+    except TypeError:
+        # issubclass() raises TypeError if returned is not a class
+        pass
+
+    # Handle basic types
+    return _parse_basic_type(base_type)
+
+
+def _parse_pydantic_class(returned: Any) -> list[ActionResultDefinition]:
+    """Parse pydantic classes (ActionFiles, ActionJSON, ActionDatapoints, custom models)."""
+    if issubclass(returned, ActionFiles):
+        return _parse_action_files(returned)
+    if issubclass(returned, ActionJSON):
+        return _parse_action_json(returned)
+    if issubclass(returned, ActionDatapoints):
+        return _parse_action_datapoints(returned)
+    # Handle custom pydantic models
+    if issubclass(returned, BaseModel):
+        return _parse_custom_pydantic_model(returned)
+
+    # If none of the above, fall through to basic type handling
+    raise TypeError("Not a recognized pydantic class")
+
+
+def _parse_basic_type(returned: Any) -> list[ActionResultDefinition]:
+    """Parse basic Python types."""
+    # Check basic types directly
+    basic_types = [str, int, float, bool, dict, list]
+
+    # For generic types like dict[str, str], check the origin type
+    origin_type = get_origin(returned)
+    if origin_type is not None:
+        # Generic type - check if its origin is a basic type
+        if origin_type not in basic_types:
+            raise ValueError(
+                f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, a Pydantic BaseModel, str, int, float, bool, dict, or list but got {returned}",
+            )
+    elif returned not in basic_types:
+        # Non-generic type - check directly
+        raise ValueError(
+            f"Action return type must be a subclass of ActionFiles, ActionJSON, ActionDatapoints, Path, a Pydantic BaseModel, str, int, float, bool, dict, or list but got {returned}",
+        )
+
+    # Generate model name safely for both basic types and generic types
+    origin_type = get_origin(returned)
+    if origin_type is not None:
+        model_name = f"{origin_type.__name__}Model"
+    else:
+        model_name = f"{returned.__name__}Model"
+
+    model = create_dynamic_model(returned, field_name="data", model_name=model_name)
+    json_schema = model.model_json_schema()
+    return [
+        JSONActionResultDefinition(result_label="json_result", json_schema=json_schema)
+    ]
+
+
+def parse_results(func: Callable) -> list[ActionResultDefinition]:
+    """Get the resulting data from an Action"""
+    returned = inspect.signature(func).return_annotation
+
+    if returned is inspect.Signature.empty or returned is None:
+        return []
+    if getattr(returned, "__origin__", None) is tuple:
+        result_definitions = []
+        for result in returned.__args__:
+            result_definitions.extend(parse_result(result))
+    elif returned is Path:
+        result_definitions = [FileActionResultDefinition(result_label="file")]
+    else:
+        result_definitions = parse_result(returned)
+    return result_definitions
+
+
+def create_dynamic_model(
+    type_hint: Type[Any],
+    field_name: str = "data",
+    model_name: str = "DynamicModel",
+) -> Type[BaseModel]:
+    """
+    Create a dynamic Pydantic model from a Python type hint.
+
+    This function takes a Python type hint and creates a Pydantic model class
+    that can validate data of that type. It supports basic types, generic types,
+    Optional types, Union types, and existing Pydantic models.
+
+    Args:
+        type_hint: The Python type hint to create a model for
+        field_name: The name of the field in the generated model (default: "data")
+        model_name: The name of the generated model class (default: "DynamicModel")
+
+    Returns:
+        A Pydantic model class that validates the specified type
+
+    Examples:
+        >>> IntModel = create_dynamic_model(int)
+        >>> instance = IntModel(data=42)
+        >>> instance.data
+        42
+
+        >>> ListModel = create_dynamic_model(List[str], field_name="items")
+        >>> instance = ListModel(items=["a", "b", "c"])
+        >>> instance.items
+        ['a', 'b', 'c']
+    """
+    # Create the model with a single field of the specified type
+    field_definition = (type_hint, ...)
+
+    # Use Pydantic's create_model to dynamically create the model class
+    return create_model(model_name, **{field_name: field_definition})

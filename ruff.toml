@@ -25,6 +25,7 @@ exclude = [
     "venv",
     ".venv",
     "docs",
+    "*.ipynb",
 ]
 
 # Same as Black.
@@ -100,7 +101,10 @@ ignore = [
     "PLR0913", # Allow for a reasonable number of arguments
     "PLR2004", # Magic value used in comparison
     "UP006", # Ignoring errors for typing types such as Dict or List
+    "UP045", # Ignoring errors for Unions
+    "UP007", # Ignoring errors for Optional
     "UP035", # Ignoring errors for typing types such as Dict or List
+    "S311",  # Ignoring use of standard random number generators
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
@@ -111,7 +115,8 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [lint.per-file-ignores]
-"**/tests/**/*.py" = ["S101", "ANN", "D"]
+"**/tests/**/*.py" = ["S101", "ANN", "D", "ARG002"]
+"**/*.ipynb" = ["T20"]
 
 [format]
 # Like Black, use double quotes for strings.

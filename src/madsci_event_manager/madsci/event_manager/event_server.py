@@ -1,6 +1,7 @@
 """Example Event Manager implementation using the new AbstractManagerBase class."""
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import pymongo
@@ -11,6 +12,7 @@ from fastapi.params import Body
 from fastapi.responses import Response
 from madsci.client.event_client import EventClient
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.event_types import (
     Event,
     EventLogLevel,
@@ -18,8 +20,10 @@ from madsci.common.types.event_types import (
     EventManagerHealth,
     EventManagerSettings,
 )
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.event_manager.events_csv_exporter import CSVExporter
 from madsci.event_manager.notifications import EmailAlerts
+from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
 from pymongo import MongoClient, errors
 from pymongo.synchronous.database import Database
@@ -46,6 +50,41 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         # Initialize database connection and collections
         self._setup_database()
 
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize manager-specific components."""
+        super().initialize(**kwargs)
+
+        # Skip version validation if an external db_connection was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self._db_connection is not None:
+            # External connection provided, likely in test context - skip version validation
+            self.logger.info(
+                "External db_connection provided, skipping MongoDB version validation"
+            )
+            return
+
+        self.logger.info("Validating MongoDB schema version...")
+
+        schema_file_path = Path(__file__).parent / "schema.json"
+
+        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
+        version_checker = MongoDBVersionChecker(
+            db_url=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+            schema_file_path=str(schema_file_path),
+            backup_dir=str(mig_cfg.backup_dir),
+            logger=self.logger,
+        )
+
+        try:
+            version_checker.validate_or_fail()
+            self.logger.info("MongoDB version validation completed successfully")
+        except RuntimeError as e:
+            self.logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+            )
+            raise e
+
     def setup_logging(self) -> None:
         """Setup logging for the event manager. Prevent recursive logging."""
         self._logger = EventClient(
@@ -56,10 +95,10 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
         if self._db_connection is None:
-            db_client = MongoClient(self.settings.db_url)
-            self._db_connection = db_client[self.settings.collection_name]
+            db_client = MongoClient(str(self.settings.mongo_db_url))
+            self._db_connection = db_client[self.settings.database_name]
 
-        self.events = self._db_connection["events"]
+        self.events = self._db_connection[self.settings.collection_name]
 
     def get_health(self) -> EventManagerHealth:
         """Get the health status of the Event Manager."""
@@ -83,21 +122,6 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
 
         return health
 
-    @get("/health")
-    def health_endpoint(self) -> EventManagerHealth:
-        """Health check endpoint for the Event Manager."""
-        return self.get_health()
-
-    @get("/")
-    def get_definition(self) -> EventManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
-    @get("/definition")
-    def get_definition_alt(self) -> EventManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
     @post("/event")
     async def log_event(self, event: Event) -> Event:
         """Create a new event."""
@@ -106,12 +130,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             try:
                 self.events.insert_one(mongo_data)
             except errors.DuplicateKeyError:
-                self.logger.log_warning(
+                self.logger.warning(
                     f"Duplicate event ID {event.event_id} - skipping insert"
                 )
                 # Just continue - don't fail the request
         except Exception as e:
-            self.logger.log_error(f"Failed to log event: {e}")
+            self.logger.error(f"Failed to log event: {e}")
             raise e
 
         if (
@@ -129,7 +153,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         """Look up an event by event_id"""
         event = self.events.find_one({"_id": event_id})
         if not event:
-            self.logger.log_error(f"Event with ID {event_id} not found")
+            self.logger.error(f"Event with ID {event_id} not found")
             raise HTTPException(
                 status_code=404, detail=f"Event with ID {event_id} not found"
             )
@@ -206,7 +230,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             return report
 
         except Exception as e:
-            self.logger.log_error(f"Error generating session utilization: {e}")
+            self.logger.error(f"Error generating session utilization: {e}")
             return {"error": f"Failed to generate report: {e!s}"}
 
     def _get_session_analyzer(self) -> Optional[UtilizationAnalyzer]:
@@ -214,7 +238,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         try:
             return UtilizationAnalyzer(self.events)
         except Exception as e:
-            self.logger.log_error(f"Failed to create session analyzer: {e}")
+            self.logger.error(f"Failed to create session analyzer: {e}")
             return None
 
     def _parse_session_time_parameters(
@@ -230,6 +254,129 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
 
         return parsed_start, parsed_end
+
+    @get("/utilization/periods")
+    async def get_utilization_periods(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        analysis_type: str = Query(
+            "daily", description="Analysis type: hourly, daily, weekly, monthly"
+        ),
+        user_timezone: str = Query(
+            "America/Chicago", description="Timezone for day boundaries"
+        ),
+        include_users: bool = Query(True, description="Include user utilization data"),
+        csv_format: bool = Query(False, description="Return data in CSV format"),
+        save_to_file: bool = Query(False, description="Save CSV to server filesystem"),
+        output_path: Optional[str] = Query(
+            None, description="Server path to save CSV files"
+        ),
+    ) -> Union[Dict[str, Any], Response]:
+        """Generate time-series utilization analysis with periodic breakdowns."""
+        try:
+            # Create analyzer and time-series analyzer
+            analyzer = self._get_session_analyzer()
+            if analyzer is None:
+                return {"error": "Failed to create session analyzer"}
+
+            time_series_analyzer = TimeSeriesAnalyzer(analyzer)
+
+            # Generate report
+            report = time_series_analyzer.generate_utilization_report_with_times(
+                start_time, end_time, analysis_type, user_timezone
+            )
+
+            # Add user utilization if requested
+            if include_users and report and "error" not in report:
+                try:
+                    time_series_analyzer.add_user_utilization_to_report(report)
+                except Exception as e:
+                    self.logger.warning(f"Failed to add user utilization: {e}")
+
+            # Handle CSV export if requested
+            if csv_format and report and "error" not in report:
+                csv_result = CSVExporter.handle_api_csv_export(
+                    report, save_to_file, output_path
+                )
+
+                # Return error if CSV processing failed
+                if "error" in csv_result:
+                    return csv_result
+
+                # Return Response object for download or JSON for file save
+                if csv_result.get("is_download"):
+                    return Response(
+                        content=csv_result["csv_content"],
+                        media_type="text/csv",
+                        headers={
+                            "Content-Disposition": "attachment; filename=utilization_periods_report.csv"
+                        },
+                    )
+
+                # File save results as JSON
+                return csv_result
+
+            # Default JSON response
+            return report
+
+        except Exception as e:
+            self.logger.error(f"Error generating utilization periods report: {e}")
+            return {"error": f"Failed to generate report: {e!s}"}
+
+    @get("/utilization/user")
+    async def get_user_utilization_report(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        csv_format: bool = Query(False, description="Return data in CSV format"),
+        save_to_file: bool = Query(False, description="Save CSV to server filesystem"),
+        output_path: Optional[str] = Query(
+            None, description="Server path to save CSV files"
+        ),
+    ) -> Union[Dict[str, Any], Response]:
+        """Generate detailed user utilization report based on workflow authors."""
+        try:
+            # Create analyzer
+            analyzer = self._get_session_analyzer()
+            if analyzer is None:
+                return {"error": "Failed to create session analyzer"}
+
+            # Parse time parameters and generate user utilization report
+            parsed_start, parsed_end = self._parse_session_time_parameters(
+                start_time, end_time
+            )
+            report = analyzer.generate_user_utilization_report(parsed_start, parsed_end)
+
+            # Handle CSV export if requested
+            if csv_format and report and "error" not in report:
+                csv_result = CSVExporter.handle_user_csv_export(
+                    report, save_to_file, output_path
+                )
+
+                # Return error if CSV processing failed
+                if "error" in csv_result:
+                    return csv_result
+
+                # Return Response object for download or JSON for file save
+                if csv_result.get("is_download"):
+                    return Response(
+                        content=csv_result["csv_content"],
+                        media_type="text/csv",
+                        headers={
+                            "Content-Disposition": "attachment; filename=user_utilization_report.csv"
+                        },
+                    )
+
+                # File save results as JSON
+                return csv_result
+
+            # Default JSON response
+            return report
+
+        except Exception as e:
+            self.logger.error(f"Error generating user utilization report: {e}")
+            return {"error": f"Failed to generate report: {e!s}"}
 
 
 # Main entry point for running the server

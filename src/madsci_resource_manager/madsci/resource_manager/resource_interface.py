@@ -1091,7 +1091,7 @@ class ResourceInterface:
             self.logger.error(f"Error deleting template: \n{traceback.format_exc()}")
             raise e
 
-    def list_templates(
+    def query_templates(
         self,
         base_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
@@ -1099,7 +1099,7 @@ class ResourceInterface:
         parent_session: Optional[Session] = None,
     ) -> list[ResourceDataModels]:
         """
-        List templates with optional filtering, returned as resources.
+        Query templates with optional filtering, returned as resources.
 
         Args:
             base_type (Optional[str]): Filter by base resource type.
@@ -1139,7 +1139,7 @@ class ResourceInterface:
                 return [row.to_data_model() for row in template_rows]
 
         except Exception as e:
-            self.logger.error(f"Error listing templates: \n{traceback.format_exc()}")
+            self.logger.error(f"Error querying templates: \n{traceback.format_exc()}")
             raise e
 
     def _check_template_nested_field(self, data: dict, field_path: str) -> bool:
@@ -1311,7 +1311,7 @@ class ResourceInterface:
         Returns:
             dict[str, list[str]]: Dictionary mapping base_type to template names.
         """
-        templates = self.list_templates(parent_session=parent_session)
+        templates = self.query_templates(parent_session=parent_session)
         categories = {}
 
         for template in templates:
@@ -1551,3 +1551,85 @@ class ResourceInterface:
         except Exception as e:
             self.logger.error(f"Error checking lock status: {e}")
             return False, None
+
+    def query_resource_hierarchy(
+        self, resource_id: str, parent_session: Optional[Session] = None
+    ) -> dict[str, Any]:
+        """
+        Query the hierarchical relationships of a resource.
+
+        Returns the ancestors (successive parent IDs from closest to furthest)
+        and descendants (all children recursively, organized by parent) of the specified resource.
+
+        Args:
+            resource_id (str): The ID of the resource to query hierarchy for.
+            parent_session (Optional[Session]): Optional parent session.
+
+        Returns:
+            dict[str, Any]: ResourceHierarchy with:
+                - ancestor_ids: List of all direct ancestors (parent, grandparent, etc.)
+                - resource_id: The ID of the queried resource
+                - descendant_ids: Dict mapping parent IDs to their direct child IDs,
+                  recursively including all descendant generations (children, grandchildren, etc.)
+        """
+        try:
+            with self.get_session(parent_session) as session:
+                # Check if the resource exists
+                resource_row = session.exec(
+                    select(ResourceTable).where(
+                        ResourceTable.resource_id == resource_id
+                    )
+                ).first()
+
+                if not resource_row:
+                    raise ValueError(f"Resource with ID '{resource_id}' not found")
+
+                # Get ancestors by walking up the parent chain
+                ancestor_ids = []
+                current_id = resource_row.parent_id
+                while current_id is not None:
+                    ancestor_ids.append(current_id)
+                    parent_row = session.exec(
+                        select(ResourceTable).where(
+                            ResourceTable.resource_id == current_id
+                        )
+                    ).first()
+                    if parent_row:
+                        current_id = parent_row.parent_id
+                    else:
+                        break
+
+                # Get all descendants recursively - organized by their parent
+                descendant_ids = {}
+
+                def _collect_descendants(parent_id: str) -> None:
+                    """Recursively collect all descendants of a given parent."""
+                    children = session.exec(
+                        select(ResourceTable).where(
+                            ResourceTable.parent_id == parent_id
+                        )
+                    ).all()
+
+                    if children:
+                        descendant_ids[parent_id] = [
+                            child.resource_id for child in children
+                        ]
+
+                        # Recursively collect descendants of each child
+                        for child in children:
+                            _collect_descendants(child.resource_id)
+
+                # Start collecting descendants from the queried resource
+                _collect_descendants(resource_id)
+
+                return {
+                    "ancestor_ids": ancestor_ids,
+                    "resource_id": resource_id,
+                    "descendant_ids": descendant_ids,
+                }
+
+        except Exception as e:
+            self.logger.error(
+                f"Error querying resource hierarchy: \n{traceback.format_exc()}"
+            )
+            raise e

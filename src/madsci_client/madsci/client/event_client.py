@@ -20,7 +20,7 @@ from madsci.common.types.event_types import (
     EventClientConfig,
     EventType,
 )
-from madsci.common.utils import threaded_task
+from madsci.common.utils import create_http_session, threaded_task
 from pydantic import BaseModel, ValidationError
 from rich.logging import RichHandler
 
@@ -33,6 +33,7 @@ class EventClient:
     _buffer_lock = Lock()
     _retry_thread = None
     _retrying = False
+    _shutdown = False
 
     def __init__(
         self,
@@ -78,6 +79,24 @@ class EventClient:
             or get_current_madsci_context().event_server_url
         )
 
+        # Create HTTP session for requests to event server
+        self.session = create_http_session(config=self.config)
+
+    def __del__(self) -> None:
+        """Clean up retry thread on destruction."""
+        with self._buffer_lock:
+            self._shutdown = True
+
+        # Wait for retry thread to finish if it exists
+        if self._retry_thread is not None and self._retry_thread.is_alive():
+            # Give the thread a reasonable time to finish (5 seconds)
+            self._retry_thread.join(timeout=5.0)
+            if self._retry_thread.is_alive():
+                # Log warning if thread didn't finish cleanly
+                self.logger.warning(
+                    "Retry thread did not terminate within timeout during cleanup"
+                )
+
     def get_log(self) -> dict[str, Event]:
         """Read the log"""
         events = {}
@@ -90,12 +109,20 @@ class EventClient:
                 events[event.event_id] = event
         return events
 
-    def get_event(self, event_id: str) -> Optional[Event]:
-        """Get a specific event by ID."""
+    def get_event(
+        self, event_id: str, timeout: Optional[float] = None
+    ) -> Optional[Event]:
+        """
+        Get a specific event by ID.
+
+        Args:
+            event_id: The ID of the event to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         if self.event_server:
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + f"event/{event_id}",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             if not response.ok:
                 response.raise_for_status()
@@ -103,15 +130,26 @@ class EventClient:
         events = self.get_log()
         return events.get(event_id, None)
 
-    def get_events(self, number: int = 100, level: int = -1) -> dict[str, Event]:
-        """Query the event server for a certain number of recent events. If no event server is configured, query the log file instead."""
+    def get_events(
+        self, number: int = 100, level: int = -1, timeout: Optional[float] = None
+    ) -> dict[str, Event]:
+        """
+        Query the event server for a certain number of recent events.
+
+        If no event server is configured, query the log file instead.
+
+        Args:
+            number: Number of events to retrieve.
+            level: Log level filter. -1 uses effective log level.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         if level == -1:
             level = int(self.logger.getEffectiveLevel())
         events = OrderedDict()
         if self.event_server:
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + "events",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
                 params={"number": number, "level": level},
             )
             if not response.ok:
@@ -127,13 +165,23 @@ class EventClient:
                 break
         return selected_events
 
-    def query_events(self, selector: dict) -> dict[str, Event]:
-        """Query the event server for events based on a selector. Requires an event server be configured."""
+    def query_events(
+        self, selector: dict, timeout: Optional[float] = None
+    ) -> dict[str, Event]:
+        """
+        Query the event server for events based on a selector.
+
+        Requires an event server be configured.
+
+        Args:
+            selector: Dictionary selector for filtering events.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         events = OrderedDict()
         if self.event_server:
-            response = requests.post(
+            response = self.session.post(
                 str(self.event_server) + "events/query",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
                 params={"selector": selector},
             )
             if not response.ok:
@@ -272,10 +320,10 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + "utilization/periods",
                 params=params,
-                timeout=30,
+                timeout=self.config.timeout_data_operations,
             )
             if not response.ok:
                 self.logger.error(
@@ -337,10 +385,10 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + "utilization/sessions",
                 params=params,
-                timeout=60,
+                timeout=self.config.timeout_long_operations,
             )
 
             if not response.ok:
@@ -397,10 +445,10 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + "utilization/users",
                 params=params,
-                timeout=60,
+                timeout=self.config.timeout_long_operations,
             )
 
             if not response.ok:
@@ -433,7 +481,7 @@ class EventClient:
     def _retry_buffered_events(self) -> None:
         backoff = 2
         max_backoff = 60
-        while not self._event_buffer.empty():
+        while not self._event_buffer.empty() and not self._shutdown:
             try:
                 event = self._event_buffer.get()
                 self._send_event_to_event_server(event, retrying=True)
@@ -459,10 +507,10 @@ class EventClient:
         """Send an event to the event manager. Buffer on failure."""
 
         try:
-            response = requests.post(
+            response = self.session.post(
                 url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),
-                timeout=10,
+                timeout=self.config.timeout_default,
             )
 
             if not response.ok:

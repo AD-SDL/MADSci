@@ -4,6 +4,7 @@ from collections.abc import Generator
 from typing import Any
 from unittest.mock import patch
 
+import httpx
 import pytest
 from madsci.client.resource_client import ResourceClient, ResourceWrapper
 from madsci.common.types.auth_types import OwnershipInfo
@@ -66,31 +67,43 @@ def test_client(interface: ResourceInterface) -> TestClient:
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[ResourceClient, None, None]:
     """Fixture for ResourceClient patched to use TestClient"""
-    with patch("madsci.client.resource_client.requests") as mock_requests:
+    with patch(
+        "madsci.client.resource_client.create_http_session"
+    ) as mock_create_session:
+
+        def add_ok_property(resp: Any) -> Any:
+            if not hasattr(resp, "ok"):
+                resp.ok = resp.status_code < 400
+            return resp
 
         def post_no_timeout(*args: Any, **kwargs: Any) -> Any:
             kwargs.pop("timeout", None)
-            return test_client.post(*args, **kwargs)
-
-        mock_requests.post.side_effect = post_no_timeout
+            resp = test_client.post(*args, **kwargs)
+            return add_ok_property(resp)
 
         def get_no_timeout(*args: Any, **kwargs: Any) -> Any:
             kwargs.pop("timeout", None)
-            return test_client.get(*args, **kwargs)
-
-        mock_requests.get.side_effect = get_no_timeout
+            resp = test_client.get(*args, **kwargs)
+            return add_ok_property(resp)
 
         def delete_no_timeout(*args: Any, **kwargs: Any) -> Any:
             kwargs.pop("timeout", None)
-            return test_client.delete(*args, **kwargs)
+            resp = test_client.delete(*args, **kwargs)
+            return add_ok_property(resp)
 
         def put_no_timeout(*args: Any, **kwargs: Any) -> Any:
             kwargs.pop("timeout", None)
-            return test_client.put(*args, **kwargs)
+            resp = test_client.put(*args, **kwargs)
+            return add_ok_property(resp)
 
-        mock_requests.put.side_effect = put_no_timeout
+        # Create a mock session that routes to TestClient
+        mock_session = type("MockSession", (), {})()
+        mock_session.post = post_no_timeout
+        mock_session.get = get_no_timeout
+        mock_session.delete = delete_no_timeout
+        mock_session.put = put_no_timeout
+        mock_create_session.return_value = mock_session
 
-        mock_requests.delete.side_effect = delete_no_timeout
         yield ResourceClient(resource_server_url="http://testserver")
 
 
@@ -362,8 +375,8 @@ def test_get_template_not_found(client: ResourceClient) -> None:
     assert template is None
 
 
-def test_list_templates(client: ResourceClient) -> None:
-    """Test listing templates using ResourceClient"""
+def test_query_templates(client: ResourceClient) -> None:
+    """Test querying templates using ResourceClient"""
     # Create multiple templates
     resource1 = Container(resource_name="Container1", capacity=50)
     resource2 = Resource(resource_name="Resource2")
@@ -382,14 +395,14 @@ def test_list_templates(client: ResourceClient) -> None:
         tags=["resource", "test"],
     )
 
-    # List all templates
-    all_templates = client.list_templates()
+    # Query all templates
+    all_templates = client.query_templates()
     template_names = [t.resource_name for t in all_templates]
     assert "Container1" in template_names
     assert "Resource2" in template_names
 
     # Filter by tags
-    test_templates = client.list_templates(tags=["test"])
+    test_templates = client.query_templates(tags=["test"])
     assert len(test_templates) >= 2
 
 
@@ -632,7 +645,7 @@ def test_minimal_template(client: ResourceClient) -> None:
     )
 
     assert new_resource.resource_name == "MinimalCopy"
-    assert type(new_resource).__name__ == "Resource"
+    assert type(new_resource.unwrap).__name__ == "Resource"
 
 
 def test_resource_wrapper_creation(client: ResourceClient) -> None:
@@ -985,3 +998,124 @@ def test_client_id_handling_in_locks(client: ResourceClient) -> None:
     # Release with the same client_id
     released = client.release_lock(locked_resource, client_id=explicit_client_id)
     assert released is not None
+
+
+def test_query_resource_hierarchy_with_server(
+    client: ResourceClient,
+) -> None:
+    """Test querying resource hierarchy using the resource client with server."""
+    # Create parent resource
+    parent = Container(
+        resource_name="Parent Container",
+        resource_class="container",
+    )
+    parent_resource = client.add_resource(parent)
+
+    # Create child resource
+    child = Resource(
+        resource_name="Child Resource",
+        resource_class="sample",
+        parent_id=parent_resource.resource_id,
+        key="child_key",
+    )
+    child_resource = client.add_resource(child)
+
+    # Create grandchild resource
+    grandchild = Resource(
+        resource_name="Grandchild Resource",
+        resource_class="sample",
+        parent_id=child_resource.resource_id,
+        key="grandchild_key",
+    )
+    grandchild_resource = client.add_resource(grandchild)
+
+    # Test hierarchy query for child
+    hierarchy = client.query_resource_hierarchy(child_resource.resource_id)
+
+    assert hierarchy.resource_id == child_resource.resource_id
+    assert hierarchy.ancestor_ids == [parent_resource.resource_id]
+    assert hierarchy.descendant_ids == {
+        child_resource.resource_id: [grandchild_resource.resource_id]
+    }
+
+    # Test hierarchy query for parent
+    hierarchy = client.query_resource_hierarchy(parent_resource.resource_id)
+
+    assert hierarchy.resource_id == parent_resource.resource_id
+    assert hierarchy.ancestor_ids == []
+    assert hierarchy.descendant_ids == {
+        parent_resource.resource_id: [child_resource.resource_id],
+        child_resource.resource_id: [grandchild_resource.resource_id],
+    }
+
+    # Test hierarchy query for grandchild
+    hierarchy = client.query_resource_hierarchy(grandchild_resource.resource_id)
+
+    assert hierarchy.resource_id == grandchild_resource.resource_id
+    assert hierarchy.ancestor_ids == [
+        child_resource.resource_id,
+        parent_resource.resource_id,
+    ]
+    assert hierarchy.descendant_ids == {}
+
+
+def test_query_resource_hierarchy_local_client() -> None:
+    """Test querying resource hierarchy using local client without server."""
+    # Since the client fixture in this file mocks requests and hits the server,
+    # we need to create a truly local client without a server URL
+    local_client = ResourceClient()  # No server URL - truly local
+
+    # Create parent resource
+    parent = Container(
+        resource_name="Parent Container",
+        resource_class="container",
+    )
+    parent_resource = local_client.add_resource(parent)
+
+    # Create child resource
+    child = Resource(
+        resource_name="Child Resource",
+        resource_class="sample",
+        parent_id=parent_resource.resource_id,
+        key="child_key",
+    )
+    child_resource = local_client.add_resource(child)
+
+    # Test hierarchy query for child
+    hierarchy = local_client.query_resource_hierarchy(child_resource.resource_id)
+
+    assert hierarchy.resource_id == child_resource.resource_id
+    assert hierarchy.ancestor_ids == [parent_resource.resource_id]
+    # Local implementation only includes descendants if they exist
+    assert hierarchy.descendant_ids == {}
+
+
+def test_query_resource_hierarchy_nonexistent_resource(
+    client: ResourceClient,
+) -> None:
+    """Test querying hierarchy for a nonexistent resource raises appropriate error."""
+    fake_id = new_ulid_str()
+
+    with pytest.raises(
+        httpx.HTTPStatusError
+    ):  # Should raise HTTPStatusError for nonexistent resource (404)
+        client.query_resource_hierarchy(fake_id)
+
+
+def test_query_resource_hierarchy_standalone_resource(
+    client: ResourceClient,
+) -> None:
+    """Test querying hierarchy for a resource with no parents or children."""
+    # Create standalone resource
+    resource = Resource(
+        resource_name="Standalone Resource",
+        resource_class="sample",
+    )
+    standalone_resource = client.add_resource(resource)
+
+    # Test hierarchy query
+    hierarchy = client.query_resource_hierarchy(standalone_resource.resource_id)
+
+    assert hierarchy.resource_id == standalone_resource.resource_id
+    assert hierarchy.ancestor_ids == []
+    assert hierarchy.descendant_ids == {}

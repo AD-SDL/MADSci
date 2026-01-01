@@ -2,6 +2,67 @@
 
 Tracks and manages the full lifecycle of laboratory resources - assets, consumables, samples, containers, and labware.
 
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Quick Start](#quick-start)
+  - [Manager Setup](#manager-setup)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [Local Mode Configuration](#local-mode-configuration)
+  - [Production Configuration](#production-configuration)
+  - [Database Setup](#database-setup)
+  - [Configuration Validation](#configuration-validation)
+- [Resource Client](#resource-client)
+- [Resource Types](#resource-types)
+  - [Core Resource Hierarchy](#core-resource-hierarchy)
+  - [Usage Examples](#usage-examples)
+- [Integration with MADSci Ecosystem](#integration-with-madsci-ecosystem)
+- [Advanced Operations](#advanced-operations)
+  - [Resource Definitions](#resource-definitions)
+  - [Bulk Operations](#bulk-operations)
+  - [History and Auditing](#history-and-auditing)
+- [Resource Templates](#resource-templates)
+  - [Creating Templates](#creating-templates)
+  - [Using Templates to Create Resources](#using-templates-to-create-resources)
+  - [Template Management Operations](#template-management-operations)
+  - [Template Use Cases](#template-use-cases)
+  - [Template Best Practices](#template-best-practices)
+- [Resource Locking and Concurrency Control](#resource-locking-and-concurrency-control)
+  - [Basic Resource Locking](#basic-resource-locking)
+  - [Context Manager for Automatic Lock Management](#context-manager-for-automatic-lock-management)
+  - [Advanced Locking Patterns](#advanced-locking-patterns)
+  - [Error Handling and Lock Recovery](#error-handling-and-lock-recovery)
+  - [Best Practices for Resource Locking](#best-practices-for-resource-locking)
+  - [Integration with Node Actions](#integration-with-node-actions)
+- [Resource Hierarchy Queries](#resource-hierarchy-queries)
+  - [Understanding Resource Hierarchy](#understanding-resource-hierarchy)
+  - [Querying Resource Hierarchy](#querying-resource-hierarchy)
+  - [Hierarchy Query Results](#hierarchy-query-results)
+  - [Use Cases](#use-cases)
+  - [Performance Considerations](#performance-considerations)
+- [Performance Optimization](#performance-optimization)
+  - [Database Performance](#database-performance)
+  - [Resource Management Performance](#resource-management-performance)
+  - [Lock Management Performance](#lock-management-performance)
+  - [Memory Management](#memory-management)
+  - [Monitoring Performance](#monitoring-performance)
+  - [Performance Best Practices](#performance-best-practices)
+- [Error Handling and Troubleshooting](#error-handling-and-troubleshooting)
+  - [Common Error Scenarios](#common-error-scenarios)
+  - [Database Connection Issues](#database-connection-issues)
+  - [Performance Troubleshooting](#performance-troubleshooting)
+  - [Resource State Issues](#resource-state-issues)
+  - [Docker and Service Issues](#docker-and-service-issues)
+  - [Common Solutions](#common-solutions)
+- [Quick Reference](#quick-reference)
+  - [Essential Operations](#essential-operations)
+  - [Common Resource Types](#common-resource-types)
+  - [Key Environment Variables](#key-environment-variables)
+  - [Common Commands](#common-commands)
+
 ## Features
 
 - **Comprehensive resource types**: Assets, consumables, containers with specialized behaviors
@@ -39,6 +100,146 @@ python -m madsci.resource_manager.resource_server
 ### Manager Setup
 
 For custom deployments, see [example_resource.manager.yaml](../../example_lab/managers/example_resource.manager.yaml) for configuration options.
+
+## Configuration
+
+The Resource Manager uses environment variables for configuration with a hierarchical precedence system. All settings have defaults suitable for development.
+
+### Environment Variables
+
+**Core Settings:**
+```bash
+# Service Configuration
+RESOURCE_HOST=localhost                    # Server hostname
+RESOURCE_PORT=8003                        # Server port
+RESOURCE_LOG_LEVEL=INFO                   # Logging level
+
+# Database Configuration
+RESOURCE_POSTGRES_HOST=localhost          # PostgreSQL hostname
+RESOURCE_POSTGRES_PORT=5432              # PostgreSQL port
+RESOURCE_POSTGRES_USER=madsci            # Database username
+RESOURCE_POSTGRES_PASSWORD=madsci        # Database password
+RESOURCE_POSTGRES_DATABASE=madsci        # Database name
+
+# Manager Integration
+RESOURCE_EVENT_MANAGER_URL=http://localhost:8001    # Event logging
+```
+
+**Advanced Settings:**
+```bash
+# Development/Testing
+RESOURCE_LOCAL_MODE=false                 # Run without external dependencies
+RESOURCE_ENABLE_CORS=true                # Enable CORS for web clients
+
+# Performance Tuning
+RESOURCE_MAX_CONNECTIONS=20              # Database connection pool size
+RESOURCE_QUERY_TIMEOUT=30                # Query timeout in seconds
+RESOURCE_LOCK_DEFAULT_DURATION=300       # Default lock duration (seconds)
+
+# Security
+RESOURCE_REQUIRE_AUTHENTICATION=false    # Enable authentication
+RESOURCE_API_KEY_HEADER=X-API-Key        # API key header name
+```
+
+### Local Mode Configuration
+
+For development or testing without external dependencies:
+
+```bash
+export RESOURCE_LOCAL_MODE=true
+export RESOURCE_EVENT_MANAGER_URL=""     # Disable event logging
+python -m madsci.resource_manager.resource_server
+```
+
+**Local Mode Limitations:**
+- No event logging integration
+- No distributed locking coordination
+- Single-process operation only
+- In-memory or file-based storage options
+
+**When to Use Local Mode:**
+- Unit testing and development
+- Offline development environments
+- Single-process applications
+- Quick prototyping and experimentation
+
+**When to Use Server Mode:**
+- Production deployments
+- Multi-process/multi-node environments
+- Integration with other MADSci managers
+- Distributed laboratory setups
+- When you need event logging and audit trails
+
+### Production Configuration
+
+**Docker Compose (Recommended):**
+```yaml
+version: '3.8'
+services:
+  resource_manager:
+    image: ghcr.io/ad-sdl/madsci:latest
+    environment:
+      RESOURCE_POSTGRES_HOST: postgres
+      RESOURCE_POSTGRES_PASSWORD: ${DB_PASSWORD}
+      RESOURCE_LOG_LEVEL: WARNING
+      RESOURCE_MAX_CONNECTIONS: 50
+    depends_on:
+      - postgres
+    ports:
+      - "8003:8003"
+```
+
+**Environment File (.env):**
+```bash
+# Database credentials
+DB_PASSWORD=secure_password_here
+POSTGRES_PASSWORD=secure_password_here
+
+# Resource Manager settings
+RESOURCE_LOG_LEVEL=INFO
+RESOURCE_REQUIRE_AUTHENTICATION=true
+RESOURCE_API_KEY_HEADER=Authorization
+```
+
+### Database Setup
+
+**Initial Setup:**
+```bash
+# Using Docker Compose
+docker compose up -d postgres
+docker compose exec postgres psql -U madsci -d madsci -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+
+# Manual PostgreSQL setup
+createdb -U postgres madsci
+psql -U postgres -d madsci -c "CREATE USER madsci WITH PASSWORD 'madsci';"
+psql -U postgres -d madsci -c "GRANT ALL PRIVILEGES ON DATABASE madsci TO madsci;"
+```
+
+**Schema Migration:**
+```python
+# The Resource Manager automatically creates tables on startup
+from madsci.resource_manager.resource_server import ResourceManagerServer
+from madsci.resource_manager.resource_server import ResourceManagerSettings
+
+settings = ResourceManagerSettings()
+server = ResourceManagerServer(settings)
+# Tables created automatically when server starts
+```
+
+### Configuration Validation
+
+```python
+# Validate configuration before starting
+from madsci.resource_manager.resource_server import ResourceManagerSettings
+
+try:
+    settings = ResourceManagerSettings()
+    print(f"✓ Configuration valid")
+    print(f"  Database: {settings.postgres_host}:{settings.postgres_port}")
+    print(f"  Server: {settings.host}:{settings.port}")
+except Exception as e:
+    print(f"✗ Configuration error: {e}")
+```
 
 ### Resource Client
 
@@ -92,6 +293,11 @@ client.increase_quantity(resource=added_reagent, amount=100.0) # Add 100mL
 history = client.query_history(resource_id=added_sample.resource_id)
 client.remove_resource(resource_id=added_sample.resource_id)  # Soft delete
 client.restore_deleted_resource(resource_id=added_sample.resource_id)
+
+# Query resource hierarchy
+hierarchy = client.query_resource_hierarchy(resource_id=added_plate.resource_id)
+print(f"Ancestors: {hierarchy.ancestor_ids}")
+print(f"Descendants: {hierarchy.descendant_ids}")
 ```
 
 ## Resource Types
@@ -592,4 +798,608 @@ class AnalyzerNode(RestNode):
             return ActionSucceeded(data=result)
 ```
 
+## Resource Hierarchy Queries
+
+The Resource Manager provides functionality to query the hierarchical relationships between resources, making it easy to understand parent-child relationships and navigate resource trees.
+
+### Understanding Resource Hierarchy
+
+Resources can form hierarchical structures where:
+- **Parent resources** contain child resources (e.g., a plate contains samples)
+- **Child resources** belong to parent resources and have a specific key/position
+- **Ancestor resources** are all parents up the hierarchy chain
+- **Descendant resources** are all children down the hierarchy chain
+
+### Querying Resource Hierarchy
+
+```python
+from madsci.client.resource_client import ResourceClient
+
+client = ResourceClient("http://localhost:8003")
+
+# Create a hierarchy: Rack -> Plate -> Sample
+rack = Grid(resource_name="Sample Rack", rows=2, columns=3, resource_class="rack")
+rack = client.add_resource(rack)
+
+plate = Grid(resource_name="96-well Plate", rows=8, columns=12, resource_class="plate")
+plate = client.add_resource(plate)
+client.set_child(resource=rack, key=(0, 0), child=plate)
+
+sample = Asset(resource_name="Sample A1", resource_class="sample")
+sample = client.add_resource(sample)
+client.set_child(resource=plate, key=(0, 0), child=sample)
+
+# Query hierarchy for the plate (middle of the hierarchy)
+hierarchy = client.query_resource_hierarchy(plate.resource_id)
+
+print(f"Resource ID: {hierarchy.resource_id}")
+print(f"Ancestors (closest to furthest): {hierarchy.ancestor_ids}")
+print(f"Descendants by parent: {hierarchy.descendant_ids}")
+
+# Example output:
+# Resource ID: 01HQ2K3M4N5P6Q7R8S9T0V1W2X
+# Ancestors: ['01HQ2K3M4N5P6Q7R8S9T0V1W2Y']  # [rack_id]
+# Descendants: {
+#     '01HQ2K3M4N5P6Q7R8S9T0V1W2X': ['01HQ2K3M4N5P6Q7R8S9T0V1W2Z']  # plate -> [sample_id]
+# }
+```
+
+### Hierarchy Query Results
+
+The `query_resource_hierarchy` method returns a `ResourceHierarchy` object with:
+
+- **`ancestor_ids`**: List of parent resource IDs, ordered from closest to furthest
+  - `[parent_id, grandparent_id, great_grandparent_id, ...]`
+  - Empty list if the resource has no parents
+
+- **`resource_id`**: The ID of the queried resource
+
+- **`descendant_ids`**: Dictionary mapping parent IDs to their direct child IDs
+  - Recursively includes all descendant generations (children, grandchildren, great-grandchildren, etc.)
+  - Only includes direct parent-child relationships (no "uncle" or "cousin" resources)
+  - Key: parent resource ID, Value: list of direct child resource IDs
+  - Empty dictionary if no descendants exist
+
+### Use Cases
+
+**1. Navigate Up the Hierarchy:**
+```python
+# Find all containers holding a specific sample
+sample_hierarchy = client.query_resource_hierarchy(sample_id)
+for ancestor_id in sample_hierarchy.ancestor_ids:
+    ancestor = client.get_resource(ancestor_id)
+    print(f"Sample is contained in: {ancestor.resource_name}")
+```
+
+**2. Navigate Down the Hierarchy:**
+```python
+# Find all contents of a container and their sub-contents
+container_hierarchy = client.query_resource_hierarchy(container_id)
+for parent_id, child_ids in container_hierarchy.descendant_ids.items():
+    parent = client.get_resource(parent_id)
+    print(f"{parent.resource_name} contains:")
+    for child_id in child_ids:
+        child = client.get_resource(child_id)
+        print(f"  - {child.resource_name}")
+```
+
+**3. Verify Containment Relationships:**
+```python
+# Check if one resource is an ancestor of another
+def is_ancestor(potential_ancestor_id, resource_id, client):
+    hierarchy = client.query_resource_hierarchy(resource_id)
+    return potential_ancestor_id in hierarchy.ancestor_ids
+
+# Check if one resource is a descendant of another
+def is_descendant(potential_descendant_id, resource_id, client):
+    hierarchy = client.query_resource_hierarchy(resource_id)
+    for child_ids in hierarchy.descendant_ids.values():
+        if potential_descendant_id in child_ids:
+            return True
+    return False
+```
+
+**4. Build Resource Trees:**
+```python
+# Recursively build a complete resource tree
+def build_resource_tree(resource_id, client, depth=0):
+    resource = client.get_resource(resource_id)
+    hierarchy = client.query_resource_hierarchy(resource_id)
+
+    indent = "  " * depth
+    print(f"{indent}{resource.resource_name} ({resource.resource_id})")
+
+    # Process direct children
+    if resource_id in hierarchy.descendant_ids:
+        for child_id in hierarchy.descendant_ids[resource_id]:
+            build_resource_tree(child_id, client, depth + 1)
+
+# Start from a root resource
+build_resource_tree(root_container_id, client)
+```
+
+### Performance Considerations
+
+#### Hierarchy Query Optimization
+- Hierarchy queries are optimized to fetch only direct parent-child relationships
+- For deep hierarchies, consider caching results if querying frequently
+- The query returns all direct ancestors and recursively traverses all descendants
+- Use sparingly for very large resource trees with many nested levels
+
+## Performance Optimization
+
+### Database Performance
+
+**Connection Pooling:**
+```bash
+# Increase connection pool size for high-throughput environments
+export RESOURCE_MAX_CONNECTIONS=50
+export RESOURCE_CONNECTION_TIMEOUT=30
+```
+
+**Query Optimization:**
+```python
+# Use specific filters to reduce query scope
+samples = client.query_resource(
+    resource_class="sample",
+    attributes={"experiment_id": "EXP001"},  # Filter early
+    multiple=True
+)
+
+# Avoid retrieving large result sets at once
+batch_size = 100
+offset = 0
+while True:
+    batch = client.query_resource(
+        resource_class="sample",
+        limit=batch_size,
+        offset=offset,
+        multiple=True
+    )
+    if not batch:
+        break
+    process_batch(batch)
+    offset += batch_size
+```
+
+### Resource Management Performance
+
+**Bulk Operations:**
+```python
+# Batch similar operations together
+resource_updates = []
+for sample_id, new_attributes in sample_updates.items():
+    resource = client.get_resource(sample_id)
+    resource.attributes.update(new_attributes)
+    resource_updates.append(resource)
+
+# Process batch
+for resource in resource_updates:
+    client.update_resource(resource)
+```
+
+**Container Hierarchy Optimization:**
+```python
+# Cache hierarchy results for repeated access
+hierarchy_cache = {}
+
+def get_cached_hierarchy(resource_id):
+    if resource_id not in hierarchy_cache:
+        hierarchy_cache[resource_id] = client.query_resource_hierarchy(resource_id)
+    return hierarchy_cache[resource_id]
+
+# Use for repeated hierarchy traversals
+for sample_id in sample_list:
+    hierarchy = get_cached_hierarchy(sample_id)
+    process_ancestors(hierarchy.ancestor_ids)
+```
+
+### Lock Management Performance
+
+**Minimize Lock Duration:**
+```python
+# ✅ Good - Short lock scope
+hierarchy = client.query_resource_hierarchy(plate_id)  # Outside lock
+with client.lock(plate) as locked_plate:
+    # Only critical operations inside lock
+    locked_plate.set_child(key=(row, col), child=sample)
+
+# ❌ Avoid - Long lock duration
+with client.lock(plate) as locked_plate:
+    hierarchy = client.query_resource_hierarchy(plate_id)  # Unnecessary lock usage
+    locked_plate.set_child(key=(row, col), child=sample)
+```
+
+**Concurrent Operations:**
+```python
+# Use separate threads for independent resource operations
+import threading
+
+def process_resource(resource_id):
+    with client.lock(resource_id) as locked_resource:
+        perform_analysis(locked_resource)
+
+# Process multiple resources concurrently
+threads = []
+for resource_id in resource_list:
+    thread = threading.Thread(target=process_resource, args=(resource_id,))
+    threads.append(thread)
+    thread.start()
+
+for thread in threads:
+    thread.join()
+```
+
+### Memory Management
+
+**Large Container Handling:**
+```python
+# For containers with many children, avoid loading all at once
+def process_large_container(container_id):
+    container = client.get_resource(container_id)
+
+    # Process children by key ranges instead of loading all
+    if isinstance(container, Grid):
+        for row in range(container.rows):
+            for col in range(container.columns):
+                child = container.get_child((row, col))
+                if child:
+                    process_child(child)
+                    # Release reference to help GC
+                    child = None
+```
+
+**Resource Cleanup:**
+```python
+# Clean up large query results
+large_result_set = client.query_resource(resource_class="sample", multiple=True)
+try:
+    for resource in large_result_set:
+        process_resource(resource)
+finally:
+    # Explicit cleanup for large datasets
+    large_result_set.clear()
+    del large_result_set
+```
+
+### Monitoring Performance
+
+**Query Timing:**
+```python
+import time
+
+start_time = time.time()
+resources = client.query_resource(resource_class="sample", multiple=True)
+query_time = time.time() - start_time
+
+if query_time > 5.0:  # Log slow queries
+    print(f"Slow query detected: {query_time:.2f}s for {len(resources)} resources")
+```
+
+**Lock Contention Monitoring:**
+```python
+lock_wait_start = time.time()
+try:
+    with client.lock(resource, lock_duration=30.0) as locked_resource:
+        lock_wait_time = time.time() - lock_wait_start
+        if lock_wait_time > 1.0:
+            print(f"Lock contention: waited {lock_wait_time:.2f}s")
+
+        perform_operation(locked_resource)
+except TimeoutError:
+    print("Failed to acquire lock - high contention detected")
+```
+
+### Performance Best Practices
+
+1. **Use Specific Queries**: Always include filters to reduce result set size
+2. **Batch Operations**: Group similar operations together
+3. **Cache Hierarchy Results**: For repeated hierarchy traversals
+4. **Minimize Lock Scope**: Keep locked sections as short as possible
+5. **Monitor Query Performance**: Log slow operations for optimization
+6. **Use Connection Pooling**: Configure appropriate pool sizes for your workload
+7. **Clean Up Resources**: Explicitly clean up large datasets when done
+
+## Error Handling and Troubleshooting
+
+### Common Error Scenarios
+
+**1. Resource Not Found:**
+```python
+from madsci.common.exceptions import ResourceNotFoundError
+
+try:
+    resource = client.get_resource("invalid_id")
+except ResourceNotFoundError:
+    print("Resource does not exist or has been removed")
+```
+
+**2. Lock Acquisition Failures:**
+```python
+# Handle lock timeouts gracefully
+try:
+    with client.lock(resource, lock_duration=30.0) as locked_resource:
+        perform_operation(locked_resource)
+except TimeoutError:
+    print("Resource is currently locked by another process")
+    # Implement retry logic or queue the operation
+```
+
+**3. Container Capacity Violations:**
+```python
+try:
+    client.set_child(resource=full_container, key="A1", child=new_sample)
+except ValueError as e:
+    if "capacity" in str(e):
+        print(f"Container is full: {e}")
+        # Find alternative container or wait for space
+```
+
+**4. Quantity Management Errors:**
+```python
+try:
+    client.decrease_quantity(resource=reagent, amount=1000.0)
+except ValueError as e:
+    if "insufficient quantity" in str(e):
+        print(f"Not enough reagent available: {e}")
+        # Check current quantity and reorder if needed
+        current = client.get_resource(reagent.resource_id)
+        print(f"Current quantity: {current.quantity}")
+```
+
+### Database Connection Issues
+
+**Connection Failures:**
+```python
+from madsci.client.resource_client import ResourceClient
+
+try:
+    client = ResourceClient("http://localhost:8003")
+    # Test connection
+    client.get_definition()
+except Exception as e:
+    print(f"Failed to connect to Resource Manager: {e}")
+    # Check if service is running: docker compose ps
+    # Check logs: docker compose logs resource_manager
+```
+
+**Network Timeouts:**
+```python
+import httpx
+
+client = ResourceClient(
+    base_url="http://localhost:8003",
+    timeout=30.0  # Increase timeout for slow operations
+)
+```
+
+### Performance Troubleshooting
+
+**Slow Hierarchy Queries:**
+```python
+# For deep hierarchies, query specific levels instead of full tree
+hierarchy = client.query_resource_hierarchy(resource_id)
+if len(hierarchy.ancestor_ids) > 10:
+    # Consider caching results or limiting traversal depth
+    pass
+```
+
+**Large Batch Operations:**
+```python
+# Process resources in smaller batches to avoid timeouts
+resources = client.query_resource(resource_class="sample", multiple=True)
+batch_size = 50
+
+for i in range(0, len(resources), batch_size):
+    batch = resources[i:i + batch_size]
+    for resource in batch:
+        # Process batch
+        pass
+```
+
+### Resource State Issues
+
+**Debugging Resource State:**
+```python
+# Check resource history for unexpected changes
+history = client.query_history(resource_id=problem_resource.resource_id)
+for entry in history[-5:]:  # Last 5 changes
+    print(f"{entry.timestamp}: {entry.change_type} - {entry.details}")
+```
+
+**Recovering from Soft Deletes:**
+```python
+# Find and restore accidentally deleted resources
+deleted_resources = client.query_resource(removed=True, multiple=True)
+for resource in deleted_resources:
+    if resource.resource_name == "important_sample":
+        client.restore_deleted_resource(resource.resource_id)
+        print(f"Restored: {resource.resource_name}")
+```
+
+### Docker and Service Issues
+
+**Service Health Check:**
+```bash
+# Check if Resource Manager is running
+curl http://localhost:8003/health
+
+# Check service logs
+docker compose logs resource_manager
+
+# Restart if needed
+docker compose restart resource_manager
+```
+
+**Database Connection:**
+```bash
+# Check PostgreSQL connection
+docker compose exec postgres psql -U madsci -d madsci -c "\dt"
+
+# Check Resource Manager tables
+docker compose exec postgres psql -U madsci -d madsci -c "\d resources"
+```
+
+### Common Solutions
+
+**1. Service Won't Start:**
+- Verify PostgreSQL is running: `docker compose ps postgres`
+- Check port availability: `lsof -i :8003`
+- Review environment variables in docker-compose.yml
+
+**2. Resource Operations Fail:**
+- Verify resource exists: `client.get_resource(resource_id)`
+- Check resource type compatibility
+- Ensure proper permissions/ownership
+
+**3. Locking Issues:**
+- Check for orphaned locks: restart service to clear
+- Reduce lock duration for short operations
+- Implement lock retry logic with backoff
+
+## Quick Reference
+
+### Essential Operations
+```python
+from madsci.client.resource_client import ResourceClient
+from madsci.common.types.resource_types import Asset, Consumable, Grid
+
+client = ResourceClient("http://localhost:8003")
+
+# Basic CRUD
+resource = client.add_resource(Asset(resource_name="Sample", resource_class="sample"))
+resource = client.get_resource(resource.resource_id)
+resource.attributes["status"] = "processed"
+client.update_resource(resource)
+client.remove_resource(resource.resource_id)
+
+# Queries
+samples = client.query_resource(resource_class="sample", multiple=True)
+recent = client.query_resource(created_after="2024-01-01", multiple=True)
+
+# Containers
+plate = client.add_resource(Grid(resource_name="Plate", rows=8, columns=12))
+client.set_child(resource=plate, key=(0, 0), child=sample)
+child = plate.get_child((0, 0))
+
+# Consumables
+reagent = client.add_resource(Consumable(resource_name="Buffer", quantity=1000.0))
+client.decrease_quantity(resource=reagent, amount=50.0)
+client.increase_quantity(resource=reagent, amount=100.0)
+
+# Locking
+with client.lock(resource) as locked:
+    locked.update_resource()
+
+# Templates
+template = client.create_template(resource=plate, template_name="standard_plate")
+new_plate = client.create_resource_from_template("standard_plate", resource_name="Plate #2")
+```
+
+### Common Resource Types
+| Type | Use Case | Key Features |
+|------|----------|--------------|
+| `Asset` | Samples, labware | Non-consumable, trackable |
+| `Consumable` | Reagents, tips | Quantity tracking, depletion |
+| `Grid` | Plates, arrays | 2D positioning (row, col) |
+| `Stack` | Plate magazines | LIFO access (push/pop) |
+| `Queue` | Conveyor systems | FIFO access (enqueue/dequeue) |
+| `Row` | Tube racks | 1D positioning |
+| `Pool` | Mixed containers | Multiple consumables in one space |
+
+### Key Environment Variables
+```bash
+RESOURCE_PORT=8003                    # Service port
+RESOURCE_POSTGRES_HOST=localhost      # Database host
+RESOURCE_LOCAL_MODE=false             # Standalone mode
+RESOURCE_LOG_LEVEL=INFO              # Logging verbosity
+```
+
+### Common Commands
+```bash
+# Start service
+python -m madsci.resource_manager.resource_server
+
+# With Docker
+docker compose up resource_manager
+
+# Health check
+curl http://localhost:8003/health
+
+# API documentation
+open http://localhost:8003/docs
+```
+
 **Examples**: See [example_lab/](../../example_lab/) for complete resource management workflows integrated with laboratory operations.
+
+## Database Migration Tools
+
+MADSci includes automated database migration tools that handle schema changes and version tracking for the resource management system.
+
+### Features
+
+- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and database schema version
+- **Automated Backup**: Creates PostgreSQL dumps before applying migrations to enable rollback on failure
+- **Schema Migration**: Uses Alembic to generate and apply database schema changes
+- **Type Conversion Safety**: Automatically handles PostgreSQL type conversions (e.g., VARCHAR to FLOAT) with safe SQL transformations
+- **Location Independence**: Can be run from any directory while finding its own configuration files
+
+### Usage
+
+#### Standard Usage
+```bash
+# Run migration to current MADSci version
+python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@localhost:5432/resources'
+
+# Migrate to specific version
+python -m madsci.resource_manager.migration_tool --target-version 1.0.0
+
+# Create backup only
+python -m madsci.resource_manager.migration_tool --backup-only
+
+# Restore from backup
+python -m madsci.resource_manager.migration_tool --restore-from /path/to/backup.sql
+
+# Generate new migration file
+python -m madsci.resource_manager.migration_tool --generate-migration "Add new feature"
+```
+
+#### Docker Usage
+When running in Docker containers, use docker-compose to execute migration commands:
+
+```bash
+# Run migration to current MADSci version in Docker
+docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src resource-manager python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@postgres:5432/resources'
+
+# Migrate to specific version in Docker
+docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src resource-manager python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@postgres:5432/resources' --target-version 1.0.0
+
+# Create backup only in Docker
+docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src resource-manager python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@postgres:5432/resources' --backup-only
+
+# Generate new migration file in Docker
+docker-compose run --rm -v $(pwd)/src:/home/madsci/MADSci/src resource-manager python -m madsci.resource_manager.migration_tool --db-url 'postgresql://user:pass@postgres:5432/resources' --generate-migration "Add new feature"
+```
+
+### Server Integration
+
+The Resource Manager server automatically checks for version compatibility on startup. If a mismatch is detected, the server will refuse to start and display migration instructions:
+
+```bash
+DATABASE MIGRATION REQUIRED! SERVER STARTUP ABORTED!
+The database schema version does not match the MADSci package version.
+To resolve this issue, run the migration tool and restart the server.
+```
+
+### Backup Location
+
+Backups are stored in `.madsci/postgresql/backups/` with timestamped filenames:
+- Format: `resources_backup_YYYYMMDD_HHMMSS.sql`
+- Can be restored using the `--restore-from` option
+
+### Requirements
+
+- PostgreSQL server running and accessible
+- PostgreSQL tools (`pg_dump`, `pg_restore`, `psql`) installed
+- Appropriate database permissions for the specified user
+- Alembic for schema migration management

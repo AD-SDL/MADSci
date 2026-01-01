@@ -64,7 +64,7 @@ def test_value_substitution_malformed_syntax():
     parameters = {"param": "value"}
 
     # Test missing opening brace
-    with pytest.raises(SyntaxError, match="Missing opening { in parameter insertion"):
+    with pytest.raises(SyntaxError, match=r"Missing opening \{ in parameter insertion"):
         value_substitution("$param}", parameters)
 
 

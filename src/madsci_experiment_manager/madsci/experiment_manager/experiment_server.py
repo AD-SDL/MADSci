@@ -1,12 +1,14 @@
 """Experiment Manager implementation using the new AbstractManagerBase class."""
 
 import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from classy_fastapi import get, post
 from fastapi import HTTPException
 from madsci.client.event_client import EventType
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.event_types import Event
 from madsci.common.types.experiment_types import (
     Experiment,
@@ -16,6 +18,7 @@ from madsci.common.types.experiment_types import (
     ExperimentRegistration,
     ExperimentStatus,
 )
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from pymongo import MongoClient
 from pymongo.database import Database
 
@@ -46,14 +49,49 @@ class ExperimentManager(
         # Initialize database connection
         self._setup_database()
 
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize manager-specific components."""
+        super().initialize(**kwargs)
+
+        # Skip version validation if external db_client or db_connection was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self._db_client is not None or self._db_connection is not None:
+            # External connection provided, likely in test context - skip version validation
+            self.logger.info(
+                "External db_client or db_connection provided, skipping MongoDB version validation"
+            )
+            return
+
+        self.logger.info("Validating MongoDB schema version...")
+
+        schema_file_path = Path(__file__).parent / "schema.json"
+
+        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
+        version_checker = MongoDBVersionChecker(
+            db_url=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+            schema_file_path=str(schema_file_path),
+            backup_dir=str(mig_cfg.backup_dir),
+            logger=self.logger,
+        )
+
+        try:
+            version_checker.validate_or_fail()
+            self.logger.info("MongoDB version validation completed successfully")
+        except RuntimeError as e:
+            self.logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+            )
+            raise e
+
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
         if self._db_connection is None:
             if self._db_client is None:
-                self._db_client = MongoClient(self.settings.db_url)
-            self._db_connection = self._db_client["experiment_manager"]
+                self._db_client = MongoClient(str(self.settings.mongo_db_url))
+            self._db_connection = self._db_client[self.settings.database_name]
 
-        self.experiments = self._db_connection["experiments"]
+        self.experiments = self._db_connection[self.settings.collection_name]
 
     def get_health(self) -> ExperimentManagerHealth:
         """Get the health status of the Experiment Manager."""
@@ -82,21 +120,6 @@ class ExperimentManager(
             health.description = f"Database connection failed: {e!s}"
 
         return health
-
-    @get("/health")
-    def health_endpoint(self) -> ExperimentManagerHealth:
-        """Health check endpoint for the Experiment Manager."""
-        return self.get_health()
-
-    @get("/")
-    def get_definition(self) -> ExperimentManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
-
-    @get("/definition")
-    def get_definition_alt(self) -> ExperimentManagerDefinition:
-        """Return the manager definition."""
-        return self.definition
 
     @get("/experiment/{experiment_id}")
     async def get_experiment(self, experiment_id: str) -> Experiment:

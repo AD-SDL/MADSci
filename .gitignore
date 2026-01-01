@@ -303,6 +303,7 @@ test_experiment/
 # Output data
 .wei/
 .madsci/
+backups/
 
 #node modules
 **/node_modules
@@ -314,3 +315,14 @@ coverage.xml
 .coverage
 
 .mcp.json
+
+# Alembic migration versions (environment-specific)
+src/madsci_resource_manager/madsci/resource_manager/alembic/versions/*.py
+
+
+# Agentic coding
+.claude/
+agent_docs/
+
+# MyST build outputs
+_build
