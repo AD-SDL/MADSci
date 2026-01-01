@@ -50,7 +50,7 @@ actions:
         default: null
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false

@@ -19,3 +19,23 @@ class DockerComposeSettings(MadsciBaseSettings):
         default="./",
         description="The path to the MADSci repository on the host machine. This is mounted into the Docker containers to provide access to the codebase.",
     )
+    REDIS_PORT: int = Field(
+        default=6379,
+        description="The port on the host machine to bind the Redis service to. This allows other services to connect to Redis running inside the Docker container.",
+    )
+    MONGODB_PORT: int = Field(
+        default=27017,
+        description="The port on the host machine to bind the MongoDB service to. This allows other services to connect to MongoDB running inside the Docker container.",
+    )
+    POSTGRES_PORT: int = Field(
+        default=5432,
+        description="The port on the host machine to bind the PostgreSQL service to. This allows other services to connect to PostgreSQL running inside the Docker container.",
+    )
+    MINIO_PORT: int = Field(
+        default=9000,
+        description="The port on the host machine to bind the MinIO service to. This allows other services to connect to MinIO running inside the Docker container.",
+    )
+    MINIO_CONSOLE_PORT: int = Field(
+        default=9001,
+        description="The port on the host machine to bind the MinIO console to. This allows other services to connect to the MinIO console running inside the Docker container.",
+    )

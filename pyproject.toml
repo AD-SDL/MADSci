@@ -1,10 +1,15 @@
 [project]
 name = "madsci"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = ["pre-commit>=4.3.0"]
 readme="README.md"
 requires-python = ">=3.9.1"
 
+[project.optional-dependencies]
+docs = [
+    "mystmd>=1.7.1",
+    "pdoc3>=0.11.6",
+]
 [dependency-groups]
 dev = [
     "pytest>=8.3.4",

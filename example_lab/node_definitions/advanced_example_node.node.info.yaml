@@ -33,7 +33,7 @@ actions:
     locations: {}
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -59,7 +59,7 @@ actions:
           - data
           title: intModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -86,7 +86,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -103,7 +103,7 @@ actions:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -133,7 +133,7 @@ actions:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -160,7 +160,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -181,7 +181,7 @@ actions:
         result_label: log_file_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -216,7 +216,7 @@ actions:
         result_label: log_file_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -277,7 +277,7 @@ actions:
           - quality_score
           title: AnalysisResult
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -342,7 +342,7 @@ actions:
           - results_summary
           title: ExperimentMetadata
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -407,7 +407,7 @@ actions:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -439,7 +439,7 @@ actions:
           - data
           title: strModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -471,7 +471,7 @@ actions:
           - data
           title: intModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -503,7 +503,7 @@ actions:
           - data
           title: floatModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -535,7 +535,7 @@ actions:
           - data
           title: boolModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -586,7 +586,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -624,7 +624,7 @@ actions:
           - data
           title: strModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -681,7 +681,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -726,7 +726,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -765,7 +765,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -798,7 +798,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -831,7 +831,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -864,7 +864,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -931,7 +931,7 @@ actions:
           - quality_score
           title: AnalysisResult
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -963,7 +963,7 @@ actions:
           - data
           title: strModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -985,14 +985,14 @@ actions:
         name: config_file
         description: ''
         argument_type: file
-        required: true
+        required: false
         default: null
     results:
       file:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1001,17 +1001,17 @@ actions:
   test_multiple_file_inputs:
     name: test_multiple_file_inputs
     description: Test action with multiple file inputs
-    args:
-      secondary_files:
-        name: secondary_files
-        description: ''
-        argument_type: list[Path]
-        required: true
-        default: null
+    args: {}
     locations: {}
     files:
       primary_file:
         name: primary_file
+        description: ''
+        argument_type: file
+        required: true
+        default: null
+      secondary_files:
+        name: secondary_files
         description: ''
         argument_type: file
         required: true
@@ -1025,7 +1025,7 @@ actions:
         result_label: log_file_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1058,7 +1058,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1067,13 +1067,7 @@ actions:
   test_multiple_locations:
     name: test_multiple_locations
     description: Test action with multiple location arguments
-    args:
-      waypoints:
-        name: waypoints
-        description: ''
-        argument_type: list[LocationArgument]
-        required: false
-        default: null
+    args: {}
     locations:
       source:
         name: source
@@ -1087,9 +1081,15 @@ actions:
         argument_type: location
         required: true
         default: null
+      waypoints:
+        name: waypoints
+        description: ''
+        argument_type: location
+        required: false
+        default: null
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1128,7 +1128,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1142,12 +1142,6 @@ actions:
         name: sample_request
         description: ''
         argument_type: SampleProcessingRequest
-        required: true
-        default: null
-      data_files:
-        name: data_files
-        description: ''
-        argument_type: list[Path]
         required: true
         default: null
       config:
@@ -1175,7 +1169,13 @@ actions:
         argument_type: location
         required: true
         default: null
-    files: {}
+    files:
+      data_files:
+        name: data_files
+        description: ''
+        argument_type: file
+        required: true
+        default: null
     results:
       json_result:
         result_label: json_result
@@ -1227,7 +1227,7 @@ actions:
         result_label: log_file_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1265,7 +1265,7 @@ actions:
     locations: {}
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false

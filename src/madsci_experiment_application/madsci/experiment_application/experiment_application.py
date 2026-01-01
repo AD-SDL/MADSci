@@ -6,15 +6,6 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
 
-from madsci.client.data_client import DataClient
-from madsci.client.event_client import EventClient
-from madsci.client.experiment_client import ExperimentClient
-from madsci.client.lab_client import LabClient
-from madsci.client.location_client import (
-    LocationClient,  # noqa: F401 - Needed for test patching
-)
-from madsci.client.resource_client import ResourceClient
-from madsci.client.workcell_client import WorkcellClient
 from madsci.common.context import set_current_madsci_context
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.base_types import PathLike
@@ -82,27 +73,22 @@ class ExperimentApplication(RestNode):
         "lab",
     ]
 
+    # Experiment-specific attributes
     experiment: Optional[Experiment] = None
     """The current experiment being run."""
     experiment_design: Optional[Union[ExperimentDesign, PathLike]] = None
     """The design of the experiment."""
-    logger: EventClient
-    event_client: EventClient
-    """The event logger for the experiment."""
-    lab_client: LabClient
-    """Client for getting lab config."""
-    workcell_client: WorkcellClient
-    """Client for managing workcells."""
-    resource_client: ResourceClient
-    """Client for managing resources."""
-    data_client: DataClient
-    """Client for managing data."""
-    experiment_client: ExperimentClient
-    """Client for managing experiments."""
+
+    # Configuration
     config: ExperimentApplicationConfig = ExperimentApplicationConfig()
     """Configuration for the ExperimentApplication."""
     config_model = ExperimentApplicationConfig
     """The Pydantic model for the configuration of the ExperimentApplication."""
+
+    # Note: All client properties (event_client, experiment_client, workcell_client,
+    # location_client, data_client, resource_client, lab_client, logger) are inherited
+    # from AbstractNode via MadsciClientMixin and are available as properties with
+    # lazy initialization. They do not need to be redeclared here.
 
     def __init__(
         self,

@@ -44,7 +44,7 @@ actions:
           - data
           title: intModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -61,7 +61,7 @@ actions:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -82,7 +82,7 @@ actions:
         result_label: file_path_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false

@@ -323,3 +323,6 @@ src/madsci_resource_manager/madsci/resource_manager/alembic/versions/*.py
 # Agentic coding
 .claude/
 agent_docs/
+
+# MyST build outputs
+_build

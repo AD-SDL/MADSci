@@ -39,6 +39,11 @@ check: checks
 ruff-unsafe:
   @ruff check . --fix --unsafe-fixes
 
+# Generate API documentation with pdoc
+docs:
+  @pdm run pdoc --output-dir api/ --force madsci
+  @echo "✅ API documentation generated in api/"
+
 # Build the project
 build: dcb
 
@@ -135,7 +140,7 @@ update-version version:
   sed -i.bak 's/^version = ".*"/version = "{{version}}"/' pyproject.toml
 
   # Update all Python package pyproject.toml files
-  find src -name "pyproject.toml" -exec sed -i.bak 's/^version = ".*"/version = "{{version}}"/' {} \;
+  find src -name "pyproject.toml" -not -path '*/.*' -exec sed -i.bak 's/^version = ".*"/version = "{{version}}"/' {} \;
 
   # Update UI package.json
   if [ -f ui/package.json ]; then
@@ -147,7 +152,7 @@ update-version version:
 
   echo "✅ Updated version to {{version}} in:"
   echo "  - Root pyproject.toml"
-  echo "  - All Python package pyproject.toml files ($(find src -name "pyproject.toml" | wc -l | xargs echo) files)"
+  echo "  - All Python package pyproject.toml files ($(find src -name "pyproject.toml" -not -path '*/.*' | wc -l | xargs echo) files)"
   echo "  - UI package.json"
   echo ""
 
@@ -169,7 +174,7 @@ show-version:
   echo "  - pyproject.toml: $(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')"
   echo ""
   echo "Python packages:"
-  find src -name "pyproject.toml" | sort | while read file; do
+  find src -name "pyproject.toml" -not -path '*/.*' | sort | while read file; do
     version=$(grep '^version = ' "$file" | sed 's/version = "\(.*\)"/\1/')
     package_name=$(grep '^name = ' "$file" | sed 's/name = "\(.*\)"/\1/')
     echo "  - $package_name: $version"

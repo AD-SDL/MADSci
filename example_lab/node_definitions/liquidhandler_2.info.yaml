@@ -58,7 +58,7 @@ actions:
           - data
           title: strModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -98,7 +98,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -135,7 +135,7 @@ actions:
         default: null
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
