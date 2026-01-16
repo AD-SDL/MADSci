@@ -8,8 +8,8 @@ RUN apt-get update && \
 	rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 # User configuration
-ARG USER_ID=9999
-ARG GROUP_ID=9999
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 ARG CONTAINER_USER=madsci
 
 RUN groupadd -g ${GROUP_ID} ${CONTAINER_USER}
