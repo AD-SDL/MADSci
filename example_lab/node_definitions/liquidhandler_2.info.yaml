@@ -21,7 +21,9 @@ capabilities:
   - cancel
   - get_location
   - lock
+  - pause
   - reset
+  - resume
   - shutdown
   - unlock
 node_url: null

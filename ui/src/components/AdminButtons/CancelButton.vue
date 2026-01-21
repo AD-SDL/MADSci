@@ -64,7 +64,7 @@ watchEffect(() => {
         }
     }
     else if (props.wf_id) {
-        if (props.wf_status["active"]) {
+        if (props.wf_status["active"] || props.wf_status["paused"]) {
             canCancel.value = true
         }
         else {

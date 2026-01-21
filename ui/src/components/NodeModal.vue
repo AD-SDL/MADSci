@@ -9,7 +9,7 @@
           <template v-if="wc_state.nodes[modal_title].info.capabilities.admin_commands.includes('pause') && wc_state.nodes[modal_title].info.capabilities.admin_commands.includes('resume')">
             <PauseResumeButton
               :node="modal_title"
-              :node_status="wc_state.nodes[modal_title].state.status"
+              :node_status="get_status(wc_state.nodes[modal_title].status)"
               class="ml-2" />
           </template>
 

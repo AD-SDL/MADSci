@@ -287,10 +287,12 @@ class Engine:
         while not response.status.is_terminal:
             with self.state_handler.wc_state_lock():
                 current_wf = self.state_handler.get_active_workflow(wf.workflow_id)
-                if current_wf and current_wf.status.cancelled:
-                    cancelled_result = ActionResult(status=ActionStatus.CANCELLED)
-                    self.handle_response(current_wf, step, cancelled_result)
-                    break
+                # if current_wf and current_wf.status.cancelled:
+                #     with open("notes.txt", "a", encoding="utf-8") as f:
+                #         f.write("\nworkcell_engine.py: monitor_action_progress wf status cancelled.\n Setting action result to cancelled and calling handle_response. " + datetime.now().strftime("%h:%M:%S"))
+                #     cancelled_result = ActionResult(status=ActionStatus.CANCELLED)
+                #     self.handle_response(current_wf, step, cancelled_result)
+                #     break
             if not check_node_capability(
                 node_info=node.info, client=client, capability="get_action_result"
             ) and not check_node_capability(
@@ -308,7 +310,10 @@ class Engine:
                 if (
                     response.status.is_terminal
                     or response.status == ActionStatus.UNKNOWN
+                    or response.status == ActionStatus.PAUSED
                 ):
+                    with open("notes.txt", "a", encoding="utf-8") as f:
+                        f.write("\nworkcell_engine.py: (monitor_action_progress) Response status terminal or paused. " + datetime.now().strftime("%h:%M:%S"))
                     # * If the action is terminal or unknown, break out of the loop
                     # * If the action is unknown, that means the node does not have a record of the action
                     break
@@ -368,8 +373,14 @@ class Engine:
                 wf.status.failed = True
                 wf.end_time = datetime.now()
             elif step.status == ActionStatus.CANCELLED:
+                with open("notes.txt", "a", encoding="utf-8") as f:
+                    f.write("\nworkcell_engine.py: (finalize_step) Step status cancelled. Setting WF status to cancelled and setting end time. " + datetime.now().strftime("%h:%M:%S"))
                 wf.status.cancelled = True
                 wf.end_time = datetime.now()
+            elif step.status == ActionStatus.PAUSED:
+                with open("notes.txt", "a", encoding="utf-8") as f:
+                    f.write("\nworkcell_engine.py: (finalize_step) Step status paused. Setting WF status to paused. " + datetime.now().strftime("%h:%M:%S"))
+                wf.status.paused = True
             elif step.status == ActionStatus.NOT_READY:
                 pass
             elif step.status == ActionStatus.UNKNOWN:

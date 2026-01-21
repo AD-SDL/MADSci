@@ -1,0 +1,20 @@
+
+liquidhandler.py: (wrapper) Cancel and Pause event cleared in wrapper. Jan:07:42
+liquidhandler.py: (wrapper) Trying to run action in wrapper. Jan:07:42
+liquidhandler.py: (run_command) Running run_command action. Jan:07:42
+workcell_server.py: (send_admin_command_to_node) Posting admin command to node. Jan:07:46
+liquidhandler.py: (pause) Setting pause event and setting paused status to True. Jan:07:46
+liquidhandler.py: (_checkpoint) Event set raising Pause error. Jan:07:46
+liquidhandler.py: (wrapper) Raising PausedError in wrapper.Jan:07:46
+liquidhandler.py: (_pause_result) Returning paused action response. Jan:07:46
+workcell_engine.py: (monitor_action_progress) Response status terminal or paused. Jan:07:47
+workcell_engine.py: (finalize_step) Step status paused. Setting WF status to paused. Jan:07:47
+workcell_server.py: (send_admin_command_to_node) Posting admin command to node. Jan:07:57
+liquidhandler.py: (resume) Setting node status paused to False. Jan:07:57
+workcell_server.py: (resume_workflow) Resume called on currently paused workflow - setting active and enqueueing. Jan:08:09
+workcell_server.py: (send_admin_command_to_node) Posting admin command to node. Jan:08:09
+liquidhandler.py: (resume) Setting node status paused to False. Jan:08:09
+liquidhandler.py: (wrapper) Cancel and Pause event cleared in wrapper. Jan:08:10
+liquidhandler.py: (wrapper) Trying to run action in wrapper. Jan:08:10
+liquidhandler.py: (run_command) Running run_command action. Jan:08:10
+workcell_engine.py: (monitor_action_progress) Response status terminal or paused. Jan:08:34

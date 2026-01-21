@@ -20,18 +20,20 @@ Key Concepts Demonstrated:
 This serves as a template for creating real instrument drivers.
 """
 
+from logging import config
 import time
 from pathlib import Path
 from typing import Any, Optional
 import threading
 import functools
+from datetime import datetime
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types import Pool, Slot
-from madsci.common.types.action_types import ActionCancelled
+from madsci.common.types.action_types import ActionCancelled, ActionPaused
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
@@ -39,23 +41,40 @@ from madsci.node_module.rest_node_module import RestNode
 class CancelledError(Exception):
     pass
 
-def cancellable(action_fn):
+class PausedError(Exception):
+    pass
+
+def interruptable(action_fn):
     @functools.wraps(action_fn)
     def wrapper(self, *args, **kwargs):
         self._cancel_event.clear()
+        with open("notes.txt", "a", encoding="utf-8") as f:
+            f.write("\nliquidhandler.py: (wrapper) Cancel and Pause event cleared in wrapper. " + datetime.now().strftime("%h:%M:%S"))
+        self._pause_event.clear()
         result_container = {"value": None}
         def run():
             try:
+                with open("notes.txt", "a", encoding="utf-8") as f:
+                    f.write("\nliquidhandler.py: (wrapper) Trying to run action in wrapper. " + datetime.now().strftime("%h:%M:%S"))
                 result_container["value"] = action_fn(self, *args, **kwargs)
             except CancelledError:
+                with open("notes.txt", "a", encoding="utf-8") as f:
+                    f.write("\nliquidhandler.py: (wrapper) Raising CancelledError in wrapper." + datetime.now().strftime("%h:%M:%S"))
                 result_container["value"] = self._cancel_result()
+            except PausedError:
+                with open("notes.txt", "a", encoding="utf-8") as f:
+                    f.write("\nliquidhandler.py: (wrapper) Raising PausedError in wrapper." + datetime.now().strftime("%h:%M:%S"))
+                result_container["value"] = self._pause_result()
             except Exception as e:
                 result_container["value"] = e
         t = threading.Thread(target=run)
         t.start()
         while t.is_alive():
-            if self._cancel_event.is_set():
-                return self._cancel_result()
+            if self._cancel_event.is_set() or self._pause_event.is_set():
+                with open("notes.txt", "a", encoding="utf-8") as f:
+                    f.write("\nliquidhandler.py: (wrapper) Cancel or Pause event set - returning from wrapper." + datetime.now().strftime("%h:%M:%S"))
+                t.join(timeout=0.25)
+                return self._cancel_result() if self._cancel_event.is_set() else self._pause_result()
             time.sleep(0.05)
         return result_container["value"]
     return wrapper
@@ -161,10 +180,40 @@ class LiquidHandlerNode(RestNode):
     def __init__(self):
         super().__init__()
         self._cancel_event = threading.Event()
+        with open("notes.txt", "a", encoding="utf-8") as f:
+            f.write("\nliquidhandler.py: (__init__) Cancel and Pause event thread created. " + datetime.now().strftime("%h:%M:%S"))
+        self._pause_event = threading.Event()
     
     def _cancel_result(self):
         action_response = ActionCancelled()
+        with open("notes.txt", "a", encoding="utf-8") as f:
+            f.write("\nliquidhandler.py: (_cancel_result) Returning cancelled action response. " + datetime.now().strftime("%h:%M:%S"))
         return action_response
+    
+    def _pause_result(self):
+        action_response = ActionPaused()
+        with open("notes.txt", "a", encoding="utf-8") as f:
+            f.write("\nliquidhandler.py: (_pause_result) Returning paused action response. " + datetime.now().strftime("%h:%M:%S"))
+        return action_response
+
+    def _checkpoint(self) -> None:
+        if self._cancel_event.is_set():
+            with open("notes.txt", "a", encoding="utf-8") as f:
+                f.write("\nliquidhandler.py: (_checkpoint) Event set raising Cancel error. " + datetime.now().strftime("%h:%M:%S"))
+            raise CancelledError()
+        if self._pause_event.is_set():
+            with open("notes.txt", "a", encoding="utf-8") as f:
+                f.write("\nliquidhandler.py: (_checkpoint) Event set raising Pause error. " + datetime.now().strftime("%h:%M:%S"))
+            raise PausedError()
+    
+    def _wait(self, seconds: float, tick: float = 0.1) -> None:
+        end = time.monotonic() + seconds
+        while True:
+            self._checkpoint()
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                return
+            self._cancel_event.wait(timeout=min(tick, remaining))
 
     def startup_handler(self) -> None:
         """
@@ -304,7 +353,7 @@ class LiquidHandlerNode(RestNode):
             }
 
     @action
-    @cancellable
+    @interruptable
     def run_command(self, command: str) -> str:
         """
         Execute a direct hardware command on the liquid handler.
@@ -322,11 +371,14 @@ class LiquidHandlerNode(RestNode):
             POST /actions/run_command {"command": "aspirate 100 ul"}
             Response: "aspirate 100 ul"
         """
+        with open("notes.txt", "a", encoding="utf-8") as f:
+            f.write("\nliquidhandler.py: (run_command) Running run_command action. " + datetime.now().strftime("%h:%M:%S"))
         self.liquid_handler.run_command(command)
-        time.sleep(self.config.wait_time)
+        self._wait(seconds=self.config.wait_time)
         return command
 
     @action
+    @interruptable
     def run_protocol(self, protocol: Path) -> dict:
         """
         Execute a protocol file on the liquid handler.
@@ -346,10 +398,11 @@ class LiquidHandlerNode(RestNode):
             Response: {"protocol_name": "pcr_setup.json"}
         """
         self.logger.log(f"Executing protocol: {protocol}")
-        time.sleep(self.config.wait_time)
+        self._wait(self.config.wait_time)
         return {"protocol_name": str(protocol.name)}
 
     @action
+    @interruptable
     def deck_transfer(
         self, source_location: LocationArgument, target_location: LocationArgument
     ) -> None:
@@ -386,7 +439,7 @@ class LiquidHandlerNode(RestNode):
         self.liquid_handler.run_command(
             f"move_labware {source_location} {target_location}"
         )
-        time.sleep(self.config.wait_time)
+        self._wait(self.config.wait_time)
 
         # Update resource tracking: remove from source, add to target
         transferred_resource = self.resource_client.pop(source_location.resource_id)[0]
@@ -408,8 +461,24 @@ class LiquidHandlerNode(RestNode):
         return AdminCommandResponse(data=[0, 0, 0, 0])
     
     def cancel(self) -> AdminCommandResponse:
+        with open("notes.txt", "a", encoding="utf-8") as f:
+            f.write("\nliquidhandler.py: (cancel) Setting cancel event. " + datetime.now().strftime("%h:%M:%S"))
         self._cancel_event.set()
         return AdminCommandResponse()
+    
+    def pause(self) -> AdminCommandResponse:
+        with open("notes.txt", "a", encoding="utf-8") as f:
+            f.write("\nliquidhandler.py: (pause) Setting pause event and setting paused status to True. " + datetime.now().strftime("%h:%M:%S"))
+        self.node_status.paused = True
+        self._pause_event.set()
+        return AdminCommandResponse()
+ 
+    def resume(self) -> AdminCommandResponse:
+        with open("notes.txt", "a", encoding="utf-8") as f:
+            f.write("\nliquidhandler.py: (resume) Setting node status paused to False. " + datetime.now().strftime("%h:%M:%S"))
+        self.node_status.paused = False
+        return AdminCommandResponse()
+    
         
 
 

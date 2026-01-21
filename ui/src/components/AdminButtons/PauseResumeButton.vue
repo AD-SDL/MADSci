@@ -37,6 +37,8 @@ import {
 const props = defineProps<{
     node?: string;
     node_status?: any;
+    wf_id?: string;
+    wf_status?: any;
 }>();
 
 const pause_url = ref('')
@@ -52,6 +54,11 @@ watchEffect(() => {
         resume_url.value = urls.value.workcell_server_url.concat('admin/resume/'.concat(props.node))
         hoverText.value = "Node"
     }
+    else if (props.wf_id) {
+        pause_url.value = urls.value.workcell_server_url.concat('workflow/'.concat(props.wf_id).concat('/pause/'))
+        resume_url.value = urls.value.workcell_server_url.concat('workflow/'.concat(props.wf_id).concat('/resume/'))
+        hoverText.value = "Workflow"
+    }
     else {
         pause_url.value = urls.value.workcell_server_url.concat('admin/pause')
         resume_url.value = urls.value.workcell_server_url.concat('admin/resume')
@@ -61,15 +68,29 @@ watchEffect(() => {
 
 watchEffect(() => {
     if (props.node) {
+        console.log("Node Status (from props=get_status):", props.node_status)
         // Determine if pressing pause/resume button should be allowed
-        if (props.node_status["BUSY"] == true || props.node_status["PAUSED"] == true) {
+        if (props.node_status == 'busy' || props.node_status == 'running' || props.node_status == 'paused') {
             allowButton.value = true
         } else {
             allowButton.value = false
         }
 
         // Determine if the node is already paused
-        if (props.node_status["PAUSED"] == true) {
+        if (props.node_status == 'paused') {
+            isPaused.value = true
+        } else {
+            isPaused.value = false
+        }
+    }
+    else if (props.wf_id) {
+        if (props.wf_status["active"] || props.wf_status["paused"]) {
+            allowButton.value = true
+        } else {
+            allowButton.value = false
+        }
+
+        if (props.wf_status["paused"]) {
             isPaused.value = true
         } else {
             isPaused.value = false

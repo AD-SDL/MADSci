@@ -5,6 +5,10 @@
         <div class="d-flex align-center w-100">
           <h2 class="title py-3 my-3">Workflow: {{ modal_title }}</h2>
           <!-- {{modal_text.run_id}} -->
+          <PauseResumeButton
+            :wf_id="modal_text.workflow_id"
+            :wf_status="modal_text.status"
+            class="ml-2" />
           <CancelButton
             :wf_id="modal_text.workflow_id"
             :wf_status="modal_text.status"
