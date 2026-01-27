@@ -41,8 +41,8 @@ ruff-unsafe:
 
 # Generate API documentation with pdoc
 docs:
-  @pdm run pdoc --output-dir api/ --force madsci
-  @echo "✅ API documentation generated in api/"
+  @pdm run pdoc --output-dir docs/api/ --force madsci
+  @echo "✅ API documentation generated in docs/api/"
 
 # Build the project
 build: dcb

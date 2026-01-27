@@ -2,6 +2,8 @@
 
 This is a fully functional example of a MADSci-powered self-driving laboratory. It demonstrates the complete MADSci ecosystem including all core managers, multiple virtual laboratory nodes, and various workflows that showcase autonomous experimentation capabilities.
 
+Currently, this lab uses simulated example modules for purely fake devices. For examples of real equipment integrated using MADSci, see [here](../docs/madsci_powered/Modules.md).
+
 ## Lab Architecture
 
 The example lab simulates a real laboratory environment with:
