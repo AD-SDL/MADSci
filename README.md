@@ -6,6 +6,7 @@
 [![PyPI](https://github.com/AD-SDL/MADSci/actions/workflows/pypi.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pypi.yml)
 [![Pytests](https://github.com/AD-SDL/MADSci/actions/workflows/pytests.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pytests.yml)
 ![Coverage badge](https://raw.githubusercontent.com/AD-SDL/MADSci/python-coverage-comment-action-data/badge.svg)
+[![JOSS status](https://joss.theoj.org/papers/d554e38543529f08aa8ebaf068c17eec/status.svg)](https://joss.theoj.org/papers/d554e38543529f08aa8ebaf068c17eec)
 
 <img src="./assets/drawio/madsci_control_flow.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
