@@ -148,6 +148,17 @@ class Event(MadsciBaseModel):
         description="The data associated with the event.",
         default_factory=dict,
     )
+    # OpenTelemetry trace context for log correlation
+    trace_id: Optional[str] = Field(
+        title="Trace ID",
+        description="OpenTelemetry trace ID for distributed trace correlation (32 hex characters).",
+        default=None,
+    )
+    span_id: Optional[str] = Field(
+        title="Span ID",
+        description="OpenTelemetry span ID for distributed trace correlation (16 hex characters).",
+        default=None,
+    )
 
     @field_validator("event_id", mode="before")
     @classmethod
@@ -243,6 +254,28 @@ class EventClientConfig(MadsciClientConfig):
         default=True,
         title="Log Compression Enabled",
         description="Whether to compress rotated log files with gzip",
+    )
+
+    # OpenTelemetry configuration
+    otel_enabled: bool = Field(
+        default=False,
+        title="OpenTelemetry Enabled",
+        description="Enable OpenTelemetry tracing and metrics integration",
+    )
+    otel_service_name: Optional[str] = Field(
+        default=None,
+        title="OpenTelemetry Service Name",
+        description="Override service name for OpenTelemetry (defaults to client name)",
+    )
+    otel_exporter: Literal["console", "otlp", "none"] = Field(
+        default="console",
+        title="OpenTelemetry Exporter",
+        description="OpenTelemetry exporter type: 'console' for development, 'otlp' for production, 'none' to disable",
+    )
+    otel_endpoint: Optional[str] = Field(
+        default=None,
+        title="OpenTelemetry Endpoint",
+        description="OTLP collector endpoint (required when otel_exporter='otlp')",
     )
 
     @field_validator("log_rotation_when")

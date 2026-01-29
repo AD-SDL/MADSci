@@ -26,6 +26,7 @@ exclude = [
     ".venv",
     "docs",
     "*.ipynb",
+    "*.md",
 ]
 
 # Same as Black.

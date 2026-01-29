@@ -2,7 +2,7 @@
 
 > **Meta Issue:** [#218 - Meta: Event Client/Manager Improvements](https://github.com/AD-SDL/MADSci/issues/218)
 > **Created:** January 2026
-> **Status:** In Progress (Phase 1 Complete)
+> **Status:** In Progress (Phase 3 Complete)
 
 ## Overview
 
@@ -433,12 +433,12 @@ This decision will be documented in the Phase 4 PR description.
 
 ### Acceptance Criteria
 
-- [ ] Research document completed
-- [ ] PoC demonstrates trace propagation
-- [ ] PoC demonstrates log correlation with traces
-- [ ] PoC demonstrates basic metrics collection
-- [ ] Recommendations provided for Phase 4 integration
-- [ ] PoC includes assessment of code reusability for Phase 4
+- [x] Research document completed
+- [x] PoC demonstrates trace propagation
+- [x] PoC demonstrates log correlation with traces
+- [x] PoC demonstrates basic metrics collection
+- [x] Recommendations provided for Phase 4 integration
+- [x] PoC includes assessment of code reusability for Phase 4
 
 ---
 
@@ -1504,7 +1504,7 @@ pytest src/madsci_client/tests/test_event_client.py::TestEventClientStructlog
 |-------|--------|----|-------|
 | Phase 1 | Complete | - | Startup logging implemented at INFO level |
 | Phase 2 | Complete | - | Log rotation with RotatingFileHandler/TimedRotatingFileHandler, gzip compression |
-| Phase 3 | Not Started | - | - |
+| Phase 3 | Complete | - | Research doc + PoC branch `feature/otel-poc` |
 | Phase 4 | Not Started | - | - |
 | Phase 5 | Not Started | - | - |
 
