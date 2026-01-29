@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Optional, Union, get_args
 
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
@@ -156,6 +156,9 @@ class Event(MadsciBaseModel):
         return str(v)
 
 
+LogRotationType = Literal["size", "time", "none"]
+
+
 class EventClientConfig(MadsciClientConfig):
     """Configuration for an Event Client.
 
@@ -206,6 +209,76 @@ class EventClientConfig(MadsciClientConfig):
         description="The directory to store logs in.",
         default_factory=lambda: Path("~") / ".madsci" / "logs",
     )
+
+    # Log rotation settings
+    log_rotation_type: LogRotationType = Field(
+        default="size",
+        title="Log Rotation Type",
+        description="Type of log rotation: 'size' (RotatingFileHandler), 'time' (TimedRotatingFileHandler), or 'none'",
+    )
+    log_max_bytes: int = Field(
+        default=10_485_760,  # 10MB
+        title="Log Max Bytes",
+        description="Maximum log file size in bytes before rotation (for size-based rotation)",
+        ge=1024,  # Minimum 1KB
+    )
+    log_backup_count: int = Field(
+        default=5,
+        title="Log Backup Count",
+        description="Number of backup log files to keep",
+        ge=0,
+    )
+    log_rotation_when: str = Field(
+        default="midnight",
+        title="Log Rotation When",
+        description="When to rotate logs (for time-based rotation): 'S', 'M', 'H', 'D', 'midnight', 'W0'-'W6'",
+    )
+    log_rotation_interval: int = Field(
+        default=1,
+        title="Log Rotation Interval",
+        description="Interval for time-based rotation",
+        ge=1,
+    )
+    log_compression_enabled: bool = Field(
+        default=True,
+        title="Log Compression Enabled",
+        description="Whether to compress rotated log files with gzip",
+    )
+
+    @field_validator("log_rotation_when")
+    @classmethod
+    def validate_log_rotation_when(cls, v: str) -> str:
+        """Validate that log_rotation_when is a valid value for TimedRotatingFileHandler."""
+        valid_values = {
+            "S",
+            "M",
+            "H",
+            "D",
+            "midnight",
+            "W0",
+            "W1",
+            "W2",
+            "W3",
+            "W4",
+            "W5",
+            "W6",
+        }
+        if v not in valid_values:
+            raise ValueError(
+                f"log_rotation_when must be one of {valid_values}, got '{v}'"
+            )
+        return v
+
+    @field_validator("log_rotation_type", mode="before")
+    @classmethod
+    def validate_log_rotation_type(cls, v: str) -> str:
+        """Validate that log_rotation_type is a valid value."""
+        valid_values = get_args(LogRotationType)
+        if v not in valid_values:
+            raise ValueError(
+                f"log_rotation_type must be one of {valid_values}, got '{v}'"
+            )
+        return v
 
 
 class EventType(str, Enum):

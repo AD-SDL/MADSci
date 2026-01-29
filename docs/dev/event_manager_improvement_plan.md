@@ -2,7 +2,7 @@
 
 > **Meta Issue:** [#218 - Meta: Event Client/Manager Improvements](https://github.com/AD-SDL/MADSci/issues/218)
 > **Created:** January 2026
-> **Status:** Planning
+> **Status:** In Progress (Phase 1 Complete)
 
 ## Overview
 
@@ -118,19 +118,21 @@ def get_madsci_version() -> str:
 
 #### 1.3 Implement Startup Logging
 
-Add `_log_startup_info()` method to EventClient:
+Add `_log_startup_info()` method to EventClient (implemented in `src/madsci_client/madsci/client/event_client.py`):
 
 ```python
 def _log_startup_info(self) -> None:
-    """Log startup information on first initialization."""
-    import platform
+    """Log startup information on first initialization.
 
+    Logs MADSci version, client configuration, and environment info
+    to help with debugging and auditing.
+    """
     startup_info = {
         "madsci_version": get_madsci_version(),
         "client_name": self.name,
         "event_server": str(self.event_server) if self.event_server else "Not configured",
         "log_dir": str(self.log_dir),
-        "log_level": self.config.log_level.name,
+        "log_level": self.config.log_level.name if hasattr(self.config.log_level, "name") else str(self.config.log_level),
         "python_version": platform.python_version(),
         "platform": platform.platform(),
     }
@@ -138,12 +140,14 @@ def _log_startup_info(self) -> None:
     self.logger.info(f"EventClient initialized: {startup_info}")
 ```
 
+**Note:** The implementation logs at INFO level (not DEBUG as originally planned) so startup info is visible by default.
+
 ### Acceptance Criteria
 
-- [ ] MADSci version is logged on EventClient initialization
-- [ ] Configuration summary is logged
-- [ ] All new tests pass
-- [ ] Existing tests continue to pass
+- [x] MADSci version is logged on EventClient initialization
+- [x] Configuration summary is logged
+- [x] All new tests pass
+- [x] Existing tests continue to pass
 
 ---
 
@@ -317,13 +321,13 @@ def _setup_file_logging(self) -> None:
 
 ### Acceptance Criteria
 
-- [ ] Size-based log rotation works correctly
-- [ ] Time-based log rotation works correctly
-- [ ] Backup count limits are enforced
-- [ ] Log compression produces valid gzip files
-- [ ] Rotation can be disabled via config
-- [ ] All new tests pass
-- [ ] Existing tests continue to pass
+- [x] Size-based log rotation works correctly
+- [x] Time-based log rotation works correctly
+- [x] Backup count limits are enforced
+- [x] Log compression produces valid gzip files
+- [x] Rotation can be disabled via config
+- [x] All new tests pass
+- [x] Existing tests continue to pass
 
 ---
 
@@ -1497,9 +1501,9 @@ pytest src/madsci_client/tests/test_event_client.py::TestEventClientStructlog
 ## Progress Tracking
 
 | Phase | Status | PR | Notes |
-|-------|--------|----|---------|
-| Phase 1 | Not Started | - | - |
-| Phase 2 | Not Started | - | - |
+|-------|--------|----|-------|
+| Phase 1 | Complete | - | Startup logging implemented at INFO level |
+| Phase 2 | Complete | - | Log rotation with RotatingFileHandler/TimedRotatingFileHandler, gzip compression |
 | Phase 3 | Not Started | - | - |
 | Phase 4 | Not Started | - | - |
 | Phase 5 | Not Started | - | - |

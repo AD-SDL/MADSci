@@ -1,14 +1,19 @@
 """MADSci Event Handling."""
 
 import contextlib
+import gzip
 import inspect
 import json
 import logging
+import platform
 import queue
+import shutil
 import time
 import traceback
 import warnings
 from collections import OrderedDict
+from importlib.metadata import PackageNotFoundError, version
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from threading import Lock, Thread
 from typing import Any, Optional, Union
@@ -23,6 +28,18 @@ from madsci.common.types.event_types import (
 from madsci.common.utils import create_http_session, threaded_task
 from pydantic import BaseModel, ValidationError
 from rich.logging import RichHandler
+
+
+def get_madsci_version() -> str:
+    """Get the installed MADSci version.
+
+    Returns:
+        The installed version string, or "unknown (development mode)" if not installed.
+    """
+    try:
+        return version("madsci_client")
+    except PackageNotFoundError:
+        return "unknown (development mode)"
 
 
 class EventClient:
@@ -71,7 +88,7 @@ class EventClient:
         self.logger.setLevel(self.config.log_level)
         for handler in self.logger.handlers:
             self.logger.removeHandler(handler)
-        file_handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
+        file_handler = self._create_file_handler()
         self.logger.addHandler(file_handler)
         self.logger.addHandler(RichHandler(rich_tracebacks=True, show_path=False))
         self.event_server = (
@@ -81,6 +98,89 @@ class EventClient:
 
         # Create HTTP session for requests to event server
         self.session = create_http_session(config=self.config)
+
+        # Log startup information
+        self._log_startup_info()
+
+    def _log_startup_info(self) -> None:
+        """Log startup information on first initialization.
+
+        Logs MADSci version, client configuration, and environment info
+        to help with debugging and auditing.
+        """
+        startup_info = {
+            "madsci_version": get_madsci_version(),
+            "client_name": self.name,
+            "event_server": str(self.event_server)
+            if self.event_server
+            else "Not configured",
+            "log_dir": str(self.log_dir),
+            "log_level": self.config.log_level.name
+            if hasattr(self.config.log_level, "name")
+            else str(self.config.log_level),
+            "python_version": platform.python_version(),
+            "platform": platform.platform(),
+        }
+
+        self.logger.info(f"EventClient initialized: {startup_info}")
+
+    def _create_file_handler(self) -> logging.Handler:
+        """Create the appropriate file handler based on rotation config.
+
+        Returns:
+            A logging handler configured for file output with optional rotation.
+        """
+        handler: logging.Handler
+
+        if self.config.log_rotation_type == "none":
+            handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
+        elif self.config.log_rotation_type == "size":
+            handler = RotatingFileHandler(
+                filename=str(self.logfile),
+                maxBytes=self.config.log_max_bytes,
+                backupCount=self.config.log_backup_count,
+            )
+            if self.config.log_compression_enabled:
+                handler.rotator = self._compress_rotated_log
+                handler.namer = self._rotated_log_namer
+        elif self.config.log_rotation_type == "time":
+            handler = TimedRotatingFileHandler(
+                filename=str(self.logfile),
+                when=self.config.log_rotation_when,
+                interval=self.config.log_rotation_interval,
+                backupCount=self.config.log_backup_count,
+            )
+            if self.config.log_compression_enabled:
+                handler.rotator = self._compress_rotated_log
+                handler.namer = self._rotated_log_namer
+        else:
+            # Fallback to basic file handler (should not happen due to validation)
+            handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
+
+        return handler
+
+    def _compress_rotated_log(self, source: str, dest: str) -> None:
+        """Compress a rotated log file with gzip.
+
+        Args:
+            source: Path to the source log file to compress.
+            dest: Path to the destination compressed file.
+        """
+        source_path = Path(source)
+        with source_path.open("rb") as f_in, gzip.open(dest, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        source_path.unlink()
+
+    def _rotated_log_namer(self, name: str) -> str:
+        """Add .gz extension to rotated log file names.
+
+        Args:
+            name: The original rotated log file name.
+
+        Returns:
+            The file name with .gz extension appended.
+        """
+        return name + ".gz"
 
     def __del__(self) -> None:
         """Clean up retry thread on destruction."""
