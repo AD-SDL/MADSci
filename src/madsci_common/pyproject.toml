@@ -32,7 +32,8 @@ dependencies = [
     "regex>=2025.7.34",
     "classy-fastapi>=0.7.0",
     "httpx>=0.28.1",
-    "click>=8.1.0"
+    "click>=8.1.0",
+    "rich>=13.0.0"
 ]
 
 [project.scripts]
