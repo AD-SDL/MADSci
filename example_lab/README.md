@@ -36,10 +36,11 @@ The example lab simulates a real laboratory environment with:
 
 Before starting the example lab, ensure you have:
 
-1. **Docker**: Docker Desktop (recommended) or Rancher Desktop
+1. **Docker**: Docker Desktop or Rancher Desktop
    - Docker Compose v2.0 or higher
    - At least 4GB RAM allocated to Docker
    - At least 10GB free disk space
+   - Consult the [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide) for configuration and setup recommendations
 
 2. **Network Requirements**:
    - Ports 2000-2004, 5432, 6379, 8000-8006, 9000-9001, and 27017 available
@@ -50,6 +51,8 @@ Before starting the example lab, ensure you have:
    - x86_64 or arm64 architecture
 
 ## Quick Start
+
+If you're new to docker,
 
 ### 1. Start the Example Lab
 

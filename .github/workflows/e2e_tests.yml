@@ -35,6 +35,6 @@ jobs:
       - name: Ensure .madsci directory exists
         run: mkdir -p ./.madsci
       - name: Build and start example lab services, and wait for startup
-        run: docker compose up --build -d && sleep 30
+        run: docker compose up --build -d && sleep 60
       - name: Run the experiment notebook
         run: timeout 15m just e2e_tests

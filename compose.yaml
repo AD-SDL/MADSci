@@ -26,7 +26,8 @@ x-madsci-service: &madsci-service
   network_mode: host
   env_file:
     - example_lab/.env # Load environment variables from the example_lab directory
-    - .env # Optional: Load environment variables from a .env file
+    - path: .env # Optional: Load environment variables from a .env file
+      required: false
   volumes:
     - ${REPO_PATH:-.}/example_lab:/home/madsci/example_lab
     - ${REPO_PATH:-.}/.madsci:/home/madsci/.madsci
