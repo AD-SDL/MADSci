@@ -2,7 +2,7 @@
 
 > **Meta Issue:** [#218 - Meta: Event Client/Manager Improvements](https://github.com/AD-SDL/MADSci/issues/218)
 > **Created:** January 2026
-> **Status:** In Progress (Phase 4 Complete)
+> **Status:** Complete (All Phases)
 
 ## Overview
 
@@ -1423,17 +1423,17 @@ class TestRetentionErrorHandling:
 
 ### Acceptance Criteria
 
-- [ ] Events can be soft-deleted (archived) in configurable batch sizes
-- [ ] TTL index is created for automatic hard-deletion of archived events
-- [ ] Soft-delete retention runs automatically on configurable schedule
-- [ ] Batch limits prevent performance impact during large retention operations
-- [ ] One-time backups can be created via API
-- [ ] Backup uses existing `MongoDBBackupTool`
-- [ ] Event queries support pagination (offset/limit)
-- [ ] Event queries support date range filtering
-- [ ] Archived events are excluded by default, can be included
-- [ ] Error handling is configurable via `fail_on_retention_error`
-- [ ] All tests pass
+- [x] Events can be soft-deleted (archived) in configurable batch sizes
+- [x] TTL index is created for automatic hard-deletion of archived events
+- [x] Soft-delete retention runs automatically on configurable schedule
+- [x] Batch limits prevent performance impact during large retention operations
+- [x] One-time backups can be created via API
+- [x] Backup uses existing `MongoDBBackupTool`
+- [x] Event queries support pagination (offset/limit)
+- [x] Event queries support date range filtering
+- [x] Archived events are excluded by default, can be included
+- [x] Error handling is configurable via `fail_on_retention_error`
+- [x] All tests pass
 
 ---
 
@@ -1506,7 +1506,7 @@ pytest src/madsci_client/tests/test_event_client.py::TestEventClientStructlog
 | Phase 2 | Complete | - | Log rotation with RotatingFileHandler/TimedRotatingFileHandler, gzip compression |
 | Phase 3 | Complete | - | Research doc + PoC branch `feature/otel-poc` |
 | Phase 4 | Complete | - | Structlog migration with idiomatic API, context binding, per-instance config |
-| Phase 5 | Not Started | - | - |
+| Phase 5 | Complete | - | MongoDB retention (soft/hard delete), backup endpoints, background retention task, query improvements |
 
 ---
 

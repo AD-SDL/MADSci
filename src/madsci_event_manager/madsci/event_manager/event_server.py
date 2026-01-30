@@ -1,12 +1,14 @@
 """Example Event Manager implementation using the new AbstractManagerBase class."""
 
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 import pymongo
 from classy_fastapi import delete, get, post
-from fastapi import Query
+from fastapi import FastAPI, Query
 from fastapi.exceptions import HTTPException
 from fastapi.params import Body
 from fastapi.responses import Response
@@ -224,6 +226,136 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             health.description = f"Database connection failed: {e!s}"
 
         return health
+
+    # ==========================================================================
+    # Background Retention Task
+    # ==========================================================================
+
+    def configure_app(self, app: FastAPI) -> None:
+        """Configure the FastAPI application with background retention task.
+
+        Overrides the base class method to add retention task lifecycle management.
+        """
+        # Call parent configuration first (CORS, rate limiting, etc.)
+        super().configure_app(app)
+
+        # Store reference to retention task for cleanup
+        self._retention_task: Optional[asyncio.Task[None]] = None
+
+        @asynccontextmanager
+        async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+            """Manage the lifecycle of background tasks."""
+            # Startup: Start retention task if enabled
+            if self.settings.retention_enabled:
+                self._retention_task = asyncio.create_task(
+                    self._run_retention_check_loop()
+                )
+                self.logger.info(
+                    "Started automatic retention task",
+                    check_interval_hours=self.settings.retention_check_interval_hours,
+                    soft_delete_after_days=self.settings.soft_delete_after_days,
+                )
+            yield
+            # Shutdown: Cancel retention task if running
+            if self._retention_task is not None:
+                self._retention_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await self._retention_task
+                self.logger.info("Stopped automatic retention task")
+
+        # Set the lifespan on the app
+        app.router.lifespan_context = lifespan
+
+    async def _run_retention_check_loop(self) -> None:
+        """Background task loop to enforce soft-delete retention policy.
+
+        Note: Hard-deletion is handled automatically by MongoDB TTL index.
+        This task only handles soft-deletion (archiving) of old events.
+        """
+        while True:
+            try:
+                archived_count = await self._archive_old_events()
+                if archived_count > 0:
+                    self.logger.info(
+                        "Retention check completed",
+                        archived_count=archived_count,
+                    )
+                else:
+                    self.logger.debug("Retention check completed, no events to archive")
+            except asyncio.CancelledError:
+                # Task is being cancelled, exit gracefully
+                raise
+            except Exception as e:
+                error_msg = f"Retention check failed: {e}"
+                if self.settings.fail_on_retention_error:
+                    self.logger.error(error_msg)
+                    raise
+                self.logger.warning(error_msg)
+
+            # Wait for next check interval
+            await asyncio.sleep(self.settings.retention_check_interval_hours * 3600)
+
+    async def _archive_old_events(self) -> int:
+        """Archive old events in batches to prevent performance impact.
+
+        Returns:
+            Total number of events archived
+        """
+        soft_delete_cutoff = datetime.utcnow() - timedelta(
+            days=self.settings.soft_delete_after_days
+        )
+        # Convert to ISO string to match MongoDB storage format
+        soft_delete_cutoff_str = soft_delete_cutoff.isoformat()
+
+        total_archived = 0
+        batches_processed = 0
+        batch_size = self.settings.archive_batch_size
+        max_batches = self.settings.max_batches_per_run
+
+        while True:
+            # Check batch limit
+            if max_batches > 0 and batches_processed >= max_batches:
+                self.logger.info(
+                    "Reached max batches limit, will continue next run",
+                    batches_processed=batches_processed,
+                    total_archived=total_archived,
+                )
+                break
+
+            # Find batch of events to archive
+            events_to_archive = list(
+                self.events.find(
+                    {
+                        "event_timestamp": {"$lt": soft_delete_cutoff_str},
+                        "archived": {"$ne": True},
+                    },
+                    {"_id": 1},
+                ).limit(batch_size)
+            )
+
+            if not events_to_archive:
+                break  # No more events to archive
+
+            event_ids = [e["_id"] for e in events_to_archive]
+
+            # Archive this batch
+            result = self.events.update_many(
+                {"_id": {"$in": event_ids}},
+                {
+                    "$set": {
+                        "archived": True,
+                        "archived_at": datetime.utcnow(),
+                    }
+                },
+            )
+
+            total_archived += result.modified_count
+            batches_processed += 1
+
+            # Small delay between batches to reduce database load
+            await asyncio.sleep(0.1)
+
+        return total_archived
 
     @post("/event")
     async def log_event(self, event: Event) -> Event:

@@ -5,6 +5,7 @@ Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires
 a working docker installation.
 """
 
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -539,3 +540,156 @@ class TestTTLIndex:
             event_data["archived_at"].replace("Z", "+00:00")
         )
         assert archived_at is not None
+
+
+# =============================================================================
+# Background Retention Task Tests
+# =============================================================================
+
+
+class TestBackgroundRetentionTask:
+    """Test the background retention task functionality."""
+
+    def test_archive_old_events_method(self, db_connection: Database) -> None:
+        """Test that _archive_old_events correctly archives old events."""
+        # Create manager with retention enabled and short soft_delete period for testing
+        settings = EventManagerSettings(
+            retention_enabled=True,
+            soft_delete_after_days=1,  # Archive events older than 1 day
+            archive_batch_size=10,
+        )
+        manager = EventManager(
+            settings=settings,
+            definition=event_manager_def,
+            db_connection=db_connection,
+        )
+
+        # Create old events (2 days ago)
+        old_events = []
+        for i in range(3):
+            event = Event(
+                event_type=EventType.TEST,
+                event_data={"test": f"old_auto_archive_{i}"},
+                event_timestamp=datetime.now() - timedelta(days=2),
+            )
+            manager.events.insert_one(event.to_mongo())
+            old_events.append(event)
+
+        # Create recent event (should not be archived)
+        recent_event = Event(
+            event_type=EventType.TEST,
+            event_data={"test": "recent_auto_archive"},
+        )
+        manager.events.insert_one(recent_event.to_mongo())
+
+        # Run the archive method
+        archived_count = asyncio.run(manager._archive_old_events())
+
+        # Should have archived the 3 old events
+        assert archived_count == 3
+
+        # Verify old events are archived
+        for event in old_events:
+            doc = manager.events.find_one({"_id": event.event_id})
+            assert doc["archived"] is True
+            assert doc["archived_at"] is not None
+
+        # Verify recent event is not archived
+        doc = manager.events.find_one({"_id": recent_event.event_id})
+        assert doc["archived"] is False
+
+    def test_archive_old_events_respects_batch_limit(
+        self, db_connection: Database
+    ) -> None:
+        """Test that _archive_old_events respects max_batches_per_run limit."""
+        # Create manager with small batch limits
+        settings = EventManagerSettings(
+            retention_enabled=True,
+            soft_delete_after_days=1,
+            archive_batch_size=2,  # 2 events per batch
+            max_batches_per_run=2,  # Max 2 batches = 4 events max
+        )
+        manager = EventManager(
+            settings=settings,
+            definition=event_manager_def,
+            db_connection=db_connection,
+        )
+
+        # Create 10 old events
+        for i in range(10):
+            event = Event(
+                event_type=EventType.TEST,
+                event_data={"test": f"batch_limit_test_{i}"},
+                event_timestamp=datetime.now() - timedelta(days=2),
+            )
+            manager.events.insert_one(event.to_mongo())
+
+        # Run archive - should only process 4 events (2 batches * 2 per batch)
+        archived_count = asyncio.run(manager._archive_old_events())
+        assert archived_count == 4
+
+        # Verify only 4 events are archived
+        archived_docs = list(manager.events.find({"archived": True}))
+        assert len(archived_docs) == 4
+
+        # Run again - should archive 4 more
+        archived_count = asyncio.run(manager._archive_old_events())
+        assert archived_count == 4
+
+        # Verify 8 total archived
+        archived_docs = list(manager.events.find({"archived": True}))
+        assert len(archived_docs) == 8
+
+    def test_archive_old_events_no_events_to_archive(
+        self, db_connection: Database
+    ) -> None:
+        """Test that _archive_old_events handles case with no events to archive."""
+        settings = EventManagerSettings(
+            retention_enabled=True,
+            soft_delete_after_days=30,
+        )
+        manager = EventManager(
+            settings=settings,
+            definition=event_manager_def,
+            db_connection=db_connection,
+        )
+
+        # Create only recent events
+        for i in range(3):
+            event = Event(
+                event_type=EventType.TEST,
+                event_data={"test": f"recent_only_{i}"},
+            )
+            manager.events.insert_one(event.to_mongo())
+
+        # Run archive - should archive nothing
+        archived_count = asyncio.run(manager._archive_old_events())
+        assert archived_count == 0
+
+
+class TestRetentionErrorHandling:
+    """Test retention error handling behavior."""
+
+    def test_default_fail_on_retention_error_is_false(self) -> None:
+        """Test that fail_on_retention_error defaults to False."""
+        settings = EventManagerSettings()
+        assert settings.fail_on_retention_error is False
+
+    def test_retention_settings_configuration(self) -> None:
+        """Test that retention settings can be configured."""
+        settings = EventManagerSettings(
+            retention_enabled=True,
+            soft_delete_after_days=60,
+            hard_delete_after_days=180,
+            retention_check_interval_hours=12,
+            archive_batch_size=500,
+            max_batches_per_run=50,
+            fail_on_retention_error=True,
+        )
+        assert settings.retention_enabled is True
+        assert settings.soft_delete_after_days == 60
+        assert settings.hard_delete_after_days == 180
+        assert settings.retention_check_interval_hours == 12
+        assert settings.archive_batch_size == 500
+        assert settings.max_batches_per_run == 50
+        assert settings.fail_on_retention_error is True
