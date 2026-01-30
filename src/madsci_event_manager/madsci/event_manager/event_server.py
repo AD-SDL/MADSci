@@ -2,7 +2,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
@@ -29,7 +29,7 @@ from madsci.event_manager.events_csv_exporter import CSVExporter
 from madsci.event_manager.notifications import EmailAlerts
 from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from pymongo import MongoClient, errors
 from pymongo.synchronous.database import Database
 
@@ -39,11 +39,21 @@ from pymongo.synchronous.database import Database
 
 
 class ArchiveEventsRequest(BaseModel):
-    """Request model for archiving events."""
+    """Request model for archiving events.
+
+    Either event_ids or before_date must be provided to specify which events to archive.
+    """
 
     event_ids: Optional[List[str]] = None
     before_date: Optional[datetime] = None
     batch_size: Optional[int] = None
+
+    @model_validator(mode="after")
+    def check_archive_params(self) -> "ArchiveEventsRequest":
+        """Validate that either event_ids or before_date is provided."""
+        if not self.event_ids and not self.before_date:
+            raise ValueError("Either event_ids or before_date must be provided")
+        return self
 
 
 class ArchiveEventsResponse(BaseModel):
@@ -301,7 +311,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         Returns:
             Total number of events archived
         """
-        soft_delete_cutoff = datetime.utcnow() - timedelta(
+        soft_delete_cutoff = datetime.now(timezone.utc) - timedelta(
             days=self.settings.soft_delete_after_days
         )
         # Convert to ISO string to match MongoDB storage format
@@ -344,7 +354,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 {
                     "$set": {
                         "archived": True,
-                        "archived_at": datetime.utcnow(),
+                        "archived_at": datetime.now(timezone.utc),
                     }
                 },
             )
@@ -481,17 +491,13 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             query: Dict[str, Any] = {"archived": {"$ne": True}}
 
             # Build query based on request parameters
+            # Note: Pydantic model_validator ensures at least one of these is set
             if request.event_ids:
                 query["_id"] = {"$in": request.event_ids}
             elif request.before_date:
                 # Convert datetime to ISO string format to match MongoDB storage format
                 # (Events are stored with ISO string timestamps via to_mongo())
                 query["event_timestamp"] = {"$lt": request.before_date.isoformat()}
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Either event_ids or before_date must be provided",
-                )
 
             # Perform archive in batches to prevent performance impact
             batch_size = request.batch_size or self.settings.archive_batch_size
@@ -514,7 +520,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                     {
                         "$set": {
                             "archived": True,
-                            "archived_at": datetime.utcnow(),
+                            "archived_at": datetime.now(timezone.utc),
                         }
                     },
                 )
@@ -583,7 +589,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             Count of deleted events
         """
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=older_than_days)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=older_than_days)
 
             result = self.events.delete_many(
                 {

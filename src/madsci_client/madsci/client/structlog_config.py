@@ -8,28 +8,17 @@ import logging
 from typing import Any, Literal
 
 import structlog
-from opentelemetry import trace
 
+# Import the canonical OTEL context processor from otel_processors
+# This provides trace_id and span_id injection into log events
+from madsci.client.otel_processors import add_otel_context
 
-def add_otel_context(
-    _logger: Any, _method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
-    """Structlog processor to add OpenTelemetry trace context to logs.
-
-    Args:
-        _logger: The wrapped logger object (unused, required by structlog processor interface).
-        _method_name: Name of the method called on the logger (unused, required by structlog processor interface).
-        event_dict: The event dictionary being processed.
-
-    Returns:
-        The event dictionary with trace context added (if available).
-    """
-    span = trace.get_current_span()
-    if span.is_recording():
-        ctx = span.get_span_context()
-        event_dict["trace_id"] = format(ctx.trace_id, "032x")
-        event_dict["span_id"] = format(ctx.span_id, "016x")
-    return event_dict
+__all__ = [
+    "add_otel_context",
+    "build_processors",
+    "create_instance_logger",
+    "get_log_level_value",
+]
 
 
 def build_processors(

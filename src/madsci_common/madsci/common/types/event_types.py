@@ -370,6 +370,12 @@ class EventClientConfig(MadsciClientConfig):
         title="OpenTelemetry Endpoint",
         description="OTLP collector endpoint (required when otel_exporter='otlp')",
     )
+    otel_metric_export_interval_ms: int = Field(
+        default=10000,
+        title="OpenTelemetry Metric Export Interval",
+        description="Interval in milliseconds for exporting metrics to the collector",
+        ge=1000,  # Minimum 1 second
+    )
 
     @field_validator("log_rotation_when")
     @classmethod

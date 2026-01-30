@@ -71,6 +71,7 @@ class OtelManager:
         service_version: str = "unknown",
         exporter_type: ExporterType = "console",
         otlp_endpoint: Optional[str] = None,
+        metric_export_interval_ms: int = 10000,
     ) -> None:
         """Initialize the OtelManager.
 
@@ -82,11 +83,13 @@ class OtelManager:
                 - "otlp": Send to OTLP collector (production)
                 - "none": Disable telemetry export
             otlp_endpoint: The OTLP collector endpoint (required if exporter_type="otlp").
+            metric_export_interval_ms: Interval in milliseconds for exporting metrics.
         """
         self.service_name = service_name
         self.service_version = service_version
         self.exporter_type = exporter_type
         self.otlp_endpoint = otlp_endpoint
+        self.metric_export_interval_ms = metric_export_interval_ms
         self._initialized = False
         self._tracer_provider: Optional[TracerProvider] = None
         self._meter_provider: Optional[MeterProvider] = None
@@ -166,7 +169,7 @@ class OtelManager:
         if self.exporter_type == "console":
             metric_reader = PeriodicExportingMetricReader(
                 ConsoleMetricExporter(),
-                export_interval_millis=10000,  # Export every 10 seconds
+                export_interval_millis=self.metric_export_interval_ms,
             )
             self._meter_provider = MeterProvider(
                 resource=resource, metric_readers=[metric_reader]
@@ -186,7 +189,7 @@ class OtelManager:
 
             metric_reader = PeriodicExportingMetricReader(
                 OTLPMetricExporter(endpoint=self.otlp_endpoint),
-                export_interval_millis=10000,
+                export_interval_millis=self.metric_export_interval_ms,
             )
             self._meter_provider = MeterProvider(
                 resource=resource, metric_readers=[metric_reader]
@@ -244,6 +247,7 @@ def setup_otel(
     service_version: str = "unknown",
     exporter_type: ExporterType = "console",
     otlp_endpoint: Optional[str] = None,
+    metric_export_interval_ms: int = 10000,
 ) -> OtelManager:
     """Initialize OpenTelemetry tracing and metrics using a default manager.
 
@@ -255,6 +259,7 @@ def setup_otel(
         service_version: The version of the service.
         exporter_type: The type of exporter to use.
         otlp_endpoint: The OTLP collector endpoint (required if exporter_type="otlp").
+        metric_export_interval_ms: Interval in milliseconds for exporting metrics.
 
     Returns:
         The configured OtelManager instance.
@@ -265,6 +270,7 @@ def setup_otel(
         service_version=service_version,
         exporter_type=exporter_type,
         otlp_endpoint=otlp_endpoint,
+        metric_export_interval_ms=metric_export_interval_ms,
     )
     _default_manager.setup()
     return _default_manager
@@ -337,3 +343,22 @@ def shutdown_otel() -> None:
     if _default_manager:
         _default_manager.shutdown()
         _default_manager = None
+
+
+def reset_otel() -> None:
+    """Reset OpenTelemetry state for testing scenarios.
+
+    This function shuts down any existing OTEL configuration and clears
+    the global state, allowing setup_otel() to be called again with
+    different configuration.
+
+    This is primarily useful in test fixtures to ensure clean state
+    between tests.
+
+    Example:
+        @pytest.fixture(autouse=True)
+        def reset_otel_between_tests():
+            yield
+            reset_otel()
+    """
+    shutdown_otel()

@@ -20,16 +20,17 @@ Example usage:
     # Output includes trace_id and span_id if within a span
 """
 
-from typing import Any, MutableMapping
+from typing import Any
 
+import structlog
 from opentelemetry import trace
 
 
 def add_otel_context(
     logger: Any,  # noqa: ARG001
     method_name: str,  # noqa: ARG001
-    event_dict: MutableMapping[str, Any],
-) -> MutableMapping[str, Any]:
+    event_dict: structlog.typing.EventDict,
+) -> structlog.typing.EventDict:
     """Structlog processor that adds OpenTelemetry trace context to log events.
 
     This processor extracts the current span's trace context and adds trace_id
@@ -89,8 +90,8 @@ def add_otel_context(
 def add_otel_span_info(
     logger: Any,  # noqa: ARG001
     method_name: str,  # noqa: ARG001
-    event_dict: MutableMapping[str, Any],
-) -> MutableMapping[str, Any]:
+    event_dict: structlog.typing.EventDict,
+) -> structlog.typing.EventDict:
     """Structlog processor that adds detailed OpenTelemetry span information.
 
     This is an extended version of add_otel_context that includes additional

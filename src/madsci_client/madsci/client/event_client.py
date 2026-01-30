@@ -71,11 +71,6 @@ class EventClient:
     """
 
     config: Optional[EventClientConfig] = None
-    _event_buffer: queue.Queue = queue.Queue()
-    _buffer_lock: Lock = Lock()
-    _retry_thread: Optional[Thread] = None
-    _retrying: bool = False
-    _shutdown: bool = False
     _bound_context: dict[str, Any]
 
     def __init__(
@@ -110,6 +105,13 @@ class EventClient:
 
         # Initialize bound context
         self._bound_context = {}
+
+        # Initialize thread-safety primitives (per-instance to avoid shared state)
+        self._event_buffer: queue.Queue = queue.Queue()
+        self._buffer_lock: Lock = Lock()
+        self._retry_thread: Optional[Thread] = None
+        self._retrying: bool = False
+        self._shutdown: bool = False
 
         # Set up log directory and file
         self.log_dir = Path(self.config.log_dir).expanduser()
