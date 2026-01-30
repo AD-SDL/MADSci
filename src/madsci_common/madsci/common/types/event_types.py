@@ -256,6 +256,18 @@ class EventClientConfig(MadsciClientConfig):
         description="Whether to compress rotated log files with gzip",
     )
 
+    # Structlog configuration
+    log_output_format: Literal["json", "console"] = Field(
+        default="console",
+        title="Log Output Format",
+        description="Log output format: 'json' for structured machine-readable, 'console' for human-readable",
+    )
+    fail_on_error: bool = Field(
+        default=False,
+        title="Fail On Error",
+        description="If True, raise exceptions on logging/sending failures. If False, log errors silently and continue.",
+    )
+
     # OpenTelemetry configuration
     otel_enabled: bool = Field(
         default=False,

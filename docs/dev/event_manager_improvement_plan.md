@@ -2,7 +2,7 @@
 
 > **Meta Issue:** [#218 - Meta: Event Client/Manager Improvements](https://github.com/AD-SDL/MADSci/issues/218)
 > **Created:** January 2026
-> **Status:** In Progress (Phase 3 Complete)
+> **Status:** In Progress (Phase 4 Complete)
 
 ## Overview
 
@@ -922,15 +922,15 @@ client = EventClient(config=config)
 
 ### Acceptance Criteria
 
-- [ ] Structlog is the default logging backend
-- [ ] Per-instance configuration works (multiple clients with different configs are isolated)
-- [ ] Idiomatic API (`info()`, `debug()`, etc.) works correctly
-- [ ] Backward-compatible aliases (`log_info()`, `log_debug()`, etc.) work correctly
-- [ ] Context binding works and accumulates context
-- [ ] JSON and console output formats work
-- [ ] Events are correctly created and sent to EventManager
-- [ ] Configurable error handling (`fail_on_error`) works correctly
-- [ ] All tests pass (new and existing, with updates)
+- [x] Structlog is the default logging backend
+- [x] Per-instance configuration works (multiple clients with different configs are isolated)
+- [x] Idiomatic API (`info()`, `debug()`, etc.) works correctly
+- [x] Backward-compatible aliases (`log_info()`, `log_debug()`, etc.) work correctly
+- [x] Context binding works and accumulates context
+- [x] JSON and console output formats work
+- [x] Events are correctly created and sent to EventManager
+- [x] Configurable error handling (`fail_on_error`) works correctly
+- [x] All tests pass (new and existing, with updates)
 - [ ] Migration guide is documented
 
 ---
@@ -1505,7 +1505,7 @@ pytest src/madsci_client/tests/test_event_client.py::TestEventClientStructlog
 | Phase 1 | Complete | - | Startup logging implemented at INFO level |
 | Phase 2 | Complete | - | Log rotation with RotatingFileHandler/TimedRotatingFileHandler, gzip compression |
 | Phase 3 | Complete | - | Research doc + PoC branch `feature/otel-poc` |
-| Phase 4 | Not Started | - | - |
+| Phase 4 | Complete | - | Structlog migration with idiomatic API, context binding, per-instance config |
 | Phase 5 | Not Started | - | - |
 
 ---

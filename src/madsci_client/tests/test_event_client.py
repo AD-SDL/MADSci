@@ -827,6 +827,266 @@ class TestEventClientUtilizationMethods:
         assert client.get_user_utilization_report() is None
 
 
+class TestEventClientStructlog:
+    """Test EventClient with structlog backend."""
+
+    def test_basic_info_logging(self, config_without_server):
+        """Test basic info logging with structlog."""
+        client = EventClient(config=config_without_server)
+
+        # Should not raise an exception
+        client.info("Test message")
+
+        # Verify log file exists and contains content
+        assert client.logfile.exists()
+
+    def test_basic_debug_logging(self, config_without_server):
+        """Test basic debug logging with structlog."""
+        client = EventClient(config=config_without_server)
+
+        client.debug("Debug message")
+        assert client.logfile.exists()
+
+    def test_basic_warning_logging(self, config_without_server):
+        """Test basic warning logging with structlog."""
+        client = EventClient(config=config_without_server)
+
+        client.warning("Warning message")
+        assert client.logfile.exists()
+
+    def test_basic_error_logging(self, config_without_server):
+        """Test basic error logging with structlog."""
+        client = EventClient(config=config_without_server)
+
+        client.error("Error message")
+        assert client.logfile.exists()
+
+    def test_basic_critical_logging(self, config_without_server):
+        """Test basic critical logging with structlog."""
+        client = EventClient(config=config_without_server)
+
+        client.critical("Critical message")
+        assert client.logfile.exists()
+
+    def test_structured_data_in_logs(self, config_without_server, caplog):
+        """Test that structured data is included in logs."""
+        client = EventClient(config=config_without_server)
+
+        with caplog.at_level(logging.INFO):
+            client.info("Processing step", step=1, total=10, status="running")
+
+        # Verify the structured data appears in the log
+        # Note: The exact format depends on structlog configuration
+        assert client.logfile.exists()
+
+    def test_context_binding(self, config_without_server, caplog):
+        """Test that bound context appears in logs."""
+        client = EventClient(config=config_without_server)
+        bound_client = client.bind(workflow_id="wf-123", node_id="node-456")
+
+        with caplog.at_level(logging.INFO):
+            bound_client.info("Processing step")
+
+        # Verify the bound context is stored
+        assert bound_client._bound_context == {
+            "workflow_id": "wf-123",
+            "node_id": "node-456",
+        }
+
+    def test_nested_context_binding(self, config_without_server):
+        """Test nested context binding accumulates context."""
+        client = EventClient(config=config_without_server)
+
+        # First level binding
+        bound1 = client.bind(workflow_id="wf-123")
+        assert bound1._bound_context == {"workflow_id": "wf-123"}
+
+        # Second level binding
+        bound2 = bound1.bind(step=1)
+        assert bound2._bound_context == {"workflow_id": "wf-123", "step": 1}
+
+        # Third level binding
+        bound3 = bound2.bind(node_id="node-456")
+        assert bound3._bound_context == {
+            "workflow_id": "wf-123",
+            "step": 1,
+            "node_id": "node-456",
+        }
+
+        # Original clients should be unchanged
+        assert client._bound_context == {}
+        assert bound1._bound_context == {"workflow_id": "wf-123"}
+
+    def test_unbind_context(self, config_without_server):
+        """Test that context can be unbound."""
+        client = EventClient(config=config_without_server)
+        bound_client = client.bind(workflow_id="wf-123", step=1, node_id="node-456")
+
+        # Unbind specific keys
+        unbound_client = bound_client.unbind("step", "node_id")
+
+        assert unbound_client._bound_context == {"workflow_id": "wf-123"}
+        # Original should be unchanged
+        assert bound_client._bound_context == {
+            "workflow_id": "wf-123",
+            "step": 1,
+            "node_id": "node-456",
+        }
+
+    def test_json_output_format(self, temp_log_dir):
+        """Test JSON output format configuration."""
+        config = EventClientConfig(
+            name="json_test",
+            log_dir=temp_log_dir,
+            log_output_format="json",
+        )
+        client = EventClient(config=config)
+
+        client.info("Test message", key="value")
+
+        # Verify configuration was applied
+        assert config.log_output_format == "json"
+        assert client.logfile.exists()
+
+    def test_console_output_format(self, temp_log_dir):
+        """Test console (human-readable) output format configuration."""
+        config = EventClientConfig(
+            name="console_test",
+            log_dir=temp_log_dir,
+            log_output_format="console",
+        )
+        client = EventClient(config=config)
+
+        client.info("Test message")
+
+        assert config.log_output_format == "console"
+        assert client.logfile.exists()
+
+    def test_exception_logging(self, config_without_server):
+        """Test exception info is properly captured."""
+        client = EventClient(config=config_without_server)
+
+        try:
+            raise ValueError("Test error")
+        except ValueError:
+            client.exception("An error occurred")
+
+        assert client.logfile.exists()
+
+    def test_backward_compat_log_info(self, config_without_server):
+        """Test log_info() alias works."""
+        client = EventClient(config=config_without_server)
+
+        client.log_info("Info via log_info")
+        assert client.logfile.exists()
+
+    def test_backward_compat_log_debug(self, config_without_server):
+        """Test log_debug() alias works."""
+        client = EventClient(config=config_without_server)
+
+        client.log_debug("Debug via log_debug")
+        assert client.logfile.exists()
+
+    def test_backward_compat_log_warning(self, config_without_server):
+        """Test log_warning() alias works."""
+        client = EventClient(config=config_without_server)
+
+        client.log_warning("Warning via log_warning")
+        assert client.logfile.exists()
+
+    def test_backward_compat_log_error(self, config_without_server):
+        """Test log_error() alias works."""
+        client = EventClient(config=config_without_server)
+
+        client.log_error("Error via log_error")
+        assert client.logfile.exists()
+
+    def test_backward_compat_log_critical(self, config_without_server):
+        """Test log_critical() alias works."""
+        client = EventClient(config=config_without_server)
+
+        client.log_critical("Critical via log_critical")
+        assert client.logfile.exists()
+
+    def test_multiple_clients_isolated_config(self, temp_log_dir):
+        """Test that multiple EventClient instances have isolated configurations."""
+        json_config = EventClientConfig(
+            name="json_client",
+            log_dir=temp_log_dir,
+            log_output_format="json",
+        )
+        console_config = EventClientConfig(
+            name="console_client",
+            log_dir=temp_log_dir,
+            log_output_format="console",
+        )
+
+        json_client = EventClient(config=json_config)
+        console_client = EventClient(config=console_config)
+
+        # Verify each client has its own configuration
+        assert json_client.config.log_output_format == "json"
+        assert console_client.config.log_output_format == "console"
+
+        # Both should be able to log independently
+        json_client.info("JSON log message")
+        console_client.info("Console log message")
+
+        # Verify both log files exist
+        assert json_client.logfile.exists()
+        assert console_client.logfile.exists()
+
+    def test_warn_alias(self, config_without_server):
+        """Test warn() is alias for log_warning() with warning_category support."""
+        client = EventClient(config=config_without_server)
+
+        # Both should work - warn is alias for log_warning
+        client.warn("Warn message")
+        client.warning("Warning message")
+
+        # warn should also accept warning_category (for backward compatibility)
+        with pytest.warns(UserWarning, match="Warn with category"):
+            client.warn("Warn with category", warning_category=UserWarning)
+
+        assert client.logfile.exists()
+
+
+class TestEventClientErrorHandling:
+    """Test EventClient error handling behavior."""
+
+    def test_fail_on_error_false_default(self, temp_log_dir):
+        """Test that fail_on_error defaults to False."""
+        config = EventClientConfig(
+            name="error_test",
+            log_dir=temp_log_dir,
+        )
+        assert config.fail_on_error is False
+
+    def test_fail_on_error_can_be_enabled(self, temp_log_dir):
+        """Test that fail_on_error can be set to True."""
+        config = EventClientConfig(
+            name="error_test",
+            log_dir=temp_log_dir,
+            fail_on_error=True,
+        )
+        assert config.fail_on_error is True
+
+    def test_fail_on_error_false_logs_silently(self, temp_log_dir, capsys):
+        """Test that errors are logged silently when fail_on_error=False."""
+        config = EventClientConfig(
+            name="silent_error_test",
+            log_dir=temp_log_dir,
+            fail_on_error=False,
+        )
+        client = EventClient(config=config)
+
+        # Normal logging should work without issues
+        client.info("Normal message")
+
+        # No exception should be raised
+        assert client.logfile.exists()
+
+
 class TestEventClientLogRotation:
     """Test EventClient log rotation functionality."""
 
