@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:84d7c633999013a0a609d9754c6e9d25bb11fa477b8dc84fb6fb733694c9a993"
+content_hash = "sha256:0f158965d5e50fa53566fe9f9de34f9a7d52e2b3d1e3f35d01a0e63dbc9673dd"
 
 [[metadata.targets]]
 requires_python = ">=3.9.1"
@@ -1423,6 +1423,7 @@ dependencies = [
     "minio",
     "opentelemetry-api",
     "opentelemetry-sdk",
+    "structlog",
     "trogon",
 ]
 

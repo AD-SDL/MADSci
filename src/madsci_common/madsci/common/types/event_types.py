@@ -92,6 +92,75 @@ class EventManagerSettings(
         description="The configuration for sending email alerts.",
     )
 
+    # Retention settings
+    retention_enabled: bool = Field(
+        default=False,
+        title="Retention Enabled",
+        description="Whether automatic event retention is enabled.",
+    )
+    soft_delete_after_days: int = Field(
+        default=90,
+        title="Soft Delete After Days",
+        description="Days after which events are soft-deleted (archived).",
+        ge=1,
+    )
+    hard_delete_after_days: int = Field(
+        default=365,
+        title="Hard Delete After Days",
+        description="Days after archive when events are permanently deleted via TTL index.",
+        ge=1,
+    )
+    retention_check_interval_hours: int = Field(
+        default=24,
+        title="Retention Check Interval Hours",
+        description="How often to run soft-delete retention checks (in hours).",
+        ge=1,
+    )
+
+    # Batch operation limits (to prevent performance impact)
+    archive_batch_size: int = Field(
+        default=1000,
+        title="Archive Batch Size",
+        description="Maximum number of events to archive in a single batch operation.",
+        ge=1,
+    )
+    max_batches_per_run: int = Field(
+        default=100,
+        title="Max Batches Per Run",
+        description="Maximum number of batches to process per retention run (0 = unlimited).",
+        ge=0,
+    )
+
+    # Backup settings
+    backup_enabled: bool = Field(
+        default=False,
+        title="Backup Enabled",
+        description="Whether automatic event backups are enabled.",
+    )
+    backup_schedule: Optional[str] = Field(
+        default=None,
+        title="Backup Schedule",
+        description="Cron expression for backup schedule (e.g., '0 2 * * *' for 2am daily).",
+    )
+    backup_dir: PathLike = Field(
+        default_factory=lambda: Path("~") / ".madsci" / "backups" / "events",
+        title="Backup Directory",
+        description="Directory for event backups.",
+    )
+    backup_max_count: int = Field(
+        default=10,
+        title="Backup Max Count",
+        description="Maximum number of backup files to keep.",
+        ge=1,
+    )
+
+    # Error handling
+    fail_on_retention_error: bool = Field(
+        default=False,
+        title="Fail On Retention Error",
+        description="If True, raise exceptions on retention failures. If False, log and continue.",
+    )
+
 
 class EventManagerHealth(ManagerHealth):
     """Health status for Event Manager including database connectivity."""
@@ -157,6 +226,18 @@ class Event(MadsciBaseModel):
     span_id: Optional[str] = Field(
         title="Span ID",
         description="OpenTelemetry span ID for distributed trace correlation (16 hex characters).",
+        default=None,
+    )
+
+    # Archive/retention fields
+    archived: bool = Field(
+        title="Archived",
+        description="Whether this event has been archived (soft-deleted).",
+        default=False,
+    )
+    archived_at: Optional[datetime] = Field(
+        title="Archived At",
+        description="Timestamp when this event was archived. Used by MongoDB TTL index for automatic hard-deletion.",
         default=None,
     )
 
