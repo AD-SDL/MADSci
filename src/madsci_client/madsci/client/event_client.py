@@ -23,6 +23,11 @@ from typing import Any, Optional, Union
 import requests
 from madsci.client.structlog_config import create_instance_logger, get_log_level_value
 from madsci.common.context import get_current_madsci_context
+from madsci.common.otel import (
+    OtelBootstrapConfig,
+    configure_otel,
+    current_trace_context,
+)
 from madsci.common.types.event_types import (
     Event,
     EventClientConfig,
@@ -70,7 +75,7 @@ class EventClient:
         console_client = EventClient(name="console_logger", config=EventClientConfig(log_output_format="console"))
     """
 
-    config: Optional[EventClientConfig] = None
+    config: EventClientConfig
     _bound_context: dict[str, Any]
 
     def __init__(
@@ -143,8 +148,31 @@ class EventClient:
         # Create HTTP session for requests to event server
         self.session = create_http_session(config=self.config)
 
+        self._otel_runtime = None
+        if self.config.otel_enabled:
+            self._setup_otel()
+
         # Log startup information
         self._log_startup_info()
+
+    def _setup_otel(self) -> None:
+        try:
+            self._otel_runtime = configure_otel(
+                OtelBootstrapConfig(
+                    enabled=True,
+                    service_name=self.config.otel_service_name or self.name,
+                    service_version=get_madsci_version(),
+                    exporter=self.config.otel_exporter,
+                    otlp_endpoint=self.config.otel_endpoint,
+                    otlp_protocol=self.config.otel_protocol,
+                    metric_export_interval_ms=self.config.otel_metric_export_interval_ms,
+                )
+            )
+        except Exception as e:
+            self._otel_runtime = None
+            self.logger.warning(
+                "OpenTelemetry setup failed; continuing without OTEL", exc_info=e
+            )
 
     def _log_startup_info(self) -> None:
         """Log startup information on first initialization.
@@ -525,12 +553,19 @@ class EventClient:
                 **context,
             }
 
+            if self._otel_runtime and self._otel_runtime.enabled:
+                trace_ctx = current_trace_context()
+            else:
+                trace_ctx = {"trace_id": None, "span_id": None}
+
             event = Event(
                 event_type=event_type,
                 event_data=event_data,
                 log_level=level,
                 alert=alert,
                 source=self.config.source,
+                trace_id=trace_ctx.get("trace_id"),
+                span_id=trace_ctx.get("span_id"),
             )
 
             self._send_event_to_event_server_task(event)
@@ -667,6 +702,8 @@ class EventClient:
             )
         if not isinstance(event, Event):
             event = self._new_event_for_log(event, level or logging.INFO)
+
+        event = Event.model_validate(event)
         event.log_level = level if level is not None else event.log_level
         event.alert = alert if alert is not None else event.alert
         if warning_category and self.logger.getEffectiveLevel() <= logging.WARNING:
@@ -924,9 +961,16 @@ class EventClient:
         """Send an event to the event manager. Buffer on failure."""
 
         try:
+            headers: dict[str, str] = {}
+            if self._otel_runtime and self._otel_runtime.enabled:
+                with contextlib.suppress(Exception):
+                    from opentelemetry.propagate import inject  # noqa: PLC0415
+
+                    inject(headers)
             response = self.session.post(
                 url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),
+                headers=headers,
                 timeout=self.config.timeout_default,
             )
 

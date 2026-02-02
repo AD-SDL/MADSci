@@ -139,7 +139,18 @@ from opentelemetry.propagate import extract, inject
 
 ## 0.4 Acceptance Criteria
 
-- [ ] All OTEL dependencies added to appropriate packages
+Progress (Implementation Notes):
+
+- Implemented canonical bootstrap module: `src/madsci_common/madsci/common/otel/`
+- Updated dependencies:
+  - `src/madsci_common/pyproject.toml`: add `opentelemetry-api` and optional `otel` group (`opentelemetry-sdk`, `opentelemetry-exporter-otlp`)
+  - `src/madsci_client/pyproject.toml`: removed `opentelemetry-sdk` from base dependencies
+- Updated example OTEL demo to use canonical bootstrap: `examples/otel_demo.py`
+- Removed the (unreleased) client-local OTEL bootstrap module: `src/madsci_client/madsci/client/otel_config.py`
+
+Acceptance Criteria:
+
+- [x] All OTEL dependencies added to appropriate packages
 - [ ] OTEL dependency specifiers are consistent across all `src/madsci_*/pyproject.toml` files
 - [ ] `pdm install -G:all` succeeds without errors
 - [ ] Import verification passes

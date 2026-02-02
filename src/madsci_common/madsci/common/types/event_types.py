@@ -370,12 +370,27 @@ class EventClientConfig(MadsciClientConfig):
         title="OpenTelemetry Endpoint",
         description="OTLP collector endpoint (required when otel_exporter='otlp')",
     )
+    otel_protocol: Literal["grpc", "http"] = Field(
+        default="grpc",
+        title="OpenTelemetry Protocol",
+        description="OTLP transport protocol ('grpc' or 'http')",
+    )
     otel_metric_export_interval_ms: int = Field(
         default=10000,
         title="OpenTelemetry Metric Export Interval",
         description="Interval in milliseconds for exporting metrics to the collector",
         ge=1000,  # Minimum 1 second
     )
+
+    @field_validator("otel_endpoint")
+    @classmethod
+    def validate_otel_endpoint(cls, v: Optional[str]) -> Optional[str]:
+        """Validate OTLP endpoint format and normalize trailing slash."""
+        if v is None:
+            return v
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("OTLP endpoint must start with http:// or https://")
+        return v.rstrip("/")
 
     @field_validator("log_rotation_when")
     @classmethod

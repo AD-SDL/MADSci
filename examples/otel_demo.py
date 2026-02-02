@@ -23,16 +23,16 @@ Expected output will show:
 import time
 from typing import Any
 
-# Import OTEL configuration and processors
-from madsci.client.otel_config import (
-    get_current_trace_context,
-    get_meter,
-    get_tracer,
-    setup_otel,
-    shutdown_otel,
-)
 from madsci.client.otel_processors import add_otel_context
+from madsci.common.otel import (
+    OtelBootstrapConfig,
+    configure_otel,
+    current_trace_context,
+)
 from madsci.common.types.event_types import Event, EventType
+
+# Import OTEL configuration and processors
+from opentelemetry import metrics, trace
 
 
 def simulate_workflow_step(
@@ -61,7 +61,7 @@ def simulate_workflow_step(
         span.set_attribute("step.simulated_duration", duration)
 
         # Get trace context for logging
-        get_current_trace_context()
+        current_trace_context()
 
         # Simulate work
         start = time.time()
@@ -77,10 +77,10 @@ def simulate_workflow_step(
 
 def demonstrate_event_with_trace_context() -> Event:
     """Show how Event objects can carry trace context."""
-    tracer = get_tracer("madsci.demo.events")
+    tracer = trace.get_tracer("madsci.demo.events")
 
     with tracer.start_as_current_span("event.logging.demo") as span:
-        ctx = get_current_trace_context()
+        ctx = current_trace_context()
 
         # Create an event with trace context
         event = Event(
@@ -108,7 +108,7 @@ def demonstrate_structlog_integration() -> None:
     except ImportError:
         return
 
-    tracer = get_tracer("madsci.demo.structlog")
+    tracer = trace.get_tracer("madsci.demo.structlog")
 
     # Configure structlog with OTEL processor
     structlog.configure(
@@ -135,15 +135,18 @@ def main() -> None:
     """Run the OpenTelemetry integration demo."""
 
     # Initialize OTEL with console exporter for demo
-    setup_otel(
-        service_name="madsci-otel-demo",
-        service_version="1.0.0",
-        exporter_type="console",
+    configure_otel(
+        OtelBootstrapConfig(
+            enabled=True,
+            service_name="madsci-otel-demo",
+            service_version="1.0.0",
+            exporter="console",
+        )
     )
 
     # Get tracer and meter for the demo
-    tracer = get_tracer("madsci.demo")
-    meter = get_meter("madsci.demo")
+    tracer = trace.get_tracer("madsci.demo")
+    meter = metrics.get_meter("madsci.demo")
 
     # Demo: Simulated workflow with tracing
 
@@ -151,7 +154,7 @@ def main() -> None:
         root_span.set_attribute("workflow.name", "demo-workflow")
         root_span.set_attribute("workflow.steps", 3)
 
-        get_current_trace_context()
+        current_trace_context()
 
         simulate_workflow_step(tracer, meter, "prepare", 0.05)
         simulate_workflow_step(tracer, meter, "execute", 0.1)
@@ -164,10 +167,7 @@ def main() -> None:
     demonstrate_structlog_integration()
 
     # Demo: Context outside of span
-    get_current_trace_context()
-
-    # Shutdown OTEL (flushes pending telemetry)
-    shutdown_otel()
+    current_trace_context()
 
 
 if __name__ == "__main__":

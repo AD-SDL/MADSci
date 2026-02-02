@@ -9,6 +9,18 @@
 - **Resource attributes**: Stable attributes describing the emitting service (e.g., `service.name`, `service.version`).
 - **High-cardinality attributes**: Attributes with many unique values (e.g., ULIDs), which can blow up cost/storage.
 
+## Compatibility Note (Unreleased)
+
+The structlog + OpenTelemetry integration described in this plan is new and has not
+been shipped in a stable release of MADSci.
+
+Normative guidance for implementation:
+
+- Backward compatibility for the pre-release structlog/OTEL modules is not a
+  concern.
+- Prefer a clean, canonical implementation (centralized in `madsci.common.otel`)
+  over compatibility shims.
+
 ## Graceful Degradation
 
 OTEL integration must **never** break core functionality. All OTEL operations should:

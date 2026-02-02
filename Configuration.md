@@ -278,6 +278,7 @@ Inherits all HTTP client configuration from MadsciClientConfig including:
 | `EVENT_CLIENT_OTEL_SERVICE_NAME`              | `string` \| `NoneType`              | `null`                  | Override service name for OpenTelemetry (defaults to client name)                                  | `null`                  |
 | `EVENT_CLIENT_OTEL_EXPORTER`                  | `"console"` \| `"otlp"` \| `"none"` | `"console"`             | OpenTelemetry exporter type: 'console' for development, 'otlp' for production, 'none' to disable   | `"console"`             |
 | `EVENT_CLIENT_OTEL_ENDPOINT`                  | `string` \| `NoneType`              | `null`                  | OTLP collector endpoint (required when otel_exporter='otlp')                                       | `null`                  |
+| `EVENT_CLIENT_OTEL_PROTOCOL`                  | `"grpc"` \| `"http"`                | `"grpc"`                | OTLP transport protocol ('grpc' or 'http')                                                         | `"grpc"`                |
 | `EVENT_CLIENT_OTEL_METRIC_EXPORT_INTERVAL_MS` | `integer`                           | `10000`                 | Interval in milliseconds for exporting metrics to the collector                                    | `10000`                 |
 
 ### OwnershipInfo

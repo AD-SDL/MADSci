@@ -358,12 +358,27 @@ def _record_send_latency(self, latency_ms: float, event_type: str) -> None:
 
 ## 1.3 Acceptance Criteria
 
-- [ ] OTEL is initialized when `config.otel_enabled=True`
-- [ ] Logging does not create a new span per log call (by design)
-- [ ] `trace_id` and `span_id` are injected when a span is active
-- [ ] `trace_id` and `span_id` are populated in Event objects
-- [ ] HTTP requests to EventManager include `traceparent` header
+Progress (Implementation Notes):
+
+- EventClient now initializes OTEL via `madsci.common.otel.configure_otel(...)`:
+  - `src/madsci_client/madsci/client/event_client.py`
+- Trace correlation fields are injected into `Event` objects when a span is active:
+  - `Event.trace_id` / `Event.span_id` populated from `madsci.common.otel.current_trace_context()`
+- Context propagation is injected into outbound EventManager HTTP requests (best-effort):
+  - `opentelemetry.propagate.inject(headers)` in `EventClient._send_event_to_event_server(...)`
+- Added `otel_protocol` to settings + endpoint normalization:
+  - `src/madsci_common/madsci/common/types/event_types.py`
+- Added initial OTEL unit tests:
+  - `src/madsci_client/tests/test_event_client_otel.py` (covers enable/disable, injection format, header propagation)
+
+Acceptance Criteria:
+
+- [x] OTEL is initialized when `config.otel_enabled=True`
+- [x] Logging does not create a new span per log call (by design)
+- [x] `trace_id` and `span_id` are injected when a span is active
+- [x] `trace_id` and `span_id` are populated in Event objects
+- [x] HTTP requests to EventManager include `traceparent` header
 - [ ] Metrics (counter, histogram, observable gauge) are recorded
 - [ ] Exporters can be validated via in-memory exporter tests
-- [ ] OTLP exporter can be configured via settings
-- [ ] All tests pass
+- [x] OTLP exporter can be configured via settings
+- [x] All tests pass
