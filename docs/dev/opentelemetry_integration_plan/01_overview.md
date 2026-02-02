@@ -14,7 +14,7 @@ By the end of this implementation:
 - [ ] **OpenTelemetry Integration**: All MADSci managers and EventClient support optional OTEL tracing
   - Measurable: 100% of manager endpoints instrumented with spans when `otel_enabled=True`
   - Measurable: Trace context propagates across all inter-service HTTP calls
-  - Measurable: OTEL can be fully disabled with zero runtime overhead
+  - Measurable: When OTEL is disabled, no SDK providers/exporters/instrumentation are installed and no background export threads are started
 - [ ] **Logging Audit**: All EventClient calls follow structured logging best practices
   - Measurable: 100% of log calls use kwargs instead of f-string formatting for data
   - Measurable: All error logs include `exc_info=True` when an exception is available

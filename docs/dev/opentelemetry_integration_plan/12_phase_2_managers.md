@@ -6,9 +6,21 @@
 ## Goals
 
 - Add OTEL tracing to all manager services
-- Extract trace context from incoming HTTP requests
+- Ensure trace context is extracted from incoming HTTP requests (by ASGI/FastAPI instrumentation when enabled)
 - Propagate trace context in outgoing HTTP requests
 - Create meaningful spans for manager operations
+
+## Prerequisite: HTTP Client Instrumentation Choice (Normative)
+
+MADSci currently uses both `requests` (sync; primary for clients) and `httpx`
+(async; used in some services/tests).
+
+Rules:
+
+- Phase 2 must instrument the HTTP client(s) actually used for cross-service
+  calls. As of this plan revision, prioritize `requests` instrumentation first.
+- Add `httpx` instrumentation only if/when manager outbound calls standardize on
+  `httpx`.
 
 Approach decision (this plan):
 
@@ -86,8 +98,12 @@ def configure_otel(
     enabled: bool,
     service_name: str,
     service_version: str | None = None,
+    test_mode: bool = False,
 ) -> OtelRuntime:
     """Configure OTEL SDK/providers using upstream env var conventions."""
+
+    # test_mode=True installs in-memory span/metric exporters/readers and
+    # disables background export threads for deterministic unit tests.
 
 
 def current_trace_context() -> dict[str, str]:
@@ -138,7 +154,19 @@ Manager endpoints in MADSci are a mix of `def` and `async def` (e.g., EventManag
 
 - Work correctly for both sync and async endpoints
 - Preserve context across `await` boundaries
-- Prefer request-header extraction as the primary source of inbound context
+ - Prefer request-header extraction as the primary source of inbound context
+
+### 2.0.1 Request Spans and Parentage (Normative)
+
+When ASGI/FastAPI auto-instrumentation is enabled, the request span is created
+and parented automatically based on inbound headers.
+
+Rules:
+
+- Do not manually extract headers inside each endpoint just to parent child
+  spans. Start child spans under the current context.
+- Use manual extraction only for background tasks, thread/task handoff, or when
+  you explicitly need a parent that is not the current span.
 
 Recommended helper pattern (pseudo-code):
 
@@ -154,6 +182,9 @@ def _span_from_request(self, operation: str, request: Request | None, **attrs):
     if request is None:
         return self._tracer.start_as_current_span(operation, attributes=attrs)
 
+    # Only do this in places where you are *not* already inside an auto-instrumented
+    # request span (e.g., background jobs). In normal endpoints, prefer relying on
+    # the current context set by ASGI instrumentation.
     ctx = extract(dict(request.headers))
     return self._tracer.start_as_current_span(operation, context=ctx, attributes=attrs)
 ```
@@ -173,8 +204,13 @@ Create `src/madsci_common/tests/test_manager_otel.py`:
 class TestManagerBaseOtel:
     """Test OTEL integration in AbstractManagerBase."""
 
-    def test_trace_context_extracted_from_request(self, mock_manager):
-        """Test that trace context is extracted from incoming requests."""
+    def test_request_context_parentage_respected(self, mock_manager):
+        """Test that inbound request context is respected for span parentage.
+
+        When ASGI/FastAPI auto-instrumentation is enabled, the request span is
+        responsible for header extraction. Manager domain spans should be
+        children of the active request span.
+        """
 
     def test_child_spans_created_for_operations(self, mock_manager):
         """Test that manager operations create child spans."""
@@ -263,7 +299,13 @@ class AbstractManagerBase(MadsciClientMixin, Generic[SettingsT, DefinitionT], Ro
         # ... existing shutdown logic ...
 
     def _extract_trace_context(self, request: Request):
-        """Extract OTEL trace context from request headers."""
+        """Extract OTEL trace context from request headers.
+
+        Prefer relying on ASGI/FastAPI auto-instrumentation for endpoint request
+        handling. This helper is primarily for background tasks or explicit
+        parenting where there is no current request span.
+        """
+
         return extract(dict(request.headers))
 
     def _create_operation_span(
@@ -278,6 +320,8 @@ class AbstractManagerBase(MadsciClientMixin, Generic[SettingsT, DefinitionT], Ro
 
         context = None
         if request:
+            # Only use manual extraction when you are not already inside an
+            # auto-instrumented request span.
             context = self._extract_trace_context(request)
 
         return self._tracer.start_as_current_span(

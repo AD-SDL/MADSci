@@ -169,7 +169,11 @@ class TestEventClientOtelMetrics:
         """Test send latency is recorded in histogram."""
 
     def test_buffer_size_gauge(self, config_with_otel):
-        """Test buffer size gauge reflects actual queue size."""
+        """Test buffer size gauge reflects actual queue size.
+
+        Note: in OTEL Python this should be implemented as an ObservableGauge
+        (callback-based), not as an imperative "settable" gauge.
+        """
 
     def test_retry_counter(self, config_with_otel_and_server):
         """Test retry counter incremented on send failures."""
@@ -202,7 +206,7 @@ Metrics:
 - Prefer using an in-memory metric reader (or a test reader) to collect metrics from the MeterProvider.
 - Tests should assert on:
 
-  - Instrument existence (counter/histogram/gauge are created when OTEL is enabled)
+  - Instrument existence (counter/histogram/observable gauge are created when OTEL is enabled)
   - Monotonic behavior (counters increment as expected)
   - Attribute sets are low-cardinality and match the expected keys (`event.level`, `event.type`)
 
@@ -212,9 +216,23 @@ Metrics:
 Practical guidance:
 
 - Configure the shared bootstrap to support a "test mode" that:
-  - uses an in-memory span exporter
-  - uses an in-memory metric reader
-  - disables background export threads (deterministic tests)
+   - uses an in-memory span exporter
+   - uses an in-memory metric reader
+   - disables background export threads (deterministic tests)
+
+### 1.4.1 Gauge Semantics (Normative)
+
+OpenTelemetry Python metrics are callback-oriented for gauge-like values.
+
+Rule:
+
+- When this plan refers to a "gauge" (e.g., buffer size), implement it as an
+  `ObservableGauge` whose callback reads the current value.
+
+Testing guidance:
+
+- Use an in-memory metric reader to collect, then assert the observed gauge
+  value. Do not rely on a custom "set" API.
 
 Acceptance target for Phase 1 tests:
 
@@ -307,6 +325,13 @@ def _send_event_to_server(self, event: Event) -> None:
     )
 ```
 
+Note:
+
+- The MADSci Python clients currently use `requests` for outbound HTTP (including
+  EventClient). Phase 2 should therefore prioritize `opentelemetry-instrumentation-requests`
+  for client spans. `httpx` instrumentation may be added later if/when managers
+  standardize on `httpx`.
+
 ### 1.2.4 Add Metrics Recording
 
 ```python
@@ -338,7 +363,7 @@ def _record_send_latency(self, latency_ms: float, event_type: str) -> None:
 - [ ] `trace_id` and `span_id` are injected when a span is active
 - [ ] `trace_id` and `span_id` are populated in Event objects
 - [ ] HTTP requests to EventManager include `traceparent` header
-- [ ] Metrics (counter, histogram, gauge) are recorded
+- [ ] Metrics (counter, histogram, observable gauge) are recorded
 - [ ] Exporters can be validated via in-memory exporter tests
 - [ ] OTLP exporter can be configured via settings
 - [ ] All tests pass

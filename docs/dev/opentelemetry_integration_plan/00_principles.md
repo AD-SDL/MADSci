@@ -123,6 +123,23 @@ that the shared bootstrap documents and enforces one consistent precedence model
 Important: OpenTelemetry SDK configuration is generally process-global; this plan assumes each service process
 initializes OTEL once, idempotently.
 
+## Baseline Resource Attributes (Normative)
+
+When OTEL is enabled, MADSci sets a minimal baseline of resource attributes for
+each process:
+
+- `service.name` (required)
+- `service.version` (when available)
+- `deployment.environment` (when available; e.g., `dev`, `test`, `prod`)
+
+Merge rules:
+
+- Read upstream env vars (`OTEL_RESOURCE_ATTRIBUTES`, `OTEL_SERVICE_NAME`) and
+  treat them as the base.
+- Merge in MADSci baseline values.
+- Only override env-provided values when explicitly configured in MADSci
+  settings (primarily intended for dev/test ergonomics).
+
 ## Global Provider / Idempotency
 
 OpenTelemetry providers (TracerProvider / MeterProvider) are typically global per-process. To avoid surprising side
@@ -167,9 +184,17 @@ Many MADSci managers use async FastAPI endpoints.
 
 Preferred approach:
 
-- Extract inbound context from request headers using the OTEL propagator.
+- When you are *not* already inside an auto-instrumented request span, extract
+  inbound context from request headers using the OTEL propagator.
 - Start spans with `context=...` so the extracted parent is used.
 - Avoid manual `attach()` / `detach()` unless you have a specific context isolation need.
+
+Note:
+
+- When ASGI/FastAPI auto-instrumentation is enabled, request context extraction
+  and request span parentage are handled automatically. In that case, prefer
+  starting child spans under the current context rather than re-extracting
+  headers in each endpoint.
 
 ```python
 from opentelemetry.propagate import extract

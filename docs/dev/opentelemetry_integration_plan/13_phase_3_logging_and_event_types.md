@@ -10,6 +10,28 @@
 - Expand EventType enum to cover all operational scenarios
 - Standardize logging patterns across components
 
+## 3.0 EventType Emission Mapping (Normative)
+
+To reduce duplicate events and keep EventType usage consistent, use the
+following ownership rules:
+
+- Manager lifecycle (process/service): `MANAGER_START`, `MANAGER_STOP`,
+  `MANAGER_ERROR`, `MANAGER_HEALTH_CHECK` are emitted by managers.
+- Workflow lifecycle + steps: `WORKFLOW_*` and `WORKFLOW_STEP_*` are emitted by
+  the workflow/workcell execution layer.
+- Node lifecycle and node action execution: `NODE_*` and `NODE_ACTION_*` are
+  emitted by the node module layer (and/or the node client boundary when that
+  is where execution is coordinated).
+- Resource/location/data domain events: `RESOURCE_*`, `LOCATION_*`,
+  `ATTACHMENT_*`, `DATA_*` are emitted by the manager that owns that domain.
+
+Guideline:
+
+- If multiple layers want visibility into the same operation, prefer having the
+  higher layer emit one high-level event, and rely on trace correlation (trace_id
+  + span_id) plus structured fields for drill-down, rather than duplicating the
+  same EventType at multiple layers.
+
 ## 3.1 EventType Gap Analysis
 
 ### Current EventTypes (from `event_types.py`)
