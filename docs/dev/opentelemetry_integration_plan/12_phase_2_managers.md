@@ -445,6 +445,13 @@ Progress (Implementation Notes, Feb 2026):
 - Added first manager domain span:
   - EventManager `/event` endpoint wraps inserts in `event.receive` span
     - `src/madsci_event_manager/madsci/event_manager/event_server.py`
+- Added WorkcellManager domain spans:
+  - Workflow submission/enqueue wraps in `workflow.execute` span
+    - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_server.py`
+  - Engine step execution wraps in `workflow.step` span
+    - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py`
+  - Node dispatch wraps in `node.action` span
+    - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py`
 - Optional deps for instrumentation added:
   - `src/madsci_common/pyproject.toml` (`otel-instrumentation` extra)
 
@@ -452,7 +459,7 @@ Acceptance Criteria:
 
 - [x] AbstractManagerBase supports OTEL configuration (best-effort, optional)
 - [x] Trace context is extracted from incoming requests via FastAPI auto-instrumentation (when installed/enabled)
-- [~] Key operations create spans with meaningful attributes (started with EventManager)
+- [~] Key operations create spans with meaningful attributes (EventManager + WorkcellManager started)
 - [x] Cross-manager/client calls propagate trace context (requests instrumentation + existing header injection in EventClient)
 - [~] Managers reuse a previously-configured process-global OTEL runtime when available
 - [x] Manager health endpoint reports OTEL status when enabled
