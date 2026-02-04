@@ -455,6 +455,14 @@ Progress (Implementation Notes, Feb 2026):
 - Added DataManager datapoint ingestion span:
   - `/datapoint` wraps create/insert in `data.save` span
     - `src/madsci_data_manager/madsci/data_manager/data_server.py`
+- Added ResourceManager domain spans:
+  - Resource lifecycle + query endpoints wrap in `resource.*` spans
+    - `src/madsci_resource_manager/madsci/resource_manager/resource_server.py`
+- Added LocationManager domain spans:
+  - Location create wraps in `location.create` span
+  - Attach resource wraps in `attachment.create` span
+  - Transfer planning wraps in `transfer.plan` span
+    - `src/madsci_location_manager/madsci/location_manager/location_server.py`
 - Optional deps for instrumentation added:
   - `src/madsci_common/pyproject.toml` (`otel-instrumentation` extra)
 

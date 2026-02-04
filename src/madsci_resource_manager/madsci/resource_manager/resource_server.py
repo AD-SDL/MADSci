@@ -222,17 +222,18 @@ class ResourceManager(
         Initialize a resource in the database based on a definition. If a matching resource already exists, it will be returned.
         """
         try:
-            resource = self._resource_interface.get_resource(
-                **resource_definition.model_dump(exclude_none=True),
-                multiple=False,
-                unique=True,
-            )
-            if not resource:
-                resource = self._resource_interface.add_resource(
-                    Resource.discriminate(resource_definition)
+            with self.span("resource.init"):
+                resource = self._resource_interface.get_resource(
+                    **resource_definition.model_dump(exclude_none=True),
+                    multiple=False,
+                    unique=True,
                 )
+                if not resource:
+                    resource = self._resource_interface.add_resource(
+                        Resource.discriminate(resource_definition)
+                    )
 
-            return resource
+                return resource
         except Exception as e:
             self.logger.error(e)
             raise e
@@ -245,7 +246,8 @@ class ResourceManager(
         Add a new resource to the Resource Manager.
         """
         try:
-            return self._resource_interface.add_resource(resource)
+            with self.span("resource.create"):
+                return self._resource_interface.add_resource(resource)
         except Exception as e:
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -258,7 +260,8 @@ class ResourceManager(
         Add a new resource to the Resource Manager.
         """
         try:
-            return self._resource_interface.add_or_update_resource(resource)
+            with self.span("resource.add_or_update"):
+                return self._resource_interface.add_or_update_resource(resource)
         except Exception as e:
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -271,7 +274,8 @@ class ResourceManager(
         Update or refresh a resource in the database, including its children.
         """
         try:
-            return self._resource_interface.update_resource(resource)
+            with self.span("resource.update"):
+                return self._resource_interface.update_resource(resource)
         except Exception as e:
             self.logger.error(e)
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -283,7 +287,8 @@ class ResourceManager(
         but it will still be available in the history table.
         """
         try:
-            return self._resource_interface.remove_resource(resource_id)
+            with self.span("resource.remove", attributes={"resource.id": resource_id}):
+                return self._resource_interface.remove_resource(resource_id)
         except NoResultFound as e:
             self.logger.info(f"Resource not found: {resource_id}")
             raise HTTPException(status_code=404, detail="Resource not found") from e
@@ -297,7 +302,10 @@ class ResourceManager(
         Retrieve a resource from the database by ID.
         """
         try:
-            resource = self._resource_interface.get_resource(resource_id=resource_id)
+            with self.span("resource.get", attributes={"resource.id": resource_id}):
+                resource = self._resource_interface.get_resource(
+                    resource_id=resource_id
+                )
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
 
@@ -314,9 +322,10 @@ class ResourceManager(
         Retrieve a resource from the database based on the specified parameters.
         """
         try:
-            resource = self._resource_interface.get_resource(
-                **query.model_dump(exclude_none=True),
-            )
+            with self.span("resource.query"):
+                resource = self._resource_interface.get_resource(
+                    **query.model_dump(exclude_none=True),
+                )
             if not resource:
                 raise HTTPException(status_code=404, detail="Resource not found")
 

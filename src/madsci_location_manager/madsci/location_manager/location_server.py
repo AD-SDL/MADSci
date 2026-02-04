@@ -283,7 +283,13 @@ class LocationManager(
     @post("/location", tags=["Locations"])
     def add_location(self, location: Location) -> Location:
         """Add a new location."""
-        with ownership_context():
+        with (
+            ownership_context(),
+            self.span(
+                "location.create",
+                attributes={"location.id": location.location_id},
+            ),
+        ):
             result = self.state_handler.set_location(location.location_id, location)
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
@@ -422,7 +428,16 @@ class LocationManager(
         resource_id: str,
     ) -> Location:
         """Attach a resource to a location."""
-        with ownership_context():
+        with (
+            ownership_context(),
+            self.span(
+                "attachment.create",
+                attributes={
+                    "location.id": location_id,
+                    "resource.id": resource_id,
+                },
+            ),
+        ):
             location = self.state_handler.get_location(location_id)
             if location is None:
                 raise HTTPException(
@@ -481,7 +496,16 @@ class LocationManager(
         Raises:
             HTTPException: If no transfer path exists
         """
-        with ownership_context():
+        with (
+            ownership_context(),
+            self.span(
+                "transfer.plan",
+                attributes={
+                    "transfer.source_location_id": source_location_id,
+                    "transfer.target_location_id": target_location_id,
+                },
+            ),
+        ):
             try:
                 return self.transfer_planner.plan_transfer(
                     source_location_id, target_location_id
