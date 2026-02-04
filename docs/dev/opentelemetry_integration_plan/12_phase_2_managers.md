@@ -455,7 +455,7 @@ Acceptance Criteria:
 - [~] Key operations create spans with meaningful attributes (started with EventManager)
 - [x] Cross-manager/client calls propagate trace context (requests instrumentation + existing header injection in EventClient)
 - [~] Managers reuse a previously-configured process-global OTEL runtime when available
-- [ ] Manager health endpoint reports OTEL status when enabled
+- [x] Manager health endpoint reports OTEL status when enabled
 - [x] All manager tests pass (common + event manager)
 
 ## 2.5 OTEL Status and Health Checks

@@ -265,11 +265,30 @@ class AbstractManagerBase(
             ManagerHealth: The current health status
         """
         try:
+            otel_enabled = bool(
+                getattr(self._settings, "otel_enabled", False)
+                and self._otel_runtime
+                and self._otel_runtime.enabled
+            )
+
+            extras: dict[str, Any] = {}
+            if getattr(self._settings, "otel_enabled", False):
+                extras.update(
+                    {
+                        "otel.enabled": otel_enabled,
+                        "otel.exporter_type": getattr(
+                            self._settings, "otel_exporter", None
+                        ),
+                        "otel.endpoint": getattr(self._settings, "otel_endpoint", None),
+                    }
+                )
+
             # Basic health check - if we can create a ManagerHealth object,
             # the manager is at least partially functional
             return ManagerHealth(
                 healthy=True,
                 description="Manager is running normally.",
+                **extras,
             )
         except Exception as e:
             return ManagerHealth(
