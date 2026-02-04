@@ -537,32 +537,37 @@ class WorkcellManager(
                             status_code=400,
                             detail="Input File Paths must be a dictionary with string keys",
                         )
-                workcell = self.state_handler.get_workcell_definition()
-                check_parameters(wf_def, json_inputs, file_input_paths)
-                wf = create_workflow(
-                    workflow_def=wf_def,
-                    workcell=workcell,
-                    json_inputs=json_inputs,
-                    file_input_paths=file_input_paths,
-                    state_handler=self.state_handler,
-                    location_client=self.location_client,
-                )
 
-                wf = save_workflow_files(
-                    workflow=wf, files=files, data_client=self.data_client
-                )
-
-                with self.state_handler.wc_state_lock():
-                    self.state_handler.set_active_workflow(wf)
-                    self.state_handler.enqueue_workflow(wf.workflow_id)
-
-                self.logger.log(
-                    Event(
-                        event_type=EventType.WORKFLOW_START,
-                        event_data=wf.model_dump(mode="json"),
+                with self.span(
+                    "workflow.execute",
+                    attributes={"workflow.step_count": len(wf_def.steps)},
+                ):
+                    workcell = self.state_handler.get_workcell_definition()
+                    check_parameters(wf_def, json_inputs, file_input_paths)
+                    wf = create_workflow(
+                        workflow_def=wf_def,
+                        workcell=workcell,
+                        json_inputs=json_inputs,
+                        file_input_paths=file_input_paths,
+                        state_handler=self.state_handler,
+                        location_client=self.location_client,
                     )
-                )
-                return wf
+
+                    wf = save_workflow_files(
+                        workflow=wf, files=files, data_client=self.data_client
+                    )
+
+                    with self.state_handler.wc_state_lock():
+                        self.state_handler.set_active_workflow(wf)
+                        self.state_handler.enqueue_workflow(wf.workflow_id)
+
+                    self.logger.log(
+                        Event(
+                            event_type=EventType.WORKFLOW_START,
+                            event_data=wf.model_dump(mode="json"),
+                        )
+                    )
+                    return wf
 
         except HTTPException as e:
             raise e

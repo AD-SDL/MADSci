@@ -48,6 +48,7 @@ from madsci.workcell_manager.workflow_utils import (
     cancel_active_workflows,
     prepare_workflow_step,
 )
+from opentelemetry import trace
 
 
 class Engine:
@@ -72,6 +73,7 @@ class Engine:
         self.data_client = data_client
         self.resource_client = ResourceClient()
         self.location_client = LocationClient()
+        self._tracer = trace.get_tracer(__name__)
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state()
         time.sleep(self.workcell_settings.cold_start_delay)
@@ -204,74 +206,98 @@ class Engine:
             # * Prepare the step
             wf = self.state_handler.get_active_workflow(workflow_id)
             step = wf.steps[wf.status.current_step_index]
-            step = prepare_workflow_step(
-                step=step,
-                workcell=self.workcell_definition,
-                state_handler=self.state_handler,
-                workflow=wf,
-                data_client=self.data_client,
-                location_client=self.location_client,
-            )
-            step.start_time = datetime.now()
-            self.logger.info(f"Running step {step.step_id} in workflow {workflow_id}")
-            if step.node is None:
-                step = self.run_workcell_action(step)
-            else:
-                node = self.state_handler.get_node(step.node)
-                client = find_node_client(node.node_url)
-                wf = self.update_step(wf, step)
 
-                # * Send the action request
-                response = None
-
-                # Merge with step.args
-                args = {**step.args, **step.locations}
-                request = ActionRequest(
-                    action_name=step.action,
-                    args=args,
-                    files=step.file_paths,
+            with self._tracer.start_as_current_span(
+                "workflow.step",
+                attributes={
+                    "step.action": step.action,
+                    "step.node": step.node,
+                    "step.index": wf.status.current_step_index,
+                },
+            ):
+                step = prepare_workflow_step(
+                    step=step,
+                    workcell=self.workcell_definition,
+                    state_handler=self.state_handler,
+                    workflow=wf,
+                    data_client=self.data_client,
+                    location_client=self.location_client,
                 )
-                action_id = request.action_id
+                step.start_time = datetime.now()
+                self.logger.info(
+                    f"Running step {step.step_id} in workflow {workflow_id}"
+                )
+                if step.node is None:
+                    step = self.run_workcell_action(step)
+                else:
+                    node = self.state_handler.get_node(step.node)
+                    client = find_node_client(node.node_url)
+                    wf = self.update_step(wf, step)
 
-                # Acquire lock on the node for the entire action duration
-                node_lock = self.state_handler.node_lock(step.node)
-                if not node_lock.acquire():
-                    raise RuntimeError(f"Failed to acquire lock on node {step.node}")
+                    # * Send the action request
+                    response = None
 
-                try:
-                    self.logger.log_info(
-                        f"Acquired lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
+                    # Merge with step.args
+                    args = {**step.args, **step.locations}
+                    request = ActionRequest(
+                        action_name=step.action,
+                        args=args,
+                        files=step.file_paths,
                     )
+                    action_id = request.action_id
+
+                    # Acquire lock on the node for the entire action duration
+                    node_lock = self.state_handler.node_lock(step.node)
+                    if not node_lock.acquire():
+                        raise RuntimeError(
+                            f"Failed to acquire lock on node {step.node}"
+                        )
 
                     try:
-                        response = client.send_action(request, await_result=False)
-                    except Exception as e:
-                        self.logger.error(
-                            f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                        with self._tracer.start_as_current_span(
+                            "node.action",
+                            attributes={
+                                "node.name": step.node,
+                                "action.name": step.action,
+                            },
+                        ):
+                            self.logger.log_info(
+                                f"Acquired lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
+                            )
+
+                            try:
+                                response = client.send_action(
+                                    request, await_result=False
+                                )
+                            except Exception as e:
+                                self.logger.error(
+                                    f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                                )
+                                if response is None:
+                                    # Create a running response so monitor_action_progress can try get_action_result
+                                    # as a fallback in case the action was actually created but the response was lost
+                                    response = request.running(
+                                        errors=[Error.from_exception(e)]
+                                    )
+                                else:
+                                    response.errors.append(Error.from_exception(e))
+
+                            response = self.handle_response(wf, step, response)
+                            action_id = response.action_id
+
+                            # * Periodically query the action status until complete, updating the workflow as needed
+                            # * If the node or client supports get_action_result, query the action result
+                            node_lock.release()
+                            self.monitor_action_progress(
+                                wf, step, node, client, response, request, action_id
+                            )
+                    finally:
+                        self.logger.log_info(
+                            f"Released lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
                         )
-                        if response is None:
-                            # Create a running response so monitor_action_progress can try get_action_result
-                            # as a fallback in case the action was actually created but the response was lost
-                            response = request.running(errors=[Error.from_exception(e)])
-                        else:
-                            response.errors.append(Error.from_exception(e))
-
-                    response = self.handle_response(wf, step, response)
-                    action_id = response.action_id
-
-                    # * Periodically query the action status until complete, updating the workflow as needed
-                    # * If the node or client supports get_action_result, query the action result
-                    node_lock.release()
-                    self.monitor_action_progress(
-                        wf, step, node, client, response, request, action_id
-                    )
-                finally:
-                    self.logger.log_info(
-                        f"Released lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
-                    )
-                    if node_lock.locked():
-                        node_lock.release()
-                # * Finalize the step
+                        if node_lock.locked():
+                            node_lock.release()
+                    # * Finalize the step
             self.finalize_step(workflow_id, step)
             self.logger.info(f"Completed step {step.step_id} in workflow {workflow_id}")
             self.logger.debug(self.state_handler.get_workflow(workflow_id))
