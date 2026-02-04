@@ -10,10 +10,12 @@ from .bootstrap import (
     configure_otel,
     current_trace_context,
 )
+from .propagation import inject_headers
 
 __all__ = [
     "OtelBootstrapConfig",
     "OtelRuntime",
     "configure_otel",
     "current_trace_context",
+    "inject_headers",
 ]

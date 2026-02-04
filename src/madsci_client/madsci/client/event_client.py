@@ -27,6 +27,7 @@ from madsci.common.otel import (
     OtelBootstrapConfig,
     configure_otel,
     current_trace_context,
+    inject_headers,
 )
 from madsci.common.types.event_types import (
     Event,
@@ -168,10 +169,11 @@ class EventClient:
                     metric_export_interval_ms=self.config.otel_metric_export_interval_ms,
                 )
             )
-        except Exception as e:
+        except Exception:
             self._otel_runtime = None
             self.logger.warning(
-                "OpenTelemetry setup failed; continuing without OTEL", exc_info=e
+                "OpenTelemetry setup failed; continuing without OTEL",
+                exc_info=True,
             )
 
     def _log_startup_info(self) -> None:
@@ -187,14 +189,14 @@ class EventClient:
             if self.event_server
             else "Not configured",
             "log_dir": str(self.log_dir),
-            "log_level": self.config.log_level.name
-            if hasattr(self.config.log_level, "name")
-            else str(self.config.log_level),
+            "log_level": str(self.config.log_level),
             "python_version": platform.python_version(),
             "platform": platform.platform(),
         }
 
-        self.logger.info(f"EventClient initialized: {startup_info}")
+        # This is an early startup log where structlog may not yet be the
+        # effective logger for all handlers; keep it stdlib-safe.
+        self.logger.info("EventClient initialized: %s", startup_info)
 
     def _create_file_handler(self) -> logging.Handler:
         """Create the appropriate file handler based on rotation config.
@@ -672,7 +674,7 @@ class EventClient:
     def log(
         self,
         event: Union[Event, Any],
-        level: Optional[int] = None,
+        level: Optional[Union[int, EventLogLevel]] = None,
         alert: Optional[bool] = None,
         warning_category: Optional[type] = None,
     ) -> None:
@@ -698,13 +700,24 @@ class EventClient:
             event = Event(
                 event_type=EventType.LOG_ERROR,
                 event_data=traceback.format_exc(),
-                log_level=logging.ERROR,
+                log_level=EventLogLevel.ERROR,
             )
         if not isinstance(event, Event):
-            event = self._new_event_for_log(event, level or logging.INFO)
+            level_int: int = logging.INFO
+            if isinstance(level, EventLogLevel):
+                level_int = int(level.value)
+            elif level is not None:
+                level_int = int(level)
+            event = self._new_event_for_log(
+                event,
+                level_int,
+            )
 
         event = Event.model_validate(event)
-        event.log_level = level if level is not None else event.log_level
+        if level is not None:
+            event.log_level = (
+                level if isinstance(level, EventLogLevel) else EventLogLevel(level)
+            )
         event.alert = alert if alert is not None else event.alert
         if warning_category and self.logger.getEffectiveLevel() <= logging.WARNING:
             # * Warn via the warnings module
@@ -936,14 +949,17 @@ class EventClient:
         backoff = 2
         max_backoff = 60
         while not self._event_buffer.empty() and not self._shutdown:
+            event: Optional[Event] = None
             try:
                 event = self._event_buffer.get()
-                self._send_event_to_event_server(event, retrying=True)
+                if isinstance(event, Event):
+                    self._send_event_to_event_server(event, retrying=True)
                 backoff = 2  # Reset backoff on success
             except Exception:
                 time.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)
-                self._event_buffer.put(event)  # Re-add the event to the buffer
+                if event is not None:
+                    self._event_buffer.put(event)  # Re-add the event to the buffer
         with self._buffer_lock:
             self._retrying = False
 
@@ -964,9 +980,7 @@ class EventClient:
             headers: dict[str, str] = {}
             if self._otel_runtime and self._otel_runtime.enabled:
                 with contextlib.suppress(Exception):
-                    from opentelemetry.propagate import inject  # noqa: PLC0415
-
-                    inject(headers)
+                    inject_headers(headers)
             response = self.session.post(
                 url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),

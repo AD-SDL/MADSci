@@ -142,6 +142,8 @@ from opentelemetry.propagate import extract, inject
 Progress (Implementation Notes):
 
 - Implemented canonical bootstrap module: `src/madsci_common/madsci/common/otel/`
+- Implemented canonical propagation helper module:
+  - `src/madsci_common/madsci/common/otel/propagation.py`
 - Updated dependencies:
   - `src/madsci_common/pyproject.toml`: add `opentelemetry-api` and optional `otel` group (`opentelemetry-sdk`, `opentelemetry-exporter-otlp`)
   - `src/madsci_client/pyproject.toml`: removed `opentelemetry-sdk` from base dependencies

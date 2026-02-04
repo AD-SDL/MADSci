@@ -365,11 +365,19 @@ Progress (Implementation Notes):
 - Trace correlation fields are injected into `Event` objects when a span is active:
   - `Event.trace_id` / `Event.span_id` populated from `madsci.common.otel.current_trace_context()`
 - Context propagation is injected into outbound EventManager HTTP requests (best-effort):
-  - `opentelemetry.propagate.inject(headers)` in `EventClient._send_event_to_event_server(...)`
+  - Canonical helper: `madsci.common.otel.inject_headers(headers)`
+    - `src/madsci_common/madsci/common/otel/propagation.py`
+  - Used by EventClient:
+    - `src/madsci_client/madsci/client/event_client.py`
 - Added `otel_protocol` to settings + endpoint normalization:
   - `src/madsci_common/madsci/common/types/event_types.py`
 - Added initial OTEL unit tests:
   - `src/madsci_client/tests/test_event_client_otel.py` (covers enable/disable, injection format, header propagation)
+
+Additional progress (Feb 2026):
+
+- Fixed EventClient OTEL setup failure logging to use `exc_info=True` (stdlib-compatible)
+- Kept EventClient startup logging stdlib-safe (avoid passing structlog-style kwargs to stdlib logger)
 
 Acceptance Criteria:
 
