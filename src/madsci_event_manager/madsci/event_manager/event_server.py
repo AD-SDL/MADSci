@@ -215,6 +215,9 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         except Exception as e:
             self.logger.warning(f"Failed to create indexes: {e}")
 
+    # NOTE: OTEL instrumentation for event receipt lives in the existing /event
+    # endpoint implementation further down in this file.
+
     def get_health(self) -> EventManagerHealth:
         """Get the health status of the Event Manager."""
         health = EventManagerHealth()
@@ -370,18 +373,25 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
     @post("/event")
     async def log_event(self, event: Event) -> Event:
         """Create a new event."""
-        try:
-            mongo_data = event.to_mongo()
+        with self.span(
+            "event.receive",
+            attributes={
+                "event.level": event.log_level.name if event.log_level else "INFO",
+                "event.type": event.event_type.value,
+            },
+        ):
             try:
-                self.events.insert_one(mongo_data)
-            except errors.DuplicateKeyError:
-                self.logger.warning(
-                    f"Duplicate event ID {event.event_id} - skipping insert"
-                )
-                # Just continue - don't fail the request
-        except Exception as e:
-            self.logger.error(f"Failed to log event: {e}")
-            raise e
+                mongo_data = event.to_mongo()
+                try:
+                    self.events.insert_one(mongo_data)
+                except errors.DuplicateKeyError:
+                    self.logger.warning(
+                        f"Duplicate event ID {event.event_id} - skipping insert"
+                    )
+                    # Just continue - don't fail the request
+            except Exception as e:
+                self.logger.error(f"Failed to log event: {e}")
+                raise e
 
         if (
             event.alert or event.log_level >= self.settings.alert_level

@@ -5,9 +5,10 @@ This module provides a base class for all MADSci manager services,
 standardizing common patterns and reducing code duplication.
 """
 
+import contextlib
 from abc import ABCMeta
 from pathlib import Path
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, ContextManager, Generic, Optional, TypeVar
 
 import uvicorn
 from classy_fastapi import Routable, get
@@ -17,6 +18,13 @@ from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.middleware import RateLimitMiddleware
+from madsci.common.otel import (
+    OtelBootstrapConfig,
+    configure_otel,
+    get_otel_runtime,
+    instrument_fastapi,
+    instrument_requests,
+)
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
 from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
@@ -124,11 +132,34 @@ class AbstractManagerBase(
         self.logger.info(self._definition)
         self.logger.info(get_current_madsci_context())
 
+        self._otel_runtime = None
+        if getattr(self._settings, "otel_enabled", False):
+            self._setup_otel()
+        else:
+            # If OTEL was configured elsewhere in the process (e.g., a shared
+            # bootstrap in a multi-service runtime), keep access to the runtime
+            # so spans can still be created.
+            self._otel_runtime = get_otel_runtime()
+
+        self._tracer = self._otel_runtime.tracer if self._otel_runtime else None
+
         # Setup ownership context
         self.setup_ownership()
 
         # Initialize manager-specific components
         self.initialize(**kwargs)
+
+    def span(
+        self, name: str, *, attributes: Optional[dict[str, Any]] = None
+    ) -> ContextManager[Any]:
+        """Create a best-effort span context manager.
+
+        This is intended for higher-level manager operations (not every log line).
+        """
+
+        if self._tracer is None:
+            return contextlib.nullcontext()
+        return self._tracer.start_as_current_span(name, attributes=attributes)
 
     @property
     def settings(self) -> SettingsT:
@@ -190,6 +221,33 @@ class AbstractManagerBase(
         # Use the mixin's event_client property (lazy initialization)
         # This creates the EventClient if it doesn't exist
         self._logger = self.event_client
+
+    def _setup_otel(self) -> None:
+        """Best-effort OTEL bootstrap for manager processes."""
+
+        try:
+            service_name = getattr(self._settings, "otel_service_name", None) or (
+                f"madsci.{self.__class__.__name__.lower()}"
+            )
+            self._otel_runtime = configure_otel(
+                OtelBootstrapConfig(
+                    enabled=True,
+                    service_name=service_name,
+                    service_version="unknown",
+                    exporter=getattr(self._settings, "otel_exporter", "console"),
+                    otlp_endpoint=getattr(self._settings, "otel_endpoint", None),
+                    otlp_protocol=getattr(self._settings, "otel_protocol", "grpc"),
+                )
+            )
+
+            # Instrument outbound HTTP (requests) if optional deps are installed.
+            instrument_requests(enabled=True)
+        except Exception:
+            self._otel_runtime = None
+            self.logger.warning(
+                "OpenTelemetry setup failed; continuing without OTEL",
+                exc_info=True,
+            )
 
     def setup_ownership(self) -> None:
         """Setup ownership context for the manager."""
@@ -358,6 +416,10 @@ class AbstractManagerBase(
 
         # Configure the app (middleware, etc.)
         self.configure_app(app)
+
+        # Instrument inbound HTTP (FastAPI) if OTEL is enabled.
+        if self._otel_runtime and self._otel_runtime.enabled:
+            instrument_fastapi(app, enabled=True)
 
         # Include the router from this Routable class
         app.include_router(self.router)

@@ -4,9 +4,10 @@ This module centralizes OpenTelemetry SDK/provider setup so MADSci services and
 clients share one consistent initialization behavior.
 """
 
+import contextlib
 import logging
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from opentelemetry import metrics, trace
 from opentelemetry.sdk.metrics import MeterProvider
@@ -86,6 +87,11 @@ def configure_otel(config: OtelBootstrapConfig) -> OtelRuntime:
     if not config.enabled:
         _runtime = OtelRuntime(enabled=False)
         return _runtime
+
+    if config.test_mode and _configured and _runtime is not None:
+        # Tests may request a fresh in-memory exporter/reader per test.
+        _configured = False
+        _runtime = None
 
     if _configured and _runtime is not None:
         return _runtime
@@ -228,6 +234,38 @@ def _configure_metrics(
         return meter_provider, None
 
     return MeterProvider(resource=resource), None
+
+
+def collect_metrics(runtime: OtelRuntime) -> Optional[Any]:
+    """Force a synchronous metrics collection for test assertions.
+
+    OpenTelemetry's metrics SDK is pull-based; in tests we want deterministic
+    reads without background threads.
+    """
+
+    if runtime.in_memory_metric_reader is None:
+        return None
+
+    # The in-memory reader captures metrics on explicit collect.
+    with contextlib.suppress(Exception):
+        runtime.in_memory_metric_reader.collect()
+
+    data = runtime.in_memory_metric_reader.get_metrics_data()
+    if data is not None:
+        return data
+
+    # Best-effort flush + collect for SDK versions that buffer observations.
+    with contextlib.suppress(Exception):
+        runtime.meter_provider.force_flush()  # type: ignore[union-attr]
+    with contextlib.suppress(Exception):
+        runtime.in_memory_metric_reader.collect()
+    return runtime.in_memory_metric_reader.get_metrics_data()
+
+
+def get_otel_runtime() -> Optional[OtelRuntime]:
+    """Return the process-global OTEL runtime when configured."""
+
+    return _runtime
 
 
 def current_trace_context() -> dict[str, Optional[str]]:

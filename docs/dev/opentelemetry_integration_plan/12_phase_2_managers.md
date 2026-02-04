@@ -430,12 +430,33 @@ instead of placed on spans as attributes.
 
 ## 2.4 Acceptance Criteria
 
-- [ ] AbstractManagerBase supports OTEL configuration
-- [ ] Trace context is extracted from incoming requests
-- [ ] Key operations create spans with meaningful attributes
-- [ ] Cross-manager calls propagate trace context
+Progress (Implementation Notes, Feb 2026):
+
+- AbstractManagerBase now bootstraps OTEL when `settings.otel_enabled=True`:
+  - `src/madsci_common/madsci/common/manager_base.py`
+- Added best-effort outbound HTTP client auto-instrumentation (requests):
+  - Helper: `src/madsci_common/madsci/common/otel/requests_instrumentation.py`
+  - Export: `madsci.common.otel.instrument_requests`
+- Added best-effort inbound HTTP server auto-instrumentation (FastAPI):
+  - Helper: `src/madsci_common/madsci/common/otel/fastapi_instrumentation.py`
+  - Export: `madsci.common.otel.instrument_fastapi`
+- Added a small domain-span helper for managers:
+  - `AbstractManagerBase.span(name, attributes=...)`
+- Added first manager domain span:
+  - EventManager `/event` endpoint wraps inserts in `event.receive` span
+    - `src/madsci_event_manager/madsci/event_manager/event_server.py`
+- Optional deps for instrumentation added:
+  - `src/madsci_common/pyproject.toml` (`otel-instrumentation` extra)
+
+Acceptance Criteria:
+
+- [x] AbstractManagerBase supports OTEL configuration (best-effort, optional)
+- [x] Trace context is extracted from incoming requests via FastAPI auto-instrumentation (when installed/enabled)
+- [~] Key operations create spans with meaningful attributes (started with EventManager)
+- [x] Cross-manager/client calls propagate trace context (requests instrumentation + existing header injection in EventClient)
+- [~] Managers reuse a previously-configured process-global OTEL runtime when available
 - [ ] Manager health endpoint reports OTEL status when enabled
-- [ ] All manager tests pass
+- [x] All manager tests pass (common + event manager)
 
 ## 2.5 OTEL Status and Health Checks
 

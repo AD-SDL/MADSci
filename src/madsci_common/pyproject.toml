@@ -43,6 +43,12 @@ otel = [
     "opentelemetry-exporter-otlp>=1.20.0",
 ]
 
+otel-instrumentation = [
+    "opentelemetry-instrumentation-fastapi>=0.41b0",
+    "opentelemetry-instrumentation-asgi>=0.41b0",
+    "opentelemetry-instrumentation-requests>=0.41b0",
+]
+
 [project.scripts]
 madsci-backup = "madsci.common.backup_tools.cli:main"
 madsci-mongodb-backup = "madsci.common.backup_tools.cli:main_mongodb_backup"

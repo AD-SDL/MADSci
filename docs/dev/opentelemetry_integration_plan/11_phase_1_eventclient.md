@@ -376,8 +376,11 @@ Progress (Implementation Notes):
 
 Additional progress (Feb 2026):
 
-- Fixed EventClient OTEL setup failure logging to use `exc_info=True` (stdlib-compatible)
-- Kept EventClient startup logging stdlib-safe (avoid passing structlog-style kwargs to stdlib logger)
+- Added canonical OTEL package in `madsci_common`:
+  - `src/madsci_common/madsci/common/otel/bootstrap.py`
+  - `src/madsci_common/madsci/common/otel/propagation.py`
+  - Export surface: `src/madsci_common/madsci/common/otel/__init__.py`
+- EventClient OTEL now uses the canonical bootstrap (migrated from `madsci_client` local OTEL modules)
 
 Acceptance Criteria:
 
@@ -386,7 +389,20 @@ Acceptance Criteria:
 - [x] `trace_id` and `span_id` are injected when a span is active
 - [x] `trace_id` and `span_id` are populated in Event objects
 - [x] HTTP requests to EventManager include `traceparent` header
-- [ ] Metrics (counter, histogram, observable gauge) are recorded
-- [ ] Exporters can be validated via in-memory exporter tests
+- [x] Metrics (counter, histogram, observable gauge) are recorded
+- [~] Exporters can be validated via in-memory exporter tests (spans covered; metrics asserted via subprocess)
 - [x] OTLP exporter can be configured via settings
 - [x] All tests pass
+
+## 1.5 Progress Update (Feb 2026)
+
+Phase 1 is now considered complete.
+
+- Metrics instrumentation implemented in EventClient:
+  - Counter: `madsci.eventclient.events` (attributes: `event.level`, `event.type`)
+  - Histogram: `madsci.eventclient.send_latency_ms`
+  - Observable gauge: `madsci.eventclient.buffer_size`
+  - Counter: `madsci.eventclient.send_retries`
+- Deterministic metrics assertions are executed in a subprocess test to avoid
+  process-global OpenTelemetry provider conflicts:
+  - `src/madsci_client/tests/test_event_client_otel_metrics_subprocess.py`

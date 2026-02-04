@@ -14,6 +14,7 @@ import time
 import traceback
 import warnings
 from collections import OrderedDict
+from collections.abc import Iterable
 from importlib.metadata import PackageNotFoundError, version
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
@@ -36,6 +37,7 @@ from madsci.common.types.event_types import (
     EventType,
 )
 from madsci.common.utils import create_http_session, threaded_task
+from opentelemetry.metrics import CallbackOptions, Observation
 from pydantic import BaseModel, ValidationError
 from rich.logging import RichHandler
 
@@ -150,6 +152,10 @@ class EventClient:
         self.session = create_http_session(config=self.config)
 
         self._otel_runtime = None
+        self._otel_event_counter = None
+        self._otel_send_latency_histogram = None
+        self._otel_buffer_size_gauge = None
+        self._otel_retry_counter = None
         if self.config.otel_enabled:
             self._setup_otel()
 
@@ -169,12 +175,82 @@ class EventClient:
                     metric_export_interval_ms=self.config.otel_metric_export_interval_ms,
                 )
             )
+
+            self._setup_otel_metrics()
         except Exception:
             self._otel_runtime = None
             self.logger.warning(
                 "OpenTelemetry setup failed; continuing without OTEL",
                 exc_info=True,
             )
+
+    def _setup_otel_metrics(self) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+
+        meter = self._otel_runtime.meter
+
+        self._otel_event_counter = meter.create_counter(
+            name="madsci.eventclient.events",
+            description="Number of events emitted by EventClient",
+            unit="1",
+        )
+        self._otel_send_latency_histogram = meter.create_histogram(
+            name="madsci.eventclient.send_latency_ms",
+            description="Latency of sending events to EventManager",
+            unit="ms",
+        )
+        self._otel_retry_counter = meter.create_counter(
+            name="madsci.eventclient.send_retries",
+            description="Number of retries attempted when sending events",
+            unit="1",
+        )
+
+        def _observe_buffer_size(_options: CallbackOptions) -> Iterable[Observation]:
+            yield Observation(self._event_buffer.qsize())
+
+        self._otel_buffer_size_gauge = meter.create_observable_gauge(
+            name="madsci.eventclient.buffer_size",
+            callbacks=[_observe_buffer_size],
+            description="Current size of the buffered event queue",
+            unit="1",
+        )
+
+    def _record_otel_event(
+        self, *, level: EventLogLevel, event_type: EventType
+    ) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+        if self._otel_event_counter is None:
+            return
+        self._otel_event_counter.add(
+            1,
+            {
+                "event.level": level.name,
+                "event.type": event_type.value,
+            },
+        )
+
+    def _record_otel_send_latency(
+        self, *, latency_ms: float, event_type: EventType
+    ) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+        if self._otel_send_latency_histogram is None:
+            return
+        self._otel_send_latency_histogram.record(
+            latency_ms,
+            {
+                "event.type": event_type.value,
+            },
+        )
+
+    def _record_otel_retry(self) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+        if self._otel_retry_counter is None:
+            return
+        self._otel_retry_counter.add(1)
 
     def _log_startup_info(self) -> None:
         """Log startup information on first initialization.
@@ -570,6 +646,7 @@ class EventClient:
                 span_id=trace_ctx.get("span_id"),
             )
 
+            self._record_otel_event(level=level, event_type=event_type)
             self._send_event_to_event_server_task(event)
         except Exception as e:
             self._handle_error(e, "Failed to send event to server")
@@ -956,6 +1033,7 @@ class EventClient:
                     self._send_event_to_event_server(event, retrying=True)
                 backoff = 2  # Reset backoff on success
             except Exception:
+                self._record_otel_retry()
                 time.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)
                 if event is not None:
@@ -977,6 +1055,7 @@ class EventClient:
         """Send an event to the event manager. Buffer on failure."""
 
         try:
+            start = time.perf_counter()
             headers: dict[str, str] = {}
             if self._otel_runtime and self._otel_runtime.enabled:
                 with contextlib.suppress(Exception):
@@ -990,6 +1069,12 @@ class EventClient:
 
             if not response.ok:
                 response.raise_for_status()
+
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            self._record_otel_send_latency(
+                latency_ms=elapsed_ms,
+                event_type=event.event_type or EventType.UNKNOWN,
+            )
 
         except Exception:
             if not retrying:

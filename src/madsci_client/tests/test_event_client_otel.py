@@ -10,14 +10,29 @@ SPAN_ID_RE = re.compile(r"^[0-9a-f]{16}$")
 
 
 @pytest.fixture
-def otel_test_runtime() -> None:
-    # Configure OTEL in deterministic in-memory mode once.
-    configure_otel(
+def otel_test_runtime():
+    # Each test gets a deterministic, in-memory OTEL runtime.
+    # configure_otel() will reset prior config in test_mode.
+    return configure_otel(
         OtelBootstrapConfig(
             enabled=True,
             service_name="madsci.test",
             exporter="none",
             test_mode=True,
+        )
+    )
+
+
+@pytest.fixture
+def otel_test_client(otel_test_runtime):
+    # Ensure client creation happens after OTEL test_mode bootstrap so it reuses
+    # the in-memory meter reader.
+    _ = otel_test_runtime
+    return EventClient(
+        config=EventClientConfig(
+            event_server_url=None,
+            otel_enabled=True,
+            otel_exporter="none",
         )
     )
 
@@ -39,14 +54,8 @@ class TestEventClientOtelIntegration:
         assert client._otel_runtime is not None
         assert client._otel_runtime.enabled is True
 
-    def test_trace_context_injected_into_event(self, otel_test_runtime: None) -> None:
-        client = EventClient(
-            config=EventClientConfig(
-                event_server_url=None,
-                otel_enabled=True,
-                otel_exporter="none",
-            )
-        )
+    def test_trace_context_injected_into_event(self, otel_test_client) -> None:
+        client = otel_test_client
         assert client._otel_runtime is not None
 
         tracer = client._otel_runtime.tracer
@@ -69,14 +78,9 @@ class TestEventClientOtelIntegration:
         assert TRACE_ID_RE.match(captured[0].trace_id)
         assert SPAN_ID_RE.match(captured[0].span_id)
 
-    def test_context_propagated_in_http_headers(self, otel_test_runtime: None) -> None:
-        client = EventClient(
-            config=EventClientConfig(
-                event_server_url="http://localhost:8001",  # type: ignore[arg-type]
-                otel_enabled=True,
-                otel_exporter="none",
-            )
-        )
+    def test_context_propagated_in_http_headers(self, otel_test_client) -> None:
+        client = otel_test_client
+        client.event_server = "http://localhost:8001"  # type: ignore[assignment]
 
         captured_headers: dict[str, str] = {}
 
@@ -97,3 +101,16 @@ class TestEventClientOtelIntegration:
         assert any(
             k.lower() in {"traceparent", "b3", "x-b3-traceid"} for k in captured_headers
         )
+
+    def test_metrics_instruments_created(self, otel_test_client) -> None:
+        client = otel_test_client
+
+        assert client._otel_runtime is not None
+        assert client._otel_event_counter is not None
+        assert client._otel_send_latency_histogram is not None
+        assert client._otel_buffer_size_gauge is not None
+        assert client._otel_retry_counter is not None
+
+    # Metrics collection assertions are covered by
+    # test_event_client_otel_metrics_subprocess.py to avoid process-global OTEL
+    # provider conflicts.
