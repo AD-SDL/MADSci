@@ -452,6 +452,9 @@ Progress (Implementation Notes, Feb 2026):
     - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py`
   - Node dispatch wraps in `node.action` span
     - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py`
+- Added DataManager datapoint ingestion span:
+  - `/datapoint` wraps create/insert in `data.save` span
+    - `src/madsci_data_manager/madsci/data_manager/data_server.py`
 - Optional deps for instrumentation added:
   - `src/madsci_common/pyproject.toml` (`otel-instrumentation` extra)
 
