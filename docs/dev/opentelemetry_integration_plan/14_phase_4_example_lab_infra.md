@@ -10,6 +10,12 @@
 - Demonstrate observability value for self-driving labs
 - Provide a template for users to bootstrap their own implementation
 
+Status (Feb 2026):
+
+- Added an OpenTelemetry Collector service to `compose.yaml` (`otel_collector`) using a file-based config mounted from `example_lab/otel-collector.yaml`.
+- Collector config includes both `traces` and `metrics` OTLP pipelines with `debug` exporter for local validation.
+- Validated EventManager OTLP export against the collector via docker compose.
+
 ## 4.1 Architecture Overview
 
 ```

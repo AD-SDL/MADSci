@@ -36,6 +36,23 @@ x-madsci-service: &madsci-service
   working_dir: /home/madsci/example_lab
 
 services:
+  otel_collector:
+    container_name: otel_collector
+    image: otel/opentelemetry-collector:latest
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ${REPO_PATH:-.}/example_lab/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    command: ["--config=/etc/otelcol/config.yaml"]
+
+  otel_collector_health:
+    container_name: otel_collector_health
+    image: curlimages/curl:8.5.0
+    network_mode: host
+    depends_on:
+      - otel_collector
+    command: ["sh", "-c", "sleep 2 && curl -sf http://localhost:4317 || true"]
+
   madsci_mongodb:
     container_name: madsci_mongodb
     image: mongo:8.0
@@ -106,6 +123,7 @@ services:
     container_name: event_manager
     command: python -m madsci.event_manager.event_server
     depends_on:
+        - otel_collector
         - madsci_mongodb
 
   experiment_manager:

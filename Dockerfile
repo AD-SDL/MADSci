@@ -8,6 +8,7 @@ ARG USER_ID=9999
 ARG GROUP_ID=9999
 ARG CONTAINER_USER=madsci
 ENV PDM_CHECK_UPDATE=false
+ENV PDM_USE_UV=true
 
 # * Install system dependencies
 RUN apt-get update && \

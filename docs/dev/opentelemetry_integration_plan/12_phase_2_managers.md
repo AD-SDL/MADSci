@@ -492,9 +492,16 @@ Acceptance Criteria:
 
 Runtime Verification Notes:
 
-- Example-lab docker images currently do not include OTLP exporter deps.
-  - With `*_OTEL_EXPORTER=otlp`, managers will log "OpenTelemetry setup failed; continuing without OTEL" due to missing `opentelemetry.exporter`.
-  - Local dev venv can install these via PDM (see `pyproject.toml` dev deps), but container images need to include them for end-to-end OTLP verification.
+- Example-lab docker images now include OTLP exporter deps (unconditionally) so OTLP export works in compose.
+  - Dockerfile installs `opentelemetry-exporter-otlp` and FastAPI/ASGI/requests instrumentations.
+  - `Dockerfile`
+
+Validated (Feb 2026):
+
+- Using docker compose:
+  - Started `otel_collector` (OTLP gRPC receiver on `localhost:4317`) and EventManager with `EVENT_OTEL_EXPORTER=otlp`.
+  - Triggered `/events/query` and observed `event.query` + FastAPI spans in collector `debug` exporter output.
+  - Initially saw `StatusCode.UNIMPLEMENTED` errors for metrics export; fixed by enabling a `metrics` pipeline in collector config.
 
 ## 2.5 OTEL Status and Health Checks
 
