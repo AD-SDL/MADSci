@@ -97,6 +97,12 @@ Additional updates in February 2026 (logging-audit ratchet):
 - Added `src/madsci_client/madsci/client/node/rest_node_client.py` to the `madsci-logging-patterns` pre-commit hook scope.
 - Audited RESTNodeClient logging to ensure structured logging (no f-strings) and `event_type` on EventClient-style log calls.
 
+Additional updates in February 2026 (logging-audit ratchet):
+
+- Added `src/madsci_client/madsci/client/event_client.py` to the `madsci-logging-patterns` pre-commit hook scope.
+- Updated EventClient internals to avoid f-strings in stdlib logger calls and to include a default `event_type` when
+  using the EventClient structlog-style methods.
+
 Notes:
 
 - This Phase 3 doc previously listed some of these files as deferred; they are now included above under

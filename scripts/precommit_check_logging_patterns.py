@@ -61,9 +61,15 @@ def _is_stdlib_logger_call(node: ast.Call) -> bool:
     if not isinstance(func.value, ast.Name):
         return False
 
-    # Heuristic: logging.getLogger(...).info(...) patterns become `logger.info(...)`
-    # and often use `%s` formatting rather than structured kwargs.
-    return func.value.id in {"logger", "log", "logging"}
+    # Heuristic: stdlib logging calls can't accept arbitrary kwargs.
+    value = func.value
+    if isinstance(value, ast.Name):
+        return value.id in {"logger", "log", "logging"}
+
+    if isinstance(value, ast.Attribute):
+        return value.attr == "logger"
+
+    return False
 
 
 def _requires_event_type(node: ast.Call) -> bool:
@@ -83,6 +89,23 @@ def _requires_event_type(node: ast.Call) -> bool:
     }:
         return False
 
+    # Only enforce for known EventClient logger variables.
+    # This avoids false positives on stdlib loggers (self.logger, logger, logging).
+    target_obj = func.value
+    if isinstance(target_obj, ast.Name):
+        target_root = target_obj.id
+    elif isinstance(target_obj, ast.Attribute):
+        target_root = target_obj.attr
+    else:
+        target_root = None
+
+    # Enforce only at EventClient boundary; raw structlog logger calls may
+    # legitimately omit event_type.
+    if target_root not in {"event_client"}:
+        return False
+
+    # Only enforce on EventClient/structlog-style calls.
+    # stdlib logging calls can't accept arbitrary kwargs like event_type.
     if _is_stdlib_logger_call(node):
         return False
 

@@ -406,3 +406,8 @@ Phase 1 is now considered complete.
 - Deterministic metrics assertions are executed in a subprocess test to avoid
   process-global OpenTelemetry provider conflicts:
   - `src/madsci_client/tests/test_event_client_otel_metrics_subprocess.py`
+
+Additional progress (Feb 2026, logging audit ratchet):
+
+- `src/madsci_client/madsci/client/event_client.py` now passes the repo-local structured logging checks
+  (`madsci-logging-patterns`) and is included in the pre-commit hook scope.

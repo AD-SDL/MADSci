@@ -344,7 +344,7 @@ class EventClient:
             if self._retry_thread.is_alive():
                 # Log warning if thread didn't finish cleanly
                 self.logger.warning(
-                    "Retry thread did not terminate within timeout during cleanup"
+                    "Retry thread did not terminate within timeout during cleanup",
                 )
 
     # ==================== Context Binding ====================
@@ -422,6 +422,7 @@ class EventClient:
         """
         try:
             combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_DEBUG)
             self._structlog_logger.debug(message, **combined_context)
             self._maybe_send_to_server(message, EventLogLevel.DEBUG, **kwargs)
         except Exception as e:
@@ -436,6 +437,7 @@ class EventClient:
         """
         try:
             combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_INFO)
             self._structlog_logger.info(message, **combined_context)
             self._maybe_send_to_server(message, EventLogLevel.INFO, **kwargs)
         except Exception as e:
@@ -450,6 +452,7 @@ class EventClient:
         """
         try:
             combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_WARNING)
             self._structlog_logger.warning(message, **combined_context)
             self._maybe_send_to_server(message, EventLogLevel.WARNING, **kwargs)
         except Exception as e:
@@ -464,6 +467,7 @@ class EventClient:
         """
         try:
             combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_ERROR)
             self._structlog_logger.error(message, **combined_context)
             self._maybe_send_to_server(message, EventLogLevel.ERROR, **kwargs)
         except Exception as e:
@@ -478,6 +482,7 @@ class EventClient:
         """
         try:
             combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_CRITICAL)
             self._structlog_logger.critical(message, **combined_context)
             self._maybe_send_to_server(message, EventLogLevel.CRITICAL, **kwargs)
         except Exception as e:
@@ -492,6 +497,7 @@ class EventClient:
         """
         try:
             combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_ERROR)
             self._structlog_logger.exception(message, **combined_context)
             self._maybe_send_to_server(
                 message, EventLogLevel.ERROR, exc_info=True, **kwargs
@@ -869,7 +875,8 @@ class EventClient:
             )
             if not response.ok:
                 self.logger.error(
-                    f"Error getting utilization periods: HTTP {response.status_code}"
+                    "Error getting utilization periods",
+                    extra={"http_status_code": response.status_code},
                 )
                 response.raise_for_status()
 
@@ -881,8 +888,11 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException as e:
-            self.logger.error(f"Error getting utilization periods: {e}")
+        except requests.RequestException:
+            self.logger.error(
+                "Error getting utilization periods",
+                exc_info=True,
+            )
             return None
 
     def get_session_utilization(
@@ -995,7 +1005,8 @@ class EventClient:
 
             if not response.ok:
                 self.logger.error(
-                    f"Error getting user utilization report: HTTP {response.status_code}"
+                    "Error getting user utilization report",
+                    extra={"http_status_code": response.status_code},
                 )
                 response.raise_for_status()
 
@@ -1007,8 +1018,11 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException as e:
-            self.logger.error(f"Error getting user utilization report: {e}")
+        except requests.RequestException:
+            self.logger.error(
+                "Error getting user utilization report",
+                exc_info=True,
+            )
             return None
 
     # ==================== Internal Methods ====================
@@ -1048,8 +1062,11 @@ class EventClient:
         """Send an event to the event manager. Buffer on failure."""
         try:
             self._send_event_to_event_server(event, retrying=retrying)
-        except Exception as e:
-            self.logger.error(f"Error in _send_event_to_event_server_task: {e}")
+        except Exception:
+            self.logger.error(
+                "Error in _send_event_to_event_server_task",
+                exc_info=True,
+            )
 
     def _send_event_to_event_server(self, event: Event, retrying: bool = False) -> None:
         """Send an event to the event manager. Buffer on failure."""
