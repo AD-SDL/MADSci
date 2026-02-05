@@ -39,6 +39,7 @@ Audited/cleaned (passes the logging-pattern hook):
 - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py`
 - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_server.py`
 - `src/madsci_node_module/madsci/node_module/abstract_node_module.py`
+- `src/madsci_node_module/madsci/node_module/type_analyzer.py`
 
 Deferred/backlog (not yet audited; tracked for follow-up):
 
@@ -53,6 +54,7 @@ Update (February 2026):
 - `workcell_engine.py` is now audited and included in the hook scope.
 - `lab_server.py` (Squid) is now audited and included in the hook scope.
 - `abstract_node_module.py` (NodeModule) is now audited and included in the hook scope.
+- `type_analyzer.py` (NodeModule) is now audited and included in the hook scope.
 
 Operational notes:
 
