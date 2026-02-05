@@ -445,6 +445,11 @@ Progress (Implementation Notes, Feb 2026):
 - Added first manager domain span:
   - EventManager `/event` endpoint wraps inserts in `event.receive` span
     - `src/madsci_event_manager/madsci/event_manager/event_server.py`
+- Added additional EventManager spans:
+  - Query wraps in `event.query` span
+  - Archiving wraps in `event.archive` span
+  - Backup endpoints wrap in `event.backup.*` spans
+    - `src/madsci_event_manager/madsci/event_manager/event_server.py`
 - Added WorkcellManager domain spans:
   - Workflow submission/enqueue wraps in `workflow.execute` span
     - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_server.py`

@@ -473,8 +473,9 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
     @post("/events/query")
     async def query_events(self, selector: Any = Body()) -> Dict[str, Event]:  # noqa: B008
         """Query events based on a selector. Note: this is a raw query, so be careful."""
-        event_list = self.events.find(selector).to_list()
-        return {event["_id"]: event for event in event_list}
+        with self.span("event.query"):
+            event_list = self.events.find(selector).to_list()
+            return {event["_id"]: event for event in event_list}
 
     # ==========================================================================
     # Event Retention Endpoints
@@ -498,53 +499,62 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             Count of archived events
         """
         try:
-            query: Dict[str, Any] = {"archived": {"$ne": True}}
+            with self.span(
+                "event.archive",
+                attributes={
+                    "archive.by_ids": bool(request.event_ids),
+                    "archive.before_date": request.before_date.isoformat()
+                    if request.before_date
+                    else None,
+                },
+            ):
+                query: Dict[str, Any] = {"archived": {"$ne": True}}
 
-            # Build query based on request parameters
-            # Note: Pydantic model_validator ensures at least one of these is set
-            if request.event_ids:
-                query["_id"] = {"$in": request.event_ids}
-            elif request.before_date:
-                # Convert datetime to ISO string format to match MongoDB storage format
-                # (Events are stored with ISO string timestamps via to_mongo())
-                query["event_timestamp"] = {"$lt": request.before_date.isoformat()}
-
-            # Perform archive in batches to prevent performance impact
-            batch_size = request.batch_size or self.settings.archive_batch_size
-            total_archived = 0
-
-            while True:
-                # Find batch of events to archive
-                events_to_archive = list(
-                    self.events.find(query, {"_id": 1}).limit(batch_size)
-                )
-
-                if not events_to_archive:
-                    break
-
-                event_ids = [e["_id"] for e in events_to_archive]
-
-                # Archive this batch
-                result = self.events.update_many(
-                    {"_id": {"$in": event_ids}},
-                    {
-                        "$set": {
-                            "archived": True,
-                            "archived_at": datetime.now(timezone.utc),
-                        }
-                    },
-                )
-
-                total_archived += result.modified_count
-
-                # If archiving by IDs, we're done after one batch
+                # Build query based on request parameters
+                # Note: Pydantic model_validator ensures at least one of these is set
                 if request.event_ids:
-                    break
+                    query["_id"] = {"$in": request.event_ids}
+                elif request.before_date:
+                    # Convert datetime to ISO string format to match MongoDB storage format
+                    # (Events are stored with ISO string timestamps via to_mongo())
+                    query["event_timestamp"] = {"$lt": request.before_date.isoformat()}
 
-            return ArchiveEventsResponse(
-                archived_count=total_archived,
-                message=f"Successfully archived {total_archived} events",
-            )
+                # Perform archive in batches to prevent performance impact
+                batch_size = request.batch_size or self.settings.archive_batch_size
+                total_archived = 0
+
+                while True:
+                    # Find batch of events to archive
+                    events_to_archive = list(
+                        self.events.find(query, {"_id": 1}).limit(batch_size)
+                    )
+
+                    if not events_to_archive:
+                        break
+
+                    event_ids = [e["_id"] for e in events_to_archive]
+
+                    # Archive this batch
+                    result = self.events.update_many(
+                        {"_id": {"$in": event_ids}},
+                        {
+                            "$set": {
+                                "archived": True,
+                                "archived_at": datetime.now(timezone.utc),
+                            }
+                        },
+                    )
+
+                    total_archived += result.modified_count
+
+                    # If archiving by IDs, we're done after one batch
+                    if request.event_ids:
+                        break
+
+                return ArchiveEventsResponse(
+                    archived_count=total_archived,
+                    message=f"Successfully archived {total_archived} events",
+                )
 
         except HTTPException:
             raise
@@ -569,15 +579,21 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         Returns:
             Dictionary of archived events
         """
-        query = {"archived": True}
-        event_list = (
-            self.events.find(query)
-            .sort("archived_at", pymongo.DESCENDING)
-            .skip(offset)
-            .limit(number)
-            .to_list()
-        )
-        return {str(event["_id"]): Event.model_validate(event) for event in event_list}
+        with self.span(
+            "event.archived.list",
+            attributes={"events.limit": number, "events.offset": offset},
+        ):
+            query = {"archived": True}
+            event_list = (
+                self.events.find(query)
+                .sort("archived_at", pymongo.DESCENDING)
+                .skip(offset)
+                .limit(number)
+                .to_list()
+            )
+            return {
+                str(event["_id"]): Event.model_validate(event) for event in event_list
+            }
 
     @delete("/events/archived")
     async def purge_archived_events(
@@ -640,29 +656,33 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             Backup file path and status
         """
         try:
-            backup_dir = Path(str(self.settings.backup_dir)).expanduser()
-            backup_settings = MongoDBBackupSettings(
-                mongo_db_url=self.settings.mongo_db_url,
-                database=self.settings.database_name,
-                backup_dir=backup_dir,
-                max_backups=self.settings.backup_max_count,
-                validate_integrity=True,
-            )
+            with self.span(
+                "event.backup.create",
+                attributes={"backup.description": request.description},
+            ):
+                backup_dir = Path(str(self.settings.backup_dir)).expanduser()
+                backup_settings = MongoDBBackupSettings(
+                    mongo_db_url=self.settings.mongo_db_url,
+                    database=self.settings.database_name,
+                    backup_dir=backup_dir,
+                    max_backups=self.settings.backup_max_count,
+                    validate_integrity=True,
+                )
 
-            backup_tool = MongoDBBackupTool(
-                settings=backup_settings,
-                logger=self.logger,
-            )
+                backup_tool = MongoDBBackupTool(
+                    settings=backup_settings,
+                    logger=self.logger,
+                )
 
-            description = request.description or "manual_backup"
-            backup_path = backup_tool.create_backup(name_suffix=description)
+                description = request.description or "manual_backup"
+                backup_path = backup_tool.create_backup(name_suffix=description)
 
-            self.logger.info(f"Created backup at {backup_path}")
+                self.logger.info(f"Created backup at {backup_path}")
 
-            return BackupResponse(
-                backup_path=str(backup_path),
-                status="completed",
-            )
+                return BackupResponse(
+                    backup_path=str(backup_path),
+                    status="completed",
+                )
 
         except Exception as e:
             self.logger.error(f"Failed to create backup: {e}")
@@ -678,37 +698,38 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             Backup configuration and list of available backups
         """
         try:
-            backup_dir = Path(str(self.settings.backup_dir)).expanduser()
-            available_backups: List[Dict[str, Any]] = []
+            with self.span("event.backup.status"):
+                backup_dir = Path(str(self.settings.backup_dir)).expanduser()
+                available_backups: List[Dict[str, Any]] = []
 
-            if backup_dir.exists():
-                backup_settings = MongoDBBackupSettings(
-                    mongo_db_url=self.settings.mongo_db_url,
-                    database=self.settings.database_name,
-                    backup_dir=backup_dir,
-                    max_backups=self.settings.backup_max_count,
-                )
-
-                backup_tool = MongoDBBackupTool(
-                    settings=backup_settings,
-                    logger=self.logger,
-                )
-
-                for backup_info in backup_tool.list_available_backups():
-                    available_backups.append(
-                        {
-                            "path": str(backup_info.backup_path),
-                            "created_at": backup_info.created_at.isoformat(),
-                            "size_bytes": backup_info.backup_size,
-                            "is_valid": backup_info.is_valid,
-                        }
+                if backup_dir.exists():
+                    backup_settings = MongoDBBackupSettings(
+                        mongo_db_url=self.settings.mongo_db_url,
+                        database=self.settings.database_name,
+                        backup_dir=backup_dir,
+                        max_backups=self.settings.backup_max_count,
                     )
 
-            return BackupStatusResponse(
-                backup_enabled=self.settings.backup_enabled,
-                backup_dir=str(backup_dir),
-                available_backups=available_backups,
-            )
+                    backup_tool = MongoDBBackupTool(
+                        settings=backup_settings,
+                        logger=self.logger,
+                    )
+
+                    for backup_info in backup_tool.list_available_backups():
+                        available_backups.append(
+                            {
+                                "path": str(backup_info.backup_path),
+                                "created_at": backup_info.created_at.isoformat(),
+                                "size_bytes": backup_info.backup_size,
+                                "is_valid": backup_info.is_valid,
+                            }
+                        )
+
+                return BackupStatusResponse(
+                    backup_enabled=self.settings.backup_enabled,
+                    backup_dir=str(backup_dir),
+                    available_backups=available_backups,
+                )
 
         except Exception as e:
             self.logger.error(f"Failed to get backup status: {e}")
