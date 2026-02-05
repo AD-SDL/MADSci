@@ -120,6 +120,22 @@ Additional updates in February 2026 (logging-audit ratchet):
   - Converted EventClient log f-strings to structured fields
   - Added/standardized `event_type` usage (manager lifecycle, resource CRUD/locking, and query contexts)
 
+Additional updates in February 2026 (logging-audit ratchet):
+
+- Expanded `madsci.workcell_manager` coverage in the `madsci-logging-patterns` pre-commit hook scope:
+  - `src/madsci_workcell_manager/madsci/workcell_manager/workflow_utils.py`
+  - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_actions.py`
+  - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_utils.py`
+  - `src/madsci_workcell_manager/madsci/workcell_manager/state_handler.py`
+  - `src/madsci_workcell_manager/madsci/workcell_manager/condition_checks.py`
+  - `src/madsci_workcell_manager/madsci/workcell_manager/schedulers/scheduler.py`
+  - `src/madsci_workcell_manager/madsci/workcell_manager/schedulers/default_scheduler.py`
+- Audited and updated these modules to pass the hook:
+  - Converted scheduler error log f-string to structured fields and added `event_type`
+    - `src/madsci_workcell_manager/madsci/workcell_manager/schedulers/default_scheduler.py`
+  - Updated workflow step validation logging to structured fields and added `event_type`
+    - `src/madsci_workcell_manager/madsci/workcell_manager/workflow_utils.py`
+
 Notes:
 
 - This Phase 3 doc previously listed some of these files as deferred; they are now included above under
