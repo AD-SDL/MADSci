@@ -25,6 +25,7 @@ from madsci.common.types.datapoint_types import (
     DataPoint,
     ObjectStorageSettings,
 )
+from madsci.common.types.event_types import EventType
 from minio import Minio
 from pymongo import MongoClient
 
@@ -63,7 +64,11 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         if self._db_client is not None:
             return
 
-        self.logger.info("Validating MongoDB schema version...")
+        self.logger.info(
+            "Validating MongoDB schema version",
+            event_type=EventType.MANAGER_START,
+            database_name=self.settings.database_name,
+        )
 
         schema_file_path = Path(__file__).parent / "schema.json"
         version_checker = MongoDBVersionChecker(
@@ -75,10 +80,16 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
 
         try:
             version_checker.validate_or_fail()
-            self.logger.info("MongoDB version validation completed successfully")
+            self.logger.info(
+                "MongoDB version validation completed successfully",
+                event_type=EventType.MANAGER_START,
+                database_name=self.settings.database_name,
+            )
         except RuntimeError as e:
             self.logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+                "Database version mismatch detected; server startup aborted",
+                event_type=EventType.MANAGER_ERROR,
+                database_name=self.settings.database_name,
             )
             raise e
 

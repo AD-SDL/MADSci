@@ -6,10 +6,9 @@ from typing import Any, Optional
 
 from classy_fastapi import get, post
 from fastapi import HTTPException
-from madsci.client.event_client import EventType
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
-from madsci.common.types.event_types import Event
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentManagerDefinition,
@@ -58,11 +57,16 @@ class ExperimentManager(
         if self._db_client is not None or self._db_connection is not None:
             # External connection provided, likely in test context - skip version validation
             self.logger.info(
-                "External db_client or db_connection provided, skipping MongoDB version validation"
+                "External db_client or db_connection provided, skipping MongoDB version validation",
+                event_type=EventType.MANAGER_START,
             )
             return
 
-        self.logger.info("Validating MongoDB schema version...")
+        self.logger.info(
+            "Validating MongoDB schema version",
+            event_type=EventType.MANAGER_START,
+            database_name=self.settings.database_name,
+        )
 
         schema_file_path = Path(__file__).parent / "schema.json"
 
@@ -77,10 +81,16 @@ class ExperimentManager(
 
         try:
             version_checker.validate_or_fail()
-            self.logger.info("MongoDB version validation completed successfully")
+            self.logger.info(
+                "MongoDB version validation completed successfully",
+                event_type=EventType.MANAGER_START,
+                database_name=self.settings.database_name,
+            )
         except RuntimeError as e:
             self.logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+                "Database version mismatch detected; server startup aborted",
+                event_type=EventType.MANAGER_ERROR,
+                database_name=self.settings.database_name,
             )
             raise e
 

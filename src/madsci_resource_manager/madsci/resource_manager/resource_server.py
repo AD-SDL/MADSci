@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from fastapi.params import Body
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info
+from madsci.common.types.event_types import EventType
 from madsci.common.types.resource_types import (
     ContainerDataModels,
     Queue,
@@ -86,8 +87,15 @@ class ResourceManager(
             self._resource_interface = ResourceInterface(
                 url=self.settings.db_url, logger=self.logger
             )
-            self.logger.info(self._resource_interface)
-            self.logger.info(self._resource_interface.session)
+            self.logger.info(
+                "Initialized resource interface",
+                event_type=EventType.MANAGER_START,
+                db_url=str(self.settings.db_url),
+            )
+            self.logger.info(
+                "Initialized resource interface session",
+                event_type=EventType.MANAGER_START,
+            )
 
     def initialize(self, **kwargs: Any) -> None:
         """Initialize manager-specific components."""
@@ -98,12 +106,16 @@ class ResourceManager(
         if self._external_resource_interface:
             # External interface provided, likely in test context - skip version validation
             self.logger.info(
-                "External resource_interface provided, skipping database version validation"
+                "External resource_interface provided, skipping database version validation",
+                event_type=EventType.MANAGER_START,
             )
             return
 
         # DATABASE VERSION VALIDATION AND AUTO-INITIALIZATION
-        self.logger.info("Validating database schema version...")
+        self.logger.info(
+            "Validating database schema version",
+            event_type=EventType.MANAGER_START,
+        )
 
         version_checker = DatabaseVersionChecker(self.settings.db_url, self.logger)
         # Validate database version
@@ -112,10 +124,14 @@ class ResourceManager(
         # - Raise error if version mismatches (with helpful log message)
         try:
             version_checker.validate_or_fail()
-            self.logger.info("Database version validation completed successfully")
+            self.logger.info(
+                "Database version validation completed successfully",
+                event_type=EventType.MANAGER_START,
+            )
         except RuntimeError as e:
             self.logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+                "Database version mismatch detected; server startup aborted",
+                event_type=EventType.MANAGER_ERROR,
             )
             raise e
 
@@ -135,7 +151,9 @@ class ResourceManager(
             return
 
         self.logger.info(
-            f"Initializing {len(self.definition.default_templates)} default templates"
+            "Initializing default templates",
+            event_type=EventType.MANAGER_START,
+            template_count=len(self.definition.default_templates),
         )
 
         for template_def in self.definition.default_templates:
@@ -156,12 +174,18 @@ class ResourceManager(
                 )
 
                 self.logger.info(
-                    f"Successfully initialized template '{template_def.template_name}'"
+                    "Successfully initialized template",
+                    event_type=EventType.RESOURCE_CREATE,
+                    template_name=template_def.template_name,
                 )
 
             except Exception as e:
                 self.logger.error(
-                    f"Failed to initialize template '{template_def.template_name}': {e}"
+                    "Failed to initialize template",
+                    event_type=EventType.RESOURCE_CREATE,
+                    template_name=template_def.template_name,
+                    error=str(e),
+                    exc_info=True,
                 )
                 # Continue with other templates even if one fails
 
@@ -235,8 +259,13 @@ class ResourceManager(
 
                 return resource
         except Exception as e:
-            self.logger.error(e)
-            raise e
+            self.logger.error(
+                "Failed to initialize resource",
+                event_type=EventType.RESOURCE_CREATE,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     @post("/resource/add")
     async def add_resource(
@@ -249,7 +278,12 @@ class ResourceManager(
             with self.span("resource.create"):
                 return self._resource_interface.add_resource(resource)
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to add resource",
+                event_type=EventType.RESOURCE_CREATE,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/add_or_update")
@@ -263,7 +297,12 @@ class ResourceManager(
             with self.span("resource.add_or_update"):
                 return self._resource_interface.add_or_update_resource(resource)
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to add or update resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/update")
@@ -277,7 +316,12 @@ class ResourceManager(
             with self.span("resource.update"):
                 return self._resource_interface.update_resource(resource)
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to update resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @delete("/resource/{resource_id}")
@@ -290,10 +334,20 @@ class ResourceManager(
             with self.span("resource.remove", attributes={"resource.id": resource_id}):
                 return self._resource_interface.remove_resource(resource_id)
         except NoResultFound as e:
-            self.logger.info(f"Resource not found: {resource_id}")
+            self.logger.info(
+                "Resource not found",
+                event_type=EventType.RESOURCE_DELETE,
+                resource_id=resource_id,
+            )
             raise HTTPException(status_code=404, detail="Resource not found") from e
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to remove resource",
+                event_type=EventType.RESOURCE_DELETE,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @get("/resource/{resource_id}")
@@ -311,7 +365,13 @@ class ResourceManager(
 
             return resource
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to get resource",
+                event_type=EventType.DATA_QUERY,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     @post("/resource/query")
@@ -331,8 +391,13 @@ class ResourceManager(
 
             return resource
         except Exception as e:
-            self.logger.error(e)
-            raise e
+            self.logger.error(
+                "Failed to query resource",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     @post("/history/query")
     async def query_history(
@@ -352,7 +417,12 @@ class ResourceManager(
                 **query.model_dump(exclude_none=True)
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to query resource history",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/history/{resource_id}/restore")
@@ -379,8 +449,14 @@ class ResourceManager(
 
             return restored_resource
         except Exception as e:
-            self.logger.error(e)
-            raise e
+            self.logger.error(
+                "Failed to restore deleted resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     @post("/template/create")
     async def create_template(self, body: TemplateCreateBody) -> ResourceDataModels:
@@ -398,7 +474,13 @@ class ResourceManager(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to create template",
+                event_type=EventType.RESOURCE_CREATE,
+                template_name=body.template_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/templates/query")
@@ -413,7 +495,12 @@ class ResourceManager(
                 created_by=query.created_by,
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to query templates",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @get("/templates/query_all")
@@ -422,17 +509,30 @@ class ResourceManager(
         try:
             return self._resource_interface.query_templates()
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to list templates",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @get("/templates/categories")
     async def get_templates_by_category(self) -> dict[str, list[str]]:
         """Get templates organized by base_type category."""
         try:
-            self.logger.info("Fetching templates by category")
+            self.logger.info(
+                "Fetching templates by category",
+                event_type=EventType.DATA_QUERY,
+            )
             return self._resource_interface.get_templates_by_category()
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to fetch templates by category",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @get("/template/{template_name}")
@@ -448,7 +548,13 @@ class ResourceManager(
         except HTTPException:
             raise
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to get template",
+                event_type=EventType.DATA_QUERY,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @get("/template/{template_name}/info")
@@ -464,7 +570,13 @@ class ResourceManager(
         except HTTPException:
             raise
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to get template info",
+                event_type=EventType.DATA_QUERY,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @put("/template/{template_name}")
@@ -479,7 +591,13 @@ class ResourceManager(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to update template",
+                event_type=EventType.RESOURCE_UPDATE,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @delete("/template/{template_name}")
@@ -495,7 +613,13 @@ class ResourceManager(
         except HTTPException:
             raise
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to delete template",
+                event_type=EventType.RESOURCE_DELETE,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/template/{template_name}/create_resource")
@@ -541,14 +665,23 @@ class ResourceManager(
             if existing_resources and len(existing_resources) == 1:
                 existing_resource = existing_resources[0]
                 self.logger.info(
-                    f"Resource '{body.resource_name}' with matching properties already exists (ID: {existing_resource.resource_id}), returning existing resource"
+                    "Resource already exists for template create_resource request",
+                    event_type=EventType.RESOURCE_CREATE,
+                    template_name=template_name,
+                    resource_id=existing_resource.resource_id,
+                    resource_name=body.resource_name,
                 )
                 return existing_resource
 
             # If multiple matches found, log warning and create new one
             if existing_resources and len(existing_resources) > 1:
                 self.logger.warning(
-                    f"Found {len(existing_resources)} resources matching '{body.resource_name}' with criteria {search_criteria}. Creating new resource."
+                    "Multiple matching resources found; creating new resource from template",
+                    event_type=EventType.RESOURCE_CREATE,
+                    template_name=template_name,
+                    resource_name=body.resource_name,
+                    match_count=len(existing_resources),
+                    search_criteria=search_criteria,
                 )
 
             # No existing resource found or multiple found, create new one from template
@@ -561,7 +694,14 @@ class ResourceManager(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to create resource from template",
+                event_type=EventType.RESOURCE_CREATE,
+                template_name=template_name,
+                resource_name=body.resource_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/push")
@@ -583,7 +723,13 @@ class ResourceManager(
                 parent_id=resource_id, child=body.child if body.child else body.child_id
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to push resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/pop")
@@ -602,7 +748,13 @@ class ResourceManager(
         try:
             return self._resource_interface.pop(parent_id=resource_id)
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to pop resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/child/set")
@@ -624,7 +776,14 @@ class ResourceManager(
                 container_id=resource_id, key=body.key, child=body.child
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to set child resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                key=body.key,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/child/remove")
@@ -646,7 +805,14 @@ class ResourceManager(
                 container_id=resource_id, key=body.key
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to remove child resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                key=body.key,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/quantity")
@@ -668,7 +834,14 @@ class ResourceManager(
                 resource_id=resource_id, quantity=quantity
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to set resource quantity",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                quantity=quantity,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/quantity/change_by")
@@ -693,7 +866,14 @@ class ResourceManager(
                 resource_id=resource_id, quantity=resource.quantity + amount
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to change resource quantity",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                amount=amount,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/quantity/increase")
@@ -718,7 +898,14 @@ class ResourceManager(
                 resource_id=resource_id, quantity=resource.quantity + abs(amount)
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to increase resource quantity",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                amount=amount,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/quantity/decrease")
@@ -744,7 +931,14 @@ class ResourceManager(
                 quantity=max(resource.quantity - abs(amount), 0),
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to decrease resource quantity",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                amount=amount,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/capacity")
@@ -766,7 +960,14 @@ class ResourceManager(
                 resource_id=resource_id, capacity=capacity
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to set resource capacity",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                capacity=capacity,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @delete("/resource/{resource_id}/capacity")
@@ -785,7 +986,13 @@ class ResourceManager(
                 resource_id=resource_id
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to remove resource capacity limit",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/empty")
@@ -802,10 +1009,20 @@ class ResourceManager(
         try:
             return self._resource_interface.empty(resource_id=resource_id)
         except NoResultFound as e:
-            self.logger.info(f"Resource not found: {resource_id}")
+            self.logger.info(
+                "Resource not found",
+                event_type=EventType.DATA_QUERY,
+                resource_id=resource_id,
+            )
             raise HTTPException(status_code=404, detail="Resource not found") from e
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to empty resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/fill")
@@ -822,10 +1039,20 @@ class ResourceManager(
         try:
             return self._resource_interface.fill(resource_id=resource_id)
         except NoResultFound as e:
-            self.logger.info(f"Resource not found: {resource_id}")
+            self.logger.info(
+                "Resource not found",
+                event_type=EventType.DATA_QUERY,
+                resource_id=resource_id,
+            )
             raise HTTPException(status_code=404, detail="Resource not found") from e
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to fill resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @post("/resource/{resource_id}/lock")
@@ -853,7 +1080,15 @@ class ResourceManager(
                 client_id=client_id,
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to acquire resource lock",
+                event_type=EventType.RESOURCE_ALLOCATE,
+                resource_id=resource_id,
+                lock_duration=lock_duration,
+                client_id=client_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
         # Handle the response outside the try-except
@@ -884,7 +1119,14 @@ class ResourceManager(
                 client_id=client_id,
             )
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to release resource lock",
+                event_type=EventType.RESOURCE_RELEASE,
+                resource_id=resource_id,
+                client_id=client_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
         if unlocked_resource:
@@ -916,7 +1158,13 @@ class ResourceManager(
                 "locked_by": locked_by,
             }
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to check resource lock",
+                event_type=EventType.DATA_QUERY,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @get("/resource/{resource_id}/hierarchy")
@@ -945,7 +1193,13 @@ class ResourceManager(
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         except Exception as e:
-            self.logger.error(e)
+            self.logger.error(
+                "Failed to query resource hierarchy",
+                event_type=EventType.DATA_QUERY,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     def _is_fresh_database(self) -> bool:
@@ -968,7 +1222,12 @@ class ResourceManager(
             migrator = DatabaseMigrator(self.settings.db_url, logger=self.logger)
             return migrator._is_fresh_database()
         except Exception as e:
-            self.logger.warning(f"Could not check fresh database status: {e}")
+            self.logger.warning(
+                "Could not check fresh database status",
+                event_type=EventType.MANAGER_HEALTH_CHECK,
+                error=str(e),
+                exc_info=True,
+            )
             # Conservative default - assume not fresh to avoid accidental data loss
             return False
 
@@ -983,22 +1242,39 @@ class ResourceManager(
             bool: True if initialization was successful, False otherwise
         """
         try:
-            self.logger.info("Auto-initialization requested for fresh database")
+            self.logger.info(
+                "Auto-initialization requested for fresh database",
+                event_type=EventType.MANAGER_START,
+            )
 
             # For safety, we don't automatically initialize in the server
             # Users should explicitly run the migration tool for database setup
             self.logger.warning(
-                "Auto-initialization not implemented. Please run the migration tool manually:"
+                "Auto-initialization not implemented; run the migration tool manually",
+                event_type=EventType.MANAGER_ERROR,
             )
 
             version_checker = DatabaseVersionChecker(self.settings.db_url, self.logger)
             cmds = version_checker._both_commands()
-            self.logger.info(f"  • Bare metal:     {cmds['bare_metal']}")
-            self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
+            self.logger.info(
+                "Migration command (bare metal)",
+                event_type=EventType.MANAGER_START,
+                command=cmds["bare_metal"],
+            )
+            self.logger.info(
+                "Migration command (docker compose)",
+                event_type=EventType.MANAGER_START,
+                command=cmds["docker_compose"],
+            )
 
             return False
         except Exception as e:
-            self.logger.error(f"Error during auto-initialization attempt: {e}")
+            self.logger.error(
+                "Error during auto-initialization attempt",
+                event_type=EventType.MANAGER_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
             return False
 
 

@@ -10,6 +10,7 @@ from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import ownership_context
+from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     Location,
     LocationDefinition,
@@ -132,8 +133,13 @@ class LocationManager(
         except Exception as e:
             # Log the error but continue - locations can still function without associated resources
             self.logger.warning(
-                f"Failed to create resource from template '{location_def.resource_template_name}' "
-                f"for location '{location_def.location_name}': {e}"
+                "Failed to create resource from template",
+                event_type=EventType.RESOURCE_CREATE,
+                template_name=location_def.resource_template_name,
+                location_id=location_def.location_id,
+                location_name=location_def.location_name,
+                error=str(e),
+                exc_info=True,
             )
             return None
 
@@ -161,18 +167,29 @@ class LocationManager(
             if existing_resource:
                 # Resource exists, reuse it
                 self.logger.debug(
-                    f"Reusing existing resource '{existing_resource_id}' for location '{location_def.location_name}'"
+                    "Reusing existing resource for location",
+                    existing_resource_id=existing_resource_id,
+                    location_id=location_def.location_id,
+                    location_name=location_def.location_name,
                 )
                 return existing_resource_id
             self.logger.info(
-                f"Existing resource '{existing_resource_id}' for location '{location_def.location_name}' "
-                f"no longer exists. Creating new resource."
+                "Existing resource missing; recreating for location",
+                event_type=EventType.RESOURCE_CREATE,
+                existing_resource_id=existing_resource_id,
+                location_id=location_def.location_id,
+                location_name=location_def.location_name,
             )
 
         except Exception as e:
             self.logger.info(
-                f"Failed to validate existing resource '{existing_resource_id}' for location '{location_def.location_name}': {e}. "
-                f"Creating new resource."
+                "Failed to validate existing location resource; recreating",
+                event_type=EventType.RESOURCE_CREATE,
+                existing_resource_id=existing_resource_id,
+                location_id=location_def.location_id,
+                location_name=location_def.location_name,
+                error=str(e),
+                exc_info=True,
             )
 
         # Existing resource doesn't exist, create a new one
@@ -237,12 +254,20 @@ class LocationManager(
             self.definition.to_yaml(definition_path)
 
             self.logger.debug(
-                f"Synced {len(location_definitions)} locations to definition file: {definition_path}"
+                "Synced locations to definition file",
+                location_count=len(location_definitions),
+                definition_path=str(definition_path),
             )
 
         except Exception as e:
             # Log error but don't fail the operation - persistence is best-effort
-            self.logger.warning(f"Failed to sync locations to definition file: {e}")
+            self.logger.warning(
+                "Failed to sync locations to definition file",
+                event_type=EventType.LOCATION_UPDATE,
+                definition_path=str(self.get_definition_path()),
+                error=str(e),
+                exc_info=True,
+            )
 
     def get_health(self) -> LocationManagerHealth:
         """Get the health status of the Location Manager."""
@@ -578,8 +603,12 @@ class LocationManager(
                 )
             except Exception as e:
                 self.logger.warning(
-                    f"Failed to query resource hierarchy for location {location_id} "
-                    f"with resource_id {location.resource_id}: {e}"
+                    "Failed to query resource hierarchy for location",
+                    event_type=EventType.DATA_QUERY,
+                    location_id=location_id,
+                    resource_id=location.resource_id,
+                    error=str(e),
+                    exc_info=True,
                 )
                 # Return empty hierarchy if query fails
                 return ResourceHierarchy(

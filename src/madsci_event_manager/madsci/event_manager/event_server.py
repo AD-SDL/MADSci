@@ -23,6 +23,7 @@ from madsci.common.types.event_types import (
     EventManagerDefinition,
     EventManagerHealth,
     EventManagerSettings,
+    EventType,
 )
 from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.event_manager.events_csv_exporter import CSVExporter
@@ -121,11 +122,16 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         if self._db_connection is not None:
             # External connection provided, likely in test context - skip version validation
             self.logger.info(
-                "External db_connection provided, skipping MongoDB version validation"
+                "External db_connection provided, skipping MongoDB version validation",
+                event_type=EventType.MANAGER_START,
             )
             return
 
-        self.logger.info("Validating MongoDB schema version...")
+        self.logger.info(
+            "Validating MongoDB schema version",
+            event_type=EventType.MANAGER_START,
+            database_name=self.settings.database_name,
+        )
 
         schema_file_path = Path(__file__).parent / "schema.json"
 
@@ -140,10 +146,16 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
 
         try:
             version_checker.validate_or_fail()
-            self.logger.info("MongoDB version validation completed successfully")
+            self.logger.info(
+                "MongoDB version validation completed successfully",
+                event_type=EventType.MANAGER_START,
+                database_name=self.settings.database_name,
+            )
         except RuntimeError as e:
             self.logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+                "Database version mismatch detected; server startup aborted",
+                event_type=EventType.MANAGER_ERROR,
+                database_name=self.settings.database_name,
             )
             raise e
 
@@ -200,7 +212,9 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                             partialFilterExpression={"archived": True},
                         )
                         self.logger.info(
-                            f"Updated TTL index for automatic hard-deletion: {self.settings.hard_delete_after_days} days"
+                            "Updated TTL index for automatic hard-deletion",
+                            event_type=EventType.MANAGER_START,
+                            hard_delete_after_days=self.settings.hard_delete_after_days,
                         )
                 else:
                     self.events.create_index(
@@ -209,11 +223,18 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                         partialFilterExpression={"archived": True},
                     )
                     self.logger.info(
-                        f"Created TTL index for automatic hard-deletion: {self.settings.hard_delete_after_days} days"
+                        "Created TTL index for automatic hard-deletion",
+                        event_type=EventType.MANAGER_START,
+                        hard_delete_after_days=self.settings.hard_delete_after_days,
                     )
 
         except Exception as e:
-            self.logger.warning(f"Failed to create indexes: {e}")
+            self.logger.warning(
+                "Failed to create event manager indexes",
+                event_type=EventType.MANAGER_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
 
     # NOTE: OTEL instrumentation for event receipt lives in the existing /event
     # endpoint implementation further down in this file.
@@ -270,6 +291,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 )
                 self.logger.info(
                     "Started automatic retention task",
+                    event_type=EventType.MANAGER_START,
                     check_interval_hours=self.settings.retention_check_interval_hours,
                     soft_delete_after_days=self.settings.soft_delete_after_days,
                 )
@@ -279,7 +301,10 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 self._retention_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await self._retention_task
-                self.logger.info("Stopped automatic retention task")
+                self.logger.info(
+                    "Stopped automatic retention task",
+                    event_type=EventType.MANAGER_STOP,
+                )
 
         # Set the lifespan on the app
         app.router.lifespan_context = lifespan
@@ -296,6 +321,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 if archived_count > 0:
                     self.logger.info(
                         "Retention check completed",
+                        event_type=EventType.MANAGER_HEALTH_CHECK,
                         archived_count=archived_count,
                     )
                 else:
@@ -304,11 +330,20 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 # Task is being cancelled, exit gracefully
                 raise
             except Exception as e:
-                error_msg = f"Retention check failed: {e}"
                 if self.settings.fail_on_retention_error:
-                    self.logger.error(error_msg)
+                    self.logger.error(
+                        "Retention check failed",
+                        event_type=EventType.MANAGER_ERROR,
+                        error=str(e),
+                        exc_info=True,
+                    )
                     raise
-                self.logger.warning(error_msg)
+                self.logger.warning(
+                    "Retention check failed",
+                    event_type=EventType.MANAGER_ERROR,
+                    error=str(e),
+                    exc_info=True,
+                )
 
             # Wait for next check interval
             await asyncio.sleep(self.settings.retention_check_interval_hours * 3600)
@@ -335,6 +370,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             if max_batches > 0 and batches_processed >= max_batches:
                 self.logger.info(
                     "Reached max batches limit, will continue next run",
+                    event_type=EventType.MANAGER_HEALTH_CHECK,
                     batches_processed=batches_processed,
                     total_archived=total_archived,
                 )
@@ -391,11 +427,18 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                     self.events.insert_one(mongo_data)
                 except errors.DuplicateKeyError:
                     self.logger.warning(
-                        f"Duplicate event ID {event.event_id} - skipping insert"
+                        "Duplicate event ID - skipping insert",
+                        event_type=EventType.DATA_STORE,
+                        event_id=event.event_id,
                     )
                     # Just continue - don't fail the request
             except Exception as e:
-                self.logger.error(f"Failed to log event: {e}")
+                self.logger.error(
+                    "Failed to log event",
+                    event_type=EventType.DATA_STORE,
+                    error=str(e),
+                    exc_info=True,
+                )
                 raise e
 
         if (
@@ -413,7 +456,11 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         """Look up an event by event_id"""
         event = self.events.find_one({"_id": event_id})
         if not event:
-            self.logger.error(f"Event with ID {event_id} not found")
+            self.logger.error(
+                "Event not found",
+                event_type=EventType.DATA_QUERY,
+                event_id=event_id,
+            )
             raise HTTPException(
                 status_code=404, detail=f"Event with ID {event_id} not found"
             )
@@ -564,7 +611,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         except HTTPException:
             raise
         except Exception as e:
-            self.logger.error(f"Failed to archive events: {e}")
+            self.logger.error(
+                "Failed to archive events",
+                event_type=EventType.DATA_EXPORT,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=500, detail=f"Failed to archive events: {e!s}"
             ) from e
@@ -635,7 +687,13 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to purge archived events: {e}")
+            self.logger.error(
+                "Failed to purge archived events",
+                event_type=EventType.DATA_EXPORT,
+                older_than_days=older_than_days,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=500, detail=f"Failed to purge archived events: {e!s}"
             ) from e
@@ -682,7 +740,11 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 description = request.description or "manual_backup"
                 backup_path = backup_tool.create_backup(name_suffix=description)
 
-                self.logger.info(f"Created backup at {backup_path}")
+                self.logger.info(
+                    "Created backup",
+                    event_type=EventType.DATA_EXPORT,
+                    backup_path=str(backup_path),
+                )
 
                 return BackupResponse(
                     backup_path=str(backup_path),
@@ -690,7 +752,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 )
 
         except Exception as e:
-            self.logger.error(f"Failed to create backup: {e}")
+            self.logger.error(
+                "Failed to create backup",
+                event_type=EventType.DATA_EXPORT,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=500, detail=f"Failed to create backup: {e!s}"
             ) from e
@@ -737,7 +804,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 )
 
         except Exception as e:
-            self.logger.error(f"Failed to get backup status: {e}")
+            self.logger.error(
+                "Failed to get backup status",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=500, detail=f"Failed to get backup status: {e!s}"
             ) from e
@@ -794,7 +866,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             return report
 
         except Exception as e:
-            self.logger.error(f"Error generating session utilization: {e}")
+            self.logger.error(
+                "Error generating session utilization",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             return {"error": f"Failed to generate report: {e!s}"}
 
     def _get_session_analyzer(self) -> Optional[UtilizationAnalyzer]:
@@ -802,7 +879,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         try:
             return UtilizationAnalyzer(self.events)
         except Exception as e:
-            self.logger.error(f"Failed to create session analyzer: {e}")
+            self.logger.error(
+                "Failed to create session analyzer",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             return None
 
     def _parse_session_time_parameters(
@@ -856,7 +938,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 try:
                     time_series_analyzer.add_user_utilization_to_report(report)
                 except Exception as e:
-                    self.logger.warning(f"Failed to add user utilization: {e}")
+                    self.logger.warning(
+                        "Failed to add user utilization",
+                        event_type=EventType.DATA_QUERY,
+                        error=str(e),
+                        exc_info=True,
+                    )
 
             # Handle CSV export if requested
             if csv_format and report and "error" not in report:
@@ -885,7 +972,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             return report
 
         except Exception as e:
-            self.logger.error(f"Error generating utilization periods report: {e}")
+            self.logger.error(
+                "Error generating utilization periods report",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             return {"error": f"Failed to generate report: {e!s}"}
 
     @get("/utilization/user")
@@ -939,7 +1031,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             return report
 
         except Exception as e:
-            self.logger.error(f"Error generating user utilization report: {e}")
+            self.logger.error(
+                "Error generating user utilization report",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
             return {"error": f"Failed to generate report: {e!s}"}
 
 

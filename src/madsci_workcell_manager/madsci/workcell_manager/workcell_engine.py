@@ -147,7 +147,7 @@ class Engine:
                         self.run_next_step()
                         scheduler_tick = time.time()
             except Exception as e:
-                self.logger.error(e)
+                self.logger.error(str(e), exc_info=True)
                 self.logger.warning(
                     f"Error in engine loop, waiting {10 * self.workcell_settings.node_update_interval} seconds before trying again."
                 )
@@ -225,7 +225,13 @@ class Engine:
                 )
                 step.start_time = datetime.now()
                 self.logger.info(
-                    f"Running step {step.step_id} in workflow {workflow_id}"
+                    "Running workflow step",
+                    event_type=EventType.WORKFLOW_STEP_START,
+                    workflow_id=workflow_id,
+                    step_id=step.step_id,
+                    step_action=step.action,
+                    step_node=step.node,
+                    step_index=wf.status.current_step_index,
                 )
                 if step.node is None:
                     step = self.run_workcell_action(step)
@@ -262,7 +268,13 @@ class Engine:
                             },
                         ):
                             self.logger.log_info(
-                                f"Acquired lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
+                                "Acquired node lock for action",
+                                event_type=EventType.ACTION_START,
+                                workflow_id=workflow_id,
+                                step_id=step.step_id,
+                                node_name=step.node,
+                                action_id=action_id,
+                                action_name=step.action,
                             )
 
                             try:
@@ -271,7 +283,15 @@ class Engine:
                                 )
                             except Exception as e:
                                 self.logger.error(
-                                    f"Sending Action Request {action_id} for step {step.step_id} triggered exception: {e!s}"
+                                    "Failed sending action request",
+                                    event_type=EventType.ACTION_FAILED,
+                                    workflow_id=workflow_id,
+                                    step_id=step.step_id,
+                                    node_name=step.node,
+                                    action_id=action_id,
+                                    action_name=step.action,
+                                    error=str(e),
+                                    exc_info=True,
                                 )
                                 if response is None:
                                     # Create a running response so monitor_action_progress can try get_action_result
@@ -293,13 +313,27 @@ class Engine:
                             )
                     finally:
                         self.logger.log_info(
-                            f"Released lock on Node {step.node} for Action {action_id} in Step {step.step_id} of Workflow {workflow_id}"
+                            "Released node lock for action",
+                            workflow_id=workflow_id,
+                            step_id=step.step_id,
+                            node_name=step.node,
+                            action_id=action_id,
+                            action_name=step.action,
                         )
                         if node_lock.locked():
                             node_lock.release()
                     # * Finalize the step
             self.finalize_step(workflow_id, step)
-            self.logger.info(f"Completed step {step.step_id} in workflow {workflow_id}")
+            self.logger.info(
+                "Completed workflow step",
+                event_type=EventType.WORKFLOW_STEP_COMPLETE,
+                workflow_id=workflow_id,
+                step_id=step.step_id,
+                step_action=step.action,
+                step_node=step.node,
+                step_index=wf.status.current_step_index,
+                step_status=str(step.status),
+            )
             self.logger.debug(self.state_handler.get_workflow(workflow_id))
         except Exception as e:
             self.logger.error(

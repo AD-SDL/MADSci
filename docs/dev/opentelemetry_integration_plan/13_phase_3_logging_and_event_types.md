@@ -10,6 +10,40 @@
 - Expand EventType enum to cover all operational scenarios
 - Standardize logging patterns across components
 
+## Progress (February 2026)
+
+Completed in this iteration (Phase 3A, scoped):
+
+- Added Phase 3A MVP `EventType` values in `src/madsci_common/madsci/common/types/event_types.py`.
+- Added `EVENT_TYPE_DESCRIPTIONS` mapping (code-governed documentation) and tests in
+  `src/madsci_common/tests/test_event_types_phase3.py`.
+- Added logging guidelines in `docs/dev/logging_guidelines.md`.
+- Added a repo-local pre-commit hook for structured logging patterns (`scripts/precommit_check_logging_patterns.py`).
+- Tightened hook scope to a small set of audited “system components” so we can ratchet over time.
+
+Audited/cleaned (passes the logging-pattern hook):
+
+- `src/madsci_common/madsci/common/manager_base.py`
+- `src/madsci_common/madsci/common/types/event_types.py`
+- `src/madsci_event_manager/madsci/event_manager/event_server.py`
+- `src/madsci_event_manager/madsci/event_manager/notifications.py`
+- `src/madsci_resource_manager/madsci/resource_manager/resource_server.py`
+- `src/madsci_location_manager/madsci/location_manager/location_server.py`
+- `src/madsci_location_manager/madsci/location_manager/transfer_planner.py`
+- `src/madsci_data_manager/madsci/data_manager/data_server.py`
+- `src/madsci_experiment_manager/madsci/experiment_manager/experiment_server.py`
+
+Deferred/backlog (not yet audited; tracked for follow-up):
+
+- Workcell + node runtime execution paths (`workcell_engine.py`, `abstract_node_module.py`) need a careful migration.
+- EventManager analyzers (e.g. `time_series_analyzer.py`, `utilization_analyzer.py`) still have legacy f-string logs.
+- Common backup/migration tooling has legacy logs.
+
+Operational notes:
+
+- Ruff linting remains enabled; scripts under `scripts/` are permitted to use `print`.
+- Type checking is disabled via `pyrightconfig.json` to reduce editor noise while this work is in flux.
+
 ## 3.0 EventType Emission Mapping (Normative)
 
 To reduce duplicate events and keep EventType usage consistent, use the

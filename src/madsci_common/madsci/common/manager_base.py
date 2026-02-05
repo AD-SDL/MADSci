@@ -27,6 +27,7 @@ from madsci.common.otel import (
 )
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
+from madsci.common.types.event_types import EventType
 from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
 
 # Type variables for generic typing
@@ -128,9 +129,21 @@ class AbstractManagerBase(
 
         # Setup logging
         self.setup_logging()
-        self.logger.info(self._settings)
-        self.logger.info(self._definition)
-        self.logger.info(get_current_madsci_context())
+        self.logger.info(
+            "Manager settings loaded",
+            event_type=EventType.MANAGER_START,
+            settings=self._settings.model_dump(mode="json"),
+        )
+        self.logger.info(
+            "Manager definition loaded",
+            event_type=EventType.MANAGER_START,
+            definition=self._definition.model_dump(mode="json"),
+        )
+        self.logger.info(
+            "MADSci context initialized",
+            event_type=EventType.MANAGER_START,
+            context=get_current_madsci_context().model_dump(mode="json"),
+        )
 
         self._otel_runtime = None
         if getattr(self._settings, "otel_enabled", False):
@@ -246,6 +259,7 @@ class AbstractManagerBase(
             self._otel_runtime = None
             self.logger.warning(
                 "OpenTelemetry setup failed; continuing without OTEL",
+                event_type=EventType.MANAGER_ERROR,
                 exc_info=True,
             )
 
@@ -347,7 +361,11 @@ class AbstractManagerBase(
 
         # Only log if logger is initialized
         if hasattr(self, "_logger"):
-            self.logger.info(f"Writing to definition file: {def_path}")
+            self.logger.info(
+                "Writing manager definition to file",
+                event_type=EventType.MANAGER_START,
+                definition_path=str(def_path),
+            )
         definition.to_yaml(def_path)
         return definition
 
@@ -403,7 +421,15 @@ class AbstractManagerBase(
             )
             if actual_exempt_ips:
                 log_msg += f", exempt IPs: {', '.join(sorted(actual_exempt_ips))}"
-            self.logger.info(log_msg)
+            self.logger.info(
+                "Rate limiting enabled",
+                event_type=EventType.MANAGER_START,
+                rate_limit_requests=self._settings.rate_limit_requests,
+                rate_limit_window_seconds=self._settings.rate_limit_window,
+                short_requests_limit=self._settings.rate_limit_short_requests,
+                short_time_window_seconds=self._settings.rate_limit_short_window,
+                exempt_ips=sorted(actual_exempt_ips) if actual_exempt_ips else [],
+            )
 
         # Add CORS middleware by default
         app.add_middleware(
@@ -474,14 +500,20 @@ class AbstractManagerBase(
         if isinstance(self._settings, ManagerSettings):
             if self._settings.uvicorn_workers is not None:
                 uvicorn_kwargs.setdefault("workers", self._settings.uvicorn_workers)
-                self.logger.info(f"Uvicorn workers: {self._settings.uvicorn_workers}")
+                self.logger.info(
+                    "Uvicorn workers configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_workers=self._settings.uvicorn_workers,
+                )
 
             if self._settings.uvicorn_limit_concurrency is not None:
                 uvicorn_kwargs.setdefault(
                     "limit_concurrency", self._settings.uvicorn_limit_concurrency
                 )
                 self.logger.info(
-                    f"Uvicorn concurrency limit: {self._settings.uvicorn_limit_concurrency}"
+                    "Uvicorn concurrency limit configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_limit_concurrency=self._settings.uvicorn_limit_concurrency,
                 )
 
             if self._settings.uvicorn_limit_max_requests is not None:
@@ -489,7 +521,9 @@ class AbstractManagerBase(
                     "limit_max_requests", self._settings.uvicorn_limit_max_requests
                 )
                 self.logger.info(
-                    f"Uvicorn max requests per worker: {self._settings.uvicorn_limit_max_requests}"
+                    "Uvicorn max requests configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_limit_max_requests=self._settings.uvicorn_limit_max_requests,
                 )
 
         uvicorn.run(

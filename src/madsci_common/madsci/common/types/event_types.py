@@ -36,12 +36,22 @@ class EventLogLevel(int, Enum):
     CRITICAL = logging.CRITICAL
 
     @classmethod
-    def _missing_(cls, value: Union[str, int]) -> "EventLogLevel":
+    def _missing_(cls, value: object) -> "EventLogLevel":
         """Handle case-insensitive matching for log levels."""
+        if isinstance(value, int):
+            for member in cls:
+                if int(member) == value:
+                    return member
+            raise ValueError(f"Invalid EventLogLevel: {value}")
+
         if isinstance(value, str):
-            value = value.upper()
-            value = value.replace("EVENTLOGLEVEL.", "")
-        return cls[value]
+            name = value.upper().replace("EVENTLOGLEVEL.", "")
+            try:
+                return cls[name]
+            except KeyError as e:
+                raise ValueError(f"Invalid EventLogLevel: {value}") from e
+
+        raise ValueError(f"Invalid EventLogLevel: {value!r}")
 
 
 class EventManagerSettings(
@@ -54,10 +64,10 @@ class EventManagerSettings(
 ):
     """Handles settings and configuration for the Event Manager."""
 
-    server_url: Optional[AnyUrl] = Field(
+    server_url: AnyUrl = Field(
         title="Event Server URL",
         description="The URL of the Event Manager server.",
-        default="http://localhost:8001",
+        default=AnyUrl("http://localhost:8001"),
     )
     manager_definition: PathLike = Field(
         title="Event Manager Definition File",
@@ -429,7 +439,13 @@ class EventClientConfig(MadsciClientConfig):
 
 
 class EventType(str, Enum):
-    """The type of an event."""
+    """The type of an event.
+
+    Notes:
+    - Prefer the most specific type available.
+    - The LOG_* types are for general logging; prefer domain-specific types when
+      applicable.
+    """
 
     UNKNOWN = "unknown"
     LOG = "log"
@@ -477,13 +493,129 @@ class EventType(str, Enum):
     # *Action Events
     ACTION_STATUS_CHANGE = "action_status_change"
 
+    # *Resource Events (Phase 3A)
+    RESOURCE_CREATE = "resource_create"
+    RESOURCE_UPDATE = "resource_update"
+    RESOURCE_DELETE = "resource_delete"
+    RESOURCE_ALLOCATE = "resource_allocate"
+    RESOURCE_RELEASE = "resource_release"
+
+    # *Location Events (Phase 3A)
+    LOCATION_CREATE = "location_create"
+    LOCATION_UPDATE = "location_update"
+    LOCATION_DELETE = "location_delete"
+    ATTACHMENT_CREATE = "attachment_create"
+    ATTACHMENT_DELETE = "attachment_delete"
+
+    # *Data Events (Phase 3A)
+    DATA_STORE = "data_store"
+    DATA_QUERY = "data_query"
+    DATA_EXPORT = "data_export"
+
+    # *Manager Lifecycle Events (Phase 3A)
+    MANAGER_START = "manager_start"
+    MANAGER_STOP = "manager_stop"
+    MANAGER_ERROR = "manager_error"
+    MANAGER_HEALTH_CHECK = "manager_health_check"
+
+    # *Workflow Step Events (Phase 3A)
+    WORKFLOW_STEP_START = "workflow_step_start"
+    WORKFLOW_STEP_COMPLETE = "workflow_step_complete"
+    WORKFLOW_STEP_FAILED = "workflow_step_failed"
+
+    # *Action Events (Phase 3A)
+    ACTION_START = "action_start"
+    ACTION_COMPLETE = "action_complete"
+    ACTION_FAILED = "action_failed"
+
     @classmethod
-    def _missing_(cls, value: str) -> "EventType":
+    def _missing_(cls, value: object) -> "EventType":
+        if not isinstance(value, str):
+            raise ValueError(f"Invalid EventType: {value!r}")
+
         value = value.lower()
         for member in cls:
             if member.lower() == value:
                 return member
-        raise ValueError(f"Invalid ManagerTypes: {value}")
+        raise ValueError(f"Invalid EventType: {value}")
+
+
+EVENT_TYPE_DESCRIPTIONS: dict[EventType, str] = {
+    # Generic
+    EventType.UNKNOWN: "Uncategorized/unknown event type.",
+    EventType.TEST: "Test-only event type used in unit/integration tests.",
+    # Log events
+    EventType.LOG: "Generic log event.",
+    EventType.LOG_DEBUG: "Debug-level log event.",
+    EventType.LOG_INFO: "Info-level log event.",
+    EventType.LOG_WARNING: "Warning-level log event.",
+    EventType.LOG_ERROR: "Error-level log event.",
+    EventType.LOG_CRITICAL: "Critical-level log event.",
+    # Lab events
+    EventType.LAB_CREATE: "Lab created.",
+    EventType.LAB_START: "Lab started.",
+    EventType.LAB_STOP: "Lab stopped.",
+    # Node events
+    EventType.NODE_CREATE: "Node created/registered.",
+    EventType.NODE_START: "Node started.",
+    EventType.NODE_STOP: "Node stopped.",
+    EventType.NODE_CONFIG_UPDATE: "Node configuration updated.",
+    EventType.NODE_STATUS_UPDATE: "Node status updated.",
+    EventType.NODE_ERROR: "Node error occurred.",
+    # Workcell events
+    EventType.WORKCELL_CREATE: "Workcell created.",
+    EventType.WORKCELL_START: "Workcell started.",
+    EventType.WORKCELL_STOP: "Workcell stopped.",
+    EventType.WORKCELL_CONFIG_UPDATE: "Workcell configuration updated.",
+    EventType.WORKCELL_STATUS_UPDATE: "Workcell status updated.",
+    # Workflow events
+    EventType.WORKFLOW_CREATE: "Workflow created/enqueued.",
+    EventType.WORKFLOW_START: "Workflow execution started.",
+    EventType.WORKFLOW_COMPLETE: "Workflow execution completed successfully.",
+    EventType.WORKFLOW_ABORT: "Workflow aborted.",
+    EventType.WORKFLOW_STEP_START: "Workflow step started.",
+    EventType.WORKFLOW_STEP_COMPLETE: "Workflow step completed successfully.",
+    EventType.WORKFLOW_STEP_FAILED: "Workflow step failed.",
+    # Experiment events
+    EventType.EXPERIMENT_CREATE: "Experiment created.",
+    EventType.EXPERIMENT_START: "Experiment run started.",
+    EventType.EXPERIMENT_COMPLETE: "Experiment run completed.",
+    EventType.EXPERIMENT_FAILED: "Experiment run failed.",
+    EventType.EXPERIMENT_CANCELLED: "Experiment run cancelled.",
+    EventType.EXPERIMENT_PAUSE: "Experiment paused.",
+    EventType.EXPERIMENT_CONTINUED: "Experiment continued/resumed.",
+    # Campaign events
+    EventType.CAMPAIGN_CREATE: "Campaign created.",
+    EventType.CAMPAIGN_START: "Campaign started.",
+    EventType.CAMPAIGN_COMPLETE: "Campaign completed.",
+    EventType.CAMPAIGN_ABORT: "Campaign aborted.",
+    # Action events
+    EventType.ACTION_STATUS_CHANGE: "Action status changed (legacy aggregate type).",
+    EventType.ACTION_START: "Action started.",
+    EventType.ACTION_COMPLETE: "Action completed successfully.",
+    EventType.ACTION_FAILED: "Action failed.",
+    # Resource events
+    EventType.RESOURCE_CREATE: "Resource created.",
+    EventType.RESOURCE_UPDATE: "Resource updated.",
+    EventType.RESOURCE_DELETE: "Resource deleted/removed.",
+    EventType.RESOURCE_ALLOCATE: "Resource allocated/reserved.",
+    EventType.RESOURCE_RELEASE: "Resource released/unreserved.",
+    # Location events
+    EventType.LOCATION_CREATE: "Location created.",
+    EventType.LOCATION_UPDATE: "Location updated.",
+    EventType.LOCATION_DELETE: "Location deleted.",
+    EventType.ATTACHMENT_CREATE: "Resource attached to a location.",
+    EventType.ATTACHMENT_DELETE: "Resource detached from a location.",
+    # Data events
+    EventType.DATA_STORE: "Data stored/ingested.",
+    EventType.DATA_QUERY: "Data queried/read.",
+    EventType.DATA_EXPORT: "Data exported.",
+    # Manager lifecycle
+    EventType.MANAGER_START: "Manager process/service started.",
+    EventType.MANAGER_STOP: "Manager process/service stopped.",
+    EventType.MANAGER_ERROR: "Manager encountered an error.",
+    EventType.MANAGER_HEALTH_CHECK: "Manager health check performed.",
+}
 
 
 class EmailAlertsConfig(MadsciBaseModel):
@@ -543,9 +675,9 @@ class EventManagerDefinition(ManagerDefinition):
         title="Event Manager ID",
         description="The ID of the event manager.",
         default_factory=new_ulid_str,
-        alias=AliasChoices("manager_id", "event_manager_id"),
+        validation_alias=AliasChoices("manager_id", "event_manager_id"),
     )
-    manager_type: Literal[ManagerType.EVENT_MANAGER] = Field(
+    manager_type: ManagerType = Field(
         title="Manager Type",
         description="The type of the event manager",
         default=ManagerType.EVENT_MANAGER,
