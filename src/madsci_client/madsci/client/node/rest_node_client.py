@@ -20,7 +20,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.client_types import RestNodeClientConfig
-from madsci.common.types.event_types import Event
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -141,9 +141,18 @@ class RestNodeClient(AbstractNodeClient):
 
         except Exception as e:
             if hasattr(e, "response") and e.response is not None:
-                self.logger.error(f"{e.response.status_code}: {e.response.text}")
+                self.logger.error(
+                    "REST node action request failed",
+                    event_type=EventType.LOG_ERROR,
+                    status_code=e.response.status_code,
+                    response_text=e.response.text,
+                )
             else:
-                self.logger.error(str(e))
+                self.logger.error(
+                    "REST node action request failed",
+                    event_type=EventType.LOG_ERROR,
+                    error=str(e),
+                )
             raise e
 
     def _create_action(
@@ -382,7 +391,11 @@ class RestNodeClient(AbstractNodeClient):
 
         except Exception as e:
             self.logger.error(
-                f"Failed to fetch files for action {action_name} with ID {action_id}: {traceback.format_exc()}"
+                "Failed to fetch files for action",
+                event_type=EventType.LOG_ERROR,
+                action_name=action_name,
+                action_id=action_id,
+                traceback=traceback.format_exc(),
             )
             raise e
         finally:

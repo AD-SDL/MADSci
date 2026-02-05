@@ -92,6 +92,11 @@ Additional updates in February 2026 (logging-audit ratchet):
 - Added `src/madsci_client/madsci/client/node/abstract_node_client.py` to the `madsci-logging-patterns` pre-commit hook scope.
 - AbstractNodeClient has no EventClient logging calls, so no logging pattern changes were required.
 
+Additional updates in February 2026 (logging-audit ratchet):
+
+- Added `src/madsci_client/madsci/client/node/rest_node_client.py` to the `madsci-logging-patterns` pre-commit hook scope.
+- Audited RESTNodeClient logging to ensure structured logging (no f-strings) and `event_type` on EventClient-style log calls.
+
 Notes:
 
 - This Phase 3 doc previously listed some of these files as deferred; they are now included above under
