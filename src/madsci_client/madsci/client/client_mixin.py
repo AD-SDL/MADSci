@@ -83,6 +83,7 @@ class MadsciClientMixin:
     _lab_client: Optional[LabClient] = None
 
     # Configuration attributes (can be set by subclasses or instances)
+    name: Optional[str] = None
     event_client_config: Optional[EventClientConfig] = None
     event_server_url: Optional[Union[str, AnyUrl]] = None
     resource_server_url: Optional[Union[str, AnyUrl]] = None

@@ -44,6 +44,10 @@ Audited/cleaned (passes the logging-pattern hook):
 - `src/madsci_node_module/madsci/node_module/rest_node_module.py`
 - `src/madsci_node_module/madsci/node_module/type_analyzer.py`
 
+Update (February 2026):
+
+- `src/madsci_client/madsci/client/client_mixin.py` is now audited and included in the hook scope.
+
 Deferred/backlog (not yet audited; tracked for follow-up):
 
 - Workcell + node runtime execution paths (`workcell_engine.py`, `abstract_node_module.py`) need a careful migration.
