@@ -37,6 +37,7 @@ Audited/cleaned (passes the logging-pattern hook):
 - `src/madsci_event_manager/madsci/event_manager/utilization_analyzer.py`
 - `src/madsci_event_manager/madsci/event_manager/time_series_analyzer.py`
 - `src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py`
+- `src/madsci_workcell_manager/madsci/workcell_manager/workcell_server.py`
 
 Deferred/backlog (not yet audited; tracked for follow-up):
 

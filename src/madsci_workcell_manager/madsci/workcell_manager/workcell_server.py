@@ -100,7 +100,12 @@ class WorkcellManager(
         if self.mongo_connection is not None:
             # External connection provided, likely in test context - skip version validation
             self.logger.info(
-                "External mongo_connection provided, skipping MongoDB version validation"
+                "External mongo_connection provided, skipping MongoDB version validation",
+                event_type=EventType.MANAGER_START,
+                manager_name=self.definition.name,
+                manager_id=self.definition.manager_id,
+                manager_type="workcell",
+                mongo_external_connection=True,
             )
             # Continue with the rest of initialization (ownership, state handler, clients)
             global_ownership_info.workcell_id = self.definition.manager_id
@@ -120,7 +125,15 @@ class WorkcellManager(
             self.location_client = LocationClient(context.location_server_url)
             return
 
-        self.logger.info("Validating MongoDB schema version...")
+        self.logger.info(
+            "Validating MongoDB schema version",
+            event_type=EventType.MANAGER_START,
+            manager_name=self.definition.name,
+            manager_id=self.definition.manager_id,
+            manager_type="workcell",
+            mongo_db=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+        )
 
         schema_file_path = Path(__file__).parent / "schema.json"
         mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
@@ -134,12 +147,25 @@ class WorkcellManager(
 
         try:
             version_checker.validate_or_fail()
-            self.logger.info("MongoDB version validation completed successfully")
-        except RuntimeError as e:
-            self.logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+            self.logger.info(
+                "MongoDB version validation completed successfully",
+                event_type=EventType.MANAGER_START,
+                manager_name=self.definition.name,
+                manager_id=self.definition.manager_id,
+                manager_type="workcell",
+                database_name=self.settings.database_name,
             )
-            raise e
+        except RuntimeError:
+            self.logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!",
+                event_type=EventType.MANAGER_ERROR,
+                manager_name=self.definition.name,
+                manager_id=self.definition.manager_id,
+                manager_type="workcell",
+                database_name=self.settings.database_name,
+                exc_info=True,
+            )
+            raise
 
         # Set up global ownership
         global_ownership_info.workcell_id = self.definition.manager_id
@@ -439,7 +465,12 @@ class WorkcellManager(
         except HTTPException as e:
             raise e
         except Exception as e:
-            self.logger.error(f"Error saving workflow definition: {e}")
+            self.logger.error(
+                "Error saving workflow definition",
+                event_type=EventType.WORKFLOW_CREATE,
+                error=str(e),
+                exc_info=True,
+            )
             traceback.print_exc()
             raise HTTPException(
                 status_code=500,
@@ -572,7 +603,13 @@ class WorkcellManager(
         except HTTPException as e:
             raise e
         except Exception as e:
-            self.logger.error(f"Error starting workflow: {e}")
+            self.logger.error(
+                "Error starting workflow",
+                event_type=EventType.WORKFLOW_START,
+                workflow_definition_id=workflow_definition_id,
+                error=str(e),
+                exc_info=True,
+            )
             traceback.print_exc()
             raise HTTPException(
                 status_code=500,
