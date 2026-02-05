@@ -103,6 +103,14 @@ Additional updates in February 2026 (logging-audit ratchet):
 - Updated EventClient internals to avoid f-strings in stdlib logger calls and to include a default `event_type` when
   using the EventClient structlog-style methods.
 
+Additional updates in February 2026 (this change):
+
+- Added remaining `madsci.common` modules to the `madsci-logging-patterns` pre-commit hook scope:
+  - `src/madsci_common/madsci/common/utils.py`
+  - `src/madsci_common/madsci/common/mongodb_version_checker.py`
+  - `src/madsci_common/madsci/common/mongodb_migration_tool.py`
+- Audited and updated these modules to pass the hook (no f-strings in log calls).
+
 Notes:
 
 - This Phase 3 doc previously listed some of these files as deferred; they are now included above under

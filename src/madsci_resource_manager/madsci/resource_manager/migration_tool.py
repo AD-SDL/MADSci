@@ -600,7 +600,7 @@ class DatabaseMigrator:
             self.logger.info(
                 "Generating new migration",
                 event_type="resources.migration.generate_migration_start",
-                message=message,
+                migration_message=message,
             )
             os.environ["RESOURCES_DB_URL"] = self.db_url
 

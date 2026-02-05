@@ -578,16 +578,25 @@ class RateLimitTracker:
         if self.limit is not None and self.remaining is not None:
             usage_fraction = 1.0 - (self.remaining / self.limit)
             if usage_fraction >= self.warning_threshold:
+                resets_at = (
+                    datetime.fromtimestamp(self.reset, tz=timezone.utc)
+                    if self.reset
+                    else None
+                )
                 logger.warning(
-                    f"Approaching rate limit: {self.remaining}/{self.limit} requests remaining "
-                    f"(resets at {datetime.fromtimestamp(self.reset, tz=timezone.utc) if self.reset else 'unknown'})"
+                    "Approaching rate limit: %s/%s remaining (resets at %s)",
+                    self.remaining,
+                    self.limit,
+                    resets_at or "unknown",
                 )
 
         if self.burst_limit is not None and self.burst_remaining is not None:
             burst_usage_fraction = 1.0 - (self.burst_remaining / self.burst_limit)
             if burst_usage_fraction >= self.warning_threshold:
                 logger.warning(
-                    f"Approaching burst rate limit: {self.burst_remaining}/{self.burst_limit} requests remaining"
+                    "Approaching burst rate limit: %s/%s remaining",
+                    self.burst_remaining,
+                    self.burst_limit,
                 )
 
     def get_delay_seconds(self) -> float:
@@ -608,7 +617,10 @@ class RateLimitTracker:
                 and self.reset is not None
             ):
                 delay = max(0.0, self.reset - time.time())
-                logger.info(f"Rate limit exhausted, delaying {delay:.2f} seconds")
+                logger.info(
+                    "Rate limit exhausted, delaying %.2f seconds before next request",
+                    delay,
+                )
                 return delay
 
             if self.burst_remaining is not None and self.burst_remaining <= 0:

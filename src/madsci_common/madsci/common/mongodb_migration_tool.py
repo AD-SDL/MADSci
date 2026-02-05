@@ -1,7 +1,6 @@
 """MongoDB migration tool for MADSci databases with backup, schema management, and CLI."""
 
 import sys
-import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -37,7 +36,12 @@ class MongoDBMigrator:
         """
         self.settings = settings
         self.db_url = str(settings.mongo_db_url)
-        self.database_name = settings.database
+        database_name = settings.database
+        if not database_name:
+            raise ValueError("MongoDBMigrator requires settings.database to be set")
+
+        database_name_str = str(database_name)
+        self.database_name = database_name_str
         self.schema_file_path = settings.get_effective_schema_file_path()
         self.logger = logger or EventClient()
 
@@ -51,7 +55,7 @@ class MongoDBMigrator:
             raw_backup if raw_backup.is_absolute() else Path.cwd() / raw_backup
         )
         self.backup_dir.mkdir(parents=True, exist_ok=True)
-        self.logger.info(f"Using backup directory: {self.backup_dir}")
+        self.logger.info("Using backup directory", backup_dir=str(self.backup_dir))
 
         # Create backup tool instance with migration-appropriate settings
         backup_settings = MongoDBBackupSettings(
@@ -99,11 +103,18 @@ class MongoDBMigrator:
                 )
 
             schema = MongoDBSchema.from_file(str(self.schema_file_path))
-            self.logger.info(f"Loaded schema from {self.schema_file_path}")
+            self.logger.info(
+                "Loaded schema", schema_file_path=str(self.schema_file_path)
+            )
             return schema
 
         except Exception as e:
-            self.logger.error(f"Error loading schema file: {e}")
+            self.logger.error(
+                "Error loading schema file",
+                schema_file_path=str(self.schema_file_path),
+                error=str(e),
+                exc_info=True,
+            )
             raise RuntimeError(f"Cannot load schema file: {e}") from e
 
     def get_current_database_schema(self) -> MongoDBSchema:
@@ -119,7 +130,12 @@ class MongoDBMigrator:
             )
 
         except Exception as e:
-            self.logger.error(f"Error getting current database schema: {e}")
+            self.logger.error(
+                "Error getting current database schema",
+                database_name=self.database_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     def apply_schema_migrations(self) -> None:
@@ -138,7 +154,12 @@ class MongoDBMigrator:
             self.logger.info("Schema migrations applied successfully")
 
         except Exception as e:
-            self.logger.error(f"Schema migration failed: {traceback.format_exc()}")
+            self.logger.error(
+                "Schema migration failed",
+                database_name=self.database_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise RuntimeError(f"Schema migration failed: {e}") from e
 
     def _ensure_collection_exists(self, collection_name: str) -> None:
@@ -146,11 +167,19 @@ class MongoDBMigrator:
         try:
             if collection_name not in self.database.list_collection_names():
                 self.database.create_collection(collection_name)
-                self.logger.info(f"Created collection: {collection_name}")
+                self.logger.info("Created collection", collection_name=collection_name)
             else:
-                self.logger.info(f"Collection already exists: {collection_name}")
+                self.logger.info(
+                    "Collection already exists",
+                    collection_name=collection_name,
+                )
         except Exception as e:
-            self.logger.error(f"Error creating collection {collection_name}: {e}")
+            self.logger.error(
+                "Error creating collection",
+                collection_name=collection_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     def _ensure_indexes_exist(
@@ -177,16 +206,23 @@ class MongoDBMigrator:
 
                     collection.create_index(keys, **index_options)
                     self.logger.info(
-                        f"Created index: {index_name} on collection {collection_name}"
+                        "Created index",
+                        index_name=index_name,
+                        collection_name=collection_name,
                     )
                 else:
                     self.logger.info(
-                        f"Index already exists: {index_name} on collection {collection_name}"
+                        "Index already exists",
+                        index_name=index_name,
+                        collection_name=collection_name,
                     )
 
         except Exception as e:
             self.logger.error(
-                f"Error ensuring indexes for collection {collection_name}: {e}"
+                "Error ensuring indexes for collection",
+                collection_name=collection_name,
+                error=str(e),
+                exc_info=True,
             )
             raise
 
@@ -217,7 +253,12 @@ class MongoDBMigrator:
             }
 
         except Exception as e:
-            self.logger.error(f"Schema validation failed: {e}")
+            self.logger.error(
+                "Schema validation failed",
+                database_name=self.database_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     def run_migration(self, target_version: Optional[str] = None) -> None:
@@ -231,11 +272,19 @@ class MongoDBMigrator:
             current_db_version = self.version_checker.get_database_version()
 
             self.logger.info(
-                f"Starting migration of {self.database_name} to version {target_version}"
+                "Starting migration",
+                database_name=self.database_name,
+                target_version=str(target_version),
             )
-            self.logger.info(f"Expected schema version: {expected_schema_version}")
             self.logger.info(
-                f"Current database version: {current_db_version or 'None'}"
+                "Expected schema version",
+                expected_schema_version=str(expected_schema_version),
+            )
+            self.logger.info(
+                "Current database version",
+                database_version=str(current_db_version)
+                if current_db_version
+                else None,
             )
 
             # ALWAYS CREATE BACKUP FIRST using backup tool
@@ -246,15 +295,25 @@ class MongoDBMigrator:
                 self.apply_schema_migrations()
 
                 # Record new version in our tracking system
-                migration_notes = f"MongoDB schema migration from {current_db_version or 'unversioned'} to {target_version}"
+                migration_notes = (
+                    "MongoDB schema migration from "
+                    f"{current_db_version or 'unversioned'} to {target_version}"
+                )
                 self.version_checker.record_version(target_version, migration_notes)
 
                 self.logger.info(
-                    f"Migration completed successfully to version {target_version}"
+                    "Migration completed successfully",
+                    database_name=self.database_name,
+                    target_version=str(target_version),
                 )
 
             except Exception as migration_error:
-                self.logger.error(f"Migration failed: {migration_error}")
+                self.logger.error(
+                    "Migration failed",
+                    database_name=self.database_name,
+                    error=str(migration_error),
+                    exc_info=True,
+                )
                 self.logger.info("Attempting to restore from backup...")
 
                 try:
@@ -262,14 +321,22 @@ class MongoDBMigrator:
                     self.logger.info("Database restored from backup successfully")
                 except Exception as restore_error:
                     self.logger.error(
-                        f"CRITICAL: Backup restore also failed: {restore_error}"
+                        "Backup restore also failed",
+                        database_name=self.database_name,
+                        error=str(restore_error),
+                        exc_info=True,
                     )
                     self.logger.error("Manual intervention required!")
 
                 raise migration_error
 
         except Exception as e:
-            self.logger.error(f"Migration process failed: {e}")
+            self.logger.error(
+                "Migration process failed",
+                database_name=self.database_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
 
@@ -286,9 +353,15 @@ def handle_migration_commands(
             version_checker.is_migration_needed()
         )
 
-        logger.info(f"Expected schema version: {expected_schema_version}")
-        logger.info(f"Database version: {db_version or 'None'}")
-        logger.info(f"Migration needed: {needs_migration}")
+        logger.info(
+            "Expected schema version",
+            expected_schema_version=str(expected_schema_version),
+        )
+        logger.info(
+            "Database version",
+            database_version=str(db_version) if db_version else None,
+        )
+        logger.info("Migration needed", needs_migration=needs_migration)
 
         if needs_migration:
             logger.info("Migration is required")
@@ -305,7 +378,7 @@ def handle_migration_commands(
     elif settings.backup_only:
         # Just create backup using backup tool
         backup_path = migrator.backup_tool.create_backup()
-        logger.info(f"Backup created: {backup_path}")
+        logger.info("Backup created", backup_path=str(backup_path))
 
     else:
         # Run full migration
@@ -320,8 +393,11 @@ def main() -> None:  # noqa
     try:
         settings = MongoDBMigrationSettings()
 
-        logger.info(f"Using database: {settings.database}")
-        logger.info(f"Using schema file: {settings.get_effective_schema_file_path()}")
+        logger.info("Using database", database=settings.database)
+        logger.info(
+            "Using schema file",
+            schema_file_path=str(settings.get_effective_schema_file_path()),
+        )
 
         migrator = MongoDBMigrator(settings, logger)
 
@@ -338,28 +414,41 @@ def main() -> None:  # noqa
 
                 if diff["missing_collections"]:
                     logger.log_warning(
-                        f"Missing collections: {diff['missing_collections']}"
+                        "Missing collections",
+                        missing_collections=diff["missing_collections"],
                     )
 
                 if diff["extra_collections"]:
                     logger.log_warning(
-                        f"Extra collections: {diff['extra_collections']}"
+                        "Extra collections",
+                        extra_collections=diff["extra_collections"],
                     )
 
                 if diff["collection_differences"]:
                     for coll_name, coll_diff in diff["collection_differences"].items():
-                        logger.log_warning(f"Collection '{coll_name}' differences:")
+                        logger.log_warning(
+                            "Collection differences",
+                            collection_name=coll_name,
+                        )
                         if coll_diff["missing_indexes"]:
                             logger.log_warning(
-                                f"  Missing indexes: {coll_diff['missing_indexes']}"
+                                "Missing indexes",
+                                collection_name=coll_name,
+                                missing_indexes=coll_diff["missing_indexes"],
                             )
                         if coll_diff["extra_indexes"]:
                             logger.log_warning(
-                                f"  Extra indexes: {coll_diff['extra_indexes']}"
+                                "Extra indexes",
+                                collection_name=coll_name,
+                                extra_indexes=coll_diff["extra_indexes"],
                             )
                         if coll_diff["different_indexes"]:
                             logger.log_warning(
-                                f"  Different indexes: {len(coll_diff['different_indexes'])}"
+                                "Different indexes",
+                                collection_name=coll_name,
+                                different_index_count=len(
+                                    coll_diff["different_indexes"]
+                                ),
                             )
 
                 sys.exit(1)
@@ -372,7 +461,7 @@ def main() -> None:  # noqa
         logger.info("Migration interrupted by user")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Migration tool failed: {e}")
+        logger.error("Migration tool failed", error=str(e), exc_info=True)
         sys.exit(1)
 
 
