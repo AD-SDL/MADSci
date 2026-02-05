@@ -56,8 +56,14 @@ WORKDIR /home/${CONTAINER_USER}
 COPY pyproject.toml pdm.lock README.md /home/${CONTAINER_USER}/MADSci/
 COPY src/ /home/${CONTAINER_USER}/MADSci/src
 WORKDIR /home/${CONTAINER_USER}/MADSci
+
 RUN --mount=type=cache,target=/root/.cache \
- 	pdm install -G:all -g -p . --frozen-lockfile
+	pdm install -G:all -g -p . && \
+	pip install \
+		opentelemetry-exporter-otlp \
+		opentelemetry-instrumentation-fastapi \
+		opentelemetry-instrumentation-asgi \
+		opentelemetry-instrumentation-requests
 
 # * Fix ownership of all MADSci files and ensure alembic directories exist with correct permissions
 RUN chown -R ${USER_ID}:${GROUP_ID} /home/${CONTAINER_USER}/MADSci && \
