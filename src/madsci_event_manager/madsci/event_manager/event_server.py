@@ -221,6 +221,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
     def get_health(self) -> EventManagerHealth:
         """Get the health status of the Event Manager."""
         health = EventManagerHealth()
+        base = super().get_health()
 
         try:
             # Test database connection
@@ -237,6 +238,10 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
             health.healthy = False
             health.db_connected = False
             health.description = f"Database connection failed: {e!s}"
+
+        health.otel_enabled = base.model_extra.get("otel.enabled")
+        health.otel_exporter_type = base.model_extra.get("otel.exporter_type")
+        health.otel_endpoint = base.model_extra.get("otel.endpoint")
 
         return health
 

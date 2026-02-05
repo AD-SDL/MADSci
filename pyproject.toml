@@ -21,6 +21,10 @@ dev = [
     "nbconvert>=7.16.6",
     "pytest-timeout>=2.4.0",
     "ruff>=0.14.9",
+    "opentelemetry-exporter-otlp>=1.39.1",
+    "opentelemetry-instrumentation-fastapi>=0.60b1",
+    "opentelemetry-instrumentation-asgi>=0.60b1",
+    "opentelemetry-instrumentation-requests>=0.60b1",
 ]
 
 [tool.pytest.ini_options]

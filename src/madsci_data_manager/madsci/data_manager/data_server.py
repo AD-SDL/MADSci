@@ -255,42 +255,49 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
     @get("/datapoint/{datapoint_id}")
     async def get_datapoint(self, datapoint_id: str) -> Any:
         """Look up a datapoint by datapoint_id"""
-        datapoint = self.datapoints.find_one({"_id": datapoint_id})
-        if not datapoint:
-            return JSONResponse(
-                status_code=404,
-                content={"message": f"Datapoint with id {datapoint_id} not found."},
-            )
-        return DataPoint.discriminate(datapoint)
+        with self.span("data.get", attributes={"datapoint.id": datapoint_id}):
+            datapoint = self.datapoints.find_one({"_id": datapoint_id})
+            if not datapoint:
+                return JSONResponse(
+                    status_code=404,
+                    content={"message": f"Datapoint with id {datapoint_id} not found."},
+                )
+            return DataPoint.discriminate(datapoint)
 
     @get("/datapoint/{datapoint_id}/value")
     async def get_datapoint_value(self, datapoint_id: str) -> Response:
         """Returns a specific data point's value. If this is a file, it will return the file."""
-        datapoint = self.datapoints.find_one({"_id": datapoint_id})
-        datapoint = DataPoint.discriminate(datapoint)
-        if datapoint.data_type == "file":
-            return FileResponse(datapoint.path)
-        return JSONResponse(datapoint.value)
+        with self.span("data.value", attributes={"datapoint.id": datapoint_id}):
+            datapoint = self.datapoints.find_one({"_id": datapoint_id})
+            datapoint = DataPoint.discriminate(datapoint)
+            if datapoint.data_type == "file":
+                return FileResponse(datapoint.path)
+            return JSONResponse(datapoint.value)
 
     @get("/datapoints")
     async def get_datapoints(self, number: int = 100) -> Dict[str, Any]:
         """Get the latest datapoints"""
-        datapoint_list = (
-            self.datapoints.find({}).sort("data_timestamp", -1).limit(number).to_list()
-        )
-        return {
-            datapoint["_id"]: DataPoint.discriminate(datapoint)
-            for datapoint in datapoint_list
-        }
+        with self.span("data.list", attributes={"datapoint.limit": number}):
+            datapoint_list = (
+                self.datapoints.find({})
+                .sort("data_timestamp", -1)
+                .limit(number)
+                .to_list()
+            )
+            return {
+                datapoint["_id"]: DataPoint.discriminate(datapoint)
+                for datapoint in datapoint_list
+            }
 
     @post("/datapoints/query")
     async def query_datapoints(self, selector: Any = Body()) -> Dict[str, Any]:  # noqa: B008
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
-        datapoint_list = self.datapoints.find(selector).to_list()
-        return {
-            datapoint["_id"]: DataPoint.discriminate(datapoint)
-            for datapoint in datapoint_list
-        }
+        with self.span("data.query"):
+            datapoint_list = self.datapoints.find(selector).to_list()
+            return {
+                datapoint["_id"]: DataPoint.discriminate(datapoint)
+                for datapoint in datapoint_list
+            }
 
 
 # Main entry point for running the server

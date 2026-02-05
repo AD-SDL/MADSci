@@ -460,6 +460,12 @@ Progress (Implementation Notes, Feb 2026):
 - Added DataManager datapoint ingestion span:
   - `/datapoint` wraps create/insert in `data.save` span
     - `src/madsci_data_manager/madsci/data_manager/data_server.py`
+- Added DataManager query/read spans:
+  - `/datapoints/query` wraps in `data.query` span
+  - `/datapoint/{id}` wraps in `data.get` span
+  - `/datapoint/{id}/value` wraps in `data.value` span
+  - `/datapoints` wraps in `data.list` span
+    - `src/madsci_data_manager/madsci/data_manager/data_server.py`
 - Added ResourceManager domain spans:
   - Resource lifecycle + query endpoints wrap in `resource.*` spans
     - `src/madsci_resource_manager/madsci/resource_manager/resource_server.py`
@@ -478,11 +484,17 @@ Acceptance Criteria:
 
 - [x] AbstractManagerBase supports OTEL configuration (best-effort, optional)
 - [x] Trace context is extracted from incoming requests via FastAPI auto-instrumentation (when installed/enabled)
-- [~] Key operations create spans with meaningful attributes (EventManager + WorkcellManager started)
+- [x] Key operations create spans with meaningful attributes (Event/Data/Workcell/Resource/Location/Experiment)
 - [x] Cross-manager/client calls propagate trace context (requests instrumentation + existing header injection in EventClient)
-- [~] Managers reuse a previously-configured process-global OTEL runtime when available
+- [x] Managers reuse a previously-configured process-global OTEL runtime when available
 - [x] Manager health endpoint reports OTEL status when enabled
 - [x] All manager tests pass (common + event manager)
+
+Runtime Verification Notes:
+
+- Example-lab docker images currently do not include OTLP exporter deps.
+  - With `*_OTEL_EXPORTER=otlp`, managers will log "OpenTelemetry setup failed; continuing without OTEL" due to missing `opentelemetry.exporter`.
+  - Local dev venv can install these via PDM (see `pyproject.toml` dev deps), but container images need to include them for end-to-end OTLP verification.
 
 ## 2.5 OTEL Status and Health Checks
 
