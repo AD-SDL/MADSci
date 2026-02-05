@@ -111,6 +111,15 @@ Additional updates in February 2026 (this change):
   - `src/madsci_common/madsci/common/mongodb_migration_tool.py`
 - Audited and updated these modules to pass the hook (no f-strings in log calls).
 
+Additional updates in February 2026 (logging-audit ratchet):
+
+- Expanded `madsci.resource_manager` coverage in the `madsci-logging-patterns` pre-commit hook scope:
+  - `src/madsci_resource_manager/madsci/resource_manager/resource_interface.py`
+  - `src/madsci_resource_manager/madsci/resource_manager/database_version_checker.py`
+- Audited and updated these modules to pass the hook:
+  - Converted EventClient log f-strings to structured fields
+  - Added/standardized `event_type` usage (manager lifecycle, resource CRUD/locking, and query contexts)
+
 Notes:
 
 - This Phase 3 doc previously listed some of these files as deferred; they are now included above under

@@ -2,7 +2,6 @@
 
 # Suppress SAWarnings
 import time
-import traceback
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -10,6 +9,7 @@ from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.event_types import EventType
 from madsci.common.types.resource_types import (
     RESOURCE_TYPE_MAP,
     Collection,
@@ -83,17 +83,24 @@ class ResourceInterface:
                 self.sessionmaker = self.sessionmaker or create_session
                 if self.engine:
                     SQLModel.metadata.create_all(self.engine)
-                self.logger.info("Initialized Resource Interface.")
+                self.logger.info(
+                    "Initialized Resource Interface",
+                    event_type=EventType.MANAGER_START,
+                )
                 break
             except Exception:
                 self.logger.error(
-                    f"Error while creating/connecting to database: \n{traceback.print_exc()}"
+                    "Error while creating/connecting to database",
+                    event_type=EventType.MANAGER_ERROR,
+                    exc_info=True,
                 )
                 time.sleep(5)
                 continue
         else:
             self.logger.error(
-                f"Failed to connect to database after {init_timeout} seconds."
+                "Failed to connect to database before timeout",
+                event_type=EventType.MANAGER_ERROR,
+                init_timeout_s=init_timeout,
             )
             raise ConnectionError(
                 f"Failed to connect to database after {init_timeout} seconds."
@@ -117,7 +124,9 @@ class ResourceInterface:
             except Exception:
                 session.rollback()
                 self.logger.error(
-                    f"Error while committing session: \n{traceback.format_exc()}"
+                    "Error while committing session",
+                    event_type=EventType.MANAGER_ERROR,
+                    exc_info=True,
                 )
                 raise
             finally:
@@ -149,7 +158,9 @@ class ResourceInterface:
                 ).first()
                 if existing_resource:
                     self.logger.info(
-                        f"Resource with ID '{resource_row.resource_id}' already exists in the database. No action taken."
+                        "Resource already exists in database; no action taken",
+                        event_type=EventType.RESOURCE_CREATE,
+                        resource_id=resource_row.resource_id,
                     )
                     return existing_resource.to_data_model()
 
@@ -169,8 +180,13 @@ class ResourceInterface:
                 session.refresh(resource_row)
                 return resource_row.to_data_model()
         except Exception as e:
-            self.logger.error(f"Error adding resource: \n{traceback.format_exc()}")
-            raise e
+            self.logger.error(
+                "Error adding resource",
+                event_type=EventType.RESOURCE_CREATE,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     def update_resource(
         self,
@@ -219,8 +235,13 @@ class ResourceInterface:
                 session.refresh(resource_row)
                 return resource_row.to_data_model()
         except Exception as e:
-            self.logger.error(f"Error updating resource: \n{traceback.format_exc()}")
-            raise e
+            self.logger.error(
+                "Error updating resource",
+                event_type=EventType.RESOURCE_UPDATE,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     def add_or_update_resource(
         self,
@@ -304,9 +325,11 @@ class ResourceInterface:
                     result = session.exec(statement).one_or_none()
                 except MultipleResultsFound as e:
                     self.logger.error(
-                        f"Result is not unique, narrow down the search criteria: {e}"
+                        "Result is not unique; narrow down the search criteria",
+                        event_type=EventType.DATA_QUERY,
+                        error=str(e),
                     )
-                    raise e
+                    raise
             elif multiple:
                 return [
                     result.to_data_model() for result in session.exec(statement).all()
@@ -405,7 +428,9 @@ class ResourceInterface:
             ).first()
             if resource_history is None:
                 self.logger.error(
-                    f"No removed resource found for ID '{resource_id}' in the History table."
+                    "No removed resource found for ID in history table",
+                    event_type=EventType.DATA_QUERY,
+                    resource_id=resource_id,
                 )
                 return None
             resource_history.removed = False
@@ -721,7 +746,10 @@ class ResourceInterface:
                 )
             if resource.capacity == capacity:
                 self.logger.info(
-                    f"Capacity of container '{resource.resource_name}' is already set to {capacity}. No action taken."
+                    "Capacity already set; no action taken",
+                    event_type=EventType.RESOURCE_UPDATE,
+                    resource_id=resource_id,
+                    capacity=capacity,
                 )
                 return resource_row.to_data_model()
             resource_row.capacity = capacity
@@ -745,7 +773,9 @@ class ResourceInterface:
                 )
             if resource.capacity is None:
                 self.logger.info(
-                    f"Container '{resource.resource_name}' has no capacity limit set. No action taken."
+                    "No capacity limit set; no action taken",
+                    event_type=EventType.RESOURCE_UPDATE,
+                    resource_id=resource_id,
                 )
                 return resource_row.to_data_model()
             resource_row.capacity = None
@@ -945,8 +975,13 @@ class ResourceInterface:
                 template_row = ResourceTemplateTable(**template_data)
                 session.add(template_row)
 
-                action = "Replaced" if existing_template else "Created"
-                self.logger.info(f"{action} template '{template_name}'")
+                action = "replaced" if existing_template else "created"
+                self.logger.info(
+                    "Template created or replaced",
+                    event_type=EventType.RESOURCE_CREATE,
+                    template_name=template_name,
+                    action=action,
+                )
 
                 session.commit()
                 session.refresh(template_row)
@@ -955,9 +990,13 @@ class ResourceInterface:
 
         except Exception as e:
             self.logger.error(
-                f"Error creating/updating template: \n{traceback.format_exc()}"
+                "Error creating/updating template",
+                event_type=EventType.RESOURCE_CREATE,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
             )
-            raise e
+            raise
 
     def get_template(
         self,
@@ -987,8 +1026,14 @@ class ResourceInterface:
                 return None
 
         except Exception as e:
-            self.logger.error(f"Error getting template: \n{traceback.format_exc()}")
-            raise e
+            self.logger.error(
+                "Error getting template",
+                event_type=EventType.DATA_QUERY,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     def update_template(
         self,
@@ -1020,7 +1065,12 @@ class ResourceInterface:
                     if hasattr(template_row, key):
                         setattr(template_row, key, value)
                     else:
-                        self.logger.warning(f"Unknown field '{key}' in template update")
+                        self.logger.warning(
+                            "Unknown field in template update",
+                            event_type=EventType.RESOURCE_UPDATE,
+                            template_name=template_name,
+                            field=key,
+                        )
 
                 # If any resource fields were updated, update default_values too
                 resource_fields = {
@@ -1045,12 +1095,22 @@ class ResourceInterface:
                 session.commit()
                 session.refresh(template_row)
 
-                self.logger.info(f"Updated template '{template_name}'")
+                self.logger.info(
+                    "Updated template",
+                    event_type=EventType.RESOURCE_UPDATE,
+                    template_name=template_name,
+                )
                 return template_row.to_data_model()
 
         except Exception as e:
-            self.logger.error(f"Error updating template: \n{traceback.format_exc()}")
-            raise e
+            self.logger.error(
+                "Error updating template",
+                event_type=EventType.RESOURCE_UPDATE,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     def delete_template(
         self,
@@ -1077,19 +1137,31 @@ class ResourceInterface:
 
                 if not template_row:
                     self.logger.warning(
-                        f"Template '{template_name}' not found for deletion"
+                        "Template not found for deletion",
+                        event_type=EventType.RESOURCE_DELETE,
+                        template_name=template_name,
                     )
                     return False
 
                 session.delete(template_row)
                 session.commit()
 
-                self.logger.info(f"Deleted template '{template_name}'")
+                self.logger.info(
+                    "Deleted template",
+                    event_type=EventType.RESOURCE_DELETE,
+                    template_name=template_name,
+                )
                 return True
 
         except Exception as e:
-            self.logger.error(f"Error deleting template: \n{traceback.format_exc()}")
-            raise e
+            self.logger.error(
+                "Error deleting template",
+                event_type=EventType.RESOURCE_DELETE,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     def query_templates(
         self,
@@ -1139,8 +1211,13 @@ class ResourceInterface:
                 return [row.to_data_model() for row in template_rows]
 
         except Exception as e:
-            self.logger.error(f"Error querying templates: \n{traceback.format_exc()}")
-            raise e
+            self.logger.error(
+                "Error querying templates",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
 
     def _check_template_nested_field(self, data: dict, field_path: str) -> bool:
         """Check if a nested field exists in the data using dot notation."""
@@ -1232,27 +1309,45 @@ class ResourceInterface:
                 # Add to database if requested
                 if add_to_database:
                     self.logger.info(
-                        f"Adding resource '{resource_name}' to resource table..."
+                        "Adding resource from template to resource table",
+                        event_type=EventType.RESOURCE_CREATE,
+                        template_name=template_name,
+                        resource_name=resource_name,
                     )
                     resource = self.add_resource(resource, parent_session=session)
                     self.logger.info(
-                        f"Resource '{resource_name}' stored in resource table with ID: {resource.resource_id}"
+                        "Resource stored in resource table from template",
+                        event_type=EventType.RESOURCE_CREATE,
+                        template_name=template_name,
+                        resource_name=resource_name,
+                        resource_id=resource.resource_id,
                     )
                 else:
                     self.logger.info(
-                        f"Created resource '{resource_name}' from template (not added to database)"
+                        "Created resource from template (not added to database)",
+                        event_type=EventType.RESOURCE_CREATE,
+                        template_name=template_name,
+                        resource_name=resource_name,
                     )
 
                 self.logger.info(
-                    f"Created resource '{resource_name}' from template '{template_name}'"
+                    "Created resource from template",
+                    event_type=EventType.RESOURCE_CREATE,
+                    template_name=template_name,
+                    resource_name=resource_name,
                 )
                 return resource
 
         except Exception as e:
             self.logger.error(
-                f"Error creating resource from template: \n{traceback.format_exc()}"
+                "Error creating resource from template",
+                event_type=EventType.RESOURCE_CREATE,
+                template_name=template_name,
+                resource_name=resource_name,
+                error=str(e),
+                exc_info=True,
             )
-            raise e
+            raise
 
     def get_template_info(
         self,
@@ -1294,9 +1389,13 @@ class ResourceInterface:
 
         except Exception as e:
             self.logger.error(
-                f"Error getting template info: \n{traceback.format_exc()}"
+                "Error getting template info",
+                event_type=EventType.DATA_QUERY,
+                template_name=template_name,
+                error=str(e),
+                exc_info=True,
             )
-            raise e
+            raise
 
     def get_templates_by_category(
         self,
@@ -1353,9 +1452,12 @@ class ResourceInterface:
 
         except Exception as e:
             self.logger.error(
-                f"Error getting templates by tags: \n{traceback.format_exc()}"
+                "Error getting templates by tags",
+                event_type=EventType.DATA_QUERY,
+                error=str(e),
+                exc_info=True,
             )
-            raise e
+            raise
 
     def _cleanup_expired_locks(self, session: Session) -> None:
         """Clean up expired locks."""
@@ -1376,10 +1478,19 @@ class ResourceInterface:
 
             if expired_resources:
                 session.commit()
-                self.logger.info(f"Cleaned up {len(expired_resources)} expired locks")
+                self.logger.info(
+                    "Cleaned up expired locks",
+                    event_type=EventType.RESOURCE_RELEASE,
+                    expired_lock_count=len(expired_resources),
+                )
 
         except Exception as e:
-            self.logger.error(f"Error cleaning up expired locks: {e}")
+            self.logger.error(
+                "Error cleaning up expired locks",
+                event_type=EventType.MANAGER_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
 
     def _check_resource_lock(
         self,
@@ -1453,12 +1564,20 @@ class ResourceInterface:
                 session.refresh(resource_row)
 
                 self.logger.info(
-                    f"Lock acquired on resource {resource_id} by {client_id}"
+                    "Lock acquired on resource",
+                    event_type=EventType.RESOURCE_ALLOCATE,
+                    resource_id=resource_id,
+                    client_id=client_id,
                 )
                 return resource_row.to_data_model()
 
         except Exception as e:
-            self.logger.error(f"Error acquiring lock: {e}")
+            self.logger.error(
+                "Error acquiring lock",
+                event_type=EventType.RESOURCE_ALLOCATE,
+                error=str(e),
+                exc_info=True,
+            )
             return None
 
     def release_lock(
@@ -1495,7 +1614,11 @@ class ResourceInterface:
                     != resource_row.locked_by  # And client doesn't match (including None case)
                 ):
                     self.logger.warning(
-                        f"Cannot release lock on {resource_id}: not owned by {client_id}"
+                        "Cannot release lock: not owned by client",
+                        event_type=EventType.RESOURCE_RELEASE,
+                        resource_id=resource_id,
+                        client_id=client_id,
+                        locked_by=resource_row.locked_by,
                     )
                     return None
 
@@ -1505,11 +1628,21 @@ class ResourceInterface:
                 session.merge(resource_row)
                 session.commit()
                 session.refresh(resource_row)
-                self.logger.info(f"Lock released on resource {resource_id}")
+                self.logger.info(
+                    "Lock released on resource",
+                    event_type=EventType.RESOURCE_RELEASE,
+                    resource_id=resource_id,
+                )
                 return resource_row.to_data_model()
 
         except Exception as e:
-            self.logger.error(f"Error releasing lock: {e}")
+            self.logger.error(
+                "Error releasing lock",
+                event_type=EventType.RESOURCE_RELEASE,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
+            )
             return None
 
     def is_locked(
@@ -1549,7 +1682,13 @@ class ResourceInterface:
                 return False, None
 
         except Exception as e:
-            self.logger.error(f"Error checking lock status: {e}")
+            self.logger.error(
+                "Error checking lock status",
+                event_type=EventType.DATA_QUERY,
+                resource_id=resource,
+                error=str(e),
+                exc_info=True,
+            )
             return False, None
 
     def query_resource_hierarchy(
@@ -1630,6 +1769,10 @@ class ResourceInterface:
 
         except Exception as e:
             self.logger.error(
-                f"Error querying resource hierarchy: \n{traceback.format_exc()}"
+                "Error querying resource hierarchy",
+                event_type=EventType.DATA_QUERY,
+                resource_id=resource_id,
+                error=str(e),
+                exc_info=True,
             )
-            raise e
+            raise

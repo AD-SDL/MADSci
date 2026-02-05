@@ -1,10 +1,10 @@
 """Database version checking and validation for MADSci."""
 
 import importlib.metadata
-import traceback
 from typing import Optional
 
 from madsci.client.event_client import EventClient
+from madsci.common.types.event_types import EventType
 from madsci.resource_manager.resource_tables import SchemaVersionTable
 from pydantic_extra_types.semantic_version import SemanticVersion
 from sqlalchemy import inspect
@@ -25,14 +25,21 @@ class DatabaseVersionChecker:
         if hasattr(self, "engine") and self.engine:
             self.engine.dispose()
             if hasattr(self, "logger") and self.logger:
-                self.logger.debug("Database version checker engine disposed")
+                self.logger.debug(
+                    "Database version checker engine disposed",
+                    event_type=EventType.LOG_DEBUG,
+                )
 
     def get_current_madsci_version(self) -> str:
         """Get the current MADSci version from the package."""
         try:
             return importlib.metadata.version("madsci")
         except importlib.metadata.PackageNotFoundError as e:
-            self.logger.error("MADSci package not found in the current environment")
+            self.logger.error(
+                "MADSci package not found in the current environment",
+                event_type=EventType.MANAGER_ERROR,
+                exc_info=True,
+            )
             raise RuntimeError(
                 "Cannot determine MADSci version: package not found. "
                 "Please ensure MADSci is properly installed in the current environment."
@@ -56,7 +63,9 @@ class DatabaseVersionChecker:
 
         except Exception:
             self.logger.error(
-                f"Error getting database version: {traceback.format_exc()}"
+                "Error getting database version",
+                event_type=EventType.MANAGER_ERROR,
+                exc_info=True,
             )
             return None
 
@@ -138,7 +147,11 @@ class DatabaseVersionChecker:
             return v1.major == v2.major and v1.minor == v2.minor
         except Exception as e:
             self.logger.warning(
-                f"Could not parse versions for comparison ('{version1}', '{version2}'): {e}"
+                "Could not parse versions for comparison",
+                event_type=EventType.MANAGER_ERROR,
+                version1=version1,
+                version2=version2,
+                error=str(e),
             )
             # If we can't parse, fall back to exact string comparison
             return version1 == version2
@@ -163,30 +176,45 @@ class DatabaseVersionChecker:
         if not self.is_version_tracked():
             cmds = self._both_commands()
             self.logger.warning(
-                "No version tracking found. Database needs migration to establish proper schema."
+                "No version tracking found; database needs migration to establish schema",
+                event_type=EventType.MANAGER_START,
             )
             self.logger.info(
-                "To enable version tracking, run the migration tool using one of:"
+                "To enable version tracking, run the migration tool using one of:",
+                event_type=EventType.MANAGER_START,
             )
-            self.logger.info(f"  • Bare metal:     {cmds['bare_metal']}")
-            self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
+            self.logger.info(
+                "Migration command (bare metal)",
+                event_type=EventType.MANAGER_START,
+                command=cmds["bare_metal"],
+            )
+            self.logger.info(
+                "Migration command (docker compose)",
+                event_type=EventType.MANAGER_START,
+                command=cmds["docker_compose"],
+            )
             # Optional: explain default backup location without printing a user path
             self.logger.info(
-                "Backups default to .madsci/postgresql/backups relative to the working directory."
+                "Backups default to .madsci/postgresql/backups relative to the working directory.",
+                event_type=EventType.MANAGER_START,
             )
             return True, current_version, None
 
         # Version IS tracked - check for mismatch using major.minor comparison
         if not self.versions_match(current_version, db_version):
             self.logger.warning(
-                f"Version mismatch (major.minor): "
-                f"MADSci v{current_version}, Database v{db_version}"
+                "Version mismatch (major.minor)",
+                event_type=EventType.MANAGER_ERROR,
+                madsci_version=current_version,
+                database_version=db_version,
             )
             return True, current_version, db_version
 
         self.logger.info(
-            f"Database version {db_version} is compatible with MADSci version {current_version} "
-            "(major.minor versions match)"
+            "Database schema is compatible with installed MADSci",
+            event_type=EventType.MANAGER_START,
+            madsci_version=current_version,
+            database_version=db_version,
         )
         return False, current_version, db_version
 
@@ -205,7 +233,9 @@ class DatabaseVersionChecker:
         # Handle completely fresh database auto-initialization
         if needs_migration and db_version is None and self.is_fresh_database():
             self.logger.info(
-                f"Auto-initializing fresh database with MADSci version {madsci_version}"
+                "Auto-initializing fresh database",
+                event_type=EventType.MANAGER_START,
+                madsci_version=madsci_version,
             )
             try:
                 # Create schema version table and record initial version
@@ -215,11 +245,18 @@ class DatabaseVersionChecker:
                     f"Auto-initialized schema version {madsci_version}",
                 )
                 self.logger.info(
-                    f"Successfully auto-initialized database with version {madsci_version}"
+                    "Successfully auto-initialized database schema version",
+                    event_type=EventType.MANAGER_START,
+                    madsci_version=madsci_version,
                 )
                 return
             except Exception as e:
-                self.logger.error(f"Failed to auto-initialize database: {e}")
+                self.logger.error(
+                    "Failed to auto-initialize database",
+                    event_type=EventType.MANAGER_ERROR,
+                    error=str(e),
+                    exc_info=True,
+                )
                 raise RuntimeError(f"Failed to auto-initialize database: {e}") from e
 
         if needs_migration:
@@ -233,17 +270,32 @@ class DatabaseVersionChecker:
                 f"  • Docker Compose: {cmds['docker_compose']}\n"
                 "Note: backups default to .madsci/postgresql/backups relative to the working directory."
             )
-            self.logger.error("Database schema version mismatch detected")
-            self.logger.error(message)
+            self.logger.error(
+                "Database schema version mismatch detected",
+                event_type=EventType.MANAGER_ERROR,
+            )
+            self.logger.error(
+                "Database migration required",
+                event_type=EventType.MANAGER_ERROR,
+                message=message,
+            )
             raise RuntimeError(message)
 
     def create_version_table_if_not_exists(self) -> None:
         """Create the schema version table if it doesn't exist."""
         try:
             SchemaVersionTable.metadata.create_all(self.engine)
-            self.logger.info("Schema version table created")
+            self.logger.info(
+                "Schema version table created",
+                event_type=EventType.MANAGER_START,
+            )
         except Exception as e:
-            self.logger.error(f"Error creating schema version table: {e}")
+            self.logger.error(
+                "Error creating schema version table",
+                event_type=EventType.MANAGER_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     def record_version(
@@ -264,7 +316,9 @@ class DatabaseVersionChecker:
                     existing_version.migration_notes = migration_notes
                     session.add(existing_version)
                     self.logger.info(
-                        f"Updated existing database version record: {version}"
+                        "Updated existing database version record",
+                        event_type=EventType.MANAGER_START,
+                        version=version,
                     )
                 else:
                     # Create new record
@@ -272,11 +326,20 @@ class DatabaseVersionChecker:
                         version=version, migration_notes=migration_notes
                     )
                     session.add(version_entry)
-                    self.logger.info(f"Recorded new database version: {version}")
+                    self.logger.info(
+                        "Recorded new database version",
+                        event_type=EventType.MANAGER_START,
+                        version=version,
+                    )
 
                 session.commit()
         except Exception as e:
-            self.logger.error(f"Error recording version: {e}")
+            self.logger.error(
+                "Error recording version",
+                event_type=EventType.MANAGER_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     def is_fresh_database(self) -> bool:
@@ -302,13 +365,23 @@ class DatabaseVersionChecker:
 
             if not has_resource_tables:
                 self.logger.info(
-                    "No existing resource tables found, treating as fresh database"
+                    "No existing resource tables found; treating as fresh database",
+                    event_type=EventType.MANAGER_START,
                 )
                 return True
 
-            self.logger.info(f"Found existing tables: {existing_tables}")
+            self.logger.info(
+                "Found existing tables",
+                event_type=EventType.MANAGER_START,
+                tables=existing_tables,
+            )
             return False
 
         except Exception as e:
-            self.logger.warning(f"Could not check database tables: {e}")
+            self.logger.warning(
+                "Could not check database tables",
+                event_type=EventType.MANAGER_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
             return False
