@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from madsci.client.event_client import EventClient
+from madsci.common.types.event_types import EventType
 
 from .backup_validator import BackupValidator
 from .base_backup import BackupInfo
@@ -35,7 +36,11 @@ class BackupManager:
             List of BackupInfo objects sorted by creation time (newest first)
         """
         if not backup_dir.exists():
-            self.logger.warning(f"Backup directory does not exist: {backup_dir}")
+            self.logger.warning(
+                "Backup directory does not exist",
+                event_type=EventType.SYSTEM_WARNING,
+                backup_dir=str(backup_dir),
+            )
             return []
 
         backups = []
@@ -61,7 +66,12 @@ class BackupManager:
                 if backup_info:
                     backups.append(backup_info)
             except Exception as e:
-                self.logger.warning(f"Error processing backup {backup_path}: {e}")
+                self.logger.warning(
+                    "Error processing backup",
+                    event_type=EventType.SYSTEM_WARNING,
+                    backup_path=str(backup_path),
+                    error=str(e),
+                )
 
         # Sort by creation time (newest first)
         backups.sort(key=lambda x: x.created_at, reverse=True)
@@ -107,7 +117,12 @@ class BackupManager:
             )
 
         except Exception as e:
-            self.logger.error(f"Error creating BackupInfo for {backup_path}: {e}")
+            self.logger.error(
+                "Error creating backup metadata",
+                event_type=EventType.SYSTEM_ERROR,
+                backup_path=str(backup_path),
+                error=str(e),
+            )
             return None
 
     def _get_directory_size(self, directory: Path) -> int:
@@ -145,9 +160,18 @@ class BackupManager:
             try:
                 self._delete_backup_and_metadata(backup.backup_path)
                 removed_count += 1
-                self.logger.info(f"Removed old backup: {backup.backup_path}")
+                self.logger.info(
+                    "Removed old backup",
+                    event_type=EventType.SYSTEM_INFO,
+                    backup_path=str(backup.backup_path),
+                )
             except Exception as e:
-                self.logger.error(f"Error removing backup {backup.backup_path}: {e}")
+                self.logger.error(
+                    "Error removing backup",
+                    event_type=EventType.SYSTEM_ERROR,
+                    backup_path=str(backup.backup_path),
+                    error=str(e),
+                )
 
         return removed_count
 
@@ -283,9 +307,18 @@ class BackupManager:
                     else:
                         shutil.rmtree(backup_path)
                     cleaned_files.append(backup_path)
-                    self.logger.info(f"Cleaned up incomplete backup: {backup_path}")
+                    self.logger.info(
+                        "Cleaned up incomplete backup",
+                        event_type=EventType.SYSTEM_INFO,
+                        backup_path=str(backup_path),
+                    )
                 except Exception as e:
-                    self.logger.error(f"Error cleaning up {backup_path}: {e}")
+                    self.logger.error(
+                        "Error cleaning up incomplete backup",
+                        event_type=EventType.SYSTEM_ERROR,
+                        backup_path=str(backup_path),
+                        error=str(e),
+                    )
 
         return cleaned_files
 
@@ -300,9 +333,18 @@ class BackupManager:
                 try:
                     metadata_file.unlink()
                     cleaned_files.append(metadata_file)
-                    self.logger.info(f"Cleaned up orphaned metadata: {metadata_file}")
+                    self.logger.info(
+                        "Cleaned up orphaned metadata",
+                        event_type=EventType.SYSTEM_INFO,
+                        metadata_file=str(metadata_file),
+                    )
                 except Exception as e:
-                    self.logger.error(f"Error cleaning up {metadata_file}: {e}")
+                    self.logger.error(
+                        "Error cleaning up orphaned metadata",
+                        event_type=EventType.SYSTEM_ERROR,
+                        metadata_file=str(metadata_file),
+                        error=str(e),
+                    )
 
         return cleaned_files
 
@@ -317,9 +359,18 @@ class BackupManager:
                 try:
                     checksum_file.unlink()
                     cleaned_files.append(checksum_file)
-                    self.logger.info(f"Cleaned up orphaned checksum: {checksum_file}")
+                    self.logger.info(
+                        "Cleaned up orphaned checksum",
+                        event_type=EventType.SYSTEM_INFO,
+                        checksum_file=str(checksum_file),
+                    )
                 except Exception as e:
-                    self.logger.error(f"Error cleaning up {checksum_file}: {e}")
+                    self.logger.error(
+                        "Error cleaning up orphaned checksum",
+                        event_type=EventType.SYSTEM_ERROR,
+                        checksum_file=str(checksum_file),
+                        error=str(e),
+                    )
 
         return cleaned_files
 
@@ -354,7 +405,10 @@ class BackupManager:
                 invalid_backups += 1
                 corrupted_backups.append(str(backup.backup_path))
                 self.logger.error(
-                    f"Error checking integrity of {backup.backup_path}: {e}"
+                    "Error checking backup integrity",
+                    event_type=EventType.SYSTEM_ERROR,
+                    backup_path=str(backup.backup_path),
+                    error=str(e),
                 )
 
         return {

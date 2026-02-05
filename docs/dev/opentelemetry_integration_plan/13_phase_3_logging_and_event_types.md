@@ -52,6 +52,11 @@ Additional updates in February 2026 (now audited and included in the hook scope)
 - `src/madsci_resource_manager/madsci/resource_manager/migration_tool.py`
 - `src/madsci_experiment_manager/madsci/experiment_manager/experiment_server.py`
 
+Additional updates in February 2026 (this change):
+
+- Added `src/madsci_common/madsci/common/backup_tools/backup_manager.py` to the `madsci-logging-patterns` pre-commit hook scope.
+- Audited and updated BackupManager logging to avoid f-strings and to include `event_type` for all EventClient log calls.
+
 Notes:
 
 - This Phase 3 doc previously listed some of these files as deferred; they are now included above under
