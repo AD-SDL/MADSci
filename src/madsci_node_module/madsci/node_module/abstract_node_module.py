@@ -3,7 +3,6 @@
 import contextlib
 import inspect
 import threading
-import traceback
 from pathlib import Path
 from typing import (
     Annotated,
@@ -117,7 +116,9 @@ class AbstractNode(MadsciClientMixin):
             )
             if not Path(node_definition_path).exists():
                 self.logger.warning(
-                    f"Node definition file '{node_definition_path}' not found, using default node definition."
+                    "Node definition file not found; using default node definition",
+                    event_type=EventType.NODE_CONFIG_UPDATE,
+                    node_definition_path=str(node_definition_path),
                 )
                 module_name = to_snake_case(self.__class__.__name__)
                 node_name = str(Path(node_definition_path).stem)
@@ -137,7 +138,10 @@ class AbstractNode(MadsciClientMixin):
             < 0
         ):
             self.logger.warning(
-                "The module version in the Node Module's source code does not match the version specified in your Node Definition. Your module may have been updated. We recommend checking to ensure compatibility, and then updating the version in your node definition to match."
+                "Node module version does not match NodeDefinition version",
+                event_type=EventType.NODE_CONFIG_UPDATE,
+                node_module_version=self.module_version,
+                node_definition_version=str(self.node_definition.module_version),
             )
 
         # * Synthesize the node info
@@ -175,7 +179,10 @@ class AbstractNode(MadsciClientMixin):
         self._configure_clients()
 
         # * Log startup info
-        self.logger.debug(f"{self.node_definition=}")
+        self.logger.debug(
+            "Node definition",
+            node_definition=self.node_definition.model_dump(mode="json"),
+        )
 
         # * Kick off the startup logic in a separate thread
         # * This allows implementations to start servers, listeners, etc.
@@ -363,13 +370,21 @@ class AbstractNode(MadsciClientMixin):
     def lock(self) -> bool:
         """Admin command to lock the node."""
         self.node_status.locked = True
-        self.logger.info("Node locked")
+        self.logger.info(
+            "Node locked",
+            event_type=EventType.NODE_STATUS_UPDATE,
+            node_id=self.node_definition.node_id,
+        )
         return True
 
     def unlock(self) -> bool:
         """Admin command to unlock the node."""
         self.node_status.locked = False
-        self.logger.info("Node unlocked")
+        self.logger.info(
+            "Node unlocked",
+            event_type=EventType.NODE_STATUS_UPDATE,
+            node_id=self.node_definition.node_id,
+        )
         return True
 
     """------------------------------------------------------------------------------------------------"""
@@ -437,7 +452,10 @@ class AbstractNode(MadsciClientMixin):
                 include_extras=True,
             ).items():
                 self.logger.debug(
-                    f"Adding parameter {parameter_name} of type {parameter_type} to action {action_name}",
+                    "Action parameter discovered",
+                    action_name=action_name,
+                    parameter_name=parameter_name,
+                    parameter_type=str(parameter_type),
                 )
                 if parameter_name == "return":
                     # TODO: Extract the return type and add it to the action definition
@@ -733,13 +751,25 @@ class AbstractNode(MadsciClientMixin):
             if arg_name in parameters:
                 arg_dict[arg_name] = arg_value
             else:
-                self.logger.log_warning(f"Ignoring unexpected argument {arg_name}")
+                self.logger.log_warning(
+                    "Ignoring unexpected argument",
+                    event_type=EventType.ACTION_STATUS_CHANGE,
+                    argument_name=arg_name,
+                    action_id=action_request.action_id,
+                    action_name=action_request.action_name,
+                )
 
         for file in action_request.files:
             if file in parameters:
                 arg_dict[file] = action_request.files[file]
             else:
-                self.logger.log_warning(f"Ignoring unexpected file {file}")
+                self.logger.log_warning(
+                    "Ignoring unexpected file",
+                    event_type=EventType.ACTION_STATUS_CHANGE,
+                    file_name=str(file),
+                    action_id=action_request.action_id,
+                    action_name=action_request.action_name,
+                )
 
     def _validate_var_args_compatibility(
         self,
@@ -1091,9 +1121,10 @@ class AbstractNode(MadsciClientMixin):
         if len(self.node_status.errors) > 100:
             self.node_status.errors = self.node_status.errors[1:]
         self.logger.error(
-            Event(event_type=EventType.NODE_ERROR, event_data=madsci_error)
+            "Node exception",
+            event_type=EventType.NODE_ERROR,
+            error=madsci_error,
         )
-        self.logger.error(traceback.format_exc())
 
     def _update_status(self) -> None:
         """Update the node status."""
@@ -1143,7 +1174,10 @@ class AbstractNode(MadsciClientMixin):
             self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
         except Exception as e:
             self.logger.warning(
-                f"Failed to update node info file: {e}",
+                "Failed to update node info file",
+                event_type=EventType.NODE_CONFIG_UPDATE,
+                error=str(e),
+                exc_info=True,
             )
 
     def _check_required_args(self, action_request: ActionRequest) -> None:
@@ -1253,10 +1287,9 @@ class AbstractNode(MadsciClientMixin):
             self.node_status.errored = True
         else:
             self.logger.info(
-                Event(
-                    event_type=EventType.NODE_START,
-                    event_data=self.node_definition.model_dump(mode="json"),
-                )
+                "Node started",
+                event_type=EventType.NODE_START,
+                node_definition=self.node_definition.model_dump(mode="json"),
             )
         finally:
             # * Mark the node as no longer initializing
@@ -1270,8 +1303,7 @@ class AbstractNode(MadsciClientMixin):
         else:
             self.action_history[action_result.action_id].append(action_result)
         self.logger.info(
-            Event(
-                event_type=EventType.ACTION_STATUS_CHANGE,
-                event_data=action_result,
-            )
+            "Action status changed",
+            event_type=EventType.ACTION_STATUS_CHANGE,
+            action_result=action_result,
         )
