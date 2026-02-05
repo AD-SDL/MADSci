@@ -8,7 +8,7 @@ from classy_fastapi import get, post
 from fastapi import HTTPException
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
-from madsci.common.types.event_types import Event, EventType
+from madsci.common.types.event_types import EventType
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentManagerDefinition,
@@ -174,12 +174,11 @@ class ExperimentManager(
 
             self.experiments.insert_one(experiment.to_mongo())
 
-            # Log the experiment start event
-            self.logger.log(
-                event=Event(
-                    event_type=EventType.EXPERIMENT_START,
-                    event_data={"experiment": experiment},
-                )
+            self.logger.info(
+                "Experiment started",
+                event_type=EventType.EXPERIMENT_START,
+                experiment_id=experiment.experiment_id,
+                run_name=experiment.run_name,
             )
             return experiment
 
@@ -200,11 +199,11 @@ class ExperimentManager(
                 {"_id": experiment_id},
                 {"$set": experiment.to_mongo()},
             )
-            self.logger.log(
-                event=Event(
-                    event_type=EventType.EXPERIMENT_COMPLETE,
-                    event_data={"experiment": experiment},
-                )
+            self.logger.info(
+                "Experiment completed",
+                event_type=EventType.EXPERIMENT_COMPLETE,
+                experiment_id=experiment.experiment_id,
+                run_name=experiment.run_name,
             )
             return experiment
 
@@ -224,11 +223,11 @@ class ExperimentManager(
                 {"_id": experiment_id},
                 {"$set": experiment.to_mongo()},
             )
-            self.logger.log(
-                event=Event(
-                    event_type=EventType.EXPERIMENT_CONTINUED,
-                    event_data={"experiment": experiment},
-                )
+            self.logger.info(
+                "Experiment continued",
+                event_type=EventType.EXPERIMENT_CONTINUED,
+                experiment_id=experiment.experiment_id,
+                run_name=experiment.run_name,
             )
             return experiment
 
@@ -248,11 +247,11 @@ class ExperimentManager(
                 {"_id": experiment_id},
                 {"$set": experiment.to_mongo()},
             )
-            self.logger.log(
-                event=Event(
-                    event_type=EventType.EXPERIMENT_PAUSE,
-                    event_data={"experiment": experiment},
-                )
+            self.logger.info(
+                "Experiment paused",
+                event_type=EventType.EXPERIMENT_PAUSE,
+                experiment_id=experiment.experiment_id,
+                run_name=experiment.run_name,
             )
             return experiment
 
@@ -272,11 +271,11 @@ class ExperimentManager(
                 {"_id": experiment_id},
                 {"$set": experiment.to_mongo()},
             )
-            self.logger.log(
-                event=Event(
-                    event_type=EventType.EXPERIMENT_CANCELLED,
-                    event_data={"experiment": experiment},
-                )
+            self.logger.info(
+                "Experiment cancelled",
+                event_type=EventType.EXPERIMENT_CANCELLED,
+                experiment_id=experiment.experiment_id,
+                run_name=experiment.run_name,
             )
             return experiment
 
@@ -296,11 +295,11 @@ class ExperimentManager(
                 {"_id": experiment_id},
                 {"$set": experiment.to_mongo()},
             )
-            self.logger.log(
-                event=Event(
-                    event_type=EventType.EXPERIMENT_FAILED,
-                    event_data={"experiment": experiment},
-                )
+            self.logger.error(
+                "Experiment failed",
+                event_type=EventType.EXPERIMENT_FAILED,
+                experiment_id=experiment.experiment_id,
+                run_name=experiment.run_name,
             )
             return experiment
 
