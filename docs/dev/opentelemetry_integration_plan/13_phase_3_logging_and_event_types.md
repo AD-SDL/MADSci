@@ -32,6 +32,7 @@ Audited/cleaned (passes the logging-pattern hook):
 - `src/madsci_location_manager/madsci/location_manager/transfer_planner.py`
 - `src/madsci_data_manager/madsci/data_manager/data_server.py`
 - `src/madsci_experiment_manager/madsci/experiment_manager/experiment_server.py`
+- `src/madsci_squid/madsci/squid/lab_server.py`
 
 Deferred/backlog (not yet audited; tracked for follow-up):
 

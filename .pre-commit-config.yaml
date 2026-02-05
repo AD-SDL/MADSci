@@ -43,5 +43,5 @@ repos:
         entry: python scripts/precommit_check_logging_patterns.py
         language: system
         types: [python]
-        files: ^src/(madsci_common/madsci/common/(manager_base\.py|types/event_types\.py)|madsci_event_manager/madsci/event_manager/(event_server\.py|notifications\.py)|madsci_resource_manager/madsci/resource_manager/resource_server\.py|madsci_location_manager/madsci/location_manager/(location_server\.py|transfer_planner\.py)|madsci_data_manager/madsci/data_manager/data_server\.py|madsci_experiment_manager/madsci/experiment_manager/experiment_server\.py)$
+        files: ^src/(madsci_common/madsci/common/(manager_base\.py|types/event_types\.py)|madsci_event_manager/madsci/event_manager/(event_server\.py|notifications\.py)|madsci_resource_manager/madsci/resource_manager/resource_server\.py|madsci_location_manager/madsci/location_manager/(location_server\.py|transfer_planner\.py)|madsci_data_manager/madsci/data_manager/data_server\.py|madsci_experiment_manager/madsci/experiment_manager/experiment_server\.py|madsci_squid/madsci/squid/lab_server\.py)$
         exclude: ^(tests/|src/.*/tests/)
