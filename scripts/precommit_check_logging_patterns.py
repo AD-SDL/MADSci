@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 TARGET_METHODS = {
+    # Structlog/EventClient style
     "debug",
     "info",
     "warning",
@@ -17,6 +18,8 @@ TARGET_METHODS = {
     "log_warning",
     "log_error",
     "log_critical",
+    # stdlib logging style
+    "exception",
 }
 
 
@@ -51,6 +54,41 @@ def _has_fstring_arg(node: ast.Call) -> bool:
     return False
 
 
+def _is_stdlib_logger_call(node: ast.Call) -> bool:
+    func = node.func
+    if not isinstance(func, ast.Attribute):
+        return False
+    if not isinstance(func.value, ast.Name):
+        return False
+
+    # Heuristic: logging.getLogger(...).info(...) patterns become `logger.info(...)`
+    # and often use `%s` formatting rather than structured kwargs.
+    return func.value.id in {"logger", "log", "logging"}
+
+
+def _requires_event_type(node: ast.Call) -> bool:
+    func = node.func
+    if not isinstance(func, ast.Attribute):
+        return False
+
+    if func.attr not in {
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "log_info",
+        "log_warning",
+        "log_error",
+        "log_critical",
+    }:
+        return False
+
+    if _is_stdlib_logger_call(node):
+        return False
+
+    return True
+
+
 def main(argv: list[str]) -> int:
     files = _iter_py_files(argv[1:])
     violations: list[str] = []
@@ -75,23 +113,13 @@ def main(argv: list[str]) -> int:
                     f"{file_path}:{node.lineno}:{node.col_offset + 1}: f-string used in log call"
                 )
 
-            # Only enforce event_type for info+warning+error+critical; debug is often too noisy.
-            func = node.func
-            assert isinstance(func, ast.Attribute)
-            if func.attr in {
-                "info",
-                "warning",
-                "error",
-                "critical",
-                "log_info",
-                "log_warning",
-                "log_error",
-                "log_critical",
-            }:
-                if not _has_kw(node, "event_type"):
-                    violations.append(
-                        f"{file_path}:{node.lineno}:{node.col_offset + 1}: missing event_type kwarg"
-                    )
+            if not _requires_event_type(node):
+                continue
+
+            if not _has_kw(node, "event_type"):
+                violations.append(
+                    f"{file_path}:{node.lineno}:{node.col_offset + 1}: missing event_type kwarg"
+                )
 
     if violations:
         for v in violations:
