@@ -44,28 +44,15 @@ Audited/cleaned (passes the logging-pattern hook):
 - `src/madsci_node_module/madsci/node_module/rest_node_module.py`
 - `src/madsci_node_module/madsci/node_module/type_analyzer.py`
 
-Update (February 2026):
+Additional updates in February 2026 (now audited and included in the hook scope):
 
-- `src/madsci_client/madsci/client/client_mixin.py` is now audited and included in the hook scope.
-- `src/madsci_experiment_application/madsci/experiment_application/experiment_application.py` is now audited and included in the hook scope.
+- `src/madsci_client/madsci/client/client_mixin.py`
+- `src/madsci_experiment_application/madsci/experiment_application/experiment_application.py`
 
-Deferred/backlog (not yet audited; tracked for follow-up):
+Notes:
 
-- Workcell + node runtime execution paths (`workcell_engine.py`, `abstract_node_module.py`) need a careful migration.
-- EventManager analyzers (e.g. `time_series_analyzer.py`, `utilization_analyzer.py`) still have legacy f-string logs.
-- Common backup/migration tooling has legacy logs.
-
-Update (February 2026):
-
-- `utilization_analyzer.py` is now audited and included in the hook scope.
-- `time_series_analyzer.py` is now audited and included in the hook scope.
-- `workcell_engine.py` is now audited and included in the hook scope.
-- `lab_server.py` (Squid) is now audited and included in the hook scope.
-- `abstract_node_module.py` (NodeModule) is now audited and included in the hook scope.
-- `type_analyzer.py` (NodeModule) is now audited and included in the hook scope.
-- `helpers.py` (NodeModule) is now audited and included in the hook scope.
-- `rest_node_module.py` (NodeModule) is now audited and included in the hook scope.
-- `__init__.py` (NodeModule) is now audited and included in the hook scope.
+- This Phase 3 doc previously listed some of these files as deferred; they are now included above under
+  audited/cleaned or additional updates.
 
 Operational notes:
 
