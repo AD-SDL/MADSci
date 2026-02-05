@@ -55,7 +55,7 @@ Additional updates in February 2026 (now audited and included in the hook scope)
 Additional updates in February 2026 (this change):
 
 - Added `src/madsci_common/madsci/common/backup_tools/backup_manager.py` to the `madsci-logging-patterns` pre-commit hook scope.
-- Audited and updated BackupManager logging to avoid f-strings and to include `event_type` for all EventClient log calls.
+- Audited and updated BackupManager logging to avoid f-strings and to include `event_type` for all EventClient log calls (using `EventType.LOG_*`).
 
 Notes:
 
