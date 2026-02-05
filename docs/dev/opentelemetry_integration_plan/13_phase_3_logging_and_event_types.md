@@ -62,6 +62,11 @@ Additional updates in February 2026 (logging-audit ratchet):
 - Added `src/madsci_event_manager/madsci/event_manager/events_csv_exporter.py` to the `madsci-logging-patterns` pre-commit hook scope.
 - Audited CSVExporter logging to ensure structured logging (no f-strings) and `event_type` on EventClient-style log calls.
 
+Additional updates in February 2026 (logging-audit ratchet):
+
+- Added `src/madsci_client/madsci/client/workcell_client.py` to the `madsci-logging-patterns` pre-commit hook scope.
+- Audited WorkcellClient logging to ensure structured logging (no f-strings) and `event_type` on EventClient-style log calls.
+
 Notes:
 
 - This Phase 3 doc previously listed some of these files as deferred; they are now included above under

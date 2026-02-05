@@ -11,6 +11,7 @@ from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.client_types import WorkcellClientConfig
+from madsci.common.types.event_types import EventType
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import WorkcellState
 from madsci.common.types.workflow_types import (
@@ -91,7 +92,11 @@ class WorkcellClient:
         response = self.session.get(url, timeout=timeout or self.config.timeout_default)
 
         if not response.ok and response.content:
-            self.logger.error(f"Error querying workflow: {response.content.decode()}")
+            self.logger.error(
+                "Error querying workflow",
+                event_type=EventType.LOG_ERROR,
+                response_content=response.content.decode(),
+            )
 
         response.raise_for_status()
         return Workflow(**response.json())
@@ -117,7 +122,11 @@ class WorkcellClient:
         url = f"{self.workcell_server_url}workflow_definition/{workflow_definition_id}"
         response = self.session.get(url, timeout=timeout or self.config.timeout_default)
         if not response.ok and response.content:
-            self.logger.error(f"Error querying workflow: {response.content.decode()}")
+            self.logger.error(
+                "Error querying workflow definition",
+                event_type=EventType.LOG_ERROR,
+                response_content=response.content.decode(),
+            )
 
         response.raise_for_status()
         return WorkflowDefinition.model_validate(response.json())
@@ -158,7 +167,9 @@ class WorkcellClient:
 
         if not response.ok and response.content:
             self.logger.error(
-                f"Error submitting workflow definition: {response.content.decode()}"
+                "Error submitting workflow definition",
+                event_type=EventType.LOG_ERROR,
+                response_content=response.content.decode(),
             )
         response.raise_for_status()
         return str(response.json())
@@ -242,7 +253,11 @@ class WorkcellClient:
         )
 
         if not response.ok and response.content:
-            self.logger.error(f"Error submitting workflow: {response.content.decode()}")
+            self.logger.error(
+                "Error submitting workflow",
+                event_type=EventType.LOG_ERROR,
+                response_content=response.content.decode(),
+            )
         response.raise_for_status()
         if not await_completion:
             return Workflow(**response.json())
@@ -444,7 +459,13 @@ Options:
                         if step == -1:
                             step = wf.status.current_step_index
                         self.logger.info(
-                            f"Retrying workflow {wf.workflow_id} from step {step}: '{wf.steps[step]}'."
+                            "Retrying workflow from step",
+                            event_type=EventType.WORKFLOW_START,
+                            workflow_id=wf.workflow_id,
+                            step_index=step,
+                            step=wf.steps[step].model_dump()
+                            if wf.steps[step]
+                            else None,
                         )
                         wf = self.retry_workflow(
                             wf.workflow_id,
