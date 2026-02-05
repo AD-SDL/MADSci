@@ -47,6 +47,7 @@ Audited/cleaned (passes the logging-pattern hook):
 Update (February 2026):
 
 - `src/madsci_client/madsci/client/client_mixin.py` is now audited and included in the hook scope.
+- `src/madsci_experiment_application/madsci/experiment_application/experiment_application.py` is now audited and included in the hook scope.
 
 Deferred/backlog (not yet audited; tracked for follow-up):
 
