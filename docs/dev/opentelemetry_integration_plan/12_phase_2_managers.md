@@ -463,6 +463,9 @@ Progress (Implementation Notes, Feb 2026):
   - Attach resource wraps in `attachment.create` span
   - Transfer planning wraps in `transfer.plan` span
     - `src/madsci_location_manager/madsci/location_manager/location_server.py`
+- Added ExperimentManager domain spans:
+  - Experiment lifecycle endpoints wrap in `experiment.*` spans
+    - `src/madsci_experiment_manager/madsci/experiment_manager/experiment_server.py`
 - Optional deps for instrumentation added:
   - `src/madsci_common/pyproject.toml` (`otel-instrumentation` extra)
 
