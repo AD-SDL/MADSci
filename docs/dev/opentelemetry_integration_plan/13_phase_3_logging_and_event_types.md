@@ -35,6 +35,7 @@ Audited/cleaned (passes the logging-pattern hook):
 - `src/madsci_squid/madsci/squid/lab_server.py`
 - `src/madsci_event_manager/madsci/event_manager/utilization_analyzer.py`
 - `src/madsci_event_manager/madsci/event_manager/time_series_analyzer.py`
+- `src/madsci_workcell_manager/madsci/workcell_manager/workcell_engine.py`
 
 Deferred/backlog (not yet audited; tracked for follow-up):
 
@@ -46,6 +47,7 @@ Update (February 2026):
 
 - `utilization_analyzer.py` is now audited and included in the hook scope.
 - `time_series_analyzer.py` is now audited and included in the hook scope.
+- `workcell_engine.py` is now audited and included in the hook scope.
 
 Operational notes:
 

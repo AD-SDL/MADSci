@@ -5,7 +5,6 @@ Engine Class and associated helpers and data
 import concurrent
 import importlib
 import time
-import traceback
 from datetime import datetime
 from typing import Optional, Union
 
@@ -77,7 +76,12 @@ class Engine:
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state()
         time.sleep(self.workcell_settings.cold_start_delay)
-        self.logger.info("Engine initialized, waiting for workflows...")
+        self.logger.info(
+            "Engine initialized, waiting for workflows",
+            event_type=EventType.WORKCELL_START,
+            workcell_id=self.workcell_definition.manager_id,
+            workcell_name=self.workcell_definition.name,
+        )
 
     @threaded_daemon
     def spin(self) -> None:
@@ -147,9 +151,21 @@ class Engine:
                         self.run_next_step()
                         scheduler_tick = time.time()
             except Exception as e:
-                self.logger.error(str(e), exc_info=True)
+                self.logger.error(
+                    "Unhandled exception in engine loop",
+                    event_type=EventType.MANAGER_ERROR,
+                    workcell_id=self.workcell_definition.manager_id,
+                    workcell_name=self.workcell_definition.name,
+                    error=str(e),
+                    exc_info=True,
+                )
+                retry_delay_s = 10 * self.workcell_settings.node_update_interval
                 self.logger.warning(
-                    f"Error in engine loop, waiting {10 * self.workcell_settings.node_update_interval} seconds before trying again."
+                    "Error in engine loop, delaying before retry",
+                    event_type=EventType.MANAGER_ERROR,
+                    workcell_id=self.workcell_definition.manager_id,
+                    workcell_name=self.workcell_definition.name,
+                    retry_delay_s=retry_delay_s,
                 )
                 with self.state_handler.wc_state_lock():
                     workcell_status = self.state_handler.get_workcell_status()
@@ -176,7 +192,12 @@ class Engine:
                 # * Check if the workflow is already complete
                 if next_wf.status.current_step_index >= len(next_wf.steps):
                     self.logger.warning(
-                        f"Workflow {next_wf.workflow_id} has no more steps, marking as completed"
+                        "Workflow has no more steps, marking as completed",
+                        event_type=EventType.WORKFLOW_COMPLETE,
+                        workflow_id=next_wf.workflow_id,
+                        workflow_name=next_wf.name,
+                        current_step_index=next_wf.status.current_step_index,
+                        step_count=len(next_wf.steps),
                     )
                     next_wf.status.completed = True
                     self.state_handler.set_active_workflow(next_wf)
@@ -192,7 +213,12 @@ class Engine:
                 self.state_handler.set_active_workflow(next_wf)
                 break
             else:
-                self.logger.info("No workflows ready to run")
+                self.logger.info(
+                    "No workflows ready to run",
+                    event_type=EventType.WORKCELL_STATUS_UPDATE,
+                    workcell_id=self.workcell_definition.manager_id,
+                    workcell_name=self.workcell_definition.name,
+                )
         if next_wf:
             thread = self.run_step(next_wf.workflow_id)
             if await_step_completion:
@@ -314,6 +340,7 @@ class Engine:
                     finally:
                         self.logger.log_info(
                             "Released node lock for action",
+                            event_type=EventType.ACTION_COMPLETE,
                             workflow_id=workflow_id,
                             step_id=step.step_id,
                             node_name=step.node,
@@ -337,7 +364,11 @@ class Engine:
             self.logger.debug(self.state_handler.get_workflow(workflow_id))
         except Exception as e:
             self.logger.error(
-                f"Running step in workflow {workflow_id} triggered unhandled exception: {traceback.format_exc()}"
+                "Running step triggered unhandled exception",
+                event_type=EventType.WORKFLOW_STEP_FAILED,
+                workflow_id=workflow_id,
+                error=str(e),
+                exc_info=True,
             )
             step.result = ActionResult(
                 status=ActionStatus.FAILED,
@@ -373,7 +404,13 @@ class Engine:
                 node_info=node.info, client=client, capability="get_action_status"
             ):
                 self.logger.warning(
-                    f"While running Step {step.step_id} of workflow {wf.workflow_id}, send_action returned a non-terminal response {response}. However, node {step.node} does not support querying an action result."
+                    "Non-terminal action response but node does not support querying",
+                    event_type=EventType.ACTION_STATUS_CHANGE,
+                    workflow_id=wf.workflow_id,
+                    step_id=step.step_id,
+                    node_name=step.node,
+                    action_id=action_id,
+                    action_status=str(response.status),
                 )
                 break
             try:
@@ -390,7 +427,14 @@ class Engine:
                     break
             except Exception as e:
                 self.logger.error(
-                    f"Querying action {action_id} for step {step.step_id} resulted in exception: {e!s}"
+                    "Exception while querying action result",
+                    event_type=EventType.ACTION_FAILED,
+                    workflow_id=wf.workflow_id,
+                    step_id=step.step_id,
+                    node_name=step.node,
+                    action_id=action_id,
+                    error=str(e),
+                    exc_info=True,
                 )
                 if response is None:
                     response = request.unknown(errors=[Error.from_exception(e)])
@@ -399,7 +443,14 @@ class Engine:
                 self.handle_response(wf, step, response)
                 if retry_count >= self.workcell_settings.get_action_result_retries:
                     self.logger.error(
-                        f"Exceeded maximum number of retries for querying action {action_id} for step {step.step_id}"
+                        "Exceeded maximum retries while querying action result",
+                        event_type=EventType.ACTION_FAILED,
+                        workflow_id=wf.workflow_id,
+                        step_id=step.step_id,
+                        node_name=step.node,
+                        action_id=action_id,
+                        retry_count=retry_count,
+                        max_retries=self.workcell_settings.get_action_result_retries,
                     )
                     # Set status to UNKNOWN after exhausting retries
                     response = request.unknown(errors=response.errors)
@@ -450,20 +501,37 @@ class Engine:
                 pass
             elif step.status == ActionStatus.UNKNOWN:
                 self.logger.error(
-                    f"Step {step.step_id} in workflow {workflow_id} ended with unknown status"
+                    "Workflow step ended with unknown status",
+                    event_type=EventType.WORKFLOW_STEP_FAILED,
+                    workflow_id=workflow_id,
+                    step_id=step.step_id,
+                    step_action=step.action,
+                    step_node=step.node,
                 )
                 wf.status.failed = True
                 wf.end_time = datetime.now()
             else:
                 self.logger.error(
-                    f"Step {step.step_id} in workflow {workflow_id} ended with unexpected status {step.status}"
+                    "Workflow step ended with unexpected status",
+                    event_type=EventType.WORKFLOW_STEP_FAILED,
+                    workflow_id=workflow_id,
+                    step_id=step.step_id,
+                    step_action=step.action,
+                    step_node=step.node,
+                    step_status=str(step.status),
                 )
                 wf.status.failed = True
                 wf.end_time = datetime.now()
             self.state_handler.set_active_workflow(wf)
 
             if wf.status.terminal:
-                self.logger.log_info(str(wf))
+                self.logger.log_info(
+                    "Workflow reached terminal state",
+                    event_type=EventType.WORKFLOW_COMPLETE,
+                    workflow_id=wf.workflow_id,
+                    workflow_name=wf.name,
+                    workflow_status=wf.status.model_dump(mode="json"),
+                )
                 self._log_completion_event(wf)
 
     def _feed_data_forward(self, step: Step, wf: Workflow) -> Workflow:
@@ -475,7 +543,11 @@ class Engine:
             ):
                 if step.result.datapoints:
                     self.logger.log_warning(
-                        event=Event(event_data=str(step.result.datapoints))
+                        "Workflow step has datapoints for feed-forward",
+                        event_type=EventType.DATA_QUERY,
+                        workflow_id=wf.workflow_id,
+                        step_id=step.step_id,
+                        step_action=step.action,
                     )
                     datapoint_ids = step.result.datapoints.model_dump()
                     # Fetch actual DataPoint objects from data manager using the IDs
@@ -488,7 +560,14 @@ class Engine:
                         f"Feed-forward parameter {param.key} specified step {param.step} but step has no datapoints"
                     )
                 if param.label is None:
-                    self.logger.log_warning(event=Event(event_data=str(datapoint_dict)))
+                    self.logger.log_warning(
+                        "Feed-forward parameter has no label; selecting based on datapoints",
+                        event_type=EventType.DATA_QUERY,
+                        workflow_id=wf.workflow_id,
+                        step_id=step.step_id,
+                        param_key=param.key,
+                        datapoint_count=len(datapoint_dict),
+                    )
                     if len(datapoint_dict) == 1:
                         datapoint = next(iter(datapoint_dict.values()))
                         wf = self.update_param_value_from_datapoint(
@@ -522,13 +601,24 @@ class Engine:
             )
 
             self.logger.info(
-                f"Logged workflow completion: {workflow.name} ({workflow.workflow_id[-8:]}) - "
-                f"Status: {event_data['status']}, Author: {(event_data.get('definition_metadata') or {}).get('author') or 'Unknown'}, "
-                f"{duration_text}"
+                "Logged workflow completion",
+                event_type=EventType.WORKFLOW_COMPLETE,
+                workflow_id=workflow.workflow_id,
+                workflow_name=workflow.name,
+                workflow_status=event_data.get("status"),
+                workflow_author=(event_data.get("definition_metadata") or {}).get(
+                    "author"
+                )
+                or "Unknown",
+                workflow_duration_text=duration_text,
             )
         except Exception as e:
             self.logger.error(
-                f"Error logging workflow completion event for workflow {workflow.workflow_id}: {e!s}\n{traceback.format_exc()}"
+                "Error logging workflow completion",
+                event_type=EventType.WORKFLOW_COMPLETE,
+                workflow_id=workflow.workflow_id,
+                error=str(e),
+                exc_info=True,
             )
 
     def update_step(self, wf: Workflow, step: Step) -> None:
@@ -597,7 +687,8 @@ class Engine:
                 submitted_datapoint = self.data_client.submit_datapoint(datapoint)
                 datapoint_ids["json_result"] = submitted_datapoint.datapoint_id
                 self.logger.log_debug(
-                    f"Uploaded JSON result as datapoint: {submitted_datapoint.datapoint_id}"
+                    "Uploaded JSON result as datapoint",
+                    datapoint_id=submitted_datapoint.datapoint_id,
                 )
 
             # Upload files as FileDataPoints if present
@@ -615,7 +706,9 @@ class Engine:
                         )
                         datapoint_ids[file_key] = submitted_datapoint.datapoint_id
                         self.logger.log_debug(
-                            f"Uploaded file '{file_key}' as datapoint: {submitted_datapoint.datapoint_id}"
+                            "Uploaded file as datapoint",
+                            file_key=file_key,
+                            datapoint_id=submitted_datapoint.datapoint_id,
                         )
                 else:
                     # Single file Path
@@ -626,7 +719,8 @@ class Engine:
                     submitted_datapoint = self.data_client.submit_datapoint(datapoint)
                     datapoint_ids["file"] = submitted_datapoint.datapoint_id
                     self.logger.log_debug(
-                        f"Uploaded file as datapoint: {submitted_datapoint.datapoint_id}"
+                        "Uploaded file as datapoint",
+                        datapoint_id=submitted_datapoint.datapoint_id,
                     )
 
             # Update response to contain only datapoint IDs
@@ -694,10 +788,12 @@ class Engine:
                 node_id=node.info.node_id if node.info else None,
             ):
                 self.logger.warning(
-                    event=Event(
-                        event_type=EventType.NODE_STATUS_UPDATE,
-                        event_data=node.status,
-                    )
+                    "Node status update failed; marking disconnected",
+                    event_type=EventType.NODE_STATUS_UPDATE,
+                    node_name=node_name,
+                    node_url=str(node.node_url),
+                    error=str(e),
+                    exc_info=True,
                 )
 
     def reset_disconnects(self) -> None:
