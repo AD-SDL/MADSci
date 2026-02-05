@@ -6,7 +6,6 @@ import re
 import sys
 import tempfile
 import time
-import traceback
 import urllib.parse as urlparse
 from datetime import datetime
 from pathlib import Path
@@ -112,7 +111,11 @@ class DatabaseMigrator:
             raw_backup if raw_backup.is_absolute() else (Path.cwd() / raw_backup)
         )
         self.backup_dir.mkdir(parents=True, exist_ok=True)
-        self.logger.info(f"Using backup directory: {self.backup_dir}")
+        self.logger.info(
+            "Using backup directory",
+            event_type="resources.migration.backup_dir",
+            backup_dir=str(self.backup_dir),
+        )
 
         # Create backup tool instance with migration-appropriate settings
         backup_settings = PostgreSQLBackupSettings(
@@ -155,11 +158,19 @@ class DatabaseMigrator:
                     # Fall back to current working directory
                     package_root = Path.cwd()
 
-            self.logger.info(f"Using package root: {package_root}")
+            self.logger.info(
+                "Using package root",
+                event_type="resources.migration.package_root",
+                package_root=str(package_root),
+            )
             return package_root
 
-        except Exception as e:
-            self.logger.warning(f"Could not determine package root: {e}")
+        except Exception:
+            self.logger.warning(
+                "Could not determine package root",
+                event_type="resources.migration.package_root_error",
+                exc_info=True,
+            )
             return Path.cwd()
 
     def _setup_alembic_config(self) -> Config:
@@ -187,7 +198,10 @@ class DatabaseMigrator:
         alembic_cfg.set_main_option("prepend_sys_path", str(self.package_root))
 
         self.logger.info(
-            f"Alembic config: ini={alembic_ini_path}, script_location={script_location}"
+            "Alembic config loaded",
+            event_type="resources.migration.alembic_config",
+            alembic_ini_path=str(alembic_ini_path),
+            script_location=str(script_location),
         )
 
         return alembic_cfg
@@ -226,7 +240,11 @@ class DatabaseMigrator:
             lock_info = f"pid={os.getpid()}\ntimestamp={time.time()}\ndatabase={database_name}\n"
             os.write(self.lock_fd, lock_info.encode())
 
-            self.logger.info(f"Acquired migration lock: {self.lock_file}")
+            self.logger.info(
+                "Acquired migration lock",
+                event_type="resources.migration.lock_acquired",
+                lock_file=str(self.lock_file),
+            )
 
         except BlockingIOError:
             if self.lock_fd is not None:
@@ -248,18 +266,33 @@ class DatabaseMigrator:
             try:
                 fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
                 os.close(self.lock_fd)
-                self.logger.info("Released migration lock")
-            except Exception as e:
-                self.logger.warning(f"Error releasing lock: {e}")
+                self.logger.info(
+                    "Released migration lock",
+                    event_type="resources.migration.lock_released",
+                )
+            except Exception:
+                self.logger.warning(
+                    "Error releasing lock",
+                    event_type="resources.migration.lock_release_error",
+                    exc_info=True,
+                )
             finally:
                 self.lock_fd = None
 
         if self.lock_file and self.lock_file.exists():
             try:
                 self.lock_file.unlink()
-                self.logger.info(f"Removed lock file: {self.lock_file}")
-            except Exception as e:
-                self.logger.warning(f"Error removing lock file: {e}")
+                self.logger.info(
+                    "Removed lock file",
+                    event_type="resources.migration.lock_file_removed",
+                    lock_file=str(self.lock_file),
+                )
+            except Exception:
+                self.logger.warning(
+                    "Error removing lock file",
+                    event_type="resources.migration.lock_file_remove_error",
+                    exc_info=True,
+                )
             finally:
                 self.lock_file = None
 
@@ -288,12 +321,18 @@ class DatabaseMigrator:
                 # Check if lock is stale (older than 1 hour)
                 if timestamp and (time.time() - timestamp) > 3600:
                     self.logger.warning(
-                        f"Detected stale lock file, removing: {lock_file_path}"
+                        "Detected stale lock file, removing",
+                        event_type="resources.migration.stale_lock_detected",
+                        lock_file=str(lock_file_path),
                     )
                     lock_file_path.unlink()
 
-            except (OSError, ValueError) as e:
-                self.logger.warning(f"Error checking stale lock: {e}")
+            except (OSError, ValueError):
+                self.logger.warning(
+                    "Error checking stale lock",
+                    event_type="resources.migration.stale_lock_check_error",
+                    exc_info=True,
+                )
 
         # Now try to acquire lock normally
         self._acquire_migration_lock()
@@ -302,7 +341,12 @@ class DatabaseMigrator:
         try:
             script = ScriptDirectory.from_config(self.alembic_cfg)
             heads = list(script.get_heads())
-            self.logger.info(f"[{when}] Alembic script heads: {heads}")
+            self.logger.info(
+                "Alembic script heads",
+                event_type="resources.migration.alembic_heads",
+                when=when,
+                heads=heads,
+            )
 
             # DB current revision(s)
             curr = []
@@ -316,15 +360,26 @@ class DatabaseMigrator:
             with EnvironmentContext(self.alembic_cfg, script, fn=_capture_current):
                 pass
             self.logger.info(
-                f"[{when}] Database current revision: {curr[0] if curr else None}"
+                "Database current revision",
+                event_type="resources.migration.alembic_db_revision",
+                when=when,
+                current_revision=(curr[0] if curr else None),
             )
-        except Exception as e:
-            self.logger.warning(f"[{when}] Could not log Alembic state: {e}")
+        except Exception:
+            self.logger.warning(
+                "Could not log Alembic state",
+                event_type="resources.migration.alembic_state_log_error",
+                when=when,
+                exc_info=True,
+            )
 
     def apply_schema_migrations(self) -> None:
         """Apply schema migrations using Alembic with automatic migration generation."""
         try:
-            self.logger.info("Applying schema migrations using Alembic...")
+            self.logger.info(
+                "Applying schema migrations using Alembic",
+                event_type="resources.migration.apply_schema_migrations_start",
+            )
 
             # Set environment variable for Alembic to use
             os.environ["RESOURCES_DB_URL"] = self.db_url
@@ -339,7 +394,10 @@ class DatabaseMigrator:
 
                 # Auto-generate migration if there are model changes
                 if self._has_pending_model_changes():
-                    self.logger.info("Detected model changes, generating migration...")
+                    self.logger.info(
+                        "Detected model changes, generating migration",
+                        event_type="resources.migration.autogen_detected_changes",
+                    )
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     migration_message = f"Auto-generated migration {timestamp}"
                     command.revision(
@@ -357,17 +415,32 @@ class DatabaseMigrator:
                             self._post_process_migration_file(latest_migration)
 
                     self.logger.info(
-                        f"Generated and processed migration: {migration_message}"
+                        "Generated and processed migration",
+                        event_type="resources.migration.autogen_complete",
+                        migration_message=migration_message,
                     )
                 # Run Alembic upgrade to head
                 try:
-                    self.logger.info("=== UPGRADE START ===")  # direct stdout sentinel
+                    self.logger.info(
+                        "=== UPGRADE START ===",
+                        event_type="resources.migration.upgrade_start",
+                    )
                     command.upgrade(self.alembic_cfg, "head")
-                    self.logger.info("=== UPGRADE DONE ===")  # direct stdout sentinel
+                    self.logger.info(
+                        "=== UPGRADE DONE ===",
+                        event_type="resources.migration.upgrade_done",
+                    )
                 except Exception:
-                    self.logger.error("UPGRADE FAILED", exc_info=True)
+                    self.logger.error(
+                        "UPGRADE FAILED",
+                        event_type="resources.migration.upgrade_failed",
+                        exc_info=True,
+                    )
                     raise
-                self.logger.info("Alembic migrations applied successfully")
+                self.logger.info(
+                    "Alembic migrations applied successfully",
+                    event_type="resources.migration.apply_schema_migrations_done",
+                )
 
                 # Ensure our version tracking table exists (separate from Alembic)
                 SchemaVersionTable.metadata.create_all(self.engine)
@@ -377,7 +450,11 @@ class DatabaseMigrator:
                 os.chdir(original_cwd)
 
         except Exception as e:
-            self.logger.error(f"Alembic migration failed: {traceback.format_exc()}")
+            self.logger.error(
+                "Alembic migration failed",
+                event_type="resources.migration.apply_schema_migrations_error",
+                exc_info=True,
+            )
             raise RuntimeError(f"Schema migration failed: {e}") from e
 
     def _post_process_migration_file(self, migration_file_path: Path) -> None:
@@ -436,13 +513,22 @@ class DatabaseMigrator:
                 with open(migration_file_path, "w") as f:  # noqa: PTH123
                     f.write(new_content)
                 self.logger.info(
-                    f"Post-processed migration file for safe type conversions: {migration_file_path}"
+                    "Post-processed migration file for safe type conversions",
+                    event_type="resources.migration.post_process_applied",
+                    migration_file=str(migration_file_path),
                 )
             else:
-                self.logger.info("No type conversion post-processing needed")
+                self.logger.info(
+                    "No type conversion post-processing needed",
+                    event_type="resources.migration.post_process_not_needed",
+                )
 
-        except Exception as e:
-            self.logger.warning(f"Could not post-process migration file: {e}")
+        except Exception:
+            self.logger.warning(
+                "Could not post-process migration file",
+                event_type="resources.migration.post_process_error",
+                exc_info=True,
+            )
 
     def _has_pending_model_changes(self) -> bool:
         """Check if there are pending model changes by comparing current schema with models."""
@@ -466,15 +552,25 @@ class DatabaseMigrator:
 
                 if has_changes:
                     self.logger.info(
-                        f"Found {len(relevant_changes)} relevant schema differences"
+                        "Found relevant schema differences",
+                        event_type="resources.migration.schema_diffs_found",
+                        diff_count=len(relevant_changes),
                     )
                     for change in relevant_changes[:5]:  # Log first 5 changes
-                        self.logger.info(f"  - {change}")
+                        self.logger.info(
+                            "Schema diff",
+                            event_type="resources.migration.schema_diff",
+                            diff=str(change),
+                        )
 
                 return has_changes
 
-        except Exception as e:
-            self.logger.warning(f"Could not check for model changes: {e}")
+        except Exception:
+            self.logger.warning(
+                "Could not check for model changes",
+                event_type="resources.migration.model_changes_check_error",
+                exc_info=True,
+            )
             return False
 
     def _ensure_alembic_initialized(self) -> None:
@@ -483,18 +579,29 @@ class DatabaseMigrator:
             inspector = inspect(self.engine)
 
             if "alembic_version" not in inspector.get_table_names():
-                self.logger.info("Initializing Alembic version tracking...")
+                self.logger.info(
+                    "Initializing Alembic version tracking",
+                    event_type="resources.migration.alembic_version_tracking_init",
+                )
                 # Stamp the database with the current revision
                 command.stamp(self.alembic_cfg, "head")
 
-        except Exception as e:
-            self.logger.warning(f"Could not initialize Alembic: {e}")
+        except Exception:
+            self.logger.warning(
+                "Could not initialize Alembic",
+                event_type="resources.migration.alembic_init_error",
+                exc_info=True,
+            )
             # This might be the first migration, which is OK
 
     def generate_migration(self, message: str) -> None:
         """Generate a new Alembic migration based on model changes."""
         try:
-            self.logger.info(f"Generating new migration: {message}")
+            self.logger.info(
+                "Generating new migration",
+                event_type="resources.migration.generate_migration_start",
+                message=message,
+            )
             os.environ["RESOURCES_DB_URL"] = self.db_url
 
             # Change to package root for generation
@@ -503,12 +610,19 @@ class DatabaseMigrator:
 
             try:
                 command.revision(self.alembic_cfg, message=message, autogenerate=True)
-                self.logger.info("Migration file generated successfully")
+                self.logger.info(
+                    "Migration file generated successfully",
+                    event_type="resources.migration.generate_migration_done",
+                )
             finally:
                 os.chdir(original_cwd)
 
-        except Exception as e:
-            self.logger.error(f"Migration generation failed: {e}")
+        except Exception:
+            self.logger.error(
+                "Migration generation failed",
+                event_type="resources.migration.generate_migration_error",
+                exc_info=True,
+            )
             raise
 
     def run_migration(self, target_version: Optional[str] = None) -> None:
@@ -523,15 +637,22 @@ class DatabaseMigrator:
 
             current_db_version = self.version_checker.get_database_version()
 
-            self.logger.info(f"Starting migration to version {target_version}")
             self.logger.info(
-                f"Current database version: {current_db_version or 'None'}"
+                "Starting migration",
+                event_type="resources.migration.run_start",
+                target_version=target_version,
+            )
+            self.logger.info(
+                "Current database version",
+                event_type="resources.migration.current_db_version",
+                current_db_version=(current_db_version or None),
             )
 
             # Check if this is a fresh database initialization
             if self._is_fresh_database():
                 self.logger.info(
-                    "Fresh database detected, performing initialization without backup..."
+                    "Fresh database detected, performing initialization without backup",
+                    event_type="resources.migration.fresh_db_detected",
                 )
                 try:
                     # For fresh databases, just apply schema migrations and set up version tracking
@@ -542,13 +663,17 @@ class DatabaseMigrator:
                     self.version_checker.record_version(target_version, migration_notes)
 
                     self.logger.info(
-                        f"Fresh database initialization completed successfully with version {target_version}"
+                        "Fresh database initialization completed successfully",
+                        event_type="resources.migration.fresh_db_init_done",
+                        target_version=target_version,
                     )
                     return
 
                 except Exception as init_error:
                     self.logger.error(
-                        f"Fresh database initialization failed: {init_error}"
+                        "Fresh database initialization failed",
+                        event_type="resources.migration.fresh_db_init_error",
+                        exc_info=True,
                     )
                     raise init_error
 
@@ -565,26 +690,47 @@ class DatabaseMigrator:
                 self.version_checker.record_version(target_version, migration_notes)
 
                 self.logger.info(
-                    f"Migration completed successfully to version {target_version}"
+                    "Migration completed successfully",
+                    event_type="resources.migration.run_done",
+                    target_version=target_version,
                 )
 
             except Exception as migration_error:
-                self.logger.error(f"Migration failed: {migration_error}")
-                self.logger.info("Attempting to restore from backup...")
+                self.logger.error(
+                    "Migration failed",
+                    event_type="resources.migration.run_error",
+                    exc_info=True,
+                )
+                self.logger.info(
+                    "Attempting to restore from backup",
+                    event_type="resources.migration.restore_attempt",
+                )
 
                 try:
                     self.backup_tool.restore_from_backup(backup_path)
-                    self.logger.info("Database restored from backup successfully")
-                except Exception as restore_error:
-                    self.logger.error(
-                        f"CRITICAL: Backup restore also failed: {restore_error}"
+                    self.logger.info(
+                        "Database restored from backup successfully",
+                        event_type="resources.migration.restore_done",
                     )
-                    self.logger.error("Manual intervention required!")
+                except Exception:
+                    self.logger.error(
+                        "CRITICAL: Backup restore also failed",
+                        event_type="resources.migration.restore_error",
+                        exc_info=True,
+                    )
+                    self.logger.error(
+                        "Manual intervention required",
+                        event_type="resources.migration.manual_intervention_required",
+                    )
 
                 raise migration_error
 
-        except Exception as e:
-            self.logger.error(f"Migration process failed: {e}")
+        except Exception:
+            self.logger.error(
+                "Migration process failed",
+                event_type="resources.migration.process_error",
+                exc_info=True,
+            )
             raise
         finally:
             # Always release the migration lock
@@ -599,8 +745,12 @@ class DatabaseMigrator:
                 )
                 result = session.exec(statement).first()
                 return result is not None
-        except Exception as e:
-            self.logger.warning(f"Could not check for existing version record: {e}")
+        except Exception:
+            self.logger.warning(
+                "Could not check for existing version record",
+                event_type="resources.migration.version_record_check_error",
+                exc_info=True,
+            )
             return False
 
     def _mark_version_as_current(self, version: str) -> None:
@@ -623,7 +773,9 @@ class DatabaseMigrator:
                     session.add(existing_record)
                     session.commit()
                     self.logger.info(
-                        f"Updated version record for {version} to current timestamp"
+                        "Updated version record for version to current timestamp",
+                        event_type="resources.migration.version_marked_current",
+                        version=version,
                     )
                 else:
                     # Create a new record if none exists
@@ -631,10 +783,18 @@ class DatabaseMigrator:
                         version,
                         f"Version synchronized with MADSci package version {version}",
                     )
-                    self.logger.info(f"Created new version record for {version}")
+                    self.logger.info(
+                        "Created new version record",
+                        event_type="resources.migration.version_record_created",
+                        version=version,
+                    )
 
-        except Exception as e:
-            self.logger.error(f"Could not mark version as current: {e}")
+        except Exception:
+            self.logger.error(
+                "Could not mark version as current",
+                event_type="resources.migration.mark_version_current_error",
+                exc_info=True,
+            )
             raise
 
     def _is_fresh_database(self) -> bool:
@@ -651,15 +811,24 @@ class DatabaseMigrator:
 
             if not has_resource_tables:
                 self.logger.info(
-                    "No existing resource tables found, treating as fresh database"
+                    "No existing resource tables found, treating as fresh database",
+                    event_type="resources.migration.fresh_db_no_tables",
                 )
                 return True
 
-            self.logger.info(f"Found existing tables: {existing_tables}")
+            self.logger.info(
+                "Found existing tables",
+                event_type="resources.migration.existing_tables",
+                tables=existing_tables,
+            )
             return False
 
-        except Exception as e:
-            self.logger.warning(f"Could not check database tables: {e}")
+        except Exception:
+            self.logger.warning(
+                "Could not check database tables",
+                event_type="resources.migration.db_tables_check_error",
+                exc_info=True,
+            )
             return False
 
 
@@ -679,12 +848,20 @@ def main() -> None:
             migrator.backup_tool.restore_from_backup(backup_path)
         elif settings.backup_only:
             backup_path = migrator.backup_tool.create_backup()
-            logger.info(f"Backup created: {backup_path}")
+            logger.info(
+                "Backup created",
+                event_type="resources.migration.backup_only_done",
+                backup_path=str(backup_path),
+            )
         else:
             migrator.run_migration(settings.target_version)
 
-    except Exception as e:
-        logger.error(f"Migration tool failed: {e}")
+    except Exception:
+        logger.error(
+            "Migration tool failed",
+            event_type="resources.migration.cli_error",
+            exc_info=True,
+        )
         sys.exit(1)
 
 
