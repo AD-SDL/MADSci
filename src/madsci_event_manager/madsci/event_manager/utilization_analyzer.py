@@ -25,9 +25,17 @@ class UtilizationAnalyzer:
         # Verify database connection
         try:
             count = events_collection.count_documents({})
-            logger.info(f"Connected to events collection with {count} total events")
-        except Exception as e:
-            logger.error(f"Error connecting to events collection: {e}")
+            logger.info(
+                "Connected to events collection",
+                event_type=EventType.LOG_INFO,
+                total_events=count,
+            )
+        except Exception:
+            logger.error(
+                "Error connecting to events collection",
+                event_type=EventType.LOG_ERROR,
+                exc_info=True,
+            )
             raise
 
         # Cache for name resolution to avoid repeated lookups
@@ -62,7 +70,8 @@ class UtilizationAnalyzer:
             # If no formal sessions found, create a default analysis session
             if not sessions:
                 logger.info(
-                    "No formal workcell sessions found, creating default analysis session"
+                    "No formal workcell sessions found, creating default analysis session",
+                    event_type=EventType.LOG_INFO,
                 )
                 sessions = [
                     {
@@ -105,7 +114,11 @@ class UtilizationAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Error generating session-based report: {e}")
+            logger.error(
+                "Error generating session-based report",
+                event_type=EventType.LOG_ERROR,
+                exc_info=True,
+            )
             return {"error": f"Failed to generate report: {e!s}"}
 
     def generate_user_utilization_report(
@@ -122,7 +135,10 @@ class UtilizationAnalyzer:
             Dict containing user statistics, system summary, and metadata
         """
         try:
-            logger.info("Generating user utilization report")
+            logger.info(
+                "Generating user utilization report",
+                event_type=EventType.LOG_INFO,
+            )
 
             # Determine analysis timeframe
             analysis_start, analysis_end = self._determine_analysis_period(
@@ -178,7 +194,11 @@ class UtilizationAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Error generating user utilization report: {e}")
+            logger.error(
+                "Error generating user utilization report",
+                event_type=EventType.LOG_ERROR,
+                exc_info=True,
+            )
             return {"error": f"Failed to generate user report: {e!s}"}
 
     def _determine_analysis_period(
@@ -191,13 +211,17 @@ class UtilizationAnalyzer:
 
         # If no timeframe provided, analyze ALL records in database
         if not start_time and not end_time:
-            logger.info("No timeframe provided - analyzing full database range")
+            logger.info(
+                "No timeframe provided - analyzing full database range",
+                event_type=EventType.LOG_INFO,
+            )
             try:
                 # Get total count first to check if we have any data
                 total_count = self.events_collection.count_documents({})
                 if total_count == 0:
                     logger.warning(
-                        "No events found in database, using default 24-hour period"
+                        "No events found in database, using default 24-hour period",
+                        event_type=EventType.LOG_WARNING,
                     )
                     now = datetime.now(timezone.utc).replace(tzinfo=None)
                     return now - timedelta(days=1), now
@@ -226,15 +250,28 @@ class UtilizationAnalyzer:
                         buffered_end = latest_time + timedelta(minutes=1)
 
                         logger.info(
-                            f"Found database range: {buffered_start} to {buffered_end}"
+                            "Found database range",
+                            event_type=EventType.LOG_INFO,
+                            buffered_start=buffered_start,
+                            buffered_end=buffered_end,
                         )
                         return buffered_start, buffered_end
-                    logger.warning("Could not parse timestamps from database events")
+                    logger.warning(
+                        "Could not parse timestamps from database events",
+                        event_type=EventType.LOG_WARNING,
+                    )
                 else:
-                    logger.warning("No events returned from database queries")
+                    logger.warning(
+                        "No events returned from database queries",
+                        event_type=EventType.LOG_WARNING,
+                    )
 
-            except Exception as e:
-                logger.error(f"Error finding full database range: {e}")
+            except Exception:
+                logger.error(
+                    "Error finding full database range",
+                    event_type=EventType.LOG_ERROR,
+                    exc_info=True,
+                )
 
         # Handle case where only one time is provided
         if start_time and not end_time:
@@ -242,7 +279,10 @@ class UtilizationAnalyzer:
             # Default to 24 hours from start time
             end_utc = start_utc + timedelta(days=1)
             logger.info(
-                f"Only start_time provided, using 24-hour period: {start_utc} to {end_utc}"
+                "Only start_time provided, using 24-hour period",
+                event_type=EventType.LOG_INFO,
+                start_utc=start_utc,
+                end_utc=end_utc,
             )
             return start_utc, end_utc
 
@@ -251,12 +291,18 @@ class UtilizationAnalyzer:
             # Default to 24 hours before end time
             start_utc = end_utc - timedelta(days=1)
             logger.info(
-                f"Only end_time provided, using 24-hour period: {start_utc} to {end_utc}"
+                "Only end_time provided, using 24-hour period",
+                event_type=EventType.LOG_INFO,
+                start_utc=start_utc,
+                end_utc=end_utc,
             )
             return start_utc, end_utc
 
         # Fallback to last 24 hours
-        logger.warning("Falling back to last 24 hours as default analysis period")
+        logger.warning(
+            "Falling back to last 24 hours as default analysis period",
+            event_type=EventType.LOG_WARNING,
+        )
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         return now - timedelta(days=1), now
 
@@ -269,7 +315,11 @@ class UtilizationAnalyzer:
 
         # Get session start events
         start_events = self._get_session_start_events(start_time, end_time)
-        logger.info(f"Found {len(start_events)} session start events")
+        logger.info(
+            "Found session start events",
+            event_type=EventType.LOG_INFO,
+            start_event_count=len(start_events),
+        )
 
         # Process each start event to create sessions
         for start_event in start_events:
@@ -323,8 +373,13 @@ class UtilizationAnalyzer:
                     )
                     break
 
-            except Exception as e:
-                logger.warning(f"Query {i + 1} failed: {e}")
+            except Exception:
+                logger.warning(
+                    "Query failed",
+                    event_type=EventType.LOG_WARNING,
+                    query_index=i + 1,
+                    exc_info=True,
+                )
                 continue
 
         return start_events
@@ -491,8 +546,13 @@ class UtilizationAnalyzer:
                 if stop_time and stop_time > start_after and stop_time <= end_time:
                     return stop_time
 
-        except Exception as e:
-            logger.warning(f"Error finding stop time for workcell {workcell_id}: {e}")
+        except Exception:
+            logger.warning(
+                "Error finding stop time for workcell",
+                event_type=EventType.LOG_WARNING,
+                workcell_id=workcell_id,
+                exc_info=True,
+            )
 
         return None
 
@@ -535,14 +595,18 @@ class UtilizationAnalyzer:
             for node_id, node_util in node_utils.items():
                 if self._is_workcell_id(node_id):
                     logger.info(
-                        f"Filtering out workcell {node_id} from session node summary"
+                        "Filtering out workcell from session node summary",
+                        event_type=EventType.LOG_INFO,
+                        node_id=node_id,
                     )
                     continue
 
                 node_name = self._resolve_node_name(node_id)
                 if not node_name and self._is_workcell_id(node_id):
                     logger.info(
-                        f"Confirmed {node_id} is a workcell, excluding from session node summary"
+                        "Confirmed node_id is a workcell, excluding from session node summary",
+                        event_type=EventType.LOG_INFO,
+                        node_id=node_id,
                     )
                     continue
 
@@ -620,7 +684,11 @@ class UtilizationAnalyzer:
                 "active_time_hours": active_time_seconds / 3600,
             }
         except Exception as e:
-            logger.error(f"Error analyzing session utilization: {e}")
+            logger.error(
+                "Error analyzing session utilization",
+                event_type=EventType.LOG_ERROR,
+                exc_info=True,
+            )
             return {
                 "error": str(e),
                 "session_type": session["session_type"],
@@ -674,8 +742,13 @@ class UtilizationAnalyzer:
                     if events:
                         break
 
-                except Exception as e:
-                    logger.warning(f"Event query {i + 1} failed: {e}")
+                except Exception:
+                    logger.warning(
+                        "Event query failed",
+                        event_type=EventType.LOG_WARNING,
+                        query_index=i + 1,
+                        exc_info=True,
+                    )
                     continue
 
             # Parse all timestamps to UTC and filter valid events
@@ -686,11 +759,19 @@ class UtilizationAnalyzer:
                 and (parsed_ts := self._parse_timestamp_utc(event["event_timestamp"]))
             ]
 
-            logger.debug(f"Found {len(valid_events)} events in session timeframe")
+            logger.debug(
+                "Found events in session timeframe",
+                event_type=EventType.LOG_DEBUG,
+                event_count=len(valid_events),
+            )
             return valid_events
 
-        except Exception as e:
-            logger.error(f"Error getting session events: {e}")
+        except Exception:
+            logger.error(
+                "Error getting session events",
+                event_type=EventType.LOG_ERROR,
+                exc_info=True,
+            )
             return []
 
     def _filter_activity_events(self, events: List[Dict]) -> List[Dict]:
@@ -739,7 +820,11 @@ class UtilizationAnalyzer:
             if is_activity_event:
                 relevant_events.append(event)
 
-        logger.debug(f"Filtered to {len(relevant_events)} activity events")
+        logger.debug(
+            "Filtered to activity events",
+            event_type=EventType.LOG_DEBUG,
+            activity_event_count=len(relevant_events),
+        )
         return relevant_events
 
     def _calculate_system_utilization(
@@ -856,8 +941,13 @@ class UtilizationAnalyzer:
 
             return len(workcell_events) > 0
 
-        except Exception as e:
-            logger.warning(f"Error checking if {entity_id} is workcell: {e}")
+        except Exception:
+            logger.warning(
+                "Error checking if entity_id is workcell",
+                event_type=EventType.LOG_WARNING,
+                entity_id=entity_id,
+                exc_info=True,
+            )
             return False
 
     def _calculate_node_utilization(
@@ -873,7 +963,9 @@ class UtilizationAnalyzer:
             if node_id:
                 if self._is_workcell_id(node_id):
                     logger.debug(
-                        f"Skipping workcell {node_id} from node utilization calculation"
+                        "Skipping workcell from node utilization calculation",
+                        event_type=EventType.LOG_DEBUG,
+                        node_id=node_id,
                     )
                     continue
 
@@ -1169,8 +1261,13 @@ class UtilizationAnalyzer:
                 if events:
                     break
 
-            except Exception as e:
-                logger.warning(f"Workflow query {i + 1} failed: {e}")
+            except Exception:
+                logger.warning(
+                    "Workflow query failed",
+                    event_type=EventType.LOG_WARNING,
+                    query_index=i + 1,
+                    exc_info=True,
+                )
                 continue
 
         # Parse timestamps
@@ -1181,7 +1278,11 @@ class UtilizationAnalyzer:
                 event["parsed_timestamp"] = event_time
                 valid_events.append(event)
 
-        logger.info(f"Found {len(valid_events)} workflow events for user analysis")
+        logger.info(
+            "Found workflow events for user analysis",
+            event_type=EventType.LOG_INFO,
+            workflow_event_count=len(valid_events),
+        )
         return valid_events
 
     def _calculate_user_statistics(
@@ -1360,7 +1461,11 @@ class UtilizationAnalyzer:
                     ).total_seconds()
                     return
             except Exception as err:
-                self.logger.warning(f"Error parsing timestamps: {err}")
+                logger.warning(
+                    "Error parsing timestamps",
+                    event_type=EventType.LOG_WARNING,
+                    err=str(err),
+                )
 
         # If no duration found, set to None
         workflow["duration_seconds"] = None
@@ -1621,7 +1726,9 @@ class UtilizationAnalyzer:
                 for node_id, node_data in session.get("node_utilizations", {}).items():
                     if self._is_workcell_id(node_id):
                         logger.debug(
-                            f"Skipping workcell {node_id} from overall node summary"
+                            "Skipping workcell from overall node summary",
+                            event_type=EventType.LOG_DEBUG,
+                            node_id=node_id,
                         )
                         continue
 
@@ -1669,7 +1776,11 @@ class UtilizationAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Error generating overall summary: {e}")
+            logger.error(
+                "Error generating overall summary",
+                event_type=EventType.LOG_ERROR,
+                exc_info=True,
+            )
             return {"error": str(e)}
 
     # Helper methods
@@ -1808,7 +1919,11 @@ class UtilizationAnalyzer:
         try:
             return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
         except ValueError:
-            logger.warning(f"Could not parse timestamp: {timestamp}")
+            logger.warning(
+                "Could not parse timestamp",
+                event_type=EventType.LOG_WARNING,
+                timestamp=timestamp,
+            )
             return None
 
     def _ensure_utc(self, dt: datetime) -> datetime:
@@ -1888,8 +2003,12 @@ class UtilizationAnalyzer:
 
             return f"{session_type.title()} {session_id[-8:]}"
 
-        except Exception as e:
-            logger.warning(f"Error resolving session name: {e}")
+        except Exception:
+            logger.warning(
+                "Error resolving session name",
+                event_type=EventType.LOG_WARNING,
+                exc_info=True,
+            )
             return f"{session.get('session_type', 'Unknown')} {session.get('session_id', '')[-8:]}"
 
     def _resolve_node_name(self, node_id: str) -> Optional[str]:
@@ -1926,8 +2045,13 @@ class UtilizationAnalyzer:
             self.name_cache["nodes"][node_id] = None
             return None
 
-        except Exception as e:
-            logger.warning(f"Error resolving node name for {node_id}: {e}")
+        except Exception:
+            logger.warning(
+                "Error resolving node name",
+                event_type=EventType.LOG_WARNING,
+                node_id=node_id,
+                exc_info=True,
+            )
             return None
 
     def _resolve_experiment_name(self, experiment_id: str) -> Optional[str]:
@@ -1986,6 +2110,11 @@ class UtilizationAnalyzer:
             self.name_cache["experiments"][experiment_id] = None
             return None
 
-        except Exception as e:
-            logger.warning(f"Error resolving experiment name for {experiment_id}: {e}")
+        except Exception:
+            logger.warning(
+                "Error resolving experiment name",
+                event_type=EventType.LOG_WARNING,
+                experiment_id=experiment_id,
+                exc_info=True,
+            )
             return None

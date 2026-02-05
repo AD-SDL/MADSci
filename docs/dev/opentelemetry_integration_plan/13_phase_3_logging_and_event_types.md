@@ -33,12 +33,18 @@ Audited/cleaned (passes the logging-pattern hook):
 - `src/madsci_data_manager/madsci/data_manager/data_server.py`
 - `src/madsci_experiment_manager/madsci/experiment_manager/experiment_server.py`
 - `src/madsci_squid/madsci/squid/lab_server.py`
+- `src/madsci_event_manager/madsci/event_manager/utilization_analyzer.py`
 
 Deferred/backlog (not yet audited; tracked for follow-up):
 
 - Workcell + node runtime execution paths (`workcell_engine.py`, `abstract_node_module.py`) need a careful migration.
 - EventManager analyzers (e.g. `time_series_analyzer.py`, `utilization_analyzer.py`) still have legacy f-string logs.
 - Common backup/migration tooling has legacy logs.
+
+Update (February 2026):
+
+- `utilization_analyzer.py` is now audited and included in the hook scope.
+- `time_series_analyzer.py` remains deferred (large surface area; will likely need a follow-up PR).
 
 Operational notes:
 
