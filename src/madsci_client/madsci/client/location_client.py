@@ -54,6 +54,7 @@ class LocationClient:
         if self.location_server_url is None:
             self.logger.warning(
                 "LocationClient initialized without a URL. Location operations will fail unless a location server URL is configured in the MADSci context.",
+                event_type="location_client.missing_server_url",
                 warning_category=MadsciLocalOnlyWarning,
             )
 

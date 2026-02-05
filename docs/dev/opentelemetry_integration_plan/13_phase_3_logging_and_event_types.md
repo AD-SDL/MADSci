@@ -48,6 +48,7 @@ Additional updates in February 2026 (now audited and included in the hook scope)
 
 - `src/madsci_client/madsci/client/client_mixin.py`
 - `src/madsci_experiment_application/madsci/experiment_application/experiment_application.py`
+- `src/madsci_client/madsci/client/location_client.py`
 
 Notes:
 
