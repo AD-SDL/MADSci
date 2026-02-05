@@ -282,10 +282,9 @@ def prepare_workflow_step(
         validation_message=validation_string,
         workflow_id=workflow.workflow_id,
         workflow_name=workflow.name,
-        step_id=working_step.step_id,
-        step_name=working_step.name,
-        step_action=working_step.action,
-        step_node=working_step.node,
+        step_name=getattr(working_step, "name", None),
+        step_action=getattr(working_step, "action", None),
+        step_node=getattr(working_step, "node", None),
     )
     if not valid:
         raise ValueError(validation_string)
