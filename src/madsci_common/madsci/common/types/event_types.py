@@ -3,10 +3,11 @@ Event types for the MADSci system.
 """
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional, Union, get_args
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union, get_args
 
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
@@ -23,6 +24,9 @@ from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic_settings import SettingsConfigDict
+
+if TYPE_CHECKING:
+    from madsci.client.event_client import EventClient
 
 
 class EventLogLevel(int, Enum):
@@ -804,3 +808,83 @@ class SystemUtilizationData(MadsciBaseModel):
         description="Calculated system utilization percentage.",
         default=0.0,
     )
+
+
+@dataclass
+class EventClientContext:
+    """
+    Holds the current EventClient and its hierarchical context.
+
+    This dataclass is used internally by the context management system
+    to track the current EventClient and accumulated context metadata.
+
+    Attributes:
+        client: The actual EventClient instance for logging.
+        hierarchy: The naming hierarchy, e.g., ["experiment", "workflow", "step"].
+        metadata: Accumulated context metadata (experiment_id, workflow_id, etc.).
+
+    Example:
+        ctx = EventClientContext(
+            client=event_client,
+            hierarchy=["experiment", "workflow"],
+            metadata={"experiment_id": "exp-123", "workflow_id": "wf-456"},
+        )
+        print(ctx.name)  # "experiment.workflow"
+    """
+
+    client: "EventClient"
+    """The actual EventClient instance."""
+
+    hierarchy: list[str] = field(default_factory=list)
+    """The naming hierarchy, e.g., ["experiment", "workflow", "step"]."""
+
+    metadata: dict[str, Any] = field(default_factory=dict)
+    """Accumulated context metadata (experiment_id, workflow_id, etc.)."""
+
+    @property
+    def name(self) -> str:
+        """
+        Get the full hierarchical name.
+
+        Returns:
+            Dot-separated hierarchy string, or "madsci" if empty.
+        """
+        return ".".join(self.hierarchy) if self.hierarchy else "madsci"
+
+    def child(
+        self,
+        name: str,
+        client: Optional["EventClient"] = None,
+        **metadata: Any,
+    ) -> "EventClientContext":
+        """
+        Create a child context with extended hierarchy.
+
+        Args:
+            name: Name for this context level, added to hierarchy.
+            client: Optional explicit EventClient. If None, creates a bound
+                   child from the parent's client.
+            **metadata: Additional context metadata to merge.
+
+        Returns:
+            New EventClientContext with extended hierarchy and metadata.
+
+        Example:
+            parent_ctx = EventClientContext(client=client, hierarchy=["experiment"])
+            child_ctx = parent_ctx.child("workflow", workflow_id="wf-123")
+            # child_ctx.hierarchy == ["experiment", "workflow"]
+            # child_ctx.metadata == {"workflow_id": "wf-123"}
+        """
+        merged_metadata = {**self.metadata, **metadata}
+
+        if client is not None:
+            child_client = client
+        else:
+            # Create bound child from parent's client
+            child_client = self.client.bind(**metadata) if metadata else self.client
+
+        return EventClientContext(
+            client=child_client,
+            hierarchy=[*self.hierarchy, name],
+            metadata=merged_metadata,
+        )

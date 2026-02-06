@@ -696,24 +696,63 @@ Add this processor to the processor chain in `build_processors()` (before the fi
 
 ## 1.3 Acceptance Criteria
 
-- [ ] `EventClientContext` dataclass implemented with `client`, `hierarchy`, `metadata` fields
-- [ ] `EventClientContext.name` property returns dot-separated hierarchy
-- [ ] `EventClientContext.child()` creates child context with extended hierarchy
-- [ ] `get_event_client()` returns context client when available
-- [ ] `get_event_client()` creates new client when no context (never fails)
-- [ ] `get_event_client()` with kwargs returns bound client
-- [ ] `event_client_context()` establishes new context
-- [ ] `event_client_context()` with `inherit=True` extends parent context
-- [ ] `event_client_context()` with `inherit=False` creates fresh context
-- [ ] `event_client_context()` with explicit `client` uses that client
-- [ ] `has_event_client_context()` returns correct boolean
-- [ ] `get_event_client_context()` returns current context or None
-- [ ] Context propagates correctly across async/await boundaries
-- [ ] Concurrent async operations have isolated contexts
-- [ ] All tests pass
-- [ ] No breaking changes to existing code
+- [x] `EventClientContext` dataclass implemented with `client`, `hierarchy`, `metadata` fields
+- [x] `EventClientContext.name` property returns dot-separated hierarchy
+- [x] `EventClientContext.child()` creates child context with extended hierarchy
+- [x] `get_event_client()` returns context client when available
+- [x] `get_event_client()` creates new client when no context (never fails)
+- [x] `get_event_client()` with kwargs returns bound client
+- [x] `event_client_context()` establishes new context
+- [x] `event_client_context()` with `inherit=True` extends parent context
+- [x] `event_client_context()` with `inherit=False` creates fresh context
+- [x] `event_client_context()` with explicit `client` uses that client
+- [x] `has_event_client_context()` returns correct boolean
+- [x] `get_event_client_context()` returns current context or None
+- [x] Context propagates correctly across async/await boundaries
+- [x] Concurrent async operations have isolated contexts
+- [x] All tests pass
+- [x] No breaking changes to existing code
 
-## 1.4 Integration Notes
+## 1.4 Implementation Status (Completed Feb 2026)
+
+**Phase 1 has been fully implemented.** All acceptance criteria have been met.
+
+### Files Modified/Created
+
+1. **`src/madsci_common/madsci/common/types/event_types.py`** (pre-existing)
+   - `EventClientContext` dataclass already existed at lines 813-890
+
+2. **`src/madsci_common/madsci/common/context.py`** (modified)
+   - Added `_event_client_context` ContextVar
+   - Added `get_event_client()` function
+   - Added `event_client_context()` context manager
+   - Added `get_event_client_context()` function
+   - Added `has_event_client_context()` function
+   - Added `_infer_caller_name()` helper function
+   - Updated `__all__` exports
+
+3. **`src/madsci_client/madsci/client/structlog_config.py`** (modified)
+   - Added `add_event_client_hierarchy()` processor
+   - Added `include_hierarchy_context` parameter to `build_processors()` and `create_instance_logger()`
+   - Updated `__all__` exports
+
+4. **`src/madsci_client/tests/test_event_client_context.py`** (created)
+   - 23 comprehensive tests covering all acceptance criteria
+   - Tests for sync and async context propagation
+   - Tests for context isolation in concurrent operations
+
+### Test Results
+
+- All 23 new context tests pass
+- All 76 existing EventClient tests pass
+- All 7 existing MadsciContext tests pass
+- All ruff linting checks pass
+
+### Dependencies
+
+- `pytest-asyncio>=0.24.0` was already present in `pyproject.toml`
+
+## 1.5 Integration Notes
 
 ### Import Structure
 

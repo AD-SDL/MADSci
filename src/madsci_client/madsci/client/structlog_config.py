@@ -13,7 +13,40 @@ import structlog
 # This provides trace_id and span_id injection into log events
 from madsci.client.otel_processors import add_otel_context
 
+
+def add_event_client_hierarchy(
+    _logger: logging.Logger,
+    _method_name: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Add EventClient hierarchy information to log events.
+
+    This processor adds madsci.hierarchy and madsci.* metadata fields
+    when an EventClientContext is active.
+
+    Args:
+        _logger: The stdlib logger (unused but required by structlog API)
+        _method_name: The log method name (unused but required by structlog API)
+        event_dict: The event dictionary to enrich
+
+    Returns:
+        The enriched event dictionary with hierarchy and metadata fields.
+    """
+    from madsci.common.context import get_event_client_context  # noqa: PLC0415
+
+    ctx = get_event_client_context()
+    if ctx is not None:
+        if ctx.hierarchy:
+            event_dict["madsci.hierarchy"] = ctx.name
+        for key, value in ctx.metadata.items():
+            event_dict[f"madsci.{key}"] = value
+
+    return event_dict
+
+
 __all__ = [
+    "add_event_client_hierarchy",
     "add_otel_context",
     "build_processors",
     "create_instance_logger",
@@ -25,6 +58,7 @@ def build_processors(
     output_format: Literal["json", "console"] = "console",
     add_timestamp: bool = True,
     include_otel_context: bool = False,
+    include_hierarchy_context: bool = False,
 ) -> list[structlog.typing.Processor]:
     """Build structlog processor pipeline.
 
@@ -32,6 +66,7 @@ def build_processors(
         output_format: Output format - "json" for machine-readable, "console" for human-readable
         add_timestamp: Whether to add ISO timestamps to logs
         include_otel_context: Whether to include OpenTelemetry trace context
+        include_hierarchy_context: Whether to include EventClient hierarchy context
 
     Returns:
         List of processors for structlog configuration
@@ -55,6 +90,10 @@ def build_processors(
     if include_otel_context:
         processors.append(add_otel_context)
 
+    # Add EventClient hierarchy context if enabled
+    if include_hierarchy_context:
+        processors.append(add_event_client_hierarchy)
+
     # Final renderer based on output format
     if output_format == "json":
         processors.append(structlog.processors.JSONRenderer())
@@ -74,6 +113,7 @@ def create_instance_logger(
     output_format: Literal["json", "console"] = "console",
     log_level: int = logging.INFO,
     include_otel_context: bool = False,
+    include_hierarchy_context: bool = False,
     add_timestamp: bool = True,
 ) -> structlog.typing.FilteringBoundLogger:
     """Create a per-instance structlog logger.
@@ -86,6 +126,7 @@ def create_instance_logger(
         output_format: Output format for logs ("json" or "console")
         log_level: Minimum log level to emit
         include_otel_context: Whether to include OTEL trace context
+        include_hierarchy_context: Whether to include EventClient hierarchy context
         add_timestamp: Whether to add timestamps to log entries
 
     Returns:
@@ -94,6 +135,7 @@ def create_instance_logger(
     processors = build_processors(
         output_format=output_format,
         include_otel_context=include_otel_context,
+        include_hierarchy_context=include_hierarchy_context,
         add_timestamp=add_timestamp,
     )
 
