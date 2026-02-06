@@ -10,6 +10,8 @@ name: madsci_example_lab
 # 7. Services are configured to restart unless stopped manually.
 # 8. The container images are built with the latest tag and a dev tag for development purposes.
 
+include:
+  - compose.otel.yaml
 
 # * Common configuration
 x-madsci-service: &madsci-service
@@ -36,17 +38,6 @@ x-madsci-service: &madsci-service
   working_dir: /home/madsci/example_lab
 
 services:
-  otel_collector:
-    container_name: otel_collector
-    # Pin to a specific version for reproducibility
-    # Use otel/opentelemetry-collector-contrib for full exporter support
-    image: otel/opentelemetry-collector-contrib:0.96.0
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ${REPO_PATH:-.}/example_lab/otel-collector.yaml:/etc/otelcol/config.yaml:ro
-    command: ["--config=/etc/otelcol/config.yaml"]
-
   madsci_mongodb:
     container_name: madsci_mongodb
     image: mongo:8.0
@@ -117,7 +108,6 @@ services:
     container_name: event_manager
     command: python -m madsci.event_manager.event_server
     depends_on:
-        - otel_collector
         - madsci_mongodb
 
   experiment_manager:
