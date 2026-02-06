@@ -85,8 +85,8 @@ class AbstractNode(MadsciClientMixin):
     """The handlers for the actions that the node supports."""
     action_history: ClassVar[dict[str, list[ActionResult]]] = {}
     """The history of the actions that the node has performed."""
-    logger: ClassVar[EventClient] = EventClient()
-    """The event logger for this node"""
+    logger: ClassVar[Optional[EventClient]] = None
+    """The event logger for this node (initialized lazily via _configure_clients)"""
     module_version: ClassVar[str] = "0.0.1"
     """The version of the module. Should match the version in the node definition."""
     supported_capabilities: ClassVar[NodeClientCapabilities] = (

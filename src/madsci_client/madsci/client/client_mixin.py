@@ -573,13 +573,14 @@ class MadsciClientMixin:
         """
         Clean up client resources.
 
-        Currently a no-op, but provided for future enhancements
-        where clients may need explicit cleanup (e.g., connection
-        pools, background threads).
+        This method closes the EventClient and any other clients that
+        have resources that need explicit cleanup (file handlers,
+        connection pools, background threads).
 
-        This method can be called in shutdown handlers or context
-        managers to ensure clean resource cleanup.
+        This method should be called in shutdown handlers or when
+        the component is no longer needed to prevent resource leaks.
         """
-        # Most clients are stateless REST consumers
-        # EventClient has background threads that cleanup automatically
-        # Future: Add explicit cleanup if needed
+        # Close EventClient to free file handlers and HTTP session
+        if self._event_client is not None:
+            self._event_client.close()
+            self._event_client = None
