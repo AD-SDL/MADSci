@@ -10,6 +10,13 @@ from dataclasses import dataclass
 from typing import Any, Literal, Optional
 
 from opentelemetry import metrics, trace
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import (
+    BatchLogRecordProcessor,
+    ConsoleLogRecordExporter,
+    SimpleLogRecordProcessor,
+)
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import (
     ConsoleMetricExporter,
@@ -50,6 +57,8 @@ class OtelRuntime:
     enabled: bool
     tracer_provider: Optional[TracerProvider] = None
     meter_provider: Optional[MeterProvider] = None
+    logger_provider: Optional[LoggerProvider] = None
+    otel_log_handler: Optional[logging.Handler] = None
     in_memory_span_exporter: Optional[InMemorySpanExporter] = None
     in_memory_metric_reader: Optional[InMemoryMetricReader] = None
 
@@ -115,10 +124,16 @@ def configure_otel(config: OtelBootstrapConfig) -> OtelRuntime:
     )
     metrics.set_meter_provider(meter_provider)
 
+    logger_provider, otel_log_handler = _configure_logging(
+        config=config, resource=resource, otlp_endpoint=otlp_endpoint
+    )
+
     _runtime = OtelRuntime(
         enabled=True,
         tracer_provider=tracer_provider,
         meter_provider=meter_provider,
+        logger_provider=logger_provider,
+        otel_log_handler=otel_log_handler,
         in_memory_span_exporter=in_memory_span_exporter,
         in_memory_metric_reader=in_memory_metric_reader,
     )
@@ -234,6 +249,66 @@ def _configure_metrics(
         return meter_provider, None
 
     return MeterProvider(resource=resource), None
+
+
+def _configure_logging(
+    *,
+    config: OtelBootstrapConfig,
+    resource: Resource,
+    otlp_endpoint: Optional[str],
+) -> tuple[LoggerProvider, logging.Handler]:
+    """Configure OTEL LoggerProvider with appropriate exporter.
+
+    Returns the LoggerProvider and a logging.Handler that bridges stdlib
+    logging to OTEL log records.
+    """
+    logger_provider = LoggerProvider(resource=resource)
+
+    if config.test_mode:
+        # For tests, use a simple processor with console exporter for visibility
+        logger_provider.add_log_record_processor(
+            SimpleLogRecordProcessor(ConsoleLogRecordExporter())
+        )
+        set_logger_provider(logger_provider)
+        handler = LoggingHandler(logger_provider=logger_provider)
+        return logger_provider, handler
+
+    if config.exporter == "console":
+        logger_provider.add_log_record_processor(
+            BatchLogRecordProcessor(ConsoleLogRecordExporter())
+        )
+        set_logger_provider(logger_provider)
+        handler = LoggingHandler(logger_provider=logger_provider)
+        return logger_provider, handler
+
+    if config.exporter == "otlp":
+        if not otlp_endpoint:
+            raise ValueError("otlp_endpoint is required when exporter='otlp'")
+        if config.otlp_protocol == "grpc":
+            from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (  # noqa: PLC0415
+                OTLPLogExporter,
+            )
+
+            logger_provider.add_log_record_processor(
+                BatchLogRecordProcessor(OTLPLogExporter(endpoint=otlp_endpoint))
+            )
+        else:
+            from opentelemetry.exporter.otlp.proto.http._log_exporter import (  # noqa: PLC0415
+                OTLPLogExporter,
+            )
+
+            logger_provider.add_log_record_processor(
+                BatchLogRecordProcessor(OTLPLogExporter(endpoint=otlp_endpoint))
+            )
+
+        set_logger_provider(logger_provider)
+        handler = LoggingHandler(logger_provider=logger_provider)
+        return logger_provider, handler
+
+    # exporter == "none" - no exporter, but still provide handler for trace context
+    set_logger_provider(logger_provider)
+    handler = LoggingHandler(logger_provider=logger_provider)
+    return logger_provider, handler
 
 
 def collect_metrics(runtime: OtelRuntime) -> Optional[Any]:

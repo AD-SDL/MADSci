@@ -27,7 +27,7 @@ from madsci.common.otel import (
 )
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
-from madsci.common.types.event_types import EventType
+from madsci.common.types.event_types import EventClientConfig, EventType
 from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
 
 # Type variables for generic typing
@@ -230,6 +230,18 @@ class AbstractManagerBase(
         # Set the name for the EventClient
         if hasattr(self, "_definition") and self._definition:
             self.name = f"{self._definition.name}"
+
+        # Propagate manager's OTEL settings to the EventClient config
+        # so that the EventClient will also export logs via OTLP
+        if getattr(self._settings, "otel_enabled", False):
+            self.event_client_config = EventClientConfig(
+                name=self.name,
+                otel_enabled=True,
+                otel_service_name=getattr(self._settings, "otel_service_name", None),
+                otel_exporter=getattr(self._settings, "otel_exporter", "console"),
+                otel_endpoint=getattr(self._settings, "otel_endpoint", None),
+                otel_protocol=getattr(self._settings, "otel_protocol", "grpc"),
+            )
 
         # Use the mixin's event_client property (lazy initialization)
         # This creates the EventClient if it doesn't exist

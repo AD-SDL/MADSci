@@ -528,9 +528,6 @@
         "y": 15
       },
       "id": 7,
-      "options": {
-        "query": ""
-      },
       "pluginVersion": "10.3.3",
       "targets": [
         {
@@ -541,7 +538,11 @@
           "queryType": "search",
           "refId": "A",
           "service": "$service",
-          "limit": 20
+          "limit": 20,
+          "operation": "",
+          "tags": "",
+          "minDuration": "",
+          "maxDuration": ""
         }
       ],
       "title": "Recent Traces",
@@ -609,28 +610,56 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "All",
-          "value": "$__all"
+          "selected": true,
+          "text": "madsci.event",
+          "value": "madsci.event"
         },
-        "datasource": {
-          "type": "jaeger",
-          "uid": "jaeger"
-        },
-        "definition": "services",
-        "description": "Select a MADSci service",
+        "description": "Select a MADSci service to view traces",
         "hide": 0,
-        "includeAll": true,
+        "includeAll": false,
         "label": "Service",
         "multi": false,
         "name": "service",
-        "options": [],
-        "query": "services",
-        "refresh": 2,
-        "regex": "",
+        "options": [
+          {
+            "selected": true,
+            "text": "madsci.event",
+            "value": "madsci.event"
+          },
+          {
+            "selected": false,
+            "text": "madsci.workcell",
+            "value": "madsci.workcell"
+          },
+          {
+            "selected": false,
+            "text": "madsci.data",
+            "value": "madsci.data"
+          },
+          {
+            "selected": false,
+            "text": "madsci.experiment",
+            "value": "madsci.experiment"
+          },
+          {
+            "selected": false,
+            "text": "madsci.resource",
+            "value": "madsci.resource"
+          },
+          {
+            "selected": false,
+            "text": "madsci.location",
+            "value": "madsci.location"
+          },
+          {
+            "selected": false,
+            "text": "madsci.lab",
+            "value": "madsci.lab"
+          }
+        ],
+        "query": "",
         "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
+        "type": "custom"
       }
     ]
   },
