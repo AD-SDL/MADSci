@@ -41,10 +41,14 @@ db_connection = create_mongo_fixture()
 
 
 @pytest.fixture
-def test_client(db_connection: Database) -> TestClient:
+def test_client(db_connection: Database, tmp_path: Path) -> TestClient:
     """Event Server Test Client Fixture"""
+    settings = EventManagerSettings(
+        email_alerts=EmailAlertsConfig(email_addresses=["test@example.com"]),
+        manager_definition=tmp_path / "event.manager.yaml",
+    )
     manager = EventManager(
-        settings=event_manager_settings,
+        settings=settings,
         definition=event_manager_def,
         db_connection=db_connection,
     )
@@ -550,13 +554,16 @@ class TestTTLIndex:
 class TestBackgroundRetentionTask:
     """Test the background retention task functionality."""
 
-    def test_archive_old_events_method(self, db_connection: Database) -> None:
+    def test_archive_old_events_method(
+        self, db_connection: Database, tmp_path: Path
+    ) -> None:
         """Test that _archive_old_events correctly archives old events."""
         # Create manager with retention enabled and short soft_delete period for testing
         settings = EventManagerSettings(
             retention_enabled=True,
             soft_delete_after_days=1,  # Archive events older than 1 day
             archive_batch_size=10,
+            manager_definition=tmp_path / "event.manager.yaml",
         )
         manager = EventManager(
             settings=settings,
@@ -599,7 +606,7 @@ class TestBackgroundRetentionTask:
         assert doc["archived"] is False
 
     def test_archive_old_events_respects_batch_limit(
-        self, db_connection: Database
+        self, db_connection: Database, tmp_path: Path
     ) -> None:
         """Test that _archive_old_events respects max_batches_per_run limit."""
         # Create manager with small batch limits
@@ -608,6 +615,7 @@ class TestBackgroundRetentionTask:
             soft_delete_after_days=1,
             archive_batch_size=2,  # 2 events per batch
             max_batches_per_run=2,  # Max 2 batches = 4 events max
+            manager_definition=tmp_path / "event.manager.yaml",
         )
         manager = EventManager(
             settings=settings,
@@ -641,12 +649,13 @@ class TestBackgroundRetentionTask:
         assert len(archived_docs) == 8
 
     def test_archive_old_events_no_events_to_archive(
-        self, db_connection: Database
+        self, db_connection: Database, tmp_path: Path
     ) -> None:
         """Test that _archive_old_events handles case with no events to archive."""
         settings = EventManagerSettings(
             retention_enabled=True,
             soft_delete_after_days=30,
+            manager_definition=tmp_path / "event.manager.yaml",
         )
         manager = EventManager(
             settings=settings,

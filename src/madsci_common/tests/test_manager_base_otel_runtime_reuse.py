@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from madsci.common.manager_base import AbstractManagerBase
@@ -25,7 +26,9 @@ class _TestManager(AbstractManagerBase[ManagerSettings, ManagerDefinition]):
         return ManagerHealth(healthy=True, description="ok")
 
 
-def test_manager_reuses_process_global_otel_runtime_when_disabled() -> None:
+def test_manager_reuses_process_global_otel_runtime_when_disabled(
+    tmp_path: Path,
+) -> None:
     runtime = configure_otel(
         OtelBootstrapConfig(
             enabled=True,
@@ -35,11 +38,16 @@ def test_manager_reuses_process_global_otel_runtime_when_disabled() -> None:
         )
     )
 
-    mgr = _TestManager(settings=ManagerSettings(otel_enabled=False))
+    mgr = _TestManager(
+        settings=ManagerSettings(
+            otel_enabled=False,
+            manager_definition=tmp_path / "manager.yaml",
+        )
+    )
     assert mgr._otel_runtime is runtime
 
 
-def test_manager_uses_existing_runtime_when_enabled() -> None:
+def test_manager_uses_existing_runtime_when_enabled(tmp_path: Path) -> None:
     runtime = configure_otel(
         OtelBootstrapConfig(
             enabled=True,
@@ -54,6 +62,7 @@ def test_manager_uses_existing_runtime_when_enabled() -> None:
             otel_enabled=True,
             otel_exporter="none",
             otel_service_name="madsci.test",
+            manager_definition=tmp_path / "manager.yaml",
         )
     )
     assert mgr._otel_runtime is runtime
