@@ -1,143 +1,3 @@
-# Phase 4: Documentation & Migration
-
-**Estimated Effort:** Small (1-2 days)
-**Breaking Changes:** None
-**Prerequisites:** Phase 3 complete
-
-## Goals
-
-- Document the new context system
-- Provide migration guide for existing code
-- Update examples
-- Add to developer guidelines
-
-## 4.1 Documentation Tasks
-
-### 4.1.1 Update Logging Guidelines
-
-Update `docs/dev/logging_guidelines.md` to include context usage:
-
-```markdown
-## EventClient Context System
-
-MADSci provides a hierarchical logging context system that automatically
-propagates context through your code. This enables logs from related
-operations to share common identifiers for easier debugging and analysis.
-
-### Basic Usage
-
-```python
-from madsci.common.context import get_event_client, event_client_context
-
-# Get a logger (uses context if available, creates new if not)
-logger = get_event_client()
-logger.info("Processing request")
-
-# Establish context at entry points
-with event_client_context(name="my_operation", operation_id="op-123") as logger:
-    logger.info("Starting operation")
-    # All logs within this block include operation_id
-
-    # Nested context adds more metadata
-    with event_client_context(name="substep", substep_id="sub-456") as step_logger:
-        step_logger.info("Executing substep")
-        # Logs include both operation_id and substep_id
-```
-
-### When to Use Context
-
-**Establish context at:**
-- Application entry points (main functions, CLI commands)
-- Experiment runs
-- Workflow executions
-- Request handlers (via middleware)
-- Long-running operations
-
-**Use `get_event_client()` in:**
-- Library code
-- Utility functions
-- Classes that may be used in different contexts
-- Any code that should inherit parent context
-
-### Best Practices
-
-1. **Prefer `get_event_client()` over `EventClient()`**
-   ```python
-   # Good - participates in context
-   logger = get_event_client()
-
-   # Legacy - creates isolated client
-   logger = EventClient()
-   ```
-
-2. **Add meaningful context metadata**
-   ```python
-   with event_client_context(
-       name="workflow",
-       workflow_id=workflow.id,
-       workflow_name=workflow.name,
-       user_id=user.id,
-   ):
-       # All nested logs include this context
-   ```
-
-3. **Use descriptive hierarchy names**
-   ```python
-   # Good - clear hierarchy
-   "experiment.workflow.step.action"
-
-   # Avoid - too generic
-   "process.subprocess.task"
-   ```
-
-4. **Override `_get_component_context()` in custom components**
-   ```python
-   class MyComponent(MadsciClientMixin):
-       def _get_component_context(self) -> dict[str, Any]:
-           return {
-               "component_type": "MyComponent",
-               "component_id": self.id,
-           }
-   ```
-```
-
-### 4.1.2 Create API Reference
-
-Add to docstrings (already done in implementation) and optionally generate API docs.
-
-### 4.1.3 Update README Examples
-
-Update relevant package READMEs to show context usage:
-
-**madsci_client/README.md:**
-```markdown
-## Logging with Context
-
-MADSci clients automatically participate in the logging context system:
-
-```python
-from madsci.common.context import event_client_context
-from madsci.client.resource_client import ResourceClient
-
-# All clients created within this context share logging context
-with event_client_context(name="my_app", app_id="app-123"):
-    resource_client = ResourceClient()
-    resource_client.logger.info("Using resource client")
-    # Log includes app_id="app-123"
-```
-```
-
-### 4.1.4 Add to Configuration.md
-
-Document any new configuration options related to context.
-
-## 4.2 Migration Guide
-
-### 4.2.1 Create Migration Document
-
-Create `docs/dev/event_client_context_plan/migration_guide.md`:
-
-```markdown
 # Migration Guide: EventClient Context System
 
 This guide helps you migrate existing code to use the new EventClient
@@ -246,6 +106,8 @@ class MyProcessor(MadsciClientMixin):
     REQUIRED_CLIENTS = ["event"]
 
 # After
+from typing import Any
+
 class MyProcessor(MadsciClientMixin):
     REQUIRED_CLIENTS = ["event"]
 
@@ -269,6 +131,9 @@ class MyProcessor(MadsciClientMixin):
 
 ```python
 # Before
+import click
+from madsci.client.event_client import EventClient
+
 @click.command()
 def my_command():
     logger = EventClient(name="my_command")
@@ -276,6 +141,7 @@ def my_command():
     do_work()
 
 # After
+import click
 from madsci.common.context import event_client_context
 
 @click.command()
@@ -289,6 +155,11 @@ def my_command():
 
 ```python
 # Before
+from fastapi import FastAPI
+from madsci.client.event_client import EventClient
+
+app = FastAPI()
+
 @app.post("/process")
 async def process_endpoint(request: ProcessRequest):
     logger = EventClient(name="process_endpoint")
@@ -296,7 +167,9 @@ async def process_endpoint(request: ProcessRequest):
     result = await do_processing(request)
     return result
 
-# After (with middleware - see Phase 3)
+# After (with middleware - automatically configured in managers)
+from madsci.common.context import get_event_client
+
 @app.post("/process")
 async def process_endpoint(request: ProcessRequest):
     logger = get_event_client()  # Uses middleware context
@@ -309,6 +182,8 @@ async def process_endpoint(request: ProcessRequest):
 
 ```python
 # Before
+from madsci.client.event_client import EventClient
+
 def background_task(task_id: str):
     logger = EventClient(name="background_task")
     logger.info(f"Task {task_id} starting")
@@ -321,6 +196,67 @@ def background_task(task_id: str):
     with event_client_context(name="background_task", task_id=task_id) as logger:
         logger.info("Task starting")
         do_work()  # Inherits task context
+```
+
+### Pattern: Experiment Application
+
+```python
+# Before
+from madsci.experiment_application import ExperimentApplication
+
+class MyExperiment(ExperimentApplication):
+    def run_experiment(self):
+        # Context is automatically established by ExperimentApplication
+        self.event_client.info("Running experiment")
+
+        # But nested operations might not share context
+        result = self.process_samples()
+        return result
+
+# After
+from madsci.experiment_application import ExperimentApplication
+from madsci.common.context import event_client_context, get_event_client
+
+class MyExperiment(ExperimentApplication):
+    def run_experiment(self):
+        # ExperimentApplication already establishes context!
+        # Just use get_event_client() in nested operations
+        self.event_client.info("Running experiment")
+
+        # Create nested context for major operations
+        with event_client_context(name="sample_processing", sample_count=10):
+            result = self.process_samples()
+        return result
+```
+
+### Pattern: Workflow Script
+
+```python
+# Before
+from madsci.client.workcell_client import WorkcellClient
+from madsci.client.resource_client import ResourceClient
+
+# Each client creates its own EventClient
+workcell = WorkcellClient()
+resource = ResourceClient()
+
+# No shared context between these clients
+workcell.start_workflow("my_workflow.yaml")
+
+# After
+from madsci.common.context import event_client_context
+from madsci.client.workcell_client import WorkcellClient
+from madsci.client.resource_client import ResourceClient
+
+with event_client_context(name="my_script", script_name="transfer_samples") as logger:
+    logger.info("Starting script")
+
+    # All clients now share the script context
+    workcell = WorkcellClient()
+    resource = ResourceClient()
+
+    # Logs from both clients will include script context
+    workcell.start_workflow("my_workflow.yaml")
 ```
 
 ## Testing with Context
@@ -354,6 +290,34 @@ def test_context_propagation():
         assert "test" in ctx.name
 ```
 
+### Testing Context Isolation
+
+```python
+import pytest
+import asyncio
+from madsci.common.context import event_client_context, get_event_client
+
+@pytest.mark.asyncio
+async def test_concurrent_contexts_isolated():
+    """Test that concurrent async operations have isolated contexts."""
+
+    async def task_with_context(task_id: str):
+        with event_client_context(name=f"task_{task_id}", task_id=task_id):
+            await asyncio.sleep(0.01)  # Yield to allow interleaving
+            client = get_event_client()
+            return client._bound_context.get("task_id")
+
+    # Run multiple tasks concurrently
+    results = await asyncio.gather(
+        task_with_context("1"),
+        task_with_context("2"),
+        task_with_context("3"),
+    )
+
+    # Each task should have seen its own context
+    assert results == ["1", "2", "3"]
+```
+
 ## Troubleshooting
 
 ### Logs Missing Context
@@ -364,6 +328,15 @@ def test_context_propagation():
 
 **Fix:** Replace `EventClient()` with `get_event_client()`.
 
+```python
+# Before (doesn't use context)
+logger = EventClient()
+
+# After (uses context)
+from madsci.common.context import get_event_client
+logger = get_event_client()
+```
+
 ### Too Many Log Files
 
 **Symptom:** Many separate log files being created.
@@ -371,6 +344,13 @@ def test_context_propagation():
 **Cause:** Multiple `EventClient()` instances with different names.
 
 **Fix:** Use context system to share single root client.
+
+```python
+# Establish context once at entry point
+with event_client_context(name="my_app") as logger:
+    # All components within this context share the same underlying logger
+    run_operations()
+```
 
 ### Context Not Propagating to Async Code
 
@@ -380,85 +360,109 @@ def test_context_propagation():
 using `await` properly (not `threading` or `multiprocessing`).
 
 **Note:** Context does NOT propagate across process boundaries. For
-multiprocessing, establish context in each subprocess.
-```
-
-## 4.3 Update Examples
-
-### 4.3.1 Update Example Lab
-
-Update example lab to demonstrate context usage:
+multiprocessing, establish context in each subprocess:
 
 ```python
-# example_lab/experiment.py
+import multiprocessing
 from madsci.common.context import event_client_context
 
-def run_example_experiment():
-    with event_client_context(
-        name="example_experiment",
-        experiment_type="demonstration",
-    ) as logger:
-        logger.info("Starting example experiment")
+def worker_process(task_id: str):
+    # Must establish context within each process
+    with event_client_context(name="worker", task_id=task_id) as logger:
+        logger.info("Worker starting")
+        do_work()
 
-        # All clients and nested operations inherit this context
-        run_workflow()
-
-        logger.info("Example experiment complete")
+if __name__ == "__main__":
+    with multiprocessing.Pool(4) as pool:
+        pool.map(worker_process, ["task1", "task2", "task3", "task4"])
 ```
 
-## 4.4 Acceptance Criteria
+### Context Lost After Exception
 
-- [x] Logging guidelines updated with context documentation
-- [x] Migration guide created
-- [x] Package READMEs updated with context examples
-- [x] Example lab demonstrates context usage
-- [x] API docstrings complete and accurate
-- [x] Troubleshooting section covers common issues
-- [x] All documentation reviewed for accuracy
+**Symptom:** After an exception, subsequent code loses context.
 
-## 4.5 Implementation Status (Completed Feb 2026)
+**Cause:** Exception caused premature exit from context manager.
 
-**Phase 4 has been fully implemented.** All acceptance criteria have been met.
+**Fix:** Use proper exception handling:
 
-### Files Modified
+```python
+from madsci.common.context import event_client_context
 
-1. **`docs/dev/logging_guidelines.md`**
-   - Added section on EventClient Context System
-   - Documented basic usage, when to use context, and best practices
-   - Added context hierarchy patterns table
-   - Added log output comparison (before/after)
-   - Added link to migration guide
+with event_client_context(name="operation", op_id="123") as logger:
+    try:
+        risky_operation()
+    except Exception as e:
+        logger.exception("Operation failed")  # Still has context
+        # Handle or re-raise
+```
 
-2. **`src/madsci_client/README.md`**
-   - Added "Logging with Context" section under Event Client
-   - Documented how clients automatically participate in context
-   - Added code examples for `event_client_context` and `get_event_client`
+## API Reference
 
-3. **`example_lab/example_transfer.py`**
-   - Updated to demonstrate context usage
-   - Wrapped entire script in `event_client_context`
-   - All clients now inherit shared logging context
+### `get_event_client()`
 
-4. **`docs/dev/event_client_context_plan/README.md`**
-   - Updated Phase 4 status to Complete
-   - Added link to migration guide
+```python
+def get_event_client(
+    name: Optional[str] = None,
+    create_if_missing: bool = True,
+    **context_kwargs: Any,
+) -> EventClient:
+    """
+    Get the current EventClient from context, or create one if none exists.
 
-### Files Created
+    Args:
+        name: Optional name override (used when creating new client)
+        create_if_missing: If False, raises RuntimeError when no context
+        **context_kwargs: Additional context to bind to the returned client
 
-1. **`docs/dev/event_client_context_plan/migration_guide.md`**
-   - Comprehensive migration guide with four levels of adoption
-   - Common migration patterns (CLI, API, background tasks, experiments)
-   - Testing patterns and troubleshooting section
-   - Complete API reference
+    Returns:
+        EventClient with inherited context
+    """
+```
 
-## 4.6 Future Considerations
+### `event_client_context()`
 
-Document these as potential future enhancements:
+```python
+@contextlib.contextmanager
+def event_client_context(
+    name: Optional[str] = None,
+    client: Optional[EventClient] = None,
+    inherit: bool = True,
+    **context_metadata: Any,
+) -> Generator[EventClient, None, None]:
+    """
+    Establish or extend an EventClient context.
+
+    Args:
+        name: Name for this context level (added to hierarchy)
+        client: Explicit EventClient to use
+        inherit: If True, inherit parent context; if False, create fresh
+        **context_metadata: Additional context to bind to all logs
+
+    Yields:
+        EventClient for this context
+    """
+```
+
+### `has_event_client_context()`
+
+```python
+def has_event_client_context() -> bool:
+    """Check if an EventClient context is currently active."""
+```
+
+### `get_event_client_context()`
+
+```python
+def get_event_client_context() -> Optional[EventClientContext]:
+    """Get the current EventClientContext, if any."""
+```
+
+## Future Considerations
+
+The following enhancements may be added in future releases:
 
 1. **Cross-process context propagation** via serialization
-2. **OTEL span creation** option for full tracing
+2. **OTEL span creation** option for full tracing integration
 3. **Context visualization** in UI dashboard
 4. **Context-based log filtering** in EventManager queries
 5. **Automatic context from environment** (e.g., K8s pod info)
-
-These are documented in the migration guide's "Future Considerations" section.

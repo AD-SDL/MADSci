@@ -11,7 +11,7 @@
 | Phase 1: Core Infrastructure | ✅ Complete | Context management functions and `EventClientContext` dataclass |
 | Phase 2: Client Updates | ✅ Complete | `MadsciClientMixin`, `RestNodeClient`, and other clients updated |
 | Phase 3: Application Integration | ✅ Complete | Experiment/workflow/manager/node context integration |
-| Phase 4: Documentation & Migration | 🔲 Planned | User documentation and migration guides |
+| Phase 4: Documentation & Migration | ✅ Complete | User documentation and migration guides |
 
 This directory contains the development plan for implementing a hierarchical EventClient context system that propagates through the MADSci system.
 
@@ -44,6 +44,7 @@ Introduce a context-based EventClient system using Python's `contextvars` that:
 - [Phase 2: Client Updates](./20_phase_2_client_updates.md)
 - [Phase 3: Application Integration](./30_phase_3_application_integration.md)
 - [Phase 4: Documentation & Migration](./40_phase_4_documentation.md)
+- [Migration Guide](./migration_guide.md)
 
 ## Quick Reference
 
