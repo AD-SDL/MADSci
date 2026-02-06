@@ -42,8 +42,10 @@ exporters:
     verbosity: basic
 
   # Jaeger for traces (via OTLP)
+  # Jaeger is configured to listen on port 14317 for OTLP gRPC to avoid conflict
+  # with the collector's own OTLP receiver on port 4317
   otlp/jaeger:
-    endpoint: localhost:4318
+    endpoint: localhost:14317
     tls:
       insecure: true
 

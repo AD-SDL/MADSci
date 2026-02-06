@@ -9,9 +9,6 @@
 # Usage:
 #   docker compose -f compose.yaml -f compose.otel.yaml up
 #
-# Note: The base compose.yaml includes otel_collector which receives OTLP telemetry.
-# This file adds the backends for storage and visualization.
-#
 # Default credentials:
 #   Grafana: admin / admin (change on first login)
 #
@@ -42,13 +39,14 @@ services:
     container_name: jaeger
     image: jaegertracing/all-in-one:1.54.0
     restart: unless-stopped
+    # Use host network mode so the collector can reach Jaeger on localhost
+    network_mode: host
     environment:
       - COLLECTOR_OTLP_ENABLED=true
-    ports:
-      # UI - localhost only for security
-      - "127.0.0.1:16686:16686"
-      # OTLP gRPC (collector receives from otel-collector)
-      - "127.0.0.1:4318:4317"
+      # Jaeger OTLP gRPC listens on 4317 by default, but the collector uses that
+      # Configure Jaeger to listen on alternate ports for OTLP
+      - COLLECTOR_OTLP_GRPC_HOST_PORT=:14317
+      - COLLECTOR_OTLP_HTTP_HOST_PORT=:14318
     volumes:
       - ${REPO_PATH:-.}/.madsci/jaeger:/badger
 
@@ -58,9 +56,7 @@ services:
     container_name: prometheus
     image: prom/prometheus:v2.50.1
     restart: unless-stopped
-    ports:
-      # UI - localhost only for security
-      - "127.0.0.1:9090:9090"
+    network_mode: host
     volumes:
       - ${REPO_PATH:-.}/example_lab/otel/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ${REPO_PATH:-.}/.madsci/prometheus:/prometheus
@@ -76,9 +72,7 @@ services:
     container_name: loki
     image: grafana/loki:2.9.4
     restart: unless-stopped
-    ports:
-      # API - localhost only for security
-      - "127.0.0.1:3100:3100"
+    network_mode: host
     volumes:
       - ${REPO_PATH:-.}/example_lab/otel/loki.yaml:/etc/loki/local-config.yaml:ro
       - ${REPO_PATH:-.}/.madsci/loki:/loki
@@ -90,6 +84,7 @@ services:
     container_name: grafana
     image: grafana/grafana:10.3.3
     restart: unless-stopped
+    network_mode: host
     environment:
       # Default admin password - CHANGE IN PRODUCTION
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -98,9 +93,6 @@ services:
       # Enable anonymous access for local development (read-only)
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-    ports:
-      # UI - localhost only for security
-      - "127.0.0.1:3000:3000"
     volumes:
       - ${REPO_PATH:-.}/.madsci/grafana:/var/lib/grafana
       - ${REPO_PATH:-.}/example_lab/otel/grafana/provisioning:/etc/grafana/provisioning:ro

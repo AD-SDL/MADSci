@@ -68,7 +68,7 @@ docker compose -f compose.yaml -f compose.otel.yaml up
 
 ## Accessing the UIs
 
-All UIs are bound to localhost for security:
+All services use host network mode:
 
 | Service    | URL                       | Description                        |
 |------------|---------------------------|------------------------------------|
@@ -76,6 +76,9 @@ All UIs are bound to localhost for security:
 | Jaeger     | http://localhost:16686    | Distributed tracing UI             |
 | Prometheus | http://localhost:9090     | Metrics querying                   |
 | Loki       | http://localhost:3100     | Log aggregation API                |
+
+**Note:** Jaeger's OTLP receiver is configured on ports 14317 (gRPC) and 14318 (HTTP)
+to avoid conflicts with the OTEL collector's receiver ports (4317/4318).
 
 ### Default Credentials
 
