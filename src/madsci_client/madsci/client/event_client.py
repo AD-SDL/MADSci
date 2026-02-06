@@ -264,21 +264,18 @@ class EventClient:
         Logs MADSci version, client configuration, and environment info
         to help with debugging and auditing.
         """
-        startup_info = {
-            "madsci_version": get_madsci_version(),
-            "client_name": self.name,
-            "event_server": str(self.event_server)
+        self._structlog_logger.info(
+            "EventClient initialized",
+            madsci_version=get_madsci_version(),
+            client_name=self.name,
+            event_server=str(self.event_server)
             if self.event_server
             else "Not configured",
-            "log_dir": str(self.log_dir),
-            "log_level": str(self.config.log_level),
-            "python_version": platform.python_version(),
-            "platform": platform.platform(),
-        }
-
-        # This is an early startup log where structlog may not yet be the
-        # effective logger for all handlers; keep it stdlib-safe.
-        self.logger.info("EventClient initialized: %s", startup_info)
+            log_dir=str(self.log_dir),
+            log_level=str(self.config.log_level),
+            python_version=platform.python_version(),
+            platform=platform.platform(),
+        )
 
     def _create_file_handler(self) -> logging.Handler:
         """Create the appropriate file handler based on rotation config.
