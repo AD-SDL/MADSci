@@ -39,7 +39,6 @@ from madsci.common.types.event_types import (
 from madsci.common.utils import create_http_session, threaded_task
 from opentelemetry.metrics import CallbackOptions, Observation
 from pydantic import BaseModel, ValidationError
-from rich.logging import RichHandler
 
 
 def get_madsci_version() -> str:
@@ -126,14 +125,17 @@ class EventClient:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.logfile = self.log_dir / f"{self.name}.log"
 
-        # Create the stdlib logger for file handling
+        # Create the stdlib logger for file handling and console output
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(get_log_level_value(self.config.log_level))
         for handler in self.logger.handlers:
             self.logger.removeHandler(handler)
         file_handler = self._create_file_handler()
         self.logger.addHandler(file_handler)
-        self.logger.addHandler(RichHandler(rich_tracebacks=True, show_path=False))
+        # Add a simple StreamHandler for console output - structlog handles formatting
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter("%(message)s"))
+        self.logger.addHandler(console_handler)
 
         # Create structlog logger for structured logging
         self._structlog_logger = create_instance_logger(
