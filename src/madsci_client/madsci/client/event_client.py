@@ -336,7 +336,16 @@ class EventClient:
         return name + ".gz"
 
     def __del__(self) -> None:
-        """Clean up retry thread on destruction."""
+        """Clean up resources on destruction."""
+        self.close()
+
+    def close(self) -> None:
+        """Clean up resources including file handlers and retry thread.
+
+        This method should be called when the EventClient is no longer needed,
+        especially in test scenarios where many clients may be created.
+        """
+        # Signal shutdown
         with self._buffer_lock:
             self._shutdown = True
 
@@ -344,11 +353,26 @@ class EventClient:
         if self._retry_thread is not None and self._retry_thread.is_alive():
             # Give the thread a reasonable time to finish (5 seconds)
             self._retry_thread.join(timeout=5.0)
-            if self._retry_thread.is_alive():
-                # Log warning if thread didn't finish cleanly
-                self.logger.warning(
-                    "Retry thread did not terminate within timeout during cleanup",
-                )
+
+        # Close and remove all handlers to free file descriptors
+        if hasattr(self, "logger") and self.logger:
+            for handler in self.logger.handlers[:]:
+                with contextlib.suppress(Exception):
+                    handler.close()
+                    self.logger.removeHandler(handler)
+
+        # Close HTTP session
+        if hasattr(self, "session") and self.session:
+            with contextlib.suppress(Exception):
+                self.session.close()
+
+    def __enter__(self) -> "EventClient":
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Context manager exit - clean up resources."""
+        self.close()
 
     # ==================== Context Binding ====================
 
