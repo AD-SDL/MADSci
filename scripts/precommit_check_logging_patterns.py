@@ -39,6 +39,7 @@ AUDITED_PATH_PREFIXES = {
     "src/madsci_node_module/madsci/node_module/",
     "src/madsci_squid/madsci/squid/",
     "src/madsci_client/madsci/client/",
+    "src/madsci_experiment_application/madsci/experiment_application/",
     "src/madsci_common/tests/",
     "src/madsci_client/tests/",
 }
