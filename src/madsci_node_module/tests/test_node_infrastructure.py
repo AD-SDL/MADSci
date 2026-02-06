@@ -525,6 +525,35 @@ class MockNode(AbstractNode):
         return f"Dict: {data}"
 
 
+def wait_for_action_completion(
+    node: AbstractNode, action_id: str, timeout: float = 5.0
+) -> ActionResult:
+    """Wait for an action to complete and return the final result.
+
+    Args:
+        node: The node running the action
+        action_id: The action ID to wait for
+        timeout: Maximum time to wait in seconds
+
+    Returns:
+        The final ActionResult
+
+    Raises:
+        AssertionError: If the action doesn't complete within timeout
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        result = node.get_action_result(action_id)
+        if result.status in [
+            ActionStatus.SUCCEEDED,
+            ActionStatus.FAILED,
+            ActionStatus.CANCELLED,
+        ]:
+            return result
+        time.sleep(0.01)  # Check every 10ms
+    raise AssertionError(f"Action {action_id} timed out after {timeout} seconds")
+
+
 class TestComplexTypeHandling:
     """Test Optional[LocationArgument] and other complex type handling in node actions."""
 
@@ -538,7 +567,8 @@ class TestComplexTypeHandling:
         request = ActionRequest(
             action_name="action_with_optional_location", args={"speed": 50}
         )
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded"
         assert "No movement" in result.json_result
 
@@ -559,7 +589,8 @@ class TestComplexTypeHandling:
             },
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         # This should succeed if the fix is applied
         assert result.status.value == "succeeded", (
             f"Expected success but got {result.status}: {result.errors}"
@@ -582,7 +613,8 @@ class TestComplexTypeHandling:
             },
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded", (
             f"Expected success but got {result.status}: {result.errors}"
         )
@@ -597,7 +629,8 @@ class TestComplexTypeHandling:
             args={"target": "string_location", "speed": 100},
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded"
         assert "string_location" in result.json_result
 
@@ -609,7 +642,8 @@ class TestComplexTypeHandling:
             action_name="action_with_optional_custom_model", args={}
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded"
         assert "No data" in result.json_result
 
@@ -622,7 +656,8 @@ class TestComplexTypeHandling:
             args={"data": {"value": "test_value", "count": 42}},
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         # This should succeed if the fix is applied
         assert result.status.value == "succeeded", (
             f"Expected success but got {result.status}: {result.errors}"
@@ -639,7 +674,8 @@ class TestComplexTypeHandling:
             args={"data": {"value": "test_value", "count": 10}},
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded"
 
 
