@@ -14,6 +14,7 @@ from madsci.common.backup_tools.backup_manager import BackupManager
 from madsci.common.backup_tools.backup_validator import BackupValidator
 from madsci.common.backup_tools.base_backup import AbstractBackupTool, BackupInfo
 from madsci.common.types.backup_types import MongoDBBackupSettings
+from madsci.common.types.event_types import EventType
 from pymongo import MongoClient
 
 
@@ -127,13 +128,23 @@ class MongoDBBackupTool(AbstractBackupTool):
         # Ensure backup directory exists (mongodump requires parent directory to exist)
         backup_path.mkdir(parents=True, exist_ok=True)
 
-        self.logger.info(f"Creating database backup: {backup_path}")
+        self.logger.info(
+            "Creating database backup",
+            event_type=EventType.LOG_INFO,
+            backup_path=str(backup_path),
+            database=self.settings.database,
+        )
         result = subprocess.run(  # noqa: S603
             mongodump_cmd, capture_output=True, text=True, check=True
         )
 
         if result.returncode == 0:
-            self.logger.info(f"Database backup completed successfully: {backup_path}")
+            self.logger.info(
+                "Database backup completed successfully",
+                event_type=EventType.LOG_INFO,
+                backup_path=str(backup_path),
+                database=self.settings.database,
+            )
 
             # Verify backup directory was created
             if not backup_path.exists():
@@ -158,7 +169,13 @@ class MongoDBBackupTool(AbstractBackupTool):
                     raise
                 except Exception as e:
                     # Log connection errors but continue with generic message
-                    self.logger.warning(f"Could not check if database is empty: {e}")
+                    self.logger.warning(
+                        "Could not check if database is empty",
+                        event_type=EventType.LOG_WARNING,
+                        database=self.settings.database,
+                        error=str(e),
+                        exc_info=True,
+                    )
 
                 raise RuntimeError(
                     f"mongodump created backup directory but database subdirectory is missing: {db_backup_path}. "
@@ -182,7 +199,13 @@ class MongoDBBackupTool(AbstractBackupTool):
 
     def _cleanup_failed_backup(self, backup_path: Path, error: Exception) -> None:
         """Clean up after a failed backup operation."""
-        self.logger.error(f"Backup failed: {error}")
+        self.logger.error(
+            "Backup failed",
+            event_type=EventType.LOG_ERROR,
+            backup_path=str(backup_path),
+            database=self.settings.database,
+            error=str(error),
+        )
         if backup_path.exists():
             shutil.rmtree(backup_path)
 
@@ -237,13 +260,24 @@ class MongoDBBackupTool(AbstractBackupTool):
         )
 
         try:
-            self.logger.info(f"Restoring database from backup: {backup_path}")
+            self.logger.info(
+                "Restoring database from backup",
+                event_type=EventType.LOG_INFO,
+                backup_path=str(backup_path),
+                database=restore_db,
+                source_database=self.settings.database,
+            )
             result = subprocess.run(  # noqa: S603
                 mongorestore_cmd, capture_output=True, text=True, check=True
             )
 
             if result.returncode == 0:
-                self.logger.info("Database restore completed successfully")
+                self.logger.info(
+                    "Database restore completed successfully",
+                    event_type=EventType.LOG_INFO,
+                    database=restore_db,
+                    source_database=self.settings.database,
+                )
                 # Verify restore success
                 if not self._verify_restore_success(backup_path):
                     raise RuntimeError("Restore verification failed")
@@ -251,7 +285,15 @@ class MongoDBBackupTool(AbstractBackupTool):
                 raise RuntimeError(f"mongorestore failed: {result.stderr}")
 
         except subprocess.CalledProcessError as e:
-            self.logger.error(f"Restore failed: {e.stderr}")
+            self.logger.error(
+                "Restore failed",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                database=restore_db,
+                source_database=self.settings.database,
+                stderr=str(e.stderr),
+                exc_info=True,
+            )
             self._cleanup_failed_restore(backup_path)
             raise RuntimeError(f"Database restore failed: {e}") from e
 
@@ -268,7 +310,14 @@ class MongoDBBackupTool(AbstractBackupTool):
         try:
             return self._validate_backup_integrity(backup_path)
         except Exception as e:
-            self.logger.error(f"Backup validation failed: {e}")
+            self.logger.error(
+                "Backup validation failed",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                database=self.settings.database,
+                error=str(e),
+                exc_info=True,
+            )
             return False
 
     def list_available_backups(self) -> List[BackupInfo]:
@@ -302,7 +351,13 @@ class MongoDBBackupTool(AbstractBackupTool):
                         )
                         backups.append(backup_info)
                     except (json.JSONDecodeError, KeyError) as e:
-                        self.logger.warning(f"Invalid metadata for backup {item}: {e}")
+                        self.logger.warning(
+                            "Invalid metadata for backup",
+                            event_type=EventType.LOG_WARNING,
+                            backup_path=str(item),
+                            error=str(e),
+                            exc_info=True,
+                        )
 
         # Sort by creation time (newest first)
         backups.sort(key=lambda x: x.created_at, reverse=True)
@@ -321,15 +376,28 @@ class MongoDBBackupTool(AbstractBackupTool):
         try:
             if backup_path.exists():
                 shutil.rmtree(backup_path)
-                self.logger.info(f"Deleted backup: {backup_path}")
+                self.logger.info(
+                    "Deleted backup",
+                    event_type=EventType.LOG_INFO,
+                    backup_path=str(backup_path),
+                )
             else:
-                self.logger.warning(f"Backup path does not exist: {backup_path}")
+                self.logger.warning(
+                    "Backup path does not exist",
+                    event_type=EventType.LOG_WARNING,
+                    backup_path=str(backup_path),
+                )
         except Exception as e:
             raise RuntimeError(f"Failed to delete backup {backup_path}: {e}") from e
 
     def _validate_backup_integrity(self, backup_path: Path) -> bool:
         """Perform comprehensive MongoDB backup validation."""
-        self.logger.info(f"Validating backup integrity: {backup_path}")
+        self.logger.info(
+            "Validating backup integrity",
+            event_type=EventType.LOG_INFO,
+            backup_path=str(backup_path),
+            database=self.settings.database,
+        )
 
         # Step 1: Verify backup completion
         if not self._verify_backup_completion(backup_path):
@@ -349,7 +417,12 @@ class MongoDBBackupTool(AbstractBackupTool):
         if not self._test_backup_restore(backup_path):
             raise RuntimeError(f"Backup restore test failed: {backup_path}")
 
-        self.logger.info("Backup integrity validation passed")
+        self.logger.info(
+            "Backup integrity validation passed",
+            event_type=EventType.LOG_INFO,
+            backup_path=str(backup_path),
+            database=self.settings.database,
+        )
         return True
 
     def _verify_backup_completion(self, backup_path: Path) -> bool:
@@ -365,16 +438,30 @@ class MongoDBBackupTool(AbstractBackupTool):
         # Check if backup contains collection files
         bson_files = list(db_backup_path.glob("*.bson"))
         if not bson_files:
-            self.logger.warning("No BSON files found in backup directory")
+            self.logger.warning(
+                "No BSON files found in backup directory",
+                event_type=EventType.LOG_WARNING,
+                backup_path=str(backup_path),
+                database=self.settings.database,
+            )
             return False
 
         # Check if backup contains metadata
         metadata_files = list(db_backup_path.glob("*.metadata.json"))
         if not metadata_files:
-            self.logger.warning("No metadata files found in backup directory")
+            self.logger.warning(
+                "No metadata files found in backup directory",
+                event_type=EventType.LOG_WARNING,
+                backup_path=str(backup_path),
+                database=self.settings.database,
+            )
 
         self.logger.info(
-            f"Backup verification successful: {len(bson_files)} collections backed up"
+            "Backup verification successful",
+            event_type=EventType.LOG_INFO,
+            backup_path=str(backup_path),
+            database=self.settings.database,
+            collections_count=len(bson_files),
         )
         return True
 
@@ -386,7 +473,12 @@ class MongoDBBackupTool(AbstractBackupTool):
         checksum_file = backup_path / "backup.checksum"
         checksum_file.write_text(checksum)
 
-        self.logger.info(f"Generated backup checksum: {checksum}")
+        self.logger.info(
+            "Generated backup checksum",
+            event_type=EventType.LOG_INFO,
+            backup_path=str(backup_path),
+            checksum=checksum,
+        )
         return checksum
 
     def _generate_backup_checksum_inline(self, backup_path: Path) -> str:
@@ -409,7 +501,11 @@ class MongoDBBackupTool(AbstractBackupTool):
         checksum_file = backup_path / "backup.checksum"
 
         if not checksum_file.exists():
-            self.logger.warning("No checksum file found for backup validation")
+            self.logger.warning(
+                "No checksum file found for backup validation",
+                event_type=EventType.LOG_WARNING,
+                backup_path=str(backup_path),
+            )
             return False
 
         try:
@@ -417,16 +513,30 @@ class MongoDBBackupTool(AbstractBackupTool):
             actual_checksum = self._generate_backup_checksum_inline(backup_path)
 
             if expected_checksum == actual_checksum:
-                self.logger.info("Backup checksum validation passed")
+                self.logger.info(
+                    "Backup checksum validation passed",
+                    event_type=EventType.LOG_INFO,
+                    backup_path=str(backup_path),
+                )
                 return True
 
             self.logger.error(
-                f"Backup checksum validation failed: expected {expected_checksum}, got {actual_checksum}"
+                "Backup checksum validation failed",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                expected_checksum=expected_checksum,
+                actual_checksum=actual_checksum,
             )
             return False
 
         except Exception as e:
-            self.logger.error(f"Error validating backup checksum: {e}")
+            self.logger.error(
+                "Error validating backup checksum",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                error=str(e),
+                exc_info=True,
+            )
             return False
 
     def _test_backup_restore(self, backup_path: Path) -> bool:
@@ -463,14 +573,32 @@ class MongoDBBackupTool(AbstractBackupTool):
 
             success = result.returncode == 0
             if success:
-                self.logger.info("Backup restore test successful")
+                self.logger.info(
+                    "Backup restore test successful",
+                    event_type=EventType.LOG_INFO,
+                    backup_path=str(backup_path),
+                    test_db=test_db_name,
+                )
             else:
-                self.logger.error(f"Backup restore test failed: {result.stderr}")
+                self.logger.error(
+                    "Backup restore test failed",
+                    event_type=EventType.LOG_ERROR,
+                    backup_path=str(backup_path),
+                    test_db=test_db_name,
+                    stderr=str(result.stderr),
+                )
 
             return success
 
         except Exception as e:
-            self.logger.error(f"Error testing backup restore: {e}")
+            self.logger.error(
+                "Error testing backup restore",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                test_db=test_db_name,
+                error=str(e),
+                exc_info=True,
+            )
             return False
         finally:
             # Clean up test database
@@ -480,7 +608,11 @@ class MongoDBBackupTool(AbstractBackupTool):
                 test_client.close()
             except Exception as e:
                 self.logger.warning(
-                    f"Failed to clean up test database {test_db_name}: {e}"
+                    "Failed to clean up test database",
+                    event_type=EventType.LOG_WARNING,
+                    test_db=test_db_name,
+                    error=str(e),
+                    exc_info=True,
                 )
 
     def _create_backup_metadata(self, backup_path: Path) -> None:
@@ -503,12 +635,22 @@ class MongoDBBackupTool(AbstractBackupTool):
         metadata_file = backup_path / "backup_metadata.json"
         metadata_file.write_text(json.dumps(metadata, indent=2))
 
-        self.logger.info(f"Created backup metadata: {metadata_file}")
+        self.logger.info(
+            "Created backup metadata",
+            event_type=EventType.LOG_INFO,
+            metadata_file=str(metadata_file),
+            backup_path=str(backup_path),
+        )
 
         # Save checksum to separate file (required for validation)
         checksum_file = backup_path / "backup.checksum"
         checksum_file.write_text(checksum)
-        self.logger.info(f"Created backup checksum: {checksum_file}")
+        self.logger.info(
+            "Created backup checksum",
+            event_type=EventType.LOG_INFO,
+            checksum_file=str(checksum_file),
+            backup_path=str(backup_path),
+        )
 
     def _verify_restore_success(self, backup_path: Path) -> bool:
         """Verify that MongoDB restore operation was successful."""
@@ -522,21 +664,35 @@ class MongoDBBackupTool(AbstractBackupTool):
                 # Verify collection exists in database
                 if collection_name not in self.database.list_collection_names():
                     self.logger.error(
-                        f"Collection {collection_name} not found after restore"
+                        "Collection not found after restore",
+                        event_type=EventType.LOG_ERROR,
+                        collection=collection_name,
                     )
                     return False
 
                 # Basic document count check
                 doc_count = self.database[collection_name].count_documents({})
                 self.logger.info(
-                    f"Collection {collection_name} has {doc_count} documents after restore"
+                    "Collection has documents after restore",
+                    event_type=EventType.LOG_INFO,
+                    collection=collection_name,
+                    doc_count=doc_count,
                 )
 
-            self.logger.info("Restore verification successful")
+            self.logger.info(
+                "Restore verification successful",
+                event_type=EventType.LOG_INFO,
+                database=self.settings.database,
+            )
             return True
 
         except Exception as e:
-            self.logger.error(f"Error verifying restore success: {e}")
+            self.logger.error(
+                "Error verifying restore success",
+                event_type=EventType.LOG_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
             return False
 
     def _cleanup_failed_restore(self, backup_path: Path) -> None:  # noqa: ARG002
@@ -545,12 +701,25 @@ class MongoDBBackupTool(AbstractBackupTool):
             # Drop all collections to clean state
             for collection_name in self.database.list_collection_names():
                 self.database.drop_collection(collection_name)
-                self.logger.info(f"Dropped collection {collection_name} during cleanup")
+                self.logger.info(
+                    "Dropped collection during cleanup",
+                    event_type=EventType.LOG_INFO,
+                    collection=collection_name,
+                )
 
-            self.logger.info("Failed restore cleanup completed")
+            self.logger.info(
+                "Failed restore cleanup completed",
+                event_type=EventType.LOG_INFO,
+                database=self.settings.database,
+            )
 
         except Exception as e:
-            self.logger.error(f"Error during failed restore cleanup: {e}")
+            self.logger.error(
+                "Error during failed restore cleanup",
+                event_type=EventType.LOG_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
 
     def _check_backup_validity(self, backup_path: Path) -> bool:
         """Check if a backup is valid by verifying its checksum."""

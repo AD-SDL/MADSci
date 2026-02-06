@@ -16,6 +16,7 @@ from madsci.common.backup_tools.backup_manager import BackupManager
 from madsci.common.backup_tools.backup_validator import BackupValidator
 from madsci.common.backup_tools.base_backup import AbstractBackupTool, BackupInfo
 from madsci.common.types.backup_types import PostgreSQLBackupSettings
+from madsci.common.types.event_types import EventType
 
 
 class BackupLockManager:
@@ -177,7 +178,13 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         cmd = self._build_pg_dump_command(backup_path, self.settings.backup_format)
 
         try:
-            self.logger.info(f"Creating database backup: {backup_path}")
+            self.logger.info(
+                "Creating database backup",
+                event_type=EventType.LOG_INFO,
+                backup_path=str(backup_path),
+                backup_format=self.settings.backup_format,
+                compression=bool(self.settings.compression),
+            )
             # Using subprocess with PostgreSQL tools - command is constructed safely
             result = subprocess.run(  # noqa: S603
                 cmd,
@@ -190,7 +197,9 @@ class PostgreSQLBackupTool(AbstractBackupTool):
 
             if result.returncode == 0:
                 self.logger.info(
-                    f"Database backup completed successfully: {backup_path}"
+                    "Database backup completed successfully",
+                    event_type=EventType.LOG_INFO,
+                    backup_path=str(backup_path),
                 )
             else:
                 raise RuntimeError(
@@ -198,10 +207,22 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                 )
 
         except subprocess.CalledProcessError as e:
-            self.logger.error(f"Backup failed: {e.stderr}")
+            self.logger.error(
+                "Backup failed",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                stderr=str(e.stderr),
+                exc_info=True,
+            )
             raise RuntimeError(f"Database backup failed: {e}") from e
         except subprocess.TimeoutExpired as e:
-            self.logger.error("Backup timed out after 1 hour")
+            self.logger.error(
+                "Backup timed out",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                timeout_seconds=3600,
+                exc_info=True,
+            )
             raise RuntimeError("Database backup timed out") from e
         except FileNotFoundError as e:
             raise RuntimeError(
@@ -223,12 +244,22 @@ class PostgreSQLBackupTool(AbstractBackupTool):
 
         # Save metadata to file
         metadata_path = self.validator.save_metadata(backup_path, metadata)
-        self.logger.info(f"Created backup metadata: {metadata_path}")
+        self.logger.info(
+            "Created backup metadata",
+            event_type=EventType.LOG_INFO,
+            backup_path=str(backup_path),
+            metadata_path=str(metadata_path),
+        )
 
         # Save checksum to separate file (required for validation)
         checksum = metadata["checksum"]
         checksum_path = self.validator.save_checksum(backup_path, checksum)
-        self.logger.info(f"Created backup checksum: {checksum_path}")
+        self.logger.info(
+            "Created backup checksum",
+            event_type=EventType.LOG_INFO,
+            backup_path=str(backup_path),
+            checksum_path=str(checksum_path),
+        )
 
     def _get_database_version(self) -> Optional[str]:
         """Get PostgreSQL database version."""
@@ -262,7 +293,12 @@ class PostgreSQLBackupTool(AbstractBackupTool):
             return result.stdout.strip() if result.returncode == 0 else None
 
         except Exception as e:
-            self.logger.warning(f"Failed to get database version: {e}")
+            self.logger.warning(
+                "Failed to get database version",
+                event_type=EventType.LOG_WARNING,
+                error=str(e),
+                exc_info=True,
+            )
             return None
 
     def _generate_backup_path(self, name_suffix: Optional[str] = None) -> Path:
@@ -340,7 +376,14 @@ class PostgreSQLBackupTool(AbstractBackupTool):
             except Exception as e:
                 # Cleanup failed backup
                 self._cleanup_failed_backup(backup_path)
-                raise RuntimeError(f"Backup creation failed: {e}") from e
+                self.logger.error(
+                    "Backup creation failed",
+                    event_type=EventType.LOG_ERROR,
+                    backup_path=str(backup_path),
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise RuntimeError("Backup creation failed") from e
 
     def restore_from_backup(
         self, backup_path: Path, target_db: Optional[str] = None
@@ -365,7 +408,12 @@ class PostgreSQLBackupTool(AbstractBackupTool):
             env["PGPASSWORD"] = db_info["password"]
 
         try:
-            self.logger.info(f"Restoring database from backup: {backup_path}")
+            self.logger.info(
+                "Restoring database from backup",
+                event_type=EventType.LOG_INFO,
+                backup_path=str(backup_path),
+                target_db=target_db,
+            )
 
             # Determine restore method based on backup format
             if backup_path.suffix == ".sql" or self.settings.backup_format == "plain":
@@ -401,7 +449,10 @@ class PostgreSQLBackupTool(AbstractBackupTool):
 
             if result.returncode == 0:
                 self.logger.info(
-                    f"Database restore completed successfully from: {backup_path}"
+                    "Database restore completed successfully",
+                    event_type=EventType.LOG_INFO,
+                    backup_path=str(backup_path),
+                    target_db=target_db,
                 )
             else:
                 raise RuntimeError(
@@ -409,10 +460,22 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                 )
 
         except subprocess.CalledProcessError as e:
-            self.logger.error(f"Restore failed: {e.stderr}")
+            self.logger.error(
+                "Restore failed",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                stderr=str(e.stderr),
+                exc_info=True,
+            )
             raise RuntimeError(f"Database restore failed: {e}") from e
         except subprocess.TimeoutExpired as e:
-            self.logger.error("Restore timed out after 1 hour")
+            self.logger.error(
+                "Restore timed out",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                timeout_seconds=3600,
+                exc_info=True,
+            )
             raise RuntimeError("Database restore timed out") from e
         except FileNotFoundError as e:
             tool = "psql" if backup_path.suffix == ".sql" else "pg_restore"
@@ -433,12 +496,20 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         try:
             # Check if backup file exists
             if not backup_path.exists():
-                self.logger.warning(f"Backup file not found: {backup_path}")
+                self.logger.warning(
+                    "Backup file not found",
+                    event_type=EventType.LOG_WARNING,
+                    backup_path=str(backup_path),
+                )
                 return False
 
             # Check if backup file has content
             if backup_path.is_file() and backup_path.stat().st_size == 0:
-                self.logger.warning(f"Backup file is empty: {backup_path}")
+                self.logger.warning(
+                    "Backup file is empty",
+                    event_type=EventType.LOG_WARNING,
+                    backup_path=str(backup_path),
+                )
                 return False
 
             # Validate using comprehensive backup validation
@@ -448,13 +519,22 @@ class PostgreSQLBackupTool(AbstractBackupTool):
 
             if not is_valid:
                 self.logger.warning(
-                    f"Backup validation failed for {backup_path}: {validation_result}"
+                    "Backup validation failed",
+                    event_type=EventType.LOG_WARNING,
+                    backup_path=str(backup_path),
+                    validation_result=validation_result,
                 )
 
             return is_valid
 
         except Exception as e:
-            self.logger.error(f"Backup validation failed: {e}")
+            self.logger.error(
+                "Backup validation failed",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                error=str(e),
+                exc_info=True,
+            )
             return False
 
     def list_available_backups(self) -> List[BackupInfo]:
@@ -471,7 +551,12 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                 backup for backup in all_backups if backup.backup_type == "postgresql"
             ]
         except Exception as e:
-            self.logger.error(f"Failed to list backups: {e}")
+            self.logger.error(
+                "Failed to list backups",
+                event_type=EventType.LOG_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
             return []
 
     def delete_backup(self, backup_path: Path) -> None:
@@ -495,14 +580,29 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                 else:
                     backup_path.unlink()
 
-                self.logger.info(f"Deleted backup: {backup_path}")
+                self.logger.info(
+                    "Deleted backup",
+                    event_type=EventType.LOG_INFO,
+                    backup_path=str(backup_path),
+                )
 
-            # Also delete metadata file
-            metadata_path = backup_path.with_suffix(".metadata.json")
-            if metadata_path.exists():
-                metadata_path.unlink()
-                self.logger.info(f"Deleted backup metadata: {metadata_path}")
+                # Also delete metadata file
+                metadata_path = backup_path.with_suffix(".metadata.json")
+                if metadata_path.exists():
+                    metadata_path.unlink()
+                    self.logger.info(
+                        "Deleted backup metadata",
+                        event_type=EventType.LOG_INFO,
+                        metadata_path=str(metadata_path),
+                        backup_path=str(backup_path),
+                    )
 
         except Exception as e:
-            self.logger.error(f"Failed to delete backup {backup_path}: {e}")
+            self.logger.error(
+                "Failed to delete backup",
+                event_type=EventType.LOG_ERROR,
+                backup_path=str(backup_path),
+                error=str(e),
+                exc_info=True,
+            )
             raise RuntimeError(f"Failed to delete backup: {e}") from e

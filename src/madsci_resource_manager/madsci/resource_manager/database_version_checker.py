@@ -277,7 +277,7 @@ class DatabaseVersionChecker:
             self.logger.error(
                 "Database migration required",
                 event_type=EventType.MANAGER_ERROR,
-                message=message,
+                details=message,
             )
             raise RuntimeError(message)
 
