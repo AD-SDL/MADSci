@@ -98,7 +98,9 @@ class TestMadsciClientMixinContextAwareness:
 
         class TestComponent(MadsciClientMixin):
             REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "resource"]
-            resource_server_url = "http://localhost:8003/"
+            resource_server_url = (
+                None  # Use local-only mode to avoid connection attempt
+            )
 
         with event_client_context(name="test", test_id="t-123"):
             component = TestComponent()
