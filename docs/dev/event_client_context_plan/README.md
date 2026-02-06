@@ -10,7 +10,7 @@
 |-------|--------|-------------|
 | Phase 1: Core Infrastructure | ✅ Complete | Context management functions and `EventClientContext` dataclass |
 | Phase 2: Client Updates | ✅ Complete | `MadsciClientMixin`, `RestNodeClient`, and other clients updated |
-| Phase 3: Application Integration | 🔲 Planned | Experiment/workflow integration |
+| Phase 3: Application Integration | ✅ Complete | Experiment/workflow/manager/node context integration |
 | Phase 4: Documentation & Migration | 🔲 Planned | User documentation and migration guides |
 
 This directory contains the development plan for implementing a hierarchical EventClient context system that propagates through the MADSci system.

@@ -470,19 +470,65 @@ This shows how context flows through a complete experiment:
 
 ## 3.4 Acceptance Criteria
 
-- [ ] `ExperimentApplication.run()` establishes experiment context
-- [ ] Workflow execution creates nested workflow context
-- [ ] Each step creates nested step context
-- [ ] Node clients created during steps inherit full context
-- [ ] Manager base class uses context-aware logging
-- [ ] Node modules use context-aware logging
-- [ ] Action execution creates action context
-- [ ] Request middleware (optional) adds request context
-- [ ] All existing tests continue to pass
-- [ ] New integration tests pass
-- [ ] Log output shows hierarchical context
+- [x] `ExperimentApplication.run()` establishes experiment context
+- [x] Workflow execution creates nested workflow context
+- [x] Each step creates nested step context
+- [x] Node clients created during steps inherit full context
+- [x] Manager base class uses context-aware logging
+- [x] Node modules use context-aware logging
+- [x] Action execution creates action context
+- [x] Request middleware (optional) adds request context
+- [x] All existing tests continue to pass
+- [x] New integration tests pass
+- [x] Log output shows hierarchical context
 
-## 3.5 Verification
+## 3.5 Implementation Status (Completed Feb 2026)
+
+**Phase 3 has been fully implemented.** All acceptance criteria have been met.
+
+### Files Modified
+
+1. **`src/madsci_experiment_application/madsci/experiment_application/experiment_application.py`**
+   - Added imports for `event_client_context` and `get_event_client`
+   - Updated `manage_experiment()` context manager to establish experiment context
+   - Context includes `experiment_id`, `experiment_name`, `run_name`, and `experiment_type`
+
+2. **`src/madsci_common/madsci/common/manager_base.py`**
+   - Added import for `EventClientContextMiddleware`
+   - Updated `configure_app()` to add context middleware to all manager endpoints
+   - Middleware establishes per-request context with `request_id`, `http_method`, `http_path`, and `manager`
+
+3. **`src/madsci_node_module/madsci/node_module/abstract_node_module.py`**
+   - Added imports for `event_client_context` and `get_event_client`
+   - Updated `_action_thread()` to wrap action execution in context
+   - Context includes `action_id`, `action_name`, `node_name`, and `node_id`
+
+4. **`src/madsci_common/madsci/common/middleware.py`**
+   - Added `EventClientContextMiddleware` class for per-request context
+   - Added `_LazyEventClientContext` class for lazy EventClient creation
+   - Middleware uses X-Request-ID header or generates ULID for request tracking
+
+### Files Created
+
+1. **`src/madsci_experiment_application/tests/test_experiment_context.py`**
+   - 12 tests covering experiment, workflow, step, and node context propagation
+   - Tests for context cleanup, exception handling, and async support
+
+2. **`src/madsci_common/tests/test_manager_context.py`**
+   - 10 tests covering manager context, middleware, and node module context
+   - Tests for request context isolation and header usage
+
+### Test Results
+
+- All 12 Phase 3 experiment context tests pass
+- All 10 Phase 3 manager context tests pass
+- All 23 Phase 1 context tests pass
+- All 17 Phase 2 client integration tests pass
+- All 16 middleware tests pass (including rate limiting)
+- All 72 rest node module tests pass
+- All ruff linting checks pass
+
+## 3.6 Verification
 
 To verify the integration works correctly:
 

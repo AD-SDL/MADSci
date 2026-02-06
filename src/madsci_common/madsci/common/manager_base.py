@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.middleware import RateLimitMiddleware
+from madsci.common.middleware import EventClientContextMiddleware, RateLimitMiddleware
 from madsci.common.otel import (
     OtelBootstrapConfig,
     configure_otel,
@@ -450,6 +450,16 @@ class AbstractManagerBase(
             allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
+        )
+
+        # Add EventClient context middleware for hierarchical logging
+        # This establishes per-request context that includes request_id, path, etc.
+        manager_name = (
+            self._definition.name if hasattr(self._definition, "name") else "manager"
+        )
+        app.add_middleware(
+            EventClientContextMiddleware,
+            manager_name=manager_name,
         )
 
     # Server creation and lifecycle methods

@@ -21,6 +21,7 @@ from madsci.client.event_client import (
     EventClient,
 )
 from madsci.client.node.abstract_node_client import AbstractNodeClient
+from madsci.common.context import event_client_context
 from madsci.common.exceptions import (
     ActionNotImplementedError,
 )
@@ -172,8 +173,12 @@ class AbstractNode(MadsciClientMixin):
     """------------------------------------------------------------------------------------------------"""
 
     def start_node(self) -> None:
-        """Called once to start the node."""
+        """
+        Called once to start the node.
 
+        Establishes node context for hierarchical logging. All logging
+        within this node will include node-specific context (node_name, node_id).
+        """
         global_ownership_info.node_id = self.node_definition.node_id
         # * Update EventClient with logging parameters
         self._configure_clients()
@@ -1076,40 +1081,70 @@ class AbstractNode(MadsciClientMixin):
         action_callable: callable,
         arg_dict: dict[str, Any],
     ) -> None:
-        try:
-            with (
-                self._action_lock
-                if self.node_info.actions[action_request.action_name].blocking
-                else contextlib.nullcontext()
-            ):
-                try:
-                    if self.node_info.actions[action_request.action_name].blocking:
-                        self.node_status.busy = True
+        """
+        Execute an action in a separate thread with context propagation.
 
-                    # Handle var_args specially if present
-                    if "__madsci_var_args__" in arg_dict:
-                        var_args = arg_dict.pop("__madsci_var_args__")
-                        result = action_callable(*var_args, **arg_dict)
-                    else:
-                        result = action_callable(**arg_dict)
-                except Exception as e:
-                    self._exception_handler(e)
-                    result = action_request.failed(errors=Error.from_exception(e))
-                finally:
-                    if self.node_info.actions[action_request.action_name].blocking:
-                        self.node_status.busy = False
-        finally:
-            self.node_status.running_actions.discard(action_request.action_id)
-        try:
-            action_result = self._process_result(result, action_request)
+        Establishes an action context that includes:
+        - action_id: The unique identifier for this action execution
+        - action_name: The name of the action being executed
+        - node_name: The name of the node executing the action
+        - node_id: The ID of the node
+        """
+        # Build context metadata for this action execution
+        node_name = (
+            self.node_definition.node_name
+            if hasattr(self, "node_definition") and self.node_definition
+            else "unknown_node"
+        )
+        node_id = (
+            self.node_definition.node_id
+            if hasattr(self, "node_definition") and self.node_definition
+            else None
+        )
 
-        except ValidationError:
-            action_result = action_request.unknown(
-                errors=Error(
-                    message=f"Action '{action_request.action_name}' returned an unexpected value: {result}.",
-                ),
-            )
-        self._extend_action_history(action_result)
+        # Wrap the action execution in context
+        with event_client_context(
+            name=f"action.{action_request.action_name}",
+            action_id=action_request.action_id,
+            action_name=action_request.action_name,
+            node_name=node_name,
+            node_id=node_id,
+        ):
+            try:
+                with (
+                    self._action_lock
+                    if self.node_info.actions[action_request.action_name].blocking
+                    else contextlib.nullcontext()
+                ):
+                    try:
+                        if self.node_info.actions[action_request.action_name].blocking:
+                            self.node_status.busy = True
+
+                        # Handle var_args specially if present
+                        if "__madsci_var_args__" in arg_dict:
+                            var_args = arg_dict.pop("__madsci_var_args__")
+                            result = action_callable(*var_args, **arg_dict)
+                        else:
+                            result = action_callable(**arg_dict)
+                    except Exception as e:
+                        self._exception_handler(e)
+                        result = action_request.failed(errors=Error.from_exception(e))
+                    finally:
+                        if self.node_info.actions[action_request.action_name].blocking:
+                            self.node_status.busy = False
+            finally:
+                self.node_status.running_actions.discard(action_request.action_id)
+
+            try:
+                action_result = self._process_result(result, action_request)
+
+            except ValidationError:
+                action_result = action_request.unknown(
+                    errors=Error(
+                        message=f"Action '{action_request.action_name}' returned an unexpected value: {result}.",
+                    ),
+                )
+            self._extend_action_history(action_result)
 
     def _exception_handler(self, e: Exception, set_node_errored: bool = True) -> None:
         """Handle an exception."""

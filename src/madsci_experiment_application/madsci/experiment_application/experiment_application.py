@@ -6,7 +6,10 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
 
-from madsci.common.context import set_current_madsci_context
+from madsci.common.context import (
+    event_client_context,
+    set_current_madsci_context,
+)
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
@@ -278,15 +281,36 @@ class ExperimentApplication(RestNode):
     def manage_experiment(
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
     ) -> contextmanager:
-        """Context manager to start and end an experiment."""
+        """
+        Context manager to start and end an experiment with full context propagation.
+
+        All logging within this experiment run will include the experiment
+        context, enabling hierarchical log filtering and analysis.
+        """
         self.start_experiment_run(run_name=run_name, run_description=run_description)
-        try:
-            yield
-        except Exception as e:
-            self.handle_exception(e)
-            raise (e)
-        else:
-            self.end_experiment()
+
+        # Establish experiment context for hierarchical logging
+        experiment_id = self.experiment.experiment_id if self.experiment else None
+        experiment_name = (
+            self.experiment.experiment_design.experiment_name
+            if self.experiment and self.experiment.experiment_design
+            else None
+        )
+
+        with event_client_context(
+            name="experiment",
+            experiment_id=experiment_id,
+            experiment_name=experiment_name,
+            run_name=run_name,
+            experiment_type=self.__class__.__name__,
+        ):
+            try:
+                yield
+            except Exception as e:
+                self.handle_exception(e)
+                raise (e)
+            else:
+                self.end_experiment()
 
     @threaded_daemon
     def loop(self) -> None:
