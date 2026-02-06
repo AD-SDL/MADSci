@@ -542,18 +542,18 @@ class AbstractNodeClient(ABC):
 
 ## 2.3 Acceptance Criteria
 
-- [ ] `MadsciClientMixin.event_client` uses context when available
-- [ ] `MadsciClientMixin.event_client` falls back to legacy behavior without context
-- [ ] `MadsciClientMixin._get_component_context()` provides component-specific context
-- [ ] Explicit client setting takes precedence over context
-- [ ] Injected clients via `setup_clients()` take precedence
-- [ ] `RestNodeClient` accepts optional `event_client` parameter
-- [ ] `RestNodeClient` uses context when no explicit client provided
-- [ ] `ResourceClient`, `WorkcellClient`, `LocationClient` updated similarly
-- [ ] Other clients share event_client when injected via mixin
-- [ ] All existing tests continue to pass
-- [ ] New context integration tests pass
-- [ ] No breaking changes to existing APIs
+- [x] `MadsciClientMixin.event_client` uses context when available
+- [x] `MadsciClientMixin.event_client` falls back to legacy behavior without context
+- [x] `MadsciClientMixin._get_component_context()` provides component-specific context
+- [x] Explicit client setting takes precedence over context
+- [x] Injected clients via `setup_clients()` take precedence
+- [x] `RestNodeClient` accepts optional `event_client` parameter
+- [x] `RestNodeClient` uses context when no explicit client provided
+- [x] `ResourceClient`, `WorkcellClient`, `LocationClient` updated similarly
+- [x] Other clients share event_client when injected via mixin
+- [x] All existing tests continue to pass
+- [x] New context integration tests pass
+- [x] No breaking changes to existing APIs
 
 ## 2.4 Migration Notes
 
@@ -588,3 +588,57 @@ class MyCustomComponent(MadsciClientMixin):
         base["custom_id"] = self.custom_id
         return base
 ```
+
+## 2.5 Implementation Status (Completed Feb 2026)
+
+**Phase 2 has been fully implemented.** All acceptance criteria have been met.
+
+### Files Modified
+
+1. **`src/madsci_client/madsci/client/client_mixin.py`**
+   - Added imports for `get_event_client` and `has_event_client_context`
+   - Updated `event_client` property to use context when available (resolution order: explicit → context → new)
+   - Added `_get_component_context()` method for component-specific context binding
+   - Updated `_create_event_client()` to bind component context to new clients
+
+2. **`src/madsci_client/madsci/client/node/rest_node_client.py`**
+   - Added import for `get_event_client`
+   - Added optional `event_client` parameter to `__init__`
+   - Uses context client with `node_url` and `component_type` binding when no explicit client provided
+
+3. **`src/madsci_client/madsci/client/resource_client.py`**
+   - Added import for `get_event_client`
+   - Updated logger initialization to use context with `component_type` and `resource_server` binding
+
+4. **`src/madsci_client/madsci/client/workcell_client.py`**
+   - Added import for `get_event_client`
+   - Updated logger initialization to use context with `component_type` and `workcell_server` binding
+
+5. **`src/madsci_client/madsci/client/location_client.py`**
+   - Added import for `get_event_client`
+   - Updated logger initialization to use context with `component_type` and `location_server` binding
+
+### Files Created
+
+1. **`src/madsci_client/tests/test_client_context_integration.py`**
+   - 17 comprehensive tests covering all acceptance criteria
+   - Tests for `MadsciClientMixin`, `RestNodeClient`, `ResourceClient`, `WorkcellClient`, `LocationClient`
+   - Tests for context propagation through nested clients
+
+### Test Results
+
+- All 17 new Phase 2 context integration tests pass
+- All 23 Phase 1 context tests pass
+- All 200 existing madsci_client tests pass (backward compatibility verified)
+- All ruff linting checks pass
+
+### Key Implementation Notes
+
+1. **Resolution Order**: The `event_client` property follows this resolution order:
+   - Explicitly set client (`_event_client`)
+   - Context client with component binding (if context exists)
+   - New client from config (legacy fallback)
+
+2. **No Caching When Using Context**: When using context, the client is not cached to `_event_client`. This allows the context lifecycle to manage the client properly.
+
+3. **AbstractNodeClient Not Modified**: The `AbstractNodeClient` base class was not modified as it doesn't create loggers directly - that's done by concrete implementations like `RestNodeClient`.

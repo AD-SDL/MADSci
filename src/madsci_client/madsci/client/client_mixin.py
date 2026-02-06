@@ -14,6 +14,7 @@ from madsci.client.lab_client import LabClient
 from madsci.client.location_client import LocationClient
 from madsci.client.resource_client import ResourceClient
 from madsci.client.workcell_client import WorkcellClient
+from madsci.common.context import get_event_client, has_event_client_context
 from madsci.common.types.client_types import LocationClientConfig, WorkcellClientConfig
 from madsci.common.types.datapoint_types import ObjectStorageSettings
 from madsci.common.types.event_types import EventClientConfig
@@ -212,21 +213,62 @@ class MadsciClientMixin:
         """
         Get or create the EventClient instance.
 
+        Resolution order:
+        1. Explicitly set client (_event_client)
+        2. Context client with component binding (if context exists)
+        3. New client from config (legacy fallback)
+
         Returns:
             EventClient: The event client for logging and event management
         """
-        if self._event_client is None:
-            self._event_client = self._create_event_client()
+        if self._event_client is not None:
+            return self._event_client
+
+        # Try to use context if available
+        if has_event_client_context():
+            component_context = self._get_component_context()
+            # Get from context with component binding
+            # Don't cache this - let context handle lifecycle
+            return get_event_client(**component_context)
+
+        # No context - create and cache new client (legacy behavior)
+        self._event_client = self._create_event_client()
         return self._event_client
 
     @event_client.setter
     def event_client(self, client: EventClient) -> None:
-        """Set the EventClient instance."""
+        """Set the EventClient instance explicitly."""
         self._event_client = client
+
+    def _get_component_context(self) -> dict[str, Any]:
+        """
+        Get component-specific context to bind to the EventClient.
+
+        Override in subclasses to add specific context.
+
+        Returns:
+            Dictionary of context key-value pairs.
+
+        Example:
+            def _get_component_context(self) -> dict[str, Any]:
+                return {
+                    "component_type": "MyComponent",
+                    "custom_field": self.custom_value,
+                }
+        """
+        context: dict[str, Any] = {}
+        if hasattr(self, "name") and self.name:
+            context["component_name"] = self.name
+        if hasattr(self, "__class__"):
+            context["component_type"] = self.__class__.__name__
+        return context
 
     def _create_event_client(self) -> EventClient:
         """
-        Factory method for creating EventClient.
+        Factory method for creating EventClient (legacy fallback).
+
+        This is called when no context is available and no explicit
+        client has been set.
 
         Returns:
             EventClient: A new EventClient instance
@@ -246,8 +288,13 @@ class MadsciClientMixin:
         if hasattr(self, "name"):
             kwargs["name"] = self.name
 
-        # Create client (falls back to context if no overrides)
-        return EventClient(**kwargs)
+        # Create client and bind component context
+        client = EventClient(**kwargs)
+        component_context = self._get_component_context()
+        if component_context:
+            client = client.bind(**component_context)
+
+        return client
 
     # ResourceClient property and factory
     @property

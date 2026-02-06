@@ -9,7 +9,7 @@ from typing import Any, ClassVar, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
-from madsci.common.context import get_current_madsci_context
+from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.client_types import ResourceClientConfig
 from madsci.common.types.event_types import EventType
@@ -249,7 +249,16 @@ class ResourceClient:
                     f"Could not connect to the resource manager at {self.resource_server_url}."
                 )
         self.local_resources = {}
-        self.logger = event_client if event_client is not None else EventClient()
+        # Use injected client, context client, or create new
+        if event_client is not None:
+            self.logger = event_client
+        else:
+            self.logger = get_event_client(
+                component_type="ResourceClient",
+                resource_server=str(self.resource_server_url)
+                if self.resource_server_url
+                else None,
+            )
         if self.resource_server_url is None:
             self.logger.warning(
                 "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",

@@ -11,6 +11,7 @@ from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
 )
+from madsci.common.context import get_event_client
 from madsci.common.types.action_types import (
     ActionFiles,
     ActionRequest,
@@ -80,17 +81,32 @@ class RestNodeClient(AbstractNodeClient):
     )
 
     def __init__(
-        self, url: AnyUrl, config: Optional[RestNodeClientConfig] = None
-    ) -> "RestNodeClient":
+        self,
+        url: AnyUrl,
+        config: Optional[RestNodeClientConfig] = None,
+        event_client: Optional[EventClient] = None,
+    ) -> None:
         """
         Initialize the client.
 
         Args:
             url: The URL of the node to connect to.
-            config: Client configuration for retry and timeout settings. If not provided, uses default NodeClientConfig.
+            config: Client configuration for retry and timeout settings.
+                   If not provided, uses default RestNodeClientConfig.
+            event_client: Optional EventClient to use for logging.
+                         If not provided, uses context client or creates new.
         """
         super().__init__(url)
-        self.logger = EventClient()
+
+        # Use injected client, context client, or create new
+        if event_client is not None:
+            self.logger = event_client
+        else:
+            self.logger = get_event_client(
+                node_url=str(url),
+                component_type="RestNodeClient",
+            )
+
         self.config = config if config is not None else RestNodeClientConfig()
         self.session = create_http_session(config=self.config)
 

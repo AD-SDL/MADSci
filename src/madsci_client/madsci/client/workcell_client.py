@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
-from madsci.common.context import get_current_madsci_context
+from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.base_types import PathLike
@@ -59,7 +59,16 @@ class WorkcellClient:
             if workcell_server_url
             else get_current_madsci_context().workcell_server_url
         )
-        self.logger = event_client or EventClient()
+        # Use injected client, context client, or create new
+        if event_client is not None:
+            self.logger = event_client
+        else:
+            self.logger = get_event_client(
+                component_type="WorkcellClient",
+                workcell_server=str(self.workcell_server_url)
+                if self.workcell_server_url
+                else None,
+            )
         if not self.workcell_server_url:
             raise ValueError(
                 "Workcell server URL was not provided and cannot be found in the context."
