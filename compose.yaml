@@ -38,20 +38,14 @@ x-madsci-service: &madsci-service
 services:
   otel_collector:
     container_name: otel_collector
-    image: otel/opentelemetry-collector:latest
+    # Pin to a specific version for reproducibility
+    # Use otel/opentelemetry-collector-contrib for full exporter support
+    image: otel/opentelemetry-collector-contrib:0.96.0
     restart: unless-stopped
     network_mode: host
     volumes:
       - ${REPO_PATH:-.}/example_lab/otel-collector.yaml:/etc/otelcol/config.yaml:ro
     command: ["--config=/etc/otelcol/config.yaml"]
-
-  otel_collector_health:
-    container_name: otel_collector_health
-    image: curlimages/curl:8.5.0
-    network_mode: host
-    depends_on:
-      - otel_collector
-    command: ["sh", "-c", "sleep 2 && curl -sf http://localhost:4317 || true"]
 
   madsci_mongodb:
     container_name: madsci_mongodb
