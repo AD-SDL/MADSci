@@ -130,7 +130,7 @@ class MongoDBBackupTool(AbstractBackupTool):
 
         self.logger.info(
             "Creating database backup",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             backup_path=str(backup_path),
             database=self.settings.database,
         )
@@ -141,7 +141,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         if result.returncode == 0:
             self.logger.info(
                 "Database backup completed successfully",
-                event_type=EventType.LOG_INFO,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 database=self.settings.database,
             )
@@ -171,7 +171,7 @@ class MongoDBBackupTool(AbstractBackupTool):
                     # Log connection errors but continue with generic message
                     self.logger.warning(
                         "Could not check if database is empty",
-                        event_type=EventType.LOG_WARNING,
+                        event_type=EventType.BACKUP_CREATE,
                         database=self.settings.database,
                         error=str(e),
                         exc_info=True,
@@ -201,7 +201,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         """Clean up after a failed backup operation."""
         self.logger.error(
             "Backup failed",
-            event_type=EventType.LOG_ERROR,
+            event_type=EventType.BACKUP_CREATE,
             backup_path=str(backup_path),
             database=self.settings.database,
             error=str(error),
@@ -262,7 +262,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         try:
             self.logger.info(
                 "Restoring database from backup",
-                event_type=EventType.LOG_INFO,
+                event_type=EventType.BACKUP_RESTORE,
                 backup_path=str(backup_path),
                 database=restore_db,
                 source_database=self.settings.database,
@@ -274,7 +274,7 @@ class MongoDBBackupTool(AbstractBackupTool):
             if result.returncode == 0:
                 self.logger.info(
                     "Database restore completed successfully",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_RESTORE,
                     database=restore_db,
                     source_database=self.settings.database,
                 )
@@ -287,7 +287,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         except subprocess.CalledProcessError as e:
             self.logger.error(
                 "Restore failed",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_RESTORE,
                 backup_path=str(backup_path),
                 database=restore_db,
                 source_database=self.settings.database,
@@ -312,7 +312,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         except Exception as e:
             self.logger.error(
                 "Backup validation failed",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 database=self.settings.database,
                 error=str(e),
@@ -353,7 +353,7 @@ class MongoDBBackupTool(AbstractBackupTool):
                     except (json.JSONDecodeError, KeyError) as e:
                         self.logger.warning(
                             "Invalid metadata for backup",
-                            event_type=EventType.LOG_WARNING,
+                            event_type=EventType.BACKUP_CREATE,
                             backup_path=str(item),
                             error=str(e),
                             exc_info=True,
@@ -378,13 +378,13 @@ class MongoDBBackupTool(AbstractBackupTool):
                 shutil.rmtree(backup_path)
                 self.logger.info(
                     "Deleted backup",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                 )
             else:
                 self.logger.warning(
                     "Backup path does not exist",
-                    event_type=EventType.LOG_WARNING,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                 )
         except Exception as e:
@@ -394,7 +394,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         """Perform comprehensive MongoDB backup validation."""
         self.logger.info(
             "Validating backup integrity",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             backup_path=str(backup_path),
             database=self.settings.database,
         )
@@ -419,7 +419,7 @@ class MongoDBBackupTool(AbstractBackupTool):
 
         self.logger.info(
             "Backup integrity validation passed",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             backup_path=str(backup_path),
             database=self.settings.database,
         )
@@ -440,7 +440,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         if not bson_files:
             self.logger.warning(
                 "No BSON files found in backup directory",
-                event_type=EventType.LOG_WARNING,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 database=self.settings.database,
             )
@@ -451,14 +451,14 @@ class MongoDBBackupTool(AbstractBackupTool):
         if not metadata_files:
             self.logger.warning(
                 "No metadata files found in backup directory",
-                event_type=EventType.LOG_WARNING,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 database=self.settings.database,
             )
 
         self.logger.info(
             "Backup verification successful",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             backup_path=str(backup_path),
             database=self.settings.database,
             collections_count=len(bson_files),
@@ -475,7 +475,7 @@ class MongoDBBackupTool(AbstractBackupTool):
 
         self.logger.info(
             "Generated backup checksum",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             backup_path=str(backup_path),
             checksum=checksum,
         )
@@ -503,7 +503,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         if not checksum_file.exists():
             self.logger.warning(
                 "No checksum file found for backup validation",
-                event_type=EventType.LOG_WARNING,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
             )
             return False
@@ -515,14 +515,14 @@ class MongoDBBackupTool(AbstractBackupTool):
             if expected_checksum == actual_checksum:
                 self.logger.info(
                     "Backup checksum validation passed",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                 )
                 return True
 
             self.logger.error(
                 "Backup checksum validation failed",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 expected_checksum=expected_checksum,
                 actual_checksum=actual_checksum,
@@ -532,7 +532,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         except Exception as e:
             self.logger.error(
                 "Error validating backup checksum",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 error=str(e),
                 exc_info=True,
@@ -575,14 +575,14 @@ class MongoDBBackupTool(AbstractBackupTool):
             if success:
                 self.logger.info(
                     "Backup restore test successful",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_RESTORE,
                     backup_path=str(backup_path),
                     test_db=test_db_name,
                 )
             else:
                 self.logger.error(
                     "Backup restore test failed",
-                    event_type=EventType.LOG_ERROR,
+                    event_type=EventType.BACKUP_RESTORE,
                     backup_path=str(backup_path),
                     test_db=test_db_name,
                     stderr=str(result.stderr),
@@ -593,7 +593,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         except Exception as e:
             self.logger.error(
                 "Error testing backup restore",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_RESTORE,
                 backup_path=str(backup_path),
                 test_db=test_db_name,
                 error=str(e),
@@ -609,7 +609,7 @@ class MongoDBBackupTool(AbstractBackupTool):
             except Exception as e:
                 self.logger.warning(
                     "Failed to clean up test database",
-                    event_type=EventType.LOG_WARNING,
+                    event_type=EventType.BACKUP_RESTORE,
                     test_db=test_db_name,
                     error=str(e),
                     exc_info=True,
@@ -637,7 +637,7 @@ class MongoDBBackupTool(AbstractBackupTool):
 
         self.logger.info(
             "Created backup metadata",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             metadata_file=str(metadata_file),
             backup_path=str(backup_path),
         )
@@ -647,7 +647,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         checksum_file.write_text(checksum)
         self.logger.info(
             "Created backup checksum",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             checksum_file=str(checksum_file),
             backup_path=str(backup_path),
         )
@@ -665,7 +665,7 @@ class MongoDBBackupTool(AbstractBackupTool):
                 if collection_name not in self.database.list_collection_names():
                     self.logger.error(
                         "Collection not found after restore",
-                        event_type=EventType.LOG_ERROR,
+                        event_type=EventType.BACKUP_RESTORE,
                         collection=collection_name,
                     )
                     return False
@@ -674,14 +674,14 @@ class MongoDBBackupTool(AbstractBackupTool):
                 doc_count = self.database[collection_name].count_documents({})
                 self.logger.info(
                     "Collection has documents after restore",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_RESTORE,
                     collection=collection_name,
                     doc_count=doc_count,
                 )
 
             self.logger.info(
                 "Restore verification successful",
-                event_type=EventType.LOG_INFO,
+                event_type=EventType.BACKUP_RESTORE,
                 database=self.settings.database,
             )
             return True
@@ -689,7 +689,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         except Exception as e:
             self.logger.error(
                 "Error verifying restore success",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_RESTORE,
                 error=str(e),
                 exc_info=True,
             )
@@ -703,20 +703,20 @@ class MongoDBBackupTool(AbstractBackupTool):
                 self.database.drop_collection(collection_name)
                 self.logger.info(
                     "Dropped collection during cleanup",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_RESTORE,
                     collection=collection_name,
                 )
 
             self.logger.info(
                 "Failed restore cleanup completed",
-                event_type=EventType.LOG_INFO,
+                event_type=EventType.BACKUP_RESTORE,
                 database=self.settings.database,
             )
 
         except Exception as e:
             self.logger.error(
                 "Error during failed restore cleanup",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_RESTORE,
                 error=str(e),
                 exc_info=True,
             )

@@ -1197,7 +1197,8 @@ class TestEventClientLogRotation:
         # Write enough data to trigger rotation (need to fill up 1KB multiple times)
         for i in range(200):
             client.info(
-                f"Test message {i} with some extra content to fill up space and trigger rotation"
+                "Test message with some extra content to fill up space and trigger rotation",
+                i=i,
             )
 
         # Check that backup files were created
@@ -1220,7 +1221,8 @@ class TestEventClientLogRotation:
         # Write a lot of data to trigger multiple rotations
         for i in range(500):
             client.info(
-                f"Test message {i} - filling up log space quickly here with extra text"
+                "Test message - filling up log space quickly here with extra text",
+                i=i,
             )
 
         # Count log files (main + backups)
@@ -1243,7 +1245,8 @@ class TestEventClientLogRotation:
         # Write enough data to trigger rotation
         for i in range(200):
             client.info(
-                f"Compression test message {i} with content to fill space and trigger rotation"
+                "Compression test message with content to fill space and trigger rotation",
+                i=i,
             )
 
         # Check for compressed backup files
@@ -1275,7 +1278,8 @@ class TestEventClientLogRotation:
         # Write enough data to trigger rotation
         for i in range(200):
             client.info(
-                f"No compression test message {i} with extra content to trigger rotation"
+                "No compression test message with extra content to trigger rotation",
+                i=i,
             )
 
         # Check for compressed backup files - should be none

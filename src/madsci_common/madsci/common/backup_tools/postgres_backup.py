@@ -180,7 +180,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         try:
             self.logger.info(
                 "Creating database backup",
-                event_type=EventType.LOG_INFO,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 backup_format=self.settings.backup_format,
                 compression=bool(self.settings.compression),
@@ -198,7 +198,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
             if result.returncode == 0:
                 self.logger.info(
                     "Database backup completed successfully",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                 )
             else:
@@ -209,7 +209,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         except subprocess.CalledProcessError as e:
             self.logger.error(
                 "Backup failed",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 stderr=str(e.stderr),
                 exc_info=True,
@@ -218,7 +218,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         except subprocess.TimeoutExpired as e:
             self.logger.error(
                 "Backup timed out",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 timeout_seconds=3600,
                 exc_info=True,
@@ -246,7 +246,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         metadata_path = self.validator.save_metadata(backup_path, metadata)
         self.logger.info(
             "Created backup metadata",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             backup_path=str(backup_path),
             metadata_path=str(metadata_path),
         )
@@ -256,7 +256,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         checksum_path = self.validator.save_checksum(backup_path, checksum)
         self.logger.info(
             "Created backup checksum",
-            event_type=EventType.LOG_INFO,
+            event_type=EventType.BACKUP_CREATE,
             backup_path=str(backup_path),
             checksum_path=str(checksum_path),
         )
@@ -295,7 +295,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         except Exception as e:
             self.logger.warning(
                 "Failed to get database version",
-                event_type=EventType.LOG_WARNING,
+                event_type=EventType.BACKUP_CREATE,
                 error=str(e),
                 exc_info=True,
             )
@@ -378,7 +378,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                 self._cleanup_failed_backup(backup_path)
                 self.logger.error(
                     "Backup creation failed",
-                    event_type=EventType.LOG_ERROR,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                     error=str(e),
                     exc_info=True,
@@ -410,7 +410,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         try:
             self.logger.info(
                 "Restoring database from backup",
-                event_type=EventType.LOG_INFO,
+                event_type=EventType.BACKUP_RESTORE,
                 backup_path=str(backup_path),
                 target_db=target_db,
             )
@@ -450,7 +450,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
             if result.returncode == 0:
                 self.logger.info(
                     "Database restore completed successfully",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_RESTORE,
                     backup_path=str(backup_path),
                     target_db=target_db,
                 )
@@ -462,7 +462,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         except subprocess.CalledProcessError as e:
             self.logger.error(
                 "Restore failed",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_RESTORE,
                 backup_path=str(backup_path),
                 stderr=str(e.stderr),
                 exc_info=True,
@@ -471,7 +471,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         except subprocess.TimeoutExpired as e:
             self.logger.error(
                 "Restore timed out",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_RESTORE,
                 backup_path=str(backup_path),
                 timeout_seconds=3600,
                 exc_info=True,
@@ -498,7 +498,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
             if not backup_path.exists():
                 self.logger.warning(
                     "Backup file not found",
-                    event_type=EventType.LOG_WARNING,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                 )
                 return False
@@ -507,7 +507,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
             if backup_path.is_file() and backup_path.stat().st_size == 0:
                 self.logger.warning(
                     "Backup file is empty",
-                    event_type=EventType.LOG_WARNING,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                 )
                 return False
@@ -520,7 +520,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
             if not is_valid:
                 self.logger.warning(
                     "Backup validation failed",
-                    event_type=EventType.LOG_WARNING,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                     validation_result=validation_result,
                 )
@@ -530,7 +530,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         except Exception as e:
             self.logger.error(
                 "Backup validation failed",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 error=str(e),
                 exc_info=True,
@@ -553,7 +553,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         except Exception as e:
             self.logger.error(
                 "Failed to list backups",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 error=str(e),
                 exc_info=True,
             )
@@ -582,7 +582,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
 
                 self.logger.info(
                     "Deleted backup",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                 )
 
@@ -592,7 +592,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                     metadata_path.unlink()
                     self.logger.info(
                         "Deleted backup metadata",
-                        event_type=EventType.LOG_INFO,
+                        event_type=EventType.BACKUP_CREATE,
                         metadata_path=str(metadata_path),
                         backup_path=str(backup_path),
                     )
@@ -600,7 +600,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
         except Exception as e:
             self.logger.error(
                 "Failed to delete backup",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 error=str(e),
                 exc_info=True,

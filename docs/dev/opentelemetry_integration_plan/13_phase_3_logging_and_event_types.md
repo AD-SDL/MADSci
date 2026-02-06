@@ -111,6 +111,24 @@ Additional updates in February 2026 (this change):
   - `src/madsci_common/madsci/common/mongodb_migration_tool.py`
 - Audited and updated these modules to pass the hook (no f-strings in log calls).
 
+Additional updates in February 2026 (this change):
+
+- Fixed incorrect `EventType.EXPERIMENT_CANCELLED` wire value (`"experiment_stop"` -> `"experiment_cancelled"`).
+- Added Phase 3B backup EventTypes:
+  - `BACKUP_CREATE`
+  - `BACKUP_RESTORE`
+- Audited and updated the backup tooling to emit backup-domain EventTypes instead of generic `LOG_*`:
+  - `src/madsci_common/madsci/common/backup_tools/mongodb_backup.py`
+  - `src/madsci_common/madsci/common/backup_tools/postgres_backup.py`
+  - `src/madsci_common/madsci/common/backup_tools/backup_manager.py`
+  - `src/madsci_common/madsci/common/backup_tools/backup_validator.py`
+- Tightened the repo-local logging-pattern checker to use an explicit allowlist (ratchet strategy), and expanded it to
+  include a small set of tests:
+  - `scripts/precommit_check_logging_patterns.py`
+  - Allowlisted `src/madsci_common/tests/` and `src/madsci_client/tests/`
+- Updated EventClient rotation tests to avoid f-strings in log calls (structured fields instead):
+  - `src/madsci_client/tests/test_event_client.py`
+
 Additional updates in February 2026 (logging-audit ratchet):
 
 - Expanded `madsci.resource_manager` coverage in the `madsci-logging-patterns` pre-commit hook scope:

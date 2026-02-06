@@ -482,7 +482,7 @@ class EventType(str, Enum):
     EXPERIMENT_START = "experiment_start"
     EXPERIMENT_COMPLETE = "experiment_complete"
     EXPERIMENT_FAILED = "experiment_failed"
-    EXPERIMENT_CANCELLED = "experiment_stop"
+    EXPERIMENT_CANCELLED = "experiment_cancelled"
     EXPERIMENT_PAUSE = "experiment_pause"
     EXPERIMENT_CONTINUED = "experiment_continued"
     # *Campaign Events
@@ -527,6 +527,10 @@ class EventType(str, Enum):
     ACTION_START = "action_start"
     ACTION_COMPLETE = "action_complete"
     ACTION_FAILED = "action_failed"
+
+    # *Backup Events (Phase 3B)
+    BACKUP_CREATE = "backup_create"
+    BACKUP_RESTORE = "backup_restore"
 
     @classmethod
     def _missing_(cls, value: object) -> "EventType":
@@ -615,6 +619,9 @@ EVENT_TYPE_DESCRIPTIONS: dict[EventType, str] = {
     EventType.MANAGER_STOP: "Manager process/service stopped.",
     EventType.MANAGER_ERROR: "Manager encountered an error.",
     EventType.MANAGER_HEALTH_CHECK: "Manager health check performed.",
+    # Backup events
+    EventType.BACKUP_CREATE: "Backup created.",
+    EventType.BACKUP_RESTORE: "Backup restored.",
 }
 
 

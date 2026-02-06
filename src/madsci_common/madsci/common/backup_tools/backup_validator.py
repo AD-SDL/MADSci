@@ -88,7 +88,7 @@ class BackupValidator:
         if stored_checksum is None:
             self.logger.warning(
                 "No checksum file found",
-                event_type=EventType.LOG_WARNING,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
             )
             return False
@@ -100,13 +100,13 @@ class BackupValidator:
             if is_valid:
                 self.logger.info(
                     "Checksum validation passed",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                 )
             else:
                 self.logger.error(
                     "Checksum validation failed",
-                    event_type=EventType.LOG_ERROR,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                     expected_checksum=stored_checksum,
                     actual_checksum=current_checksum,
@@ -117,7 +117,7 @@ class BackupValidator:
         except Exception as e:
             self.logger.error(
                 "Error validating checksum",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 error=str(e),
                 exc_info=True,
@@ -194,7 +194,7 @@ class BackupValidator:
         except json.JSONDecodeError as e:
             self.logger.error(
                 "Invalid metadata JSON",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 metadata_file=str(metadata_file),
                 error=str(e),
                 exc_info=True,
@@ -293,7 +293,7 @@ class BackupValidator:
         except Exception as e:
             self.logger.error(
                 "Error validating SQL backup structure",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 error=str(e),
                 exc_info=True,

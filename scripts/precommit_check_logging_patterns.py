@@ -22,6 +22,32 @@ TARGET_METHODS = {
     "exception",
 }
 
+# This hook is intended to ratchet a small, curated set of production modules
+# over time. It is still executed by pre-commit for any staged Python file, but
+# we only report violations for files under this allowlist.
+#
+# Rationale: avoids overwhelming contributors while we incrementally migrate the
+# codebase to structured logging patterns.
+AUDITED_PATH_PREFIXES = {
+    "src/madsci_common/madsci/common/",
+    "src/madsci_event_manager/madsci/event_manager/",
+    "src/madsci_resource_manager/madsci/resource_manager/",
+    "src/madsci_location_manager/madsci/location_manager/",
+    "src/madsci_data_manager/madsci/data_manager/",
+    "src/madsci_experiment_manager/madsci/experiment_manager/",
+    "src/madsci_workcell_manager/madsci/workcell_manager/",
+    "src/madsci_node_module/madsci/node_module/",
+    "src/madsci_squid/madsci/squid/",
+    "src/madsci_client/madsci/client/",
+    "src/madsci_common/tests/",
+    "src/madsci_client/tests/",
+}
+
+
+def _is_audited(file_path: Path) -> bool:
+    normalized = file_path.as_posix()
+    return any(normalized.startswith(prefix) for prefix in AUDITED_PATH_PREFIXES)
+
 
 def _iter_py_files(paths: list[str]) -> list[Path]:
     files: list[Path] = []
@@ -117,6 +143,8 @@ def main(argv: list[str]) -> int:
     violations: list[str] = []
 
     for file_path in files:
+        if not _is_audited(file_path):
+            continue
         try:
             tree = ast.parse(
                 file_path.read_text(encoding="utf-8"), filename=str(file_path)

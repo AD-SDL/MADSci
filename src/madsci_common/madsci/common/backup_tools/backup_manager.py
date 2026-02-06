@@ -38,7 +38,7 @@ class BackupManager:
         if not backup_dir.exists():
             self.logger.warning(
                 "Backup directory does not exist",
-                event_type=EventType.LOG_WARNING,
+                event_type=EventType.BACKUP_CREATE,
                 backup_dir=str(backup_dir),
             )
             return []
@@ -68,7 +68,7 @@ class BackupManager:
             except Exception as e:
                 self.logger.warning(
                     "Error processing backup",
-                    event_type=EventType.LOG_WARNING,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup_path),
                     error=str(e),
                 )
@@ -119,7 +119,7 @@ class BackupManager:
         except Exception as e:
             self.logger.error(
                 "Error creating backup metadata",
-                event_type=EventType.LOG_ERROR,
+                event_type=EventType.BACKUP_CREATE,
                 backup_path=str(backup_path),
                 error=str(e),
             )
@@ -162,13 +162,13 @@ class BackupManager:
                 removed_count += 1
                 self.logger.info(
                     "Removed old backup",
-                    event_type=EventType.LOG_INFO,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup.backup_path),
                 )
             except Exception as e:
                 self.logger.error(
                     "Error removing backup",
-                    event_type=EventType.LOG_ERROR,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup.backup_path),
                     error=str(e),
                 )
@@ -309,13 +309,13 @@ class BackupManager:
                     cleaned_files.append(backup_path)
                     self.logger.info(
                         "Cleaned up incomplete backup",
-                        event_type=EventType.LOG_INFO,
+                        event_type=EventType.BACKUP_CREATE,
                         backup_path=str(backup_path),
                     )
                 except Exception as e:
                     self.logger.error(
                         "Error cleaning up incomplete backup",
-                        event_type=EventType.LOG_ERROR,
+                        event_type=EventType.BACKUP_CREATE,
                         backup_path=str(backup_path),
                         error=str(e),
                     )
@@ -335,13 +335,13 @@ class BackupManager:
                     cleaned_files.append(metadata_file)
                     self.logger.info(
                         "Cleaned up orphaned metadata",
-                        event_type=EventType.LOG_INFO,
+                        event_type=EventType.BACKUP_CREATE,
                         metadata_file=str(metadata_file),
                     )
                 except Exception as e:
                     self.logger.error(
                         "Error cleaning up orphaned metadata",
-                        event_type=EventType.LOG_ERROR,
+                        event_type=EventType.BACKUP_CREATE,
                         metadata_file=str(metadata_file),
                         error=str(e),
                     )
@@ -361,13 +361,13 @@ class BackupManager:
                     cleaned_files.append(checksum_file)
                     self.logger.info(
                         "Cleaned up orphaned checksum",
-                        event_type=EventType.LOG_INFO,
+                        event_type=EventType.BACKUP_CREATE,
                         checksum_file=str(checksum_file),
                     )
                 except Exception as e:
                     self.logger.error(
                         "Error cleaning up orphaned checksum",
-                        event_type=EventType.LOG_ERROR,
+                        event_type=EventType.BACKUP_CREATE,
                         checksum_file=str(checksum_file),
                         error=str(e),
                     )
@@ -406,7 +406,7 @@ class BackupManager:
                 corrupted_backups.append(str(backup.backup_path))
                 self.logger.error(
                     "Error checking backup integrity",
-                    event_type=EventType.LOG_ERROR,
+                    event_type=EventType.BACKUP_CREATE,
                     backup_path=str(backup.backup_path),
                     error=str(e),
                 )
