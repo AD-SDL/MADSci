@@ -259,7 +259,7 @@ src/madsci_common/
 
 ## Important Notes
 
-- Python 3.9+ required
+- Python 3.10+ required
 - Docker required for running services and some tests
 - Pre-commit hooks enforce code quality standards
 - The project is currently in beta with potential breaking changes

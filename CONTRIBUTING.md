@@ -12,7 +12,7 @@ Thank you for your interest in contributing to MADSci! This guide will help you 
 
 ### Prerequisites
 
-- **Python 3.9+**: Required for all MADSci components
+- **Python 3.10+**: Required for all MADSci components
 - **[PDM](https://pdm-project.org/)**: For dependency management and virtual environments
 - **[Docker](https://docs.docker.com/engine/install/)**: Required for services, integration tests, and end-to-end tests
   - Alternatives: [Rancher Desktop](https://rancherdesktop.io/), [Podman](https://podman.io/)

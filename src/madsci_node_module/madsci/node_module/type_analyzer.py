@@ -103,9 +103,9 @@ All errors include detailed messages with the problematic type hint for debuggin
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
+from types import UnionType
 from typing import Annotated, Any, Optional, Union, get_args, get_origin
 
 from madsci.common.types.action_types import (
@@ -115,13 +115,6 @@ from madsci.common.types.action_types import (
     ActionResult,
 )
 from madsci.common.types.location_types import LocationArgument
-
-# Python 3.10+ has types.UnionType for the | operator
-# In Python 3.9, we only have typing.Union
-if sys.version_info >= (3, 10):
-    from types import UnionType
-else:
-    UnionType = None  # type: ignore[assignment, misc]
 
 
 @dataclass

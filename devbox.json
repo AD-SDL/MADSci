@@ -1,9 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.16.0/.schema/devbox.schema.json",
   "packages": [
-    "python@3.9",
+    "python@3.10",
     "uv@latest",
-    "pdm@latest"
+    "pdm@latest",
+    "just@latest"
   ],
   "env": {
     "PDM_USE_UV": "True"
