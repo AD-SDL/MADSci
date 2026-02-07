@@ -1,6 +1,7 @@
 name: Docker Image
 
 on:
+  pull_request:
   push: # * Run for every push
     branches: [ "*" ]
     tags: [ '*' ]
