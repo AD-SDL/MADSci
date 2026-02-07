@@ -2,19 +2,14 @@ name: Build Docker Images
 
 on:
   pull_request:
-  push: # * Run for every push
-    branches: [ "*" ]
+  push:
+    # Only run on main branch and tags to avoid duplicates with pull_request
+    # PRs will trigger via pull_request event, pushes to main/tags run here
+    branches: [ "main" ]
     tags: [ '*' ]
   schedule: # Run on Tuesday's at 12:00
     - cron: '0 12 * * 2'
   workflow_dispatch: # Run manually
-
-# Prevent duplicate runs when both push and pull_request events fire
-# Use head_ref (PR source branch) if available, otherwise use ref_name
-# This ensures push and PR events for the same branch share a concurrency group
-concurrency:
-  group: docker-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
 
 env:
   # Use docker.io for Docker Hub if empty
