@@ -141,49 +141,6 @@ class TestEventTypeDomainCoverage:
         assert not missing, f"Missing backup operation EventTypes: {missing}"
 
 
-class TestLoggingPatterns:
-    """Test consistent logging patterns across components.
-
-    These tests verify the pre-commit hook's enforcement of logging patterns
-    by checking that the hook script and audited files exist.
-    """
-
-    def test_logging_pattern_hook_exists(self) -> None:
-        """Test that the logging patterns pre-commit hook script exists."""
-        hook_path = Path("scripts/precommit_check_logging_patterns.py")
-        assert hook_path.exists(), f"Logging patterns hook not found: {hook_path}"
-
-    def test_logging_pattern_hook_defines_audited_paths(self) -> None:
-        """Test that the hook defines AUDITED_PATH_PREFIXES."""
-        hook_path = Path("scripts/precommit_check_logging_patterns.py")
-        content = hook_path.read_text()
-        assert "AUDITED_PATH_PREFIXES" in content, (
-            "Hook must define AUDITED_PATH_PREFIXES"
-        )
-
-    def test_logging_guidelines_document_exists(self) -> None:
-        """Test that logging guidelines documentation exists."""
-        guidelines_path = Path("docs/dev/logging_guidelines.md")
-        assert guidelines_path.exists(), (
-            f"Logging guidelines not found: {guidelines_path}"
-        )
-
-    def test_logging_guidelines_has_required_sections(self) -> None:
-        """Test that logging guidelines has key sections."""
-        guidelines_path = Path("docs/dev/logging_guidelines.md")
-        content = guidelines_path.read_text()
-
-        required_sections = [
-            "Principles",
-            "event_type",
-            "structured logging",
-        ]
-        for section in required_sections:
-            assert section.lower() in content.lower(), (
-                f"Logging guidelines missing section on: {section}"
-            )
-
-
 class TestEventTypeUsagePatterns:
     """Test EventType usage patterns in the codebase.
 

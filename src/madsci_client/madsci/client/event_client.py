@@ -120,6 +120,10 @@ class EventClient:
         self._retrying: bool = False
         self._shutdown: bool = False
 
+        # Track whether this client is a bound child (created via bind()/unbind())
+        # Child clients share resources with the parent and should not close them
+        self._is_bound_child: bool = False
+
         # Set up log directory and file
         self.log_dir = Path(self.config.log_dir).expanduser()
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -344,7 +348,14 @@ class EventClient:
 
         This method should be called when the EventClient is no longer needed,
         especially in test scenarios where many clients may be created.
+
+        Note: Bound child clients (created via bind()/unbind()) share resources
+        with their parent and will skip cleanup to avoid closing shared resources.
         """
+        # Bound child clients share resources with parent - don't close them
+        if getattr(self, "_is_bound_child", False):
+            return
+
         # Signal shutdown
         with self._buffer_lock:
             self._shutdown = True
@@ -399,6 +410,8 @@ class EventClient:
         new_client = copy.copy(self)
         new_client._bound_context = {**self._bound_context, **context}
         new_client._structlog_logger = self._structlog_logger.bind(**context)
+        # Mark as a bound child so it won't close shared resources
+        new_client._is_bound_child = True
         return new_client
 
     def unbind(self, *keys: str) -> "EventClient":
@@ -415,6 +428,8 @@ class EventClient:
             k: v for k, v in self._bound_context.items() if k not in keys
         }
         new_client._structlog_logger = self._structlog_logger.unbind(*keys)
+        # Mark as a bound child so it won't close shared resources
+        new_client._is_bound_child = True
         return new_client
 
     # ==================== Error Handling ====================

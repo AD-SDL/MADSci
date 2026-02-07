@@ -1368,3 +1368,121 @@ class TestEventClientLogRotation:
         assert len(timed_handlers) == 1
         # TimedRotatingFileHandler stores weekly as W0, W1, etc.
         assert timed_handlers[0].when == "W0"
+
+
+class TestEventClientBoundChildBehavior:
+    """Test that bound child clients properly share resources without closing them."""
+
+    def test_bound_child_flag_set_on_bind(self, temp_log_dir):
+        """Test that bind() sets _is_bound_child flag on new client."""
+        config = EventClientConfig(
+            name="parent_client",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        parent = EventClient(config=config)
+
+        # Parent should not be a bound child
+        assert parent._is_bound_child is False
+
+        # Bound client should be marked as a child
+        child = parent.bind(workflow_id="wf-123")
+        assert child._is_bound_child is True
+
+        parent.close()
+
+    def test_bound_child_flag_set_on_unbind(self, temp_log_dir):
+        """Test that unbind() sets _is_bound_child flag on new client."""
+        config = EventClientConfig(
+            name="parent_client",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        parent = EventClient(config=config)
+        bound = parent.bind(key1="a", key2="b")
+
+        # Unbound client should also be marked as a child
+        unbound = bound.unbind("key1")
+        assert unbound._is_bound_child is True
+
+        parent.close()
+
+    def test_bound_child_close_does_not_close_shared_resources(self, temp_log_dir):
+        """Test that closing a bound child does not close shared resources."""
+        config = EventClientConfig(
+            name="parent_client",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        parent = EventClient(config=config)
+        child = parent.bind(workflow_id="wf-123")
+
+        # Get references to shared resources
+        parent_handlers = list(parent.logger.handlers)
+        parent_session = parent.session
+
+        # Close the child - this should NOT close shared resources
+        child.close()
+
+        # Parent's handlers should still be intact
+        assert len(parent.logger.handlers) == len(parent_handlers)
+        for handler in parent.logger.handlers:
+            # Handlers should not be closed
+            assert hasattr(handler, "stream") or hasattr(handler, "baseFilename")
+
+        # Parent should still be able to log
+        parent.info("Still logging after child close")
+
+        # Parent's session should still work
+        assert parent.session is parent_session
+
+        # Now close the parent - this SHOULD close resources
+        parent.close()
+
+    def test_nested_bound_children_all_marked_as_children(self, temp_log_dir):
+        """Test that nested bindings all create child clients."""
+        config = EventClientConfig(
+            name="parent_client",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        parent = EventClient(config=config)
+
+        child1 = parent.bind(level1="a")
+        child2 = child1.bind(level2="b")
+        child3 = child2.bind(level3="c")
+
+        assert parent._is_bound_child is False
+        assert child1._is_bound_child is True
+        assert child2._is_bound_child is True
+        assert child3._is_bound_child is True
+
+        # Closing children should not affect parent
+        child3.close()
+        child2.close()
+        child1.close()
+
+        # Parent should still work
+        parent.info("Parent still works")
+        parent.close()
+
+    def test_bound_children_share_buffer_and_lock(self, temp_log_dir):
+        """Test that bound children share the same buffer and lock as parent."""
+        config = EventClientConfig(
+            name="parent_client",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        parent = EventClient(config=config)
+        child = parent.bind(workflow_id="wf-123")
+
+        # They should share the same buffer and lock (shallow copy behavior)
+        assert child._event_buffer is parent._event_buffer
+        assert child._buffer_lock is parent._buffer_lock
+
+        parent.close()
