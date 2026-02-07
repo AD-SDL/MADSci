@@ -497,42 +497,42 @@ class EventType(str, Enum):
     # *Action Events
     ACTION_STATUS_CHANGE = "action_status_change"
 
-    # *Resource Events (Phase 3A)
+    # *Resource Events
     RESOURCE_CREATE = "resource_create"
     RESOURCE_UPDATE = "resource_update"
     RESOURCE_DELETE = "resource_delete"
     RESOURCE_ALLOCATE = "resource_allocate"
     RESOURCE_RELEASE = "resource_release"
 
-    # *Location Events (Phase 3A)
+    # *Location Events
     LOCATION_CREATE = "location_create"
     LOCATION_UPDATE = "location_update"
     LOCATION_DELETE = "location_delete"
     ATTACHMENT_CREATE = "attachment_create"
     ATTACHMENT_DELETE = "attachment_delete"
 
-    # *Data Events (Phase 3A)
+    # *Data Events
     DATA_STORE = "data_store"
     DATA_QUERY = "data_query"
     DATA_EXPORT = "data_export"
 
-    # *Manager Lifecycle Events (Phase 3A)
+    # *Manager Lifecycle Events
     MANAGER_START = "manager_start"
     MANAGER_STOP = "manager_stop"
     MANAGER_ERROR = "manager_error"
     MANAGER_HEALTH_CHECK = "manager_health_check"
 
-    # *Workflow Step Events (Phase 3A)
+    # *Workflow Step Events
     WORKFLOW_STEP_START = "workflow_step_start"
     WORKFLOW_STEP_COMPLETE = "workflow_step_complete"
     WORKFLOW_STEP_FAILED = "workflow_step_failed"
 
-    # *Action Events (Phase 3A)
+    # *Action Events
     ACTION_START = "action_start"
     ACTION_COMPLETE = "action_complete"
     ACTION_FAILED = "action_failed"
 
-    # *Backup Events (Phase 3B)
+    # *Backup Events
     BACKUP_CREATE = "backup_create"
     BACKUP_RESTORE = "backup_restore"
 

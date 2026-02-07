@@ -38,11 +38,16 @@ project:
       children:
         - pattern: docs/madsci_powered/*.md
 
+    - title: Guides
+      children:
+        - file: docs/guides/logging.md
+
     - title: Example Lab
       children:
         - file: example_lab/README.md
         - file: example_lab/NODE_DEVELOPMENT_GUIDE.md
         - file: example_lab/WORKFLOW_GUIDE.md
+        - file: example_lab/OBSERVABILITY.md
         - file: example_lab/TROUBLESHOOTING.md
         # Automatically include all notebooks
         - pattern: example_lab/notebooks/*.ipynb

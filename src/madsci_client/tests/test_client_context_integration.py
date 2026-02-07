@@ -1,4 +1,4 @@
-"""Tests for client context integration (Phase 2)."""
+"""Tests for client context integration."""
 
 from typing import ClassVar
 
