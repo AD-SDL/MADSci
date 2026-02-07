@@ -10,7 +10,7 @@ on:
       use_local_build:
         description: 'Build images locally instead of pulling from registry'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 env:
@@ -22,7 +22,7 @@ env:
 
 
 jobs:
-  docker-compose-test:
+  e2e_tests:
     runs-on: ubuntu-latest
     # Only run if the docker workflow succeeded, or if triggered manually
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
