@@ -2,10 +2,10 @@
 # It is not intended for manual editing.
 
 [metadata]
-groups = ["default", "dev"]
+groups = ["default", "dev", "docs"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:0e95336f79f5e4827c63507a5e2775f886ebc8c4053506c54cf8d872b81599ce"
+content_hash = "sha256:a3a1ed1296dc2e3af9385192fba2579e2989b77784223b722e5a9662ad5776c4"
 
 [[metadata.targets]]
 requires_python = ">=3.10.0"
@@ -1698,6 +1698,15 @@ files = [
 ]
 
 [[package]]
+name = "markdown"
+version = "3.10.1"
+summary = ""
+files = [
+    {file = "markdown-3.10.1-py3-none-any.whl", hash = "sha256:867d788939fe33e4b736426f5b9f651ad0c0ae0ecf89df0ca5d1176c70812fe3"},
+    {file = "markdown-3.10.1.tar.gz", hash = "sha256:1c19c10bd5c14ac948c53d0d762a04e2fa35a6d58a6b7b1e6bfcbe6fefc0001a"},
+]
+
+[[package]]
 name = "markdown-it-py"
 version = "4.0.0"
 summary = ""
@@ -2080,6 +2089,19 @@ files = [
 ]
 
 [[package]]
+name = "mystmd"
+version = "1.8.0"
+summary = ""
+dependencies = [
+    "nodeenv",
+    "platformdirs",
+]
+files = [
+    {file = "mystmd-1.8.0-py3-none-any.whl", hash = "sha256:4df0957040172ebaec46825bd314ff7f158cae9950c58ce650dae03c3b633c5f"},
+    {file = "mystmd-1.8.0.tar.gz", hash = "sha256:1bbbb282e17ba7aef2ec2f8f7d0031d41d8f89dd9264578199e61c6487160dce"},
+]
+
+[[package]]
 name = "nbclient"
 version = "0.10.4"
 summary = ""
@@ -2145,11 +2167,11 @@ files = [
 
 [[package]]
 name = "nodeenv"
-version = "1.10.0"
+version = "1.9.1"
 summary = ""
 files = [
-    {file = "nodeenv-1.10.0-py2.py3-none-any.whl", hash = "sha256:5bb13e3eed2923615535339b3c620e76779af4cb4c6a90deccc9e36b274d3827"},
-    {file = "nodeenv-1.10.0.tar.gz", hash = "sha256:996c191ad80897d076bdfba80a41994c2b47c68e224c542b48feba42ba00f8bb"},
+    {file = "nodeenv-1.9.1-py2.py3-none-any.whl", hash = "sha256:ba11c9782d29c27c70ffbdda2d7415098754709be8a7056d79a737cd901155c9"},
+    {file = "nodeenv-1.9.1.tar.gz", hash = "sha256:6ec12890a2dab7946721edbfbcd91f3319c6ccc9aec47be7c7e6b7011ee6645f"},
 ]
 
 [[package]]
@@ -2626,6 +2648,19 @@ files = [
 ]
 
 [[package]]
+name = "pdoc3"
+version = "0.11.6"
+summary = ""
+dependencies = [
+    "mako",
+    "markdown",
+]
+files = [
+    {file = "pdoc3-0.11.6-py3-none-any.whl", hash = "sha256:8b72723767bd48d899812d2aec8375fc1c3476e179455db0b4575e6dccb44b93"},
+    {file = "pdoc3-0.11.6.tar.gz", hash = "sha256:1ea5e84b87a754d191fb64bf5e517ca6c50d0d84a614c1efecf6b46d290ae387"},
+]
+
+[[package]]
 name = "pexpect"
 version = "4.9.0"
 summary = ""
@@ -2737,11 +2772,11 @@ files = [
 
 [[package]]
 name = "platformdirs"
-version = "4.5.1"
+version = "4.2.2"
 summary = ""
 files = [
-    {file = "platformdirs-4.5.1-py3-none-any.whl", hash = "sha256:d03afa3963c806a9bed9d5125c8f4cb2fdaf74a55ab60e5d59b3fde758104d31"},
-    {file = "platformdirs-4.5.1.tar.gz", hash = "sha256:61d5cdcc6065745cdd94f0f878977f8de9437be93de97c1c12f853c9c0cdcbda"},
+    {file = "platformdirs-4.2.2-py3-none-any.whl", hash = "sha256:2d7a1657e36a80ea911db832a8a6ece5ee53d8de21edd5cc5879af6530b1bfee"},
+    {file = "platformdirs-4.2.2.tar.gz", hash = "sha256:38b7b51f512eed9e84a22788b4bce1de17c0adb134d6becb09836e37d8654cd3"},
 ]
 
 [[package]]
