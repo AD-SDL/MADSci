@@ -9,6 +9,12 @@ on:
     - cron: '0 12 * * 2'
   workflow_dispatch: # Run manually
 
+# Prevent duplicate runs: cancel in-progress runs on the same branch/PR
+# For PRs, group by PR number; for pushes, group by branch; for tags, group by tag
+concurrency:
+  group: docker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   # Use docker.io for Docker Hub if empty
   REGISTRY: ghcr.io
