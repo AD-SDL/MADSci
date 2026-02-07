@@ -16,6 +16,7 @@ dependencies = [
   "madsci.client",
   "pandas",
   "matplotlib>=3.5.0",
+  "pytz",
 ]
 
 [project.urls]

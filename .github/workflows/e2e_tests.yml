@@ -34,6 +34,8 @@ jobs:
           echo "GROUP_ID=$(id -g)" >> .env
       - name: Ensure .madsci directory exists
         run: mkdir -p ./.madsci
+      - name: Build base image first (required for dashboard)
+        run: docker compose build workcell_manager
       - name: Build and start example lab services, and wait for startup
         run: docker compose up --build -d && sleep 60
       - name: Check service health

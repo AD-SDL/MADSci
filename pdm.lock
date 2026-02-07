@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:a3a1ed1296dc2e3af9385192fba2579e2989b77784223b722e5a9662ad5776c4"
+content_hash = "sha256:8f269ec2d8543cf7b64fc6890aa507670f1e440fa7070396c24cdfdd8736166c"
 
 [[metadata.targets]]
 requires_python = ">=3.10.0"
@@ -1595,6 +1595,7 @@ dependencies = [
     "matplotlib",
     "pandas==2.3.3; python_full_version < \"3.11\"",
     "pandas==3.0.0; python_full_version >= \"3.11\"",
+    "pytz",
 ]
 
 [[package]]
