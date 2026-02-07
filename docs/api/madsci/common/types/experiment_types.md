@@ -219,7 +219,7 @@ Classes
     `run_name: str | None`
     :
 
-`ExperimentStatus(*args, **kwds)`
+`ExperimentStatus(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Current status of an experiment run.
 
     ### Ancestors (in MRO)

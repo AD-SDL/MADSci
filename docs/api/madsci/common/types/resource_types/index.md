@@ -64,12 +64,12 @@ Classes
     `base_type: Literal[<ContainerTypeEnum.collection: 'collection'>]`
     :
 
-    `children: dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `children: dict[str, 'ResourceDataModels']`
     :
 
     ### Methods
 
-    `extract_children(self) ‑> dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `extract_children(self) ‑> dict[str, 'ResourceDataModels']`
     :   Extract the children from the collection as a flat dictionary.
 
     `populate_children(self, children: dict[str, 'ResourceDataModels']) ‑> None`
@@ -114,7 +114,7 @@ Classes
 
     ### Methods
 
-    `validate_consumable_quantity(self) ‑> Self`
+    `validate_consumable_quantity(self) ‑> typing_extensions.Self`
     :   Validate that the quantity is less than or equal to the capacity.
 
 `Container(**data: Any)`
@@ -153,7 +153,7 @@ Classes
     `capacity: int | None`
     :
 
-    `children: dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `children: dict[str, 'ResourceDataModels']`
     :
 
     ### Instance variables
@@ -163,7 +163,7 @@ Classes
 
     ### Methods
 
-    `extract_children(self) ‑> dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `extract_children(self) ‑> dict[str, 'ResourceDataModels']`
     :   Extract the children from the container as a flat dictionary.
 
     `get_child(self, key: str) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
@@ -172,7 +172,7 @@ Classes
     `populate_children(self, children: dict[str, 'ResourceDataModels']) ‑> None`
     :   Populate the children of the container.
 
-    `validate_container_quantity(self) ‑> Self`
+    `validate_container_quantity(self) ‑> typing_extensions.Self`
     :   Validate that the quantity is less than or equal to the capacity.
 
 `ContinuousConsumable(**data: Any)`
@@ -273,13 +273,13 @@ Classes
 
     ### Methods
 
-    `get_child(self, key: str | tuple[int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)], int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)]] | int) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    `get_child(self, key: str | tuple[int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)], int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)]] | int) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
     :   Get a child from the Grid.
 
     `initialize_grid(self) ‑> None`
     :   Creates a grid of the correct dimensions
 
-    `set_child(self, key: str | tuple[int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)], int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)]] | int, child: ResourceDataModels) ‑> None`
+    `set_child(self, key: str | tuple[int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)], int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)]] | int, child: ResourceDataModels) ‑> None`
     :   Get a child from the Grid.
 
     `split_index(self, key: str) ‑> tuple[int | str, int | str]`
@@ -313,12 +313,12 @@ Classes
     `capacity: float | None`
     :
 
-    `children: dict[str, madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable]`
+    `children: dict[str, 'ConsumableDataModels']`
     :
 
     ### Methods
 
-    `extract_children(self) ‑> dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `extract_children(self) ‑> dict[str, 'ResourceDataModels']`
     :   Extract the children from the pool as a flat dictionary.
 
     `populate_children(self, children: dict[str, 'ResourceDataModels']) ‑> None`
@@ -349,12 +349,12 @@ Classes
     `base_type: Literal[<ContainerTypeEnum.queue: 'queue'>]`
     :
 
-    `children: list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `children: list['ResourceDataModels']`
     :
 
     ### Methods
 
-    `extract_children(self) ‑> dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `extract_children(self) ‑> dict[str, 'ResourceDataModels']`
     :   Extract the children from the stack as a flat dict.
 
     `populate_children(self, children: dict[str, 'ResourceDataModels']) ‑> None`
@@ -462,25 +462,25 @@ Classes
 
     ### Methods
 
-    `check_key_bounds(self, key: str | int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)]) ‑> bool`
+    `check_key_bounds(self, key: str | int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)]) ‑> bool`
     :   Check if the key is within the bounds of the grid.
 
-    `extract_children(self) ‑> list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `extract_children(self) ‑> list['ResourceDataModels']`
     :   return all children
 
     `get_all_keys(self) ‑> list`
     :   get all keys of this object
 
-    `get_child(self, key: int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)]) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    `get_child(self, key: int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)]) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
     :   Get a child from the Row.
 
-    `numericize_index(self, key: str | int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)]) ‑> int | str`
+    `numericize_index(self, key: str | int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)]) ‑> int | str`
     :   Convert a key to a numeric value.
 
-    `populate_children(self, children: dict[int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)], 'ResourceDataModels']) ‑> None`
+    `populate_children(self, children: dict[int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)], 'ResourceDataModels']) ‑> None`
     :   Populate the children of the grid.
 
-    `set_child(self, key: int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)], value: ResourceDataModels) ‑> None`
+    `set_child(self, key: int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)], value: ResourceDataModels) ‑> None`
     :   set a child using a string or int
 
     `set_list(self) ‑> madsci.common.types.resource_types.Row`
@@ -514,7 +514,7 @@ Classes
     `capacity: Literal[1]`
     :
 
-    `children: list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `children: list['ResourceDataModels']`
     :
 
     ### Instance variables
@@ -524,7 +524,7 @@ Classes
 
     ### Methods
 
-    `extract_children(self) ‑> dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `extract_children(self) ‑> dict[str, 'ResourceDataModels']`
     :   Extract the children from the stack as a flat dict.
 
     `get_child(self, key: int | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
@@ -558,12 +558,12 @@ Classes
     `base_type: Literal[<ContainerTypeEnum.stack: 'stack'>]`
     :
 
-    `children: list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `children: list['ResourceDataModels']`
     :
 
     ### Methods
 
-    `extract_children(self) ‑> dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `extract_children(self) ‑> dict[str, 'ResourceDataModels']`
     :   Extract the children from the stack as a flat dict.
 
     `populate_children(self, children: dict[str, 'ResourceDataModels']) ‑> None`
@@ -604,7 +604,7 @@ Classes
 
     ### Methods
 
-    `get_child(self, key: tuple[int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)], int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)], int | Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1106ea160>)]]) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    `get_child(self, key: tuple[int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)], int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)], int | typing.Annotated[str, AfterValidator(func=<function single_letter_or_digit_validator at 0x1088b24d0>)]]) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
     :   Get a child from the Voxel Grid.
 
     `initialize_grid(self) ‑> None`

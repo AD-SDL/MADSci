@@ -504,7 +504,7 @@ Classes
     `status: Literal[<ActionStatus.RUNNING: 'running'>]`
     :
 
-`ActionStatus(*args, **kwds)`
+`ActionStatus(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Status for a step of a workflow
 
     ### Ancestors (in MRO)

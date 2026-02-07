@@ -94,7 +94,7 @@ Functions
 Classes
 -------
 
-`ObjectNamingStrategy(*args, **kwds)`
+`ObjectNamingStrategy(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Strategies for naming objects in storage.
 
     ### Ancestors (in MRO)

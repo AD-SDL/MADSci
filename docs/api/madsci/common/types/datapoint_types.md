@@ -173,7 +173,7 @@ Classes
     `object_id_to_str(v: str | bson.objectid.ObjectId) ‑> str`
     :   Cast ObjectID to string.
 
-`DataPointTypeEnum(*args, **kwds)`
+`DataPointTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Enumeration for the types of data points.
 
     Attributes:

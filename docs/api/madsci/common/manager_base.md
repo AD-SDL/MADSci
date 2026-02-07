@@ -183,6 +183,11 @@ Classes
     `setup_ownership(self) ‑> None`
     :   Setup ownership context for the manager.
 
+    `span(self, name: str, *, attributes: dict[str, typing.Any] | None = None) ‑> ContextManager[Any]`
+    :   Create a best-effort span context manager.
+
+        This is intended for higher-level manager operations (not every log line).
+
 `ManagerBaseMeta(*args, **kwargs)`
 :   Metaclass that combines ABCMeta and Routable's metaclass.
 

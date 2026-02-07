@@ -177,6 +177,46 @@ Classes
     `settings_customise_sources(settings_cls: type[pydantic_settings.main.BaseSettings], init_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, env_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, dotenv_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, file_secret_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource) ‑> tuple[pydantic_settings.sources.base.PydanticBaseSettingsSource, ...]`
     :   Sets the order of settings sources for the settings model.
 
+`MadsciDeveloperSettings(**values: Any)`
+:   Developer-focused settings for MADSci behavior.
+
+    These settings control development experience features like rich tracebacks.
+    All settings use the MADSCI_ prefix for environment variables.
+
+    Environment Variables:
+        MADSCI_DISABLE_RICH_TRACEBACKS: Set to true to disable rich tracebacks
+            (default: false, rich tracebacks are enabled)
+        MADSCI_RICH_TRACEBACKS_SHOW_LOCALS: Set to true to show local variables
+            in tracebacks (default: false for security - can leak secrets)
+
+    Note:
+        show_locals is disabled by default to prevent accidental exposure of
+        sensitive data (tokens, passwords) that may be present in local variables
+        during exceptions.
+
+    Create a new model by parsing and validating input data from keyword arguments.
+
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * pydantic_settings.main.BaseSettings
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `disable_rich_tracebacks: bool`
+    :
+
+    `model_config: ClassVar[pydantic_settings.main.SettingsConfigDict]`
+    :
+
+    `rich_tracebacks_show_locals: bool`
+    :
+
 `MadsciSQLModel(**data: Any)`
 :   Parent class for all MADSci data models that are SQLModel-based.
 

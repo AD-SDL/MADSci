@@ -5,14 +5,17 @@ REST-based node client implementation.
 Classes
 -------
 
-`RestNodeClient(url: pydantic.networks.AnyUrl, config: madsci.common.types.client_types.RestNodeClientConfig | None = None)`
+`RestNodeClient(url: pydantic.networks.AnyUrl, config: madsci.common.types.client_types.RestNodeClientConfig | None = None, event_client: madsci.client.event_client.EventClient | None = None)`
 :   REST-based node client.
 
     Initialize the client.
 
     Args:
         url: The URL of the node to connect to.
-        config: Client configuration for retry and timeout settings. If not provided, uses default NodeClientConfig.
+        config: Client configuration for retry and timeout settings.
+               If not provided, uses default RestNodeClientConfig.
+        event_client: Optional EventClient to use for logging.
+                     If not provided, uses context client or creates new.
 
     ### Ancestors (in MRO)
 

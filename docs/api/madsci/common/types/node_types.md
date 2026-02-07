@@ -245,7 +245,7 @@ Classes
 
     ### Class variables
 
-    `actions: dict[str, madsci.common.types.action_types.ActionDefinition]`
+    `actions: dict[str, 'ActionDefinition']`
     :
 
     `config: Any | None`
@@ -386,7 +386,7 @@ Classes
     `ready: bool`
     :   Whether the node is ready to accept actions.
 
-`NodeType(*args, **kwds)`
+`NodeType(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   The type of a MADSci node.
 
     ### Ancestors (in MRO)

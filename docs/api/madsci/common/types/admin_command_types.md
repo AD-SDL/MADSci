@@ -34,7 +34,7 @@ Classes
     `success: bool`
     :
 
-`AdminCommands(*args, **kwds)`
+`AdminCommands(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Valid Admin Commands to send to a Node
 
     ### Ancestors (in MRO)

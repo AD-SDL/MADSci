@@ -114,7 +114,7 @@ Classes
     `send_admin_command_to_node(self, command: str, node: str) ‑> madsci.common.types.admin_command_types.AdminCommandResponse`
     :   Send admin command to a node.
 
-    `start_workflow(self, workflow_definition_id: Annotated[str, Form(PydanticUndefined)], ownership_info: Annotated[str | None, Form(PydanticUndefined)] = None, json_inputs: Annotated[str | None, Form(PydanticUndefined)] = None, file_input_paths: Annotated[str | None, Form(PydanticUndefined)] = None, files: list[fastapi.datastructures.UploadFile] = []) ‑> madsci.common.types.workflow_types.Workflow`
+    `start_workflow(self, workflow_definition_id: typing.Annotated[str, Form(PydanticUndefined)], ownership_info: typing.Annotated[str | None, Form(PydanticUndefined)] = None, json_inputs: typing.Annotated[str | None, Form(PydanticUndefined)] = None, file_input_paths: typing.Annotated[str | None, Form(PydanticUndefined)] = None, files: list[fastapi.datastructures.UploadFile] = []) ‑> madsci.common.types.workflow_types.Workflow`
     :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
 
         Parameters

@@ -98,6 +98,9 @@ Classes
     `location_server_url: str | pydantic.networks.AnyUrl | None`
     :
 
+    `name: str | None`
+    :
+
     `object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None`
     :
 
@@ -120,6 +123,11 @@ Classes
 
     `event_client: madsci.client.event_client.EventClient`
     :   Get or create the EventClient instance.
+
+        Resolution order:
+        1. Explicitly set client (_event_client)
+        2. Context client with component binding (if context exists)
+        3. New client from config (legacy fallback)
 
         Returns:
             EventClient: The event client for logging and event management
@@ -189,9 +197,9 @@ Classes
     `teardown_clients(self) ‑> None`
     :   Clean up client resources.
 
-        Currently a no-op, but provided for future enhancements
-        where clients may need explicit cleanup (e.g., connection
-        pools, background threads).
+        This method closes the EventClient and any other clients that
+        have resources that need explicit cleanup (file handlers,
+        connection pools, background threads).
 
-        This method can be called in shutdown handlers or context
-        managers to ensure clean resource cleanup.
+        This method should be called in shutdown handlers or when
+        the component is no longer needed to prevent resource leaks.

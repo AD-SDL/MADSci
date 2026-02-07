@@ -37,8 +37,8 @@ Classes
     `config_model: ClassVar[type[madsci.common.types.node_types.NodeConfig]]`
     :   The node config model class. This is the class that will be used to instantiate self.config.
 
-    `logger: ClassVar[madsci.client.event_client.EventClient]`
-    :   The event logger for this node
+    `logger: ClassVar[madsci.client.event_client.EventClient | None]`
+    :   The event logger for this node (initialized lazily via _configure_clients)
 
     `module_version: ClassVar[str]`
     :   The version of the module. Should match the version in the node definition.
@@ -115,6 +115,9 @@ Classes
 
     `start_node(self) ‑> None`
     :   Called once to start the node.
+
+        Establishes node context for hierarchical logging. All logging
+        within this node will include node-specific context (node_name, node_id).
 
     `startup_handler(self) ‑> None`
     :   Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources.

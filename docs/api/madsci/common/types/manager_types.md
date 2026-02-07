@@ -125,6 +125,21 @@ Classes
     `manager_definition: str | pathlib.Path`
     :
 
+    `otel_enabled: bool`
+    :
+
+    `otel_endpoint: str | None`
+    :
+
+    `otel_exporter: Literal['console', 'otlp', 'none']`
+    :
+
+    `otel_protocol: Literal['grpc', 'http']`
+    :
+
+    `otel_service_name: str | None`
+    :
+
     `rate_limit_cleanup_interval: int`
     :
 
@@ -158,7 +173,7 @@ Classes
     `uvicorn_workers: int | None`
     :
 
-`ManagerType(*args, **kwds)`
+`ManagerType(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Types of Squid Managers.
 
     ### Ancestors (in MRO)

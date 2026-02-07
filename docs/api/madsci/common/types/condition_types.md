@@ -38,7 +38,7 @@ Classes
     `model_config`
     :
 
-`ConditionTypeEnum(*args, **kwds)`
+`ConditionTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Types of conditional check for a step
 
     ### Ancestors (in MRO)
@@ -93,7 +93,7 @@ Classes
     `model_config`
     :
 
-`OperatorTypeEnum(*args, **kwds)`
+`OperatorTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Comparison operators for value checks
 
     ### Ancestors (in MRO)

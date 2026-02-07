@@ -65,7 +65,7 @@ Classes
     `created_at: datetime.datetime | None`
     :
 
-    `custom_attributes: list[madsci.common.types.resource_types.definitions.CustomResourceAttributeDefinition] | None`
+    `custom_attributes: list['CustomResourceAttributeDefinition'] | None`
     :
 
     `key: str | None`
@@ -151,7 +151,7 @@ Classes
         Returns:
             dict: Dictionary of children resources.
 
-    `children_list: sqlalchemy.orm.base.Mapped[list[madsci.resource_manager.resource_tables.ResourceTable]]`
+    `children_list: sqlalchemy.orm.base.Mapped[list['ResourceTable']]`
     :
 
     `columns: int | None`
@@ -160,7 +160,7 @@ Classes
     `created_at: datetime.datetime | None`
     :
 
-    `custom_attributes: list[madsci.common.types.resource_types.definitions.CustomResourceAttributeDefinition] | None`
+    `custom_attributes: list['CustomResourceAttributeDefinition'] | None`
     :
 
     `key: str | None`
@@ -290,7 +290,7 @@ Classes
 
     ### Static methods
 
-    `from_data_model(resource: Annotated[Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)]) ‑> Self`
+    `from_data_model(resource: typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)]) ‑> typing_extensions.Self`
     :   Create a new Resource Table entry from a resource data model.
 
     ### Methods
@@ -333,7 +333,7 @@ Classes
     `created_by: str | None`
     :
 
-    `custom_attributes: list[madsci.common.types.resource_types.definitions.CustomResourceAttributeDefinition] | None`
+    `custom_attributes: list['CustomResourceAttributeDefinition'] | None`
     :
 
     `default_values: dict[str, typing.Any]`

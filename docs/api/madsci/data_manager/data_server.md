@@ -36,7 +36,7 @@ Classes
 
     ### Methods
 
-    `create_datapoint(self, datapoint: Annotated[str, Form(PydanticUndefined)], files: list[fastapi.datastructures.UploadFile] = []) ‑> Any`
+    `create_datapoint(self, datapoint: typing.Annotated[str, Form(PydanticUndefined)], files: list[fastapi.datastructures.UploadFile] = []) ‑> Any`
     :   Create a new datapoint.
 
     `get_datapoint(self, datapoint_id: str) ‑> Any`

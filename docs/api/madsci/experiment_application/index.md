@@ -96,8 +96,11 @@ Classes
     `loop(self) ‑> None`
     :   Function that runs the experimental loop. This should be overridden by subclasses.
 
-    `manage_experiment(self, run_name: str | None = None, run_description: str | None = None) ‑> <function contextmanager at 0x102c7ee80>`
-    :   Context manager to start and end an experiment.
+    `manage_experiment(self, run_name: str | None = None, run_description: str | None = None) ‑> Generator[None, None, None]`
+    :   Context manager to start and end an experiment with full context propagation.
+
+        All logging within this experiment run will include the experiment
+        context, enabling hierarchical log filtering and analysis.
 
     `pause_experiment(self) ‑> None`
     :   Pause the experiment.

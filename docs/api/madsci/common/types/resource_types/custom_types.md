@@ -29,7 +29,7 @@ Classes
     `model_config`
     :
 
-`AssetTypeEnum(*args, **kwds)`
+`AssetTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Type for a MADSci Asset.
 
     ### Ancestors (in MRO)
@@ -110,7 +110,7 @@ Classes
     `model_config`
     :
 
-`ConsumableTypeEnum(*args, **kwds)`
+`ConsumableTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Type for a MADSci Consumable.
 
     ### Ancestors (in MRO)
@@ -178,7 +178,7 @@ Classes
     `supported_child_types: list[str]`
     :
 
-`ContainerTypeEnum(*args, **kwds)`
+`ContainerTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Type for a MADSci Container.
 
     ### Ancestors (in MRO)
@@ -416,7 +416,7 @@ Classes
     `base_type: Literal[<ResourceTypeEnum.resource: 'resource'>]`
     :
 
-    `custom_attributes: list[madsci.common.types.resource_types.custom_types.CustomResourceAttributeDefinition] | None`
+    `custom_attributes: list['CustomResourceAttributeDefinition'] | None`
     :
 
     `model_config`
@@ -436,7 +436,7 @@ Classes
     `validate_parent_types(v: list[str] | str) ‑> list[str]`
     :   Validate parent types.
 
-`ResourceTypeEnum(*args, **kwds)`
+`ResourceTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Enum for all resource base types.
 
     ### Ancestors (in MRO)

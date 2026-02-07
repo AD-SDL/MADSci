@@ -342,7 +342,7 @@ Classes
     `base_type: Literal[<ResourceTypeEnum.resource: 'resource'>]`
     :
 
-    `custom_attributes: list[madsci.common.types.resource_types.definitions.CustomResourceAttributeDefinition] | None`
+    `custom_attributes: list['CustomResourceAttributeDefinition'] | None`
     :
 
     `owner: madsci.common.types.auth_types.OwnershipInfo`
@@ -383,7 +383,7 @@ Classes
 
     ### Class variables
 
-    `default_templates: list[madsci.common.types.resource_types.definitions.TemplateDefinition]`
+    `default_templates: list['TemplateDefinition']`
     :
 
     `manager_type: Literal[<ManagerType.RESOURCE_MANAGER: 'resource_manager'>]`
