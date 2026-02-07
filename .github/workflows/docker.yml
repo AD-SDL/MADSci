@@ -9,10 +9,11 @@ on:
     - cron: '0 12 * * 2'
   workflow_dispatch: # Run manually
 
-# Prevent duplicate runs: cancel in-progress runs on the same branch/PR
-# For PRs, group by PR number; for pushes, group by branch; for tags, group by tag
+# Prevent duplicate runs when both push and pull_request events fire
+# Use head_ref (PR source branch) if available, otherwise use ref_name
+# This ensures push and PR events for the same branch share a concurrency group
 concurrency:
-  group: docker-${{ github.event.pull_request.number || github.ref }}
+  group: docker-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
