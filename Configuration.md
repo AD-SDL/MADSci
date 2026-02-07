@@ -17,6 +17,31 @@ These environment variables are used to configure the default Docker Compose in 
 | `MINIO_PORT`         | `integer` | `9000`  | The port on the host machine to bind the MinIO service to. This allows other services to connect to MinIO running inside the Docker container.                                                           | `9000`  |
 | `MINIO_CONSOLE_PORT` | `integer` | `9001`  | The port on the host machine to bind the MinIO console to. This allows other services to connect to the MinIO console running inside the Docker container.                                               | `9001`  |
 
+## MadsciDeveloperSettings
+
+Developer-focused settings for MADSci behavior.
+
+These settings control development experience features like rich tracebacks.
+All settings use the MADSCI_ prefix for environment variables.
+
+Environment Variables:
+    MADSCI_DISABLE_RICH_TRACEBACKS: Set to true to disable rich tracebacks
+        (default: false, rich tracebacks are enabled)
+    MADSCI_RICH_TRACEBACKS_SHOW_LOCALS: Set to true to show local variables
+        in tracebacks (default: false for security - can leak secrets)
+
+Note:
+    show_locals is disabled by default to prevent accidental exposure of
+    sensitive data (tokens, passwords) that may be present in local variables
+    during exceptions.
+
+**Environment Prefix**: `MADSCI_`
+
+| Name                                 | Type      | Default | Description                                                                                     | Example |
+|--------------------------------------|-----------|---------|-------------------------------------------------------------------------------------------------|---------|
+| `MADSCI_DISABLE_RICH_TRACEBACKS`     | `boolean` | `false` | Disable rich traceback handler for exception output.                                            | `false` |
+| `MADSCI_RICH_TRACEBACKS_SHOW_LOCALS` | `boolean` | `false` | Show local variables in tracebacks. Disabled by default for security - can leak sensitive data. | `false` |
+
 ## MadsciContext
 
 Base class for MADSci context settings.

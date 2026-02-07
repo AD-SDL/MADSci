@@ -35,6 +35,7 @@ timeout = 10
 project_dir = "."
 default_settings = [
     "madsci.common.types.docker_types:DockerComposeSettings",
+    "madsci.common.types.base_types:MadsciDeveloperSettings",
     "madsci.common.types.context_types:MadsciContext",
     "madsci.common.types.datapoint_types:DataManagerSettings",
     "madsci.common.types.datapoint_types:ObjectStorageSettings",
