@@ -36,5 +36,35 @@ jobs:
         run: mkdir -p ./.madsci
       - name: Build and start example lab services, and wait for startup
         run: docker compose up --build -d && sleep 60
+      - name: Check service health
+        run: |
+          echo "=== Docker Compose Service Status ==="
+          docker compose ps
+          echo ""
+          echo "=== Checking Lab Manager Health ==="
+          curl -sf http://localhost:8000/health && echo "Lab Manager: OK" || echo "Lab Manager: FAILED or not ready"
+          echo ""
+          echo "=== Checking Event Manager Health ==="
+          curl -sf http://localhost:8001/health && echo "Event Manager: OK" || echo "Event Manager: FAILED or not ready"
+          echo ""
+          echo "=== Checking Workcell Manager Health ==="
+          curl -sf http://localhost:8005/health && echo "Workcell Manager: OK" || echo "Workcell Manager: FAILED or not ready"
+          echo ""
+          echo "=== Lab Manager Logs (last 30 lines) ==="
+          docker compose logs lab_manager --tail=30
       - name: Run the experiment notebook
         run: timeout 15m just e2e_tests
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Service Status ==="
+          docker compose ps
+          echo ""
+          echo "=== Lab Manager Logs ==="
+          docker compose logs lab_manager --tail=100
+          echo ""
+          echo "=== Event Manager Logs ==="
+          docker compose logs event_manager --tail=50
+          echo ""
+          echo "=== Workcell Manager Logs ==="
+          docker compose logs workcell_manager --tail=50
