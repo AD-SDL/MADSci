@@ -366,9 +366,9 @@ class EventClientContextMiddleware(BaseHTTPMiddleware):
         manager_name: The name of the manager to include in context.
 
     Note:
-        The context is stored in request.state to ensure propagation to
-        endpoint handlers, as Python's contextvars don't always propagate
-        correctly across Starlette's middleware async boundaries.
+        The context is established using Python's contextvars, which properly
+        propagates across async boundaries in modern Python (3.7+). The
+        EventClient is created lazily when first accessed via get_event_client().
     """
 
     def __init__(
@@ -420,7 +420,7 @@ class EventClientContextMiddleware(BaseHTTPMiddleware):
             "request_id": request_id,
             "http_method": request.method,
             "http_path": str(request.url.path),
-            "manager": self.manager_name,
+            "manager_name": self.manager_name,
         }
 
         # Create a lazy context that will create the EventClient when first accessed

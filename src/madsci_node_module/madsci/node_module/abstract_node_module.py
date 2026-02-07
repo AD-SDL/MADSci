@@ -116,11 +116,6 @@ class AbstractNode(MadsciClientMixin):
                 self.config, "node_definition", "default.node.yaml"
             )
             if not Path(node_definition_path).exists():
-                self.logger.warning(
-                    "Node definition file not found; using default node definition",
-                    event_type=EventType.NODE_CONFIG_UPDATE,
-                    node_definition_path=str(node_definition_path),
-                )
                 module_name = to_snake_case(self.__class__.__name__)
                 node_name = str(Path(node_definition_path).stem)
                 self.node_definition = NodeDefinition(
@@ -130,6 +125,18 @@ class AbstractNode(MadsciClientMixin):
                 self.node_definition = NodeDefinition.from_yaml(node_definition_path)
         global_ownership_info.node_id = self.node_definition.node_id
         self._configure_clients()
+
+        # Log warning about missing node definition file after logger is configured
+        if node_definition is None:
+            node_definition_path = getattr(
+                self.config, "node_definition", "default.node.yaml"
+            )
+            if not Path(node_definition_path).exists():
+                self.logger.warning(
+                    "Node definition file not found; using default node definition",
+                    event_type=EventType.NODE_CONFIG_UPDATE,
+                    node_definition_path=str(node_definition_path),
+                )
 
         # * Check Node Version
         if (

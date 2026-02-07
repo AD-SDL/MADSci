@@ -6,6 +6,7 @@ from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.client_types import LocationClientConfig
+from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import Location
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
@@ -62,7 +63,7 @@ class LocationClient:
         if self.location_server_url is None:
             self.logger.warning(
                 "LocationClient initialized without a URL. Location operations will fail unless a location server URL is configured in the MADSci context.",
-                event_type="location_client.missing_server_url",
+                event_type=EventType.LOG_WARNING,
                 warning_category=MadsciLocalOnlyWarning,
             )
 

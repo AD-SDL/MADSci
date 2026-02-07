@@ -55,7 +55,7 @@ class DataClient:
         )
         self.logger = EventClient()
         if self.data_server_url is None:
-            self.logger.warn(
+            self.logger.log_warning(
                 "No URL provided for the data client. Cannot persist datapoints.",
                 event_type=EventType.LOG_WARNING,
                 warning_category=MadsciLocalOnlyWarning,

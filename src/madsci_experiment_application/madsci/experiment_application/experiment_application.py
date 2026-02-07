@@ -4,7 +4,7 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Generator, Optional, TypeVar, Union
 
 from madsci.common.context import (
     event_client_context,
@@ -280,7 +280,7 @@ class ExperimentApplication(RestNode):
     @contextmanager
     def manage_experiment(
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
-    ) -> contextmanager:
+    ) -> Generator[None, None, None]:
         """
         Context manager to start and end an experiment with full context propagation.
 

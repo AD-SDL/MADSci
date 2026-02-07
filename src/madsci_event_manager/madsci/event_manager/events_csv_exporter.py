@@ -2,14 +2,12 @@
 
 import csv
 import io
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
+from madsci.common.context import get_event_client
 from madsci.common.types.event_types import EventType
-
-logger = logging.getLogger(__name__)
 
 
 class CSVExporter:
@@ -34,7 +32,7 @@ class CSVExporter:
         if not report_data or "error" in report_data:
             CSVExporter._validate_report_data(report_data)
 
-        logger.info(
+        get_event_client().info(
             "Exporting utilization periods report to CSV",
             event_type=EventType.LOG_INFO,
             save_to_file=bool(output_path),
@@ -65,7 +63,7 @@ class CSVExporter:
                 metadata.get("analysis_type", "daily"),
             )
 
-            logger.info(
+            get_event_client().info(
                 "Utilization periods CSV export complete",
                 event_type=EventType.LOG_INFO,
                 output_path=str(output_path),

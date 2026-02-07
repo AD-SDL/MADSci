@@ -183,15 +183,31 @@ def _infer_caller_name() -> str:
     Walks up the stack to find the first frame that's not in the
     context module, and uses its module name.
 
+    Uses inspect.currentframe() and f_back traversal instead of
+    inspect.stack() for better performance (avoids building full stack list).
+
     Returns:
         Inferred module name, or "madsci" as fallback.
     """
-    stack = inspect.stack()
-    for frame_info in stack[1:]:  # Skip this function
-        module = frame_info.frame.f_globals.get("__name__", "")
-        # Skip context module frames
-        if not module.startswith("madsci.common.context"):
-            return module
+    frame = inspect.currentframe()
+    # Skip this function's own frame
+    if frame is not None:
+        frame = frame.f_back
+
+    # Walk back through frames without constructing the full stack
+    try:
+        depth = 0
+        while frame is not None and depth < 50:
+            module = frame.f_globals.get("__name__", "")
+            # Skip context module frames
+            if not module.startswith("madsci.common.context"):
+                return module
+            frame = frame.f_back
+            depth += 1
+    finally:
+        # Avoid reference cycles involving frame objects
+        del frame
+
     return "madsci"
 
 
