@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:2d29d67137d81ec4d917acd25bfc2f971f4f6a8bf70c0e50925b2014dadb5736"
+content_hash = "sha256:8204ecb53eaa72dfdedcc0a8587ffe088ed9d176995ae622c68f4d2e18501840"
 
 [[metadata.targets]]
 requires_python = ">=3.9.1"
@@ -160,15 +160,6 @@ summary = ""
 files = [
     {file = "attrs-25.4.0-py3-none-any.whl", hash = "sha256:adcf7e2a1fb3b36ac48d97835bb6d8ade15b8dcce26aba8bf1d14847b57a3373"},
     {file = "attrs-25.4.0.tar.gz", hash = "sha256:16d5969b87f0859ef33a48b35d55ac1be6e42ae49d5e853b597db70c35c57e11"},
-]
-
-[[package]]
-name = "backports-asyncio-runner"
-version = "1.2.0"
-summary = ""
-files = [
-    {file = "backports_asyncio_runner-1.2.0-py3-none-any.whl", hash = "sha256:0da0a936a8aeb554eccb426dc55af3ba63bcdc69fa1a600b5bb305413a4477b5"},
-    {file = "backports_asyncio_runner-1.2.0.tar.gz", hash = "sha256:a5aa7b2b7d8f8bfcaa2b57313f70792df84e32a2a746f585213373f900b42162"},
 ]
 
 [[package]]
@@ -3275,34 +3266,6 @@ dependencies = [
 files = [
     {file = "pytest-9.0.2-py3-none-any.whl", hash = "sha256:711ffd45bf766d5264d487b917733b453d917afd2b0ad65223959f59089f875b"},
     {file = "pytest-9.0.2.tar.gz", hash = "sha256:75186651a92bd89611d1d9fc20f0b4345fd827c41ccd5c299a868a05d70edf11"},
-]
-
-[[package]]
-name = "pytest-asyncio"
-version = "1.2.0"
-summary = ""
-dependencies = [
-    "backports-asyncio-runner; python_full_version < \"3.10\"",
-    "pytest==8.4.2; python_full_version < \"3.10\"",
-    "typing-extensions; python_full_version < \"3.10\"",
-]
-files = [
-    {file = "pytest_asyncio-1.2.0-py3-none-any.whl", hash = "sha256:8e17ae5e46d8e7efe51ab6494dd2010f4ca8dae51652aa3c8d55acf50bfb2e99"},
-    {file = "pytest_asyncio-1.2.0.tar.gz", hash = "sha256:c609a64a2a8768462d0c99811ddb8bd2583c33fd33cf7f21af1c142e824ffb57"},
-]
-
-[[package]]
-name = "pytest-asyncio"
-version = "1.3.0"
-summary = ""
-dependencies = [
-    "backports-asyncio-runner; python_full_version == \"3.10.*\"",
-    "pytest==9.0.2; python_full_version >= \"3.10\"",
-    "typing-extensions; python_full_version >= \"3.10\" and python_full_version < \"3.13\"",
-]
-files = [
-    {file = "pytest_asyncio-1.3.0-py3-none-any.whl", hash = "sha256:611e26147c7f77640e6d0a92a38ed17c3e9848063698d5c93d5aa7aa11cebff5"},
-    {file = "pytest_asyncio-1.3.0.tar.gz", hash = "sha256:d7f52f36d231b80ee124cd216ffb19369aa168fc10095013c6b014a34d3ee9e5"},
 ]
 
 [[package]]
