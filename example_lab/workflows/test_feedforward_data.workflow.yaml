@@ -22,7 +22,7 @@ steps:
   - name: Generate File
     key: generate
     node: platereader_1
-    action: create_plate_file
+    action: read_plate
   - name: Read File
     node: liquidhandler_1
     action: run_protocol

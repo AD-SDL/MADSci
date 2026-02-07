@@ -35,6 +35,13 @@ with event_client_context(
 
     # * Add the resource to liquidhandler_1.deck_1 for simple transfer
     l1_deck1 = location_client.get_location_by_name("liquidhandler_1.deck_1")
+    # * Clear any existing resources from the slot before pushing
+    # ! WARNING: Force-popping resources is only safe in this example/test context.
+    # ! In real experiments, there may be physical objects still present at the location.
+    # ! Always verify physical state matches resource state before force-clearing slots.
+    l1_deck1_resource = resource_client.get_resource(l1_deck1.resource_id)
+    if l1_deck1_resource.children:
+        resource_client.pop(l1_deck1.resource_id)
     resource_client.push(l1_deck1.resource_id, demo_plate_1.resource_id)
 
     # * Run the simple transfer workflow
@@ -62,6 +69,17 @@ with event_client_context(
 
     # * Add the resource to storage_rack for multistep transfer
     storage_rack = location_client.get_location_by_name("storage_rack")
+    # * Clear any existing resources from the slot before pushing (storage_rack can have multiple)
+    # ! WARNING: Force-popping resources is only safe in this example/test context.
+    # ! In real experiments, there may be physical objects still present at the location.
+    # ! Always verify physical state matches resource state before force-clearing slots.
+    storage_rack_resource = resource_client.get_resource(storage_rack.resource_id)
+    while (
+        storage_rack_resource.children
+        and len(storage_rack_resource.children) >= storage_rack_resource.capacity
+    ):
+        resource_client.pop(storage_rack.resource_id)
+        storage_rack_resource = resource_client.get_resource(storage_rack.resource_id)
     resource_client.push(storage_rack.resource_id, demo_plate_2.resource_id)
 
     # * Run the multistep transfer workflow
@@ -92,6 +110,13 @@ with event_client_context(
 
     # * Add the resource to liquidhandler_1.deck_2 for transfer_resource test
     l1_deck2 = location_client.get_location_by_name("liquidhandler_1.deck_2")
+    # * Clear any existing resources from the slot before pushing
+    # ! WARNING: Force-popping resources is only safe in this example/test context.
+    # ! In real experiments, there may be physical objects still present at the location.
+    # ! Always verify physical state matches resource state before force-clearing slots.
+    l1_deck2_resource = resource_client.get_resource(l1_deck2.resource_id)
+    if l1_deck2_resource.children:
+        resource_client.pop(l1_deck2.resource_id)
     resource_client.push(l1_deck2.resource_id, demo_plate_3.resource_id)
 
     # * Run a workflow that uses the transfer_resource action

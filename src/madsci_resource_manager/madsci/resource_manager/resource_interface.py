@@ -542,8 +542,13 @@ class ResourceInterface:
                 )
             parent = parent_row.to_data_model()
             if parent.capacity and len(parent.children) >= parent_row.capacity:
+                # Handle case where child is a string (resource ID) vs a Resource object
+                if isinstance(child, str):
+                    child_info = child
+                else:
+                    child_info = f"{child.resource_name} ({child.resource_id})"
                 raise ValueError(
-                    f"Cannot push resource '{child.resource_name} ({child.resource_id})' to container '{parent_row.resource_name} ({parent_row.resource_id})' because it is full."
+                    f"Cannot push resource '{child_info}' to container '{parent_row.resource_name} ({parent_row.resource_id})' because it is full."
                 )
             self.add_child(
                 parent_id=parent_id,

@@ -1,5 +1,5 @@
 node_name: example_app
-node_id: 01K5KNT13D6TADM875N3PNH3KX
+node_id: 01KGWQ2RRA57VCJWKZQQ5FKFD2
 node_description: null
 node_type: device
 module_name: example_app
@@ -30,7 +30,7 @@ config:
   update_node_files: true
   status_update_interval: 2.0
   state_update_interval: 2.0
-  node_url: http://127.0.0.1:2000/
+  node_url: http://localhost:6000/
   uvicorn_kwargs:
     limit_concurrency: 10
   enable_rate_limiting: true

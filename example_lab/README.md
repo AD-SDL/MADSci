@@ -52,7 +52,7 @@ Before starting the example lab, ensure you have:
 
 ## Quick Start
 
-If you're new to docker,
+If you're new to docker/docker compose, we recommend consulting our [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide) before jumping in.
 
 ### 1. Start the Example Lab
 
