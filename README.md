@@ -6,6 +6,7 @@
 [![PyPI](https://github.com/AD-SDL/MADSci/actions/workflows/pypi.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pypi.yml)
 [![Pytests](https://github.com/AD-SDL/MADSci/actions/workflows/pytests.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pytests.yml)
 ![Coverage badge](https://raw.githubusercontent.com/AD-SDL/MADSci/python-coverage-comment-action-data/badge.svg)
+[![JOSS status](https://joss.theoj.org/papers/d554e38543529f08aa8ebaf068c17eec/status.svg)](https://joss.theoj.org/papers/d554e38543529f08aa8ebaf068c17eec)
 
 <img src="./assets/drawio/madsci_control_flow.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
@@ -22,6 +23,7 @@ MADSci is a modular, autonomous, and scalable framework for scientific discovery
 - **Event Management**, enabling distributed logging and event handling across every part of the autonomous lab.
 - **Data Management**, collecting and storing data created by instruments or analysis as part of an experiment.
 - **Location Management**, coordinating multiple different representations of locations in the laboratory and their interactions with resources and nodes.
+- **Observability**, with built-in OpenTelemetry integration for distributed tracing, metrics, and log correlation across the entire lab infrastructure.
 
 <img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
@@ -45,6 +47,11 @@ MADSci is made up of a number of different modular components, each of which can
 - [Resource Manager](./src/madsci_resource_manager/README.md): For tracking labware, assets, samples, and consumables in an automated or autonomous lab.
 - [Data Manager](./src/madsci_data_manager/README.md): handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis)
 - [Squid Lab Manager](./src/madsci_squid/README.md): a central lab configuration manager and dashboard provider for MADSci-powered labs.
+
+### Guides
+
+- [Logging and Event Context](./docs/guides/logging.md): Guide to MADSci's structured logging system and hierarchical context propagation.
+- [Observability](./example_lab/OBSERVABILITY.md): How to use the OpenTelemetry observability stack for distributed tracing, metrics, and logs.
 
 ## Installation
 
@@ -100,8 +107,9 @@ MADSci uses environment variables for configuration with hierarchical precedence
 - **Database connections**: MongoDB/PostgreSQL on localhost by default
 - **File storage**: Defaults to `~/.madsci/` subdirectories
 - **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
+- **OpenTelemetry**: Configurable per-manager with `*_OTEL_ENABLED`, `*_OTEL_ENDPOINT`, etc.
 
-See [Configuration.md](./Configuration.md) for comprehensive options and [example_lab/](./example_lab/) for working configurations.
+See [Configuration.md](./Configuration.md) for comprehensive options, [example_lab/](./example_lab/) for working configurations, and [OBSERVABILITY.md](./example_lab/OBSERVABILITY.md) for OpenTelemetry setup.
 
 ## Roadmap
 

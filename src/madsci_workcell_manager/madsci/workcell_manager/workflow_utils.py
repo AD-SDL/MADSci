@@ -13,6 +13,7 @@ from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.location_client import LocationClient
 from madsci.common.types.datapoint_types import FileDataPoint
+from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     LocationArgument,
 )
@@ -274,7 +275,17 @@ def prepare_workflow_step(
     )
     if data_client is not None:
         working_step = prepare_workflow_files(working_step, workflow, data_client)
-    EventClient().info(validation_string)
+    EventClient().info(
+        "Workflow step validation",
+        event_type=EventType.WORKCELL_STATUS_UPDATE,
+        valid=valid,
+        validation_message=validation_string,
+        workflow_id=workflow.workflow_id,
+        workflow_name=workflow.name,
+        step_name=getattr(working_step, "name", None),
+        step_action=getattr(working_step, "action", None),
+        step_node=getattr(working_step, "node", None),
+    )
     if not valid:
         raise ValueError(validation_string)
     return working_step

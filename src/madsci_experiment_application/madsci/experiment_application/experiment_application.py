@@ -4,12 +4,16 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Generator, Optional, TypeVar, Union
 
-from madsci.common.context import set_current_madsci_context
+from madsci.common.context import (
+    event_client_context,
+    set_current_madsci_context,
+)
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
+from madsci.common.types.event_types import EventType
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -97,7 +101,7 @@ class ExperimentApplication(RestNode):
         experiment: Optional[Experiment] = None,
         *args: Any,
         **kwargs: Any,
-    ) -> "ExperimentApplication":
+    ) -> None:
         """
         Initialize the experiment application.
 
@@ -123,7 +127,7 @@ class ExperimentApplication(RestNode):
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
 
-        self.experiment = experiment if experiment else self.experiment
+        self.experiment = experiment or self.experiment
 
         # Note: All clients (experiment_client, workcell_client, location_client,
         # data_client, resource_client, event_client) are inherited from AbstractNode
@@ -161,13 +165,27 @@ class ExperimentApplication(RestNode):
     ) -> None:
         """Sends the ExperimentDesign to the server to register a new experimental run."""
 
+        if self.experiment_design is None:
+            raise ValueError(
+                "experiment_design is required to start a new experiment run"
+            )
+
+        if not isinstance(self.experiment_design, ExperimentDesign):
+            raise TypeError(
+                "experiment_design must be an ExperimentDesign instance (or a path/string that can be loaded to one)"
+            )
+
         self.experiment = self.experiment_client.start_experiment(
             experiment_design=self.experiment_design,
             run_name=run_name,
             run_description=run_description,
         )
         self.logger.info(
-            f"Started run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run started",
+            event_type=EventType.EXPERIMENT_START,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
         )
         passed_checks = False
         while not passed_checks:
@@ -187,8 +205,20 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id,
             status=status,
         )
+        event_type = (
+            EventType.EXPERIMENT_COMPLETE
+            if status in {None, ExperimentStatus.COMPLETED}
+            else EventType.EXPERIMENT_FAILED
+            if status == ExperimentStatus.FAILED
+            else EventType.EXPERIMENT_COMPLETE
+        )
         self.logger.info(
-            f"Ended run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run ended",
+            event_type=event_type,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
+            status=str(status) if status is not None else None,
         )
 
     def pause_experiment(self) -> None:
@@ -197,7 +227,11 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id
         )
         self.logger.info(
-            f"Paused run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run paused",
+            event_type=EventType.EXPERIMENT_PAUSE,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
         )
 
     def cancel_experiment(self) -> None:
@@ -206,7 +240,11 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id
         )
         self.logger.info(
-            f"Cancelled run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run cancelled",
+            event_type=EventType.EXPERIMENT_CANCELLED,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
         )
 
     def fail_experiment(self) -> None:
@@ -216,29 +254,63 @@ class ExperimentApplication(RestNode):
             status=ExperimentStatus.FAILED,
         )
         self.logger.info(
-            f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run failed",
+            event_type=EventType.EXPERIMENT_FAILED,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
         )
 
     def handle_exception(self, exception: Exception) -> None:
         """Exception handler that makes experiment fail by default, can be overwritten"""
-        self.logger.info(
-            f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}' with exception {exception!s}"
+        self.logger.error(
+            "Experiment run raised exception",
+            event_type=EventType.EXPERIMENT_FAILED,
+            experiment_id=self.experiment.experiment_id if self.experiment else None,
+            run_name=self.experiment.run_name if self.experiment else None,
+            experiment_name=(
+                self.experiment.experiment_design.experiment_name
+                if self.experiment
+                else None
+            ),
+            error=str(exception),
         )
         self.end_experiment(ExperimentStatus.FAILED)
 
     @contextmanager
     def manage_experiment(
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
-    ) -> contextmanager:
-        """Context manager to start and end an experiment."""
+    ) -> Generator[None, None, None]:
+        """
+        Context manager to start and end an experiment with full context propagation.
+
+        All logging within this experiment run will include the experiment
+        context, enabling hierarchical log filtering and analysis.
+        """
         self.start_experiment_run(run_name=run_name, run_description=run_description)
-        try:
-            yield
-        except Exception as e:
-            self.handle_exception(e)
-            raise (e)
-        else:
-            self.end_experiment()
+
+        # Establish experiment context for hierarchical logging
+        experiment_id = self.experiment.experiment_id if self.experiment else None
+        experiment_name = (
+            self.experiment.experiment_design.experiment_name
+            if self.experiment and self.experiment.experiment_design
+            else None
+        )
+
+        with event_client_context(
+            name="experiment",
+            experiment_id=experiment_id,
+            experiment_name=experiment_name,
+            run_name=run_name,
+            experiment_type=self.__class__.__name__,
+        ):
+            try:
+                yield
+            except Exception as e:
+                self.handle_exception(e)
+                raise (e)
+            else:
+                self.end_experiment()
 
     @threaded_daemon
     def loop(self) -> None:
@@ -262,7 +334,10 @@ class ExperimentApplication(RestNode):
         exception = None
         if self.experiment.status == ExperimentStatus.PAUSED:
             self.logger.warning(
-                f"Experiment '{self.experiment.experiment_design.experiment_name}' has been paused."
+                "Experiment run paused; waiting for resume",
+                event_type=EventType.EXPERIMENT_PAUSE,
+                experiment_id=self.experiment.experiment_id,
+                experiment_name=self.experiment.experiment_design.experiment_name,
             )
             while True:
                 time.sleep(5)
@@ -281,7 +356,17 @@ class ExperimentApplication(RestNode):
             )
 
         if exception:
-            self.logger.error(exception.message)
+            self.logger.error(
+                "Experiment run terminated",
+                event_type=(
+                    EventType.EXPERIMENT_CANCELLED
+                    if isinstance(exception, ExperimentCancelledError)
+                    else EventType.EXPERIMENT_FAILED
+                ),
+                experiment_id=self.experiment.experiment_id,
+                experiment_name=self.experiment.experiment_design.experiment_name,
+                error=exception.message,
+            )
             raise exception
 
     def get_resource_from_condition(self, condition: Condition) -> Optional[Resource]:

@@ -9,6 +9,16 @@ ARG USER_ID=9999
 ARG GROUP_ID=9999
 ARG CONTAINER_USER=madsci
 
+# Note: Python virtualenv (MADSCI_VENV, VIRTUAL_ENV, PATH) is inherited from base image
+# The venv is located at /home/madsci/MADSci/.venv
+# Verify the virtualenv is properly configured
+RUN echo "Verifying virtualenv..." && \
+	which python && \
+	python --version && \
+	python -c "import sys; print(f'Python executable: {sys.executable}')" && \
+	python -c "import madsci; print(f'MADSci package found at: {madsci.__file__}')" && \
+	echo "Virtualenv verification complete."
+
 # * Install node dependencies
 RUN mkdir -p /tmp/node_dependencies
 COPY ui/package.json /tmp/node_dependencies/package.json

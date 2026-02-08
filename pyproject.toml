@@ -1,9 +1,9 @@
 [project]
 name = "madsci"
 version = "0.6.1"
-dependencies = ["pre-commit>=4.3.0"]
+dependencies = ["pre-commit>=4.3.0", "structlog>=25.5.0", "colorama>=0.4.6"]
 readme="README.md"
-requires-python = ">=3.9.1"
+requires-python = ">=3.10.0"
 
 [project.optional-dependencies]
 docs = [
@@ -21,6 +21,11 @@ dev = [
     "nbconvert>=7.16.6",
     "pytest-timeout>=2.4.0",
     "ruff>=0.14.9",
+    "opentelemetry-exporter-otlp>=1.39.1",
+    "opentelemetry-instrumentation-fastapi>=0.60b1",
+    "opentelemetry-instrumentation-asgi>=0.60b1",
+    "opentelemetry-instrumentation-requests>=0.60b1",
+    "pytest-asyncio>=1.3.0",
 ]
 
 [tool.pytest.ini_options]
@@ -30,6 +35,7 @@ timeout = 10
 project_dir = "."
 default_settings = [
     "madsci.common.types.docker_types:DockerComposeSettings",
+    "madsci.common.types.base_types:MadsciDeveloperSettings",
     "madsci.common.types.context_types:MadsciContext",
     "madsci.common.types.datapoint_types:DataManagerSettings",
     "madsci.common.types.datapoint_types:ObjectStorageSettings",

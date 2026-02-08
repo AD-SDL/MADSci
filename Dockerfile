@@ -7,7 +7,20 @@ LABEL org.opencontainers.image.licenses=MIT
 ARG USER_ID=9999
 ARG GROUP_ID=9999
 ARG CONTAINER_USER=madsci
+
+# PDM configuration for uv mode with virtualenv
 ENV PDM_CHECK_UPDATE=false
+ENV PDM_USE_UV=true
+
+# Virtual environment location - PDM creates .venv in the project directory
+# We use this path for runtime configuration
+ENV MADSCI_VENV=/home/madsci/MADSci/.venv
+
+# Configure PATH to use the virtualenv by default
+ENV PATH="${MADSCI_VENV}/bin:${PATH}"
+
+# Ensure Python uses the virtualenv
+ENV VIRTUAL_ENV="${MADSCI_VENV}"
 
 # * Install system dependencies
 RUN apt-get update && \
@@ -38,7 +51,7 @@ RUN apt-get update && \
 	pg_dump --version
 RUN npm install -g yarn
 RUN --mount=type=cache,target=/root/.cache \
-	pip install -U pdm
+	pip install -U pdm uv
 
 # * User Configuration
 RUN groupadd -g ${GROUP_ID} ${CONTAINER_USER} && \
@@ -51,15 +64,25 @@ COPY madsci-entrypoint.sh /madsci-entrypoint.sh
 RUN chmod +x /madsci-entrypoint.sh
 ENTRYPOINT ["/madsci-entrypoint.sh"]
 
-# * Install Python package and dependencies
+# * Install Python package and dependencies in virtualenv
 WORKDIR /home/${CONTAINER_USER}
 COPY pyproject.toml pdm.lock README.md /home/${CONTAINER_USER}/MADSci/
 COPY src/ /home/${CONTAINER_USER}/MADSci/src
 WORKDIR /home/${CONTAINER_USER}/MADSci
-RUN --mount=type=cache,target=/root/.cache \
- 	pdm install -G:all -g -p . --no-lock
 
-# * Fix ownership of all MADSci files and ensure alembic directories exist with correct permissions
+# Install packages using PDM with uv backend
+# PDM with uv mode requires a virtualenv - it will create .venv in the project directory
+# by default (venv.in_project=True)
+# Note: uv-created venvs don't include pip, so we use uv to install additional packages
+RUN --mount=type=cache,target=/root/.cache \
+	pdm install -G:all -p . && \
+	uv pip install --python ${MADSCI_VENV}/bin/python \
+		opentelemetry-exporter-otlp \
+		opentelemetry-instrumentation-fastapi \
+		opentelemetry-instrumentation-asgi \
+		opentelemetry-instrumentation-requests
+
+# * Fix ownership of all MADSci files (including .venv), ensure alembic directories exist with correct permissions
 RUN chown -R ${USER_ID}:${GROUP_ID} /home/${CONTAINER_USER}/MADSci && \
 	mkdir -p /home/${CONTAINER_USER}/MADSci/src/madsci_resource_manager/madsci/resource_manager/alembic/versions && \
 	chown -R ${USER_ID}:${GROUP_ID} /home/${CONTAINER_USER}/MADSci/src/madsci_resource_manager/madsci/resource_manager/alembic/versions

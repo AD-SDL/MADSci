@@ -1,0 +1,18 @@
+# Grafana Dashboard Provisioning for MADSci Example Lab
+#
+# This file configures Grafana to auto-load dashboards from the dashboards directory.
+# https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards
+
+apiVersion: 1
+
+providers:
+  - name: 'MADSci Dashboards'
+    orgId: 1
+    folder: 'MADSci'
+    folderUid: 'madsci'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

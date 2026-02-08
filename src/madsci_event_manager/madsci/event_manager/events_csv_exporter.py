@@ -6,6 +6,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
+from madsci.common.context import get_event_client
+from madsci.common.types.event_types import EventType
+
 
 class CSVExporter:
     """Handles conversion of utilization reports to CSV format."""
@@ -29,6 +32,12 @@ class CSVExporter:
         if not report_data or "error" in report_data:
             CSVExporter._validate_report_data(report_data)
 
+        get_event_client().info(
+            "Exporting utilization periods report to CSV",
+            event_type=EventType.LOG_INFO,
+            save_to_file=bool(output_path),
+        )
+
         output = io.StringIO()
         writer = csv.writer(output)
 
@@ -47,12 +56,20 @@ class CSVExporter:
         # Save to file if output_path provided
         if output_path:
             metadata = report_data.get("summary_metadata", {})
-            return CSVExporter._save_single_csv_file(
+            file_path = CSVExporter._save_single_csv_file(
                 csv_content,
                 output_path,
                 "utilization_periods",
                 metadata.get("analysis_type", "daily"),
             )
+
+            get_event_client().info(
+                "Utilization periods CSV export complete",
+                event_type=EventType.LOG_INFO,
+                output_path=str(output_path),
+                file_path=file_path,
+            )
+            return file_path
 
         return csv_content
 

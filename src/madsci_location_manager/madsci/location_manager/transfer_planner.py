@@ -5,6 +5,7 @@ from typing import Optional
 
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     Location,
     LocationManagerDefinition,
@@ -265,7 +266,10 @@ class TransferPlanner:
         except Exception:
             # Log warning but don't fail - just return base cost
             EventClient().warning(
-                f"Failure during capacity check for resource {target_location.resource_id}. Using base transfer cost."
+                "Failure during capacity check for resource. Using base transfer cost.",
+                event_type=EventType.DATA_QUERY,
+                resource_id=target_location.resource_id,
+                exc_info=True,
             )
             return base_cost
 

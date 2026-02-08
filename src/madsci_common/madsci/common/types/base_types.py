@@ -25,6 +25,47 @@ _T = TypeVar("_T")
 PathLike = Union[str, Path]
 
 
+class MadsciDeveloperSettings(BaseSettings):
+    """
+    Developer-focused settings for MADSci behavior.
+
+    These settings control development experience features like rich tracebacks.
+    All settings use the MADSCI_ prefix for environment variables.
+
+    Environment Variables:
+        MADSCI_DISABLE_RICH_TRACEBACKS: Set to true to disable rich tracebacks
+            (default: false, rich tracebacks are enabled)
+        MADSCI_RICH_TRACEBACKS_SHOW_LOCALS: Set to true to show local variables
+            in tracebacks (default: false for security - can leak secrets)
+
+    Note:
+        show_locals is disabled by default to prevent accidental exposure of
+        sensitive data (tokens, passwords) that may be present in local variables
+        during exceptions.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="MADSCI_",
+        env_file=None,
+        validate_default=True,
+        extra="ignore",
+    )
+
+    disable_rich_tracebacks: bool = Field(
+        default=False,
+        title="Disable Rich Tracebacks",
+        description="Disable rich traceback handler for exception output.",
+    )
+    rich_tracebacks_show_locals: bool = Field(
+        default=False,
+        title="Show Locals in Rich Tracebacks",
+        description=(
+            "Show local variables in tracebacks. "
+            "Disabled by default for security - can leak sensitive data."
+        ),
+    )
+
+
 class MadsciBaseSettings(BaseSettings):
     """
     Base class for all MADSci settings.

@@ -46,7 +46,7 @@ class TestNodeInterface:
 
     def __init__(self, logger: Optional[EventClient] = None) -> "TestNodeInterface":
         """Initialize the test interface."""
-        self.logger = logger if logger else EventClient()
+        self.logger = logger or EventClient()
 
     def run_command(self, command: str, fail: bool = False) -> bool:
         """Run a command on the test interface."""

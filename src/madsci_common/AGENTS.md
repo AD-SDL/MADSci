@@ -14,6 +14,24 @@ The `madsci_common` package contains shared types, utilities, and base classes u
 - **experiment_types.py**: Experiment and campaign management
 - **event_types.py**: Event logging and monitoring
 - **location_types.py**: Laboratory location and spatial management
+- **auth_types.py**: Ownership metadata and authentication
+
+### Context Management (`madsci/common/context.py`)
+- **MadsciContext**: Global context for server URLs and configuration
+- **EventClient context**: Hierarchical logging context system
+- **Context decorators**: `@with_madsci_context`, `@with_event_client`, `@event_client_class`
+
+### Ownership (`madsci/common/ownership.py`)
+- **OwnershipInfo**: Metadata tracking (user, experiment, workflow, etc.)
+- **ownership_context**: Context manager for ownership propagation
+- **Decorators**: `@with_ownership`, `@ownership_class`
+
+### OpenTelemetry (`madsci/common/otel/`)
+- **bootstrap.py**: OTEL initialization and configuration
+- **tracing.py**: Span context managers and decorators (`span_context`, `@with_span`, `@traced_class`)
+- **propagation.py**: W3C trace context propagation
+- **fastapi_instrumentation.py**: FastAPI auto-instrumentation
+- **requests_instrumentation.py**: HTTP requests auto-instrumentation
 
 ### Base Classes
 - **AbstractManagerBase**: Base class for all manager services with FastAPI integration
@@ -45,6 +63,35 @@ class MyManagerServer(AbstractManagerBase[MySettings, MyDefinition]):
         super().__init__(settings)
 ```
 
+### Context-Aware Logging
+Use the context system for hierarchical logging:
+```python
+from madsci.common.context import event_client_context, get_event_client
+
+# At entry points, establish context
+with event_client_context(name="operation", operation_id="op-123") as logger:
+    logger.info("Starting operation")
+
+# In library code, inherit context
+def utility_function():
+    logger = get_event_client()
+    logger.info("Utility running")
+```
+
+### OpenTelemetry Tracing
+Use the tracing decorators and context managers:
+```python
+from madsci.common.otel import span_context, with_span
+
+@with_span(name="process_data")
+def process(data):
+    return transform(data)
+
+with span_context("custom_operation") as span:
+    span.set_attribute("key", "value")
+    do_work()
+```
+
 ### Type Definitions
 - All models use Pydantic v2 with proper validation
 - Enums are used for status and state management
@@ -56,3 +103,4 @@ class MyManagerServer(AbstractManagerBase[MySettings, MyDefinition]):
 - Breaking changes here affect the entire MADSci ecosystem
 - Type definitions should be backward-compatible when possible
 - All new types should include comprehensive docstrings and examples
+- Context management uses `contextvars.ContextVar` for thread-safe, async-compatible propagation

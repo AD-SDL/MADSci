@@ -2,17 +2,94 @@
 Middleware for MADSci REST servers.
 
 This module provides middleware for enhancing server resilience,
-including rate limiting and request tracking.
+including rate limiting, request tracking, and EventClient context propagation.
 """
 
 import asyncio
 import time
 from collections import defaultdict
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from fastapi import Request, Response, status
+from madsci.common.utils import new_ulid_str
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+
+if TYPE_CHECKING:
+    from madsci.client.event_client import EventClient
+    from madsci.common.types.event_types import EventClientContext
+
+
+class _LazyEventClientContext:
+    """
+    A lazy context that creates the EventClient only when accessed.
+
+    This avoids the overhead of creating an EventClient for every request,
+    especially when the endpoint doesn't use logging.
+
+    Implements the same interface as EventClientContext for compatibility
+    with the context system.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        hierarchy: list,
+        metadata: dict,
+    ) -> None:
+        """Initialize the lazy context."""
+        self._name = name
+        self.hierarchy = hierarchy
+        self.metadata = metadata
+        self._client = None
+
+    @property
+    def name(self) -> str:
+        """Get the full hierarchical name."""
+        return ".".join(self.hierarchy) if self.hierarchy else "madsci"
+
+    @property
+    def client(self) -> "EventClient":
+        """
+        Get or create the EventClient.
+
+        The client is created lazily on first access, avoiding the overhead
+        of client creation for requests that don't use logging.
+        """
+        if self._client is None:
+            from madsci.client.event_client import EventClient  # noqa: PLC0415
+
+            self._client = EventClient(name=self._name)
+            if self.metadata:
+                self._client = self._client.bind(**self.metadata)
+        return self._client
+
+    def child(
+        self,
+        name: str,
+        client: Optional["EventClient"] = None,
+        **metadata: Any,
+    ) -> "EventClientContext":
+        """
+        Create a child context with extended hierarchy.
+
+        This maintains compatibility with EventClientContext.child().
+        """
+        from madsci.common.types.event_types import EventClientContext  # noqa: PLC0415
+
+        merged_metadata = {**self.metadata, **metadata}
+
+        if client is not None:
+            child_client = client
+        else:
+            # Create bound child from this context's client
+            child_client = self.client.bind(**metadata) if metadata else self.client
+
+        return EventClientContext(
+            client=child_client,
+            hierarchy=[*self.hierarchy, name],
+            metadata=merged_metadata,
+        )
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -273,3 +350,92 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             response.headers["X-RateLimit-Burst-Remaining"] = str(short_remaining)
 
         return response
+
+
+class EventClientContextMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware that establishes EventClient context for each request.
+
+    This enables hierarchical logging where all logs within a request
+    share common context (request_id, path, method, etc.).
+
+    When combined with manager-level context, this creates a hierarchy like:
+    manager.resource_manager -> request.GET./resources -> [endpoint handlers]
+
+    Attributes:
+        manager_name: The name of the manager to include in context.
+
+    Note:
+        The context is established using Python's contextvars, which properly
+        propagates across async boundaries in modern Python (3.7+). The
+        EventClient is created lazily when first accessed via get_event_client().
+    """
+
+    def __init__(
+        self,
+        app: Callable,
+        manager_name: str = "manager",
+    ) -> None:
+        """
+        Initialize the EventClient context middleware.
+
+        Args:
+            app: The ASGI application
+            manager_name: The name of the manager to include in context
+        """
+        super().__init__(app)
+        self.manager_name = manager_name
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """
+        Process each request within an EventClient context.
+
+        Establishes context with:
+        - request_id: From X-Request-ID header or generated ULID
+        - http_method: The HTTP method (GET, POST, etc.)
+        - http_path: The request path
+        - manager: The manager name
+
+        The context is established using Python's contextvars. The EventClient
+        is created lazily when first accessed via get_event_client().
+
+        Args:
+            request: The incoming HTTP request
+            call_next: The next middleware or endpoint handler
+
+        Returns:
+            Response: The HTTP response
+        """
+        from madsci.common.context import (  # noqa: PLC0415
+            _event_client_context,
+        )
+
+        # Get request ID from header or generate a new one
+        request_id = request.headers.get("X-Request-ID") or new_ulid_str()
+
+        # Build a context name based on the request
+        context_name = f"request.{request.method}.{request.url.path}"
+
+        context_metadata = {
+            "request_id": request_id,
+            "http_method": request.method,
+            "http_path": str(request.url.path),
+            "manager_name": self.manager_name,
+        }
+
+        # Create a lazy context that will create the EventClient when first accessed
+        # We use a special "lazy" context that defers client creation
+        ctx = _LazyEventClientContext(
+            name=context_name,
+            hierarchy=[context_name],
+            metadata=context_metadata,
+        )
+
+        # Set context manually to ensure it propagates
+        # Note: We use type: ignore because _LazyEventClientContext is duck-typed
+        # to be compatible with EventClientContext
+        token = _event_client_context.set(ctx)  # type: ignore[arg-type]
+        try:
+            return await call_next(request)
+        finally:
+            _event_client_context.reset(token)

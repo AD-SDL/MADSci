@@ -35,3 +35,13 @@ repos:
       - id: mixed-line-ending
       - id: end-of-file-fixer
       - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: madsci-logging-patterns
+        name: MADSci logging patterns
+        entry: python scripts/precommit_check_logging_patterns.py
+        language: system
+        types: [python]
+        files: ^src/.*\.py$
+        exclude: ^(tests/|src/.*/tests/).*$

@@ -43,6 +43,35 @@ from pydantic import BaseModel
 # ============================================================================
 
 
+def wait_for_action_completion(
+    node, action_id: str, timeout: float = 5.0
+) -> ActionResult:
+    """Wait for an action to complete and return the final result.
+
+    Args:
+        node: The node running the action
+        action_id: The action ID to wait for
+        timeout: Maximum time to wait in seconds
+
+    Returns:
+        The final ActionResult
+
+    Raises:
+        AssertionError: If the action doesn't complete within timeout
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        result = node.get_action_result(action_id)
+        if result.status in [
+            ActionStatus.SUCCEEDED,
+            ActionStatus.FAILED,
+            ActionStatus.CANCELLED,
+        ]:
+            return result
+        time.sleep(0.01)  # Check every 10ms
+    raise AssertionError(f"Action {action_id} timed out after {timeout} seconds")
+
+
 class TestIntegrationNodeConfig(RestNodeConfig):
     """Configuration for integration test nodes."""
 
@@ -574,16 +603,21 @@ def test_execute_action_validates_location_argument():
         action_name="test_action",
         args={"loc": {"representation": "test_loc", "location_name": "test_loc"}},
     )
-    result = node.run_action(valid_request)
+    node.run_action(valid_request)
+    result = wait_for_action_completion(node, valid_request.action_id)
     assert result.status == ActionStatus.SUCCEEDED
     assert result.json_result == "Location: test_loc"
 
     # Invalid location should fail validation
+    # Note: This should fail immediately during arg parsing, not in the thread
     invalid_request = ActionRequest(
         action_name="test_action",
         args={"loc": {"invalid": "data"}},
     )
     result = node.run_action(invalid_request)
+    # Wait a bit for thread to complete if it started
+    time.sleep(0.1)
+    result = node.get_action_result(invalid_request.action_id)
     assert result.status == ActionStatus.FAILED
     assert result.errors is not None
 

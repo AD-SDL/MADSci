@@ -2,14 +2,14 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
 from madsci.common.utils import new_ulid_str
 from pydantic import AnyUrl, ConfigDict, Field
 
 
-class ManagerType(str, Enum):
+class ManagerType(str, Enum):  # pyright: ignore[reportIncompatibleMethodOverride]
     """Types of Squid Managers."""
 
     WORKCELL_MANAGER = "workcell_manager"
@@ -21,14 +21,6 @@ class ManagerType(str, Enum):
     EXPERIMENT_MANAGER = "experiment_manager"
     LAB_MANAGER = "lab_manager"
     LOCATION_MANAGER = "location_manager"
-
-    @classmethod
-    def _missing_(cls, value: str) -> "ManagerType":
-        value = value.lower()
-        for member in cls:
-            if member.lower() == value:
-                return member
-        raise ValueError(f"Invalid ManagerTypes: {value}")
 
 
 class ManagerSettings(MadsciBaseSettings):
@@ -114,6 +106,33 @@ class ManagerSettings(MadsciBaseSettings):
         description="Maximum number of requests a worker will process before restarting. Helps prevent memory leaks.",
         default=None,
         ge=1,
+    )
+
+    # OpenTelemetry configuration
+    otel_enabled: bool = Field(
+        default=False,
+        title="OpenTelemetry Enabled",
+        description="Enable OpenTelemetry tracing and metrics integration for this manager",
+    )
+    otel_service_name: Optional[str] = Field(
+        default=None,
+        title="OpenTelemetry Service Name",
+        description="Override service name for OpenTelemetry (defaults to manager name)",
+    )
+    otel_exporter: Literal["console", "otlp", "none"] = Field(
+        default="console",
+        title="OpenTelemetry Exporter",
+        description="OpenTelemetry exporter type: 'console' for development, 'otlp' for production, 'none' to disable",
+    )
+    otel_endpoint: Optional[str] = Field(
+        default=None,
+        title="OpenTelemetry Endpoint",
+        description="OTLP collector endpoint (required when otel_exporter='otlp')",
+    )
+    otel_protocol: Literal["grpc", "http"] = Field(
+        default="grpc",
+        title="OpenTelemetry Protocol",
+        description="OTLP transport protocol ('grpc' or 'http')",
     )
 
 

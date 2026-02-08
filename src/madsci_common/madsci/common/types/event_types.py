@@ -3,10 +3,11 @@ Event types for the MADSci system.
 """
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union, get_args
 
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
@@ -24,6 +25,9 @@ from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic_settings import SettingsConfigDict
 
+if TYPE_CHECKING:
+    from madsci.client.event_client import EventClient
+
 
 class EventLogLevel(int, Enum):
     """The log level of an event."""
@@ -36,12 +40,22 @@ class EventLogLevel(int, Enum):
     CRITICAL = logging.CRITICAL
 
     @classmethod
-    def _missing_(cls, value: Union[str, int]) -> "EventLogLevel":
+    def _missing_(cls, value: object) -> "EventLogLevel":
         """Handle case-insensitive matching for log levels."""
+        if isinstance(value, int):
+            for member in cls:
+                if int(member) == value:
+                    return member
+            raise ValueError(f"Invalid EventLogLevel: {value}")
+
         if isinstance(value, str):
-            value = value.upper()
-            value = value.replace("EVENTLOGLEVEL.", "")
-        return cls[value]
+            name = value.upper().replace("EVENTLOGLEVEL.", "")
+            try:
+                return cls[name]
+            except KeyError as e:
+                raise ValueError(f"Invalid EventLogLevel: {value}") from e
+
+        raise ValueError(f"Invalid EventLogLevel: {value!r}")
 
 
 class EventManagerSettings(
@@ -54,10 +68,10 @@ class EventManagerSettings(
 ):
     """Handles settings and configuration for the Event Manager."""
 
-    server_url: Optional[AnyUrl] = Field(
+    server_url: AnyUrl = Field(
         title="Event Server URL",
         description="The URL of the Event Manager server.",
-        default="http://localhost:8001",
+        default=AnyUrl("http://localhost:8001"),
     )
     manager_definition: PathLike = Field(
         title="Event Manager Definition File",
@@ -90,6 +104,75 @@ class EventManagerSettings(
         default=None,
         title="Email Alerts Configuration",
         description="The configuration for sending email alerts.",
+    )
+
+    # Retention settings
+    retention_enabled: bool = Field(
+        default=False,
+        title="Retention Enabled",
+        description="Whether automatic event retention is enabled.",
+    )
+    soft_delete_after_days: int = Field(
+        default=90,
+        title="Soft Delete After Days",
+        description="Days after which events are soft-deleted (archived).",
+        ge=1,
+    )
+    hard_delete_after_days: int = Field(
+        default=365,
+        title="Hard Delete After Days",
+        description="Days after archive when events are permanently deleted via TTL index.",
+        ge=1,
+    )
+    retention_check_interval_hours: int = Field(
+        default=24,
+        title="Retention Check Interval Hours",
+        description="How often to run soft-delete retention checks (in hours).",
+        ge=1,
+    )
+
+    # Batch operation limits (to prevent performance impact)
+    archive_batch_size: int = Field(
+        default=1000,
+        title="Archive Batch Size",
+        description="Maximum number of events to archive in a single batch operation.",
+        ge=1,
+    )
+    max_batches_per_run: int = Field(
+        default=100,
+        title="Max Batches Per Run",
+        description="Maximum number of batches to process per retention run (0 = unlimited).",
+        ge=0,
+    )
+
+    # Backup settings
+    backup_enabled: bool = Field(
+        default=False,
+        title="Backup Enabled",
+        description="Whether automatic event backups are enabled.",
+    )
+    backup_schedule: Optional[str] = Field(
+        default=None,
+        title="Backup Schedule",
+        description="Cron expression for backup schedule (e.g., '0 2 * * *' for 2am daily).",
+    )
+    backup_dir: PathLike = Field(
+        default_factory=lambda: Path("~") / ".madsci" / "backups" / "events",
+        title="Backup Directory",
+        description="Directory for event backups.",
+    )
+    backup_max_count: int = Field(
+        default=10,
+        title="Backup Max Count",
+        description="Maximum number of backup files to keep.",
+        ge=1,
+    )
+
+    # Error handling
+    fail_on_retention_error: bool = Field(
+        default=False,
+        title="Fail On Retention Error",
+        description="If True, raise exceptions on retention failures. If False, log and continue.",
     )
 
 
@@ -148,12 +231,38 @@ class Event(MadsciBaseModel):
         description="The data associated with the event.",
         default_factory=dict,
     )
+    # OpenTelemetry trace context for log correlation
+    trace_id: Optional[str] = Field(
+        title="Trace ID",
+        description="OpenTelemetry trace ID for distributed trace correlation (32 hex characters).",
+        default=None,
+    )
+    span_id: Optional[str] = Field(
+        title="Span ID",
+        description="OpenTelemetry span ID for distributed trace correlation (16 hex characters).",
+        default=None,
+    )
+
+    # Archive/retention fields
+    archived: bool = Field(
+        title="Archived",
+        description="Whether this event has been archived (soft-deleted).",
+        default=False,
+    )
+    archived_at: Optional[datetime] = Field(
+        title="Archived At",
+        description="Timestamp when this event was archived. Used by MongoDB TTL index for automatic hard-deletion.",
+        default=None,
+    )
 
     @field_validator("event_id", mode="before")
     @classmethod
     def object_id_to_str(cls, v: Union[str, ObjectId]) -> str:
         """Cast ObjectID to string."""
         return str(v)
+
+
+LogRotationType = Literal["size", "time", "none"]
 
 
 class EventClientConfig(MadsciClientConfig):
@@ -207,9 +316,140 @@ class EventClientConfig(MadsciClientConfig):
         default_factory=lambda: Path("~") / ".madsci" / "logs",
     )
 
+    # Log rotation settings
+    log_rotation_type: LogRotationType = Field(
+        default="size",
+        title="Log Rotation Type",
+        description="Type of log rotation: 'size' (RotatingFileHandler), 'time' (TimedRotatingFileHandler), or 'none'",
+    )
+    log_max_bytes: int = Field(
+        default=10_485_760,  # 10MB
+        title="Log Max Bytes",
+        description="Maximum log file size in bytes before rotation (for size-based rotation)",
+        ge=1024,  # Minimum 1KB
+    )
+    log_backup_count: int = Field(
+        default=5,
+        title="Log Backup Count",
+        description="Number of backup log files to keep",
+        ge=0,
+    )
+    log_rotation_when: str = Field(
+        default="midnight",
+        title="Log Rotation When",
+        description="When to rotate logs (for time-based rotation): 'S', 'M', 'H', 'D', 'midnight', 'W0'-'W6'",
+    )
+    log_rotation_interval: int = Field(
+        default=1,
+        title="Log Rotation Interval",
+        description="Interval for time-based rotation",
+        ge=1,
+    )
+    log_compression_enabled: bool = Field(
+        default=True,
+        title="Log Compression Enabled",
+        description="Whether to compress rotated log files with gzip",
+    )
+
+    # Structlog configuration
+    log_output_format: Literal["json", "console"] = Field(
+        default="console",
+        title="Log Output Format",
+        description="Log output format: 'json' for structured machine-readable, 'console' for human-readable",
+    )
+    fail_on_error: bool = Field(
+        default=False,
+        title="Fail On Error",
+        description="If True, raise exceptions on logging/sending failures. If False, log errors silently and continue.",
+    )
+
+    # OpenTelemetry configuration
+    otel_enabled: bool = Field(
+        default=False,
+        title="OpenTelemetry Enabled",
+        description="Enable OpenTelemetry tracing and metrics integration",
+    )
+    otel_service_name: Optional[str] = Field(
+        default=None,
+        title="OpenTelemetry Service Name",
+        description="Override service name for OpenTelemetry (defaults to client name)",
+    )
+    otel_exporter: Literal["console", "otlp", "none"] = Field(
+        default="console",
+        title="OpenTelemetry Exporter",
+        description="OpenTelemetry exporter type: 'console' for development, 'otlp' for production, 'none' to disable",
+    )
+    otel_endpoint: Optional[str] = Field(
+        default=None,
+        title="OpenTelemetry Endpoint",
+        description="OTLP collector endpoint (required when otel_exporter='otlp')",
+    )
+    otel_protocol: Literal["grpc", "http"] = Field(
+        default="grpc",
+        title="OpenTelemetry Protocol",
+        description="OTLP transport protocol ('grpc' or 'http')",
+    )
+    otel_metric_export_interval_ms: int = Field(
+        default=10000,
+        title="OpenTelemetry Metric Export Interval",
+        description="Interval in milliseconds for exporting metrics to the collector",
+        ge=1000,  # Minimum 1 second
+    )
+
+    @field_validator("otel_endpoint")
+    @classmethod
+    def validate_otel_endpoint(cls, v: Optional[str]) -> Optional[str]:
+        """Validate OTLP endpoint format and normalize trailing slash."""
+        if v is None:
+            return v
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("OTLP endpoint must start with http:// or https://")
+        return v.rstrip("/")
+
+    @field_validator("log_rotation_when")
+    @classmethod
+    def validate_log_rotation_when(cls, v: str) -> str:
+        """Validate that log_rotation_when is a valid value for TimedRotatingFileHandler."""
+        valid_values = {
+            "S",
+            "M",
+            "H",
+            "D",
+            "midnight",
+            "W0",
+            "W1",
+            "W2",
+            "W3",
+            "W4",
+            "W5",
+            "W6",
+        }
+        if v not in valid_values:
+            raise ValueError(
+                f"log_rotation_when must be one of {valid_values}, got '{v}'"
+            )
+        return v
+
+    @field_validator("log_rotation_type", mode="before")
+    @classmethod
+    def validate_log_rotation_type(cls, v: str) -> str:
+        """Validate that log_rotation_type is a valid value."""
+        valid_values = get_args(LogRotationType)
+        if v not in valid_values:
+            raise ValueError(
+                f"log_rotation_type must be one of {valid_values}, got '{v}'"
+            )
+        return v
+
 
 class EventType(str, Enum):
-    """The type of an event."""
+    """The type of an event.
+
+    Notes:
+    - Prefer the most specific type available.
+    - The LOG_* types are for general logging; prefer domain-specific types when
+      applicable.
+    """
 
     UNKNOWN = "unknown"
     LOG = "log"
@@ -246,7 +486,7 @@ class EventType(str, Enum):
     EXPERIMENT_START = "experiment_start"
     EXPERIMENT_COMPLETE = "experiment_complete"
     EXPERIMENT_FAILED = "experiment_failed"
-    EXPERIMENT_CANCELLED = "experiment_stop"
+    EXPERIMENT_CANCELLED = "experiment_cancelled"
     EXPERIMENT_PAUSE = "experiment_pause"
     EXPERIMENT_CONTINUED = "experiment_continued"
     # *Campaign Events
@@ -257,13 +497,136 @@ class EventType(str, Enum):
     # *Action Events
     ACTION_STATUS_CHANGE = "action_status_change"
 
+    # *Resource Events
+    RESOURCE_CREATE = "resource_create"
+    RESOURCE_UPDATE = "resource_update"
+    RESOURCE_DELETE = "resource_delete"
+    RESOURCE_ALLOCATE = "resource_allocate"
+    RESOURCE_RELEASE = "resource_release"
+
+    # *Location Events
+    LOCATION_CREATE = "location_create"
+    LOCATION_UPDATE = "location_update"
+    LOCATION_DELETE = "location_delete"
+    ATTACHMENT_CREATE = "attachment_create"
+    ATTACHMENT_DELETE = "attachment_delete"
+
+    # *Data Events
+    DATA_STORE = "data_store"
+    DATA_QUERY = "data_query"
+    DATA_EXPORT = "data_export"
+
+    # *Manager Lifecycle Events
+    MANAGER_START = "manager_start"
+    MANAGER_STOP = "manager_stop"
+    MANAGER_ERROR = "manager_error"
+    MANAGER_HEALTH_CHECK = "manager_health_check"
+
+    # *Workflow Step Events
+    WORKFLOW_STEP_START = "workflow_step_start"
+    WORKFLOW_STEP_COMPLETE = "workflow_step_complete"
+    WORKFLOW_STEP_FAILED = "workflow_step_failed"
+
+    # *Action Events
+    ACTION_START = "action_start"
+    ACTION_COMPLETE = "action_complete"
+    ACTION_FAILED = "action_failed"
+
+    # *Backup Events
+    BACKUP_CREATE = "backup_create"
+    BACKUP_RESTORE = "backup_restore"
+
     @classmethod
-    def _missing_(cls, value: str) -> "EventType":
+    def _missing_(cls, value: object) -> "EventType":
+        if not isinstance(value, str):
+            raise ValueError(f"Invalid EventType: {value!r}")
+
         value = value.lower()
         for member in cls:
             if member.lower() == value:
                 return member
-        raise ValueError(f"Invalid ManagerTypes: {value}")
+        raise ValueError(f"Invalid EventType: {value}")
+
+
+EVENT_TYPE_DESCRIPTIONS: dict[EventType, str] = {
+    # Generic
+    EventType.UNKNOWN: "Uncategorized/unknown event type.",
+    EventType.TEST: "Test-only event type used in unit/integration tests.",
+    # Log events
+    EventType.LOG: "Generic log event.",
+    EventType.LOG_DEBUG: "Debug-level log event.",
+    EventType.LOG_INFO: "Info-level log event.",
+    EventType.LOG_WARNING: "Warning-level log event.",
+    EventType.LOG_ERROR: "Error-level log event.",
+    EventType.LOG_CRITICAL: "Critical-level log event.",
+    # Lab events
+    EventType.LAB_CREATE: "Lab created.",
+    EventType.LAB_START: "Lab started.",
+    EventType.LAB_STOP: "Lab stopped.",
+    # Node events
+    EventType.NODE_CREATE: "Node created/registered.",
+    EventType.NODE_START: "Node started.",
+    EventType.NODE_STOP: "Node stopped.",
+    EventType.NODE_CONFIG_UPDATE: "Node configuration updated.",
+    EventType.NODE_STATUS_UPDATE: "Node status updated.",
+    EventType.NODE_ERROR: "Node error occurred.",
+    # Workcell events
+    EventType.WORKCELL_CREATE: "Workcell created.",
+    EventType.WORKCELL_START: "Workcell started.",
+    EventType.WORKCELL_STOP: "Workcell stopped.",
+    EventType.WORKCELL_CONFIG_UPDATE: "Workcell configuration updated.",
+    EventType.WORKCELL_STATUS_UPDATE: "Workcell status updated.",
+    # Workflow events
+    EventType.WORKFLOW_CREATE: "Workflow created/enqueued.",
+    EventType.WORKFLOW_START: "Workflow execution started.",
+    EventType.WORKFLOW_COMPLETE: "Workflow execution completed successfully.",
+    EventType.WORKFLOW_ABORT: "Workflow aborted.",
+    EventType.WORKFLOW_STEP_START: "Workflow step started.",
+    EventType.WORKFLOW_STEP_COMPLETE: "Workflow step completed successfully.",
+    EventType.WORKFLOW_STEP_FAILED: "Workflow step failed.",
+    # Experiment events
+    EventType.EXPERIMENT_CREATE: "Experiment created.",
+    EventType.EXPERIMENT_START: "Experiment run started.",
+    EventType.EXPERIMENT_COMPLETE: "Experiment run completed.",
+    EventType.EXPERIMENT_FAILED: "Experiment run failed.",
+    EventType.EXPERIMENT_CANCELLED: "Experiment run cancelled.",
+    EventType.EXPERIMENT_PAUSE: "Experiment paused.",
+    EventType.EXPERIMENT_CONTINUED: "Experiment continued/resumed.",
+    # Campaign events
+    EventType.CAMPAIGN_CREATE: "Campaign created.",
+    EventType.CAMPAIGN_START: "Campaign started.",
+    EventType.CAMPAIGN_COMPLETE: "Campaign completed.",
+    EventType.CAMPAIGN_ABORT: "Campaign aborted.",
+    # Action events
+    EventType.ACTION_STATUS_CHANGE: "Action status changed (legacy aggregate type).",
+    EventType.ACTION_START: "Action started.",
+    EventType.ACTION_COMPLETE: "Action completed successfully.",
+    EventType.ACTION_FAILED: "Action failed.",
+    # Resource events
+    EventType.RESOURCE_CREATE: "Resource created.",
+    EventType.RESOURCE_UPDATE: "Resource updated.",
+    EventType.RESOURCE_DELETE: "Resource deleted/removed.",
+    EventType.RESOURCE_ALLOCATE: "Resource allocated/reserved.",
+    EventType.RESOURCE_RELEASE: "Resource released/unreserved.",
+    # Location events
+    EventType.LOCATION_CREATE: "Location created.",
+    EventType.LOCATION_UPDATE: "Location updated.",
+    EventType.LOCATION_DELETE: "Location deleted.",
+    EventType.ATTACHMENT_CREATE: "Resource attached to a location.",
+    EventType.ATTACHMENT_DELETE: "Resource detached from a location.",
+    # Data events
+    EventType.DATA_STORE: "Data stored/ingested.",
+    EventType.DATA_QUERY: "Data queried/read.",
+    EventType.DATA_EXPORT: "Data exported.",
+    # Manager lifecycle
+    EventType.MANAGER_START: "Manager process/service started.",
+    EventType.MANAGER_STOP: "Manager process/service stopped.",
+    EventType.MANAGER_ERROR: "Manager encountered an error.",
+    EventType.MANAGER_HEALTH_CHECK: "Manager health check performed.",
+    # Backup events
+    EventType.BACKUP_CREATE: "Backup created.",
+    EventType.BACKUP_RESTORE: "Backup restored.",
+}
 
 
 class EmailAlertsConfig(MadsciBaseModel):
@@ -323,9 +686,9 @@ class EventManagerDefinition(ManagerDefinition):
         title="Event Manager ID",
         description="The ID of the event manager.",
         default_factory=new_ulid_str,
-        alias=AliasChoices("manager_id", "event_manager_id"),
+        validation_alias=AliasChoices("manager_id", "event_manager_id"),
     )
-    manager_type: Literal[ManagerType.EVENT_MANAGER] = Field(
+    manager_type: ManagerType = Field(
         title="Manager Type",
         description="The type of the event manager",
         default=ManagerType.EVENT_MANAGER,
@@ -445,3 +808,83 @@ class SystemUtilizationData(MadsciBaseModel):
         description="Calculated system utilization percentage.",
         default=0.0,
     )
+
+
+@dataclass
+class EventClientContext:
+    """
+    Holds the current EventClient and its hierarchical context.
+
+    This dataclass is used internally by the context management system
+    to track the current EventClient and accumulated context metadata.
+
+    Attributes:
+        client: The actual EventClient instance for logging.
+        hierarchy: The naming hierarchy, e.g., ["experiment", "workflow", "step"].
+        metadata: Accumulated context metadata (experiment_id, workflow_id, etc.).
+
+    Example:
+        ctx = EventClientContext(
+            client=event_client,
+            hierarchy=["experiment", "workflow"],
+            metadata={"experiment_id": "exp-123", "workflow_id": "wf-456"},
+        )
+        print(ctx.name)  # "experiment.workflow"
+    """
+
+    client: "EventClient"
+    """The actual EventClient instance."""
+
+    hierarchy: list[str] = field(default_factory=list)
+    """The naming hierarchy, e.g., ["experiment", "workflow", "step"]."""
+
+    metadata: dict[str, Any] = field(default_factory=dict)
+    """Accumulated context metadata (experiment_id, workflow_id, etc.)."""
+
+    @property
+    def name(self) -> str:
+        """
+        Get the full hierarchical name.
+
+        Returns:
+            Dot-separated hierarchy string, or "madsci" if empty.
+        """
+        return ".".join(self.hierarchy) if self.hierarchy else "madsci"
+
+    def child(
+        self,
+        name: str,
+        client: Optional["EventClient"] = None,
+        **metadata: Any,
+    ) -> "EventClientContext":
+        """
+        Create a child context with extended hierarchy.
+
+        Args:
+            name: Name for this context level, added to hierarchy.
+            client: Optional explicit EventClient. If None, creates a bound
+                   child from the parent's client.
+            **metadata: Additional context metadata to merge.
+
+        Returns:
+            New EventClientContext with extended hierarchy and metadata.
+
+        Example:
+            parent_ctx = EventClientContext(client=client, hierarchy=["experiment"])
+            child_ctx = parent_ctx.child("workflow", workflow_id="wf-123")
+            # child_ctx.hierarchy == ["experiment", "workflow"]
+            # child_ctx.metadata == {"workflow_id": "wf-123"}
+        """
+        merged_metadata = {**self.metadata, **metadata}
+
+        if client is not None:
+            child_client = client
+        else:
+            # Create bound child from parent's client
+            child_client = self.client.bind(**metadata) if metadata else self.client
+
+        return EventClientContext(
+            client=child_client,
+            hierarchy=[*self.hierarchy, name],
+            metadata=merged_metadata,
+        )
