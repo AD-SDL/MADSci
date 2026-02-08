@@ -1,17 +1,10 @@
-Module madsci.common.otel
-=========================
-OpenTelemetry bootstrap and helpers.
+Module madsci.common.otel.tracing
+=================================
+OpenTelemetry tracing decorators and context managers for MADSci.
 
-This package provides a single canonical OpenTelemetry configuration surface
-for MADSci processes.
-
-Sub-modules
------------
-* madsci.common.otel.bootstrap
-* madsci.common.otel.fastapi_instrumentation
-* madsci.common.otel.propagation
-* madsci.common.otel.requests_instrumentation
-* madsci.common.otel.tracing
+This module provides convenient decorators and context managers for creating
+OpenTelemetry spans in MADSci code, following the same patterns as the
+event client and ownership context decorators.
 
 Functions
 ---------
@@ -28,28 +21,11 @@ Functions
         add_span_event("cache_hit", {"key": cache_key})
         add_span_event("validation_complete", {"items_validated": 100})
 
-`collect_metrics(runtime: madsci.common.otel.bootstrap.OtelRuntime) ‑> Any | None`
-:   Force a synchronous metrics collection for test assertions.
-
-    OpenTelemetry's metrics SDK is pull-based; in tests we want deterministic
-    reads without background threads.
-
-`configure_otel(config: madsci.common.otel.bootstrap.OtelBootstrapConfig) ‑> madsci.common.otel.bootstrap.OtelRuntime`
-:   Configure OpenTelemetry SDK providers.
-
-    This function is idempotent: the first successful configuration wins.
-
-`current_trace_context() ‑> dict[str, str | None]`
-:   Return the active trace/span ids for log correlation.
-
 `get_current_span() ‑> opentelemetry.trace.span.Span`
 :   Get the current active span.
 
     Returns:
         The current Span, or a non-recording span if none is active.
-
-`get_otel_runtime() ‑> madsci.common.otel.bootstrap.OtelRuntime | None`
-:   Return the process-global OTEL runtime when configured.
 
 `get_tracer(name: str | None = None) ‑> opentelemetry.trace.Tracer`
 :   Get an OpenTelemetry tracer.
@@ -59,19 +35,6 @@ Functions
 
     Returns:
         An OpenTelemetry Tracer instance.
-
-`inject_headers(headers: MutableMapping[str, str]) ‑> None`
-:   Inject trace context into outbound HTTP headers.
-
-`instrument_fastapi(app: FastAPI, *, enabled: bool = True) ‑> bool`
-:   Enable OpenTelemetry auto-instrumentation for FastAPI.
-
-    Returns True when instrumentation was applied, otherwise False.
-
-`instrument_requests(*, enabled: bool = True) ‑> bool`
-:   Enable OpenTelemetry auto-instrumentation for `requests`.
-
-    Returns True when instrumentation was applied, otherwise False.
 
 `is_span_recording() ‑> bool`
 :   Check if the current span is recording.
@@ -235,67 +198,3 @@ Functions
         @with_span(attributes={"workflow.type": "batch"})
         async def run_batch_workflow():
             await process_batch()
-
-Classes
--------
-
-`OtelBootstrapConfig(enabled: bool, service_name: str, service_version: str = 'unknown', exporter: Literal['console', 'otlp', 'none'] = 'console', otlp_endpoint: str | None = None, otlp_protocol: Literal['grpc', 'http'] = 'grpc', metric_export_interval_ms: int = 10000, test_mode: bool = False)`
-:   Settings for `configure_otel`.
-
-    ### Instance variables
-
-    `enabled: bool`
-    :
-
-    `exporter: Literal['console', 'otlp', 'none']`
-    :
-
-    `metric_export_interval_ms: int`
-    :
-
-    `otlp_endpoint: str | None`
-    :
-
-    `otlp_protocol: Literal['grpc', 'http']`
-    :
-
-    `service_name: str`
-    :
-
-    `service_version: str`
-    :
-
-    `test_mode: bool`
-    :
-
-`OtelRuntime(enabled: bool, tracer_provider: opentelemetry.sdk.trace.TracerProvider | None = None, meter_provider: opentelemetry.sdk.metrics._internal.MeterProvider | None = None, logger_provider: opentelemetry.sdk._logs._internal.LoggerProvider | None = None, otel_log_handler: logging.Handler | None = None, in_memory_span_exporter: opentelemetry.sdk.trace.export.in_memory_span_exporter.InMemorySpanExporter | None = None, in_memory_metric_reader: opentelemetry.sdk.metrics._internal.export.InMemoryMetricReader | None = None)`
-:   Runtime handles returned by `configure_otel`.
-
-    ### Instance variables
-
-    `enabled: bool`
-    :
-
-    `in_memory_metric_reader: opentelemetry.sdk.metrics._internal.export.InMemoryMetricReader | None`
-    :
-
-    `in_memory_span_exporter: opentelemetry.sdk.trace.export.in_memory_span_exporter.InMemorySpanExporter | None`
-    :
-
-    `logger_provider: opentelemetry.sdk._logs._internal.LoggerProvider | None`
-    :
-
-    `meter: opentelemetry.metrics.Meter`
-    :   Return a meter bound to this module.
-
-    `meter_provider: opentelemetry.sdk.metrics._internal.MeterProvider | None`
-    :
-
-    `otel_log_handler: logging.Handler | None`
-    :
-
-    `tracer: opentelemetry.trace.Tracer`
-    :   Return a tracer bound to this module.
-
-    `tracer_provider: opentelemetry.sdk.trace.TracerProvider | None`
-    :

@@ -17,6 +17,10 @@ Classes
 `LocationManager(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, definition: madsci.common.types.location_types.LocationManagerDefinition | None = None, **kwargs: Any)`
 :   MADSci Location Manager using the new AbstractManagerBase pattern.
 
+    This class is decorated with @ownership_class() which automatically
+    establishes ownership context for all public methods, eliminating the
+    need for manual `with ownership_context():` blocks in each endpoint.
+
     Initialize the LocationManager.
 
     ### Ancestors (in MRO)
@@ -36,6 +40,11 @@ Classes
 
     `transfer_planner: madsci.location_manager.transfer_planner.TransferPlanner | None`
     :
+
+    ### Instance variables
+
+    `ownership_info: madsci.common.types.auth_types.OwnershipInfo`
+    :   Get the current OwnershipInfo.
 
     ### Methods
 

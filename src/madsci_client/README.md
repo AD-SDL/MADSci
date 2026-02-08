@@ -107,7 +107,7 @@ def utility_function():
     logger.info("Utility function running")
 ```
 
-See the [Migration Guide](../../docs/dev/event_client_context_plan/migration_guide.md) for detailed migration patterns.
+See the [Migration Guide](../../docs/dev/event_client_context_plan/migration_guide.md) for detailed migration patterns, and the [Logging Guide](../../docs/guides/logging.md) for comprehensive documentation on structured logging and context management.
 
 ## Experiment Application
 

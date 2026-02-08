@@ -81,6 +81,9 @@ Classes
         This method should be called when the EventClient is no longer needed,
         especially in test scenarios where many clients may be created.
 
+        Note: Bound child clients (created via bind()/unbind()) share resources
+        with their parent and will skip cleanup to avoid closing shared resources.
+
     `critical(self, message: str, **kwargs: Any) ‑> None`
     :   Log a critical message.
 

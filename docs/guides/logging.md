@@ -334,3 +334,107 @@ def worker_process(task_id: str):
         logger.info("Worker starting")
         do_work()
 ```
+
+---
+
+## Context Decorators
+
+For cleaner code, use decorators instead of context managers:
+
+### `@with_event_client`
+
+Wrap functions with EventClient context:
+
+```python
+from madsci.common.context import with_event_client
+
+@with_event_client(name="my_workflow", workflow_id="wf-123")
+def my_workflow(event_client=None):
+    event_client.info("Running workflow")
+    do_work()
+
+# Called normally - context is established automatically
+my_workflow()
+```
+
+### `@event_client_class`
+
+Wrap all methods of a class with context:
+
+```python
+from madsci.common.context import event_client_class
+
+@event_client_class(component_type="processor")
+class DataProcessor:
+    def process(self, data):
+        # self.event_client is available in all methods
+        self.event_client.info("Processing data", data_size=len(data))
+        return transform(data)
+
+    def get_context_overrides(self) -> dict:
+        # Optional: provide instance-specific context
+        return {"processor_id": self.id}
+```
+
+---
+
+## OpenTelemetry Integration
+
+When OpenTelemetry is enabled, logs are automatically correlated with distributed traces.
+
+### Configuration
+
+Enable OTEL per-manager or per-EventClient:
+
+```python
+from madsci.client.event_client import EventClient, EventClientConfig
+
+config = EventClientConfig(
+    otel_enabled=True,
+    otel_service_name="my_service",
+    otel_exporter="otlp",
+    otel_endpoint="http://localhost:4317",
+    otel_protocol="grpc",
+)
+client = EventClient(name="traced_component", config=config)
+```
+
+Or via environment variables:
+```bash
+EVENT_OTEL_ENABLED=true
+EVENT_OTEL_SERVICE_NAME="madsci.event"
+EVENT_OTEL_EXPORTER="otlp"
+EVENT_OTEL_ENDPOINT="http://localhost:4317"
+```
+
+### Automatic Trace Context
+
+With OTEL enabled, events automatically include:
+- `trace_id`: W3C trace identifier
+- `span_id`: Current span identifier
+- `parent_span_id`: Parent span identifier (if available)
+
+This enables:
+- Clicking on a trace ID in logs to jump to the full trace in Jaeger
+- Seeing which logs were generated during a specific request
+- Understanding the full flow of a workflow across all managers
+
+### Tracing Decorators
+
+For explicit span creation:
+
+```python
+from madsci.common.otel import span_context, with_span
+
+# Context manager
+with span_context("process_data", attributes={"data.size": 100}) as span:
+    result = process(data)
+    span.set_attribute("result.count", len(result))
+
+# Decorator
+@with_span(name="fetch_user")
+def get_user(user_id: str):
+    return api.fetch(user_id)
+```
+
+See [OBSERVABILITY.md](../../example_lab/OBSERVABILITY.md) for the full observability stack setup.

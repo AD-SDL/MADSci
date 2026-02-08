@@ -8,6 +8,10 @@ Classes
 `ResourceManager(settings: madsci.common.types.resource_types.definitions.ResourceManagerSettings | None = None, definition: madsci.common.types.resource_types.definitions.ResourceManagerDefinition | None = None, resource_interface: madsci.resource_manager.resource_interface.ResourceInterface | None = None, **kwargs: Any)`
 :   Resource Manager REST Server.
 
+    This class is decorated with @ownership_class() which automatically
+    establishes ownership context for all public methods, eliminating the
+    need for manual middleware or `with ownership_context():` blocks.
+
     Initialize the Resource Manager.
 
     ### Ancestors (in MRO)
@@ -27,6 +31,11 @@ Classes
 
     `SETTINGS_CLASS: type[madsci.common.types.base_types.MadsciBaseSettings] | None`
     :   Settings for the MADSci Resource Manager.
+
+    ### Instance variables
+
+    `ownership_info: madsci.common.types.auth_types.OwnershipInfo`
+    :   Get the current OwnershipInfo.
 
     ### Methods
 
@@ -73,7 +82,10 @@ Classes
         it will be returned instead of creating a duplicate.
 
     `create_server(self) ‑> fastapi.applications.FastAPI`
-    :   Create and configure the FastAPI server with middleware.
+    :   Create and configure the FastAPI server.
+
+        Note: Ownership context is now handled by the @ownership_class decorator
+        which wraps all public methods with ownership context automatically.
 
     `create_template(self, body: madsci.common.types.resource_types.server_types.TemplateCreateBody) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Create a new resource template from a resource.
@@ -111,6 +123,12 @@ Classes
 
     `get_health(self) ‑> madsci.common.types.resource_types.definitions.ResourceManagerHealth`
     :   Get the health status of the Resource Manager.
+
+    `get_ownership_overrides(self) ‑> dict`
+    :   Return ownership overrides for this manager.
+
+        This method is called by the @ownership_class decorator to get
+        instance-specific ownership information.
 
     `get_resource(self, resource_id: str) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Retrieve a resource from the database by ID.

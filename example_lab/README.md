@@ -406,6 +406,28 @@ For production use:
 - [Configuration.md](../Configuration.md) - Complete configuration reference
 - [Main README](../README.md) - MADSci overview and installation
 - [Individual package documentation](../src/) - Detailed API references
+- [Logging Guide](../docs/guides/logging.md) - Structured logging and context management
+
+### 🔭 **Observability**
+- [OBSERVABILITY.md](OBSERVABILITY.md) - OpenTelemetry stack setup with Jaeger, Prometheus, Loki, and Grafana
+
+## Observability Stack
+
+The example lab includes optional OpenTelemetry observability with distributed tracing, metrics, and log aggregation:
+
+```bash
+# Start with full observability stack (Jaeger, Prometheus, Loki, Grafana)
+docker compose -f compose.yaml -f compose.otel.yaml up
+```
+
+**Access the UIs:**
+| Service    | URL                       | Description                        |
+|------------|---------------------------|------------------------------------|
+| Grafana    | http://localhost:3000     | Unified dashboards (admin/admin)   |
+| Jaeger     | http://localhost:16686    | Distributed tracing UI             |
+| Prometheus | http://localhost:9090     | Metrics querying                   |
+
+See [OBSERVABILITY.md](OBSERVABILITY.md) for detailed setup and configuration.
 
 ## Stopping the Lab
 

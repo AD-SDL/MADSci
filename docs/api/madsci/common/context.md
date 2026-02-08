@@ -5,6 +5,46 @@ Provides the ContextHandler class for managing global MadsciContext throughout a
 Functions
 ---------
 
+`event_client_class(name: str | None = None, inherit: bool = True, **context_metadata: Any) ‑> Callable[[type[~T]], type[~T]]`
+:   Class decorator that establishes an EventClient context for method calls.
+
+    This decorator modifies a class so that specified methods (or all public
+    methods if none specified) run within an EventClient context. The class
+    gains an 'event_client' property that returns the current context's client.
+
+    Args:
+        name: Base name for the context. Defaults to the class name.
+              Method contexts will be named "{class_name}.{method_name}".
+        inherit: If True (default), inherit and extend parent context.
+                If False, create a fresh context for each method call.
+        **context_metadata: Additional context to bind to all log messages
+                           within this class (e.g., component_type="processor").
+
+    Returns:
+        A class decorator.
+
+    Example:
+        @event_client_class(component_type="data_processor")
+        class DataProcessor:
+            def process(self, data):
+                # self.event_client is available
+                self.event_client.info("Processing", data_size=len(data))
+                return self._transform(data)
+
+            def _transform(self, data):  # Private methods not wrapped
+                return data.upper()
+
+        @event_client_class(name="CustomName", wrap_methods=["run", "execute"])
+        class Workflow:
+            def run(self):
+                self.event_client.info("Running workflow")
+
+            def execute(self):
+                self.event_client.info("Executing")
+
+            def helper(self):  # Not wrapped
+                pass
+
 `event_client_context(name: str | None = None, client: ForwardRef('EventClient') | None = None, inherit: bool = True, **context_metadata: Any) ‑> Generator['EventClient', None, None]`
 :   Establish or extend an EventClient context.
 
@@ -91,11 +131,141 @@ Functions
         else:
             logger = EventClient(name="standalone")  # Create new
 
-`madsci_context(**overrides: dict[str, typing.Any]) ‑> Generator[None, madsci.common.types.context_types.MadsciContext, None]`
+`has_madsci_context() ‑> bool`
+:   Check if a MadsciContext has been explicitly set (not just using global default).
+
+    Returns:
+        True if a context has been explicitly set, False otherwise.
+
+`madsci_context(**overrides: Any) ‑> Generator[madsci.common.types.context_types.MadsciContext, None, None]`
 :   Updates the current MadsciContext (as returned by get_current_madsci_context) with the provided overrides.
+
+`madsci_context_class(lab_server_url: str | None = None, event_server_url: str | None = None, experiment_server_url: str | None = None, data_server_url: str | None = None, resource_server_url: str | None = None, workcell_server_url: str | None = None, location_server_url: str | None = None) ‑> Callable[[type], type]`
+:   Class decorator that establishes a MadsciContext for method calls.
+
+    This decorator modifies a class so that all public methods run within a
+    MadsciContext. The class gains a 'madsci_context' property that returns
+    the current context.
+
+    Args:
+        lab_server_url: Lab server URL to set in context.
+        event_server_url: Event server URL to set in context.
+        experiment_server_url: Experiment server URL to set in context.
+        data_server_url: Data server URL to set in context.
+        resource_server_url: Resource server URL to set in context.
+        workcell_server_url: Workcell server URL to set in context.
+        location_server_url: Location server URL to set in context.
+
+    Returns:
+        A class decorator.
+
+    Example:
+        @madsci_context_class(event_server_url="http://localhost:8001")
+        class EventLogger:
+            def log_event(self, message):
+                # self.madsci_context is available
+                print(f"Logging to: {self.madsci_context.event_server_url}")
+
+        @madsci_context_class(lab_server_url="http://lab:8000")
+        class LabConnector:
+            def get_context_overrides(self) -> dict:
+                # Add instance-specific context overrides
+                return {"workcell_server_url": self.workcell_url}
+
+            def connect(self):
+                # Uses both class-level and instance-level context
+                print(f"Lab: {self.madsci_context.lab_server_url}")
 
 `set_current_madsci_context(context: madsci.common.types.context_types.MadsciContext) ‑> None`
 :   Sets the current MadsciContext object.
+
+`with_event_client(func: Callable[~P, ~R] | None = None, *, name: str | None = None, inherit: bool = True, **context_metadata: Any) ‑> Callable[~P, ~R] | Callable[[Callable[~P, ~R]], Callable[~P, ~R]]`
+:   Decorator that establishes an EventClient context for a function.
+
+    This decorator wraps a function (sync or async) so that all code executed
+    within it has access to an EventClient via get_event_client(), with
+    accumulated context. The decorated function can optionally receive the
+    EventClient as a keyword argument named 'event_client'.
+
+    Can be used with or without arguments:
+        @with_event_client
+        def my_function(): ...
+
+        @with_event_client(name="my_workflow", workflow_id="wf-123")
+        def my_workflow(): ...
+
+    Args:
+        func: The function to wrap (when used without parentheses).
+        name: Name for this context level. If not provided, uses the
+              function's qualified name.
+        inherit: If True (default), inherit and extend parent context.
+                If False, create a fresh context.
+        **context_metadata: Additional context to bind to all log messages
+                           within this function (e.g., experiment_id, node_id).
+
+    Returns:
+        The decorated function that runs within an EventClient context.
+
+    Example:
+        @with_event_client
+        def process_data():
+            logger = get_event_client()
+            logger.info("Processing data...")
+
+        @with_event_client(name="experiment", experiment_id="exp-123")
+        def run_experiment(event_client: EventClient = None):
+            # event_client is automatically injected
+            event_client.info("Running experiment")
+
+        @with_event_client(name="async_task")
+        async def async_operation():
+            logger = get_event_client()
+            await some_async_work()
+            logger.info("Done")
+
+`with_madsci_context(func: Callable[~P, ~R] | None = None, *, lab_server_url: str | None = None, event_server_url: str | None = None, experiment_server_url: str | None = None, data_server_url: str | None = None, resource_server_url: str | None = None, workcell_server_url: str | None = None, location_server_url: str | None = None) ‑> Callable[~P, ~R] | Callable[[Callable[~P, ~R]], Callable[~P, ~R]]`
+:   Decorator that establishes a MadsciContext for a function.
+
+    This decorator wraps a function (sync or async) so that all code executed
+    within it has access to the specified MadsciContext configuration via
+    get_current_madsci_context(). The decorated function can optionally receive
+    the MadsciContext as a keyword argument named 'madsci_ctx'.
+
+    Can be used with or without arguments:
+        @with_madsci_context
+        def my_function(): ...
+
+        @with_madsci_context(event_server_url="http://localhost:8001")
+        def my_workflow(): ...
+
+    Args:
+        func: The function to wrap (when used without parentheses).
+        lab_server_url: Lab server URL to set in context.
+        event_server_url: Event server URL to set in context.
+        experiment_server_url: Experiment server URL to set in context.
+        data_server_url: Data server URL to set in context.
+        resource_server_url: Resource server URL to set in context.
+        workcell_server_url: Workcell server URL to set in context.
+        location_server_url: Location server URL to set in context.
+
+    Returns:
+        The decorated function that runs within a MadsciContext.
+
+    Example:
+        @with_madsci_context(event_server_url="http://localhost:8001")
+        def log_events():
+            ctx = get_current_madsci_context()
+            print(f"Logging to: {ctx.event_server_url}")
+
+        @with_madsci_context(lab_server_url="http://lab:8000")
+        def connect_to_lab(madsci_ctx: MadsciContext = None):
+            # madsci_ctx is automatically injected
+            print(f"Connecting to: {madsci_ctx.lab_server_url}")
+
+        @with_madsci_context(data_server_url="http://data:8004")
+        async def async_data_op():
+            ctx = get_current_madsci_context()
+            await upload_data(ctx.data_server_url)
 
 Classes
 -------
