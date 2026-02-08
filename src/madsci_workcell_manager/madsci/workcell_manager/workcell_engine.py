@@ -14,6 +14,7 @@ from madsci.client.location_client import LocationClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.client.resource_client import ResourceClient
 from madsci.common.nodes import check_node_capability
+from madsci.common.otel.tracing import span_context
 from madsci.common.ownership import ownership_context
 from madsci.common.types.action_types import (
     ActionDatapoints,
@@ -47,7 +48,6 @@ from madsci.workcell_manager.workflow_utils import (
     cancel_active_workflows,
     prepare_workflow_step,
 )
-from opentelemetry import trace
 
 
 class Engine:
@@ -72,7 +72,6 @@ class Engine:
         self.data_client = data_client
         self.resource_client = ResourceClient()
         self.location_client = LocationClient()
-        self._tracer = trace.get_tracer(__name__)
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state()
         time.sleep(self.workcell_settings.cold_start_delay)
@@ -233,7 +232,7 @@ class Engine:
             wf = self.state_handler.get_active_workflow(workflow_id)
             step = wf.steps[wf.status.current_step_index]
 
-            with self._tracer.start_as_current_span(
+            with span_context(
                 "workflow.step",
                 attributes={
                     "step.action": step.action,
@@ -286,7 +285,7 @@ class Engine:
                         )
 
                     try:
-                        with self._tracer.start_as_current_span(
+                        with span_context(
                             "node.action",
                             attributes={
                                 "node.name": step.node,

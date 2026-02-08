@@ -54,7 +54,7 @@ class LocationStateHandler:
                 port=int(self._redis_port),
                 db=0,
                 decode_responses=True,
-                password=self._redis_password if self._redis_password else None,
+                password=self._redis_password or None,
             )
         return self._redis_connection
 

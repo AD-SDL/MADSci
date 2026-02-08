@@ -129,8 +129,8 @@ class RestNode(AbstractNode):
             self._configure_routes()
             uvicorn.run(
                 self.rest_api,
-                host=url.host if url.host else "127.0.0.1",
-                port=url.port if url.port else 2000,
+                host=url.host or "127.0.0.1",
+                port=url.port or 2000,
                 **getattr(self.config, "uvicorn_kwargs", {}),
             )
         else:

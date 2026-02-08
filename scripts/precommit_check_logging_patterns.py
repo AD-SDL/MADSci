@@ -101,7 +101,7 @@ def _requires_event_type(node: ast.Call) -> bool:
 
     # Enforce only at EventClient boundary; raw structlog logger calls may
     # legitimately omit event_type.
-    if target_root not in {"event_client"}:
+    if target_root != "event_client":
         return False
 
     # Only enforce on EventClient/structlog-style calls.

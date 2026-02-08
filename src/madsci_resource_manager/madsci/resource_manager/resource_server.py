@@ -1,13 +1,13 @@
 """Resource Manager server implementation, extending th AbstractBaseManager class."""
 
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional, Union
 
 import fastapi
 from classy_fastapi import delete, get, post, put
 from fastapi import HTTPException
 from fastapi.params import Body
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.ownership import global_ownership_info
+from madsci.common.ownership import ownership_class
 from madsci.common.types.event_types import EventType
 from madsci.common.types.resource_types import (
     ContainerDataModels,
@@ -50,13 +50,37 @@ QUERY_BODY_PARAM = Body(...)
 HISTORY_QUERY_BODY_PARAM = Body(...)
 
 
+@ownership_class()
 class ResourceManager(
     AbstractManagerBase[ResourceManagerSettings, ResourceManagerDefinition]
 ):
-    """Resource Manager REST Server."""
+    """Resource Manager REST Server.
+
+    This class is decorated with @ownership_class() which automatically
+    establishes ownership context for all public methods, eliminating the
+    need for manual middleware or `with ownership_context():` blocks.
+    """
 
     SETTINGS_CLASS = ResourceManagerSettings
     DEFINITION_CLASS = ResourceManagerDefinition
+
+    def get_ownership_overrides(self) -> dict:
+        """Return ownership overrides for this manager.
+
+        This method is called by the @ownership_class decorator to get
+        instance-specific ownership information.
+        """
+        # Check if definition is available yet (may not be during __init__)
+        if not hasattr(self, "_definition") or self._definition is None:
+            return {}
+
+        # Use resource_manager_id as the primary field, but support manager_id for compatibility
+        manager_id = getattr(
+            self._definition,
+            "resource_manager_id",
+            getattr(self._definition, "manager_id", None),
+        )
+        return {"manager_id": manager_id} if manager_id else {}
 
     def __init__(
         self,
@@ -74,9 +98,6 @@ class ResourceManager(
 
         # Initialize the resource interface
         self._setup_resource_interface()
-
-        # Set up ownership middleware
-        self._setup_ownership()
 
         # Initialize default templates after everything is set up
         self._initialize_default_templates()
@@ -135,16 +156,6 @@ class ResourceManager(
             )
             raise e
 
-    def _setup_ownership(self) -> None:
-        """Setup ownership information."""
-        # Use resource_manager_id as the primary field, but support manager_id for compatibility
-        manager_id = getattr(
-            self.definition,
-            "resource_manager_id",
-            getattr(self.definition, "manager_id", None),
-        )
-        global_ownership_info.manager_id = manager_id
-
     def _initialize_default_templates(self) -> None:
         """Create or update default templates defined in the manager definition."""
         if not self.definition.default_templates:
@@ -190,23 +201,12 @@ class ResourceManager(
                 # Continue with other templates even if one fails
 
     def create_server(self) -> fastapi.FastAPI:
-        """Create and configure the FastAPI server with middleware."""
-        app = super().create_server()
+        """Create and configure the FastAPI server.
 
-        @app.middleware("http")
-        async def ownership_middleware(
-            request: fastapi.Request, call_next: Callable
-        ) -> fastapi.Response:
-            # Use resource_manager_id as the primary field, but support manager_id for compatibility
-            manager_id = getattr(
-                self.definition,
-                "resource_manager_id",
-                getattr(self.definition, "manager_id", None),
-            )
-            global_ownership_info.manager_id = manager_id
-            return await call_next(request)
-
-        return app
+        Note: Ownership context is now handled by the @ownership_class decorator
+        which wraps all public methods with ownership context automatically.
+        """
+        return super().create_server()
 
     def get_health(self) -> ResourceManagerHealth:
         """Get the health status of the Resource Manager."""
@@ -688,7 +688,7 @@ class ResourceManager(
             return self._resource_interface.create_resource_from_template(
                 template_name=template_name,
                 resource_name=body.resource_name,
-                overrides=body.overrides if body.overrides else {},
+                overrides=body.overrides or {},
                 add_to_database=body.add_to_database,
             )
         except ValueError as e:
@@ -720,7 +720,7 @@ class ResourceManager(
         """
         try:
             return self._resource_interface.push(
-                parent_id=resource_id, child=body.child if body.child else body.child_id
+                parent_id=resource_id, child=body.child or body.child_id
             )
         except Exception as e:
             self.logger.error(

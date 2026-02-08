@@ -127,7 +127,7 @@ class ExperimentApplication(RestNode):
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
 
-        self.experiment = experiment if experiment else self.experiment
+        self.experiment = experiment or self.experiment
 
         # Note: All clients (experiment_client, workcell_client, location_client,
         # data_client, resource_client, event_client) are inherited from AbstractNode

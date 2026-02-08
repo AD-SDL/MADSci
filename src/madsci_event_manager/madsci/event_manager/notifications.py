@@ -20,7 +20,7 @@ class EmailAlerts:
     ) -> None:
         """Create an instance of EmailAlerts with the provided configuration."""
         self.config = config
-        self.logger = logger if logger else EventClient()
+        self.logger = logger or EventClient()
 
     def send_email_alerts(
         self,

@@ -475,7 +475,7 @@ class UtilizationAnalyzer:
             next_start = self._find_next_workcell_start(
                 workcell_id, start_timestamp, all_start_events
             )
-            stop_timestamp = next_start if next_start else end_time
+            stop_timestamp = next_start or end_time
 
         return stop_timestamp
 
@@ -581,7 +581,7 @@ class UtilizationAnalyzer:
             experiment_details = []
             for exp_id in system_util.active_experiments:
                 exp_name = self._resolve_experiment_name(exp_id)
-                display_name = exp_name if exp_name else f"Experiment {exp_id[-8:]}"
+                display_name = exp_name or f"Experiment {exp_id[-8:]}"
                 experiment_details.append(
                     {
                         "experiment_id": exp_id,
@@ -1492,7 +1492,7 @@ class UtilizationAnalyzer:
         if not isinstance(author, str):
             return "Unknown Author"
         cleaned = author.strip()
-        return cleaned if cleaned else "Unknown Author"
+        return cleaned or "Unknown Author"
 
     def _get_or_create_user(
         self, users: Dict[str, Dict], author: str
