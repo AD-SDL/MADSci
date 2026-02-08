@@ -1198,3 +1198,92 @@ def migrate_compose_file(path: Path, migrations: list[FileMigration], dry_run: b
 
     return changes
 ```
+
+---
+
+## Module Migration
+
+### Migrating External Module Repositories
+
+For external module repositories (e.g., `pf400_module`, `ot2_module`), the migration tool can help standardize the structure and add missing components.
+
+### `madsci migrate module`
+
+Analyze and update an existing module repository to follow MADSci conventions.
+
+```bash
+madsci migrate module [OPTIONS] [MODULE_DIR]
+```
+
+**Options:**
+- `--dry-run` - Preview changes without applying
+- `--apply` - Apply the changes
+- `--add-types` - Generate a `foo_types.py` file from existing code
+- `--add-fake` - Generate a fake interface from the real interface
+- `--update-structure` - Reorganize files to match recommended structure
+
+**Example:**
+```bash
+$ madsci migrate module ./pf400_module --dry-run
+
+Analyzing module: pf400_module
+──────────────────────────────
+
+Current structure:
+  src/
+  ├── pf400_rest_node.py        ✓ Node found
+  ├── pf400_interface/          ✓ Interface package found
+  │   ├── pf400.py
+  │   ├── pf400_constants.py
+  │   └── pf400_errors.py
+  └── keyboard_control.py
+Recommended additions:
+  ⚠ Missing: src/pf400_types.py
+      → Will extract settings and models from existing code
+  ⚠ Missing: src/pf400_fake_interface.py
+      → Will generate from pf400_interface with stubbed methods
+  ⚠ Missing: tests/test_pf400_fake.py
+      → Will generate basic fake interface tests
+Actions:
+  1. Generate pf400_types.py with:
+     - PF400NodeSettings (extracted from node)
+     - PF400InterfaceSettings (extracted from interface)
+     - Existing Pydantic models
+  2. Generate pf400_fake_interface.py with:
+     - Same method signatures as real interface
+     - Configurable delays and responses
+     - State tracking for testing
+  3. Update pf400_rest_node.py to:
+     - Import from pf400_types
+      - Support interface_variant selection
+
+Dry run - no changes made.
+Run with --apply to execute.
+```
+
+### Interface Standardization
+
+For modules that have interfaces but don't follow the recommended pattern, the migration tool can help:
+
+```bash
+# Generate a fake interface from an existing real interface
+madsci migrate module ./my_module --add-fake
+
+# Extract types into a foo_types.py file
+madsci migrate module ./my_module --add-types
+```
+
+### What Gets Generated
+
+**`foo_types.py`** (from `--add-types`):
+- Extracts settings classes from node and interface
+- Consolidates Pydantic models
+- Adds proper imports and documentation
+
+**`foo_fake_interface.py`** (from `--add-fake`):
+- Copies method signatures from real interface
+- Replaces hardware calls with configurable stubs
+- Adds state tracking for verification in tests
+- Includes delay simulation for realistic timing
+
+---

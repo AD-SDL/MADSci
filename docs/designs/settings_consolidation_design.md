@@ -373,6 +373,266 @@ class RestNodeSettings(NodeSettings):
     shutdown_timeout: float = 30.0
 ```
 
+
+---
+
+## Module and Interface Settings
+
+### Key Concept: Node vs. Module
+
+A **Node** is a runtime server instance that communicates with the workcell. A **Module** is a complete package (typically a git repository) containing the node, interfaces, drivers, types, tests, and deployment configurations.
+
+The settings hierarchy reflects this:
+
+```
+ModuleSettings (module-level metadata)
+    └── NodeSettings (node runtime config)
+            └── RestNodeSettings (REST-specific config)
+
+InterfaceSettings (interface-specific config, independent of node)
+```
+
+### ModuleSettings
+
+```python
+# src/madsci_common/madsci/common/types/module_types.py
+from typing import Optional
+from pydantic import Field
+from madsci.common.types.base_types import MadsciBaseSettings
+class ModuleSettings(MadsciBaseSettings):
+    """Base settings for node modules.
+    Contains module-level metadata that applies to the entire module,
+    not just a single node instance.
+    """
+    model_config = SettingsConfigDict(
+        env_prefix="MODULE_",
+    )
+    # Module identity
+    module_name: str = Field(
+        description="Name of the module (e.g., 'liquidhandler', 'pf400')"
+    )
+    module_version: str = Field(
+        default="0.0.1",
+        description="Semantic version of the module"
+    )
+    repository_url: Optional[str] = Field(
+        default=None,
+        description="URL of the module's git repository"
+    )
+    # Interface selection
+    interface_variant: str = Field(
+        default="real",
+        description="Which interface variant to use: 'real', 'fake', 'sim'"
+    )
+class NodeSettings(ModuleSettings):
+    """Base settings for all nodes.
+    Inherits from ModuleSettings and adds node-specific runtime configuration.
+    Replaces NodeDefinition + NodeConfig.
+    """
+    model_config = SettingsConfigDict(
+        env_prefix="NODE_",
+    )
+    # ... (existing NodeSettings fields follow)
+```
+
+### InterfaceSettings
+
+```python
+# src/madsci_common/madsci/common/types/interface_types.py
+from typing import Optional
+from pydantic import Field
+from madsci.common.types.base_types import MadsciBaseSettings
+class InterfaceSettings(MadsciBaseSettings):
+    """Base settings for hardware interfaces.
+    These settings are used by interface classes, independent of whether
+    they're used in a MADSci node or standalone (e.g., in a Jupyter notebook).
+    """
+    model_config = SettingsConfigDict(
+        env_prefix="INTERFACE_",
+    )
+    # Connection settings (override in subclass with specific prefix)
+    connection_timeout: float = Field(
+        default=10.0,
+        description="Timeout for initial connection (seconds)"
+    )
+    command_timeout: float = Field(
+        default=30.0,
+        description="Timeout for individual commands (seconds)"
+    )
+    retry_count: int = Field(
+        default=3,
+        description="Number of retries on transient failures"
+    )
+    retry_delay: float = Field(
+        default=1.0,
+        description="Delay between retries (seconds)"
+    )
+class SerialInterfaceSettings(InterfaceSettings):
+    """Settings for serial port interfaces."""
+    port: str = Field(
+        default="/dev/ttyUSB0",
+        description="Serial port path"
+    )
+    baudrate: int = Field(
+        default=9600,
+        description="Baud rate"
+    )
+    bytesize: int = 8
+    parity: str = "N"
+    stopbits: int = 1
+class SocketInterfaceSettings(InterfaceSettings):
+    """Settings for TCP/IP socket interfaces."""
+    host: str = Field(
+        default="localhost",
+        description="Host to connect to"
+    )
+    port: int = Field(
+        description="Port to connect to"
+    )
+```
+
+---
+
+## The foo_types.py Pattern
+
+For module development, we recommend organizing settings and data models in a central `foo_types.py` file. This keeps all type definitions in one place and allows them to be imported by both the node and interfaces.
+
+### Recommended Structure
+
+```python
+# src/foo_types.py
+"""Type definitions for the Foo module.
+This file contains all Pydantic models, settings classes, and type definitions
+used by the Foo module. Keeping them here allows:
+- Node and interfaces to share common types
+- Clean imports without circular dependencies
+- Easy discovery of all module-specific types
+"""
+from typing import Optional, Literal
+from pydantic import Field
+from madsci.common.types.module_types import ModuleSettings, NodeSettings
+from madsci.common.types.interface_types import SerialInterfaceSettings
+# =============================================================================
+# Module & Node Settings
+# =============================================================================
+class FooModuleSettings(ModuleSettings):
+    """Module-level settings for Foo."""
+    module_name: str = "foo"
+class FooNodeSettings(NodeSettings):
+    """Node settings for Foo, including interface config."""
+    model_config = SettingsConfigDict(
+        env_prefix="FOO_",
+    )
+    # Interface selection
+    interface_variant: Literal["real", "fake", "sim"] = "real"
+    # Foo-specific settings
+    max_speed: float = Field(
+        default=100.0,
+        description="Maximum speed in mm/s"
+    )
+    home_on_startup: bool = Field(
+        default=True,
+        description="Whether to home the device on startup"
+    )
+# =============================================================================
+# Interface Settings
+# =============================================================================
+class FooInterfaceSettings(SerialInterfaceSettings):
+    """Settings for the Foo hardware interface."""
+    model_config = SettingsConfigDict(
+        env_prefix="FOO_INTERFACE_",
+    )
+    port: str = "/dev/ttyUSB0"
+    baudrate: int = 115200
+# =============================================================================
+# Data Models (Commands, Results, State)
+# =============================================================================
+class FooCommand(MadsciBaseModel):
+    """A command to send to the Foo device."""
+    command_type: str
+    parameters: dict = Field(default_factory=dict)
+class FooResult(MadsciBaseModel):
+    """Result from a Foo device operation."""
+    success: bool
+    data: Optional[dict] = None
+    error_message: Optional[str] = None
+class FooState(MadsciBaseModel):
+    """Current state of the Foo device."""
+    position: tuple[float, float, float]
+    is_homed: bool
+    is_busy: bool
+    error_code: Optional[int] = None
+```
+
+### Usage in Node and Interfaces
+
+```python
+# src/foo_rest_node.py
+from foo_types import FooNodeSettings, FooState, FooResult
+from foo_interface import FooInterface
+from foo_fake_interface import FooFakeInterface
+class FooNode(RestNode):
+    config: FooNodeSettings = FooNodeSettings()
+    def startup_handler(self):
+        # Select interface based on settings
+        if self.config.interface_variant == "fake":
+            self.interface = FooFakeInterface(self.config)
+        else:
+            self.interface = FooInterface(self.config)
+# src/foo_interface.py
+from foo_types import FooInterfaceSettings, FooCommand, FooResult
+class FooInterface:
+    def __init__(self, settings: FooInterfaceSettings = None):
+        self.settings = settings or FooInterfaceSettings()
+```
+
+---
+
+## Configuration File Structure for Modules
+
+When configuring a module, the settings can be organized in config files:
+
+### YAML Format
+
+```yaml
+# foo_module/config.yaml
+# Module-level settings
+module:
+  module_name: "foo"
+  module_version: "1.2.0"
+  repository_url: "https://github.com/my-lab/foo_module"
+# Node settings (for running as MADSci node)
+node:
+  name: "foo_1"
+  server_port: 2000
+  interface_variant: "real"
+  max_speed: 150.0
+  home_on_startup: true
+# Interface settings
+interface:
+  port: "/dev/ttyUSB0"
+  baudrate: 115200
+  command_timeout: 60.0
+```
+
+### Environment Variables
+
+```bash
+# Module
+MODULE_NAME=foo
+MODULE_VERSION=1.2.0
+# Node
+FOO_NAME=foo_1
+FOO_SERVER_PORT=2000
+FOO_INTERFACE_VARIANT=real
+FOO_MAX_SPEED=150.0
+FOO_HOME_ON_STARTUP=true
+# Interface
+FOO_INTERFACE_PORT=/dev/ttyUSB0
+FOO_INTERFACE_BAUDRATE=115200
+FOO_INTERFACE_COMMAND_TIMEOUT=60.0
+```
+
 ---
 
 ## Environment Variable Naming

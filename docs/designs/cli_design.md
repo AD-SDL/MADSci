@@ -379,26 +379,30 @@ madsci new lab [OPTIONS] [DIRECTORY]
 - `--template TEMPLATE` - Lab template (minimal, standard, distributed)
 - `--no-interactive` - Skip prompts, use defaults
 
-#### `madsci new node`
+#### `madsci new module`
 
 ```bash
-madsci new node [OPTIONS] [DIRECTORY]
+madsci new module [OPTIONS] [DIRECTORY]
 ```
 
+Creates a complete module repository with node, interface(s), types, tests, and documentation.
+
 **Options:**
-- `--name NAME` - Node name (required if non-interactive)
+- `--name NAME` - Module name (required if non-interactive)
 - `--type TYPE` - Node type (device, compute, human)
-- `--template TEMPLATE` - Node template (basic, device, instrument, liquid_handler, robot_arm)
+- `--template TEMPLATE` - Module template (basic, device, instrument, liquid_handler, robot_arm, camera)
+- `--interface INTERFACE` - Interface communication pattern (serial, socket, rest, sdk)
+- `--include-fake` - Include fake interface for testing (default: true)
 - `--port PORT` - Default port number
 - `--no-interactive` - Skip prompts, use defaults
 
 **Interactive Flow:**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Create New Node                             │
+│                     Create New Module                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  Node name: [my_pipette__________]                              │
+│  Module name: [my_pipette__________]                            │
 │                                                                  │
 │  Node type:                                                      │
 │    ● device   - Physical instruments and robots                 │
@@ -406,10 +410,21 @@ madsci new node [OPTIONS] [DIRECTORY]
 │    ○ human    - Manual operation steps                          │
 │                                                                  │
 │  Template:                                                       │
-│    ○ basic         - Minimal node with one action               │
-│    ● device        - Standard device actions                    │
+│    ○ basic         - Minimal module with one action             │
+│    ● device        - Standard device lifecycle                  │
 │    ○ instrument    - Measurement device                         │
 │    ○ liquid_handler - Pipetting operations                      │
+│                                                                  │
+│  Interface type:                                                 │
+│    ○ serial   - Serial/USB communication                        │
+│    ● socket   - TCP/IP socket                                   │
+│    ○ rest     - REST API wrapper                                │
+│    ○ sdk      - Vendor SDK integration                          │
+│                                                                  │
+│  Include interfaces:                                             │
+│    ☑ Real interface (hardware communication)                    │
+│    ☑ Fake interface (testing without hardware)                  │
+│    ☐ Simulation interface (Omniverse/physics sim)               │
 │                                                                  │
 │  Port: [2000]                                                    │
 │                                                                  │
@@ -420,24 +435,77 @@ madsci new node [OPTIONS] [DIRECTORY]
 
 **Output:**
 ```
-Creating node "my_pipette" from template "device"...
+Creating module "my_pipette" from template "device"...
 
-  ✓ Created my_pipette/
-  ✓ Created my_pipette/my_pipette.py
-  ✓ Created my_pipette/config.py
-  ✓ Created my_pipette/tests/
-  ✓ Created my_pipette/tests/test_my_pipette.py
-  ✓ Created my_pipette/README.md
+  ✓ Created my_pipette_module/
+  ✓ Created my_pipette_module/src/my_pipette_rest_node.py
+  ✓ Created my_pipette_module/src/my_pipette_interface.py
+  ✓ Created my_pipette_module/src/my_pipette_fake_interface.py
+  ✓ Created my_pipette_module/src/my_pipette_types.py
+  ✓ Created my_pipette_module/tests/
+  ✓ Created my_pipette_module/tests/test_my_pipette_node.py
+  ✓ Created my_pipette_module/tests/test_my_pipette_interface.py
+  ✓ Created my_pipette_module/Dockerfile
+  ✓ Created my_pipette_module/pyproject.toml
+  ✓ Created my_pipette_module/README.md
 
 Next steps:
-  1. cd my_pipette
-  2. Edit my_pipette.py to implement your actions
-  3. python my_pipette.py  # Start the node
-  4. curl http://localhost:2000/health  # Verify it's running
+  1. cd my_pipette_module
+  2. Implement my_pipette_interface.py for your hardware
+  3. python src/my_pipette_rest_node.py --fake  # Test with fake interface
+  4. python src/my_pipette_rest_node.py  # Run with real hardware
+  5. curl http://localhost:2000/health  # Verify it's running
 
 Documentation:
-  https://madsci.readthedocs.io/guides/integrator/nodes
+  https://madsci.readthedocs.io/guides/integrator/modules
 ```
+
+#### `madsci new interface`
+
+```bash
+madsci new interface [OPTIONS] [MODULE_PATH]
+```
+
+Add a new interface variant to an existing module.
+
+**Arguments:**
+- `MODULE_PATH` - Path to existing module (default: current directory)
+
+**Options:**
+- `--type TYPE` - Interface type (fake, sim, mock)
+- `--name NAME` - Custom interface name
+- `--no-interactive` - Skip prompts, use defaults
+
+**Output:**
+```
+Adding fake interface to my_pipette_module...
+
+  ✓ Created src/my_pipette_fake_interface.py
+  ✓ Updated src/my_pipette_types.py (added FakeInterfaceConfig)
+  ✓ Created tests/test_my_pipette_fake_interface.py
+  ✓ Updated README.md (documented fake interface)
+
+Next steps:
+  1. Implement fake behavior in my_pipette_fake_interface.py
+  2. Run tests: pytest tests/test_my_pipette_fake_interface.py
+  3. Use fake interface: python src/my_pipette_rest_node.py --fake
+```
+
+#### `madsci new node`
+
+```bash
+madsci new node [OPTIONS] [DIRECTORY]
+```
+
+Creates just the node server when an interface already exists (rare use case).
+
+**Options:**
+- `--name NAME` - Node name
+- `--interface-module MODULE` - Python module path for existing interface
+- `--port PORT` - Default port number
+- `--no-interactive` - Skip prompts, use defaults
+
+**Note:** Most users should use `madsci new module` instead, which creates the complete package including node, interface, and types.
 
 #### `madsci new experiment`
 

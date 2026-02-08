@@ -91,23 +91,46 @@ Users currently create new components by:
 
 ```
 templates/
-├── node/
+├── module/                         # Complete module repositories
 │   ├── basic/
 │   │   ├── template.yaml           # Template manifest
-│   │   ├── {{node_name}}/          # Output directory (templated name)
-│   │   │   ├── {{node_name}}.py.j2
-│   │   │   ├── config.py.j2
+│   │   ├── {{module_name}}_module/ # Output directory (templated name)
+│   │   │   ├── src/
+│   │   │   │   ├── {{module_name}}_rest_node.py.j2
+│   │   │   │   ├── {{module_name}}_interface.py.j2
+│   │   │   │   ├── {{module_name}}_fake_interface.py.j2
+│   │   │   │   └── {{module_name}}_types.py.j2
 │   │   │   ├── tests/
-│   │   │   │   └── test_{{node_name}}.py.j2
+│   │   │   │   ├── test_{{module_name}}_node.py.j2
+│   │   │   │   └── test_{{module_name}}_interface.py.j2
+│   │   │   ├── Dockerfile.j2
+│   │   │   ├── pyproject.toml.j2
 │   │   │   └── README.md.j2
 │   │   └── hooks/
 │   │       └── post_generate.py    # Optional post-generation script
 │   ├── device/
-│   │   └── ...
+│   │   └── ...                     # Standard device lifecycle (init, shutdown, status)
 │   ├── instrument/
-│   │   └── ...
-│   └── liquid_handler/
-│       └── ...
+│   │   └── ...                     # Measurement devices (measure, calibrate)
+│   ├── liquid_handler/
+│   │   └── ...                     # Pipetting operations
+│   ├── robot_arm/
+│   │   └── ...                     # Pick/place/move operations
+│   └── camera/
+│       └── ...                     # Image capture/analysis
+├── interface/                      # Interface variants for existing modules
+│   ├── fake/
+│   │   ├── template.yaml
+│   │   └── {{module_name}}_fake_interface.py.j2
+│   ├── sim/
+│   │   ├── template.yaml
+│   │   └── {{module_name}}_sim_interface.py.j2
+│   └── mock/
+│       ├── template.yaml
+│       └── {{module_name}}_mock_interface.py.j2
+├── node/                           # Node-only templates (when interface exists)
+│   └── basic/
+│       └── ...                     # Just the REST node server
 ├── experiment/
 │   ├── script/
 │   ├── notebook/
@@ -1168,16 +1191,54 @@ def collect_parameters_interactive(engine: TemplateEngine) -> dict:
 
 ## Bundled Templates
 
-### Node Templates
+### Module Templates
+
+Complete module repositories with node, interface(s), types, tests, and documentation.
+
+| ID | Name | Description | Interface Pattern |
+|----|------|-------------|-------------------|
+| `module/basic` | Basic Module | Minimal module with one action | Generic |
+| `module/device` | Device Module | Standard device lifecycle (init, shutdown, status) | Generic |
+| `module/instrument` | Instrument Module | Measurement device with calibration | Generic |
+| `module/liquid_handler` | Liquid Handler Module | Pipetting operations | Serial/Socket |
+| `module/robot_arm` | Robot Arm Module | Pick and place operations | Socket/SDK |
+| `module/camera` | Camera Module | Image capture and analysis | SDK |
+
+**Generated Module Structure:**
+```
+my_device_module/
+├── src/
+│   ├── my_device_rest_node.py       # MADSci REST node server
+│   ├── my_device_interface.py       # Real hardware interface
+│   ├── my_device_fake_interface.py  # Fake interface for testing
+│   └── my_device_types.py           # Config, models, types
+├── tests/
+│   ├── test_my_device_node.py       # Node tests (using fake interface)
+│   └── test_my_device_interface.py  # Interface unit tests
+├── Dockerfile
+├── pyproject.toml
+└── README.md
+```
+
+### Interface Templates
+
+Add interface variants to existing modules.
 
 | ID | Name | Description |
 |----|------|-------------|
-| `node/basic` | Basic Node | Minimal node with one example action |
-| `node/device` | Device Node | Physical device with lifecycle actions |
-| `node/instrument` | Instrument Node | Measurement device with calibration |
-| `node/liquid_handler` | Liquid Handler | Pipetting operations |
-| `node/robot_arm` | Robot Arm | Pick and place operations |
-| `node/compute` | Compute Node | Data processing node |
+| `interface/fake` | Fake Interface | Simulated behavior for testing |
+| `interface/sim` | Simulation Interface | Connects to physics simulation (Omniverse) |
+| `interface/mock` | Mock Interface | Pytest mock-based interface for unit tests |
+
+### Node Templates
+
+Node-only templates for when an interface already exists (rare use case).
+
+| ID | Name | Description |
+|----|------|-------------|
+| `node/basic` | Basic Node | Minimal REST node wrapping existing interface |
+
+**Note:** Most users should use `module/*` templates instead, which include the complete package.
 
 ### Experiment Templates
 

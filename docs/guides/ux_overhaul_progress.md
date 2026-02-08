@@ -180,10 +180,11 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 
 ### Planned Deliverables
 
-- [ ] 3.1 `madsci new` Command Family
-- [ ] 3.2 Interactive Wizards (TUI)
-- [ ] 3.3 Template Library
+- [ ] 3.1 `madsci new` Command Family (`module`, `interface`, `node`, `experiment`, `workflow`, `lab`)
+- [ ] 3.2 Interactive Wizards (TUI) - Module Wizard with interface variant selection
+- [ ] 3.3 Template Library (module templates, interface templates, communication patterns)
 - [ ] 3.4 Generated Code Quality
+- [ ] 3.5 Fake/Simulation Interface Infrastructure
 
 ---
 
@@ -243,10 +244,28 @@ The following design documents were created during Phase 0 planning:
 | TUI Design | `docs/designs/tui_design.md` | TUI screens and navigation |
 | Template System Design | `docs/designs/template_system_design.md` | Template architecture |
 | ID Registry Design | `docs/designs/id_registry_design.md` | ID registry implementation |
+| Settings Consolidation Design | `docs/designs/settings_consolidation_design.md` | Settings system refactor |
+| Migration Tool Design | `docs/designs/migration_tool_design.md` | Definition file migration |
 
 ---
 
 ## Changelog
+
+### 2026-02-09
+
+- **Plan Updated**: Added Node vs. Module distinction throughout the UX Overhaul Plan
+  - New "Equipment Integrator Workflow" section documenting 8-step module development journey
+  - Updated CLI commands: `madsci new module`, `madsci new interface`
+  - New Phase 3.5: Fake/Simulation Interface Infrastructure
+  - Full module structure with `foo_types.py` pattern
+  - Updated glossary with Node, Module, Interface definitions
+- **Design Documents Updated**: All 6 design documents updated to align with module-first approach
+  - CLI Design: Updated scaffolding commands
+  - Template System: Added module/interface templates
+  - TUI Design: Replaced Node Wizard with Module Wizard
+  - ID Registry: Added module registration support
+  - Settings Consolidation: Added ModuleSettings and foo_types.py pattern
+  - Migration Tool: Added module migration commands
 
 ### 2026-02-08
 

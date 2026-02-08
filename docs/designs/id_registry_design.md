@@ -107,7 +107,8 @@ Currently, component IDs are stored in definition YAML files:
       "last_seen": "2026-02-07T15:30:00Z",
       "metadata": {
         "module_name": "liquidhandler",
-        "module_version": "0.0.1"
+        "module_version": "0.0.1",
+        "interface_variants": ["real", "fake"]
       },
       "lock": {
         "holder_pid": 12345,
@@ -117,6 +118,19 @@ Currently, component IDs are stored in definition YAML files:
         "heartbeat_at": "2026-02-07T15:30:05Z",
         "expires_at": "2026-02-07T15:30:35Z"
       }
+    },
+    "liquidhandler_module": {
+      "id": "01JYFEHVT120D60Z88RVERJ75M",
+      "component_type": "module",
+      "created_at": "2026-02-07T09:00:00Z",
+      "last_seen": "2026-02-07T15:30:00Z",
+      "metadata": {
+        "module_name": "liquidhandler",
+        "module_version": "1.2.0",
+        "interface_variants": ["real", "fake", "sim"],
+        "repository_url": "https://github.com/AD-SDL/liquidhandler_module"
+      },
+      "lock": null
     },
     "workcell_manager": {
       "id": "01JK706A23XYZFT4SA5M0VQT35H",
@@ -155,7 +169,7 @@ class RegistryLock(MadsciBaseModel):
 class RegistryEntry(MadsciBaseModel):
     """A single entry in the registry."""
     id: str
-    component_type: Literal["node", "manager", "experiment", "workcell"]
+    component_type: Literal["node", "module", "manager", "experiment", "workcell"]
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_seen: datetime = Field(default_factory=datetime.utcnow)
     metadata: dict = Field(default_factory=dict)
