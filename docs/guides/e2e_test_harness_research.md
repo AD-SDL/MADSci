@@ -2,6 +2,7 @@
 
 **Status**: Research Complete
 **Date**: 2026-02-07
+**Last Updated**: 2026-02-08
 
 ## Executive Summary
 
@@ -270,6 +271,7 @@ class TutorialStep:
     command: str | None = None
     python_code: str | None = None
     validations: list[Validation] = field(default_factory=list)
+    timeout: int | None = None  # Per-step timeout in seconds (overrides default)
 
 @dataclass
 class Validation:
@@ -314,6 +316,7 @@ steps:
   - name: "Start the node"
     command: "python my_pipette/my_pipette.py &"
     background: true
+    timeout: 60  # Allow up to 60 seconds for this step
     wait_for:
       type: http_health
       url: "http://localhost:2000/health"

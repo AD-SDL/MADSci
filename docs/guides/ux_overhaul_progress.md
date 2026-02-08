@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Started**: 2026-02-07
-**Last Updated**: 2026-02-08
+**Last Updated**: 2026-02-10
 
 This document tracks the implementation progress of the [MADSci UX Overhaul Plan](./ux_overhaul_plan.md).
 
@@ -250,6 +250,22 @@ The following design documents were created during Phase 0 planning:
 ---
 
 ## Changelog
+
+### 2026-02-10
+
+- **Review Feedback Incorporated**: Comprehensive review feedback synthesized and applied across all documents
+  - Added concrete deprecation timeline: deprecated in v0.7.0, removed in v0.8.0
+  - TUI phased delivery: MVP in Phase 1, full features in later phases
+  - Multi-workcell support added to ID Registry design
+  - Air-gapped environment support added to Template System
+  - Docker-compose migration safety improvements (ruamel.yaml, validation, rollback)
+  - OTEL integration notes added across CLI, TUI, and ID Registry designs
+  - Documentation URL corrected to https://ad-sdl.github.io/MADSci/
+  - Added `madsci run workflow` convenience command
+  - Windows compatibility requirements clarified (filelock, pathlib)
+  - Schema export capability added to Settings Consolidation
+  - Step timeout support added to E2E test harness
+  - ExperimentCampaign design notes expanded
 
 ### 2026-02-09
 

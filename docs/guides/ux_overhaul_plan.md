@@ -2,7 +2,8 @@
 
 **Status**: Active Development
 **Created**: 2026-02-07
-**Last Updated**: 2026-02-07
+**Last Updated**: 2026-02-08
+**Current MADSci Version**: 0.6.2
 
 ## Executive Summary
 
@@ -147,11 +148,14 @@ madsci logs               # Aggregate/tail logs from services
                           #   - Follow mode (-f)
 ```
 
-#### 1.3 TUI Foundation (Textual)
+#### 1.3 TUI Foundation (Textual) - MVP
 - Basic app shell with navigation
-- Service status dashboard (real-time health)
-- Log viewer with filtering
-- Foundation for future screens (wizards, resource browser, etc.)
+- Service status dashboard (static health display, manual refresh)
+- Log viewer with filtering (read-only)
+- Command palette via Trogon integration
+- Foundation architecture for future screens
+
+**Note**: Advanced TUI features (interactive wizards, real-time updates, workflow visualization) are deferred to Phase 3+ to reduce Phase 1 scope. All features described in the TUI design document will be implemented by project completion.
 
 #### 1.4 User Configuration Infrastructure
 - `MadsciUserConfig` class for CLI-level preferences
@@ -783,6 +787,16 @@ class MyOptimization(ExperimentCampaign):
         ...
 ```
 
+**Design Notes for ExperimentCampaign** (to be detailed in future design document):
+
+| Concern | Approach |
+|---------|----------|
+| **State persistence** | Campaign state persisted to Experiment Manager after each iteration. Supports restart from last checkpoint |
+| **Experiment Manager integration** | Each iteration creates an ExperimentRun. Campaign tracked as parent entity with `campaign_id` linking runs |
+| **AI/ML parameter selection** | `get_next_parameters()` receives full history. Users can integrate Ax, Optuna, or custom optimizers |
+| **Human-in-the-loop** | Optional `await_approval()` hook before each iteration. TUI/dashboard shows pending decisions |
+| **Long-running support** | Heartbeat to Experiment Manager. Auto-pause if no heartbeat. Resume from CLI or TUI |
+
 #### 4.4 Template Integration
 
 `madsci new experiment` prompts for modality and generates appropriate template.
@@ -974,14 +988,16 @@ Week 15+:   Phase 6 - Pure Python Mode (stretch)
 
 | Risk | Mitigation |
 |------|------------|
-| Breaking existing production labs | Migration tool with dry-run, deprecation warnings, rollback support |
+| Breaking existing production labs | Migration tool with dry-run, deprecation warnings, rollback support. Clear timeline: deprecated in 0.7, removed in 0.8 |
 | Scope creep | Clear phase boundaries, MVP for each deliverable |
-| TUI complexity | Start minimal, iterate based on feedback |
-| Pure Python mode intractable | Treat as stretch goal, fail fast if blockers found |
-| Template maintenance burden | Automated validation catches template breakage |
+| TUI complexity | Phased delivery: MVP in Phase 1 (static dashboard, logs, command palette), full features in later phases |
+| Pure Python mode intractable | Treat as stretch goal, fail fast if blockers found. Consider MVP: SQLite for PostgreSQL managers, in-memory for MongoDB |
+| Template maintenance burden | Automated validation catches template breakage. Consider template versioning beyond schema (e.g., `best_practices_version`) |
 | Module complexity overwhelming | Progressive disclosure: basic template first, advanced patterns documented |
 | Fake interface fidelity | Document limitations clearly, provide timing simulation helpers |
-| External module repos diverge | Provide migration CLI, template versioning, compatibility checks |
+| External module repos diverge | Provide migration CLI, template versioning, compatibility checks. Module maintainers are within team or close collaborators |
+| Windows compatibility issues | Add Windows to CI test matrix. Use cross-platform `filelock` library. Use `pathlib.Path` throughout |
+| Docker-compose migration breaks files | Use `ruamel.yaml` to preserve formatting/comments. Create comprehensive backups. Offer `--no-docker-compose` flag |
 
 ---
 
@@ -995,9 +1011,24 @@ The following decisions have been made based on review:
 
 3. **Registry service**: The ID Registry API will be part of the Lab Manager (Squid), not a separate service. This reduces operational complexity while still providing distributed coordination.
 
-4. **Notebook integration**: Start with Rich display (simpler, works in more environments). IPywidgets integration can be added later if there's demand for interactive progress widgets.
+4. **Notebook integration**: Start with Rich display (simpler, works in more environments). IPywidgets integration can be added later if there's demand for interactive progress widgets. The `ExperimentNotebook` modality should include automatic progress updates that don't flood output cells, a `display()` method for attractive Jupyter rendering, and graceful degradation when Rich isn't available.
 
-5. **Windows support**: **Critical priority.** Many laboratory instruments only work on Windows. All features must work on Windows, and Docker Desktop issues should be documented with workarounds. Pure Python mode (Phase 6) is especially important for Windows users.
+5. **Windows support**: **Critical priority.** Many laboratory instruments only work on Windows. All features must work on Windows, and Docker Desktop issues should be documented with workarounds. Pure Python mode (Phase 6) is especially important for Windows users. Windows-specific testing should be added to CI matrix, and all file locking code must use the cross-platform `filelock` library (not `fcntl`).
+
+6. **Deprecation timeline**: Definition files will be deprecated in v0.7.0 (with warnings) and removed in v0.8.0. This gives users one minor version to migrate.
+
+7. **TUI phased delivery**: The TUI will be delivered in phases:
+   - **Phase 1 (MVP)**: Dashboard with static status, log viewer (read-only), command palette via Trogon
+   - **Phase 3+**: Interactive wizards, node management screens, workflow visualization, real-time updates
+   - **Final**: All screens and features described in the TUI design document will be implemented by project completion
+
+8. **Multi-workcell support**: While multiple labs on shared infrastructure is out of scope, supporting multiple workcells within a single lab is important and should be explicitly designed for. The ID Registry and Settings system should accommodate workcell-scoped components.
+
+9. **Air-gapped environments**: Template installation must support local directories in addition to git URLs, allowing users in network-isolated environments to manually transfer templates and instantiate from local paths.
+
+10. **OpenTelemetry integration**: The CLI and TUI should integrate with the existing OTEL support. `madsci doctor` should check OTEL exporter connectivity when configured, and `madsci status` could show trace/span counts if OTEL is enabled.
+
+11. **Documentation location**: All documentation lives at https://ad-sdl.github.io/MADSci/ (using myst.md + GitHub Pages). Links throughout the codebase and CLI help text should reference this URL.
 
 ---
 

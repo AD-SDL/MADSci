@@ -2,6 +2,7 @@
 
 **Status**: Draft
 **Date**: 2026-02-07
+**Last Updated**: 2026-02-08
 **Author**: Claude (AI Assistant)
 
 ## Overview
@@ -174,6 +175,10 @@ class RegistryEntry(MadsciBaseModel):
     last_seen: datetime = Field(default_factory=datetime.utcnow)
     metadata: dict = Field(default_factory=dict)
     lock: Optional[RegistryLock] = None
+    workcell_id: Optional[str] = Field(
+        default=None,
+        description="ID of the workcell this component belongs to (for multi-workcell labs)"
+    )
 
     def is_locked(self) -> bool:
         """Check if entry is currently locked."""
@@ -266,7 +271,11 @@ from madsci.common.types.registry_types import RegistryLock, RegistryEntry
 from madsci.common.utils import new_ulid_str
 
 class LockManager:
-    """Manages heartbeat-based locks for registry entries."""
+    """Manages heartbeat-based locks for registry entries.
+
+    IMPORTANT: This implementation uses the cross-platform `filelock` library
+    for file locking. Do NOT use `fcntl` directly as it is Unix-only.
+    """
 
     LOCK_TTL = timedelta(seconds=30)
     HEARTBEAT_INTERVAL = 10  # seconds
@@ -1134,6 +1143,12 @@ The following decisions have been made based on review:
 4. **Encryption**: **Not required at this time.** The registry contains component names and IDs, not secrets. If sensitive metadata needs to be stored later, encryption can be added.
 
 5. **Audit log**: **Yes, log all lock acquisitions and releases.** This aids debugging of "component already locked" issues. Use the EventClient to log these as structured events with `event_type=EventType.REGISTRY_LOCK_ACQUIRED` / `REGISTRY_LOCK_RELEASED`.
+
+6. **Windows compatibility**: **Critical.** All file locking code must use the cross-platform `filelock` library, NOT `fcntl` (which is Unix-only). Path handling should use `pathlib.Path` throughout. Registry file location on Windows is `%USERPROFILE%\.madsci\registry.json`.
+
+7. **Multi-workcell support**: The registry supports multiple workcells within a single lab. Each component can have a `workcell_id` in its metadata to indicate which workcell it belongs to. The registry does NOT support multiple labs - users with multiple labs should use separate registry files or user accounts.
+
+8. **OTEL integration**: Lock acquisitions and releases are traced via OTEL when enabled. The `IdentityResolver` creates spans for `resolve()` and `release()` operations with appropriate attributes (`component.name`, `component.type`, `lock.holder`).
 
 ---
 

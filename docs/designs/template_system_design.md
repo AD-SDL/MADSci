@@ -2,6 +2,7 @@
 
 **Status**: Draft
 **Date**: 2026-02-07
+**Last Updated**: 2026-02-08
 **Author**: Claude (AI Assistant)
 
 ## Overview
@@ -1008,21 +1009,59 @@ class TemplateRegistry:
         self,
         source: str,
         name: Optional[str] = None,
+        local: bool = False,
     ) -> Path:
         """Install a template from a source.
 
         Args:
             source: Path to template directory or git URL
             name: Optional name override
+            local: If True, treat source as local path (for air-gapped environments)
 
         Returns:
             Path to installed template
         """
-        # TODO: Implement template installation from:
-        # - Local directory
-        # - Git repository
-        # - Archive file
-        pass
+        source_path = Path(source)
+
+        if local or source_path.exists():
+            # Local directory installation (supports air-gapped environments)
+            if not source_path.exists():
+                raise TemplateNotFoundError(f"Local path not found: {source}")
+
+            manifest_path = source_path / "template.yaml"
+            if not manifest_path.exists():
+                raise TemplateError(f"No template.yaml found in {source}")
+
+            manifest = TemplateManifest.from_yaml(manifest_path)
+            template_name = name or f"{manifest.category}/{source_path.name}"
+
+            dest_path = self.user_template_dir / template_name
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Copy template to user directory
+            import shutil
+            if dest_path.exists():
+                shutil.rmtree(dest_path)
+            shutil.copytree(source_path, dest_path)
+
+            return dest_path
+
+        elif source.startswith(("http://", "https://", "git@")):
+            # Git repository installation (requires network)
+            import subprocess
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", source, tmpdir],
+                    check=True,
+                    capture_output=True,
+                )
+                # Recursively install from cloned directory
+                return self.install_template(tmpdir, name=name, local=True)
+
+        else:
+            raise TemplateError(f"Unknown source format: {source}")
 
 
 class TemplateNotFoundError(Exception):
@@ -1349,12 +1388,22 @@ The following decisions have been made based on review:
 
 2. **Template inheritance**: **Deferred to later.** While template inheritance would be useful, the added complexity is not justified for the initial implementation. Templates can be self-contained with copy-paste of common patterns. Inheritance can be added in a future version if there's demand.
 
-3. **Remote templates**: **Yes, support git repos.** Users should be able to install templates from git repositories:
+3. **Remote templates**: **Yes, support git repos and local directories.** Users should be able to install templates from multiple sources:
    ```bash
+   # From git repository (requires network access)
    madsci template install https://github.com/org/madsci-templates.git
    madsci template install git@github.com:org/madsci-templates.git --path node/custom
+
+   # From local directory (for air-gapped environments)
+   madsci template install /path/to/local/templates --local
+   madsci template install ./my-templates --local
    ```
-   Templates will be cloned/downloaded to `~/.madsci/templates/` and registered in the template registry.
+   Templates will be copied to `~/.madsci/templates/` and registered in the template registry.
+
+   **Air-gapped environment workflow:**
+   1. On a machine with network access, clone template repository
+   2. Transfer the cloned directory to the air-gapped machine (USB, secure file transfer, etc.)
+   3. Install from local path: `madsci template install /path/to/transferred/templates --local`
 
 4. **Template testing**: See analysis below.
 

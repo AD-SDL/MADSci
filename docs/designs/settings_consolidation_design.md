@@ -2,6 +2,7 @@
 
 **Status**: Draft
 **Date**: 2026-02-07
+**Last Updated**: 2026-02-08
 **Author**: Claude (AI Assistant)
 
 ## Overview
@@ -1089,17 +1090,25 @@ GET /settings?format=yaml
 
 GET /settings?include_defaults=false
     Returns: Only non-default settings
+
+GET /settings?include_schema=true
+    Returns: Settings plus JSON schema for documentation
 ```
 
 ### Implementation
 
 ```python
 # Add to AbstractManagerBase
-def get_settings_export(self, include_defaults: bool = True) -> dict:
+def get_settings_export(
+    self,
+    include_defaults: bool = True,
+    include_schema: bool = False,
+) -> dict:
     """Export current settings for backup/replication.
 
     Args:
         include_defaults: If True, include fields with default values
+        include_schema: If True, include JSON schema for documentation
 
     Returns:
         Settings as a dictionary (secrets redacted)
@@ -1117,7 +1126,14 @@ def get_settings_export(self, include_defaults: bool = True) -> dict:
         defaults = type(self.settings)().model_dump()
         data = {k: v for k, v in data.items() if data.get(k) != defaults.get(k)}
 
-    return data
+    result = {"settings": data}
+
+    if include_schema:
+        # Include JSON schema for documentation purposes
+        result["schema"] = type(self.settings).model_json_schema()
+        result["schema_title"] = type(self.settings).__name__
+
+    return result
 
 # Add endpoint
 @router.get("/settings")

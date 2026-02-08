@@ -2,6 +2,7 @@
 
 **Status**: Draft
 **Date**: 2026-02-07
+**Last Updated**: 2026-02-08
 **Author**: Claude (AI Assistant)
 
 ## Overview
@@ -103,6 +104,9 @@ madsci
 ├── export                  # Export settings/state (subcommands)
 │   ├── settings            # Export component settings
 │   └── state               # Export runtime state (future)
+├── run                     # Run workflows/experiments (subcommands)
+│   ├── workflow            # Run a workflow
+│   └── experiment          # Run an experiment
 ├── tui                     # Launch interactive TUI
 └── completion              # Shell completion scripts
 ```
@@ -188,6 +192,11 @@ Performs comprehensive system diagnostics.
    - Valid configuration files
    - Environment variables set
    - Registry accessibility
+
+6. **Observability (if configured)**
+   - OpenTelemetry exporter connectivity
+   - OTEL collector reachability
+   - Trace/metric export status
 
 **Output:**
 ```
@@ -457,7 +466,7 @@ Next steps:
   5. curl http://localhost:2000/health  # Verify it's running
 
 Documentation:
-  https://madsci.readthedocs.io/guides/integrator/modules
+  https://ad-sdl.github.io/MADSci/guides/integrator/modules
 ```
 
 #### `madsci new interface`
@@ -839,6 +848,65 @@ Import registry from a file.
 
 ---
 
+### Run Command Group
+
+```bash
+madsci run <TYPE> [OPTIONS]
+```
+
+Convenience commands for running workflows and experiments.
+
+#### `madsci run workflow`
+
+```bash
+madsci run workflow <NAME|PATH> [OPTIONS]
+```
+
+Run a workflow on the workcell.
+
+**Arguments:**
+- `NAME|PATH` - Workflow name (from workcell) or path to workflow YAML file
+
+**Options:**
+- `--workcell URL` - Workcell manager URL (default: from config)
+- `--parameters JSON` - Workflow parameters as JSON string
+- `--parameters-file PATH` - Path to parameters JSON/YAML file
+- `--wait` - Wait for workflow to complete (default: true)
+- `--no-wait` - Submit and return immediately
+- `--timeout SECONDS` - Timeout for workflow completion
+
+**Examples:**
+```bash
+# Run workflow by name
+madsci run workflow sample_transfer
+
+# Run workflow with parameters
+madsci run workflow sample_transfer --parameters '{"source": "plate_1", "dest": "plate_2"}'
+
+# Run workflow from file
+madsci run workflow ./workflows/my_workflow.yaml
+
+# Submit without waiting
+madsci run workflow long_experiment --no-wait
+```
+
+#### `madsci run experiment`
+
+```bash
+madsci run experiment <NAME|PATH> [OPTIONS]
+```
+
+Run an experiment.
+
+**Arguments:**
+- `NAME|PATH` - Experiment name or path to experiment script
+
+**Options:**
+- `--parameters JSON` - Experiment parameters as JSON string
+- `--campaign` - Run as part of a campaign (creates campaign if needed)
+
+---
+
 ### TUI Command
 
 ```bash
@@ -926,7 +994,7 @@ def madsci(ctx, config, lab_url, verbose, quiet, no_color, json_output):
 
     For more information:
         madsci <command> --help
-        https://madsci.readthedocs.io
+        https://ad-sdl.github.io/MADSci/
     """
     ctx.ensure_object(dict)
     ctx.obj['config'] = MadsciCLIConfig.load(config)
@@ -1167,6 +1235,14 @@ The following decisions have been made based on review:
 3. **Configuration file format**: Use `MadsciBaseSettings` (Pydantic Settings) to support multiple formats (YAML, TOML, JSON, environment variables). **Default to TOML** for the user config file (`~/.madsci/config.toml`) as it's more human-friendly for configuration.
 
 4. **Update mechanism**: Yes, `madsci version --check-updates` will check PyPI for available updates. This will use a simple HTTP request to the PyPI JSON API and compare versions using semantic versioning.
+
+5. **OpenTelemetry integration**: The CLI integrates with MADSci's existing OTEL support:
+   - `madsci doctor` checks OTEL exporter connectivity when `*_OTEL_ENABLED=true`
+   - `madsci status` shows trace/span counts if OTEL is enabled
+   - All CLI operations can be traced via OTEL when configured
+   - OTEL configuration follows the same `*_OTEL_*` environment variable pattern as managers
+
+6. **Documentation URL**: All help text and error messages reference https://ad-sdl.github.io/MADSci/ as the documentation location.
 
 ---
 

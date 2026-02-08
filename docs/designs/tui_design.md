@@ -2,6 +2,7 @@
 
 **Status**: Draft
 **Date**: 2026-02-07
+**Last Updated**: 2026-02-08
 **Author**: Claude (AI Assistant)
 
 ## Overview
@@ -15,6 +16,33 @@ This document defines the design for the MADSci Terminal User Interface (TUI). T
 3. **Keyboard-first**: Full keyboard navigation with mouse support
 4. **Context-aware**: Shows relevant information based on current state
 5. **Non-blocking**: Long operations run in background with progress indicators
+
+## Phased Delivery
+
+The TUI will be delivered incrementally to reduce Phase 1 scope while ensuring all features are implemented by project completion.
+
+### Phase 1: MVP
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| App shell | Basic navigation, header, footer | Required |
+| Dashboard | Static status display, manual refresh | Required |
+| Log viewer | Read-only log display with filtering | Required |
+| Command palette | Trogon integration for CLI commands | Required |
+
+### Phase 3+: Full Features
+
+| Feature | Description | Phase |
+|---------|-------------|-------|
+| Real-time updates | WebSocket-based live status | 3 |
+| Interactive wizards | New module, experiment wizards | 3 |
+| Node management | Start/stop/configure nodes | 3 |
+| Workflow visualization | Step progress, graph view | 4 |
+| Resource browser | Inventory exploration | 4 |
+| Experiment management | Run/monitor experiments | 4 |
+| Settings screen | Configuration management | 5 |
+
+**Commitment**: All screens and features described in this document will be implemented by project completion.
 
 ## Technical Foundation
 
@@ -1209,3 +1237,9 @@ The following decisions have been made based on review:
 4. **Persistence**: No wizard state persistence. If a user exits mid-wizard, they start fresh. This keeps the implementation simple and avoids potential issues with stale partial state.
 
 5. **Notifications**: Out of scope for initial implementation. Desktop notifications may be considered in a future version if there's demand.
+
+6. **OpenTelemetry integration**: The TUI integrates with MADSci's existing OTEL support:
+   - Status screen shows OTEL exporter status when configured
+   - Dashboard can display trace/span counts if OTEL is enabled
+   - TUI operations are traced when OTEL is configured (useful for debugging TUI performance)
+   - Log viewer can filter by trace ID when OTEL correlation is available

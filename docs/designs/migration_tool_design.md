@@ -2,6 +2,7 @@
 
 **Status**: Draft
 **Date**: 2026-02-07
+**Last Updated**: 2026-02-08
 **Author**: Claude (AI Assistant)
 
 ## Overview
@@ -1104,7 +1105,34 @@ The following decisions have been made based on review:
 
 ## Docker Compose Migration
 
-Since docker-compose.yaml auto-update was approved, here's the detailed approach:
+Since docker-compose.yaml auto-update was approved, here's the detailed approach.
+
+### Safety Considerations
+
+**IMPORTANT**: Modifying docker-compose.yaml files is risky. The migration tool must:
+
+1. **Use `ruamel.yaml`** instead of PyYAML to preserve:
+   - YAML formatting and indentation
+   - Comments (PyYAML discards these)
+   - Anchor/alias references
+
+2. **Create comprehensive backups** before any modification:
+   - Backup file: `docker-compose.yaml.backup.{timestamp}`
+   - Keep last 3 backups by default
+
+3. **Offer opt-out**: Users can skip docker-compose updates:
+   ```bash
+   madsci migrate convert --all --no-docker-compose
+   ```
+
+4. **Validate after modification**:
+   - Run `docker compose config` to verify the modified file is valid
+   - Roll back automatically if validation fails
+
+5. **Handle complex files gracefully**:
+   - Detect and warn about anchors/aliases that might be affected
+   - Refuse to modify files with syntax that `ruamel.yaml` can't round-trip
+   - Suggest manual migration for complex cases
 
 ### Detection
 
@@ -1158,12 +1186,25 @@ madsci migrate docker-compose --apply
 
 ```python
 # In migration/docker_compose.py
-def migrate_compose_file(path: Path, migrations: list[FileMigration], dry_run: bool = True):
-    """Update docker-compose.yaml based on completed migrations."""
-    import yaml
+def migrate_compose_file(
+    path: Path,
+    migrations: list[FileMigration],
+    dry_run: bool = True,
+) -> list[str]:
+    """Update docker-compose.yaml based on completed migrations.
+
+    Uses ruamel.yaml to preserve formatting and comments.
+    Creates backup before modification and validates result.
+    """
+    from ruamel.yaml import YAML
+    import subprocess
+    from datetime import datetime
+
+    yaml = YAML()
+    yaml.preserve_quotes = True
 
     with open(path) as f:
-        compose = yaml.safe_load(f)
+        compose = yaml.load(f)
 
     if not compose or 'services' not in compose:
         return
@@ -1190,11 +1231,30 @@ def migrate_compose_file(path: Path, migrations: list[FileMigration], dry_run: b
         # ... (implementation details)
 
     if not dry_run and changes:
-        backup_path = path.with_suffix(path.suffix + '.bak')
+        # Create timestamped backup
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = path.parent / f"{path.name}.backup.{timestamp}"
         shutil.copy2(path, backup_path)
 
+        # Write modified file
         with open(path, 'w') as f:
-            yaml.dump(compose, f, default_flow_style=False)
+            yaml.dump(compose, f)
+
+        # Validate the result
+        try:
+            result = subprocess.run(
+                ["docker", "compose", "-f", str(path), "config"],
+                capture_output=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            # Validation failed - roll back
+            shutil.copy2(backup_path, path)
+            raise MigrationError(
+                f"Docker compose validation failed after migration. "
+                f"File has been restored from backup.\n"
+                f"Error: {e.stderr.decode()}"
+            )
 
     return changes
 ```
