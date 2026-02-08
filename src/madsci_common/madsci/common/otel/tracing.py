@@ -401,6 +401,11 @@ def _should_wrap_traced_method(cls: type, attr_name: str) -> bool:
     if not callable(attr):
         return False
 
+    # Skip class attributes that are types (classes) - they are callable but not methods
+    # This prevents wrapping class attributes like DEFINITION_CLASS, SETTINGS_CLASS, etc.
+    if isinstance(attr, type):
+        return False
+
     # Skip classmethods, staticmethods, and properties
     static_attr = inspect.getattr_static(cls, attr_name)
     return not isinstance(static_attr, (classmethod, staticmethod, property))
