@@ -13,7 +13,7 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 | Phase | Name | Status | Progress |
 |-------|------|--------|----------|
 | 0 | Validation Infrastructure | ✅ Complete | 100% |
-| 1 | CLI Scaffold + Core Infrastructure | 🔲 Not Started | 0% |
+| 1 | CLI Scaffold + Core Infrastructure | ✅ Complete | 100% |
 | 2 | Definition System Refactor | 🔲 Not Started | 0% |
 | 3 | Scaffolding & Templates | 🔲 Not Started | 0% |
 | 4 | ExperimentApplication Modalities | 🔲 Not Started | 0% |
@@ -141,18 +141,148 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 
 ---
 
-## Phase 1: CLI Scaffold + Core Infrastructure 🔲
+## Phase 1: CLI Scaffold + Core Infrastructure ✅
 
-**Status**: Not Started
+**Status**: Complete
 
 **Prerequisites**: Phase 0 (Complete ✅)
 
-### Planned Deliverables
+### Deliverables
 
-- [ ] 1.1 Unified `madsci` CLI Entry Point
-- [ ] 1.2 Core Commands (`version`, `doctor`, `status`, `logs`)
-- [ ] 1.3 TUI Foundation (Textual)
-- [ ] 1.4 User Configuration Infrastructure
+#### 1.1 Unified `madsci` CLI Entry Point ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_client/madsci/client/cli/`
+
+**Components Implemented**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `__init__.py` | Main CLI entry point with AliasedGroup for command aliases | ✅ Complete |
+| `commands/__init__.py` | Command module exports | ✅ Complete |
+| `commands/version.py` | Version information command | ✅ Complete |
+| `commands/doctor.py` | System diagnostics command | ✅ Complete |
+| `commands/status.py` | Service status command | ✅ Complete |
+| `commands/logs.py` | Log viewing command | ✅ Complete |
+| `commands/tui.py` | TUI launcher command | ✅ Complete |
+
+**Features**:
+- Click-based CLI with command aliases (`s` for `status`, `l` for `logs`, etc.)
+- Global options: `--config`, `--lab-url`, `--verbose`, `--quiet`, `--no-color`, `--json`
+- Rich console output with colors and formatting
+- JSON output mode for all commands
+- Shell completion support ready
+
+#### 1.2 Core Commands ✅
+
+**Status**: Complete
+
+**`madsci version`**:
+- Shows MADSci version and all installed package versions
+- Displays Python version and platform information
+- JSON output option for scripting
+
+**`madsci doctor`**:
+- Python environment checks (version, venv, packages)
+- Docker availability and version checks
+- Port availability checks (8000-8006)
+- Actionable fix suggestions for issues
+- JSON output option
+- Category filtering (`--check python`, `--check docker`, `--check ports`)
+
+**`madsci status`**:
+- Shows health status of all manager services
+- Real-time status with watch mode (`--watch`)
+- Per-service version display
+- JSON output option
+- Customizable timeout
+
+**`madsci logs`**:
+- Fetches logs from Event Manager
+- Filtering by level, service, and pattern (`--grep`)
+- Follow mode for real-time updates (`--follow`)
+- Configurable tail lines (`--tail`)
+- Duration-based filtering (`--since 5m`)
+- JSON output option
+
+#### 1.3 TUI Foundation (Textual) ✅
+
+**Status**: Complete (MVP)
+
+**Location**: `src/madsci_client/madsci/client/cli/tui/`
+
+**Components Implemented**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `__init__.py` | TUI module exports | ✅ Complete |
+| `app.py` | Main MadsciApp class with navigation | ✅ Complete |
+| `screens/__init__.py` | Screen exports | ✅ Complete |
+| `screens/dashboard.py` | Dashboard with service status overview | ✅ Complete |
+| `screens/status.py` | Detailed service status with DataTable | ✅ Complete |
+| `screens/logs.py` | Log viewer with filtering | ✅ Complete |
+| `widgets/__init__.py` | Widget module (placeholder) | ✅ Complete |
+| `styles/__init__.py` | Styles module (placeholder) | ✅ Complete |
+
+**Features (MVP)**:
+- Dashboard with service status overview
+- Service status table with health checks
+- Log viewer with filtering and follow mode
+- Keyboard navigation (d=Dashboard, s=Status, l=Logs, r=Refresh, q=Quit)
+- Manual refresh capability
+- Help display
+
+#### 1.4 User Configuration Infrastructure ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_client/madsci/client/cli/utils/`
+
+**Components Implemented**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `__init__.py` | Utils module exports | ✅ Complete |
+| `config.py` | MadsciCLIConfig class with TOML support | ✅ Complete |
+| `output.py` | Output formatting helpers (success, error, warning, info) | ✅ Complete |
+
+**Features**:
+- Pydantic Settings-based configuration
+- TOML config file support (`~/.madsci/config.toml`)
+- Environment variable support (`MADSCI_*` prefix)
+- All manager URL configuration
+- Registry path configuration
+- Output preference settings
+
+### Entry Point
+
+**Location**: `src/madsci_client/pyproject.toml`
+
+```toml
+[project.scripts]
+madsci = "madsci.client.cli:main"
+```
+
+### Dependencies Added
+
+- `httpx>=0.25.0` - HTTP client for service health checks
+- `toml>=0.10.2` - TOML configuration file parsing
+- `rich>=13.0.0` - Terminal output formatting
+- `textual>=0.50.0` (optional, `[tui]` extra) - TUI framework
+
+### Tests
+
+**Location**: `src/madsci_client/tests/cli/`
+
+| File | Tests | Status |
+|------|-------|--------|
+| `test_version.py` | 4 tests for version command | ✅ Complete |
+| `test_doctor.py` | 5 tests for doctor command | ✅ Complete |
+| `test_status.py` | 4 tests for status command | ✅ Complete |
+| `test_logs.py` | 5 tests for logs command | ✅ Complete |
+
+**Total**: 18 tests for CLI commands
 
 ---
 
@@ -250,6 +380,17 @@ The following design documents were created during Phase 0 planning:
 ---
 
 ## Changelog
+
+### 2026-02-08 (Continued)
+
+- **Phase 1 Complete**: CLI Scaffold + Core Infrastructure implemented
+  - Unified `madsci` CLI entry point with Click and command aliases
+  - Core commands: `version`, `doctor`, `status`, `logs`, `tui`
+  - TUI MVP with Dashboard, Status, and Logs screens using Textual
+  - User configuration infrastructure with TOML support
+  - 18 CLI tests added
+  - Entry point configured in pyproject.toml
+  - Dependencies added: httpx, toml, rich, textual (optional)
 
 ### 2026-02-10
 
