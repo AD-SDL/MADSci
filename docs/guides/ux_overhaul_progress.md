@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Started**: 2026-02-07
-**Last Updated**: 2026-02-10
+**Last Updated**: 2026-02-08
 
 This document tracks the implementation progress of the [MADSci UX Overhaul Plan](./ux_overhaul_plan.md).
 
@@ -14,7 +14,7 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 |-------|------|--------|----------|
 | 0 | Validation Infrastructure | ✅ Complete | 100% |
 | 1 | CLI Scaffold + Core Infrastructure | ✅ Complete | 100% |
-| 2 | Definition System Refactor | 🔲 Not Started | 0% |
+| 2 | Definition System Refactor | ✅ Complete | 100% |
 | 3 | Scaffolding & Templates | 🔲 Not Started | 0% |
 | 4 | ExperimentApplication Modalities | 🔲 Not Started | 0% |
 | 5 | Documentation & Guides | 🔲 Not Started | 0% |
@@ -286,19 +286,165 @@ madsci = "madsci.client.cli:main"
 
 ---
 
-## Phase 2: Definition System Refactor 🔲
+## Phase 2: Definition System Refactor ✅
 
-**Status**: Not Started
+**Status**: Complete
 
-**Prerequisites**: Phase 1
+**Prerequisites**: Phase 1 (Complete ✅)
 
-### Planned Deliverables
+### Deliverables
 
-- [ ] 2.1 Template System
-- [ ] 2.2 ID Registry
-- [ ] 2.3 Settings Consolidation
-- [ ] 2.4 Migration Tool
-- [ ] 2.5 Deprecation Layer
+#### 2.1 Template System ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/templates/`
+
+**Components Implemented**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `types/template_types.py` | Pydantic models for template parameters, manifests, and generated projects | ✅ Complete |
+| `templates/__init__.py` | Module exports | ✅ Complete |
+| `templates/engine.py` | TemplateEngine class with Jinja2 rendering and validation | ✅ Complete |
+| `templates/registry.py` | TemplateRegistry for discovering and loading templates | ✅ Complete |
+
+**Features**:
+- Template manifest validation (`template.yaml`)
+- Parameter types: string, integer, float, boolean, choice, multi_choice, path
+- Jinja2 template rendering with custom filters (pascal_case, camel_case, kebab_case)
+- Post-generation hooks support
+- Dry-run mode for previewing generation
+- Template installation from local paths and git URLs (air-gapped environment support)
+
+#### 2.2 ID Registry ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/registry/`
+
+**Components Implemented**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `types/registry_types.py` | Pydantic models for registry entries and locks | ✅ Complete |
+| `registry/__init__.py` | Module exports | ✅ Complete |
+| `registry/lock_manager.py` | Heartbeat-based locking for conflict prevention | ✅ Complete |
+| `registry/local_registry.py` | File-based local registry manager | ✅ Complete |
+| `registry/identity_resolver.py` | High-level identity resolution with lab sync | ✅ Complete |
+
+**Features**:
+- Persistent name-to-ID mapping in `~/.madsci/registry.json`
+- Heartbeat-based locking (30 second TTL, configurable)
+- Lock conflict detection with clear error messages
+- Cross-platform support via `filelock` library
+- Export/import for backup and sharing
+- Rename support for refactoring
+- Stale entry cleanup
+
+**CLI Commands** (`madsci registry`):
+- `list` - List all registered components
+- `resolve` - Resolve a name to ID
+- `rename` - Rename a registry entry
+- `clean` - Remove stale entries
+- `export` / `import` - Backup and restore
+
+#### 2.3 Settings Consolidation ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/types/`
+
+**Components Implemented**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `module_types.py` | ModuleSettings, NodeModuleSettings for node module development | ✅ Complete |
+| `interface_types.py` | InterfaceSettings and specialized variants (Serial, Socket, USB, HTTP) | ✅ Complete |
+| `manager_base.py` | Settings export endpoint added to AbstractManagerBase | ✅ Complete |
+
+**Features**:
+- **ModuleSettings**: Base settings for MADSci node modules with module metadata, version info, and interface variant selection
+- **NodeModuleSettings**: Extends ModuleSettings with node-specific runtime configuration
+- **InterfaceSettings**: Base settings for hardware interfaces with timeout, retry, and reconnection config
+- **SerialInterfaceSettings**: Settings for serial port communication (RS-232, RS-485, USB-serial)
+- **SocketInterfaceSettings**: Settings for TCP/IP socket communication
+- **USBInterfaceSettings**: Settings for direct USB device communication
+- **HTTPInterfaceSettings**: Settings for HTTP/REST API interfaces with authentication support
+- **Settings Export Endpoint**: `/settings` endpoint on all managers for backup/replication
+
+**Pattern Established**:
+- Module developers create `foo_types.py` with all type definitions
+- Settings classes support environment variables, TOML/YAML files, and CLI arguments
+- Sensitive fields automatically redacted in settings export
+
+#### 2.4 Migration Tool ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/migration/`
+
+**Components Implemented**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `types/migration_types.py` | Pydantic models for migration plans and actions | ✅ Complete |
+| `migration/__init__.py` | Module exports | ✅ Complete |
+| `migration/scanner.py` | Scans for definition files needing migration | ✅ Complete |
+| `migration/converter.py` | Converts definition files to new format | ✅ Complete |
+
+**Features**:
+- Scans for `*.manager.yaml`, `*.node.yaml`, `*.workflow.yaml` files
+- Extracts IDs and registers in local registry
+- Generates environment variable files
+- Creates backups before modifying
+- Marks original files as deprecated
+- Rollback support
+
+**CLI Commands** (`madsci migrate`):
+- `scan` - Find files needing migration
+- `convert` - Convert definition files (with --dry-run)
+- `status` - Show migration progress
+- `finalize` - Remove deprecated files
+- `rollback` - Restore original files
+
+#### 2.5 Deprecation Layer ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/deprecation.py`
+
+**Components Implemented**:
+
+| Component | Description | Status |
+|-----------|-------------|--------|
+| `MadsciDeprecationWarning` | Custom warning class for MADSci deprecations | ✅ Complete |
+| `emit_definition_deprecation_warning()` | Emits warning when loading definition files | ✅ Complete |
+| `@deprecated` decorator | Mark functions/methods as deprecated | ✅ Complete |
+| `@deprecated_parameter` decorator | Mark specific parameters as deprecated | ✅ Complete |
+| Integration with `AbstractManagerBase` | Automatic warning when loading from definition files | ✅ Complete |
+
+**Features**:
+- Clear deprecation timeline: deprecated in v0.7.0, removed in v0.8.0
+- Actionable migration hints with specific CLI commands
+- Documentation links in warning messages
+- Warning not filtered by default (visible to users)
+- Decorators for marking deprecated functions and parameters
+
+### Tests
+
+**Location**: `src/madsci_common/tests/`
+
+| File | Tests | Status |
+|------|-------|--------|
+| `test_registry/test_local_registry.py` | Registry and lock manager tests (14 tests) | ✅ Complete |
+| `test_migration/test_scanner.py` | Migration scanner tests (9 tests) | ✅ Complete |
+| `test_settings/test_module_types.py` | ModuleSettings tests (10 tests) | ✅ Complete |
+| `test_settings/test_interface_types.py` | InterfaceSettings tests (20 tests) | ✅ Complete |
+| `test_settings/test_settings_export.py` | Settings export tests (7 tests) | ✅ Complete |
+| `test_deprecation.py` | Deprecation utilities tests (15 tests) | ✅ Complete |
+
+**Total Phase 2 Tests**: 73 tests, all passing
 
 ---
 
@@ -381,7 +527,25 @@ The following design documents were created during Phase 0 planning:
 
 ## Changelog
 
-### 2026-02-08 (Continued)
+### 2026-02-08
+
+- **Phase 2 Complete**: Definition System Refactor fully implemented
+  - Settings Consolidation (2.3):
+    - Created `ModuleSettings` and `NodeModuleSettings` for node module development
+    - Created `InterfaceSettings` with specialized variants (Serial, Socket, USB, HTTP)
+    - Added `/settings` export endpoint to `AbstractManagerBase`
+    - Established `foo_types.py` pattern for module development
+    - 37 tests for settings types
+  - Deprecation Layer (2.5):
+    - Created `MadsciDeprecationWarning` custom warning class
+    - Added `emit_definition_deprecation_warning()` function
+    - Created `@deprecated` and `@deprecated_parameter` decorators
+    - Integrated deprecation warnings into `AbstractManagerBase.load_or_create_definition()`
+    - Clear timeline: deprecated in v0.7.0, removed in v0.8.0
+    - 15 deprecation tests
+  - Total Phase 2 tests: 73 passing tests
+
+### 2026-02-08 (Earlier)
 
 - **Phase 1 Complete**: CLI Scaffold + Core Infrastructure implemented
   - Unified `madsci` CLI entry point with Click and command aliases

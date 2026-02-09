@@ -359,14 +359,115 @@ class AbstractManagerBase(
         """
         return self.definition
 
+    @get("/settings")
+    def get_settings_endpoint(
+        self,
+        include_defaults: bool = True,
+        include_schema: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Export current settings for backup/replication.
+
+        This endpoint allows exporting the current manager settings in a format
+        suitable for backup, documentation, or replicating the configuration
+        to another environment.
+
+        Args:
+            include_defaults: If True, include fields with default values.
+                             If False, only include non-default settings.
+            include_schema: If True, include JSON schema for documentation.
+
+        Returns:
+            dict: Settings as a dictionary with sensitive fields redacted.
+        """
+        return self.get_settings_export(
+            include_defaults=include_defaults,
+            include_schema=include_schema,
+        )
+
+    def get_settings_export(
+        self,
+        include_defaults: bool = True,
+        include_schema: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Export current settings for backup/replication.
+
+        This method allows programmatic access to the current manager settings
+        in a format suitable for backup, documentation, or replicating the
+        configuration to another environment.
+
+        Args:
+            include_defaults: If True, include fields with default values.
+                             If False, only include non-default settings.
+            include_schema: If True, include JSON schema for documentation.
+
+        Returns:
+            dict: Settings as a dictionary with the following structure:
+                - "settings": The settings values (secrets redacted)
+                - "schema" (optional): JSON schema if include_schema is True
+                - "schema_title" (optional): Settings class name if include_schema is True
+        """
+        data = self._settings.model_dump(mode="json")
+
+        # Redact sensitive fields based on common patterns
+        sensitive_patterns = [
+            "password",
+            "secret",
+            "token",
+            "key",
+            "credential",
+            "api_key",
+            "apikey",
+            "auth",
+        ]
+        for field in list(data.keys()):
+            field_lower = field.lower()
+            if any(pattern in field_lower for pattern in sensitive_patterns):
+                data[field] = "***REDACTED***"
+
+        if not include_defaults:
+            # Only include fields that differ from defaults
+            try:
+                defaults = type(self._settings)().model_dump(mode="json")
+                data = {k: v for k, v in data.items() if data.get(k) != defaults.get(k)}
+            except Exception:  # noqa: S110
+                # If we can't create a default instance (e.g., required fields),
+                # return all fields instead of failing
+                pass
+
+        result: dict[str, Any] = {"settings": data}
+
+        if include_schema:
+            # Include JSON schema for documentation purposes
+            result["schema"] = type(self._settings).model_json_schema()
+            result["schema_title"] = type(self._settings).__name__
+
+        return result
+
     def load_or_create_definition(self) -> DefinitionT:
-        """Load definition from file or create default."""
+        """Load definition from file or create default.
+
+        .. deprecated:: 0.7.0
+            Definition files are deprecated. Use settings-based configuration instead.
+            This method will be removed in v0.8.0.
+        """
+        from madsci.common.deprecation import (  # noqa: PLC0415
+            emit_definition_deprecation_warning,
+        )
+
         # Get settings first (create if not set)
         if not hasattr(self, "_settings") or self._settings is None:
             self._settings = self.create_default_settings()
 
         def_path = self.get_definition_path()
         if def_path.exists():
+            # Emit deprecation warning when loading from definition file
+            emit_definition_deprecation_warning(
+                definition_path=def_path,
+                definition_type="manager definition",
+                migration_command=f"madsci migrate convert {def_path}",
+            )
             definition = self.DEFINITION_CLASS.from_yaml(def_path)
         else:
             definition = self.create_default_definition()
