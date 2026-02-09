@@ -12,6 +12,7 @@ import click
 from madsci.client.cli.commands.doctor import doctor
 from madsci.client.cli.commands.logs import logs
 from madsci.client.cli.commands.migrate import migrate
+from madsci.client.cli.commands.new import new
 from madsci.client.cli.commands.registry import registry
 from madsci.client.cli.commands.status import status
 from madsci.client.cli.commands.tui import tui
@@ -140,6 +141,7 @@ madsci.add_command(logs)
 madsci.add_command(tui)
 madsci.add_command(registry)
 madsci.add_command(migrate)
+madsci.add_command(new)
 
 
 def main() -> None:
