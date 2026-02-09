@@ -1,8 +1,8 @@
-name: "Script Experiment"
-version: "2.0.0"
-description: "A simple run-once experiment script using ExperimentScript modality"
+name: "Notebook Experiment"
+version: "1.0.0"
+description: "An interactive Jupyter notebook experiment"
 category: "experiment"
-tags: ["script", "simple", "starter"]
+tags: ["notebook", "jupyter", "interactive"]
 
 author: "MADSci Team"
 license: "MIT"
@@ -21,7 +21,7 @@ parameters:
     type: string
     description: "Human-readable description of the experiment"
     required: true
-    default: "A MADSci experiment"
+    default: "A MADSci notebook experiment"
 
   - name: author_name
     type: string
@@ -29,12 +29,12 @@ parameters:
     required: false
     default: ""
 
-files:
-  - source: "{{experiment_name}}.py.j2"
-    destination: "{{experiment_name}}.py"
+  - name: lab_server_url
+    type: string
+    description: "URL of the MADSci lab server"
+    required: false
+    default: "http://localhost:8000/"
 
-hooks:
-  post_generate:
-    - command: "ruff format {{experiment_name}}.py"
-      description: "Format generated code"
-      continue_on_error: true
+files:
+  - source: "{{experiment_name}}.ipynb.j2"
+    destination: "{{experiment_name}}.ipynb"

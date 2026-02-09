@@ -16,7 +16,7 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 | 1 | CLI Scaffold + Core Infrastructure | ✅ Complete | 100% |
 | 2 | Definition System Refactor | ✅ Complete | 100% |
 | 3 | Scaffolding & Templates | ✅ Complete | 100% |
-| 4 | ExperimentApplication Modalities | 🔲 Not Started | 0% |
+| 4 | ExperimentApplication Modalities | ✅ Complete | 100% |
 | 5 | Documentation & Guides | 🔲 Not Started | 0% |
 | 6 | Polish & Integration | 🔲 Not Started | 0% |
 
@@ -564,17 +564,132 @@ madsci = "madsci.client.cli:main"
 
 ---
 
-## Phase 4: ExperimentApplication Modalities 🔲
+## Phase 4: ExperimentApplication Modalities ✅
 
-**Status**: Not Started
+**Status**: Complete
 
-**Prerequisites**: Phase 3
+**Prerequisites**: Phase 3 (Complete ✅)
 
-### Planned Deliverables
+### Deliverables
 
-- [ ] 4.1 Base Class Extraction
-- [ ] 4.2 Modality Implementations (Script, Notebook, TUI, Node)
-- [ ] 4.3 Migration of Existing Experiments
+#### 4.1 Base Class Extraction ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_experiment_application/madsci/experiment_application/`
+
+**Components Implemented**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `experiment_base.py` | `ExperimentBase` class with `MadsciClientMixin` composition | ✅ Complete |
+| `experiment_base.py` | `ExperimentBaseConfig` with server URL settings | ✅ Complete |
+
+**Features**:
+- Composition over inheritance: Uses `MadsciClientMixin` instead of inheriting from `RestNode`
+- Core experiment lifecycle methods: `start_experiment_run()`, `end_experiment()`, `pause_experiment()`, `cancel_experiment()`, `fail_experiment()`
+- `manage_experiment()` context manager for automatic lifecycle management
+- Lazy initialization of manager clients (experiment, workcell, event, data, resource, location)
+- `_configure_server_urls()` for automatic URL resolution from lab server
+- `_setup_lab_context()` for lab configuration loading
+
+#### 4.2 Modality Implementations ✅
+
+**Status**: Complete
+
+**Components Implemented**:
+
+| File | Modality | Description | Status |
+|------|----------|-------------|--------|
+| `experiment_script.py` | `ExperimentScript` | Simple run-once experiments | ✅ Complete |
+| `experiment_notebook.py` | `ExperimentNotebook` | Jupyter notebook with cell-by-cell execution | ✅ Complete |
+| `experiment_tui.py` | `ExperimentTUI` | Interactive terminal UI experiments | ✅ Complete |
+| `experiment_node.py` | `ExperimentNode` | Server mode exposing REST API | ✅ Complete |
+
+**ExperimentScript Features**:
+- `run()` method for simple execution
+- `main()` class method for script entry points
+- `ExperimentScriptConfig` with `run_args` and `run_kwargs`
+- Automatic lifecycle management via `manage_experiment()`
+
+**ExperimentNotebook Features**:
+- `start()`/`end()` pattern for cell-by-cell execution
+- `run_workflow()` convenience method
+- `display()` method with Rich formatting support
+- Context manager support (`with exp:` pattern)
+- `ExperimentNotebookConfig` with `rich_output` and `auto_display_results`
+
+**ExperimentTUI Features**:
+- `run_tui()` method for interactive terminal UI
+- Textual-based TUI application (optional dependency)
+- `ExperimentTUIConfig` with `refresh_interval` and `show_logs`
+- Graceful handling when textual is not installed
+
+**ExperimentNode Features**:
+- Server mode wrapping internal `RestNode`
+- Exposes `run_experiment` as REST API action
+- `ExperimentNodeConfig` with `server_host` and `server_port`
+- `serve()` method to start the REST server
+
+#### 4.3 TUI App Module ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_experiment_application/madsci/experiment_application/tui/`
+
+| File | Description | Status |
+|------|-------------|--------|
+| `__init__.py` | Module exports | ✅ Complete |
+| `app.py` | Textual-based TUI application | ✅ Complete |
+
+**Features**:
+- Status display with experiment info
+- Log viewer panel
+- Control buttons (Pause, Resume, Cancel)
+- Graceful degradation when textual not installed
+
+#### 4.4 Package Exports & Deprecation ✅
+
+**Status**: Complete
+
+**Components**:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `__init__.py` | Updated exports for all modalities and configs | ✅ Complete |
+| `experiment_application.py` | Added deprecation warning pointing to new modalities | ✅ Complete |
+
+**Deprecation Timeline**:
+- Deprecated in v0.7.0
+- Removed in v0.8.0
+
+#### 4.5 Updated Templates ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/bundled_templates/experiment/`
+
+| Template | Description | Status |
+|----------|-------------|--------|
+| `script/` | Updated to use `ExperimentScript` modality | ✅ Complete |
+| `notebook/` | New template using `ExperimentNotebook` modality | ✅ Complete |
+
+### Tests
+
+**Location**: `src/madsci_experiment_application/tests/test_experiment_modalities.py`
+
+| Test Class | Tests | Status |
+|------------|-------|--------|
+| `TestExperimentBaseConfig` | 2 tests for config defaults and custom values | ✅ Passing |
+| `TestExperimentBase` | 7 tests for base class functionality | ✅ Passing |
+| `TestExperimentScript` | 4 tests for script modality | ✅ Passing |
+| `TestExperimentNotebook` | 9 tests for notebook modality | ✅ Passing |
+| `TestExperimentTUI` | 3 tests for TUI modality | ✅ Passing |
+| `TestExperimentNode` | 3 tests for node modality | ✅ Passing |
+| `TestExperimentApplicationDeprecation` | 1 test for deprecation warning | ✅ Passing |
+| `TestModuleImports` | 2 tests for module exports | ✅ Passing |
+
+**Total Phase 4 Tests**: 31 tests, all passing
 
 ---
 
@@ -622,10 +737,35 @@ The following design documents were created during Phase 0 planning:
 | ID Registry Design | `docs/designs/id_registry_design.md` | ID registry implementation |
 | Settings Consolidation Design | `docs/designs/settings_consolidation_design.md` | Settings system refactor |
 | Migration Tool Design | `docs/designs/migration_tool_design.md` | Definition file migration |
+| Experiment Modalities Design | `docs/designs/experiment_modalities_design.md` | ExperimentApplication modalities architecture |
 
 ---
 
 ## Changelog
+
+### 2026-02-08 (Phase 4)
+
+- **Phase 4 Complete**: ExperimentApplication Modalities fully implemented
+  - Base Class Extraction (4.1):
+    - Created `ExperimentBase` class using composition (`MadsciClientMixin`) instead of inheritance
+    - `ExperimentBaseConfig` with server URL settings for all managers
+    - Core lifecycle methods: `start_experiment_run()`, `end_experiment()`, `pause_experiment()`, `cancel_experiment()`, `fail_experiment()`
+    - `manage_experiment()` context manager for automatic lifecycle management
+  - Modality Implementations (4.2):
+    - `ExperimentScript`: Simple run-once experiments with `run()` and `main()` methods
+    - `ExperimentNotebook`: Jupyter notebook support with `start()`/`end()` pattern and Rich display
+    - `ExperimentTUI`: Interactive terminal UI with Textual (optional dependency)
+    - `ExperimentNode`: Server mode exposing `run_experiment` as REST API action
+  - TUI App Module (4.3):
+    - Textual-based TUI application with status display, log viewer, control buttons
+    - Graceful degradation when textual not installed
+  - Deprecation (4.4):
+    - Added deprecation warning to `ExperimentApplication` pointing to new modalities
+    - Timeline: deprecated in v0.7.0, removed in v0.8.0
+  - Updated Templates (4.5):
+    - Updated `experiment/script` template to use `ExperimentScript` modality
+    - Created `experiment/notebook` template using `ExperimentNotebook` modality
+  - 31 tests for all new modalities, all passing
 
 ### 2026-02-08 (Phase 3)
 

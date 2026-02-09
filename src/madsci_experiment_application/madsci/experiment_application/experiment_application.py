@@ -1,6 +1,21 @@
-"""Provides an ExperimentApplication class that manages the execution of an experiment."""
+"""Provides an ExperimentApplication class that manages the execution of an experiment.
+
+.. deprecated:: 0.7.0
+    ExperimentApplication is deprecated. Use ExperimentScript, ExperimentNotebook,
+    ExperimentTUI, or ExperimentNode instead depending on your use case.
+    ExperimentApplication will be removed in v0.8.0.
+
+    Migration guide:
+    - For simple scripts: Use ExperimentScript
+    - For Jupyter notebooks: Use ExperimentNotebook
+    - For interactive terminal: Use ExperimentTUI
+    - For server mode: Use ExperimentNode
+
+    See https://ad-sdl.github.io/MADSci/migration/experiment-modalities for details.
+"""
 
 import time
+import warnings
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
@@ -105,6 +120,10 @@ class ExperimentApplication(RestNode):
         """
         Initialize the experiment application.
 
+        .. deprecated:: 0.7.0
+            ExperimentApplication is deprecated. Use ExperimentScript,
+            ExperimentNotebook, ExperimentTUI, or ExperimentNode instead.
+
         You can provide an experiment design to use for creating new experiments,
         or an existing experiment to continue.
 
@@ -113,6 +132,14 @@ class ExperimentApplication(RestNode):
         data, resource) are available as properties and will be lazily initialized
         when first accessed.
         """
+        warnings.warn(
+            "ExperimentApplication is deprecated and will be removed in v0.8.0. "
+            "Use ExperimentScript (for scripts), ExperimentNotebook (for notebooks), "
+            "ExperimentTUI (for interactive TUI), or ExperimentNode (for server mode) instead. "
+            "See https://ad-sdl.github.io/MADSci/migration/experiment-modalities for migration guide.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(*args, **kwargs)
 
         # Setup lab client and context if provided
