@@ -43,7 +43,7 @@ def test_manager_with_rate_limiting() -> TestManager:
     settings = TestManagerSettings(
         rate_limit_enabled=True,
         rate_limit_requests=5,
-        rate_limit_window=10,
+        rate_limit_window=2,  # Reduced from 10s to 2s for faster tests
         rate_limit_exempt_ips=[],  # Disable localhost exemption for testing
     )
     definition = TestManagerDefinition(name="Rate Limited Manager")
@@ -63,10 +63,10 @@ def test_manager_with_dual_rate_limiting() -> TestManager:
     """Create a test manager instance with dual rate limiting enabled."""
     settings = TestManagerSettings(
         rate_limit_enabled=True,
-        rate_limit_requests=20,  # Long window: 20 requests per 10 seconds
-        rate_limit_window=10,
-        rate_limit_short_requests=5,  # Short window: 5 requests per 1 second (burst) - intentionally low for testing
-        rate_limit_short_window=1,
+        rate_limit_requests=20,  # Long window: 20 requests per 5 seconds
+        rate_limit_window=5,  # Reduced from 10s to 5s for faster tests
+        rate_limit_short_requests=5,  # Short window: 5 requests per 1 second (burst)
+        rate_limit_short_window=1,  # Keep at 1s (minimum int value)
         rate_limit_exempt_ips=[],  # Disable localhost exemption for testing
     )
     definition = TestManagerDefinition(name="Dual Rate Limited Manager")
@@ -131,8 +131,8 @@ def test_rate_limit_reset_after_window(rate_limited_client: TestClient) -> None:
         response = rate_limited_client.get("/health")
         assert response.status_code == 200
 
-    # Wait for the time window to pass
-    time.sleep(11)  # Rate limit window is 10 seconds + 1 for safety
+    # Wait for the time window to pass (window is 2s, add buffer)
+    time.sleep(2.5)
 
     # Next request should succeed
     response = rate_limited_client.get("/health")
@@ -278,21 +278,21 @@ def test_dual_rate_limiting_long_window_protection(
     dual_rate_limited_client: TestClient,
 ) -> None:
     """Test that long window limit prevents sustained high load."""
-    # Make requests slowly to avoid burst limit (20 requests over ~4 seconds)
-    # Burst limit is 5/second, so we'll space them out
+    # Make requests slowly to avoid burst limit (20 requests)
+    # Burst limit is 5/1s, so we'll space them out
     for i in range(20):
         response = dual_rate_limited_client.get("/health")
         assert response.status_code == 200, f"Request {i + 1} should succeed"
         # Small delay to avoid burst limit (every 5th request, wait a bit longer)
         if (i + 1) % 5 == 0:
-            time.sleep(1.1)  # Wait for burst window to reset
+            time.sleep(1.1)  # Wait for burst window to reset (1s window + buffer)
 
     # The 21st request should be rejected by long window limit
     response = dual_rate_limited_client.get("/health")
     assert response.status_code == 429
-    # Should mention the long window (10 seconds), not burst
+    # Should mention the long window (5 seconds), not burst
     assert "burst limit" not in response.json()["detail"]
-    assert "20 requests per 10 seconds" in response.json()["detail"]
+    assert "20 requests per 5 seconds" in response.json()["detail"]
 
 
 def test_dual_rate_limiting_headers(dual_rate_limited_client: TestClient) -> None:
@@ -378,7 +378,7 @@ def test_dual_rate_limiting_burst_reset(dual_rate_limited_client: TestClient) ->
     assert "burst limit" in response.json()["detail"]
 
     # Wait for burst window to reset (1 second + margin)
-    time.sleep(1.5)
+    time.sleep(1.2)
 
     # Should be able to make more requests now (burst limit reset)
     for i in range(5):

@@ -52,7 +52,9 @@ def test_manager(db_connection: Database) -> DataManager:
 def test_client(test_manager: DataManager) -> TestClient:
     """Data Server Test Client Fixture"""
     app = test_manager.create_server()
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    client.close()
 
 
 def test_root(test_client: TestClient) -> None:

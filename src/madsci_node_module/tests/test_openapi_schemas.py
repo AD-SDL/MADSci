@@ -409,9 +409,13 @@ class OpenAPISchemaTestNode(TestNode):
         }
 
 
-@pytest.fixture
-def openapi_test_node() -> OpenAPISchemaTestNode:
-    """Create an OpenAPI test node instance."""
+@pytest.fixture(scope="module")
+def openapi_test_node() -> Generator[OpenAPISchemaTestNode, None, None]:
+    """Create an OpenAPI test node instance.
+
+    Uses module scope to avoid creating a new node for each test,
+    significantly improving test performance.
+    """
     node_definition = NodeDefinition(
         node_name="OpenAPI Schema Test Node",
         module_name="openapi_schema_test_node",
@@ -420,15 +424,24 @@ def openapi_test_node() -> OpenAPISchemaTestNode:
 
     node = OpenAPISchemaTestNode(
         node_definition=node_definition,
-        node_config=TestNodeConfig(test_required_param=1),
+        node_config=TestNodeConfig(
+            test_required_param=1,
+            enable_rate_limiting=False,  # Disable rate limiting for tests
+        ),
     )
     node.start_node(testing=True)
-    return node
+    yield node
+    # Cleanup after all tests in module
+    if hasattr(node, "event_client") and node.event_client:
+        node.event_client.close()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def openapi_test_client(openapi_test_node) -> Generator[TestClient, None, None]:
-    """Create test client for OpenAPI test node."""
+    """Create test client for OpenAPI test node.
+
+    Uses module scope to reuse the same client across all tests.
+    """
     with TestClient(openapi_test_node.rest_api) as client:
         time.sleep(0.5)  # Wait for startup to complete
         yield client

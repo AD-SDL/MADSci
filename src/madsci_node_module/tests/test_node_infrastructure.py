@@ -66,7 +66,7 @@ def dummy_node():
             self.action_handlers = {}
             self.action_history = {}
             self.node_state = {}
-            self.logger = self.event_client = EventClient()
+            self.logger = self.event_client = EventClient(event_server_url=None)
             self.resource_client = ResourceClient(event_client=self.event_client)
             self.data_client = DataClient()
             self.node_status = NodeStatus(ready=True)
@@ -456,7 +456,7 @@ class MockNode(AbstractNode):
         self.action_handlers = {}
         self.action_history = {}
         self.node_state = {}
-        self.logger = self.event_client = EventClient()
+        self.logger = self.event_client = EventClient(event_server_url=None)
         self.resource_client = ResourceClient(event_client=self.event_client)
         self.data_client = DataClient()
         self.node_status = NodeStatus(ready=True)
@@ -705,7 +705,7 @@ class TestAnnotatedPathInNode:
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)
@@ -756,7 +756,7 @@ class TestAnnotatedPathInNode:
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)
@@ -809,7 +809,7 @@ class TestAnnotatedPathInNode:
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)
@@ -862,7 +862,7 @@ class TestAnnotatedPathInNode:
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)
@@ -914,7 +914,7 @@ class TestAnnotatedPathInNode:
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)

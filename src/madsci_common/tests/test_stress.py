@@ -202,6 +202,7 @@ def test_sustained_load(stress_test_client: TestClient) -> None:
     assert final_health["success"], "Server became unhealthy after sustained load"
 
 
+@pytest.mark.slow
 @pytest.mark.anyio
 async def test_burst_traffic(stress_test_manager: TestManager) -> None:
     """Test server handles sudden traffic bursts with concurrent async requests."""

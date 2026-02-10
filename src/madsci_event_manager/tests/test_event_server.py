@@ -53,7 +53,9 @@ def test_client(db_connection: Database, tmp_path: Path) -> TestClient:
         db_connection=db_connection,
     )
     app = manager.create_server()
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    client.close()
 
 
 def test_root(test_client: TestClient) -> None:

@@ -67,7 +67,9 @@ def test_client(interface: ResourceInterface) -> TestClient:
         resource_interface=interface,
     )
     app = manager.create_server()
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    client.close()
 
 
 def test_definition(test_client: TestClient) -> None:

@@ -67,7 +67,9 @@ def test_client(
         start_engine=False,
     )
     app = manager.create_server()
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    client.close()
 
 
 def test_get_workcell(test_client: TestClient) -> None:

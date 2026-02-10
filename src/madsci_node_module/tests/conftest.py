@@ -1,8 +1,12 @@
 """Consolidated fixtures for MADSci node module tests."""
 
+import contextlib
+import shutil
+import tempfile
 import time
-from typing import Callable, Dict, Optional
-from unittest.mock import patch
+from pathlib import Path
+from typing import Callable, Dict, Generator, Optional
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +16,51 @@ from madsci.node_module.abstract_node_module import AbstractNode
 from rich.logging import RichHandler
 
 from madsci_node_module.tests.test_node import TestNode, TestNodeConfig
+
+
+@pytest.fixture(autouse=True)
+def mock_madsci_context_no_event_server():
+    """Ensure no EventClient tries to connect to a real event server during tests.
+
+    This fixture patches get_current_madsci_context to return a context with
+    event_server_url=None, preventing any EventClient from attempting to connect
+    to a real event server at localhost:8001.
+    """
+    mock_context = MagicMock()
+    mock_context.event_server_url = None
+
+    with patch(
+        "madsci.client.event_client.get_current_madsci_context",
+        return_value=mock_context,
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True, scope="module")
+def cleanup_temp_files():
+    """Clean up temporary files created during tests to prevent file descriptor leaks.
+
+    Uses module scope to reduce overhead while still preventing "too many open files"
+    errors. Temp files are cleaned up after each test module completes rather than
+    after every individual test.
+    """
+    temp_dir = Path(tempfile.gettempdir())
+
+    # Get the set of temp files before the module runs
+    before_files = set(temp_dir.glob("tmp*"))
+
+    yield
+
+    # Get temp files after the module and clean up new ones
+    after_files = set(temp_dir.glob("tmp*"))
+    new_files = after_files - before_files
+
+    for filepath in new_files:
+        with contextlib.suppress(Exception):
+            if filepath.is_file():
+                filepath.unlink()
+            elif filepath.is_dir():
+                shutil.rmtree(filepath, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)
@@ -40,12 +89,14 @@ def setup_test_logging():
 
 
 @pytest.fixture
-def test_node_factory() -> Callable[..., TestNode]:
+def test_node_factory() -> Generator[Callable[..., TestNode], None, None]:
     """Factory for creating test nodes with different configurations.
 
     This replaces multiple TestNode variants (TestNode, EnhancedTestNode,
     OpenAPISchemaTestNode, etc.) with a single configurable factory.
     """
+    # Track all created nodes for cleanup
+    created_nodes: list[TestNode] = []
 
     def _create_node(
         actions: Optional[Dict[str, Callable]] = None,
@@ -91,6 +142,7 @@ def test_node_factory() -> Callable[..., TestNode]:
             node_definition=node_definition,
             node_config=node_config,
         )
+        created_nodes.append(node)
 
         # Add any additional actions dynamically
         if actions:
@@ -101,7 +153,13 @@ def test_node_factory() -> Callable[..., TestNode]:
 
         return node
 
-    return _create_node
+    yield _create_node
+
+    # Cleanup: close EventClient on all created nodes
+    for node in created_nodes:
+        with contextlib.suppress(Exception):
+            if hasattr(node, "event_client") and node.event_client:
+                node.event_client.close()
 
 
 @pytest.fixture
@@ -143,12 +201,16 @@ def var_args_test_node(test_node_factory) -> TestNode:
 
 
 @pytest.fixture
-def client_factory(test_node_factory) -> Callable[..., TestClient]:
+def client_factory(
+    test_node_factory,
+) -> Generator[Callable[..., TestClient], None, None]:
     """Factory for creating test clients with different configurations.
 
     This replaces multiple client fixtures (test_client, enhanced_client, etc.)
     with a single configurable factory.
     """
+    # Track all created clients for cleanup
+    created_clients: list[TestClient] = []
 
     def _create_client(
         node_config: Optional[Dict] = None,
@@ -181,24 +243,32 @@ def client_factory(test_node_factory) -> Callable[..., TestClient]:
             AbstractNode.start_node(node)
 
         client = TestClient(node.rest_api)
+        created_clients.append(client)
 
         if startup_wait > 0:
             time.sleep(startup_wait)
 
         return client
 
-    return _create_client
+    yield _create_client
+
+    # Cleanup: close all created clients to prevent file descriptor leaks
+    for client in created_clients:
+        with contextlib.suppress(Exception):
+            client.close()
 
 
 @pytest.fixture
 def test_client(client_factory) -> TestClient:
     """Standard test client for most tests."""
+    # client_factory now yields and handles cleanup
     return client_factory()
 
 
 @pytest.fixture
 def enhanced_client(client_factory) -> TestClient:
     """Enhanced test client."""
+    # client_factory now yields and handles cleanup
     return client_factory(
         node_name="Enhanced Test Node", module_name="enhanced_test_node"
     )
@@ -207,6 +277,7 @@ def enhanced_client(client_factory) -> TestClient:
 @pytest.fixture
 def openapi_test_client(client_factory) -> TestClient:
     """Test client for OpenAPI schema testing."""
+    # client_factory now yields and handles cleanup
     return client_factory(
         node_name="OpenAPI Schema Test Node", module_name="openapi_schema_test_node"
     )
@@ -215,6 +286,7 @@ def openapi_test_client(client_factory) -> TestClient:
 @pytest.fixture
 def argument_test_client(client_factory) -> TestClient:
     """Test client for argument testing."""
+    # client_factory now yields and handles cleanup
     return client_factory(
         node_name="Argument Test Node", module_name="argument_test_node"
     )
@@ -223,6 +295,7 @@ def argument_test_client(client_factory) -> TestClient:
 @pytest.fixture
 def var_args_test_client(client_factory) -> TestClient:
     """Test client for variable arguments testing."""
+    # client_factory now yields and handles cleanup
     return client_factory(
         node_name="Var Args Test Node",
         module_name="var_args_test_node",

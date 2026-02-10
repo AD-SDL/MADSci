@@ -58,7 +58,9 @@ def app(redis_server: Redis, tmp_path):
 @pytest.fixture
 def client(app):
     """Create a test client."""
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    client.close()
 
 
 @pytest.fixture
