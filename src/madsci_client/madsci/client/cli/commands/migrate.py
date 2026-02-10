@@ -12,7 +12,12 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-console = Console()
+
+def _get_console(ctx: click.Context) -> Console:
+    """Get console from Click context, respecting global --no-color and --quiet flags."""
+    if ctx.obj and "console" in ctx.obj:
+        return ctx.obj["console"]
+    return Console()
 
 
 @click.group()
@@ -45,15 +50,17 @@ def migrate() -> None:
     is_flag=True,
     help="Show detailed information about each file.",
 )
-def scan(directory: str, json_output: bool, verbose: bool) -> None:
+@click.pass_context
+def scan(ctx: click.Context, directory: str, json_output: bool, verbose: bool) -> None:
     """Scan for files that need migration."""
     from madsci.common.migration import MigrationScanner  # noqa: PLC0415
     from madsci.common.types.migration_types import MigrationStatus  # noqa: PLC0415
 
+    console = _get_console(ctx)
     scanner = MigrationScanner(Path(directory))
     plan = scanner.scan()
 
-    if json_output:
+    if json_output or ctx.obj.get("json"):
         console.print_json(json.dumps(plan.model_dump(mode="json"), default=str))
         return
 
@@ -73,10 +80,10 @@ def scan(directory: str, json_output: bool, verbose: bool) -> None:
 
         for m in migrations:
             status_icon = {
-                MigrationStatus.PENDING: "✗",
-                MigrationStatus.MIGRATED: "✓",
-                MigrationStatus.DEPRECATED: "○",
-                MigrationStatus.FAILED: "✗",
+                MigrationStatus.PENDING: "\u2717",
+                MigrationStatus.MIGRATED: "\u2713",
+                MigrationStatus.DEPRECATED: "\u25cb",
+                MigrationStatus.FAILED: "\u2717",
             }.get(m.status, "?")
 
             status_color = {
@@ -92,7 +99,7 @@ def scan(directory: str, json_output: bool, verbose: bool) -> None:
                 console.print(f"      Name: {m.name}")
                 console.print(f"      ID: {m.component_id}")
                 for action in m.actions:
-                    console.print(f"      → {action.description}")
+                    console.print(f"      \u2192 {action.description}")
 
         console.print()
 
@@ -134,7 +141,9 @@ def scan(directory: str, json_output: bool, verbose: bool) -> None:
     type=click.Path(),
     help="Output directory for generated files.",
 )
+@click.pass_context
 def convert(  # noqa: C901, PLR0912
+    ctx: click.Context,
     files: tuple[str, ...],
     convert_all: bool,
     dry_run: bool,
@@ -149,9 +158,12 @@ def convert(  # noqa: C901, PLR0912
     )
     from madsci.common.types.migration_types import MigrationStatus  # noqa: PLC0415
 
+    console = _get_console(ctx)
+
     if not dry_run and not apply:
         console.print("[red]Error: Specify --dry-run or --apply[/red]")
-        raise SystemExit(1)
+        ctx.exit(1)
+        return
 
     # Get files to convert
     if convert_all:
@@ -161,7 +173,8 @@ def convert(  # noqa: C901, PLR0912
     else:
         if not files:
             console.print("[red]Error: Specify files to convert or use --all[/red]")
-            raise SystemExit(1)
+            ctx.exit(1)
+            return
         scanner = MigrationScanner(Path.cwd())
         plan = scanner.scan()
         migrations = [
@@ -183,11 +196,11 @@ def convert(  # noqa: C901, PLR0912
 
     for migration in migrations:
         console.print(f"\n[bold]Migrating: {migration.source_path}[/bold]")
-        console.print("─" * 50)
+        console.print("\u2500" * 50)
 
         # Show actions
         for action in migration.actions:
-            console.print(f"  → {action.description}")
+            console.print(f"  \u2192 {action.description}")
 
         if dry_run:
             console.print("\n[yellow]Dry run - no changes made.[/yellow]")
@@ -195,11 +208,11 @@ def convert(  # noqa: C901, PLR0912
             result = converter.convert(migration, dry_run=False, create_backup=backup)
 
             if result.errors:
-                for error in result.errors:
-                    console.print(f"[red]Error: {error}[/red]")
+                for err in result.errors:
+                    console.print(f"[red]Error: {err}[/red]")
                 error_count += 1
             else:
-                console.print("[green]✓ Migrated successfully[/green]")
+                console.print("[green]\u2713 Migrated successfully[/green]")
                 if result.backup_path:
                     console.print(f"  Backup: {result.backup_path}")
                 for output_file in result.output_files:
@@ -213,10 +226,12 @@ def convert(  # noqa: C901, PLR0912
 
 
 @migrate.command()
-def status() -> None:
+@click.pass_context
+def status(ctx: click.Context) -> None:
     """Show migration status."""
     from madsci.common.migration import MigrationScanner  # noqa: PLC0415
 
+    console = _get_console(ctx)
     scanner = MigrationScanner(Path.cwd())
     plan = scanner.scan()
 
@@ -234,7 +249,7 @@ def status() -> None:
     # Progress bar
     bar_width = 30
     filled = int(bar_width * plan.migrated_count / total) if total > 0 else 0
-    bar = "█" * filled + "░" * (bar_width - filled)
+    bar = "\u2588" * filled + "\u2591" * (bar_width - filled)
     console.print(f"[{bar}]\n")
 
     # Show by status
@@ -276,14 +291,20 @@ def status() -> None:
     is_flag=True,
     help="Skip confirmation prompt.",
 )
-def finalize(dry_run: bool, apply: bool, keep_backups: bool, force: bool) -> None:
+@click.pass_context
+def finalize(
+    ctx: click.Context, dry_run: bool, apply: bool, keep_backups: bool, force: bool
+) -> None:
     """Finalize migration by removing deprecated files."""
     from madsci.common.migration import MigrationScanner  # noqa: PLC0415
     from madsci.common.types.migration_types import MigrationStatus  # noqa: PLC0415
 
+    console = _get_console(ctx)
+
     if not dry_run and not apply:
         console.print("[red]Error: Specify --dry-run or --apply[/red]")
-        raise SystemExit(1)
+        ctx.exit(1)
+        return
 
     scanner = MigrationScanner(Path.cwd())
     plan = scanner.scan()
@@ -300,7 +321,7 @@ def finalize(dry_run: bool, apply: bool, keep_backups: bool, force: bool) -> Non
 
     console.print("\n[bold]Files to remove:[/bold]")
     for m in deprecated:
-        console.print(f"  ✗ {m.source_path}")
+        console.print(f"  \u2717 {m.source_path}")
 
     if dry_run:
         console.print("\n[yellow]Dry run - no changes made.[/yellow]")
@@ -312,7 +333,7 @@ def finalize(dry_run: bool, apply: bool, keep_backups: bool, force: bool) -> Non
 
     for m in deprecated:
         m.source_path.unlink()
-        console.print(f"[green]✓[/green] Removed {m.source_path}")
+        console.print(f"[green]\u2713[/green] Removed {m.source_path}")
 
         if not keep_backups and m.backup_path and m.backup_path.exists():
             m.backup_path.unlink()
@@ -333,13 +354,18 @@ def finalize(dry_run: bool, apply: bool, keep_backups: bool, force: bool) -> Non
     is_flag=True,
     help="Preview without making changes.",
 )
-def rollback(files: tuple[str, ...], rollback_all: bool, dry_run: bool) -> None:
+@click.pass_context
+def rollback(
+    ctx: click.Context, files: tuple[str, ...], rollback_all: bool, dry_run: bool
+) -> None:
     """Roll back a migration to restore original files."""
     from madsci.common.migration import (  # noqa: PLC0415
         MigrationRollback,
         MigrationScanner,
     )
     from madsci.common.types.migration_types import MigrationStatus  # noqa: PLC0415
+
+    console = _get_console(ctx)
 
     # Get files to rollback
     if rollback_all:
@@ -353,7 +379,8 @@ def rollback(files: tuple[str, ...], rollback_all: bool, dry_run: bool) -> None:
     else:
         if not files:
             console.print("[red]Error: Specify files to rollback or use --all[/red]")
-            raise SystemExit(1)
+            ctx.exit(1)
+            return
         scanner = MigrationScanner(Path.cwd())
         plan = scanner.scan()
         migrations = [
@@ -378,7 +405,7 @@ def rollback(files: tuple[str, ...], rollback_all: bool, dry_run: bool) -> None:
         result = rollback_handler.rollback(migration)
 
         if result.errors:
-            for error in result.errors:
-                console.print(f"[red]Error: {error}[/red]")
+            for err in result.errors:
+                console.print(f"[red]Error: {err}[/red]")
         else:
-            console.print("[green]✓ Rolled back successfully[/green]")
+            console.print("[green]\u2713 Rolled back successfully[/green]")

@@ -11,7 +11,12 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-console = Console()
+
+def _get_console(ctx: click.Context) -> Console:
+    """Get console from Click context, respecting global --no-color and --quiet flags."""
+    if ctx.obj and "console" in ctx.obj:
+        return ctx.obj["console"]
+    return Console()
 
 
 @click.group()
@@ -50,7 +55,9 @@ def registry() -> None:
     is_flag=True,
     help="Output in JSON format.",
 )
+@click.pass_context
 def list_entries(
+    ctx: click.Context,
     component_type: Optional[str],
     include_stale: bool,
     json_output: bool,
@@ -58,13 +65,14 @@ def list_entries(
     """List all registered components."""
     from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
 
+    console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
     entries = registry_mgr.list_entries(
         component_type=component_type,  # type: ignore[arg-type]
         include_stale=include_stale,
     )
 
-    if json_output:
+    if json_output or ctx.obj.get("json"):
         output = [
             {
                 "name": name,
@@ -111,21 +119,24 @@ def list_entries(
     is_flag=True,
     help="Output in JSON format.",
 )
-def resolve(name: str, json_output: bool) -> None:
+@click.pass_context
+def resolve(ctx: click.Context, name: str, json_output: bool) -> None:
     """Resolve a component name to its ID."""
     from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
 
+    console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
     entry = registry_mgr.get_entry(name)
 
     if entry is None:
-        if json_output:
+        if json_output or ctx.obj.get("json"):
             console.print_json(json.dumps({"error": f"Name '{name}' not found"}))
         else:
             console.print(f"[red]Name '{name}' not found in registry[/red]")
-        raise SystemExit(1)
+        ctx.exit(1)
+        return
 
-    if json_output:
+    if json_output or ctx.obj.get("json"):
         console.print_json(
             json.dumps(
                 {
@@ -137,7 +148,7 @@ def resolve(name: str, json_output: bool) -> None:
             )
         )
     else:
-        console.print(f"[cyan]{name}[/cyan] → [green]{entry.id}[/green]")
+        console.print(f"[cyan]{name}[/cyan] \u2192 [green]{entry.id}[/green]")
         console.print(f"  Type: {entry.component_type}")
         console.print(f"  Locked: {entry.is_locked()}")
         if entry.metadata:
@@ -153,28 +164,30 @@ def resolve(name: str, json_output: bool) -> None:
     is_flag=True,
     help="Force rename even if locked.",
 )
-def rename(old_name: str, new_name: str, force: bool) -> None:
+@click.pass_context
+def rename(ctx: click.Context, old_name: str, new_name: str, force: bool) -> None:
     """Rename a registry entry."""
     # Lazy imports to improve CLI startup time
     from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
     from madsci.common.registry.local_registry import RegistryError  # noqa: PLC0415
     from madsci.common.registry.lock_manager import RegistryLockError  # noqa: PLC0415
 
+    console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
 
     try:
         component_id = registry_mgr.rename(old_name, new_name, force=force)
         console.print(
-            f"[green]✓[/green] Renamed [cyan]{old_name}[/cyan] → [cyan]{new_name}[/cyan]"
+            f"[green]\u2713[/green] Renamed [cyan]{old_name}[/cyan] \u2192 [cyan]{new_name}[/cyan]"
         )
         console.print(f"  ID: {component_id}")
     except RegistryLockError as e:
         console.print(f"[red]Cannot rename: {e}[/red]")
         console.print("Use --force to override the lock.")
-        raise SystemExit(1) from None
+        ctx.exit(1)
     except RegistryError as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise SystemExit(1) from None
+        ctx.exit(1)
 
 
 @registry.command()
@@ -195,10 +208,12 @@ def rename(old_name: str, new_name: str, force: bool) -> None:
     is_flag=True,
     help="Skip confirmation prompt.",
 )
-def clean(older_than: int, dry_run: bool, force: bool) -> None:
+@click.pass_context
+def clean(ctx: click.Context, older_than: int, dry_run: bool, force: bool) -> None:
     """Remove stale registry entries."""
     from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
 
+    console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
 
     # First, preview
@@ -210,7 +225,7 @@ def clean(older_than: int, dry_run: bool, force: bool) -> None:
 
     console.print(f"Found {len(stale)} stale entries:")
     for name in stale:
-        console.print(f"  • {name}")
+        console.print(f"  \u2022 {name}")
 
     if dry_run:
         console.print("\n[yellow]Dry run - no changes made.[/yellow]")
@@ -221,7 +236,7 @@ def clean(older_than: int, dry_run: bool, force: bool) -> None:
         return
 
     registry_mgr.clean_stale(older_than_days=older_than, dry_run=False)
-    console.print(f"[green]✓ Removed {len(stale)} stale entries.[/green]")
+    console.print(f"[green]\u2713 Removed {len(stale)} stale entries.[/green]")
 
 
 @registry.command("export")
@@ -231,17 +246,19 @@ def clean(older_than: int, dry_run: bool, force: bool) -> None:
     type=click.Path(),
     help="Output file (default: stdout).",
 )
-def export_registry(output: Optional[str]) -> None:
+@click.pass_context
+def export_registry(ctx: click.Context, output: Optional[str]) -> None:
     """Export registry to JSON file."""
     from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
 
+    console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
     data = registry_mgr.export()
 
     if output:
         with Path(output).open("w") as f:
             json.dump(data, f, indent=2, default=str)
-        console.print(f"[green]✓ Exported registry to {output}[/green]")
+        console.print(f"[green]\u2713 Exported registry to {output}[/green]")
     else:
         console.print_json(json.dumps(data, default=str))
 
@@ -259,10 +276,12 @@ def export_registry(output: Optional[str]) -> None:
     is_flag=True,
     help="Skip confirmation prompt.",
 )
-def import_registry(file: str, merge: bool, force: bool) -> None:
+@click.pass_context
+def import_registry(ctx: click.Context, file: str, merge: bool, force: bool) -> None:
     """Import registry from JSON file."""
     from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
 
+    console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
 
     with Path(file).open() as f:
@@ -278,4 +297,4 @@ def import_registry(file: str, merge: bool, force: bool) -> None:
             return
 
     registry_mgr.import_entries(data, merge=merge)
-    console.print(f"[green]✓ Imported {entry_count} entries.[/green]")
+    console.print(f"[green]\u2713 Imported {entry_count} entries.[/green]")

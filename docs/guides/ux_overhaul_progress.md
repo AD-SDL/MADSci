@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Started**: 2026-02-07
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-02-09 (Phase 6 in progress)
 
 This document tracks the implementation progress of the [MADSci UX Overhaul Plan](./ux_overhaul_plan.md).
 
@@ -18,7 +18,7 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 | 3 | Scaffolding & Templates | ✅ Complete | 100% |
 | 4 | ExperimentApplication Modalities | ✅ Complete | 100% |
 | 5 | Documentation & Guides | ✅ Complete | 100% |
-| 6 | Polish & Integration | 🔲 Not Started | 0% |
+| 6 | Polish & Integration | 🔄 In Progress | 50% |
 
 ---
 
@@ -811,20 +811,119 @@ madsci = "madsci.client.cli:main"
 
 ---
 
-## Phase 6: Polish & Integration 🔲
+## Phase 6: Polish & Integration 🔄
 
-**Status**: Not Started
+**Status**: In Progress
 
-**Prerequisites**: Phases 1-5
+**Prerequisites**: Phases 1-5 (Complete ✅)
 
-### Planned Deliverables
+### Deliverables
 
-- [ ] End-to-end user journey testing
-- [ ] Performance optimization
-- [ ] Error message improvements
+#### 6.1 CLI Error Message Improvements ✅
+
+**Status**: Complete
+
+**Files Modified**:
+
+| File | Changes | Status |
+|------|---------|--------|
+| `commands/migrate.py` | Removed module-level `console`, added `_get_console(ctx)`, `@click.pass_context` on all 5 subcommands, `ctx.exit(1)` instead of `raise SystemExit(1)`, Unicode escape sequences, variable shadowing fix | ✅ Complete |
+| `commands/registry.py` | Removed module-level `console`, added `_get_console(ctx)`, `@click.pass_context` on all 6 subcommands, global `--json` flag support via `ctx.obj.get("json")`, `ctx.exit(1)` instead of `raise SystemExit(1)`, Unicode escape sequences | ✅ Complete |
+
+**Improvements**:
+- Console now respects global `--no-color` and `--quiet` flags in all migrate and registry subcommands
+- Global `--json` flag properly propagated to registry subcommands
+- `raise SystemExit(1)` replaced with `ctx.exit(1)` for proper Click lifecycle management
+- Literal Unicode characters replaced with escape sequences for cross-platform compatibility
+- Variable shadowing (`error` → `err`) fixed in migrate convert and rollback commands
+
+#### 6.2 Missing Templates Created ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/bundled_templates/`
+
+**New Templates**:
+
+| Template ID | Name | Files | Description |
+|-------------|------|-------|-------------|
+| `experiment/tui` | TUI Experiment | `template.yaml`, `{{experiment_name}}_tui.py.j2` | ExperimentTUI modality with pause/cancel support, `check_experiment_status` loop |
+| `experiment/node` | Node Experiment | `template.yaml`, `{{experiment_name}}_node.py.j2` | ExperimentNode modality with REST server, `server_port` parameter |
+| `workflow/multi_step` | Multi-Step Workflow | `template.yaml`, `{{workflow_name}}.workflow.yaml.j2` | 3-step workflow with `node_1`/`node_2` parameters |
+
+**Updated Template Count**: 11 templates total (was 8):
+1. `module/basic` - Basic module with node, interfaces, types, tests
+2. `module/device` - Device module with `@action` decorator, resource management (NEW)
+3. `interface/fake` - Simulated interface for testing
+4. `experiment/script` - Simple run-once experiment
+5. `experiment/notebook` - Jupyter notebook experiment
+6. `experiment/tui` - Interactive terminal UI experiment (NEW)
+7. `experiment/node` - Server mode REST API experiment (NEW)
+8. `workflow/basic` - Single-step workflow YAML
+9. `workflow/multi_step` - Multi-step workflow YAML (NEW)
+10. `workcell/basic` - Workcell configuration
+11. `lab/minimal` - Lab configuration without Docker
+
+#### 6.3 Device Module Template ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/bundled_templates/module/device/`
+
+**Files** (11 total):
+
+| File | Description |
+|------|-------------|
+| `template.yaml` | Template manifest with parameters |
+| `{{module_name}}_module/src/{{module_name}}_rest_node.py.j2` | REST node using `@action` decorator pattern |
+| `{{module_name}}_module/src/{{module_name}}_interface.py.j2` | Real hardware interface |
+| `{{module_name}}_module/src/{{module_name}}_fake_interface.py.j2` | Fake interface with command_history, lifecycle |
+| `{{module_name}}_module/src/{{module_name}}_types.py.j2` | Types with device_number, wait_time |
+| `{{module_name}}_module/src/__init__.py.j2` | Package init |
+| `{{module_name}}_module/tests/test_{{module_name}}_interface.py.j2` | 14 test methods |
+| `{{module_name}}_module/tests/__init__.py.j2` | Test package init |
+| `{{module_name}}_module/pyproject.toml.j2` | Package configuration |
+| `{{module_name}}_module/README.md.j2` | Documentation |
+| `{{module_name}}_module/Dockerfile.j2` | Container build |
+
+**Key Differences from `module/basic`**:
+- Uses `@action` decorator (not `@ActionHandler`)
+- Includes resource management with `Slot` templates via `resource_client`
+- Full device lifecycle (initialize, shutdown, status, reset)
+- Fake interface with `command_history` tracking and `initialize`/`shutdown` lifecycle
+
+#### 6.4 Template Bug Fix ✅
+
+**Status**: Complete
+
+**File Modified**: `src/madsci_common/madsci/common/bundled_templates/workflow/basic/{{workflow_name}}.workflow.yaml.j2`
+
+- Fixed reference to undefined `author_name` variable (replaced with hardcoded "MADSci User")
+
+#### 6.5 Template Engine & Registry Tests ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/tests/test_templates/test_template_engine.py`
+
+**Test Classes**:
+
+| Test Class | Tests | Description |
+|------------|-------|-------------|
+| `TestJinja2Filters` | 9 | pascal_case, camel_case, kebab_case filters |
+| `TestTemplateRegistry` | 11 | list, filter by category/tag, get, install local, uninstall |
+| `TestTemplateEngine` | 7 | manifest loading, defaults, validation (valid, missing required, invalid pattern, port range, wrong type) |
+| `TestTemplateRendering` | 15 | dry-run, full render, Python syntax validation, conditional files, content substitution, all template types |
+| `TestTemplateCompleteness` | 32 | all 11 templates exist, defaults validate, all render successfully, all generated Python has valid syntax |
+
+**Total Phase 6 Tests**: 74 tests, all passing
+
+### Remaining Deliverables
+
+- [ ] Enhance minimal viable lab template (add `.gitignore`, `pyproject.toml`, example workflow)
+- [ ] Add E2E tutorial tests for workflow, workcell, lab creation, and full lifecycle
 - [ ] Final documentation review
-- [ ] Extract example_lab patterns into additional templates (from 5.2)
-- [ ] Enhance minimal viable lab template and docs (from 5.7)
+- [ ] Performance optimization (lazy imports in remaining commands)
 
 ---
 
@@ -847,6 +946,27 @@ The following design documents were created during Phase 0 planning:
 ---
 
 ## Changelog
+
+### 2026-02-09 (Phase 6 Start)
+
+- **Phase 6 In Progress**: Polish & Integration work begun
+  - CLI Error Message Improvements (6.1):
+    - Fixed `migrate.py`: removed module-level `console`, added `_get_console(ctx)` helper, `@click.pass_context` on all 5 subcommands, `ctx.exit(1)` replacing `raise SystemExit(1)`, Unicode escape sequences, variable shadowing fix
+    - Fixed `registry.py`: same pattern applied to all 6 subcommands, global `--json` flag propagation via `ctx.obj.get("json")`
+  - Missing Templates Created (6.2):
+    - Created `experiment/tui` template (ExperimentTUI modality with pause/cancel)
+    - Created `experiment/node` template (ExperimentNode modality with REST server)
+    - Created `workflow/multi_step` template (3-step workflow with node parameters)
+  - Device Module Template (6.3):
+    - Created `module/device` template (11 files) using `@action` decorator pattern
+    - Includes resource management with `Slot` templates, full device lifecycle
+    - Fake interface with `command_history` tracking
+  - Template Bug Fix (6.4):
+    - Fixed `workflow/basic` template referencing undefined `author_name` variable
+  - Template Engine & Registry Tests (6.5):
+    - Created 74 tests across 5 test classes covering filters, registry, engine, rendering, and completeness
+    - All 11 templates validated for existence, default validation, rendering, and Python syntax
+  - Template count increased from 8 to 11
 
 ### 2026-02-09 (Phase 5 Bug Fixes)
 
