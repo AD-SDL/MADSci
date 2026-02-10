@@ -324,5 +324,8 @@ src/madsci_resource_manager/madsci/resource_manager/alembic/versions/*.py
 .claude/
 agent_docs/
 
+# Scratch directory for local testing
+.scratch/
+
 # MyST build outputs
 _build

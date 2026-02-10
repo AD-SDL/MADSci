@@ -43,7 +43,7 @@ madsci logs --follow
 madsci status
 
 # Detailed diagnostics
-madsci doctor --check all
+madsci doctor
 
 # Launch TUI for monitoring
 madsci tui
@@ -79,7 +79,7 @@ madsci-backup create --db-url mongodb://localhost:27017 --output ./backups --val
 madsci logs --follow
 
 # Specific service
-madsci logs --service workcell_manager --tail 100
+madsci logs workcell_manager --tail 100
 
 # Filter by level
 madsci logs --level error --since 1h

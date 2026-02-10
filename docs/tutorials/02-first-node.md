@@ -36,7 +36,7 @@ cd madsci-tutorial
 source .venv/bin/activate
 
 # Create a new module
-madsci new module --name temp_sensor --output .
+madsci new module --name temp_sensor
 ```
 
 You'll see interactive prompts:

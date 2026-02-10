@@ -41,20 +41,21 @@ print(f"Result: {final.outputs}")
 ### Running an Experiment Script
 
 ```python
-from madsci.experiment_application import ExperimentScript, ExperimentDesign
+from madsci.experiment_application import ExperimentScript
+from madsci.common.types.experiment_types import ExperimentDesign
 
 class MyExperiment(ExperimentScript):
     experiment_design = ExperimentDesign(
-        name="My Experiment",
-        description="Simple data collection",
+        experiment_name="My Experiment",
+        experiment_description="Simple data collection",
     )
 
-    def run(self):
+    def run_experiment(self):
         # Your experiment logic here
         return {"result": "success"}
 
 if __name__ == "__main__":
-    MyExperiment().main()
+    MyExperiment.main()
 ```
 
 ### Querying Data

@@ -22,7 +22,7 @@ MADSci supports different ways of running experiments:
 
 | Modality | Use Case | Key Features |
 |----------|----------|-------------|
-| **ExperimentScript** | Simple run-once experiments | Minimal setup, `run()` method |
+| **ExperimentScript** | Simple run-once experiments | Minimal setup, `run_experiment()` method |
 | **ExperimentNotebook** | Interactive Jupyter notebooks | Cell-by-cell execution, rich display |
 | **ExperimentTUI** | Interactive terminal apps | Full TUI with controls |
 | **ExperimentNode** | Long-running servers | REST API, triggered remotely |
@@ -56,7 +56,8 @@ import time
 from datetime import datetime
 
 import httpx
-from madsci.experiment_application import ExperimentScript, ExperimentDesign
+from madsci.experiment_application import ExperimentScript
+from madsci.common.types.experiment_types import ExperimentDesign
 
 
 class TemperatureStudy(ExperimentScript):
@@ -68,9 +69,8 @@ class TemperatureStudy(ExperimentScript):
 
     # Define your experiment's design
     experiment_design = ExperimentDesign(
-        name="Temperature Study",
-        description="Collect and analyze temperature readings",
-        version="1.0.0",
+        experiment_name="Temperature Study",
+        experiment_description="Collect and analyze temperature readings",
     )
 
     def __init__(self, node_url: str = "http://localhost:2000", num_readings: int = 10):
@@ -79,7 +79,7 @@ class TemperatureStudy(ExperimentScript):
         self.num_readings = num_readings
         self.readings: list[dict] = []
 
-    def run(self) -> dict:
+    def run_experiment(self) -> dict:
         """Main experiment logic.
 
         This method contains your experimental procedure.
@@ -158,7 +158,7 @@ class TemperatureStudy(ExperimentScript):
 if __name__ == "__main__":
     # Create and run the experiment
     experiment = TemperatureStudy(num_readings=5)
-    results = experiment.main()
+    experiment.run()
 
     # Optionally save results
     # import json
@@ -211,7 +211,8 @@ Designed for use in Jupyter notebooks with cell-by-cell execution.
 """
 
 import httpx
-from madsci.experiment_application import ExperimentNotebook, ExperimentDesign
+from madsci.experiment_application import ExperimentNotebook
+from madsci.common.types.experiment_types import ExperimentDesign
 
 
 class TemperatureNotebook(ExperimentNotebook):
@@ -232,9 +233,8 @@ class TemperatureNotebook(ExperimentNotebook):
     """
 
     experiment_design = ExperimentDesign(
-        name="Temperature Notebook",
-        description="Interactive temperature exploration",
-        version="1.0.0",
+        experiment_name="Temperature Notebook",
+        experiment_description="Interactive temperature exploration",
     )
 
     def __init__(self, node_url: str = "http://localhost:2000"):
@@ -306,7 +306,7 @@ exp.end()  # Closes experiment session
 Instead of writing from scratch, use the template:
 
 ```bash
-madsci new experiment --name my_study --template script --output .
+madsci new experiment --name my_study --modality script
 ```
 
 This generates a ready-to-customize experiment script.
@@ -321,7 +321,7 @@ def main(cls) -> dict:
     Internally does:
     1. Creates experiment instance
     2. Calls start_experiment_run() if managers available
-    3. Calls run() - your code
+    3. Calls run_experiment() - your code
     4. Calls end_experiment()
     5. Returns results
     """
@@ -364,16 +364,16 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-from madsci.experiment_application import ExperimentScript, ExperimentDesign
+from madsci.experiment_application import ExperimentScript
+from madsci.common.types.experiment_types import ExperimentDesign
 
 
 class TimeSeriesExperiment(ExperimentScript):
     """Collect temperature readings over time and save to file."""
 
     experiment_design = ExperimentDesign(
-        name="Temperature Time Series",
-        description="Collect temperature readings at regular intervals",
-        version="1.0.0",
+        experiment_name="Temperature Time Series",
+        experiment_description="Collect temperature readings at regular intervals",
     )
 
     def __init__(
@@ -390,7 +390,7 @@ class TimeSeriesExperiment(ExperimentScript):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
 
-    def run(self) -> dict:
+    def run_experiment(self) -> dict:
         """Collect time series data."""
         start_time = datetime.now()
         end_time_target = time.time() + self.duration
@@ -424,7 +424,7 @@ class TimeSeriesExperiment(ExperimentScript):
         # Save results
         output_file = self.output_dir / f"timeseries_{start_time:%Y%m%d_%H%M%S}.json"
         results = {
-            "experiment": self.experiment_design.name,
+            "experiment": self.experiment_design.experiment_name,
             "start_time": start_time.isoformat(),
             "duration_seconds": self.duration,
             "interval_seconds": self.interval,
@@ -450,7 +450,7 @@ if __name__ == "__main__":
         duration_seconds=args.duration,
         interval_seconds=args.interval,
     )
-    experiment.main()
+    experiment.run()
 ```
 
 Run it:
@@ -461,7 +461,7 @@ python timeseries_experiment.py --duration 30 --interval 5
 
 ## Key Takeaways
 
-1. **ExperimentScript is simplest**: Override `run()` and call `main()`
+1. **ExperimentScript is simplest**: Override `run_experiment()` and call `run()`
 2. **ExperimentNotebook is interactive**: Use `start()`/`end()` for cell-by-cell work
 3. **Experiments work standalone**: No managers required for basic usage
 4. **Results are just Python dicts**: Easy to save, analyze, or display

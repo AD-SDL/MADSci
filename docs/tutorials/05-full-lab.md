@@ -66,7 +66,7 @@ mkdir my_lab
 cd my_lab
 
 # Create lab configuration
-madsci new lab --name my_lab --template standard --output .
+madsci new lab --name my_lab --template standard
 ```
 
 Or create the files manually:
@@ -640,10 +640,10 @@ madsci-backup create --db-url postgresql://postgres:postgres@localhost:5432/mads
 
 ```bash
 # Run diagnostics
-madsci doctor --check all
+madsci doctor
 
 # Check specific services
-madsci status --verbose
+madsci status
 ```
 
 ### Log Viewing
@@ -653,7 +653,7 @@ madsci status --verbose
 madsci logs --follow
 
 # Filter by service
-madsci logs --service event_manager --tail 100
+madsci logs event_manager --tail 100
 
 # Filter by level
 madsci logs --level error --since 1h

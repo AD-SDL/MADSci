@@ -174,11 +174,30 @@ def generate_from_template(  # noqa: C901, PLR0912
     if no_interactive:
         params = engine.get_default_values()
         if name:
-            # Try common name parameter patterns
-            for key in ["module_name", "node_name", "name", "experiment_name"]:
-                if any(p.name == key for p in engine.manifest.parameters):
-                    params[key] = name
-                    break
+            # Map the --name CLI flag to the correct template parameter.
+            # Strategy: use the template's category to determine the primary
+            # name parameter (e.g., "module" -> "module_name"), then fall back
+            # to the first parameter if it looks like a name field.
+            category = (
+                engine.manifest.category.value if engine.manifest.category else ""
+            )
+            category_name_key = f"{category}_name" if category else ""
+
+            if category_name_key and any(
+                p.name == category_name_key for p in engine.manifest.parameters
+            ):
+                params[category_name_key] = name
+            else:
+                # Fallback: use the first parameter if it ends with _name
+                first_param = (
+                    engine.manifest.parameters[0]
+                    if engine.manifest.parameters
+                    else None
+                )
+                if first_param and (
+                    first_param.name.endswith("_name") or first_param.name == "name"
+                ):
+                    params[first_param.name] = name
     else:
         console.print(
             Panel(

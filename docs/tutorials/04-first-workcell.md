@@ -53,7 +53,7 @@ cd madsci-tutorial
 source .venv/bin/activate
 
 # Create a simple robot arm module
-madsci new module --name robot_arm --output .
+madsci new module --name robot_arm
 ```
 
 Follow the prompts, then edit `robot_arm_module/src/robot_arm_rest_node.py`:
@@ -172,7 +172,7 @@ pip install -e .
 Create a workcell configuration file:
 
 ```bash
-madsci new workcell --name my_workcell --output .
+madsci new workcell --name my_workcell
 ```
 
 Or create `my_workcell.workcell.yaml` manually:
@@ -309,7 +309,7 @@ MADSci Service Status
 Now the fun part - create a workflow that coordinates both nodes:
 
 ```bash
-madsci new workflow --name sample_collection --output .
+madsci new workflow --name sample_collection
 ```
 
 Edit `sample_collection.workflow.yaml`:
@@ -620,4 +620,4 @@ steps:
 
 - [Workflow Guide](../../example_lab/WORKFLOW_GUIDE.md)
 - [Workcell Manager Documentation](../../src/madsci_workcell_manager/README.md)
-- [Workflow YAML Schema](../../docs/designs/workflow_schema.md)
+- [Workflow YAML Schema](../../docs/designs/template_system_design.md)

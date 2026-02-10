@@ -7,7 +7,7 @@ This guide walks through creating a new MADSci module using the `madsci new modu
 The fastest way to create a module is with the CLI:
 
 ```bash
-madsci new module --name my_instrument --output .
+madsci new module --name my_instrument
 ```
 
 ### Interactive Mode
@@ -49,8 +49,7 @@ For scripting or CI:
 madsci new module \
   --name my_instrument \
   --description "My laboratory instrument" \
-  --no-interactive \
-  --output .
+  --no-interactive
 ```
 
 ## Generated Structure

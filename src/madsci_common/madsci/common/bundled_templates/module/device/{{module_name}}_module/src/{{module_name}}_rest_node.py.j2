@@ -83,7 +83,10 @@ class {{ module_name | pascal_case }}Node(RestNode):
         self.resource_client.init_template(
             resource=device_slot,
             template_name="{{ module_name }}_slot",
-            description="Template for {{ module_name }} device slot. Represents positions where items can be placed on the device.",
+            description=(
+                "Template for {{ module_name }} device slot. "
+                "Represents positions where items can be placed on the device."
+            ),
             required_overrides=["resource_name"],
             tags=["{{ module_name }}", "slot", "device"],
             created_by=self.node_definition.node_id,

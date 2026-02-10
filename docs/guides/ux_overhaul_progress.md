@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Started**: 2026-02-07
-**Last Updated**: 2026-02-09 (Phase 6 in progress)
+**Last Updated**: 2026-02-10 (Phase 6 complete)
 
 This document tracks the implementation progress of the [MADSci UX Overhaul Plan](./ux_overhaul_plan.md).
 
@@ -18,7 +18,7 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 | 3 | Scaffolding & Templates | ✅ Complete | 100% |
 | 4 | ExperimentApplication Modalities | ✅ Complete | 100% |
 | 5 | Documentation & Guides | ✅ Complete | 100% |
-| 6 | Polish & Integration | 🔄 In Progress | 90% |
+| 6 | Polish & Integration | ✅ Complete | 100% |
 
 ---
 
@@ -811,9 +811,9 @@ madsci = "madsci.client.cli:main"
 
 ---
 
-## Phase 6: Polish & Integration 🔄
+## Phase 6: Polish & Integration ✅
 
-**Status**: In Progress
+**Status**: Complete
 
 **Prerequisites**: Phases 1-5 (Complete ✅)
 
@@ -981,9 +981,49 @@ madsci = "madsci.client.cli:main"
 
 **Total E2E Tutorial Tests**: 7 files (was 4)
 
-### Remaining Deliverables
+#### 6.10 Final Documentation Review ✅
 
-- [ ] Final documentation review (content accuracy, link validation)
+**Status**: Complete
+
+**Issues Fixed**:
+
+| Category | Files Affected | Fix |
+|----------|---------------|-----|
+| CLI `--output` flag | 5 tutorials, 1 integrator guide | Replaced non-existent `--output` flag with positional `DIRECTORY` argument |
+| `ExperimentDesign` field names | Tutorial 03, experimentalist guide | `name=` → `experiment_name=`, `description=` → `experiment_description=`, removed non-existent `version=` |
+| `ExperimentDesign` import | Tutorial 03, experimentalist guide | Import from `madsci.common.types.experiment_types` instead of `madsci.experiment_application` |
+| Method override | Tutorial 03, experimentalist guide | `def run()` → `def run_experiment()` (correct override method) |
+| `--template` → `--modality` | Tutorial 03 | Fixed experiment CLI flag |
+| `--check all` | Tutorial 05, operator guide | Removed invalid `--check all` (omit `--check` to run all) |
+| `--service` flag | Tutorial 05, operator guide | Services are positional args, not `--service` flag |
+| `--verbose` on status | Tutorial 05 | Removed non-existent `--verbose` flag from `madsci status` |
+| Broken link | Tutorial 04 | Fixed `workflow_schema.md` → `template_system_design.md` |
+
+#### 6.11 CLI `--name` Parameter Fix ✅
+
+**Status**: Complete
+
+**File Modified**: `src/madsci_client/madsci/client/cli/commands/new.py`
+
+**Issue**: The `--name` CLI flag was only mapped to `module_name`, `node_name`, `name`, and `experiment_name` template parameters. Missing mappings for `lab_name`, `workflow_name`, and `workcell_name` caused `--name` to be silently ignored for those template types.
+
+**Fix**: Replaced hardcoded parameter list with category-based resolution. The `--name` value is now mapped to `{category}_name` (e.g., `lab` → `lab_name`) using the template manifest's category field, with a fallback to the first parameter if it ends with `_name`.
+
+#### 6.12 Device Template Ruff Fix ✅
+
+**Status**: Complete
+
+**File Modified**: `src/madsci_common/madsci/common/bundled_templates/module/device/{{module_name}}_module/src/{{module_name}}_rest_node.py.j2`
+
+**Fix**: Wrapped long `description` string (126 chars > 100 limit) in parenthesized string concatenation to pass `ruff check` (E501).
+
+#### 6.13 E2E Test Python 3.10 Compatibility ✅
+
+**Status**: Complete
+
+**File Modified**: `tests/e2e/tutorials/tutorial_05_lab.tutorial.yaml`
+
+**Fix**: `tomllib` is only available in Python 3.11+. Updated the pyproject.toml validation step to fall back to `tomli` or basic file reading on Python 3.10.
 
 ---
 
@@ -1006,6 +1046,32 @@ The following design documents were created during Phase 0 planning:
 ---
 
 ## Changelog
+
+### 2026-02-10 (Phase 6 Complete)
+
+- **Phase 6 Complete**: All deliverables finished, all tests passing
+  - CLI `--name` Parameter Fix (6.11):
+    - Fixed `generate_from_template()` in `new.py`: `--name` flag was silently ignored for lab, workflow, and workcell templates
+    - Root cause: hardcoded parameter name list (`module_name`, `node_name`, `name`, `experiment_name`) missing `lab_name`, `workflow_name`, `workcell_name`
+    - Fix: category-based resolution using `{manifest.category}_name` with fallback to first parameter
+  - Device Template Ruff Fix (6.12):
+    - Fixed E501 (line too long) in `module/device` template's `_rest_node.py.j2`
+    - Wrapped 126-char `description` string in parenthesized concatenation
+  - E2E Test Python 3.10 Compatibility (6.13):
+    - Fixed `tutorial_05_lab.tutorial.yaml`: `tomllib` not available in Python 3.10
+    - Added fallback to `tomli` or basic file reading
+  - Final Documentation Review (6.10):
+    - Reviewed all 5 tutorials, 3 guide READMEs, and integrator guide files
+    - Fixed `--output` flag in 6 files (CLI uses positional `DIRECTORY` argument)
+    - Fixed `ExperimentDesign` field names (`name` → `experiment_name`, `description` → `experiment_description`)
+    - Fixed `ExperimentDesign` import path (from `madsci.common.types.experiment_types`)
+    - Fixed method override (`run()` → `run_experiment()`)
+    - Fixed `--template` → `--modality` for experiment CLI
+    - Fixed `--check all`, `--service`, `--verbose` CLI flag errors
+    - Fixed broken `workflow_schema.md` link in tutorial 04
+  - All 10 E2E tutorial tests passing
+  - All 78 template engine tests passing
+  - All 29 CLI tests passing
 
 ### 2026-02-09 (Phase 6 Continued)
 
