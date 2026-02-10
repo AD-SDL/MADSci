@@ -566,11 +566,14 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 3
+        assert len(result.files_created) == 6
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert ".env" in file_names
+        assert ".gitignore" in file_names
+        assert "pyproject.toml" in file_names
         assert "README.md" in file_names
+        assert "example.workflow.yaml" in file_names
 
     def test_render_workcell_basic(
         self, registry: TemplateRegistry, tmp_path: Path
@@ -606,6 +609,7 @@ class TestTemplateCompleteness:
             "module/basic",
             "module/device",
             "interface/fake",
+            "node/basic",
             "experiment/script",
             "experiment/notebook",
             "experiment/tui",
@@ -630,6 +634,7 @@ class TestTemplateCompleteness:
         [
             "module/basic",
             "module/device",
+            "node/basic",
             "experiment/script",
             "experiment/tui",
             "experiment/node",
@@ -651,6 +656,7 @@ class TestTemplateCompleteness:
         [
             ("module/basic", {"module_name": "test_gen", "port": 2000}),
             ("module/device", {"module_name": "test_gen", "port": 2000}),
+            ("node/basic", {"node_name": "test_gen", "port": 2000}),
             ("experiment/script", {"experiment_name": "test_gen"}),
             ("experiment/tui", {"experiment_name": "test_gen"}),
             ("experiment/node", {"experiment_name": "test_gen", "server_port": 6000}),
@@ -694,6 +700,7 @@ class TestTemplateCompleteness:
         [
             ("module/basic", {"module_name": "syntax_test", "port": 2000}),
             ("module/device", {"module_name": "syntax_test", "port": 2000}),
+            ("node/basic", {"node_name": "syntax_test", "port": 2000}),
             ("experiment/script", {"experiment_name": "syntax_test"}),
             ("experiment/tui", {"experiment_name": "syntax_test"}),
             (

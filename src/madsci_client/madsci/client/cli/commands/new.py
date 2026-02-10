@@ -2,27 +2,27 @@
 
 This module provides the `madsci new` command group for creating new MADSci
 components (modules, interfaces, nodes, experiments, workflows, labs).
+
+Heavy dependencies (template engine, Jinja2, rich) are imported lazily
+within functions to reduce CLI startup time.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import click
-from madsci.common.templates.engine import (
-    TemplateEngine,
-    TemplateError,
-    TemplateValidationError,
-)
-from madsci.common.templates.registry import TemplateNotFoundError, TemplateRegistry
-from madsci.common.types.template_types import ParameterType, TemplateCategory
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
-from rich.table import Table
+
+if TYPE_CHECKING:
+    from madsci.common.templates.engine import TemplateEngine
+    from rich.console import Console
 
 
 def get_console(ctx: click.Context) -> Console:
     """Get console from context or create new one."""
+    from rich.console import Console
+
     if ctx.obj and "console" in ctx.obj:
         return ctx.obj["console"]
     return Console()
@@ -40,6 +40,9 @@ def collect_parameters_interactive(  # noqa: C901
     Returns:
         Dictionary of parameter names to values.
     """
+    from madsci.common.types.template_types import ParameterType
+    from rich.prompt import Confirm, Prompt
+
     params: dict[str, object] = {}
 
     for param in engine.manifest.parameters:
@@ -120,6 +123,8 @@ def display_template_list(
         console: Rich console for output.
         title: Table title.
     """
+    from rich.table import Table
+
     table = Table(title=title, show_header=True)
     table.add_column("ID", style="cyan")
     table.add_column("Name")
@@ -152,6 +157,11 @@ def generate_from_template(  # noqa: C901, PLR0912
     Returns:
         True if generation succeeded, False otherwise.
     """
+    from madsci.common.templates.engine import TemplateError, TemplateValidationError
+    from madsci.common.templates.registry import TemplateNotFoundError, TemplateRegistry
+    from rich.panel import Panel
+    from rich.prompt import Confirm
+
     registry = TemplateRegistry()
 
     try:
@@ -279,6 +289,11 @@ def module(
         madsci new module ./my_module --no-interactive
     """
     console = get_console(ctx)
+
+    from madsci.common.templates.registry import TemplateRegistry
+    from madsci.common.types.template_types import TemplateCategory
+    from rich.prompt import Prompt
+
     registry = TemplateRegistry()
 
     # List templates if not specified or show selection
@@ -365,6 +380,8 @@ def interface(
 
     # Interactive type selection
     if not interface_type and not no_interactive:
+        from rich.prompt import Prompt
+
         console.print("\n[bold]Interface types:[/bold]")
         console.print("  1. fake - In-memory simulation for testing")
         console.print("  2. sim  - External physics simulator connection")
@@ -704,6 +721,11 @@ def list_templates(
         madsci new list --tag device
     """
     console = get_console(ctx)
+
+    from madsci.common.templates.registry import TemplateRegistry
+    from madsci.common.types.template_types import TemplateCategory
+    from rich.table import Table
+
     registry = TemplateRegistry()
 
     # Convert category string to enum

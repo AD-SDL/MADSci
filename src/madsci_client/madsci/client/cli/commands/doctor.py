@@ -3,20 +3,15 @@
 Performs comprehensive system diagnostics to ensure MADSci is properly configured.
 """
 
+from __future__ import annotations
+
 import json
-import shutil
-import socket
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from enum import Enum
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as pkg_version
 from typing import Any
 
 import click
-from rich.console import Console
-from rich.panel import Panel
 
 
 class CheckStatus(str, Enum):
@@ -128,6 +123,9 @@ def check_virtual_env() -> CheckResult:
 
 def check_docker() -> CheckResult:
     """Check Docker availability and version."""
+    import shutil
+    import subprocess
+
     docker_path = shutil.which("docker")
 
     if not docker_path:
@@ -180,6 +178,9 @@ def check_docker() -> CheckResult:
 
 def check_docker_compose() -> CheckResult:
     """Check Docker Compose availability and version."""
+    import shutil
+    import subprocess
+
     try:
         result = subprocess.run(
             ["docker", "compose", "version", "--short"],  # noqa: S607
@@ -226,6 +227,8 @@ def check_docker_compose() -> CheckResult:
 
 def check_port(port: int, service_name: str) -> CheckResult:
     """Check if a port is available."""
+    import socket
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(1)
     try:
@@ -254,6 +257,8 @@ def check_port(port: int, service_name: str) -> CheckResult:
 
 def check_required_packages() -> CheckResult:
     """Check that required packages are installed."""
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as pkg_version
 
     required = ["madsci.common", "madsci.client"]
     missing = []
@@ -375,6 +380,9 @@ def doctor(  # noqa: C901
         madsci doctor --check docker   Only check Docker
         madsci doctor --json           Output as JSON
     """
+    from rich.console import Console
+    from rich.panel import Panel
+
     console: Console = ctx.obj.get("console", Console())
 
     cat_list = list(categories) if categories else None

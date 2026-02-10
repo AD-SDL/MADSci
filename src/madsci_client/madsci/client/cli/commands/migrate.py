@@ -53,8 +53,8 @@ def migrate() -> None:
 @click.pass_context
 def scan(ctx: click.Context, directory: str, json_output: bool, verbose: bool) -> None:
     """Scan for files that need migration."""
-    from madsci.common.migration import MigrationScanner  # noqa: PLC0415
-    from madsci.common.types.migration_types import MigrationStatus  # noqa: PLC0415
+    from madsci.common.migration import MigrationScanner
+    from madsci.common.types.migration_types import MigrationStatus
 
     console = _get_console(ctx)
     scanner = MigrationScanner(Path(directory))
@@ -152,11 +152,11 @@ def convert(  # noqa: C901, PLR0912
     output: Optional[str],
 ) -> None:
     """Convert definition files to new format."""
-    from madsci.common.migration import (  # noqa: PLC0415
+    from madsci.common.migration import (
         MigrationConverter,
         MigrationScanner,
     )
-    from madsci.common.types.migration_types import MigrationStatus  # noqa: PLC0415
+    from madsci.common.types.migration_types import MigrationStatus
 
     console = _get_console(ctx)
 
@@ -229,7 +229,7 @@ def convert(  # noqa: C901, PLR0912
 @click.pass_context
 def status(ctx: click.Context) -> None:
     """Show migration status."""
-    from madsci.common.migration import MigrationScanner  # noqa: PLC0415
+    from madsci.common.migration import MigrationScanner
 
     console = _get_console(ctx)
     scanner = MigrationScanner(Path.cwd())
@@ -296,8 +296,8 @@ def finalize(
     ctx: click.Context, dry_run: bool, apply: bool, keep_backups: bool, force: bool
 ) -> None:
     """Finalize migration by removing deprecated files."""
-    from madsci.common.migration import MigrationScanner  # noqa: PLC0415
-    from madsci.common.types.migration_types import MigrationStatus  # noqa: PLC0415
+    from madsci.common.migration import MigrationScanner
+    from madsci.common.types.migration_types import MigrationStatus
 
     console = _get_console(ctx)
 
@@ -359,11 +359,11 @@ def rollback(
     ctx: click.Context, files: tuple[str, ...], rollback_all: bool, dry_run: bool
 ) -> None:
     """Roll back a migration to restore original files."""
-    from madsci.common.migration import (  # noqa: PLC0415
+    from madsci.common.migration import (
         MigrationRollback,
         MigrationScanner,
     )
-    from madsci.common.types.migration_types import MigrationStatus  # noqa: PLC0415
+    from madsci.common.types.migration_types import MigrationStatus
 
     console = _get_console(ctx)
 

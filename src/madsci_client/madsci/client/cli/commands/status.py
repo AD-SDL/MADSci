@@ -3,6 +3,8 @@
 Displays status of MADSci services.
 """
 
+from __future__ import annotations
+
 import json
 import time
 from dataclasses import dataclass
@@ -10,11 +12,6 @@ from enum import Enum
 from typing import Any
 
 import click
-import httpx
-from rich.console import Console
-from rich.live import Live
-from rich.panel import Panel
-from rich.table import Table
 
 # Default service URLs
 DEFAULT_SERVICES = {
@@ -62,6 +59,8 @@ class ServiceInfo:
 
 def check_service_health(name: str, url: str, timeout: float = 5.0) -> ServiceInfo:
     """Check the health of a service."""
+    import httpx
+
     health_url = url.rstrip("/") + "/health"
 
     try:
@@ -117,8 +116,10 @@ def get_status_icon(status: ServiceStatus) -> str:
     return icons.get(status, "?")
 
 
-def create_status_table(services: list[ServiceInfo]) -> Table:
+def create_status_table(services: list[ServiceInfo]) -> Any:
     """Create a Rich table with service status."""
+    from rich.table import Table
+
     table = Table(title="MADSci Service Status", show_header=True)
     table.add_column("Status", justify="center", width=4)
     table.add_column("Service", style="cyan")
@@ -196,6 +197,8 @@ def status(  # noqa: C901
         madsci status --watch            Continuously update
         madsci status --json             Output as JSON
     """
+    from rich.console import Console
+
     console: Console = ctx.obj.get("console", Console())
 
     if services:
@@ -231,6 +234,9 @@ def status(  # noqa: C901
         return
 
     if watch:
+        from rich.live import Live
+        from rich.panel import Panel
+
         try:
             with Live(console=console, refresh_per_second=1) as live:
                 while True:

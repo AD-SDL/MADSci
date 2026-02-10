@@ -3,15 +3,12 @@
 Displays version information for MADSci and all installed packages.
 """
 
+from __future__ import annotations
+
 import json
-import platform
 import sys
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as pkg_version
 
 import click
-from rich.console import Console
-from rich.table import Table
 
 # List of MADSci packages to check
 MADSCI_PACKAGES = [
@@ -38,6 +35,9 @@ def get_package_version(package_name: str) -> str | None:
     Returns:
         The version string if installed, None otherwise.
     """
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as pkg_version
+
     try:
         return pkg_version(package_name)
     except PackageNotFoundError:
@@ -64,6 +64,8 @@ def get_system_info() -> dict[str, str]:
     Returns:
         Dictionary with system information.
     """
+    import platform
+
     return {
         "python_version": sys.version.split()[0],
         "python_implementation": platform.python_implementation(),
@@ -95,6 +97,9 @@ def version(ctx: click.Context, as_json: bool, check_updates: bool) -> None:
         madsci version --json       Output as JSON
         madsci version --check-updates  Check for updates
     """
+    from rich.console import Console
+    from rich.table import Table
+
     console: Console = ctx.obj.get("console", Console())
 
     # Gather information

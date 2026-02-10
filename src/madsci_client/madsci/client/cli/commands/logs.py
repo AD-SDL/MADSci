@@ -3,6 +3,8 @@
 View and aggregate logs from MADSci services.
 """
 
+from __future__ import annotations
+
 import json
 import re
 import time
@@ -10,10 +12,6 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import click
-import httpx
-from rich.console import Console
-from rich.panel import Panel
-from rich.text import Text
 
 # Default Event Manager URL
 DEFAULT_EVENT_MANAGER_URL = "http://localhost:8001/"
@@ -62,8 +60,10 @@ def format_log_entry(
     entry: dict[str, Any],
     show_timestamps: bool = True,
     no_color: bool = False,
-) -> Text:
+) -> Any:
     """Format a log entry for display."""
+    from rich.text import Text
+
     text = Text()
 
     if show_timestamps:
@@ -118,6 +118,8 @@ def fetch_logs_from_event_manager(
     timeout: float = 10.0,
 ) -> list[dict[str, Any]]:
     """Fetch logs from the Event Manager."""
+    import httpx
+
     url = base_url.rstrip("/") + "/events"
     params: dict[str, Any] = {"limit": limit}
 
@@ -241,6 +243,9 @@ def logs(  # noqa: C901, PLR0912
         madsci logs --grep "workflow"        Filter by pattern
         madsci logs workcell_manager         Logs from specific service
     """
+    from rich.console import Console
+    from rich.panel import Panel
+
     console: Console = ctx.obj.get("console", Console())
     no_color = ctx.obj.get("no_color", False)
 

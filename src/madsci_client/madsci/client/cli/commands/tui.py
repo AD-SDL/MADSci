@@ -26,7 +26,7 @@ def tui(ctx: click.Context, screen: str) -> None:  # noqa: ARG001
         madsci tui --screen logs    Launch TUI on logs screen
     """
     try:
-        from madsci.client.cli.tui import MadsciApp  # noqa: PLC0415
+        from madsci.client.cli.tui import MadsciApp
     except ImportError as e:
         console = ctx.obj.get("console")
         if console:

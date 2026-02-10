@@ -63,7 +63,7 @@ def list_entries(
     json_output: bool,
 ) -> None:
     """List all registered components."""
-    from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
+    from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
@@ -122,7 +122,7 @@ def list_entries(
 @click.pass_context
 def resolve(ctx: click.Context, name: str, json_output: bool) -> None:
     """Resolve a component name to its ID."""
-    from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
+    from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
@@ -168,9 +168,9 @@ def resolve(ctx: click.Context, name: str, json_output: bool) -> None:
 def rename(ctx: click.Context, old_name: str, new_name: str, force: bool) -> None:
     """Rename a registry entry."""
     # Lazy imports to improve CLI startup time
-    from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
-    from madsci.common.registry.local_registry import RegistryError  # noqa: PLC0415
-    from madsci.common.registry.lock_manager import RegistryLockError  # noqa: PLC0415
+    from madsci.common.registry import LocalRegistryManager
+    from madsci.common.registry.local_registry import RegistryError
+    from madsci.common.registry.lock_manager import RegistryLockError
 
     console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
@@ -211,7 +211,7 @@ def rename(ctx: click.Context, old_name: str, new_name: str, force: bool) -> Non
 @click.pass_context
 def clean(ctx: click.Context, older_than: int, dry_run: bool, force: bool) -> None:
     """Remove stale registry entries."""
-    from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
+    from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
@@ -249,7 +249,7 @@ def clean(ctx: click.Context, older_than: int, dry_run: bool, force: bool) -> No
 @click.pass_context
 def export_registry(ctx: click.Context, output: Optional[str]) -> None:
     """Export registry to JSON file."""
-    from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
+    from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()
@@ -279,7 +279,7 @@ def export_registry(ctx: click.Context, output: Optional[str]) -> None:
 @click.pass_context
 def import_registry(ctx: click.Context, file: str, merge: bool, force: bool) -> None:
     """Import registry from JSON file."""
-    from madsci.common.registry import LocalRegistryManager  # noqa: PLC0415
+    from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
     registry_mgr = LocalRegistryManager()

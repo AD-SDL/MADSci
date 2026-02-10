@@ -18,7 +18,7 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 | 3 | Scaffolding & Templates | ✅ Complete | 100% |
 | 4 | ExperimentApplication Modalities | ✅ Complete | 100% |
 | 5 | Documentation & Guides | ✅ Complete | 100% |
-| 6 | Polish & Integration | 🔄 In Progress | 50% |
+| 6 | Polish & Integration | 🔄 In Progress | 90% |
 
 ---
 
@@ -851,18 +851,19 @@ madsci = "madsci.client.cli:main"
 | `experiment/node` | Node Experiment | `template.yaml`, `{{experiment_name}}_node.py.j2` | ExperimentNode modality with REST server, `server_port` parameter |
 | `workflow/multi_step` | Multi-Step Workflow | `template.yaml`, `{{workflow_name}}.workflow.yaml.j2` | 3-step workflow with `node_1`/`node_2` parameters |
 
-**Updated Template Count**: 11 templates total (was 8):
+**Updated Template Count**: 12 templates total (was 8):
 1. `module/basic` - Basic module with node, interfaces, types, tests
 2. `module/device` - Device module with `@action` decorator, resource management (NEW)
 3. `interface/fake` - Simulated interface for testing
-4. `experiment/script` - Simple run-once experiment
-5. `experiment/notebook` - Jupyter notebook experiment
-6. `experiment/tui` - Interactive terminal UI experiment (NEW)
-7. `experiment/node` - Server mode REST API experiment (NEW)
-8. `workflow/basic` - Single-step workflow YAML
-9. `workflow/multi_step` - Multi-step workflow YAML (NEW)
-10. `workcell/basic` - Workcell configuration
-11. `lab/minimal` - Lab configuration without Docker
+4. `node/basic` - Standalone REST node server (NEW)
+5. `experiment/script` - Simple run-once experiment
+6. `experiment/notebook` - Jupyter notebook experiment
+7. `experiment/tui` - Interactive terminal UI experiment (NEW)
+8. `experiment/node` - Server mode REST API experiment (NEW)
+9. `workflow/basic` - Single-step workflow YAML
+10. `workflow/multi_step` - Multi-step workflow YAML (NEW)
+11. `workcell/basic` - Workcell configuration
+12. `lab/minimal` - Lab configuration without Docker (ENHANCED: +.gitignore, +pyproject.toml, +example workflow)
 
 #### 6.3 Device Module Template ✅
 
@@ -918,12 +919,71 @@ madsci = "madsci.client.cli:main"
 
 **Total Phase 6 Tests**: 74 tests, all passing
 
+#### 6.6 Minimal Lab Template Enhancement ✅
+
+**Status**: Complete
+
+**Files Added** to `src/madsci_common/madsci/common/bundled_templates/lab/minimal/`:
+
+| File | Description |
+|------|-------------|
+| `{{lab_name}}/.gitignore.j2` | Git ignore rules for Python, IDE, OS, and MADSci files |
+| `{{lab_name}}/pyproject.toml.j2` | Python project config with madsci dependencies, dev extras, ruff config |
+| `{{lab_name}}/workflows/example.workflow.yaml.j2` | Example workflow YAML demonstrating workflow structure |
+
+**Files Updated**:
+- `template.yaml` - Added 3 new files to the files list (total: 6 files)
+- `{{lab_name}}/README.md.j2` - Updated project structure to reflect new files
+
+#### 6.7 Node Template Created ✅
+
+**Status**: Complete
+
+**Location**: `src/madsci_common/madsci/common/bundled_templates/node/basic/`
+
+| File | Description |
+|------|-------------|
+| `template.yaml` | Template manifest with `node_name`, `node_description`, `port` parameters |
+| `{{node_name}}_rest_node.py.j2` | Standalone REST node server with example action |
+
+**Note**: The `node/basic` directory existed but was empty. The `madsci new node` command referenced it but would fail at runtime. Now functional.
+
+#### 6.8 Performance Optimization (Lazy Imports) ✅
+
+**Status**: Complete
+
+**Files Modified**:
+
+| File | Changes |
+|------|--------|
+| `cli/__init__.py` | Moved command imports into `_register_commands()` function |
+| `cli/commands/__init__.py` | Removed eager imports of all 7 command modules |
+| `cli/commands/new.py` | Moved `TemplateEngine`, `TemplateRegistry`, `ParameterType`, `TemplateCategory`, `rich.*` imports into functions |
+| `cli/commands/status.py` | Moved `httpx`, `rich.console`, `rich.table`, `rich.live`, `rich.panel` imports into functions |
+| `cli/commands/logs.py` | Moved `httpx`, `rich.console`, `rich.panel`, `rich.text` imports into functions |
+| `cli/commands/doctor.py` | Moved `shutil`, `socket`, `subprocess`, `importlib.metadata`, `rich.console`, `rich.panel` imports into functions |
+| `cli/commands/version.py` | Moved `platform`, `importlib.metadata`, `rich.console`, `rich.table` imports into functions |
+| `ruff.toml` | Added `PLC0415` to per-file-ignores for `**/cli/**/*.py` |
+
+**Impact**: CLI startup now only imports `click` and core Python stdlib at module level. All heavy dependencies (httpx, rich, Jinja2, template engine) are loaded on-demand when the specific command is invoked.
+
+#### 6.9 E2E Tutorial Tests ✅
+
+**Status**: Complete
+
+**Location**: `tests/e2e/tutorials/`
+
+| File | Steps | Description |
+|------|-------|-------------|
+| `tutorial_04_workflow.tutorial.yaml` | 8 | Workflow, workcell, and node creation via templates |
+| `tutorial_05_lab.tutorial.yaml` | 7 | Lab creation with validation of all generated files |
+| `tutorial_06_full_lifecycle.tutorial.yaml` | 9 | Complete lifecycle: device module + experiments + workflow + workcell + template listing |
+
+**Total E2E Tutorial Tests**: 7 files (was 4)
+
 ### Remaining Deliverables
 
-- [ ] Enhance minimal viable lab template (add `.gitignore`, `pyproject.toml`, example workflow)
-- [ ] Add E2E tutorial tests for workflow, workcell, lab creation, and full lifecycle
-- [ ] Final documentation review
-- [ ] Performance optimization (lazy imports in remaining commands)
+- [ ] Final documentation review (content accuracy, link validation)
 
 ---
 
@@ -946,6 +1006,31 @@ The following design documents were created during Phase 0 planning:
 ---
 
 ## Changelog
+
+### 2026-02-09 (Phase 6 Continued)
+
+- **Phase 6 Progress**: Additional deliverables completed
+  - Minimal Lab Template Enhancement (6.6):
+    - Added `.gitignore.j2` with Python, IDE, OS, and MADSci ignore rules
+    - Added `pyproject.toml.j2` with project metadata and dependencies
+    - Added `workflows/example.workflow.yaml.j2` demonstrating workflow structure
+    - Updated `template.yaml` to include 6 files (was 3)
+    - Updated `README.md.j2` to reflect new project structure
+  - Node Template Created (6.7):
+    - Created `node/basic` template (was empty directory causing runtime errors)
+    - `template.yaml` with `node_name`, `node_description`, `port` parameters
+    - `{{node_name}}_rest_node.py.j2` standalone REST node with example action
+  - Performance Optimization (6.8):
+    - Lazy imports in CLI: moved all heavy dependencies (httpx, rich, Jinja2, template engine) to function-level imports
+    - Modified 7 CLI files: `__init__.py`, `commands/__init__.py`, `new.py`, `status.py`, `logs.py`, `doctor.py`, `version.py`
+    - Added `PLC0415` per-file-ignores for CLI directory in `ruff.toml`
+    - Removed now-unnecessary `noqa: PLC0415` comments from `migrate.py`, `registry.py`, `tui.py`
+  - E2E Tutorial Tests (6.9):
+    - Created `tutorial_04_workflow.tutorial.yaml` (8 steps: workflow, workcell, node creation)
+    - Created `tutorial_05_lab.tutorial.yaml` (7 steps: lab creation, file validation)
+    - Created `tutorial_06_full_lifecycle.tutorial.yaml` (9 steps: device module + experiments + workflow + workcell + template listing)
+  - Template count increased from 11 to 12
+  - E2E tutorial test count increased from 4 to 7
 
 ### 2026-02-09 (Phase 6 Start)
 
