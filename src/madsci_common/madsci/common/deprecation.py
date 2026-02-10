@@ -179,6 +179,9 @@ class DeprecatedClass:
     _deprecated_in: str = DEPRECATED_IN
     _removal_in: str = REMOVAL_IN
 
+    _deprecation_wrapped: bool = False
+    """Internal flag to track whether __init__ has already been wrapped."""
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Emit deprecation warning when subclass is instantiated."""
         super().__init_subclass__(**kwargs)
@@ -187,23 +190,31 @@ class DeprecatedClass:
         if cls.__name__ == "DeprecatedClass":
             return
 
-        # Check if this is a direct subclass that should warn
-        if hasattr(cls, "_deprecation_reason"):
-            replacement_hint = (
-                f" Use '{cls._deprecation_replacement}' instead."
-                if cls._deprecation_replacement
-                else ""
+        # Only wrap __init__ for classes that directly define _deprecation_reason
+        # (not inherited), and haven't already been wrapped. This prevents
+        # double-warnings when a deprecated class is further subclassed.
+        if "_deprecation_reason" not in cls.__dict__:
+            return
+
+        if cls._deprecation_wrapped:
+            return
+
+        replacement_hint = (
+            f" Use '{cls._deprecation_replacement}' instead."
+            if cls._deprecation_replacement
+            else ""
+        )
+        original_init = cls.__init__
+
+        @wraps(original_init)
+        def warning_init(self: Any, *args: Any, **kwargs: Any) -> None:
+            message = (
+                f"{cls.__name__} is deprecated as of v{cls._deprecated_in} "
+                f"and will be removed in v{cls._removal_in}. "
+                f"{cls._deprecation_reason}{replacement_hint}"
             )
-            original_init = cls.__init__
+            warnings.warn(message, MadsciDeprecationWarning, stacklevel=2)
+            original_init(self, *args, **kwargs)
 
-            @wraps(original_init)
-            def warning_init(self: Any, *args: Any, **kwargs: Any) -> None:
-                message = (
-                    f"{cls.__name__} is deprecated as of v{cls._deprecated_in} "
-                    f"and will be removed in v{cls._removal_in}. "
-                    f"{cls._deprecation_reason}{replacement_hint}"
-                )
-                warnings.warn(message, MadsciDeprecationWarning, stacklevel=2)
-                original_init(self, *args, **kwargs)
-
-            cls.__init__ = warning_init  # type: ignore[method-assign]
+        cls.__init__ = warning_init  # type: ignore[method-assign]
+        cls._deprecation_wrapped = True

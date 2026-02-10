@@ -6,7 +6,7 @@ from the old configuration system (Definition files) to the new system
 (Settings + ID Registry).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -101,7 +101,8 @@ class MigrationPlan(MadsciBaseModel):
         default_factory=list, description="All files in the migration plan"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="When the plan was created"
+        default_factory=lambda: datetime.now(tz=timezone.utc),
+        description="When the plan was created",
     )
 
     @property

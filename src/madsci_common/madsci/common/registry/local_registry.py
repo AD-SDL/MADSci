@@ -7,7 +7,7 @@ name-to-ID mappings on each machine.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -100,7 +100,7 @@ class LocalRegistryManager:
             registry: The registry to write.
         """
         self._ensure_directory()
-        registry.updated_at = datetime.utcnow()
+        registry.updated_at = datetime.now(tz=timezone.utc)
 
         with self.registry_path.open("w") as f:
             json.dump(registry.model_dump(mode="json"), f, indent=2, default=str)
@@ -141,7 +141,7 @@ class LocalRegistryManager:
                     if acquire_lock:
                         entry = self.lock_manager.acquire(entry)
 
-                    entry.last_seen = datetime.utcnow()
+                    entry.last_seen = datetime.now(tz=timezone.utc)
                     if metadata:
                         entry.metadata.update(metadata)
 
@@ -152,7 +152,7 @@ class LocalRegistryManager:
                         self.lock_manager.start_heartbeat(name, self)
 
                     logger.debug(
-                        "Resolved existing entry", name=name, entry_id=entry.id
+                        "Resolved existing entry: name=%s entry_id=%s", name, entry.id
                     )
                     return entry.id
 
@@ -172,7 +172,9 @@ class LocalRegistryManager:
                 if acquire_lock:
                     self.lock_manager.start_heartbeat(name, self)
 
-                logger.info("Created new registry entry", name=name, entry_id=entry.id)
+                logger.info(
+                    "Created new registry entry: name=%s entry_id=%s", name, entry.id
+                )
                 return entry.id
 
         except Timeout as err:
@@ -238,7 +240,7 @@ class LocalRegistryManager:
                 entry = self.lock_manager.refresh(entry)
                 registry.entries[name] = entry
                 self._write(registry)
-                logger.debug("Refreshed lock", name=name)
+                logger.debug("Refreshed lock: name=%s", name)
         except Timeout as err:
             raise RegistryLockError("Timeout acquiring file lock for refresh") from err
 
@@ -259,9 +261,9 @@ class LocalRegistryManager:
                     entry = self.lock_manager.release(entry)
                     registry.entries[name] = entry
                     self._write(registry)
-                    logger.debug("Released lock", name=name)
+                    logger.debug("Released lock: name=%s", name)
         except Timeout:
-            logger.warning("Timeout releasing lock", name=name)
+            logger.warning("Timeout releasing lock: name=%s", name)
 
     def rename(self, old_name: str, new_name: str, force: bool = False) -> str:
         """Rename a registry entry.
@@ -304,7 +306,9 @@ class LocalRegistryManager:
 
                 self._write(registry)
                 logger.info(
-                    "Renamed registry entry", old_name=old_name, new_name=new_name
+                    "Renamed registry entry: old_name=%s new_name=%s",
+                    old_name,
+                    new_name,
                 )
 
                 return entry.id
@@ -359,7 +363,7 @@ class LocalRegistryManager:
         Returns:
             List of removed (or would-be-removed) entry names.
         """
-        threshold = datetime.utcnow() - timedelta(days=older_than_days)
+        threshold = datetime.now(tz=timezone.utc) - timedelta(days=older_than_days)
 
         try:
             with self._file_lock.acquire(timeout=self.FILE_LOCK_TIMEOUT):
@@ -375,7 +379,7 @@ class LocalRegistryManager:
                     for name in stale:
                         del registry.entries[name]
                     self._write(registry)
-                    logger.info("Cleaned stale entries", count=len(stale))
+                    logger.info("Cleaned stale entries: count=%d", len(stale))
 
                 return stale
         except Timeout:
@@ -421,7 +425,7 @@ class LocalRegistryManager:
 
                 self._write(registry)
                 logger.info(
-                    "Imported entries", count=len(imported.entries), merge=merge
+                    "Imported entries: count=%d merge=%s", len(imported.entries), merge
                 )
         except Timeout as err:
             raise RegistryError("Timeout importing entries") from err

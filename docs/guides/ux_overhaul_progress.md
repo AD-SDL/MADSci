@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Started**: 2026-02-07
-**Last Updated**: 2026-02-10 (Phase 6 complete)
+**Last Updated**: 2026-02-10 (Post-review bug fixes complete)
 
 This document tracks the implementation progress of the [MADSci UX Overhaul Plan](./ux_overhaul_plan.md).
 
@@ -1045,7 +1045,95 @@ The following design documents were created during Phase 0 planning:
 
 ---
 
+## Code Review Findings & Bug Fixes
+
+A comprehensive code review of the `ux_overhaul` -> `unstable` merge (14 commits, ~42,000 lines across 193 files) identified the following issues. They are listed by severity and tracked here as they are resolved.
+
+### High Severity
+
+#### CR-1: stdlib logging called with structlog-style kwargs (Runtime crash) ✅
+
+**Status**: Fixed
+
+**Problem**: 7 files (~37 call sites) use `logging.getLogger(__name__)` (stdlib) but call the logger with keyword arguments like `logger.warning("msg", name=name, error=str(e))`. Stdlib logging does not accept arbitrary keyword arguments -- this will raise `TypeError` at runtime on any code path that hits these log statements.
+
+**Affected Files**:
+- `src/madsci_common/madsci/common/registry/identity_resolver.py`
+- `src/madsci_common/madsci/common/registry/local_registry.py`
+- `src/madsci_common/madsci/common/registry/lock_manager.py`
+- `src/madsci_common/madsci/common/migration/converter.py`
+- `src/madsci_common/madsci/common/migration/scanner.py`
+- `src/madsci_common/madsci/common/templates/engine.py`
+- `src/madsci_common/madsci/common/templates/registry.py`
+
+**Fix**: Convert all logger calls to use %-formatting compatible with stdlib logging.
+
+### Medium Severity
+
+#### CR-2: `_sync_to_lab` silently ignores `component_id` parameter ✅
+
+**Status**: Fixed
+
+**Problem**: In `identity_resolver.py`, the `_sync_to_lab` method accepts `component_id` but never uses it (suppressed with `# noqa: ARG002`). The POST body sent to the lab registry omits the actual ID, defeating distributed coordination.
+
+**Fix**: Include `"id": component_id` in the POST body and remove the `# noqa: ARG002`.
+
+#### CR-3: Settings export redacts fields too aggressively ✅
+
+**Status**: Fixed
+
+**Problem**: In `manager_base.py`, the `get_settings_export` method redacts any field whose name contains common substrings like `"key"`, `"auth"`, or `"token"`. This catches legitimate non-sensitive fields like `primary_key`, `auth_enabled`, `token_count`.
+
+**Fix**: Use more specific patterns (e.g., `api_key` instead of just `key`, require `_` boundaries).
+
+### Low Severity
+
+#### CR-4: `datetime.utcnow()` deprecated in Python 3.12+ ✅
+
+**Status**: Fixed
+
+**Problem**: 15+ call sites across 6 files use `datetime.utcnow()`, which is deprecated in Python 3.12+ and will be removed in a future Python version.
+
+**Affected Files**:
+- `src/madsci_common/madsci/common/types/registry_types.py`
+- `src/madsci_common/madsci/common/types/template_types.py`
+- `src/madsci_common/madsci/common/types/migration_types.py`
+- `src/madsci_common/madsci/common/registry/lock_manager.py`
+- `src/madsci_common/madsci/common/registry/local_registry.py`
+- `src/madsci_common/madsci/common/migration/converter.py`
+
+**Fix**: Replace with `datetime.now(tz=timezone.utc)` (using `datetime.timezone.utc` for Python 3.10 compatibility, not `datetime.UTC` which requires 3.11+).
+
+#### CR-5: `DeprecatedClass.__init_subclass__` warns on every inheritance level ✅
+
+**Status**: Fixed
+
+**Problem**: In `deprecation.py`, `__init_subclass__` wraps `__init__` for every subclass in the hierarchy. If `class A(DeprecatedClass)` and `class B(A)`, instantiating `B()` will warn twice because the `hasattr(cls, "_deprecation_reason")` check always passes (inherited attribute).
+
+**Fix**: Changed to check `"_deprecation_reason" in cls.__dict__` (own attribute only, not inherited) and added a `_deprecation_wrapped` flag to prevent double-wrapping.
+
+#### CR-6: `_register_commands()` defeats lazy import intent ✅
+
+**Status**: Fixed
+
+**Problem**: In `cli/__init__.py`, `_register_commands()` was called at module import time, eagerly importing all 8 command modules despite the docstring claiming lazy loading.
+
+**Fix**: Moved lazy loading into `AliasedGroup.get_command()` — commands are now stored as `(module_path, attr_name)` tuples in `_LAZY_COMMANDS` and only imported when actually invoked. The resolved command is cached via `self.add_command()` to avoid re-importing.
+
+---
+
 ## Changelog
+
+### 2026-02-10 (Code Review Bug Fixes Complete)
+
+- **All 6 code review findings fixed**: Comprehensive review of the `ux_overhaul` merge identified and resolved all issues
+  - CR-1 (High): Fixed stdlib logging with kwargs in 7 files (~37 call sites). Converted `logger.warning("msg", name=name)` to `logger.warning("msg: name=%s", name)` pattern.
+  - CR-2 (Medium): Fixed `_sync_to_lab` in `identity_resolver.py` to include `component_id` in POST body.
+  - CR-3 (Medium): Fixed over-aggressive settings redaction in `manager_base.py`. Now uses word-boundary-aware patterns instead of broad substring matching.
+  - CR-4 (Medium): Replaced all `datetime.utcnow()` calls across 6 files with `datetime.now(tz=timezone.utc)` for Python 3.10+ compatibility (not `datetime.UTC` which requires 3.11+). Also found and fixed 2 additional files (`template_types.py`, `migration_types.py`) missed in initial scan.
+  - CR-5 (Low): Fixed `DeprecatedClass` double-warning by checking `"_deprecation_reason" in cls.__dict__` and adding `_deprecation_wrapped` tracking flag.
+  - CR-6 (Low): Implemented true lazy loading in CLI by moving import logic into `AliasedGroup.get_command()` with `_LAZY_COMMANDS` registry. Removed `LazyCommand` class (used deprecated `click.BaseCommand`).
+  - Full test suite passes: 2004 tests, 0 failures
 
 ### 2026-02-10 (Phase 6 Complete)
 

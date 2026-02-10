@@ -74,9 +74,9 @@ class MigrationScanner:
                         plan.files.append(migration)
 
         logger.info(
-            "Scanned project directory",
-            project_dir=str(self.project_dir),
-            files_found=len(plan.files),
+            "Scanned project directory: project_dir=%s files_found=%d",
+            str(self.project_dir),
+            len(plan.files),
         )
         return plan
 
@@ -132,7 +132,7 @@ class MigrationScanner:
             )
 
         except Exception as e:
-            logger.warning("Error analyzing file", path=str(path), error=str(e))
+            logger.warning("Error analyzing file: path=%s error=%s", str(path), str(e))
             # Return migration with error
             return FileMigration(
                 source_path=path,

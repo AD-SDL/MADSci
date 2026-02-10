@@ -9,7 +9,7 @@ import logging
 import os
 import socket
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Optional
 
 from madsci.common.types.registry_types import RegistryEntry, RegistryLock
@@ -91,7 +91,7 @@ class LockManager:
         Returns:
             A new RegistryLock with current process information.
         """
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         return RegistryLock(
             holder_pid=self.pid,
             holder_host=self.hostname,
@@ -143,7 +143,7 @@ class LockManager:
             raise RegistryLockError(f"Cannot acquire lock for '{entry.id}': {reason}")
 
         entry.lock = self.create_lock()
-        entry.last_seen = datetime.utcnow()
+        entry.last_seen = datetime.now(tz=timezone.utc)
         return entry
 
     def refresh(self, entry: RegistryEntry) -> RegistryEntry:
@@ -164,7 +164,7 @@ class LockManager:
         if entry.lock is None:
             raise RegistryLockError("Cannot refresh: no lock exists")
 
-        now = datetime.utcnow()
+        now = datetime.now(tz=timezone.utc)
         entry.lock.heartbeat_at = now
         entry.lock.expires_at = now + self.lock_ttl
         entry.last_seen = now
@@ -204,14 +204,16 @@ class LockManager:
                     registry.refresh_lock(name)
                 except Exception as e:
                     # Log but don't crash - will retry next interval
-                    logger.warning("Failed to refresh lock", name=name, error=str(e))
+                    logger.warning(
+                        "Failed to refresh lock: name=%s error=%s", name, str(e)
+                    )
 
         thread = threading.Thread(
             target=heartbeat_loop, daemon=True, name=f"heartbeat-{name}"
         )
         thread.start()
         self._heartbeat_threads[name] = thread
-        logger.debug("Started heartbeat thread", name=name)
+        logger.debug("Started heartbeat thread: name=%s", name)
 
     def stop_heartbeat(self, name: str) -> None:
         """Stop the heartbeat thread for an entry.
@@ -222,7 +224,7 @@ class LockManager:
         if name in self._stop_events:
             self._stop_events[name].set()
             del self._stop_events[name]
-            logger.debug("Stopped heartbeat", name=name)
+            logger.debug("Stopped heartbeat: name=%s", name)
         if name in self._heartbeat_threads:
             # Wait briefly for thread to exit
             self._heartbeat_threads[name].join(timeout=1.0)

@@ -164,9 +164,9 @@ class TemplateRegistry:
                     )
                 except Exception as e:
                     logger.debug(
-                        "Skipping invalid template",
-                        template_dir=str(template_dir),
-                        error=str(e),
+                        "Skipping invalid template: template_dir=%s error=%s",
+                        str(template_dir),
+                        str(e),
                     )
 
         return templates
@@ -249,7 +249,9 @@ class TemplateRegistry:
                 shutil.rmtree(dest_path)
             shutil.copytree(source_path, dest_path)
 
-            logger.info("Installed template", source=source, dest_path=str(dest_path))
+            logger.info(
+                "Installed template: source=%s dest_path=%s", source, str(dest_path)
+            )
             return dest_path
 
         if source.startswith(("http://", "https://", "git@")):
@@ -293,7 +295,7 @@ class TemplateRegistry:
 
         if template_path.exists():
             shutil.rmtree(template_path)
-            logger.info("Uninstalled template", template_id=template_id)
+            logger.info("Uninstalled template: template_id=%s", template_id)
             return True
 
         return False

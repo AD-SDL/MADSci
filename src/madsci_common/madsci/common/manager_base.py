@@ -410,20 +410,32 @@ class AbstractManagerBase(
         """
         data = self._settings.model_dump(mode="json")
 
-        # Redact sensitive fields based on common patterns
-        sensitive_patterns = [
+        # Redact sensitive fields based on common patterns.
+        # Use word-boundary-aware matching to avoid false positives on fields
+        # like "primary_key", "auth_enabled", "token_count", etc.
+        # Exact-match patterns are checked with substring matching;
+        # boundary patterns require the sensitive word to appear as a
+        # standalone segment (delimited by "_" or start/end of string).
+        import re  # noqa: PLC0415
+
+        exact_patterns = [
             "password",
             "secret",
-            "token",
-            "key",
             "credential",
             "api_key",
             "apikey",
-            "auth",
+        ]
+        boundary_patterns = [
+            r"(?:^|_)token(?:_|$)",
+            r"(?:^|_)key(?:_|$)",
+            r"(?:^|_)auth(?:_|$)",
         ]
         for field in list(data.keys()):
             field_lower = field.lower()
-            if any(pattern in field_lower for pattern in sensitive_patterns):
+            is_sensitive = any(
+                pattern in field_lower for pattern in exact_patterns
+            ) or any(re.search(pattern, field_lower) for pattern in boundary_patterns)
+            if is_sensitive:
                 data[field] = "***REDACTED***"
 
         if not include_defaults:

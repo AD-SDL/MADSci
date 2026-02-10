@@ -335,7 +335,7 @@ class TemplateEngine:
                     # Static file - copy as-is
                     shutil.copy2(source_full, dest_full)
 
-                logger.debug("Created file", dest_path=str(dest_full))
+                logger.debug("Created file: dest_path=%s", str(dest_full))
 
             files_created.append(dest_full)
 
@@ -356,7 +356,7 @@ class TemplateEngine:
                         capture_output=True,
                     )
                     hooks_executed.append(cmd)
-                    logger.debug("Executed hook", cmd=cmd)
+                    logger.debug("Executed hook: cmd=%s", cmd)
                 except subprocess.CalledProcessError as e:
                     if not hook.continue_on_error:
                         raise TemplateHookError(
@@ -364,9 +364,9 @@ class TemplateEngine:
                         ) from e
 
         logger.info(
-            "Generated files from template",
-            files_count=len(files_created),
-            template_name=self.manifest.name,
+            "Generated files from template: files_count=%d template_name=%s",
+            len(files_created),
+            self.manifest.name,
         )
 
         return GeneratedProject(

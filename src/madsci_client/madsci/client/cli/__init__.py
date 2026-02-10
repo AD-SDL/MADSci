@@ -4,6 +4,7 @@ This module provides the main entry point for the MADSci CLI, offering a
 comprehensive toolkit for building and operating self-driving laboratories.
 """
 
+import importlib
 from typing import ClassVar
 
 import click
@@ -12,9 +13,26 @@ from rich.console import Console
 # Version will be loaded dynamically
 __version__ = "0.6.2"
 
+# Lazy command registry: maps command names to (module_path, attr_name) tuples.
+# Commands are only imported when actually invoked.
+_LAZY_COMMANDS: dict[str, tuple[str, str]] = {
+    "version": ("madsci.client.cli.commands.version", "version"),
+    "doctor": ("madsci.client.cli.commands.doctor", "doctor"),
+    "status": ("madsci.client.cli.commands.status", "status"),
+    "logs": ("madsci.client.cli.commands.logs", "logs"),
+    "tui": ("madsci.client.cli.commands.tui", "tui"),
+    "registry": ("madsci.client.cli.commands.registry", "registry"),
+    "migrate": ("madsci.client.cli.commands.migrate", "migrate"),
+    "new": ("madsci.client.cli.commands.new", "new"),
+}
+
 
 class AliasedGroup(click.Group):
-    """Click group that supports command aliases."""
+    """Click group that supports command aliases and lazy command loading.
+
+    Commands are imported only when they are actually invoked or when
+    help text is requested, reducing CLI startup time.
+    """
 
     _aliases: ClassVar[dict[str, str]] = {
         "n": "new",
@@ -25,12 +43,33 @@ class AliasedGroup(click.Group):
         "ui": "tui",
     }
 
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        """List all available commands, including lazy ones."""
+        # Combine eagerly registered commands with lazy ones
+        eager = set(super().list_commands(ctx))
+        return sorted(eager | set(_LAZY_COMMANDS.keys()))
+
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
-        """Resolve command aliases."""
+        """Resolve command aliases and lazily import commands."""
         # Check if it's an alias
         if cmd_name in self._aliases:
             cmd_name = self._aliases[cmd_name]
-        return super().get_command(ctx, cmd_name)
+
+        # Try eagerly registered commands first
+        cmd = super().get_command(ctx, cmd_name)
+        if cmd is not None:
+            return cmd
+
+        # Lazily import the command
+        if cmd_name in _LAZY_COMMANDS:
+            module_path, attr_name = _LAZY_COMMANDS[cmd_name]
+            module = importlib.import_module(module_path)
+            cmd = getattr(module, attr_name)
+            # Cache it so we don't import again
+            self.add_command(cmd, cmd_name)
+            return cmd
+
+        return None
 
     def resolve_command(
         self, ctx: click.Context, args: list[str]
@@ -121,34 +160,6 @@ def madsci(
         quiet=quiet,
         force_terminal=None,  # Auto-detect
     )
-
-
-def _register_commands() -> None:
-    """Register CLI commands with lazy imports.
-
-    Commands are imported only when they are actually invoked,
-    reducing startup time for the CLI.
-    """
-    from madsci.client.cli.commands.doctor import doctor
-    from madsci.client.cli.commands.logs import logs
-    from madsci.client.cli.commands.migrate import migrate
-    from madsci.client.cli.commands.new import new
-    from madsci.client.cli.commands.registry import registry
-    from madsci.client.cli.commands.status import status
-    from madsci.client.cli.commands.tui import tui
-    from madsci.client.cli.commands.version import version
-
-    madsci.add_command(version)
-    madsci.add_command(doctor)
-    madsci.add_command(status)
-    madsci.add_command(logs)
-    madsci.add_command(tui)
-    madsci.add_command(registry)
-    madsci.add_command(migrate)
-    madsci.add_command(new)
-
-
-_register_commands()
 
 
 def main() -> None:

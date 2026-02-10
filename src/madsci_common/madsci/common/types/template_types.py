@@ -5,7 +5,7 @@ This module defines the types used by the template system for scaffolding
 new MADSci components (modules, nodes, experiments, workflows, labs).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -163,7 +163,8 @@ class GeneratedProject(MadsciBaseModel):
         default_factory=list, description="Hooks that were executed"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="When the project was generated"
+        default_factory=lambda: datetime.now(tz=timezone.utc),
+        description="When the project was generated",
     )
 
 

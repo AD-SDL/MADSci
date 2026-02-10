@@ -6,7 +6,7 @@ persistent mapping between human-readable component names and their unique
 identifiers (ULIDs).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from madsci.common.types.base_types import MadsciBaseModel
@@ -49,11 +49,11 @@ class RegistryEntry(MadsciBaseModel):
         description="Type of component (node, module, manager, etc.)"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(tz=timezone.utc),
         description="When this entry was created",
     )
     last_seen: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(tz=timezone.utc),
         description="Last time this component was active",
     )
     metadata: dict = Field(
@@ -73,7 +73,7 @@ class RegistryEntry(MadsciBaseModel):
         """Check if entry is currently locked (lock exists and not expired)."""
         if self.lock is None:
             return False
-        return datetime.utcnow() < self.lock.expires_at
+        return datetime.now(tz=timezone.utc) < self.lock.expires_at
 
     def is_locked_by(self, instance_id: str) -> bool:
         """Check if entry is locked by a specific instance.
@@ -98,11 +98,11 @@ class LocalRegistry(MadsciBaseModel):
 
     version: int = Field(default=1, description="Registry file format version")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(tz=timezone.utc),
         description="When this registry was created",
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(tz=timezone.utc),
         description="When this registry was last updated",
     )
     entries: dict[str, RegistryEntry] = Field(

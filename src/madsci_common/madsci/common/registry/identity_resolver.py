@@ -117,7 +117,7 @@ class IdentityResolver:
                     self._sync_to_lab(name, local_id, component_type, metadata)
                 except Exception as e:
                     # Lab sync failure is non-fatal in standalone mode
-                    logger.warning("Failed to sync to lab registry", error=str(e))
+                    logger.warning("Failed to sync to lab registry: %s", str(e))
 
             return local_id
 
@@ -127,7 +127,7 @@ class IdentityResolver:
                 try:
                     return self._resolve_from_lab(name, component_type, metadata)
                 except Exception as e:
-                    logger.warning("Failed to resolve from lab", error=str(e))
+                    logger.warning("Failed to resolve from lab: %s", str(e))
             raise
 
     def resolve_with_info(
@@ -224,7 +224,7 @@ class IdentityResolver:
     def _sync_to_lab(
         self,
         name: str,
-        component_id: str,  # noqa: ARG002
+        component_id: str,
         component_type: ComponentType,
         metadata: Optional[dict[str, Any]],
     ) -> None:
@@ -243,6 +243,7 @@ class IdentityResolver:
             self.lab_client.post(
                 f"/registry/entries/{name}",
                 {
+                    "id": component_id,
                     "component_type": component_type,
                     "metadata": metadata or {},
                     "acquire_lock": True,
@@ -251,9 +252,9 @@ class IdentityResolver:
                     "lock_holder_instance": self.local_registry.lock_manager.instance_id,
                 },
             )
-            logger.debug("Synced to lab registry", name=name)
+            logger.debug("Synced to lab registry: name=%s", name)
         except Exception as e:
-            logger.warning("Failed to sync to lab", name=name, error=str(e))
+            logger.warning("Failed to sync to lab: name=%s error=%s", name, str(e))
 
     def lookup(self, name: str) -> Optional[str]:
         """Look up an ID without acquiring a lock.
@@ -276,7 +277,7 @@ class IdentityResolver:
                 if response and "id" in response:
                     return response["id"]
             except Exception as e:
-                logger.debug("Failed to lookup from lab", error=str(e))
+                logger.debug("Failed to lookup from lab: %s", str(e))
 
         return None
 
@@ -298,9 +299,11 @@ class IdentityResolver:
                     f"/registry/entries/{name}/unlock",
                     {"holder_instance": instance_id},
                 )
-                logger.debug("Released from lab registry", name=name)
+                logger.debug("Released from lab registry: name=%s", name)
             except Exception as e:
-                logger.debug("Failed to release from lab", name=name, error=str(e))
+                logger.debug(
+                    "Failed to release from lab: name=%s error=%s", name, str(e)
+                )
 
     def release_all(self) -> None:
         """Release all locks held by this resolver.

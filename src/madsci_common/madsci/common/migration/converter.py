@@ -6,7 +6,7 @@ This module converts definition files to the new configuration format.
 
 import logging
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -69,7 +69,8 @@ class MigrationConverter:
         """
         if dry_run:
             logger.info(
-                "Dry run: would migrate file", source_path=str(migration.source_path)
+                "Dry run: would migrate file: source_path=%s",
+                str(migration.source_path),
             )
             return migration
 
@@ -81,7 +82,7 @@ class MigrationConverter:
                 )
                 shutil.copy2(migration.source_path, backup_path)
                 migration.backup_path = backup_path
-                logger.debug("Created backup", backup_path=str(backup_path))
+                logger.debug("Created backup: backup_path=%s", str(backup_path))
 
             # 2. Register ID
             for action in migration.actions:
@@ -97,8 +98,12 @@ class MigrationConverter:
                                 name: {
                                     "id": component_id,
                                     "component_type": migration.component_type,
-                                    "created_at": datetime.utcnow().isoformat(),
-                                    "last_seen": datetime.utcnow().isoformat(),
+                                    "created_at": datetime.now(
+                                        tz=timezone.utc
+                                    ).isoformat(),
+                                    "last_seen": datetime.now(
+                                        tz=timezone.utc
+                                    ).isoformat(),
                                     "metadata": {
                                         "migrated_from": str(migration.source_path)
                                     },
@@ -107,7 +112,9 @@ class MigrationConverter:
                         },
                         merge=True,
                     )
-                    logger.info("Registered ID", name=name, component_id=component_id)
+                    logger.info(
+                        "Registered ID: name=%s component_id=%s", name, component_id
+                    )
 
             # 3. Generate env file
             for action in migration.actions:
@@ -120,7 +127,9 @@ class MigrationConverter:
                     # Append to existing or create new
                     with env_file.open("a") as f:
                         f.write(f"\n# Migrated from {migration.source_path.name}\n")
-                        f.write(f"# Migration date: {datetime.utcnow().isoformat()}\n")
+                        f.write(
+                            f"# Migration date: {datetime.now(tz=timezone.utc).isoformat()}\n"
+                        )
                         for key, value in env_vars.items():
                             # Quote values with special characters
                             quoted_value = (
@@ -131,25 +140,30 @@ class MigrationConverter:
                             f.write(f"{key}={quoted_value}\n")
 
                     migration.output_files.append(env_file)
-                    logger.info("Generated env file", env_file=str(env_file))
+                    logger.info("Generated env file: env_file=%s", str(env_file))
 
             # 4. Mark original as deprecated
             for action in migration.actions:
                 if action.action_type == "mark_deprecated":
                     self._mark_deprecated(migration.source_path)
                     logger.debug(
-                        "Marked as deprecated", source_path=str(migration.source_path)
+                        "Marked as deprecated: source_path=%s",
+                        str(migration.source_path),
                     )
 
             migration.status = MigrationStatus.MIGRATED
-            migration.migrated_at = datetime.utcnow()
-            logger.info("Successfully migrated", source_path=str(migration.source_path))
+            migration.migrated_at = datetime.now(tz=timezone.utc)
+            logger.info(
+                "Successfully migrated: source_path=%s", str(migration.source_path)
+            )
 
         except Exception as e:
             migration.errors.append(str(e))
             migration.status = MigrationStatus.FAILED
             logger.error(
-                "Migration failed", source_path=str(migration.source_path), error=str(e)
+                "Migration failed: source_path=%s error=%s",
+                str(migration.source_path),
+                str(e),
             )
 
         return migration
@@ -182,7 +196,7 @@ class MigrationConverter:
         with path.open() as f:
             content = f.read()
 
-        migration_date = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        migration_date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         deprecation_header = f"""\
 # ╔════════════════════════════════════════════════════════════════════════╗
 # ║  DEPRECATED - This file format is deprecated                           ║
@@ -198,7 +212,7 @@ class MigrationConverter:
 # ╚════════════════════════════════════════════════════════════════════════╝
 
 _deprecated: true
-_migrated_at: "{datetime.utcnow().isoformat()}"
+_migrated_at: "{datetime.now(tz=timezone.utc).isoformat()}"
 
 """
 
@@ -239,7 +253,7 @@ class MigrationRollback:
                 shutil.copy2(migration.backup_path, migration.source_path)
                 migration.backup_path.unlink()
                 logger.info(
-                    "Restored from backup", source_path=str(migration.source_path)
+                    "Restored from backup: source_path=%s", str(migration.source_path)
                 )
 
             # 2. Remove generated files
@@ -248,8 +262,8 @@ class MigrationRollback:
                     # For env files, we should be more careful
                     # For now, just log a warning
                     logger.warning(
-                        "Generated file exists - manual cleanup may be needed",
-                        output_file=str(output_file),
+                        "Generated file exists - manual cleanup may be needed: output_file=%s",
+                        str(output_file),
                     )
 
             # 3. Registry entries are not removed to avoid losing IDs
@@ -258,12 +272,14 @@ class MigrationRollback:
             migration.status = MigrationStatus.PENDING
             migration.migrated_at = None
             migration.output_files = []
-            logger.info("Rolled back", source_path=str(migration.source_path))
+            logger.info("Rolled back: source_path=%s", str(migration.source_path))
 
         except Exception as e:
             migration.errors.append(f"Rollback failed: {e}")
             logger.error(
-                "Rollback failed", source_path=str(migration.source_path), error=str(e)
+                "Rollback failed: source_path=%s error=%s",
+                str(migration.source_path),
+                str(e),
             )
 
         return migration
