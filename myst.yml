@@ -42,6 +42,30 @@ project:
       children:
         - file: docs/guides/logging.md
 
+    - title: Tutorials
+      children:
+        - file: docs/tutorials/01-exploration.md
+        - file: docs/tutorials/02-first-node.md
+        - file: docs/tutorials/03-first-experiment.md
+        - file: docs/tutorials/04-first-workcell.md
+        - file: docs/tutorials/05-full-lab.md
+
+    - title: Equipment Integrator Guide
+      children:
+        - file: docs/guides/integrator/README.md
+        - file: docs/guides/integrator/01-understanding-modules.md
+        - file: docs/guides/integrator/02-creating-a-module.md
+        - file: docs/guides/integrator/03-developing-interfaces.md
+        - file: docs/guides/integrator/04-fake-interfaces.md
+
+    - title: Lab Operator Guide
+      children:
+        - file: docs/guides/operator/README.md
+
+    - title: Experimentalist Guide
+      children:
+        - file: docs/guides/experimentalist/README.md
+
     - title: Example Lab
       children:
         - file: example_lab/README.md

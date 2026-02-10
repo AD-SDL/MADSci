@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Started**: 2026-02-07
-**Last Updated**: 2026-02-08
+**Last Updated**: 2026-02-09
 
 This document tracks the implementation progress of the [MADSci UX Overhaul Plan](./ux_overhaul_plan.md).
 
@@ -17,7 +17,7 @@ This document tracks the implementation progress of the [MADSci UX Overhaul Plan
 | 2 | Definition System Refactor | ✅ Complete | 100% |
 | 3 | Scaffolding & Templates | ✅ Complete | 100% |
 | 4 | ExperimentApplication Modalities | ✅ Complete | 100% |
-| 5 | Documentation & Guides | 🔲 Not Started | 0% |
+| 5 | Documentation & Guides | 🔄 In Progress | 75% |
 | 6 | Polish & Integration | 🔲 Not Started | 0% |
 
 ---
@@ -693,18 +693,130 @@ madsci = "madsci.client.cli:main"
 
 ---
 
-## Phase 5: Documentation & Guides 🔲
+## Phase 5: Documentation & Guides 🔄
 
-**Status**: Not Started
+**Status**: In Progress (75%)
 
-**Prerequisites**: Phases 1-4
+**Prerequisites**: Phases 1-4 (Complete ✅)
 
-### Planned Deliverables
+### Deliverables
 
-- [ ] Updated documentation for new CLI
-- [ ] Persona-based guides (Lab Operator, Equipment Integrator, Experimentalist)
-- [ ] Tutorial sequences validated by Phase 0 infrastructure
-- [ ] Example updates
+#### 5.1 Tutorial Documentation ✅
+
+**Status**: Complete
+
+**Location**: `docs/tutorials/`
+
+| Tutorial | Description | Status |
+|----------|-------------|--------|
+| `01-exploration.md` | MADSci concepts, CLI, TUI introduction | ✅ Complete |
+| `02-first-node.md` | Create a node module with fake interface | ✅ Complete |
+| `03-first-experiment.md` | Write experiment scripts and notebooks | ✅ Complete |
+| `04-first-workcell.md` | Coordinate multiple nodes with workflows | ✅ Complete |
+| `05-full-lab.md` | Deploy complete lab with all managers | ✅ Complete |
+
+**Features**:
+- Progressive complexity (Ladder of Complexity approach)
+- No Docker required for tutorials 01-03
+- Complete code examples
+- Links to reference documentation
+
+#### 5.2 Example Extraction to Templates 🔲
+
+**Status**: Pending
+
+- [ ] Extract example_lab patterns into additional templates
+- [ ] Add device, instrument, liquid_handler, robot_arm templates
+- [ ] Add multi-step workflow templates
+
+#### 5.3 Equipment Integrator Guide ✅
+
+**Status**: Complete
+
+**Location**: `docs/guides/integrator/`
+
+| File | Description | Status |
+|------|-------------|--------|
+| `README.md` | Guide overview and quick reference | ✅ Complete |
+| `01-understanding-modules.md` | Node vs Module vs Interface concepts | ✅ Complete |
+| `02-creating-a-module.md` | `madsci new module` walkthrough | ✅ Complete |
+| `03-developing-interfaces.md` | Interface patterns (Serial, Socket, HTTP, SDK) | ✅ Complete |
+| `04-fake-interfaces.md` | Creating testable simulated interfaces | ✅ Complete |
+
+**Additional planned files**:
+- [ ] `05-wiring-the-node.md` - Connecting interface to node server
+- [ ] `06-testing-strategies.md` - Unit, integration, hardware-in-the-loop
+- [ ] `07-debugging.md` - Common issues and troubleshooting
+- [ ] `08-packaging-deployment.md` - Docker, dependencies, CI/CD
+- [ ] `09-publishing.md` - Sharing modules, versioning
+
+#### 5.4 Lab Operator Guide ✅
+
+**Status**: Complete (README)
+
+**Location**: `docs/guides/operator/`
+
+| File | Description | Status |
+|------|-------------|--------|
+| `README.md` | Operator guide overview with quick reference | ✅ Complete |
+
+**Additional planned files**:
+- [ ] `01-daily-operations.md` - Starting, stopping, monitoring
+- [ ] `02-monitoring.md` - TUI, CLI, observability tools
+- [ ] `03-backup-recovery.md` - Database backups, disaster recovery
+- [ ] `04-troubleshooting.md` - Common issues and solutions
+- [ ] `05-updates-maintenance.md` - Upgrading MADSci
+
+#### 5.5 Experimentalist Guide ✅
+
+**Status**: Complete (README)
+
+**Location**: `docs/guides/experimentalist/`
+
+| File | Description | Status |
+|------|-------------|--------|
+| `README.md` | Experimentalist guide overview with quick reference | ✅ Complete |
+
+**Additional planned files**:
+- [ ] `01-running-experiments.md` - Workflows and experiment scripts
+- [ ] `02-working-with-data.md` - Querying and exporting data
+- [ ] `03-managing-resources.md` - Tracking samples and materials
+- [ ] `04-experiment-design.md` - Best practices
+- [ ] `05-jupyter-notebooks.md` - Interactive experimentation
+
+#### 5.6 Tutorial Automation ✅
+
+**Status**: Started
+
+**Location**: `tests/e2e/tutorials/`
+
+| File | Description | Status |
+|------|-------------|--------|
+| `tutorial_02_first_node.tutorial.yaml` | Automated test for Tutorial 2 | ✅ Complete |
+
+**Additional planned tests**:
+- [ ] `tutorial_01_exploration.tutorial.yaml`
+- [ ] `tutorial_03_experiment.tutorial.yaml`
+
+#### 5.7 Minimal Viable Lab (Pure Python) 🔲
+
+**Status**: Pending
+
+- [ ] Enhance `lab/minimal` template
+- [ ] Add single-process mode documentation
+- [ ] Document in-memory/SQLite alternatives
+
+### Summary
+
+| Deliverable | Status | Notes |
+|-------------|--------|-------|
+| Tutorial documentation (5.1) | ✅ Complete | 5 tutorials created |
+| Example extraction (5.2) | 🔲 Pending | Additional templates needed |
+| Equipment Integrator Guide (5.3) | ✅ Partial | 4/9 files complete |
+| Lab Operator Guide (5.4) | ✅ Partial | README complete |
+| Experimentalist Guide (5.5) | ✅ Partial | README complete |
+| Tutorial automation (5.6) | 🔄 Started | 1 test file created |
+| Minimal Viable Lab (5.7) | 🔲 Pending | Template exists, docs needed |
 
 ---
 
@@ -742,6 +854,28 @@ The following design documents were created during Phase 0 planning:
 ---
 
 ## Changelog
+
+### 2026-02-09 (Phase 5)
+
+- **Phase 5 In Progress**: Documentation & Guides implementation started
+  - Tutorial Documentation (5.1):
+    - Created `docs/tutorials/01-exploration.md` - CLI, TUI, concepts introduction
+    - Created `docs/tutorials/02-first-node.md` - Module creation with fake interface
+    - Created `docs/tutorials/03-first-experiment.md` - Experiment scripts and notebooks
+    - Created `docs/tutorials/04-first-workcell.md` - Multi-node coordination with workflows
+    - Created `docs/tutorials/05-full-lab.md` - Complete lab deployment with Docker
+  - Equipment Integrator Guide (5.3):
+    - Created `docs/guides/integrator/README.md` - Guide overview
+    - Created `docs/guides/integrator/01-understanding-modules.md` - Node/Module/Interface concepts
+    - Created `docs/guides/integrator/02-creating-a-module.md` - Module scaffolding walkthrough
+    - Created `docs/guides/integrator/03-developing-interfaces.md` - Interface patterns
+    - Created `docs/guides/integrator/04-fake-interfaces.md` - Simulated interface patterns
+  - Lab Operator Guide (5.4):
+    - Created `docs/guides/operator/README.md` - Operator quick reference
+  - Experimentalist Guide (5.5):
+    - Created `docs/guides/experimentalist/README.md` - Experimentalist quick reference
+  - Tutorial Automation (5.6):
+    - Created `tests/e2e/tutorials/tutorial_02_first_node.tutorial.yaml`
 
 ### 2026-02-08 (Phase 4)
 

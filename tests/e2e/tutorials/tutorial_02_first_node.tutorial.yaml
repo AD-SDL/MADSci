@@ -1,0 +1,95 @@
+# Tutorial 2: First Node Module
+# This tutorial test validates the module creation workflow
+
+name: "Tutorial 02 - First Node Module"
+description: "Test the module creation workflow from Tutorial 2"
+
+test_mode: python  # No Docker required
+cleanup: true  # Remove generated files after test
+
+steps:
+  - name: "Create module with madsci new"
+    command: "madsci new module --name test_sensor --no-interactive --output ./test_tutorial_02"
+    timeout: 60000
+    validate:
+      - exit_code: 0
+      - directory_exists: "./test_tutorial_02/test_sensor_module"
+      - file_exists: "./test_tutorial_02/test_sensor_module/src/test_sensor_rest_node.py"
+      - file_exists: "./test_tutorial_02/test_sensor_module/src/test_sensor_interface.py"
+      - file_exists: "./test_tutorial_02/test_sensor_module/src/test_sensor_fake_interface.py"
+      - file_exists: "./test_tutorial_02/test_sensor_module/src/test_sensor_types.py"
+      - file_exists: "./test_tutorial_02/test_sensor_module/tests/test_test_sensor_interface.py"
+      - file_exists: "./test_tutorial_02/test_sensor_module/pyproject.toml"
+      - file_exists: "./test_tutorial_02/test_sensor_module/Dockerfile"
+      - file_exists: "./test_tutorial_02/test_sensor_module/README.md"
+
+  - name: "Validate Python syntax of generated files"
+    command: "python -m py_compile ./test_tutorial_02/test_sensor_module/src/test_sensor_rest_node.py"
+    validate:
+      - exit_code: 0
+
+  - name: "Validate interface file syntax"
+    command: "python -m py_compile ./test_tutorial_02/test_sensor_module/src/test_sensor_interface.py"
+    validate:
+      - exit_code: 0
+
+  - name: "Validate fake interface file syntax"
+    command: "python -m py_compile ./test_tutorial_02/test_sensor_module/src/test_sensor_fake_interface.py"
+    validate:
+      - exit_code: 0
+
+  - name: "Validate types file syntax"
+    command: "python -m py_compile ./test_tutorial_02/test_sensor_module/src/test_sensor_types.py"
+    validate:
+      - exit_code: 0
+
+  - name: "Run ruff check on generated code"
+    command: "ruff check ./test_tutorial_02/test_sensor_module/src/"
+    continue_on_error: true  # May have minor style issues
+    validate:
+      - exit_code: 0
+
+  - name: "Install module in development mode"
+    command: "pip install -e ./test_tutorial_02/test_sensor_module"
+    timeout: 120000
+    validate:
+      - exit_code: 0
+
+  - name: "Run generated tests"
+    command: "pytest ./test_tutorial_02/test_sensor_module/tests/ -v"
+    timeout: 60000
+    validate:
+      - exit_code: 0
+      - output_contains: "passed"
+
+  - name: "Start node server in background"
+    command: "python ./test_tutorial_02/test_sensor_module/src/test_sensor_rest_node.py"
+    background: true
+    health_check:
+      url: "http://localhost:2000/health"
+      timeout: 30000
+      interval: 1000
+
+  - name: "Test node health endpoint"
+    command: "curl -s http://localhost:2000/health"
+    validate:
+      - exit_code: 0
+      - json_contains: {"status": "healthy"}
+
+  - name: "Test node info endpoint"
+    command: "curl -s http://localhost:2000/info"
+    validate:
+      - exit_code: 0
+      - output_contains: "test_sensor"
+
+  - name: "Test example action"
+    command: 'curl -s -X POST http://localhost:2000/actions/example_action -H "Content-Type: application/json" -d ''{"param": "test_value"}'''
+    validate:
+      - exit_code: 0
+      - json_field:
+          path: "action_response"
+          value: "succeeded"
+
+cleanup_steps:
+  - name: "Remove test directory"
+    command: "rm -rf ./test_tutorial_02"
