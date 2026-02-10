@@ -303,9 +303,14 @@ class TemplateEngine:
                 if condition_result not in ("true", "1", "yes"):
                     continue
 
-            # Render source path
+            # Render source path (for resolving the actual file on disk)
             source_path_template = self._jinja_env.from_string(file_spec.source)
             source_path = source_path_template.render(**values)
+
+            # Keep the original (unrendered) source path for Jinja2 template
+            # loading, since the files on disk still have {{variable}}
+            # placeholders in their names.
+            original_source_path = file_spec.source
 
             # Render destination path
             dest_path_template = self._jinja_env.from_string(file_spec.destination)
@@ -321,8 +326,9 @@ class TemplateEngine:
 
                 # Render and write
                 if source_full.suffix == ".j2":
-                    # Jinja2 template
-                    template = self._jinja_env.get_template(source_path)
+                    # Jinja2 template - use original_source_path since the
+                    # file on disk has {{variable}} placeholders in its name
+                    template = self._jinja_env.get_template(original_source_path)
                     content = template.render(**values)
                     dest_full.write_text(content)
                 else:

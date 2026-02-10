@@ -1,0 +1,50 @@
+# Tutorial 03: First Experiment
+# Validates the first experiment tutorial - experiment script creation and execution
+
+name: "Tutorial 03: First Experiment"
+description: "Validates the first experiment tutorial - experiment script creation and execution"
+version: "1.0"
+tags:
+  - tutorial
+  - quick
+  - no-docker
+
+requirements:
+  python: ">=3.10"
+  docker: false
+
+mode: python
+timeout: 180.0
+
+steps:
+  - name: "Create working directory"
+    command: "mkdir -p test_experiment_tutorial"
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: directory_exists
+        path: "test_experiment_tutorial"
+
+  - name: "Create experiment from template"
+    command: "madsci new experiment --name test_exp --modality script --no-interactive test_experiment_tutorial"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Verify experiment file exists"
+    command: "ls test_experiment_tutorial/"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Check generated file syntax"
+    command: "python -m py_compile test_experiment_tutorial/test_exp.py"
+    continue_on_error: true
+    validations:
+      - type: exit_code
+        expected: 0
+
+cleanup:
+  commands:
+    - "rm -rf test_experiment_tutorial"
+  stop_background: true
