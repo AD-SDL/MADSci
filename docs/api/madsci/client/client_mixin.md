@@ -58,6 +58,7 @@ Classes
     ### Descendants
 
     * madsci.common.manager_base.AbstractManagerBase
+    * madsci.experiment_application.experiment_base.ExperimentBase
     * madsci.node_module.abstract_node_module.AbstractNode
 
     ### Class variables

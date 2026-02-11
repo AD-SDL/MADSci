@@ -98,3 +98,35 @@ Functions
 
     Returns:
         Integer log level value
+
+Classes
+-------
+
+`AnsiStrippingFormatter(fmt=None, datefmt=None, style='%', validate=True, *, defaults=None)`
+:   Logging formatter that strips ANSI escape codes for clean file output.
+
+    Use this on file handlers to prevent color codes from polluting log files
+    when structlog's ConsoleRenderer is used with colors=True.
+
+    Initialize the formatter with specified format strings.
+
+    Initialize the formatter either with the specified format string, or a
+    default as described above. Allow for specialized date formatting with
+    the optional datefmt argument. If datefmt is omitted, you get an
+    ISO8601-like (or RFC 3339-like) format.
+
+    Use a style parameter of '%', '{' or '$' to specify that you want to
+    use one of %-formatting, :meth:`str.format` (``{}``) formatting or
+    :class:`string.Template` formatting in your format string.
+
+    .. versionchanged:: 3.2
+       Added the ``style`` parameter.
+
+    ### Ancestors (in MRO)
+
+    * logging.Formatter
+
+    ### Methods
+
+    `format(self, record: logging.LogRecord) ‑> str`
+    :   Format the log record, stripping any ANSI escape codes.

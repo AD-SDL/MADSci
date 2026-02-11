@@ -56,6 +56,15 @@ Classes
     ### Descendants
 
     * madsci.common.backup_tools.base_backup.BackupInfo
+    * madsci.common.testing.types.E2ETestCleanup
+    * madsci.common.testing.types.E2ETestDefinition
+    * madsci.common.testing.types.E2ETestRequirements
+    * madsci.common.testing.types.E2ETestResult
+    * madsci.common.testing.types.E2ETestStep
+    * madsci.common.testing.types.StepResult
+    * madsci.common.testing.types.ValidationConfig
+    * madsci.common.testing.types.ValidationResult
+    * madsci.common.testing.types.WaitConfig
     * madsci.common.types.action_types.ActionDatapoints
     * madsci.common.types.action_types.ActionDefinition
     * madsci.common.types.action_types.ActionFiles
@@ -91,6 +100,9 @@ Classes
     * madsci.common.types.location_types.TransferTemplateOverrides
     * madsci.common.types.manager_types.ManagerDefinition
     * madsci.common.types.manager_types.ManagerHealth
+    * madsci.common.types.migration_types.FileMigration
+    * madsci.common.types.migration_types.MigrationAction
+    * madsci.common.types.migration_types.MigrationPlan
     * madsci.common.types.node_types.Node
     * madsci.common.types.node_types.NodeClientCapabilities
     * madsci.common.types.node_types.NodeDefinition
@@ -98,6 +110,10 @@ Classes
     * madsci.common.types.node_types.NodeSetConfigResponse
     * madsci.common.types.node_types.NodeStatus
     * madsci.common.types.parameter_types.WorkflowParameter
+    * madsci.common.types.registry_types.LocalRegistry
+    * madsci.common.types.registry_types.RegistryEntry
+    * madsci.common.types.registry_types.RegistryLock
+    * madsci.common.types.registry_types.RegistryResolveResult
     * madsci.common.types.resource_types.custom_types.CustomResourceAttributeDefinition
     * madsci.common.types.resource_types.custom_types.ResourceTypeDefinition
     * madsci.common.types.resource_types.definitions.TemplateDefinition
@@ -105,6 +121,13 @@ Classes
     * madsci.common.types.resource_types.server_types.ResourceRequestBase
     * madsci.common.types.step_types.StepDefinition
     * madsci.common.types.step_types.StepParameters
+    * madsci.common.types.template_types.GeneratedProject
+    * madsci.common.types.template_types.ParameterChoice
+    * madsci.common.types.template_types.TemplateFile
+    * madsci.common.types.template_types.TemplateHook
+    * madsci.common.types.template_types.TemplateInfo
+    * madsci.common.types.template_types.TemplateManifest
+    * madsci.common.types.template_types.TemplateParameter
     * madsci.common.types.workcell_types.WorkcellManagerDefinition
     * madsci.common.types.workcell_types.WorkcellState
     * madsci.common.types.workcell_types.WorkcellStatus
@@ -162,9 +185,12 @@ Classes
     * madsci.common.types.context_types.MadsciContext
     * madsci.common.types.datapoint_types.ObjectStorageSettings
     * madsci.common.types.docker_types.DockerComposeSettings
+    * madsci.common.types.interface_types.InterfaceSettings
     * madsci.common.types.manager_types.ManagerSettings
+    * madsci.common.types.module_types.ModuleSettings
     * madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings
     * madsci.common.types.node_types.NodeConfig
+    * madsci.experiment_application.experiment_base.ExperimentBaseConfig
     * madsci.resource_manager.migration_tool.DatabaseMigrationSettings
 
     ### Class variables

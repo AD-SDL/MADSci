@@ -144,6 +144,39 @@ Classes
         Returns:
             ManagerHealth: The current health status
 
+    `get_settings_endpoint(self, include_defaults: bool = True, include_schema: bool = False) ‑> dict[str, typing.Any]`
+    :   Export current settings for backup/replication.
+
+        This endpoint allows exporting the current manager settings in a format
+        suitable for backup, documentation, or replicating the configuration
+        to another environment.
+
+        Args:
+            include_defaults: If True, include fields with default values.
+                             If False, only include non-default settings.
+            include_schema: If True, include JSON schema for documentation.
+
+        Returns:
+            dict: Settings as a dictionary with sensitive fields redacted.
+
+    `get_settings_export(self, include_defaults: bool = True, include_schema: bool = False) ‑> dict[str, typing.Any]`
+    :   Export current settings for backup/replication.
+
+        This method allows programmatic access to the current manager settings
+        in a format suitable for backup, documentation, or replicating the
+        configuration to another environment.
+
+        Args:
+            include_defaults: If True, include fields with default values.
+                             If False, only include non-default settings.
+            include_schema: If True, include JSON schema for documentation.
+
+        Returns:
+            dict: Settings as a dictionary with the following structure:
+                - "settings": The settings values (secrets redacted)
+                - "schema" (optional): JSON schema if include_schema is True
+                - "schema_title" (optional): Settings class name if include_schema is True
+
     `health_endpoint(self) ‑> madsci.common.types.manager_types.ManagerHealth`
     :   Health check endpoint for the manager.
 
@@ -165,6 +198,10 @@ Classes
 
     `load_or_create_definition(self) ‑> ~DefinitionT`
     :   Load definition from file or create default.
+
+        .. deprecated:: 0.7.0
+            Definition files are deprecated. Use settings-based configuration instead.
+            This method will be removed in v0.8.0.
 
     `run_server(self, host: str | None = None, port: int | None = None, **uvicorn_kwargs: Any) ‑> None`
     :   Run the server using uvicorn.

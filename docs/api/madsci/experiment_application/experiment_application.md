@@ -2,6 +2,19 @@ Module madsci.experiment_application.experiment_application
 ===========================================================
 Provides an ExperimentApplication class that manages the execution of an experiment.
 
+.. deprecated:: 0.7.0
+    ExperimentApplication is deprecated. Use ExperimentScript, ExperimentNotebook,
+    ExperimentTUI, or ExperimentNode instead depending on your use case.
+    ExperimentApplication will be removed in v0.8.0.
+
+    Migration guide:
+    - For simple scripts: Use ExperimentScript
+    - For Jupyter notebooks: Use ExperimentNotebook
+    - For interactive terminal: Use ExperimentTUI
+    - For server mode: Use ExperimentNode
+
+    See https://ad-sdl.github.io/MADSci/migration/experiment-modalities for details.
+
 Classes
 -------
 
@@ -16,6 +29,10 @@ Classes
     it also uses experiment, workcell, location, and optionally lab clients.
 
     Initialize the experiment application.
+
+    .. deprecated:: 0.7.0
+        ExperimentApplication is deprecated. Use ExperimentScript,
+        ExperimentNotebook, ExperimentTUI, or ExperimentNode instead.
 
     You can provide an experiment design to use for creating new experiments,
     or an existing experiment to continue.
