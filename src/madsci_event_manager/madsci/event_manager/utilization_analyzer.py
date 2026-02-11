@@ -849,8 +849,9 @@ class UtilizationAnalyzer:
         # Process events chronologically
         sorted_events = sorted(
             events,
-            key=lambda e: self._parse_timestamp_utc(e.get("event_timestamp"))
-            or datetime.min,
+            key=lambda e: (
+                self._parse_timestamp_utc(e.get("event_timestamp")) or datetime.min
+            ),
         )
 
         for event in sorted_events:
@@ -1031,8 +1032,9 @@ class UtilizationAnalyzer:
         """Sort events by timestamp."""
         return sorted(
             events,
-            key=lambda e: self._parse_timestamp_utc(e.get("event_timestamp"))
-            or datetime.min,
+            key=lambda e: (
+                self._parse_timestamp_utc(e.get("event_timestamp")) or datetime.min
+            ),
         )
 
     def _process_single_event(
@@ -1318,42 +1320,45 @@ class UtilizationAnalyzer:
 
         return workflows
 
+    def _extract_author(self, event_data: Dict) -> Optional[str]:
+        """Extract author from event data, supporting both flat and nested formats."""
+        # Flat format (new): author directly in event_data
+        author_value = event_data.get("author")
+        if author_value and isinstance(author_value, str) and author_value.strip():
+            return author_value.strip()
+
+        # Nested format (legacy): author in definition_metadata or workflow_definition_metadata
+        for key in ("definition_metadata", "workflow_definition_metadata"):
+            metadata = event_data.get(key)
+            if isinstance(metadata, dict):
+                author_value = metadata.get("author")
+                if (
+                    author_value
+                    and isinstance(author_value, str)
+                    and author_value.strip()
+                ):
+                    return author_value.strip()
+
+        return None
+
+    def _extract_workflow_name(self, event_data: Dict) -> str:
+        """Extract workflow name from event data."""
+        for field in ("name", "workflow_name"):
+            value = event_data.get(field)
+            if value and isinstance(value, str):
+                return value
+        return "Unknown"
+
     def _get_or_create_workflow(
         self, workflows: Dict[str, Dict], event: Dict, workflow_id: str
     ) -> Dict[str, Any]:
         """Get existing workflow or create new one."""
         if workflow_id not in workflows:
             event_data = event.get("event_data", {})
-
-            # Safely extract workflow name
-            workflow_name = "Unknown"
-            if event_data.get("name") and isinstance(event_data["name"], str):
-                workflow_name = event_data["name"]
-            elif event_data.get("workflow_name") and isinstance(
-                event_data["workflow_name"], str
-            ):
-                workflow_name = event_data["workflow_name"]
-
-            # Safely extract author
-            author = None
-            workflow_definition_metadata = event_data.get(
-                "workflow_definition_metadata"
-            )
-            if isinstance(workflow_definition_metadata, dict):
-                author_value = workflow_definition_metadata.get("author")
-                if author_value and isinstance(author_value, str):
-                    author = author_value.strip() or None
-
-            # Fallback to direct author field for backward compatibility
-            if not author:
-                author_value = event_data.get("author")
-                if author_value and isinstance(author_value, str):
-                    author = author_value.strip() or None
-
             workflows[workflow_id] = {
                 "workflow_id": str(workflow_id),
-                "workflow_name": str(workflow_name),
-                "author": author,
+                "workflow_name": self._extract_workflow_name(event_data),
+                "author": self._extract_author(event_data),
                 "start_time": None,
                 "end_time": None,
                 "status": "unknown",
@@ -1368,68 +1373,38 @@ class UtilizationAnalyzer:
         event_type = str(event.get("event_type", "")).lower()
         event_data = event.get("event_data", {})
 
-        # Extract author from multiple locations if not already set
         if not workflow.get("author"):
-            author = None
-
-            # Try new structure (workflow_definition_metadata.author)
-            workflow_definition_metadata = event_data.get(
-                "workflow_definition_metadata"
-            )
-            if isinstance(workflow_definition_metadata, dict):
-                author_value = workflow_definition_metadata.get("author")
-                if author_value and isinstance(author_value, str):
-                    author = author_value.strip() or None
-
-            # Fallback to old structure (direct author field)
-            if not author:
-                author_value = event_data.get("author")
-                if author_value and isinstance(author_value, str):
-                    author = author_value.strip() or None
-
+            author = self._extract_author(event_data)
             if author:
                 workflow["author"] = author
 
-        # Process different event types
         if "start" in event_type:
             workflow["start_time"] = event["parsed_timestamp"]
             workflow["status"] = "started"
         elif "complete" in event_type:
             workflow["end_time"] = event["parsed_timestamp"]
-
-            # Extract status from the new workflow structure
-            status = self._extract_workflow_completion_status(event_data)
-            workflow["status"] = status
-
+            workflow["status"] = self._extract_workflow_completion_status(event_data)
             self._set_workflow_duration(workflow, event_data)
 
     def _extract_workflow_completion_status(self, event_data: Dict) -> str:
         """Extract the completion status from workflow event data."""
+        status = event_data.get("status")
 
-        # Try to get status from the nested status object (new structure)
-        status_obj = event_data.get("status")
+        # Flat format (new): status is a simple string
+        if isinstance(status, str):
+            return status
 
-        if isinstance(status_obj, dict):
-            # Check completion states in order of preference
-            status_checks = ["completed", "failed", "cancelled", "running"]
+        # Nested format (legacy): status is a dict with boolean flags
+        if isinstance(status, dict):
+            for flag in ("completed", "failed", "cancelled", "running"):
+                if status.get(flag):
+                    return flag
 
-            # First check direct boolean flags
-            for status in status_checks:
-                if status_obj.get(status):
-                    return status
+            description = status.get("description", "").lower()
+            for flag in ("completed", "failed", "cancelled", "running"):
+                if flag in description:
+                    return flag
 
-            # Fallback to description parsing
-            description = status_obj.get("description", "").lower()
-            for status in status_checks:
-                if status in description:
-                    return status
-
-        # Fallback to direct status field (old structure)
-        direct_status = event_data.get("status")
-        if isinstance(direct_status, str):
-            return direct_status
-
-        # Default fallback for completion events
         return "completed"
 
     def _set_workflow_duration(

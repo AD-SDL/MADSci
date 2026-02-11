@@ -1,7 +1,6 @@
 """MADSci Workcell Manager using AbstractManagerBase."""
 
 import json
-import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, ClassVar, Optional, Union
@@ -457,7 +456,6 @@ class WorkcellManager(
                 wf_def = WorkflowDefinition.model_validate(workflow_definition)
 
             except Exception as e:
-                traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
             return self.state_handler.save_workflow_definition(
                 workflow_definition=wf_def,
@@ -471,7 +469,6 @@ class WorkcellManager(
                 error=str(e),
                 exc_info=True,
             )
-            traceback.print_exc()
             raise HTTPException(
                 status_code=500,
                 detail=f"Error saving workflow definition: {e}",
@@ -498,7 +495,6 @@ class WorkcellManager(
         try:
             return self.state_handler.get_workflow_definition(workflow_definition_id)
         except Exception as e:
-            traceback.print_exc()
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @post("/workflow")
@@ -537,7 +533,6 @@ class WorkcellManager(
                 wf_def = self.state_handler.get_workflow_definition(str(workflow_id))
 
             except Exception as e:
-                traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
             ownership_info = (
@@ -592,11 +587,12 @@ class WorkcellManager(
                         self.state_handler.set_active_workflow(wf)
                         self.state_handler.enqueue_workflow(wf.workflow_id)
 
-                    self.logger.log(
-                        Event(
-                            event_type=EventType.WORKFLOW_START,
-                            event_data=wf.model_dump(mode="json"),
-                        )
+                    self.logger.info(
+                        "Workflow start successful",
+                        event_type=EventType.WORKFLOW_START,
+                        workflow_name=wf.name,
+                        workflow_id=wf.workflow_id,
+                        workflow_definition_id=workflow_definition_id,
                     )
                     return wf
 
@@ -610,7 +606,6 @@ class WorkcellManager(
                 error=str(e),
                 exc_info=True,
             )
-            traceback.print_exc()
             raise HTTPException(
                 status_code=500,
                 detail=f"Error starting workflow: {e}",
