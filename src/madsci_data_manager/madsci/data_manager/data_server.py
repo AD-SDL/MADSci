@@ -171,6 +171,23 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
             object_storage_settings=self._object_storage_settings,
         )
 
+    @staticmethod
+    def _cleanup_temp_file(path: Path) -> None:
+        """Remove a temporary file (sync helper for async methods)."""
+        path.unlink()
+
+    @staticmethod
+    def _get_storage_path(base_path: str, time: datetime) -> Path:
+        """Resolve and create the date-based storage path (sync helper for async methods)."""
+        path = (
+            Path(base_path).expanduser()
+            / str(time.year)
+            / str(time.month)
+            / str(time.day)
+        )
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     @post("/datapoint")
     async def create_datapoint(
         self, datapoint: Annotated[str, Form()], files: list[UploadFile] = []
@@ -217,7 +234,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
                         )
 
                         # Clean up temporary file
-                        temp_path.unlink()
+                        self._cleanup_temp_file(temp_path)
 
                         # If upload was successful, store object storage information in database
                         if object_storage_info:
@@ -237,13 +254,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
                         )
                     # Fallback to local storage
                     time = datetime.now()
-                    path = (
-                        Path(self.settings.file_storage_path).expanduser()
-                        / str(time.year)
-                        / str(time.month)
-                        / str(time.day)
-                    )
-                    path.mkdir(parents=True, exist_ok=True)
+                    path = self._get_storage_path(self.settings.file_storage_path, time)
                     final_path = path / (
                         datapoint_obj.datapoint_id + "_" + file.filename
                     )

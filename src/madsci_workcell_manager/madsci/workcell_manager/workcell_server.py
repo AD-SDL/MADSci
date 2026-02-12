@@ -38,8 +38,10 @@ from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
+    cancel_workflow,
     check_parameters,
     create_workflow,
+    pause_workflow,
     save_workflow_files,
 )
 from pymongo.synchronous.database import Database
@@ -373,46 +375,68 @@ class WorkcellManager(
 
     @post("/workflow/{workflow_id}/pause")
     def pause_workflow(self, workflow_id: str) -> Workflow:
-        """Pause a specific workflow."""
+        """Pause a running workflow."""
         with self.state_handler.wc_state_lock():
-            wf = self.state_handler.get_active_workflow(workflow_id)
-            if wf.status.active:
-                if wf.status.running:
-                    self.send_admin_command_to_node(
-                        "pause", wf.steps[wf.status.current_step_index].node
-                    )
-                wf.status.paused = True
-                self.state_handler.set_active_workflow(wf)
+            wf = self.state_handler.get_workflow(workflow_id)
+            wf = pause_workflow(wf)
 
-        return self.state_handler.get_active_workflow(workflow_id)
+            if 0 <= wf.status.current_step_index < len(wf.steps):
+                node_name = wf.steps[wf.status.current_step_index].node
+                try:
+                    self.send_admin_command_to_node("pause", node_name)
+                except HTTPException:
+                    self.logger.warning(
+                        "Pause not supported by node",
+                        node_name=node_name,
+                        exc_info=True,
+                    )
+            self.state_handler.set_active_workflow(wf)
+
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/resume")
     def resume_workflow(self, workflow_id: str) -> Workflow:
         """Resume a paused workflow."""
         with self.state_handler.wc_state_lock():
-            wf = self.state_handler.get_active_workflow(workflow_id)
+            wf = self.state_handler.get_workflow(workflow_id)
             if wf.status.paused:
-                if wf.status.running:
-                    self.send_admin_command_to_node(
-                        "resume", wf.steps[wf.status.current_step_index].node
-                    )
-                wf.status.paused = False
+                index = wf.status.current_step_index
+                wf.status.reset(index)
+                if 0 <= wf.status.current_step_index < len(wf.steps):
+                    try:
+                        self.send_admin_command_to_node(
+                            "resume", wf.steps[wf.status.current_step_index].node
+                        )
+                    except HTTPException:
+                        self.logger.warning(
+                            "Resume not supported by node",
+                            node_name=wf.steps[wf.status.current_step_index].node,
+                            exc_info=True,
+                        )
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.enqueue_workflow(wf.workflow_id)
-        return self.state_handler.get_active_workflow(workflow_id)
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/cancel")
     def cancel_workflow(self, workflow_id: str) -> Workflow:
         """Cancel a specific workflow."""
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
-            if wf.status.running:
-                self.send_admin_command_to_node(
-                    "cancel", wf.steps[wf.status.current_step_index].node
-                )
-            wf.status.cancelled = True
+            wf = cancel_workflow(wf)
+
+            if 0 <= wf.status.current_step_index < len(wf.steps):
+                node_name = wf.steps[wf.status.current_step_index].node
+                try:
+                    self.send_admin_command_to_node("cancel", node_name)
+                except HTTPException:
+                    self.logger.warning(
+                        "Cancel not supported by this node",
+                        node_name=node_name,
+                        exc_info=True,
+                    )
             self.state_handler.set_active_workflow(wf)
-        return self.state_handler.get_active_workflow(workflow_id)
+
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/retry")
     def retry_workflow(self, workflow_id: str, index: int = -1) -> Workflow:
@@ -422,6 +446,8 @@ class WorkcellManager(
             if wf.status.terminal:
                 if index < 0:
                     index = wf.status.current_step_index
+                if wf.status.completed:
+                    index = 0
                 wf.status.reset(index)
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.delete_archived_workflow(wf.workflow_id)
@@ -431,7 +457,7 @@ class WorkcellManager(
                     status_code=400,
                     detail="Workflow is not in a terminal state, cannot retry",
                 )
-        return self.state_handler.get_active_workflow(workflow_id)
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow_definition")
     async def submit_workflow_definition(
