@@ -95,7 +95,7 @@ class LiquidHandlerConfig(RestNodeConfig):
     device_number: int = 0
     """The device number of the liquid handler (for multi-device setups)."""
 
-    wait_time: float = 20.0
+    wait_time: float = 10.0
     """Time to wait while running an action, in seconds (simulates real hardware timing)."""
 
 

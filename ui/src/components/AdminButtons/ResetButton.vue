@@ -55,7 +55,7 @@ import { ref, watchEffect } from 'vue';
     watchEffect(() => {
         if (props.node) {
             // Determine if the node is able to be reset (if actively running something)
-            if (props.node_status == 'BUSY') {
+            if (props.node_status == 'busy' || props.node_status == 'running') {
                 canReset.value = false
                 //user should pause or stop running action before resetting
             }

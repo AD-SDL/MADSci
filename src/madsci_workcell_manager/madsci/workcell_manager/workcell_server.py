@@ -35,11 +35,11 @@ from madsci.workcell_manager.workflow_utils import (
     check_parameters,
     create_workflow,
     save_workflow_files,
+    cancel_workflow,
+    pause_workflow,
 )
 from pymongo.synchronous.database import Database
 from ulid import ULID
-import threading
-import time
 
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -246,8 +246,6 @@ class WorkcellManager(
     ) -> AdminCommandResponse:
         """Send admin command to a node."""
         node = self.state_handler.get_node(node)
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nworkcell_server.py: (send_admin_command_to_node) Posting admin command to node. " + datetime.now().strftime("%h:%M:%S"))
         if command in node.info.capabilities.admin_commands:
             client = find_node_client(node.node_url)
             return client.send_admin_command(command)
@@ -277,52 +275,19 @@ class WorkcellManager(
     
     @post("/workflow/{workflow_id}/pause")
     def pause_workflow(self, workflow_id: str) -> Workflow:
-        """Test background polling"""
-        pause_thread = threading.Thread(
-            target=self._pause_workflow_background,
-            args=(workflow_id,),
-            daemon=True
-        )
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nworkcell_server.py: (pause_workflow) Pause workflow thread starting. " + datetime.now().strftime("%h:%M:%S"))
-        pause_thread.start()
-        return self.state_handler.get_workflow(workflow_id)
-    
-    def _pause_workflow_background(self, workflow_id: str) -> None:
-        max_retries = 100
-        retry_count = 0
-        poll_interval = 0.5
+        with self.state_handler.wc_state_lock():
+            wf = self.state_handler.get_workflow(workflow_id)
+            wf = pause_workflow(wf)
+            self.state_handler.set_active_workflow(wf)
 
-        while retry_count < max_retries:
+            node_name = wf.steps[wf.status.current_step_index].node
             try:
-                with self.state_handler.wc_state_lock():
-                    wf = self.state_handler.get_workflow(workflow_id)
-                    if not wf.status.active:
-                        self.logger.log(f"Workflow {workflow_id} already terminal or paused. Pause complete.")
-                        return
-                    if wf.status.active and 0 <= wf.status.current_step_index < len(wf.steps):
-                        current_node = wf.steps[wf.status.current_step_index].node
-                        try:
-                            response = self.send_admin_command_to_node("pause", current_node)
-                            if response.success:
-                                with open("notes.txt", "a", encoding="utf-8") as f:
-                                    f.write("\nworkcell_server.py: (_pause_workflow_background) Pause thread response successful. " + datetime.now().strftime("%h:%M:%S"))
-                                self.state_handler.set_active_workflow(wf)
-                                self.logger.log(f"Workflow {workflow_id} paused on node {current_node}.")
-                                return
-                            else:
-                                self.logger.log(f"Pause on node {current_node} failed: {response.errors}.")
-                        except Exception as e:
-                            self.logger.error(f"Error sending pause to node {current_node}: {e}.")
-                        retry_count += 1
-                    else:
-                        self.logger.log(f"Workflow {workflow_id} not active. Stopping pause attempts.")
-                        return
-            except Exception as e:
-                self.logger.error(f"Error in pause background task: {e}.")
-                retry_count += 1
-            time.sleep(poll_interval)
-        self.logger.warning(f"Workflow {workflow_id} exceeded max pause retries.")
+                self.send_admin_command_to_node("pause", node_name)
+            except HTTPException as e:
+                self.logger.warning(f"Pause not supported by node {node_name}: {e.detail}")
+            self.state_handler.set_active_workflow(wf)
+        
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/resume")
     def resume_workflow(self, workflow_id: str) -> Workflow:
@@ -330,8 +295,6 @@ class WorkcellManager(
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             if wf.status.paused:
-                with open("notes.txt", "a", encoding="utf-8") as f:
-                    f.write("\nworkcell_server.py: (resume_workflow) Resume called on currently paused workflow - setting active and enqueueing. " + datetime.now().strftime("%h:%M:%S"))
                 index = wf.status.current_step_index
                 wf.status.reset(index)
                 self.send_admin_command_to_node(
@@ -343,53 +306,20 @@ class WorkcellManager(
 
     @post("/workflow/{workflow_id}/cancel")
     def cancel_workflow(self, workflow_id: str) -> Workflow:
-        """Test background polling"""
-        cancel_thread = threading.Thread(
-            target=self._cancel_workflow_background,
-            args=(workflow_id,),
-            daemon=True
-        )
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nworkcell_server.py: (cancel_workflow) Cancel workflow thread starting. " + datetime.now().strftime("%h:%M:%S"))
-        cancel_thread.start()
-        return self.state_handler.get_workflow(workflow_id)
-    
-    def _cancel_workflow_background(self, workflow_id: str) -> None:
-        max_retries = 100
-        retry_count = 0
-        poll_interval = 0.5
+        """Cancel a specific workflow."""
+        with self.state_handler.wc_state_lock():
+            wf = self.state_handler.get_workflow(workflow_id)
+            wf = cancel_workflow(wf)
+            self.state_handler.set_active_workflow(wf)
 
-        while retry_count < max_retries:
+            node_name = wf.steps[wf.status.current_step_index].node
             try:
-                with self.state_handler.wc_state_lock():
-                    wf = self.state_handler.get_workflow(workflow_id)
-                    if wf.status.terminal:
-                        self.logger.log(f"Workflow {workflow_id} already terminal. Cancel complete.")
-                        return
-                    if wf.status.active and 0 <= wf.status.current_step_index < len(wf.steps):
-                        current_node = wf.steps[wf.status.current_step_index].node
-                        try:
-                            response = self.send_admin_command_to_node("cancel", current_node)
-                            if response.success:
-                                with open("notes.txt", "a", encoding="utf-8") as f:
-                                    f.write("\nworkcell_server.py: (_cancel_workflow_background) Cancel thread response successful. " + datetime.now().strftime("%h:%M:%S"))
-                                #wf = cancel_workflow(wf)
-                                self.state_handler.set_active_workflow(wf)
-                                self.logger.log(f"Workflow {workflow_id} cancelled on node {current_node}.")
-                                return
-                            else:
-                                self.logger.log(f"Cancel on node {current_node} failed: {response.errors}.")
-                        except Exception as e:
-                            self.logger.error(f"Error sending cancel to node {current_node}: {e}.")
-                        retry_count += 1
-                    else:
-                        self.logger.log(f"Workflow {workflow_id} not active. Stopping cancel attempts.")
-                        return
-            except Exception as e:
-                self.logger.error(f"Error in cancel background task: {e}.")
-                retry_count += 1
-            time.sleep(poll_interval)
-        self.logger.warning(f"Workflow {workflow_id} exceeded max cancel retries.")
+                self.send_admin_command_to_node("cancel", node_name)
+            except HTTPException as e:
+                self.logger.warning(f"Cancel not supported by node {node_name}: {e.detail}")
+            self.state_handler.set_active_workflow(wf)
+            
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/retry")
     def retry_workflow(self, workflow_id: str, index: int = -1) -> Workflow:
@@ -400,7 +330,7 @@ class WorkcellManager(
                 if index < 0:
                     index = wf.status.current_step_index
                 if wf.status.completed:
-                    index = 0 # *** If workflow is done and completed (not cancelled/failed...), retry wf from beginning.
+                    index = 0 
                 wf.status.reset(index)
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.delete_archived_workflow(wf.workflow_id)
@@ -410,7 +340,7 @@ class WorkcellManager(
                     status_code=400,
                     detail="Workflow is not in a terminal state, cannot retry",
                 )
-        return self.state_handler.get_active_workflow(workflow_id)
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow_definition")
     async def submit_workflow_definition(

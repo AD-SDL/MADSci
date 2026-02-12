@@ -433,31 +433,48 @@ def get_workflow_inputs_directory(
     """returns a directory name for the workflows inputs"""
     return Path(working_directory).expanduser() / "Workflows" / workflow_id / "Inputs"
 
+def pause_workflow(wf: Workflow) -> Workflow:
+    """Cancels the workflow run"""
+
+    with open("notes.txt", "a", encoding="utf-8") as f:
+        f.write("\nworkflow_utils.py: (pause_workflow) Running pause_workflow. " + datetime.now().strftime("%h:%M:%S"))
+
+    wf.status.paused = True
+    wf.status.running = False
+
+    i = wf.status.current_step_index
+    if 0 <= i < len(wf.steps):
+        step = wf.steps[i]
+        step.status = ActionStatus.PAUSED
+        step.result = ActionResult(status=ActionStatus.PAUSED)
+
+    return wf
 
 def cancel_workflow(wf: Workflow) -> Workflow:
     """Cancels the workflow run"""
+
     with open("notes.txt", "a", encoding="utf-8") as f:
         f.write("\nworkflow_utils.py: (cancel_workflow) Running cancel_workflow. " + datetime.now().strftime("%h:%M:%S"))
-    # Handle WF status.
-    # wf.status.cancelled = True
-    # wf.status.running = False
 
-    # Handle WF current action/step.
-    # current_step = wf.steps[wf.step_index]
-    # current_step.status = ActionStatus.CANCELLED
-    # current_step.result = ActionResult(status=ActionStatus.CANCELLED)
-    # if not current_step.end_time:
-    #     current_step.end_time = datetime.now()
-    # if current_step.start_time and current_step.end_time:
-    #     current_step.duration = current_step.end_time - current_step.start_time
+    wf.status.cancelled = True
+    wf.status.running = False
 
-    # handle start/end/duration.
-    # if not wf.end_time:
-    #     wf.end_time = datetime.now()
+    i = wf.status.current_step_index
+    if 0 <= i < len(wf.steps):
+        step = wf.steps[i]
+        step.status = ActionStatus.CANCELLED
+        step.result = ActionResult(status=ActionStatus.CANCELLED)
+        if not step.end_time:
+            step.end_time = datetime.now()
+        if step.start_time and step.end_time:
+            step.duration = step.end_time - step.start_time
+
+    if not wf.end_time:
+        wf.end_time = datetime.now()
     return wf
 
 def cancel_active_workflows(state_handler: WorkcellStateHandler) -> None:
     """Cancels all currently running workflow runs"""
     for wf in state_handler.get_active_workflows().values():
         if wf.status.active:
-            cancel_workflow(wf, state_handler=state_handler)
+            cancel_workflow(wf)
