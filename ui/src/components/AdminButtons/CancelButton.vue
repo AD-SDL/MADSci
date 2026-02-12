@@ -28,6 +28,8 @@ import { ref, watchEffect } from 'vue';
 const props = defineProps<{
     node?: string;
     node_status?: any;
+    wf_id?: string;
+    wf_status?: any;
 }>();
 
 const cancel_url = ref('')
@@ -40,6 +42,10 @@ watchEffect(() => {
         cancel_url.value = urls.value.workcell_server_url.concat('admin/cancel/'.concat(props.node))
         hoverText.value = "Cancel Node Action"
     }
+    else if (props.wf_id) {
+        cancel_url.value = urls.value.workcell_server_url.concat('workflow/'.concat(props.wf_id).concat('/cancel/'))
+        hoverText.value = "Cancel Workflow"
+    }
     else {
         cancel_url.value = urls.value.workcell_server_url.concat('admin/cancel')
         hoverText.value = "Cancel All Workflows"
@@ -49,7 +55,15 @@ watchEffect(() => {
 watchEffect(() => {
     // Determine if the node is cancelable (if actively running something)
     if (props.node) {
-        if (props.node_status == 'BUSY' || props.node_status == 'PAUSED') {
+        if (props.node_status == 'busy' || props.node_status == 'running' || props.node_status == 'paused') {
+            canCancel.value = true
+        }
+        else {
+            canCancel.value = false
+        }
+    }
+    else if (props.wf_id) {
+        if (props.wf_status["active"] || props.wf_status["paused"]) {
             canCancel.value = true
         }
         else {

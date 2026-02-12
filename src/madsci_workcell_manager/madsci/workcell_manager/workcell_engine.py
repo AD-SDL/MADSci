@@ -407,6 +407,8 @@ class Engine:
         interval = 1.0
         retry_count = 0
         while not response.status.is_terminal:
+            with self.state_handler.wc_state_lock():
+                self.state_handler.get_active_workflow(wf.workflow_id)
             if not check_node_capability(
                 node_info=node.info, client=client, capability="get_action_result"
             ) and not check_node_capability(
@@ -427,10 +429,18 @@ class Engine:
                 interval = interval * 1.5 if interval < 10.0 else 10.0
                 response = client.get_action_result(action_id)
                 self.handle_response(wf, step, response)
-                if (
-                    response.status.is_terminal
-                    or response.status == ActionStatus.UNKNOWN
+                if response.status.is_terminal or response.status in (
+                    ActionStatus.UNKNOWN,
+                    ActionStatus.PAUSED,
                 ):
+                    self.logger.debug(
+                        "Action response is terminal or paused",
+                        event_type=EventType.ACTION_STATUS_CHANGE,
+                        workflow_id=wf.workflow_id,
+                        step_id=step.step_id,
+                        action_id=action_id,
+                        action_status=str(response.status),
+                    )
                     # * If the action is terminal or unknown, break out of the loop
                     # * If the action is unknown, that means the node does not have a record of the action
                     break
@@ -504,8 +514,22 @@ class Engine:
                 wf.status.failed = True
                 wf.end_time = datetime.now()
             elif step.status == ActionStatus.CANCELLED:
+                self.logger.debug(
+                    "Step cancelled, setting workflow status to cancelled",
+                    event_type=EventType.WORKFLOW_STEP_COMPLETE,
+                    workflow_id=workflow_id,
+                    step_id=step.step_id,
+                )
                 wf.status.cancelled = True
                 wf.end_time = datetime.now()
+            elif step.status == ActionStatus.PAUSED:
+                self.logger.debug(
+                    "Step paused, setting workflow status to paused",
+                    event_type=EventType.WORKFLOW_STEP_COMPLETE,
+                    workflow_id=workflow_id,
+                    step_id=step.step_id,
+                )
+                wf.status.paused = True
             elif step.status == ActionStatus.NOT_READY:
                 pass
             elif step.status == ActionStatus.UNKNOWN:

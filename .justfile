@@ -91,7 +91,8 @@ coverage-xml:
 
 # Build docker images
 dcb: env
-  @docker compose build
+  @docker compose build workcell_manager
+  @docker compose build lab_manager
 
 # Start the example lab
 up *args: env

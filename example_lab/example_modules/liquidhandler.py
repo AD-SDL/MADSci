@@ -20,17 +20,74 @@ Key Concepts Demonstrated:
 This serves as a template for creating real instrument drivers.
 """
 
+import functools
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
+from madsci.common.types.action_types import ActionCancelled, ActionPaused
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types import Pool, Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
+
+
+# ***
+class CancelledError(Exception):
+    """Raised when an action is cancelled via the cancel admin command."""
+
+
+class PausedError(Exception):
+    """Raised when an action is paused via the pause admin command."""
+
+
+def interruptable(action_fn: Any) -> Any:
+    """Decorator that makes an action interruptable by cancel/pause events."""
+
+    @functools.wraps(action_fn)
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        self._cancel_event.clear()
+        self._pause_event.clear()
+        self.logger.debug("Cancel and pause events cleared in interruptable wrapper")
+        result_container: dict[str, Any] = {"value": None, "error": None}
+
+        def run() -> None:
+            try:
+                self.logger.debug("Running action in interruptable wrapper")
+                result_container["value"] = action_fn(self, *args, **kwargs)
+            except CancelledError:
+                self.logger.debug("CancelledError raised in interruptable wrapper")
+                result_container["value"] = self._cancel_result()
+            except PausedError:
+                self.logger.debug("PausedError raised in interruptable wrapper")
+                result_container["value"] = self._pause_result()
+            except Exception as e:
+                result_container["error"] = e
+
+        t = threading.Thread(target=run, daemon=True)
+        t.start()
+        while t.is_alive():
+            if self._cancel_event.is_set() or self._pause_event.is_set():
+                self.logger.debug("Cancel or pause event set, returning from wrapper")
+                t.join(timeout=2.0)
+                if t.is_alive():
+                    self.logger.warning("Action thread still running after interrupt")
+                return (
+                    self._cancel_result()
+                    if self._cancel_event.is_set()
+                    else self._pause_result()
+                )
+            time.sleep(0.05)
+
+        if result_container["error"] is not None:
+            raise result_container["error"]
+        return result_container["value"]
+
+    return wrapper
 
 
 class LiquidHandlerConfig(RestNodeConfig):
@@ -85,19 +142,9 @@ class LiquidHandlerInterface:
         self.device_number = device_number
 
     def run_command(self, command: str) -> None:
-        """
-        Execute a command on the liquid handler hardware.
-
-        In a real implementation, this would send commands to the actual
-        liquid handler via the appropriate communication protocol.
-
-        Args:
-            command: Hardware command string to execute
-        """
-        self.logger.log(
-            f"Running command {command} on device number {self.device_number}."
-        )
-        time.sleep(2)  # Simulate hardware command execution time
+        """Run a command on the liquid handler."""
+        self.logger.log(f"Executing hardware command: {command}")
+        time.sleep(0.1)
 
 
 class LiquidHandlerNode(RestNode):
@@ -140,6 +187,42 @@ class LiquidHandlerNode(RestNode):
 
     # Pydantic model class for configuration validation
     config_model = LiquidHandlerConfig
+
+    def __init__(self) -> None:
+        """Initialize the liquid handler node with cancel/pause event support."""
+        super().__init__()
+        self._cancel_event = threading.Event()
+        self._pause_event = threading.Event()
+
+    def _cancel_result(self) -> ActionCancelled:
+        self.logger.debug("Returning cancelled action response")
+        return ActionCancelled()
+
+    def _pause_result(self) -> ActionPaused:
+        self.logger.debug("Returning paused action response")
+        return ActionPaused()
+
+    def _checkpoint(self) -> None:
+        if self._cancel_event.is_set():
+            self.logger.debug("Cancel event set, raising CancelledError")
+            raise CancelledError()
+        if self._pause_event.is_set():
+            self.logger.debug("Pause event set, raising PausedError")
+            raise PausedError()
+
+    def _wait(self, seconds: float, tick: float = 0.1) -> None:
+        end = time.monotonic() + seconds
+        while True:
+            self._checkpoint()
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                return
+            sleep_time = min(tick, remaining)
+            # Wait on cancel; if it doesn't fire, also check pause
+            if self._cancel_event.wait(timeout=sleep_time / 2):
+                self._checkpoint()
+            if self._pause_event.wait(timeout=sleep_time / 2):
+                self._checkpoint()
 
     def startup_handler(self) -> None:
         """
@@ -279,6 +362,7 @@ class LiquidHandlerNode(RestNode):
             }
 
     @action
+    @interruptable
     def run_command(self, command: str) -> str:
         """
         Execute a direct hardware command on the liquid handler.
@@ -296,11 +380,13 @@ class LiquidHandlerNode(RestNode):
             POST /actions/run_command {"command": "aspirate 100 ul"}
             Response: "aspirate 100 ul"
         """
+        self.logger.debug("Running run_command action", command=command)
         self.liquid_handler.run_command(command)
-        time.sleep(self.config.wait_time)
+        self._wait(seconds=self.config.wait_time)
         return command
 
     @action
+    @interruptable
     def run_protocol(self, protocol: Path) -> dict:
         """
         Execute a protocol file on the liquid handler.
@@ -320,10 +406,11 @@ class LiquidHandlerNode(RestNode):
             Response: {"protocol_name": "pcr_setup.json"}
         """
         self.logger.log(f"Executing protocol: {protocol}")
-        time.sleep(self.config.wait_time)
+        self._wait(self.config.wait_time)
         return {"protocol_name": str(protocol.name)}
 
     @action
+    @interruptable
     def deck_transfer(
         self, source_location: LocationArgument, target_location: LocationArgument
     ) -> None:
@@ -360,7 +447,7 @@ class LiquidHandlerNode(RestNode):
         self.liquid_handler.run_command(
             f"move_labware {source_location} {target_location}"
         )
-        time.sleep(self.config.wait_time)
+        self._wait(self.config.wait_time)
 
         # Update resource tracking: remove from source, add to target
         transferred_resource = self.resource_client.pop(source_location.resource_id)[0]
@@ -380,6 +467,25 @@ class LiquidHandlerNode(RestNode):
             AdminCommandResponse: Location data [x, y, z, rotation] in lab coordinates
         """
         return AdminCommandResponse(data=[0, 0, 0, 0])
+
+    def cancel(self) -> AdminCommandResponse:
+        """Cancel the currently running action."""
+        self.logger.debug("Setting cancel event")
+        self._cancel_event.set()
+        return AdminCommandResponse()
+
+    def pause(self) -> AdminCommandResponse:
+        """Pause the currently running action."""
+        self.logger.debug("Setting pause event and paused status")
+        self.node_status.paused = True
+        self._pause_event.set()
+        return AdminCommandResponse()
+
+    def resume(self) -> AdminCommandResponse:
+        """Resume a paused action."""
+        self.logger.debug("Resuming, setting paused status to False")
+        self.node_status.paused = False
+        return AdminCommandResponse()
 
 
 if __name__ == "__main__":

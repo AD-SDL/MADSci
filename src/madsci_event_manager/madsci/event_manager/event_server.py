@@ -702,6 +702,14 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
     # Backup Endpoints
     # ==========================================================================
 
+    def _get_backup_dir(self) -> Path:
+        """Resolve the backup directory path (sync helper for async methods)."""
+        return Path(str(self.settings.backup_dir)).expanduser()
+
+    def _backup_dir_exists(self, backup_dir: Path) -> bool:
+        """Check if backup directory exists (sync helper for async methods)."""
+        return backup_dir.exists()
+
     @post("/backup")
     async def create_backup(
         self,
@@ -723,7 +731,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
                 "event.backup.create",
                 attributes={"backup.description": request.description},
             ):
-                backup_dir = Path(str(self.settings.backup_dir)).expanduser()
+                backup_dir = self._get_backup_dir()
                 backup_settings = MongoDBBackupSettings(
                     mongo_db_url=self.settings.mongo_db_url,
                     database=self.settings.database_name,
@@ -771,10 +779,10 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
         """
         try:
             with self.span("event.backup.status"):
-                backup_dir = Path(str(self.settings.backup_dir)).expanduser()
+                backup_dir = self._get_backup_dir()
                 available_backups: List[Dict[str, Any]] = []
 
-                if backup_dir.exists():
+                if self._backup_dir_exists(backup_dir):
                     backup_settings = MongoDBBackupSettings(
                         mongo_db_url=self.settings.mongo_db_url,
                         database=self.settings.database_name,

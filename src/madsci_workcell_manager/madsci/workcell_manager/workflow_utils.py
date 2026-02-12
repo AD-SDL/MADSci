@@ -12,6 +12,7 @@ from fastapi import UploadFile
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.location_client import LocationClient
+from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.datapoint_types import FileDataPoint
 from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
@@ -444,11 +445,49 @@ def get_workflow_inputs_directory(
     return Path(working_directory).expanduser() / "Workflows" / workflow_id / "Inputs"
 
 
-def cancel_workflow(wf: Workflow, state_handler: WorkcellStateHandler) -> None:
-    """Cancels the workflow run"""
+def pause_workflow(wf: Workflow) -> Workflow:
+    """Pauses the workflow run."""
+    EventClient().debug(
+        "Pausing workflow",
+        workflow_id=wf.workflow_id,
+        workflow_name=wf.name,
+    )
+
+    wf.status.paused = True
+    wf.status.running = False
+
+    i = wf.status.current_step_index
+    if 0 <= i < len(wf.steps):
+        step = wf.steps[i]
+        step.status = ActionStatus.PAUSED
+        step.result = ActionResult(status=ActionStatus.PAUSED)
+
+    return wf
+
+
+def cancel_workflow(wf: Workflow) -> Workflow:
+    """Cancels the workflow run."""
+    EventClient().debug(
+        "Cancelling workflow",
+        workflow_id=wf.workflow_id,
+        workflow_name=wf.name,
+    )
+
     wf.status.cancelled = True
-    with state_handler.wc_state_lock():
-        state_handler.set_active_workflow(wf)
+    wf.status.running = False
+
+    i = wf.status.current_step_index
+    if 0 <= i < len(wf.steps):
+        step = wf.steps[i]
+        step.status = ActionStatus.CANCELLED
+        step.result = ActionResult(status=ActionStatus.CANCELLED)
+        if not step.end_time:
+            step.end_time = datetime.now()
+        if step.start_time and step.end_time:
+            step.duration = step.end_time - step.start_time
+
+    if not wf.end_time:
+        wf.end_time = datetime.now()
     return wf
 
 
@@ -456,4 +495,5 @@ def cancel_active_workflows(state_handler: WorkcellStateHandler) -> None:
     """Cancels all currently running workflow runs"""
     for wf in state_handler.get_active_workflows().values():
         if wf.status.active:
-            cancel_workflow(wf, state_handler=state_handler)
+            cancelled_wf = cancel_workflow(wf)
+            state_handler.set_active_workflow(cancelled_wf)

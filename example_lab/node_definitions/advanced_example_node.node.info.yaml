@@ -39,6 +39,19 @@ actions:
     accepts_var_kwargs: false
     var_args_schema: null
     var_kwargs_schema: null
+  stall:
+    name: stall
+    description: Stall a set amount of time.
+    args: {}
+    locations: {}
+    files: {}
+    results: {}
+    blocking: true
+    asynchronous: true
+    accepts_var_args: false
+    accepts_var_kwargs: false
+    var_args_schema: null
+    var_kwargs_schema: null
   return_json:
     name: return_json
     description: Return a JSON object
@@ -1287,6 +1300,7 @@ config:
   rate_limit_short_window: 1
   rate_limit_cleanup_interval: 300
   device_number: 0
+  wait_time: 2.0
 config_schema:
   description: Configuration for the advanced example node module.
   properties:
@@ -1396,5 +1410,9 @@ config_schema:
       default: 0
       title: Device Number
       type: integer
+    wait_time:
+      default: 2.0
+      title: Wait Time
+      type: number
   title: AdvancedExampleConfig
   type: object
