@@ -24,14 +24,14 @@ class LocationStateHandler:
     def __init__(
         self,
         settings: LocationManagerSettings,
+        manager_id: str,
         redis_connection: Optional[Any] = None,
-        manager_id: Optional[str] = None,
     ) -> None:
         """
         Initialize a LocationStateHandler.
         """
         self.settings = settings
-        self._manager_id = manager_id or settings.manager_id
+        self._manager_id = manager_id
         self._redis_host = settings.redis_host
         self._redis_port = settings.redis_port
         self._redis_password = settings.redis_password
@@ -54,7 +54,7 @@ class LocationStateHandler:
                 port=int(self._redis_port),
                 db=0,
                 decode_responses=True,
-                password=self._redis_password if self._redis_password else None,
+                password=self._redis_password or None,
             )
         return self._redis_connection
 

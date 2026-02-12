@@ -15,11 +15,15 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       name: Checkout code
+    - name: Install the latest version of uv
+      uses: astral-sh/setup-uv@v7
     - name: Setup PDM
       uses: pdm-project/setup-pdm@v3
       with:
-        python-version: 3.9
+        python-version: "3.10"
     - name: Install dependencies
+      env:
+        PDM_USE_UV: "True"
       run: pdm install
     - uses: pre-commit/action@v3.0.1
       name: Run Pre-Commit Checks

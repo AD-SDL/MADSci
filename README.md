@@ -6,6 +6,7 @@
 [![PyPI](https://github.com/AD-SDL/MADSci/actions/workflows/pypi.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pypi.yml)
 [![Pytests](https://github.com/AD-SDL/MADSci/actions/workflows/pytests.yml/badge.svg)](https://github.com/AD-SDL/MADSci/actions/workflows/pytests.yml)
 ![Coverage badge](https://raw.githubusercontent.com/AD-SDL/MADSci/python-coverage-comment-action-data/badge.svg)
+[![JOSS status](https://joss.theoj.org/papers/d554e38543529f08aa8ebaf068c17eec/status.svg)](https://joss.theoj.org/papers/d554e38543529f08aa8ebaf068c17eec)
 
 <img src="./assets/drawio/madsci_control_flow.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
@@ -22,6 +23,7 @@ MADSci is a modular, autonomous, and scalable framework for scientific discovery
 - **Event Management**, enabling distributed logging and event handling across every part of the autonomous lab.
 - **Data Management**, collecting and storing data created by instruments or analysis as part of an experiment.
 - **Location Management**, coordinating multiple different representations of locations in the laboratory and their interactions with resources and nodes.
+- **Observability**, with built-in OpenTelemetry integration for distributed tracing, metrics, and log correlation across the entire lab infrastructure.
 
 <img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
@@ -45,6 +47,11 @@ MADSci is made up of a number of different modular components, each of which can
 - [Resource Manager](./src/madsci_resource_manager/README.md): For tracking labware, assets, samples, and consumables in an automated or autonomous lab.
 - [Data Manager](./src/madsci_data_manager/README.md): handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis)
 - [Squid Lab Manager](./src/madsci_squid/README.md): a central lab configuration manager and dashboard provider for MADSci-powered labs.
+
+### Guides
+
+- [Logging and Event Context](./docs/guides/logging.md): Guide to MADSci's structured logging system and hierarchical context propagation.
+- [Observability](./example_lab/OBSERVABILITY.md): How to use the OpenTelemetry observability stack for distributed tracing, metrics, and logs.
 
 ## Installation
 
@@ -78,6 +85,8 @@ We provide pre-built Docker images for easy deployment:
 - **[ghcr.io/ad-sdl/madsci](https://github.com/orgs/AD-SDL/packages/container/package/madsci)**: Base image with all MADSci packages. Use as foundation for custom services.
 - **[ghcr.io/ad-sdl/madsci_dashboard](https://github.com/orgs/AD-SDL/packages/container/package/madsci_dashboard)**: Extends base image with web dashboard for lab management.
 
+For users new to docker, we recommend checking out our [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide)
+
 ### Quick Start
 
 Try MADSci with our complete example lab:
@@ -98,15 +107,15 @@ MADSci uses environment variables for configuration with hierarchical precedence
 - **Database connections**: MongoDB/PostgreSQL on localhost by default
 - **File storage**: Defaults to `~/.madsci/` subdirectories
 - **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
+- **OpenTelemetry**: Configurable per-manager with `*_OTEL_ENABLED`, `*_OTEL_ENDPOINT`, etc.
 
-See [Configuration.md](./Configuration.md) for comprehensive options and [example_lab/](./example_lab/) for working configurations.
+See [Configuration.md](./Configuration.md) for comprehensive options, [example_lab/](./example_lab/) for working configurations, and [OBSERVABILITY.md](./example_lab/OBSERVABILITY.md) for OpenTelemetry setup.
 
 ## Roadmap
 
 We're working on bringing the following additional components to MADSci:
 
 - **Auth Manager**: For handling authentication and user and group management for an autonomous lab.
-- **Transfer Manager**: For coordinating resource movement in a lab.
 
 ## Getting Started
 
@@ -147,78 +156,21 @@ client = WorkcellClient("http://localhost:8005")
 result = client.submit_workflow("path/to/workflow.yaml")
 ```
 
-## Developer Guide
+## Contributing
 
-### Prerequisites
+Interested in contributing to MADSci? We welcome all contributions, from bug reports to new features!
 
-- **Python 3.9+**: Required for all MADSci components
-- **[PDM](https://pdm-project.org/)**: For dependency management and virtual environments
-- **[Docker](https://docs.docker.com/engine/install/)**: Required for services and integration tests
-  - Alternatives: [Rancher Desktop](https://rancherdesktop.io/), [Podman](https://podman.io/)
-- **[just](https://github.com/casey/just)**: Task runner for development commands (note: commands are defined in the hidden `.justfile` in the repository root)
-- **Node.js/yarn**: Only needed for dashboard development
+See our [Contributing Guide](./CONTRIBUTING.md) for:
+- Development setup and prerequisites
+- Development commands and workflows
+- How to report bugs and request features
+- Pull request guidelines
+- Configuration best practices
 
-### Quick Setup
-
+For quick development setup:
 ```bash
-# Clone and initialize
 git clone https://github.com/AD-SDL/MADSci.git
 cd MADSci
-just init  # Installs all dependencies and sets up pre-commit hooks
-
-# See all available commands
-just list
-
-# Start example lab for testing
-just up
+just init  # Installs dependencies and sets up pre-commit hooks
+just up    # Start example lab for testing
 ```
-
-### Development Commands
-
-```bash
-# Testing
-pytest                    # Run all tests
-just test                 # Alternative test runner
-pytest -k workcell        # Run specific component tests
-
-# Code Quality
-just checks               # Run all pre-commit checks (ruff, formatting, etc.)
-ruff check               # Manual linting
-ruff format              # Manual formatting
-
-# Services
-just build               # Build Docker images
-just up                  # Start example lab
-just down               # Stop services
-
-# Dashboard Development
-cd ui/
-yarn dev                # Start Vue dev server
-yarn build              # Build for production
-```
-
-### Development Patterns
-
-**Manager Implementation:**
-Each manager service follows this structure:
-- Settings class inheriting from `MadsciBaseSettings`
-- FastAPI server with REST endpoints
-- Client class for programmatic interaction
-- Database models (SQLModel/Pydantic)
-
-**Testing:**
-- Integration tests use Docker containers via pytest-mock-resources
-- Component tests are in each package's `tests/` directory
-- Use `pytest -k EXPRESSION` to filter tests
-
-**Configuration:**
-- Environment variables with hierarchical precedence
-- Each manager has unique prefix (e.g., `WORKCELL_`, `EVENT_`)
-- See [Configuration.md](./Configuration.md) for full details
-
-### Dev Container Support
-
-For VS Code users, use the included [.devcontainer](./.devcontainer) for instant setup:
-- Automatic dependency installation
-- Pre-configured development environment
-- Docker services ready to run

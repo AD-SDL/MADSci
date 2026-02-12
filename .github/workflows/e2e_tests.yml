@@ -1,0 +1,134 @@
+name: End-to-End Tests
+
+on:
+  workflow_run:
+    workflows: ["Build Docker Images"]
+    types:
+      - completed
+  workflow_dispatch: # Run manually
+    inputs:
+      use_local_build:
+        description: 'Build images locally instead of pulling from registry'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ghcr.io
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: ${{ github.repository }}
+  DASHBOARD_IMAGE_NAME: ${{ github.repository }}_dashboard
+
+
+jobs:
+  e2e_tests:
+    runs-on: ubuntu-latest
+    # Only run if the docker workflow succeeded, or if triggered manually
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # For workflow_run events, checkout the commit that triggered the docker build
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Setup Just
+        uses: extractions/setup-just@v2
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tag
+        id: image-tag
+        run: |
+          # For workflow_run events, determine the tag based on the triggering event
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            EVENT="${{ github.event.workflow_run.event }}"
+            if [ "$EVENT" = "pull_request" ]; then
+              # For PRs, use pr-<number> format
+              # Extract PR number from the head_branch or use the pull_requests array
+              PR_NUMBER=$(echo '${{ toJSON(github.event.workflow_run.pull_requests) }}' | jq -r '.[0].number // empty')
+              if [ -n "$PR_NUMBER" ]; then
+                TAG="pr-$PR_NUMBER"
+              else
+                # Fallback to branch name
+                TAG=$(echo "${{ github.event.workflow_run.head_branch }}" | sed 's/\//-/g')
+              fi
+            else
+              # For push events, use the branch name
+              TAG=$(echo "${{ github.event.workflow_run.head_branch }}" | sed 's/\//-/g')
+            fi
+          else
+            # For manual triggers
+            TAG=$(echo "${{ github.ref_name }}" | sed 's/\//-/g')
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Using image tag: $TAG"
+
+      - name: Pull pre-built images from registry
+        if: ${{ github.event.inputs.use_local_build != 'true' }}
+        run: |
+          echo "Pulling images with tag: ${{ steps.image-tag.outputs.tag }}"
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}
+          docker pull ${{ env.REGISTRY }}/${{ env.DASHBOARD_IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}
+          # Tag as latest so docker-compose uses them
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.DASHBOARD_IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }} ${{ env.REGISTRY }}/${{ env.DASHBOARD_IMAGE_NAME }}:latest
+
+      - name: Build images locally (fallback or manual)
+        if: ${{ github.event.inputs.use_local_build == 'true' }}
+        run: |
+          docker compose build workcell_manager
+          docker compose build lab_manager
+
+      - name: example.env to .env
+        run: cp .env.example .env
+
+      - name: Set USER_ID and GROUP_ID in .env
+        run: |
+          echo "USER_ID=$(id -u)" >> .env
+          echo "GROUP_ID=$(id -g)" >> .env
+
+      - name: Ensure .madsci directory exists
+        run: mkdir -p ./.madsci
+
+      - name: Start example lab services and wait for startup
+        run: docker compose up -d && sleep 60
+      - name: Check service health
+        run: |
+          echo "=== Docker Compose Service Status ==="
+          docker compose ps
+          echo ""
+          echo "=== Checking Lab Manager Health ==="
+          curl -sf http://localhost:8000/health && echo "Lab Manager: OK" || echo "Lab Manager: FAILED or not ready"
+          echo ""
+          echo "=== Checking Event Manager Health ==="
+          curl -sf http://localhost:8001/health && echo "Event Manager: OK" || echo "Event Manager: FAILED or not ready"
+          echo ""
+          echo "=== Checking Workcell Manager Health ==="
+          curl -sf http://localhost:8005/health && echo "Workcell Manager: OK" || echo "Workcell Manager: FAILED or not ready"
+          echo ""
+          echo "=== Lab Manager Logs (last 30 lines) ==="
+          docker compose logs lab_manager --tail=30
+      - name: Run the experiment notebook
+        run: timeout 15m just e2e_tests
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Service Status ==="
+          docker compose ps
+          echo ""
+          echo "=== Lab Manager Logs ==="
+          docker compose logs lab_manager --tail=100
+          echo ""
+          echo "=== Event Manager Logs ==="
+          docker compose logs event_manager --tail=50
+          echo ""
+          echo "=== Workcell Manager Logs ==="
+          docker compose logs workcell_manager --tail=50

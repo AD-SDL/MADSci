@@ -8,6 +8,7 @@ from madsci.experiment_application import (
 )
 from pydantic import AnyUrl
 
+
 class ExampleApp(ExperimentApplication):
     """An Example Application"""
 
@@ -19,10 +20,11 @@ class ExampleApp(ExperimentApplication):
     def run_experiment(self) -> str:
         """main experiment function"""
 
-        workflow = self.workcell_client.submit_workflow(
+        self.workcell_client.submit_workflow(
             "./workflows/admin_commands_test.workflow.yaml",
         )
         return "test"
+
 
 if __name__ == "__main__":
     app = ExampleApp(

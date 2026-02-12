@@ -451,7 +451,7 @@ class TestSchemaGeneration:
     def test_basic_type_schema_generation(
         self,
         openapi_test_client: TestClient,
-        return_type,  # noqa: ARG002
+        return_type,
         expected_schema_type,
         action_name,
     ):
@@ -492,7 +492,7 @@ class TestSchemaGeneration:
     def test_pydantic_model_schema_generation(
         self,
         openapi_test_client: TestClient,
-        model_action,  # noqa: ARG002
+        model_action,
         expected_properties,
     ):
         """Test schema generation for Pydantic model returns."""

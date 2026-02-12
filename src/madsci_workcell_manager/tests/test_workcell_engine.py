@@ -110,7 +110,9 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
         mock_location_client.return_value = mock_location_client_instance
 
         warnings.simplefilter("ignore", UserWarning)
-        return Engine(state_handler=state_handler, data_client=DataClient())
+        engine = Engine(state_handler=state_handler, data_client=DataClient())
+        engine.state_handler.set_node(node_name="node1", node=test_node)
+        return engine
 
 
 def test_engine_initialization(engine: Engine) -> None:
@@ -123,6 +125,21 @@ def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
     """Test run_next_step when no workflows are ready."""
     workflow = engine.run_next_step()
     assert workflow is None
+
+
+def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
+    """Test run_next_step when no workflows are ready."""
+    with patch(
+        "madsci.client.node.rest_node_client.RestNodeClient.get_status",
+        side_effect=Exception("Connection failed"),
+    ):
+        engine.update_active_nodes(engine.state_handler)
+        for node in engine.state_handler.get_nodes().values():
+            assert node.status.disconnected is True
+        engine.reset_disconnects()
+        for node in engine.state_handler.get_nodes().values():
+            assert node.status.initializing is True
+            assert node.status.disconnected is False
 
 
 def test_run_next_step_with_ready_workflow(
@@ -155,10 +172,6 @@ def test_run_single_step(engine: Engine, state_handler: WorkcellStateHandler) ->
         status=WorkflowStatus(running=True),
     )
     state_handler.set_active_workflow(workflow)
-    state_handler.set_node(
-        node_name="node1",
-        node=test_node,
-    )
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"
     ) as mock_client:
@@ -209,10 +222,6 @@ def test_run_single_step_with_update_parameters(
         status=WorkflowStatus(running=True),
     )
     state_handler.set_active_workflow(workflow)
-    state_handler.set_node(
-        node_name="node1",
-        node=test_node,
-    )
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"
     ) as mock_client:
@@ -243,10 +252,6 @@ def test_run_single_step_of_workflow_with_multiple_steps(
         status=WorkflowStatus(running=True),
     )
     state_handler.set_active_workflow(workflow)
-    state_handler.set_node(
-        node_name="node1",
-        node=test_node,
-    )
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"
     ) as mock_client:
@@ -310,9 +315,7 @@ def test_finalize_step_failure(
     assert finalized_workflow.steps[0].status == ActionStatus.FAILED
 
 
-def test_handle_data_and_files_with_data(
-    engine: Engine, state_handler: WorkcellStateHandler
-) -> None:
+def test_handle_data_and_files_with_data(engine: Engine) -> None:
     """Test handle_data_and_files with data points."""
     step = Step(
         name="Test Step",
@@ -324,10 +327,6 @@ def test_handle_data_and_files_with_data(
         name="Test Workflow",
         steps=[step],
         status=WorkflowStatus(running=True),
-    )
-    state_handler.set_node(
-        node_name="node1",
-        node=test_node,
     )
     action_result = ActionSucceeded(json_result=42)
 
@@ -352,9 +351,7 @@ def test_handle_data_and_files_with_data(
         )
 
 
-def test_handle_data_and_files_with_files(
-    engine: Engine, state_handler: WorkcellStateHandler
-) -> None:
+def test_handle_data_and_files_with_files(engine: Engine) -> None:
     """Test handle_data_and_files with file points."""
     step = Step(
         name="Test Step",
@@ -367,10 +364,6 @@ def test_handle_data_and_files_with_files(
         name="Test Workflow",
         steps=[step],
         status=WorkflowStatus(running=True),
-    )
-    state_handler.set_node(
-        node_name="node1",
-        node=test_node,
     )
     action_result = ActionSucceeded(files=Path("/path/to/file"))
 
@@ -398,10 +391,6 @@ def test_run_step_send_action_exception_then_get_action_result_success(
         status=WorkflowStatus(running=True),
     )
     state_handler.set_active_workflow(workflow)
-    state_handler.set_node(
-        node_name="node1",
-        node=test_node,
-    )
 
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"
@@ -436,10 +425,6 @@ def test_run_step_send_action_and_get_action_result_fail(
         status=WorkflowStatus(running=True),
     )
     state_handler.set_active_workflow(workflow)
-    state_handler.set_node(
-        node_name="node1",
-        node=test_node,
-    )
 
     with patch(
         "madsci.workcell_manager.workcell_engine.find_node_client"

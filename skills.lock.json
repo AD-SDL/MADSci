@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "repos": {
+    "entries": [
+      {
+        "key": "github.com/anthropics/skills",
+        "alias": "anthropic",
+        "url": "git@github.com:anthropics/skills.git",
+        "host": "github.com",
+        "owner": "anthropics",
+        "repo": "skills",
+        "addedAt": "2025-12-31T19:55:04.154889415+00:00"
+      },
+      {
+        "key": "github.com/luckierdodge/skills",
+        "alias": "luckierdodge/skills",
+        "url": "git@github.com:luckierdodge/skills.git",
+        "host": "github.com",
+        "owner": "luckierdodge",
+        "repo": "skills",
+        "addedAt": "2025-12-31T20:37:19.808800738+00:00"
+      }
+    ],
+    "updatedAt": "2025-12-31T20:37:19.808801089+00:00"
+  },
+  "skills": [
+    {
+      "installName": "galahad",
+      "source": {
+        "repoKey": "github.com/luckierdodge/skills",
+        "skillPath": "skills/galahad"
+      },
+      "commit": "ebcc26ad5d4da255297b4df5d93662feccb625b6",
+      "digest": "sha256:868bb48579ce70b5005212705b1822c971ac09f6ee396b34a00863e66534546d",
+      "installedAt": "2026-01-01T18:03:26.654012977+00:00"
+    },
+    {
+      "installName": "code-ratchets",
+      "source": {
+        "repoKey": "github.com/luckierdodge/skills",
+        "skillPath": "skills/code-ratchets"
+      },
+      "commit": "ebcc26ad5d4da255297b4df5d93662feccb625b6",
+      "digest": "sha256:6c5d87ad865bdfc2946567704238119204970cf7a0e89781139fd8e6f67e61cc",
+      "installedAt": "2026-01-01T18:04:58.171051513+00:00"
+    }
+  ],
+  "generatedAt": "2026-01-01T18:04:58.171107168+00:00"
+}

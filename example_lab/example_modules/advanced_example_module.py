@@ -1,8 +1,8 @@
 """A module for testing advanced features of MADSci."""
 
+import time
 from pathlib import Path
 from typing import Annotated, Optional, Union
-import time
 
 from madsci.common.types.action_types import (
     ActionFiles,

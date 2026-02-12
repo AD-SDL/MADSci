@@ -36,6 +36,13 @@ checks:
   @pre-commit run --all-files || { echo "" && echo "Some checks failed! Running one more time to see if any automatic fixes worked:" && echo "" ; pre-commit run --all-files; }
 # Run the pre-commit checks
 check: checks
+ruff-unsafe:
+  @ruff check . --fix --unsafe-fixes
+
+# Generate API documentation with pdoc
+docs:
+  @pdm run pdoc --output-dir docs/api/ --force madsci
+  @echo "✅ API documentation generated in docs/api/"
 
 # Build the project
 build: dcb
@@ -133,7 +140,7 @@ update-version version:
   sed -i.bak 's/^version = ".*"/version = "{{version}}"/' pyproject.toml
 
   # Update all Python package pyproject.toml files
-  find src -name "pyproject.toml" -exec sed -i.bak 's/^version = ".*"/version = "{{version}}"/' {} \;
+  find src -name "pyproject.toml" -not -path '*/.*' -exec sed -i.bak 's/^version = ".*"/version = "{{version}}"/' {} \;
 
   # Update UI package.json
   if [ -f ui/package.json ]; then
@@ -145,7 +152,7 @@ update-version version:
 
   echo "✅ Updated version to {{version}} in:"
   echo "  - Root pyproject.toml"
-  echo "  - All Python package pyproject.toml files ($(find src -name "pyproject.toml" | wc -l | xargs echo) files)"
+  echo "  - All Python package pyproject.toml files ($(find src -name "pyproject.toml" -not -path '*/.*' | wc -l | xargs echo) files)"
   echo "  - UI package.json"
   echo ""
 
@@ -167,7 +174,7 @@ show-version:
   echo "  - pyproject.toml: $(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')"
   echo ""
   echo "Python packages:"
-  find src -name "pyproject.toml" | sort | while read file; do
+  find src -name "pyproject.toml" -not -path '*/.*' | sort | while read file; do
     version=$(grep '^version = ' "$file" | sed 's/version = "\(.*\)"/\1/')
     package_name=$(grep '^name = ' "$file" | sed 's/name = "\(.*\)"/\1/')
     echo "  - $package_name: $version"
@@ -180,13 +187,18 @@ show-version:
   fi
 
 # Run the node notebook
-node_integration_tests:
+node_e2e_tests:
   docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/node_notebook.ipynb
 
 # Run the experiment notebook
-experiment_integration_tests:
-  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
+experiment_e2e_tests:
+  docker compose run --rm workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
 
+backup_e2e_tests:
+  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/backup_and_migration.ipynb
 
 # Run the integration tests
-integration_tests: node_integration_tests experiment_integration_tests
+e2e_tests: node_e2e_tests experiment_e2e_tests backup_e2e_tests
+
+# Run the full pipeline including e2e tests
+all: down pipeupd e2e_tests down

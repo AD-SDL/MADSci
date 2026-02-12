@@ -12,7 +12,9 @@ from fastapi import UploadFile
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.location_client import LocationClient
+from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.datapoint_types import FileDataPoint
+from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     LocationArgument,
 )
@@ -23,7 +25,6 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.types.action_types import ActionStatus, ActionResult
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_actions import workcell_action_dict
 
@@ -275,7 +276,17 @@ def prepare_workflow_step(
     )
     if data_client is not None:
         working_step = prepare_workflow_files(working_step, workflow, data_client)
-    EventClient().info(validation_string)
+    EventClient().info(
+        "Workflow step validation",
+        event_type=EventType.WORKCELL_STATUS_UPDATE,
+        valid=valid,
+        validation_message=validation_string,
+        workflow_id=workflow.workflow_id,
+        workflow_name=workflow.name,
+        step_name=getattr(working_step, "name", None),
+        step_action=getattr(working_step, "action", None),
+        step_node=getattr(working_step, "node", None),
+    )
     if not valid:
         raise ValueError(validation_string)
     return working_step
@@ -433,11 +444,14 @@ def get_workflow_inputs_directory(
     """returns a directory name for the workflows inputs"""
     return Path(working_directory).expanduser() / "Workflows" / workflow_id / "Inputs"
 
-def pause_workflow(wf: Workflow) -> Workflow:
-    """Cancels the workflow run"""
 
-    with open("notes.txt", "a", encoding="utf-8") as f:
-        f.write("\nworkflow_utils.py: (pause_workflow) Running pause_workflow. " + datetime.now().strftime("%h:%M:%S"))
+def pause_workflow(wf: Workflow) -> Workflow:
+    """Pauses the workflow run."""
+    EventClient().debug(
+        "Pausing workflow",
+        workflow_id=wf.workflow_id,
+        workflow_name=wf.name,
+    )
 
     wf.status.paused = True
     wf.status.running = False
@@ -450,11 +464,14 @@ def pause_workflow(wf: Workflow) -> Workflow:
 
     return wf
 
-def cancel_workflow(wf: Workflow) -> Workflow:
-    """Cancels the workflow run"""
 
-    with open("notes.txt", "a", encoding="utf-8") as f:
-        f.write("\nworkflow_utils.py: (cancel_workflow) Running cancel_workflow. " + datetime.now().strftime("%h:%M:%S"))
+def cancel_workflow(wf: Workflow) -> Workflow:
+    """Cancels the workflow run."""
+    EventClient().debug(
+        "Cancelling workflow",
+        workflow_id=wf.workflow_id,
+        workflow_name=wf.name,
+    )
 
     wf.status.cancelled = True
     wf.status.running = False
@@ -472,6 +489,7 @@ def cancel_workflow(wf: Workflow) -> Workflow:
     if not wf.end_time:
         wf.end_time = datetime.now()
     return wf
+
 
 def cancel_active_workflows(state_handler: WorkcellStateHandler) -> None:
     """Cancels all currently running workflow runs"""

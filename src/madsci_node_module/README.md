@@ -325,7 +325,7 @@ CMD ["python", "my_instrument_node.py"]
 #### Multi-stage Docker Build
 ```dockerfile
 # Build stage
-FROM python:3.9-slim as builder
+FROM python:3.10-slim as builder
 WORKDIR /build
 COPY requirements.txt .
 RUN pip install --user -r requirements.txt
@@ -882,7 +882,7 @@ services:
       retries: 3
 
   integration-test:
-    image: python:3.9
+    image: python:3.10
     depends_on:
       - my-instrument-node
     volumes:

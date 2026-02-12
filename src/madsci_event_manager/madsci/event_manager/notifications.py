@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 from typing import Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.event_types import EmailAlertsConfig, Event
+from madsci.common.types.event_types import EmailAlertsConfig, Event, EventType
 
 
 class EmailAlerts:
@@ -20,7 +20,7 @@ class EmailAlerts:
     ) -> None:
         """Create an instance of EmailAlerts with the provided configuration."""
         self.config = config
-        self.logger = logger if logger else EventClient()
+        self.logger = logger or EventClient()
 
     def send_email_alerts(
         self,
@@ -28,7 +28,10 @@ class EmailAlerts:
     ) -> None:
         """Send email alerts to the configured email addresses."""
         if not self.config.email_addresses:
-            self.logger.warning("No email addresses configured for alerts.")
+            self.logger.warning(
+                "No email addresses configured for alerts",
+                event_type=EventType.MANAGER_ERROR,
+            )
             return
 
         def send_to_address(email_address: str) -> None:
@@ -40,7 +43,11 @@ class EmailAlerts:
                 headers={"X-MADSci-Event-ID": event.event_id},
                 importance=self.config.default_importance,
             ):
-                self.logger.error(f"Failed to send email to {email_address}")
+                self.logger.error(
+                    "Failed to send email",
+                    event_type=EventType.MANAGER_ERROR,
+                    email_address=email_address,
+                )
 
         with ThreadPoolExecutor() as executor:
             executor.map(send_to_address, self.config.email_addresses)
@@ -90,7 +97,7 @@ class EmailAlerts:
             server = smtplib.SMTP(smtp_server, smtp_port)
             try:
                 if self.config.use_tls:
-                    self.logger.debug("Starting TLS for secure connection")  # Debug log
+                    self.logger.debug("Starting TLS for secure connection")
                     server.starttls()
                 if smtp_username and smtp_password:
                     server.login(smtp_username, smtp_password)
@@ -98,8 +105,18 @@ class EmailAlerts:
             finally:
                 server.quit()
 
-            self.logger.info(f"Email alert sent to {email_address}")
+            self.logger.info(
+                "Email alert sent",
+                event_type=EventType.MANAGER_START,
+                email_address=email_address,
+            )
             return True
         except Exception as e:
-            self.logger.error(f"Failed to send email to {email_address}: {e}")
+            self.logger.error(
+                "Failed to send email",
+                event_type=EventType.MANAGER_ERROR,
+                email_address=email_address,
+                error=str(e),
+                exc_info=True,
+            )
             return False

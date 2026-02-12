@@ -33,7 +33,7 @@ actions:
     locations: {}
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -46,7 +46,7 @@ actions:
     locations: {}
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -72,7 +72,7 @@ actions:
           - data
           title: intModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -99,7 +99,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -116,7 +116,7 @@ actions:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -146,7 +146,7 @@ actions:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -173,7 +173,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -194,7 +194,7 @@ actions:
         result_label: log_file_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -229,7 +229,7 @@ actions:
         result_label: log_file_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -290,7 +290,7 @@ actions:
           - quality_score
           title: AnalysisResult
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -355,7 +355,7 @@ actions:
           - results_summary
           title: ExperimentMetadata
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -420,7 +420,7 @@ actions:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -452,7 +452,7 @@ actions:
           - data
           title: strModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -484,7 +484,7 @@ actions:
           - data
           title: intModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -516,7 +516,7 @@ actions:
           - data
           title: floatModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -548,7 +548,7 @@ actions:
           - data
           title: boolModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -599,7 +599,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -637,7 +637,7 @@ actions:
           - data
           title: strModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -694,7 +694,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -739,7 +739,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -778,7 +778,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -811,7 +811,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -844,7 +844,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -877,7 +877,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -944,7 +944,7 @@ actions:
           - quality_score
           title: AnalysisResult
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -976,7 +976,7 @@ actions:
           - data
           title: strModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -998,14 +998,14 @@ actions:
         name: config_file
         description: ''
         argument_type: file
-        required: true
+        required: false
         default: null
     results:
       file:
         result_label: file
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1014,17 +1014,17 @@ actions:
   test_multiple_file_inputs:
     name: test_multiple_file_inputs
     description: Test action with multiple file inputs
-    args:
-      secondary_files:
-        name: secondary_files
-        description: ''
-        argument_type: list[Path]
-        required: true
-        default: null
+    args: {}
     locations: {}
     files:
       primary_file:
         name: primary_file
+        description: ''
+        argument_type: file
+        required: true
+        default: null
+      secondary_files:
+        name: secondary_files
         description: ''
         argument_type: file
         required: true
@@ -1038,7 +1038,7 @@ actions:
         result_label: log_file_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1071,7 +1071,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1080,13 +1080,7 @@ actions:
   test_multiple_locations:
     name: test_multiple_locations
     description: Test action with multiple location arguments
-    args:
-      waypoints:
-        name: waypoints
-        description: ''
-        argument_type: list[LocationArgument]
-        required: false
-        default: null
+    args: {}
     locations:
       source:
         name: source
@@ -1100,9 +1094,15 @@ actions:
         argument_type: location
         required: true
         default: null
+      waypoints:
+        name: waypoints
+        description: ''
+        argument_type: location
+        required: false
+        default: null
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1141,7 +1141,7 @@ actions:
           - data
           title: dictModel
           type: object
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1155,12 +1155,6 @@ actions:
         name: sample_request
         description: ''
         argument_type: SampleProcessingRequest
-        required: true
-        default: null
-      data_files:
-        name: data_files
-        description: ''
-        argument_type: list[Path]
         required: true
         default: null
       config:
@@ -1188,7 +1182,13 @@ actions:
         argument_type: location
         required: true
         default: null
-    files: {}
+    files:
+      data_files:
+        name: data_files
+        description: ''
+        argument_type: file
+        required: true
+        default: null
     results:
       json_result:
         result_label: json_result
@@ -1240,7 +1240,7 @@ actions:
         result_label: log_file_2
         description: null
         result_type: file
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1278,7 +1278,7 @@ actions:
     locations: {}
     files: {}
     results: {}
-    blocking: false
+    blocking: true
     asynchronous: true
     accepts_var_args: false
     accepts_var_kwargs: false
@@ -1291,7 +1291,14 @@ config:
   status_update_interval: 2.0
   state_update_interval: 2.0
   node_url: http://localhost:2004/
-  uvicorn_kwargs: {}
+  uvicorn_kwargs:
+    limit_concurrency: 10
+  enable_rate_limiting: true
+  rate_limit_requests: 100
+  rate_limit_window: 60
+  rate_limit_short_requests: 50
+  rate_limit_short_window: 1
+  rate_limit_cleanup_interval: 300
   device_number: 0
   wait_time: 10.0
 config_schema:
@@ -1349,9 +1356,56 @@ config_schema:
       type: string
     uvicorn_kwargs:
       additionalProperties: true
-      description: Configuration for the Uvicorn server that runs the REST API.
+      description: Configuration for the Uvicorn server that runs the REST API. By
+        default, sets limit_concurrency=10 to protect against connection exhaustion
+        attacks.
       title: Uvicorn Configuration
       type: object
+    enable_rate_limiting:
+      default: true
+      description: Enable rate limiting middleware for the REST API.
+      title: Enable Rate Limiting
+      type: boolean
+    rate_limit_requests:
+      default: 100
+      description: Maximum number of requests allowed per long time window (only used
+        if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Requests
+      type: integer
+    rate_limit_window:
+      default: 60
+      description: Long time window in seconds for rate limiting (only used if enable_rate_limiting
+        is True).
+      minimum: 1
+      title: Rate Limit Window
+      type: integer
+    rate_limit_short_requests:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 50
+      description: Maximum number of requests allowed per short time window for burst
+        protection (only used if enable_rate_limiting is True). If None, short window
+        limiting is disabled.
+      title: Rate Limit Short Requests
+    rate_limit_short_window:
+      anyOf:
+      - minimum: 1
+        type: integer
+      - type: 'null'
+      default: 1
+      description: Short time window for burst protection in seconds (only used if
+        enable_rate_limiting is True). If None, short window limiting is disabled.
+      title: Rate Limit Short Window
+    rate_limit_cleanup_interval:
+      default: 300
+      description: Interval in seconds between cleanup operations to prevent memory
+        leaks (only used if enable_rate_limiting is True).
+      minimum: 1
+      title: Rate Limit Cleanup Interval
+      type: integer
     device_number:
       default: 0
       title: Device Number

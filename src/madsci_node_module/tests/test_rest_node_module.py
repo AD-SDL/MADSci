@@ -1252,7 +1252,7 @@ class TestEnhancedActionResultTypeMapping:
 
             assert "files" in result
             files = result["files"]
-            # Files are now returned as file keys (list) rather than dict
+            # Files are returned as file keys (list)
             assert isinstance(files, list)
             assert "log_file" in files
             assert "data_file" in files

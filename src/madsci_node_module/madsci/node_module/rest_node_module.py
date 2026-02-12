@@ -1,5 +1,6 @@
 """REST-based Node Module helper classes."""
 
+import inspect
 import os
 import signal
 import tempfile
@@ -24,6 +25,7 @@ from fastapi.background import BackgroundTasks
 from fastapi.datastructures import UploadFile
 from fastapi.routing import APIRouter
 from madsci.client.node.rest_node_client import RestNodeClient
+from madsci.common.middleware import RateLimitMiddleware
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.action_types import (
     ActionFiles,
@@ -107,6 +109,15 @@ class RestNode(AbstractNode):
 
             self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
 
+            # Add rate limiting middleware if enabled
+            if self.config.enable_rate_limiting:
+                self.rest_api.add_middleware(
+                    RateLimitMiddleware,
+                    requests_limit=self.config.rate_limit_requests,
+                    time_window=self.config.rate_limit_window,
+                    cleanup_interval=self.config.rate_limit_cleanup_interval,
+                )
+
             # Middleware to set ownership context for each request
             @self.rest_api.middleware("http")
             async def ownership_middleware(
@@ -118,14 +129,24 @@ class RestNode(AbstractNode):
             self._configure_routes()
             uvicorn.run(
                 self.rest_api,
-                host=url.host if url.host else "127.0.0.1",
-                port=url.port if url.port else 2000,
+                host=url.host or "127.0.0.1",
+                port=url.port or 2000,
                 **getattr(self.config, "uvicorn_kwargs", {}),
             )
         else:
             super().start_node()
             self.logger.debug("Running node in test mode")
             self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
+
+            # Add rate limiting middleware if enabled
+            if self.config.enable_rate_limiting:
+                self.rest_api.add_middleware(
+                    RateLimitMiddleware,
+                    requests_limit=self.config.rate_limit_requests,
+                    time_window=self.config.rate_limit_window,
+                    cleanup_interval=self.config.rate_limit_cleanup_interval,
+                )
+
             self._configure_routes()
 
     def get_action_status(self, action_id: str) -> ActionStatus:
@@ -486,6 +507,46 @@ class RestNode(AbstractNode):
                 headers={"content-type": "application/zip"},
             )
 
+    def get_action_files_zip_by_id(self, action_id: str) -> FileResponse:
+        """Get all files from an action as a ZIP file using only action_id."""
+        action_response = super().get_action_result(action_id)
+
+        if not action_response.files:
+            if action_response.status != ActionStatus.SUCCEEDED:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Action {action_id} did not succeed (status: {action_response.status}). Cannot download files from failed action.",
+                )
+            raise HTTPException(
+                status_code=404,
+                detail=f"Action {action_id} completed successfully but produced no file results",
+            )
+
+        # Always create a ZIP, even for single files for consistency
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip_file:
+            with ZipFile(temp_zip_file.name, "w") as zip_file:
+                if isinstance(action_response.files, Path):
+                    # Single file - add to ZIP with appropriate name
+                    if action_response.files.exists():
+                        zip_file.write(action_response.files, "file")
+                elif isinstance(action_response.files, ActionFiles):
+                    # Multiple files - add all to ZIP with their labels as names
+                    files_dict = action_response.files.model_dump()
+                    for file_label, file_path in files_dict.items():
+                        if Path(file_path).exists():
+                            # Use the file label as the filename in the ZIP
+                            file_extension = Path(file_path).suffix
+                            zip_filename = f"{file_label}{file_extension}"
+                            zip_file.write(file_path, zip_filename)
+                else:
+                    raise ValueError("Invalid file response")
+
+            return FileResponse(
+                path=temp_zip_file.name,
+                filename=f"{action_id}_files.zip",
+                headers={"content-type": "application/zip"},
+            )
+
     def _configure_routes(self) -> None:
         """Configure the routes for the REST API."""
         self.router = APIRouter()
@@ -496,9 +557,35 @@ class RestNode(AbstractNode):
         self.router.add_api_route("/state", self.get_state, methods=["GET"])
         self.router.add_api_route("/config", self.set_config, methods=["POST"])
         self.router.add_api_route("/log", self.get_log, methods=["GET"])
+
+        # Admin command endpoint with special handling for shutdown
+        shutdown_accepts_background_tasks = (
+            "background_tasks" in inspect.signature(self.shutdown).parameters
+        )
+
+        def admin_command_handler(
+            admin_command: AdminCommands, background_tasks: BackgroundTasks
+        ) -> AdminCommandResponse:
+            """Handle admin commands with BackgroundTasks support for shutdown."""
+            if admin_command == AdminCommands.SHUTDOWN:
+                if shutdown_accepts_background_tasks:
+                    return self.shutdown(background_tasks)
+                # For backwards compatibility with nodes that override shutdown without background_tasks
+                result = self.shutdown()
+                if result is None:
+                    return AdminCommandResponse(success=True, errors=[])
+                if isinstance(result, bool):
+                    return AdminCommandResponse(success=result, errors=[])
+                if isinstance(result, AdminCommandResponse):
+                    return result
+                raise ValueError(
+                    f"Shutdown method returned an unexpected value: {result}"
+                )
+            return self.run_admin_command(admin_command)
+
         self.router.add_api_route(
             "/admin/{admin_command}",
-            self.run_admin_command,
+            admin_command_handler,
             methods=["POST"],
         )
 
@@ -510,6 +597,11 @@ class RestNode(AbstractNode):
         )
         self.router.add_api_route(
             "/action/{action_id}/result", self.get_action_result_dict, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/action/{action_id}/download",
+            self.get_action_files_zip_by_id,
+            methods=["GET"],
         )
 
         self.rest_api.include_router(self.router)

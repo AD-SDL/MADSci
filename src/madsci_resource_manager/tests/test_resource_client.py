@@ -67,31 +67,43 @@ def test_client(interface: ResourceInterface) -> TestClient:
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[ResourceClient, None, None]:
     """Fixture for ResourceClient patched to use TestClient"""
-    with patch("madsci.client.resource_client.requests") as mock_requests:
+    with patch(
+        "madsci.client.resource_client.create_http_session"
+    ) as mock_create_session:
+
+        def add_ok_property(resp: Any) -> Any:
+            if not hasattr(resp, "ok"):
+                resp.ok = resp.status_code < 400
+            return resp
 
         def post_no_timeout(*args: Any, **kwargs: Any) -> Any:
             kwargs.pop("timeout", None)
-            return test_client.post(*args, **kwargs)
-
-        mock_requests.post.side_effect = post_no_timeout
+            resp = test_client.post(*args, **kwargs)
+            return add_ok_property(resp)
 
         def get_no_timeout(*args: Any, **kwargs: Any) -> Any:
             kwargs.pop("timeout", None)
-            return test_client.get(*args, **kwargs)
-
-        mock_requests.get.side_effect = get_no_timeout
+            resp = test_client.get(*args, **kwargs)
+            return add_ok_property(resp)
 
         def delete_no_timeout(*args: Any, **kwargs: Any) -> Any:
             kwargs.pop("timeout", None)
-            return test_client.delete(*args, **kwargs)
+            resp = test_client.delete(*args, **kwargs)
+            return add_ok_property(resp)
 
         def put_no_timeout(*args: Any, **kwargs: Any) -> Any:
             kwargs.pop("timeout", None)
-            return test_client.put(*args, **kwargs)
+            resp = test_client.put(*args, **kwargs)
+            return add_ok_property(resp)
 
-        mock_requests.put.side_effect = put_no_timeout
+        # Create a mock session that routes to TestClient
+        mock_session = type("MockSession", (), {})()
+        mock_session.post = post_no_timeout
+        mock_session.get = get_no_timeout
+        mock_session.delete = delete_no_timeout
+        mock_session.put = put_no_timeout
+        mock_create_session.return_value = mock_session
 
-        mock_requests.delete.side_effect = delete_no_timeout
         yield ResourceClient(resource_server_url="http://testserver")
 
 

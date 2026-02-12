@@ -20,64 +20,70 @@ Key Concepts Demonstrated:
 This serves as a template for creating real instrument drivers.
 """
 
-from logging import config
+import functools
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
-import threading
-import functools
-from datetime import datetime
 
 from madsci.client.event_client import EventClient
+from madsci.common.types.action_types import ActionCancelled, ActionPaused
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types import Pool, Slot
-from madsci.common.types.action_types import ActionCancelled, ActionPaused
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 
+
 # ***
 class CancelledError(Exception):
-    pass
+    """Raised when an action is cancelled via the cancel admin command."""
+
 
 class PausedError(Exception):
-    pass
+    """Raised when an action is paused via the pause admin command."""
 
-def interruptable(action_fn):
+
+def interruptable(action_fn: Any) -> Any:
+    """Decorator that makes an action interruptable by cancel/pause events."""
+
     @functools.wraps(action_fn)
-    def wrapper(self, *args, **kwargs):
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         self._cancel_event.clear()
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nliquidhandler.py: (wrapper) Cancel and Pause event cleared in wrapper. " + datetime.now().strftime("%h:%M:%S"))
+        self.logger.debug("Cancel and pause events cleared in interruptable wrapper")
         self._pause_event.clear()
         result_container = {"value": None}
-        def run():
+
+        def run() -> None:
             try:
-                with open("notes.txt", "a", encoding="utf-8") as f:
-                    f.write("\nliquidhandler.py: (wrapper) Trying to run action in wrapper. " + datetime.now().strftime("%h:%M:%S"))
+                self.logger.debug("Running action in interruptable wrapper")
                 result_container["value"] = action_fn(self, *args, **kwargs)
             except CancelledError:
-                with open("notes.txt", "a", encoding="utf-8") as f:
-                    f.write("\nliquidhandler.py: (wrapper) Raising CancelledError in wrapper." + datetime.now().strftime("%h:%M:%S"))
+                self.logger.debug("CancelledError raised in interruptable wrapper")
                 result_container["value"] = self._cancel_result()
             except PausedError:
-                with open("notes.txt", "a", encoding="utf-8") as f:
-                    f.write("\nliquidhandler.py: (wrapper) Raising PausedError in wrapper." + datetime.now().strftime("%h:%M:%S"))
+                self.logger.debug("PausedError raised in interruptable wrapper")
                 result_container["value"] = self._pause_result()
             except Exception as e:
                 result_container["value"] = e
+
         t = threading.Thread(target=run)
         t.start()
         while t.is_alive():
             if self._cancel_event.is_set() or self._pause_event.is_set():
-                with open("notes.txt", "a", encoding="utf-8") as f:
-                    f.write("\nliquidhandler.py: (wrapper) Cancel or Pause event set - returning from wrapper." + datetime.now().strftime("%h:%M:%S"))
+                self.logger.debug("Cancel or pause event set, returning from wrapper")
                 t.join(timeout=0.25)
-                return self._cancel_result() if self._cancel_event.is_set() else self._pause_result()
+                return (
+                    self._cancel_result()
+                    if self._cancel_event.is_set()
+                    else self._pause_result()
+                )
             time.sleep(0.05)
         return result_container["value"]
+
     return wrapper
+
 
 class LiquidHandlerConfig(RestNodeConfig):
     """
@@ -177,35 +183,28 @@ class LiquidHandlerNode(RestNode):
     # Pydantic model class for configuration validation
     config_model = LiquidHandlerConfig
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the liquid handler node with cancel/pause event support."""
         super().__init__()
         self._cancel_event = threading.Event()
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nliquidhandler.py: (__init__) Cancel and Pause event thread created. " + datetime.now().strftime("%h:%M:%S"))
         self._pause_event = threading.Event()
-    
-    def _cancel_result(self):
-        action_response = ActionCancelled()
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nliquidhandler.py: (_cancel_result) Returning cancelled action response. " + datetime.now().strftime("%h:%M:%S"))
-        return action_response
-    
-    def _pause_result(self):
-        action_response = ActionPaused()
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nliquidhandler.py: (_pause_result) Returning paused action response. " + datetime.now().strftime("%h:%M:%S"))
-        return action_response
+
+    def _cancel_result(self) -> ActionCancelled:
+        self.logger.debug("Returning cancelled action response")
+        return ActionCancelled()
+
+    def _pause_result(self) -> ActionPaused:
+        self.logger.debug("Returning paused action response")
+        return ActionPaused()
 
     def _checkpoint(self) -> None:
         if self._cancel_event.is_set():
-            with open("notes.txt", "a", encoding="utf-8") as f:
-                f.write("\nliquidhandler.py: (_checkpoint) Event set raising Cancel error. " + datetime.now().strftime("%h:%M:%S"))
+            self.logger.debug("Cancel event set, raising CancelledError")
             raise CancelledError()
         if self._pause_event.is_set():
-            with open("notes.txt", "a", encoding="utf-8") as f:
-                f.write("\nliquidhandler.py: (_checkpoint) Event set raising Pause error. " + datetime.now().strftime("%h:%M:%S"))
+            self.logger.debug("Pause event set, raising PausedError")
             raise PausedError()
-    
+
     def _wait(self, seconds: float, tick: float = 0.1) -> None:
         end = time.monotonic() + seconds
         while True:
@@ -371,8 +370,7 @@ class LiquidHandlerNode(RestNode):
             POST /actions/run_command {"command": "aspirate 100 ul"}
             Response: "aspirate 100 ul"
         """
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nliquidhandler.py: (run_command) Running run_command action. " + datetime.now().strftime("%h:%M:%S"))
+        self.logger.debug("Running run_command action", command=command)
         self.liquid_handler.run_command(command)
         self._wait(seconds=self.config.wait_time)
         return command
@@ -459,27 +457,25 @@ class LiquidHandlerNode(RestNode):
             AdminCommandResponse: Location data [x, y, z, rotation] in lab coordinates
         """
         return AdminCommandResponse(data=[0, 0, 0, 0])
-    
+
     def cancel(self) -> AdminCommandResponse:
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nliquidhandler.py: (cancel) Setting cancel event. " + datetime.now().strftime("%h:%M:%S"))
+        """Cancel the currently running action."""
+        self.logger.debug("Setting cancel event")
         self._cancel_event.set()
         return AdminCommandResponse()
-    
+
     def pause(self) -> AdminCommandResponse:
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nliquidhandler.py: (pause) Setting pause event and setting paused status to True. " + datetime.now().strftime("%h:%M:%S"))
+        """Pause the currently running action."""
+        self.logger.debug("Setting pause event and paused status")
         self.node_status.paused = True
         self._pause_event.set()
         return AdminCommandResponse()
- 
+
     def resume(self) -> AdminCommandResponse:
-        with open("notes.txt", "a", encoding="utf-8") as f:
-            f.write("\nliquidhandler.py: (resume) Setting node status paused to False. " + datetime.now().strftime("%h:%M:%S"))
+        """Resume a paused action."""
+        self.logger.debug("Resuming, setting paused status to False")
         self.node_status.paused = False
         return AdminCommandResponse()
-    
-        
 
 
 if __name__ == "__main__":

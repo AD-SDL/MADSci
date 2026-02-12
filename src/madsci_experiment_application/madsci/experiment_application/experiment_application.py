@@ -4,19 +4,16 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Generator, Optional, TypeVar, Union
 
-from madsci.client.data_client import DataClient
-from madsci.client.event_client import EventClient
-from madsci.client.experiment_client import ExperimentClient
-from madsci.client.lab_client import LabClient
-from madsci.client.location_client import LocationClient
-from madsci.client.resource_client import ResourceClient
-from madsci.client.workcell_client import WorkcellClient
-from madsci.common.context import set_current_madsci_context
+from madsci.common.context import (
+    event_client_context,
+    set_current_madsci_context,
+)
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
+from madsci.common.types.event_types import EventType
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -64,30 +61,38 @@ class ExperimentApplication(RestNode):
     """
     An experiment application that helps manage the execution of an experiment.
 
-    You can either use this class as a base class for your own application class, or create an instance of it to manage the execution of an experiment.
+    You can either use this class as a base class for your own application class,
+    or create an instance of it to manage the execution of an experiment.
+
+    This class extends AbstractNode (via RestNode) and inherits client management
+    from MadsciClientMixin. In addition to the standard node clients (event, resource, data),
+    it also uses experiment, workcell, location, and optionally lab clients.
     """
 
+    # Extend the required clients from AbstractNode to include experiment-specific clients
+    OPTIONAL_CLIENTS: ClassVar[list[str]] = [
+        "experiment",
+        "workcell",
+        "location",
+        "lab",
+    ]
+
+    # Experiment-specific attributes
     experiment: Optional[Experiment] = None
     """The current experiment being run."""
     experiment_design: Optional[Union[ExperimentDesign, PathLike]] = None
     """The design of the experiment."""
-    logger: EventClient
-    event_client: EventClient
-    """The event logger for the experiment."""
-    lab_client: LabClient
-    """Client for getting lab config."""
-    workcell_client: WorkcellClient
-    """Client for managing workcells."""
-    resource_client: ResourceClient
-    """Client for managing resources."""
-    data_client: DataClient
-    """Client for managing data."""
-    experiment_client: ExperimentClient
-    """Client for managing experiments."""
+
+    # Configuration
     config: ExperimentApplicationConfig = ExperimentApplicationConfig()
     """Configuration for the ExperimentApplication."""
     config_model = ExperimentApplicationConfig
     """The Pydantic model for the configuration of the ExperimentApplication."""
+
+    # Note: All client properties (event_client, experiment_client, workcell_client,
+    # location_client, data_client, resource_client, lab_client, logger) are inherited
+    # from AbstractNode via MadsciClientMixin and are available as properties with
+    # lazy initialization. They do not need to be redeclared here.
 
     def __init__(
         self,
@@ -96,28 +101,37 @@ class ExperimentApplication(RestNode):
         experiment: Optional[Experiment] = None,
         *args: Any,
         **kwargs: Any,
-    ) -> "ExperimentApplication":
-        """Initialize the experiment application. You can provide an experiment design to use for creating new experiments, or an existing experiment to continue."""
+    ) -> None:
+        """
+        Initialize the experiment application.
+
+        You can provide an experiment design to use for creating new experiments,
+        or an existing experiment to continue.
+
+        Note: Client initialization is handled by the parent AbstractNode class
+        via MadsciClientMixin. All manager clients (experiment, workcell, location,
+        data, resource) are available as properties and will be lazily initialized
+        when first accessed.
+        """
         super().__init__(*args, **kwargs)
 
+        # Setup lab client and context if provided
         lab_server_url = lab_server_url or self.config.lab_server_url
         if lab_server_url:
-            self.lab_client = LabClient(lab_server_url=lab_server_url)
+            self.lab_server_url = lab_server_url
             set_current_madsci_context(self.lab_client.get_lab_context())
-        self.logger = self.event_client = EventClient()
+            self.setup_clients()
+
+        # Setup experiment design
         self.experiment_design = experiment_design or self.experiment_design
         if isinstance(self.experiment_design, (str, Path)):
             self.experiment_design = ExperimentDesign.from_yaml(self.experiment_design)
 
-        self.experiment = experiment if experiment else self.experiment
+        self.experiment = experiment or self.experiment
 
-        # * Re-initialize experiment client in-case user provided a different server URL
-        self.experiment_client = ExperimentClient()
-        self.workcell_client = WorkcellClient()
-        self.location_client = LocationClient()
-        self.data_client = DataClient()
-        self.resource_client = ResourceClient()
-        self.event_client = self.logger = EventClient()
+        # Note: All clients (experiment_client, workcell_client, location_client,
+        # data_client, resource_client, event_client) are inherited from AbstractNode
+        # via MadsciClientMixin and will be initialized lazily when accessed
 
     @classmethod
     def start_new(
@@ -151,13 +165,27 @@ class ExperimentApplication(RestNode):
     ) -> None:
         """Sends the ExperimentDesign to the server to register a new experimental run."""
 
+        if self.experiment_design is None:
+            raise ValueError(
+                "experiment_design is required to start a new experiment run"
+            )
+
+        if not isinstance(self.experiment_design, ExperimentDesign):
+            raise TypeError(
+                "experiment_design must be an ExperimentDesign instance (or a path/string that can be loaded to one)"
+            )
+
         self.experiment = self.experiment_client.start_experiment(
             experiment_design=self.experiment_design,
             run_name=run_name,
             run_description=run_description,
         )
         self.logger.info(
-            f"Started run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run started",
+            event_type=EventType.EXPERIMENT_START,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
         )
         passed_checks = False
         while not passed_checks:
@@ -177,8 +205,20 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id,
             status=status,
         )
+        event_type = (
+            EventType.EXPERIMENT_COMPLETE
+            if status in {None, ExperimentStatus.COMPLETED}
+            else EventType.EXPERIMENT_FAILED
+            if status == ExperimentStatus.FAILED
+            else EventType.EXPERIMENT_COMPLETE
+        )
         self.logger.info(
-            f"Ended run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run ended",
+            event_type=event_type,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
+            status=str(status) if status is not None else None,
         )
 
     def pause_experiment(self) -> None:
@@ -187,7 +227,11 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id
         )
         self.logger.info(
-            f"Paused run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run paused",
+            event_type=EventType.EXPERIMENT_PAUSE,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
         )
 
     def cancel_experiment(self) -> None:
@@ -196,7 +240,11 @@ class ExperimentApplication(RestNode):
             experiment_id=self.experiment.experiment_id
         )
         self.logger.info(
-            f"Cancelled run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run cancelled",
+            event_type=EventType.EXPERIMENT_CANCELLED,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
         )
 
     def fail_experiment(self) -> None:
@@ -206,29 +254,63 @@ class ExperimentApplication(RestNode):
             status=ExperimentStatus.FAILED,
         )
         self.logger.info(
-            f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}'"
+            "Experiment run failed",
+            event_type=EventType.EXPERIMENT_FAILED,
+            experiment_id=self.experiment.experiment_id,
+            run_name=self.experiment.run_name,
+            experiment_name=self.experiment.experiment_design.experiment_name,
         )
 
     def handle_exception(self, exception: Exception) -> None:
         """Exception handler that makes experiment fail by default, can be overwritten"""
-        self.logger.info(
-            f"Failed run '{self.experiment.run_name}' ({self.experiment.experiment_id}) of experiment '{self.experiment.experiment_design.experiment_name}' with exception {exception!s}"
+        self.logger.error(
+            "Experiment run raised exception",
+            event_type=EventType.EXPERIMENT_FAILED,
+            experiment_id=self.experiment.experiment_id if self.experiment else None,
+            run_name=self.experiment.run_name if self.experiment else None,
+            experiment_name=(
+                self.experiment.experiment_design.experiment_name
+                if self.experiment
+                else None
+            ),
+            error=str(exception),
         )
         self.end_experiment(ExperimentStatus.FAILED)
 
     @contextmanager
     def manage_experiment(
         self, run_name: Optional[str] = None, run_description: Optional[str] = None
-    ) -> contextmanager:
-        """Context manager to start and end an experiment."""
+    ) -> Generator[None, None, None]:
+        """
+        Context manager to start and end an experiment with full context propagation.
+
+        All logging within this experiment run will include the experiment
+        context, enabling hierarchical log filtering and analysis.
+        """
         self.start_experiment_run(run_name=run_name, run_description=run_description)
-        try:
-            yield
-        except Exception as e:
-            self.handle_exception(e)
-            raise (e)
-        else:
-            self.end_experiment()
+
+        # Establish experiment context for hierarchical logging
+        experiment_id = self.experiment.experiment_id if self.experiment else None
+        experiment_name = (
+            self.experiment.experiment_design.experiment_name
+            if self.experiment and self.experiment.experiment_design
+            else None
+        )
+
+        with event_client_context(
+            name="experiment",
+            experiment_id=experiment_id,
+            experiment_name=experiment_name,
+            run_name=run_name,
+            experiment_type=self.__class__.__name__,
+        ):
+            try:
+                yield
+            except Exception as e:
+                self.handle_exception(e)
+                raise (e)
+            else:
+                self.end_experiment()
 
     @threaded_daemon
     def loop(self) -> None:
@@ -252,7 +334,10 @@ class ExperimentApplication(RestNode):
         exception = None
         if self.experiment.status == ExperimentStatus.PAUSED:
             self.logger.warning(
-                f"Experiment '{self.experiment.experiment_design.experiment_name}' has been paused."
+                "Experiment run paused; waiting for resume",
+                event_type=EventType.EXPERIMENT_PAUSE,
+                experiment_id=self.experiment.experiment_id,
+                experiment_name=self.experiment.experiment_design.experiment_name,
             )
             while True:
                 time.sleep(5)
@@ -271,7 +356,17 @@ class ExperimentApplication(RestNode):
             )
 
         if exception:
-            self.logger.error(exception.message)
+            self.logger.error(
+                "Experiment run terminated",
+                event_type=(
+                    EventType.EXPERIMENT_CANCELLED
+                    if isinstance(exception, ExperimentCancelledError)
+                    else EventType.EXPERIMENT_FAILED
+                ),
+                experiment_id=self.experiment.experiment_id,
+                experiment_name=self.experiment.experiment_design.experiment_name,
+                error=exception.message,
+            )
             raise exception
 
     def get_resource_from_condition(self, condition: Condition) -> Optional[Resource]:

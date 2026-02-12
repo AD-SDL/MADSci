@@ -260,10 +260,21 @@ class DataManagerSettings(
         description="Path to the data manager definition file to use.",
         default=Path("data.manager.yaml"),
     )
-    db_url: str = Field(
-        default="mongodb://localhost:27017",
-        title="Database URL",
-        description="The URL of the database used by the Data Manager.",
+    database_name: str = Field(
+        default="madsci_data",
+        title="Database Name",
+        description="The name of the MongoDB database where events are stored.",
+    )
+    collection_name: str = Field(
+        default="datapoints",
+        title="Collection Name",
+        description="The name of the MongoDB collection where data are stored.",
+    )
+    mongo_db_url: AnyUrl = Field(
+        default=AnyUrl("mongodb://localhost:27017"),
+        title="MongoDB URL",
+        description="The URL of the MongoDB database used by the Data Manager.",
+        validation_alias=AliasChoices("mongo_db_url", "DATA_DB_URL", "db_url"),
     )
     file_storage_path: PathLike = Field(
         title="File Storage Path",

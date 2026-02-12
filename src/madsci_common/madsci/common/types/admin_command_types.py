@@ -20,6 +20,7 @@ class AdminCommands(str, Enum):
     UNLOCK = "unlock"
     GET_LOCATION = "get_location"
 
+
 class AdminCommandResponse(MadsciBaseModel):
     """Response from an Admin Command"""
 

@@ -15,7 +15,7 @@
 
           <CancelButton
             :node="modal_title"
-            :node_status="get_status(wc_state.nodes[modal_title].status)" 
+            :node_status="get_status(wc_state.nodes[modal_title].status)"
             class="ml-2" />
 
           <ResetButton

@@ -1,6 +1,6 @@
 [project]
 name = "madsci.common"
-version = "0.5.3"
+version = "0.6.2"
 description = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -8,7 +8,7 @@ authors = [
     {name = "Casey Stone", email = "cstone@anl.gov"},
     {name = "Doga Ozgulbas", email = "dozgulbas@anl.gov"},
 ]
-requires-python = ">=3.9.1"
+requires-python = ">=3.10.0"
 readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
@@ -20,6 +20,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
     "pymongo>=4.10.1",
+    "psycopg2-binary>=2.9.0",
     "fastapi>=0.115.4",
     "uvicorn[standard]>=0.32.0",
     "python-multipart>=0.0.17",
@@ -29,9 +30,29 @@ dependencies = [
     "pydantic-settings>=2.9.1",
     "pydantic-settings-export>=1.0.2",
     "regex>=2025.7.34",
-    "classy-fastapi>=0.7.0"
+    "classy-fastapi>=0.7.0",
+    "httpx>=0.28.1",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "opentelemetry-api>=1.20.0",
 ]
 
+[project.optional-dependencies]
+otel = [
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+]
+
+otel-instrumentation = [
+    "opentelemetry-instrumentation-fastapi>=0.41b0",
+    "opentelemetry-instrumentation-asgi>=0.41b0",
+    "opentelemetry-instrumentation-requests>=0.41b0",
+]
+
+[project.scripts]
+madsci-backup = "madsci.common.backup_tools.cli:main"
+madsci-mongodb-backup = "madsci.common.backup_tools.cli:main_mongodb_backup"
+madsci-postgres-backup = "madsci.common.backup_tools.postgres_cli:main_postgres_backup"
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"

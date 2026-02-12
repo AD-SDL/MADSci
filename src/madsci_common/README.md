@@ -325,3 +325,276 @@ class CustomManager(AbstractManagerBase[Settings, Definition]):
     ENABLE_ROOT_DEFINITION_ENDPOINT = False  # Disable root endpoint
     # Allows custom root endpoint implementation or static file serving for UIs
 ```
+
+### Middleware
+
+MADSci provides middleware components for enhancing server resilience and monitoring:
+
+#### Rate Limiting
+
+The `RateLimitMiddleware` protects services from overload by enforcing request rate limits per client IP with support for dual window limiting (burst + sustained):
+
+```python
+from madsci.common.middleware import RateLimitMiddleware
+from fastapi import FastAPI
+
+app = FastAPI()
+
+# Add rate limiting with dual windows
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_limit=100,              # Long window: 100 requests per 60 seconds
+    time_window=60,
+    short_requests_limit=50,         # Short window: 50 requests per 1 second (burst protection)
+    short_time_window=1,
+    cleanup_interval=300             # Clean up inactive clients every 5 minutes
+)
+```
+
+**Key features:**
+- **Dual rate limiting**: Separate limits for burst (short window) and sustained (long window) traffic
+- **Async-safe**: Uses asyncio locks to prevent race conditions in concurrent coroutine handling
+- **Sliding window**: Rate limiting based on moving time window algorithm
+- **Memory efficient**: Automatic cleanup of inactive client tracking data
+- **Standard headers**: Returns `X-RateLimit-*` headers and `Retry-After` on limit exceeded
+- **429 responses**: Returns HTTP 429 Too Many Requests when limit is exceeded
+
+**Configuration parameters:**
+- `requests_limit`: Maximum requests allowed per long time window (default: 100)
+- `time_window`: Long time window in seconds (default: 60)
+- `short_requests_limit`: Maximum requests per short window for burst protection (default: 50, optional)
+- `short_time_window`: Short time window in seconds (default: 1, optional)
+- `cleanup_interval`: Interval between cleanup operations in seconds (default: 300)
+
+**Response headers:**
+- `X-RateLimit-Limit`: Maximum requests allowed in the long time window
+- `X-RateLimit-Remaining`: Number of requests remaining in current long window
+- `X-RateLimit-Reset`: Unix timestamp when the long window rate limit resets
+- `X-RateLimit-Burst-Limit`: Maximum requests allowed in the short time window (if configured)
+- `X-RateLimit-Burst-Remaining`: Number of requests remaining in current short window (if configured)
+- `Retry-After`: Seconds to wait before retrying (included in 429 responses)
+
+**Example 429 responses:**
+```json
+// Burst limit exceeded
+{
+  "detail": "Rate limit exceeded: 50 requests per 1 seconds (burst limit)"
+}
+
+// Long window limit exceeded
+{
+  "detail": "Rate limit exceeded: 100 requests per 60 seconds"
+}
+```
+
+**Integration with managers:**
+```python
+from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.middleware import RateLimitMiddleware
+
+class MyManager(AbstractManagerBase[MySettings, MyDefinition]):
+    def __init__(self, settings: MySettings):
+        super().__init__(settings)
+        # Rate limiting is automatically configured from ManagerSettings
+        # To customize, modify settings before initialization:
+        # settings.rate_limit_requests = 200
+        # settings.rate_limit_short_requests = 20
+```
+
+**How dual rate limiting works:**
+
+Dual rate limiting protects against both burst traffic and sustained high load:
+
+1. **Burst protection (short window)**: Prevents rapid request bursts that could overwhelm the service
+   - Example: 50 requests per second limit prevents a client from sending 100 requests instantly
+
+2. **Sustained load protection (long window)**: Prevents continuous high request rates over time
+   - Example: 100 requests per minute limit prevents sustained abuse
+
+Both limits must be satisfied for a request to succeed. If either limit is exceeded, a 429 response is returned with appropriate `Retry-After` guidance.
+
+**Single window mode:**
+
+To use only long window limiting (no burst protection), set `short_requests_limit` and `short_time_window` to `None`:
+
+```python
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_limit=100,
+    time_window=60,
+    short_requests_limit=None,  # Disable burst protection
+    short_time_window=None,
+)
+```
+### Database Backup Tools
+
+MADSci provides standalone backup tools for MongoDB databases that can be used independently or integrated with migration workflows:
+
+```python
+from pathlib import Path
+from pydantic import AnyUrl
+from madsci.common.backup_tools import (
+    MongoDBBackupTool,
+    MongoDBBackupSettings
+)
+
+# Configure backup settings
+settings = MongoDBBackupSettings(
+    mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+    database="events",
+    backup_dir=Path("./backups"),
+    max_backups=10,  # Keep last 10 backups
+    validate_integrity=True
+)
+
+# Create backup tool
+backup_tool = MongoDBBackupTool(settings)
+
+# Create a backup
+backup_path = backup_tool.create_backup("before_migration")
+print(f"Backup created: {backup_path}")
+
+# List available backups
+backups = backup_tool.list_available_backups()
+
+# Restore from backup
+backup_tool.restore_from_backup(backup_path)
+
+# Validate backup integrity
+is_valid = backup_tool.validate_backup_integrity(backup_path)
+```
+
+**Using the unified CLI:**
+```bash
+# Create MongoDB backup (auto-detects database type)
+madsci-backup create --db-url mongodb://localhost:27017/events
+
+# Restore from backup
+madsci-backup restore --backup /path/to/backup --db-url mongodb://localhost:27017/events
+
+# Validate backup integrity
+madsci-backup validate --backup /path/to/backup --db-url mongodb://localhost:27017/events
+```
+
+**Features:**
+- Standalone backup/restore operations
+- Automatic backup rotation and retention
+- SHA256 integrity validation
+- Support for specific collection filtering
+- Integration with MADSci migration tools
+- Unified CLI for both PostgreSQL and MongoDB
+
+For comprehensive documentation including examples, best practices, and advanced usage, see [backup_tools/README.md](./madsci/common/backup_tools/README.md).
+
+### Context Management
+
+MADSci provides a hierarchical context system for managing configuration and logging contexts across components:
+
+```python
+from madsci.common.context import (
+    madsci_context,
+    get_current_madsci_context,
+    event_client_context,
+    get_event_client,
+)
+
+# Global context for server URLs
+with madsci_context(event_server_url="http://localhost:8001") as ctx:
+    print(ctx.event_server_url)
+
+# EventClient context for hierarchical logging
+with event_client_context(name="my_operation", experiment_id="exp-123") as logger:
+    logger.info("Starting operation")
+
+    # Nested contexts inherit parent metadata
+    with event_client_context(name="substep", step_id="step-1") as step_logger:
+        step_logger.info("Executing substep")  # Includes both experiment_id and step_id
+
+# In library code, use get_event_client() to inherit context
+def utility_function():
+    logger = get_event_client()  # Uses context if available
+    logger.info("Utility running")
+```
+
+**Context Decorators:**
+```python
+from madsci.common.context import with_event_client, event_client_class
+
+@with_event_client(name="my_workflow")
+def my_workflow(event_client=None):
+    event_client.info("Running workflow")
+
+@event_client_class(component_type="processor")
+class DataProcessor:
+    def process(self, data):
+        self.event_client.info("Processing", data_size=len(data))
+```
+
+See [docs/guides/logging.md](../../docs/guides/logging.md) for comprehensive documentation.
+
+### Ownership Context
+
+Track ownership metadata (user, experiment, workflow, etc.) throughout the system:
+
+```python
+from madsci.common.ownership import ownership_context, get_current_ownership_info
+
+with ownership_context(experiment_id="exp-123", workflow_id="wf-456") as info:
+    # All operations within this context include ownership metadata
+    print(info.experiment_id)  # "exp-123"
+
+    # Events automatically capture current ownership
+    logger = get_event_client()
+    logger.info("Processing")  # Event includes experiment_id, workflow_id
+```
+
+### OpenTelemetry Integration
+
+MADSci includes built-in OpenTelemetry support for distributed tracing, metrics, and logs:
+
+```python
+from madsci.common.otel import (
+    configure_otel,
+    OtelBootstrapConfig,
+    span_context,
+    with_span,
+    traced_class,
+)
+
+# Configure OTEL (idempotent - first call wins)
+runtime = configure_otel(OtelBootstrapConfig(
+    enabled=True,
+    service_name="my_service",
+    exporter="otlp",
+    otlp_endpoint="http://localhost:4317",
+))
+
+# Context manager for spans
+with span_context("process_data", attributes={"data.size": 100}) as span:
+    result = process(data)
+    span.set_attribute("result.count", len(result))
+
+# Decorator for automatic tracing
+@with_span(name="fetch_user")
+def get_user(user_id: str):
+    return api.fetch(user_id)
+
+# Class decorator for tracing all methods
+@traced_class(attributes={"component": "processor"})
+class DataProcessor:
+    def process(self, data):
+        return transform(data)
+```
+
+**Auto-instrumentation:**
+```python
+from madsci.common.otel import instrument_fastapi, instrument_requests
+
+# Instrument FastAPI applications
+instrument_fastapi(app, enabled=True)
+
+# Instrument HTTP requests library
+instrument_requests(enabled=True)
+```
+
+See [example_lab/OBSERVABILITY.md](../../example_lab/OBSERVABILITY.md) for the full observability stack setup.

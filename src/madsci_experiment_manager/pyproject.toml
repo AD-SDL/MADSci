@@ -1,6 +1,6 @@
 [project]
 name = "madsci.experiment_manager"
-version = "0.5.3"
+version = "0.6.2"
 description = "The Modular Autonomous Discovery for Science (MADSci) Experiment Manager."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -8,13 +8,12 @@ authors = [
     {name = "Casey Stone", email = "cstone@anl.gov"},
     {name = "Doga Ozgulbas", email = "dozgulbas@anl.gov"},
 ]
-requires-python = ">=3.9.1"
+requires-python = ">=3.10.0"
 readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
   "madsci.common",
   "madsci.client",
-  "nicegui>=2.10.1"
 ]
 
 [project.urls]

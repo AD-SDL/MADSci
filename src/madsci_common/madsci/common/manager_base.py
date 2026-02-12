@@ -5,19 +5,30 @@ This module provides a base class for all MADSci manager services,
 standardizing common patterns and reducing code duplication.
 """
 
+import contextlib
 from abc import ABCMeta
 from pathlib import Path
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, ContextManager, Generic, Optional, TypeVar
 
 import uvicorn
 from classy_fastapi import Routable, get
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.middleware import EventClientContextMiddleware, RateLimitMiddleware
+from madsci.common.otel import (
+    OtelBootstrapConfig,
+    configure_otel,
+    get_otel_runtime,
+    instrument_fastapi,
+    instrument_requests,
+)
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
-from madsci.common.types.manager_types import ManagerHealth
+from madsci.common.types.event_types import EventClientConfig, EventType
+from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
 
 # Type variables for generic typing
 SettingsT = TypeVar("SettingsT", bound=MadsciBaseSettings)
@@ -30,7 +41,10 @@ class ManagerBaseMeta(ABCMeta, type(Routable)):
 
 
 class AbstractManagerBase(
-    Generic[SettingsT, DefinitionT], Routable, metaclass=ManagerBaseMeta
+    MadsciClientMixin,
+    Generic[SettingsT, DefinitionT],
+    Routable,
+    metaclass=ManagerBaseMeta,
 ):
     """
     Abstract base class for MADSci manager services using classy-fastapi.
@@ -115,15 +129,50 @@ class AbstractManagerBase(
 
         # Setup logging
         self.setup_logging()
-        self.logger.info(self._settings)
-        self.logger.info(self._definition)
-        self.logger.info(get_current_madsci_context())
+        self.logger.info(
+            "Manager settings loaded",
+            event_type=EventType.MANAGER_START,
+            settings=self._settings.model_dump(mode="json"),
+        )
+        self.logger.info(
+            "Manager definition loaded",
+            event_type=EventType.MANAGER_START,
+            definition=self._definition.model_dump(mode="json"),
+        )
+        self.logger.info(
+            "MADSci context initialized",
+            event_type=EventType.MANAGER_START,
+            context=get_current_madsci_context().model_dump(mode="json"),
+        )
+
+        self._otel_runtime = None
+        if getattr(self._settings, "otel_enabled", False):
+            self._setup_otel()
+        else:
+            # If OTEL was configured elsewhere in the process (e.g., a shared
+            # bootstrap in a multi-service runtime), keep access to the runtime
+            # so spans can still be created.
+            self._otel_runtime = get_otel_runtime()
+
+        self._tracer = self._otel_runtime.tracer if self._otel_runtime else None
 
         # Setup ownership context
         self.setup_ownership()
 
         # Initialize manager-specific components
         self.initialize(**kwargs)
+
+    def span(
+        self, name: str, *, attributes: Optional[dict[str, Any]] = None
+    ) -> ContextManager[Any]:
+        """Create a best-effort span context manager.
+
+        This is intended for higher-level manager operations (not every log line).
+        """
+
+        if self._tracer is None:
+            return contextlib.nullcontext()
+        return self._tracer.start_as_current_span(name, attributes=attributes)
 
     @property
     def settings(self) -> SettingsT:
@@ -172,8 +221,59 @@ class AbstractManagerBase(
         """
 
     def setup_logging(self) -> None:
-        """Setup logging for the manager."""
-        self._logger = EventClient(name=f"{self._definition.name}")
+        """
+        Setup logging for the manager using MadsciClientMixin.
+
+        This method initializes the EventClient for manager logging.
+        The EventClient is created via the mixin's lazy initialization.
+        """
+        # Set the name for the EventClient
+        if hasattr(self, "_definition") and self._definition:
+            self.name = f"{self._definition.name}"
+
+        # Propagate manager's OTEL settings to the EventClient config
+        # so that the EventClient will also export logs via OTLP
+        if getattr(self._settings, "otel_enabled", False):
+            self.event_client_config = EventClientConfig(
+                name=self.name,
+                otel_enabled=True,
+                otel_service_name=getattr(self._settings, "otel_service_name", None),
+                otel_exporter=getattr(self._settings, "otel_exporter", "console"),
+                otel_endpoint=getattr(self._settings, "otel_endpoint", None),
+                otel_protocol=getattr(self._settings, "otel_protocol", "grpc"),
+            )
+
+        # Use the mixin's event_client property (lazy initialization)
+        # This creates the EventClient if it doesn't exist
+        self._logger = self.event_client
+
+    def _setup_otel(self) -> None:
+        """Best-effort OTEL bootstrap for manager processes."""
+
+        try:
+            service_name = getattr(self._settings, "otel_service_name", None) or (
+                f"madsci.{self.__class__.__name__.lower()}"
+            )
+            self._otel_runtime = configure_otel(
+                OtelBootstrapConfig(
+                    enabled=True,
+                    service_name=service_name,
+                    service_version="unknown",
+                    exporter=getattr(self._settings, "otel_exporter", "console"),
+                    otlp_endpoint=getattr(self._settings, "otel_endpoint", None),
+                    otlp_protocol=getattr(self._settings, "otel_protocol", "grpc"),
+                )
+            )
+
+            # Instrument outbound HTTP (requests) if optional deps are installed.
+            instrument_requests(enabled=True)
+        except Exception:
+            self._otel_runtime = None
+            self.logger.warning(
+                "OpenTelemetry setup failed; continuing without OTEL",
+                event_type=EventType.MANAGER_ERROR,
+                exc_info=True,
+            )
 
     def setup_ownership(self) -> None:
         """Setup ownership context for the manager."""
@@ -191,11 +291,30 @@ class AbstractManagerBase(
             ManagerHealth: The current health status
         """
         try:
+            otel_enabled = bool(
+                getattr(self._settings, "otel_enabled", False)
+                and self._otel_runtime
+                and self._otel_runtime.enabled
+            )
+
+            extras: dict[str, Any] = {}
+            if getattr(self._settings, "otel_enabled", False):
+                extras.update(
+                    {
+                        "otel.enabled": otel_enabled,
+                        "otel.exporter_type": getattr(
+                            self._settings, "otel_exporter", None
+                        ),
+                        "otel.endpoint": getattr(self._settings, "otel_endpoint", None),
+                    }
+                )
+
             # Basic health check - if we can create a ManagerHealth object,
             # the manager is at least partially functional
             return ManagerHealth(
                 healthy=True,
                 description="Manager is running normally.",
+                **extras,
             )
         except Exception as e:
             return ManagerHealth(
@@ -254,7 +373,11 @@ class AbstractManagerBase(
 
         # Only log if logger is initialized
         if hasattr(self, "_logger"):
-            self.logger.info(f"Writing to definition file: {def_path}")
+            self.logger.info(
+                "Writing manager definition to file",
+                event_type=EventType.MANAGER_START,
+                definition_path=str(def_path),
+            )
         definition.to_yaml(def_path)
         return definition
 
@@ -268,6 +391,58 @@ class AbstractManagerBase(
         Args:
             app: The FastAPI application instance
         """
+        # Add rate limiting middleware if enabled
+        # Check if settings has rate limiting configuration (ManagerSettings-based)
+        if (
+            isinstance(self._settings, ManagerSettings)
+            and self._settings.rate_limit_enabled
+        ):
+            # Convert exempt IPs list to set, or use None to get defaults
+            # Note: empty list [] should create empty set, not None
+            exempt_ips = (
+                set(self._settings.rate_limit_exempt_ips)
+                if self._settings.rate_limit_exempt_ips is not None
+                else None
+            )
+
+            app.add_middleware(
+                RateLimitMiddleware,
+                requests_limit=self._settings.rate_limit_requests,
+                time_window=self._settings.rate_limit_window,
+                short_requests_limit=self._settings.rate_limit_short_requests,
+                short_time_window=self._settings.rate_limit_short_window,
+                cleanup_interval=self._settings.rate_limit_cleanup_interval,
+                exempt_ips=exempt_ips,
+            )
+            # Build log message with both long and short window info
+            log_msg = (
+                f"Rate limiting enabled: {self._settings.rate_limit_requests} requests "
+                f"per {self._settings.rate_limit_window} seconds"
+            )
+            if (
+                self._settings.rate_limit_short_requests is not None
+                and self._settings.rate_limit_short_window is not None
+            ):
+                log_msg += (
+                    f", burst limit: {self._settings.rate_limit_short_requests} requests "
+                    f"per {self._settings.rate_limit_short_window} seconds"
+                )
+            # Add exempt IPs info to log message
+            actual_exempt_ips = (
+                exempt_ips if exempt_ips is not None else {"127.0.0.1", "::1"}
+            )
+            if actual_exempt_ips:
+                log_msg += f", exempt IPs: {', '.join(sorted(actual_exempt_ips))}"
+            self.logger.info(
+                "Rate limiting enabled",
+                event_type=EventType.MANAGER_START,
+                rate_limit_requests=self._settings.rate_limit_requests,
+                rate_limit_window_seconds=self._settings.rate_limit_window,
+                short_requests_limit=self._settings.rate_limit_short_requests,
+                short_time_window_seconds=self._settings.rate_limit_short_window,
+                exempt_ips=sorted(actual_exempt_ips) if actual_exempt_ips else [],
+            )
+
         # Add CORS middleware by default
         app.add_middleware(
             CORSMiddleware,
@@ -275,6 +450,16 @@ class AbstractManagerBase(
             allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
+        )
+
+        # Add EventClient context middleware for hierarchical logging
+        # This establishes per-request context that includes request_id, path, etc.
+        manager_name = (
+            self._definition.name if hasattr(self._definition, "name") else "manager"
+        )
+        app.add_middleware(
+            EventClientContextMiddleware,
+            manager_name=manager_name,
         )
 
     # Server creation and lifecycle methods
@@ -298,6 +483,10 @@ class AbstractManagerBase(
 
         # Configure the app (middleware, etc.)
         self.configure_app(app)
+
+        # Instrument inbound HTTP (FastAPI) if OTEL is enabled.
+        if self._otel_runtime and self._otel_runtime.enabled:
+            instrument_fastapi(app, enabled=True)
 
         # Include the router from this Routable class
         app.include_router(self.router)
@@ -328,6 +517,36 @@ class AbstractManagerBase(
         else:
             default_host = "localhost"
             default_port = 8000
+
+        # Apply resource constraints from settings if available (ManagerSettings-based)
+        if isinstance(self._settings, ManagerSettings):
+            if self._settings.uvicorn_workers is not None:
+                uvicorn_kwargs.setdefault("workers", self._settings.uvicorn_workers)
+                self.logger.info(
+                    "Uvicorn workers configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_workers=self._settings.uvicorn_workers,
+                )
+
+            if self._settings.uvicorn_limit_concurrency is not None:
+                uvicorn_kwargs.setdefault(
+                    "limit_concurrency", self._settings.uvicorn_limit_concurrency
+                )
+                self.logger.info(
+                    "Uvicorn concurrency limit configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_limit_concurrency=self._settings.uvicorn_limit_concurrency,
+                )
+
+            if self._settings.uvicorn_limit_max_requests is not None:
+                uvicorn_kwargs.setdefault(
+                    "limit_max_requests", self._settings.uvicorn_limit_max_requests
+                )
+                self.logger.info(
+                    "Uvicorn max requests configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_limit_max_requests=self._settings.uvicorn_limit_max_requests,
+                )
 
         uvicorn.run(
             app,

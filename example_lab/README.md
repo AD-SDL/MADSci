@@ -2,6 +2,8 @@
 
 This is a fully functional example of a MADSci-powered self-driving laboratory. It demonstrates the complete MADSci ecosystem including all core managers, multiple virtual laboratory nodes, and various workflows that showcase autonomous experimentation capabilities.
 
+Currently, this lab uses simulated example modules for purely fake devices. For examples of real equipment integrated using MADSci, see [here](../docs/madsci_powered/Modules.md).
+
 ## Lab Architecture
 
 The example lab simulates a real laboratory environment with:
@@ -34,10 +36,11 @@ The example lab simulates a real laboratory environment with:
 
 Before starting the example lab, ensure you have:
 
-1. **Docker**: Docker Desktop (recommended) or Rancher Desktop
+1. **Docker**: Docker Desktop or Rancher Desktop
    - Docker Compose v2.0 or higher
    - At least 4GB RAM allocated to Docker
    - At least 10GB free disk space
+   - Consult the [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide) for configuration and setup recommendations
 
 2. **Network Requirements**:
    - Ports 2000-2004, 5432, 6379, 8000-8006, 9000-9001, and 27017 available
@@ -48,6 +51,8 @@ Before starting the example lab, ensure you have:
    - x86_64 or arm64 architecture
 
 ## Quick Start
+
+If you're new to docker/docker compose, we recommend consulting our [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide) before jumping in.
 
 ### 1. Start the Example Lab
 
@@ -152,7 +157,7 @@ The example lab includes several pre-configured workflows demonstrating differen
 python -c "
 from madsci.client.workcell_client import WorkcellClient
 client = WorkcellClient()
-result = client.execute_workflow('workflows/simple_transfer.workflow.yaml')
+result = client.start_workflow('workflows/simple_transfer.workflow.yaml')
 print(f'Workflow result: {result}')
 "
 ```
@@ -163,7 +168,7 @@ print(f'Workflow result: {result}')
 python -c "
 from madsci.client.workcell_client import WorkcellClient
 client = WorkcellClient()
-result = client.execute_workflow('workflows/multistep_transfer.workflow.yaml')
+result = client.start_workflow('workflows/multistep_transfer.workflow.yaml')
 print(f'Workflow result: {result}')
 "
 ```
@@ -174,7 +179,7 @@ print(f'Workflow result: {result}')
 python -c "
 from madsci.client.workcell_client import WorkcellClient
 client = WorkcellClient()
-result = client.execute_workflow('workflows/minimal_test.workflow.yaml')
+result = client.start_workflow('workflows/minimal_test.workflow.yaml')
 print(f'Workflow result: {result}')
 "
 ```
@@ -401,6 +406,28 @@ For production use:
 - [Configuration.md](../Configuration.md) - Complete configuration reference
 - [Main README](../README.md) - MADSci overview and installation
 - [Individual package documentation](../src/) - Detailed API references
+- [Logging Guide](../docs/guides/logging.md) - Structured logging and context management
+
+### 🔭 **Observability**
+- [OBSERVABILITY.md](OBSERVABILITY.md) - OpenTelemetry stack setup with Jaeger, Prometheus, Loki, and Grafana
+
+## Observability Stack
+
+The example lab includes optional OpenTelemetry observability with distributed tracing, metrics, and log aggregation:
+
+```bash
+# Start with full observability stack (Jaeger, Prometheus, Loki, Grafana)
+docker compose -f compose.yaml -f compose.otel.yaml up
+```
+
+**Access the UIs:**
+| Service    | URL                       | Description                        |
+|------------|---------------------------|------------------------------------|
+| Grafana    | http://localhost:3000     | Unified dashboards (admin/admin)   |
+| Jaeger     | http://localhost:16686    | Distributed tracing UI             |
+| Prometheus | http://localhost:9090     | Metrics querying                   |
+
+See [OBSERVABILITY.md](OBSERVABILITY.md) for detailed setup and configuration.
 
 ## Stopping the Lab
 

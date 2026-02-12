@@ -14,12 +14,12 @@ locations:
       deck_type: standard
       max_plates: 1
     robotarm_1:
+      gripper_config: standard
+      max_payload: 2.0
       position:
       - 10
       - 15
       - 5
-      gripper_config: standard
-      max_payload: 2.0
   resource_template_name: plate_nest
   resource_template_overrides:
     resource_class: deck_slot
@@ -47,12 +47,12 @@ locations:
       deck_type: standard
       max_plates: 1
     robotarm_1:
+      gripper_config: standard
+      max_payload: 2.0
       position:
       - 20
       - 15
       - 5
-      gripper_config: standard
-      max_payload: 2.0
   resource_template_name: plate_nest
   resource_template_overrides:
     resource_class: deck_slot
@@ -80,12 +80,12 @@ locations:
       deck_type: standard
       max_plates: 1
     robotarm_1:
+      gripper_config: standard
+      max_payload: 2.0
       position:
       - 5
       - 15
       - 5
-      gripper_config: standard
-      max_payload: 2.0
   resource_template_name: plate_nest
   resource_template_overrides:
     resource_class: deck_slot
@@ -113,12 +113,12 @@ locations:
       deck_type: standard
       max_plates: 1
     robotarm_1:
+      gripper_config: standard
+      max_payload: 2.0
       position:
       - 25
       - 15
       - 5
-      gripper_config: standard
-      max_payload: 2.0
   resource_template_name: plate_nest
   resource_template_overrides:
     resource_class: deck_slot
@@ -142,12 +142,12 @@ locations:
   description: Plate carriage - accessible by robotarm_1 for plate transport
   representations:
     robotarm_1:
+      gripper_config: wide
+      max_payload: 3.0
       position:
       - 15
       - 10
       - 8
-      gripper_config: wide
-      max_payload: 3.0
   resource_template_name: plate_nest
   resource_template_overrides:
     resource_class: plate_carriage
@@ -158,12 +158,12 @@ locations:
   description: Storage Rack - High-capacity storage accessible only by robot arm
   representations:
     robotarm_1:
+      gripper_config: wide
+      max_payload: 10.0
       position:
       - 30
       - 25
       - 10
-      gripper_config: wide
-      max_payload: 10.0
   resource_template_name: storage_stack
   resource_template_overrides:
     resource_class: storage

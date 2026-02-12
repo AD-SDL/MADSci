@@ -1,38 +1,84 @@
 """MADSci Event Handling."""
 
 import contextlib
+import copy
+import gzip
 import inspect
 import json
 import logging
+import platform
 import queue
+import shutil
+import sys
 import time
 import traceback
 import warnings
 from collections import OrderedDict
+from collections.abc import Iterable
+from importlib.metadata import PackageNotFoundError, version
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from threading import Lock, Thread
 from typing import Any, Optional, Union
 
 import requests
+from madsci.client.structlog_config import create_instance_logger, get_log_level_value
 from madsci.common.context import get_current_madsci_context
+from madsci.common.otel import (
+    OtelBootstrapConfig,
+    configure_otel,
+    current_trace_context,
+    inject_headers,
+)
 from madsci.common.types.event_types import (
     Event,
     EventClientConfig,
+    EventLogLevel,
     EventType,
 )
-from madsci.common.utils import threaded_task
+from madsci.common.utils import create_http_session, threaded_task
+from opentelemetry.metrics import CallbackOptions, Observation
 from pydantic import BaseModel, ValidationError
-from rich.logging import RichHandler
+
+
+def get_madsci_version() -> str:
+    """Get the installed MADSci version.
+
+    Returns:
+        The installed version string, or "unknown (development mode)" if not installed.
+    """
+    try:
+        return version("madsci_client")
+    except PackageNotFoundError:
+        return "unknown (development mode)"
 
 
 class EventClient:
-    """A logger and event handler for MADSci system components."""
+    """A logger and event handler for MADSci system components.
 
-    config: Optional[EventClientConfig] = None
-    _event_buffer = queue.Queue()
-    _buffer_lock = Lock()
-    _retry_thread = None
-    _retrying = False
+    Uses structlog for structured logging with context binding support.
+    Each EventClient instance has its own isolated logger configuration.
+
+    Example:
+        # Basic usage
+        client = EventClient(name="my_module")
+        client.info("Starting process", step=1, total=10)
+
+        # Context binding
+        client = client.bind(workflow_id="wf-123")
+        client.info("Processing")  # Automatically includes workflow_id
+
+        # Nested binding
+        client = client.bind(node_id="node-456")
+        client.info("Action complete")  # Includes both workflow_id and node_id
+
+        # Multiple clients with different configs (fully isolated)
+        json_client = EventClient(name="json_logger", config=EventClientConfig(log_output_format="json"))
+        console_client = EventClient(name="console_logger", config=EventClientConfig(log_output_format="console"))
+    """
+
+    config: EventClientConfig
+    _bound_context: dict[str, Any]
 
     def __init__(
         self,
@@ -63,20 +109,597 @@ class EventClient:
                 # * No luck, name after EventClient
                 self.name = __name__
         self.name = str(self.name)
-        self.logger = logging.getLogger(self.name)
+
+        # Initialize bound context
+        self._bound_context = {}
+
+        # Initialize thread-safety primitives (per-instance to avoid shared state)
+        self._event_buffer: queue.Queue = queue.Queue()
+        self._buffer_lock: Lock = Lock()
+        self._retry_thread: Optional[Thread] = None
+        self._retrying: bool = False
+        self._shutdown: bool = False
+
+        # Track whether this client is a bound child (created via bind()/unbind())
+        # Child clients share resources with the parent and should not close them
+        self._is_bound_child: bool = False
+
+        # Set up log directory and file
         self.log_dir = Path(self.config.log_dir).expanduser()
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.logfile = self.log_dir / f"{self.name}.log"
-        self.logger.setLevel(self.config.log_level)
+
+        # Create the stdlib logger for file handling and console output
+        self.logger = logging.getLogger(self.name)
+        self.logger.setLevel(get_log_level_value(self.config.log_level))
         for handler in self.logger.handlers:
             self.logger.removeHandler(handler)
-        file_handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
+        file_handler = self._create_file_handler()
         self.logger.addHandler(file_handler)
-        self.logger.addHandler(RichHandler(rich_tracebacks=True, show_path=False))
+        # Add a simple StreamHandler for console output - structlog handles formatting
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter("%(message)s"))
+        self.logger.addHandler(console_handler)
+
+        # Create structlog logger for structured logging
+        self._structlog_logger = create_instance_logger(
+            name=self.name,
+            output_format=self.config.log_output_format,
+            log_level=get_log_level_value(self.config.log_level),
+            include_otel_context=self.config.otel_enabled,
+        )
+
         self.event_server = (
             self.config.event_server_url
             or get_current_madsci_context().event_server_url
         )
+
+        # Create HTTP session for requests to event server
+        self.session = create_http_session(config=self.config)
+
+        self._otel_runtime = None
+        self._otel_event_counter = None
+        self._otel_send_latency_histogram = None
+        self._otel_buffer_size_gauge = None
+        self._otel_retry_counter = None
+        if self.config.otel_enabled:
+            self._setup_otel()
+
+        # Log startup information
+        self._log_startup_info()
+
+    def _setup_otel(self) -> None:
+        try:
+            self._otel_runtime = configure_otel(
+                OtelBootstrapConfig(
+                    enabled=True,
+                    service_name=self.config.otel_service_name or self.name,
+                    service_version=get_madsci_version(),
+                    exporter=self.config.otel_exporter,
+                    otlp_endpoint=self.config.otel_endpoint,
+                    otlp_protocol=self.config.otel_protocol,
+                    metric_export_interval_ms=self.config.otel_metric_export_interval_ms,
+                )
+            )
+
+            self._setup_otel_metrics()
+
+            # Attach OTEL log handler to bridge stdlib logs to OTEL
+            if self._otel_runtime.otel_log_handler is not None:
+                self.logger.addHandler(self._otel_runtime.otel_log_handler)
+        except Exception:
+            self._otel_runtime = None
+            self.logger.warning(
+                "OpenTelemetry setup failed; continuing without OTEL",
+                exc_info=True,
+            )
+
+    def _setup_otel_metrics(self) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+
+        meter = self._otel_runtime.meter
+
+        self._otel_event_counter = meter.create_counter(
+            name="madsci.eventclient.events",
+            description="Number of events emitted by EventClient",
+            unit="1",
+        )
+        self._otel_send_latency_histogram = meter.create_histogram(
+            name="madsci.eventclient.send_latency_ms",
+            description="Latency of sending events to EventManager",
+            unit="ms",
+        )
+        self._otel_retry_counter = meter.create_counter(
+            name="madsci.eventclient.send_retries",
+            description="Number of retries attempted when sending events",
+            unit="1",
+        )
+
+        def _observe_buffer_size(_options: CallbackOptions) -> Iterable[Observation]:
+            yield Observation(self._event_buffer.qsize())
+
+        self._otel_buffer_size_gauge = meter.create_observable_gauge(
+            name="madsci.eventclient.buffer_size",
+            callbacks=[_observe_buffer_size],
+            description="Current size of the buffered event queue",
+            unit="1",
+        )
+
+    def _record_otel_event(
+        self, *, level: EventLogLevel, event_type: EventType
+    ) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+        if self._otel_event_counter is None:
+            return
+        self._otel_event_counter.add(
+            1,
+            {
+                "event.level": level.name,
+                "event.type": event_type.value,
+            },
+        )
+
+    def _record_otel_send_latency(
+        self, *, latency_ms: float, event_type: EventType
+    ) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+        if self._otel_send_latency_histogram is None:
+            return
+        self._otel_send_latency_histogram.record(
+            latency_ms,
+            {
+                "event.type": event_type.value,
+            },
+        )
+
+    def _record_otel_retry(self) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+        if self._otel_retry_counter is None:
+            return
+        self._otel_retry_counter.add(1)
+
+    def _log_startup_info(self) -> None:
+        """Log startup information on first initialization.
+
+        Logs MADSci version, client configuration, and environment info
+        to help with debugging and auditing.
+        """
+        self._structlog_logger.info(
+            "EventClient initialized",
+            madsci_version=get_madsci_version(),
+            client_name=self.name,
+            event_server=str(self.event_server)
+            if self.event_server
+            else "Not configured",
+            log_dir=str(self.log_dir),
+            log_level=str(self.config.log_level),
+            python_version=platform.python_version(),
+            platform=platform.platform(),
+        )
+
+    def _create_file_handler(self) -> logging.Handler:
+        """Create the appropriate file handler based on rotation config.
+
+        Returns:
+            A logging handler configured for file output with optional rotation.
+        """
+        handler: logging.Handler
+
+        if self.config.log_rotation_type == "none":
+            handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
+        elif self.config.log_rotation_type == "size":
+            handler = RotatingFileHandler(
+                filename=str(self.logfile),
+                maxBytes=self.config.log_max_bytes,
+                backupCount=self.config.log_backup_count,
+            )
+            if self.config.log_compression_enabled:
+                handler.rotator = self._compress_rotated_log
+                handler.namer = self._rotated_log_namer
+        elif self.config.log_rotation_type == "time":
+            handler = TimedRotatingFileHandler(
+                filename=str(self.logfile),
+                when=self.config.log_rotation_when,
+                interval=self.config.log_rotation_interval,
+                backupCount=self.config.log_backup_count,
+            )
+            if self.config.log_compression_enabled:
+                handler.rotator = self._compress_rotated_log
+                handler.namer = self._rotated_log_namer
+        else:
+            # Fallback to basic file handler (should not happen due to validation)
+            handler = logging.FileHandler(filename=str(self.logfile), mode="a+")
+
+        return handler
+
+    def _compress_rotated_log(self, source: str, dest: str) -> None:
+        """Compress a rotated log file with gzip.
+
+        Args:
+            source: Path to the source log file to compress.
+            dest: Path to the destination compressed file.
+        """
+        source_path = Path(source)
+        with source_path.open("rb") as f_in, gzip.open(dest, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        source_path.unlink()
+
+    def _rotated_log_namer(self, name: str) -> str:
+        """Add .gz extension to rotated log file names.
+
+        Args:
+            name: The original rotated log file name.
+
+        Returns:
+            The file name with .gz extension appended.
+        """
+        return name + ".gz"
+
+    def __del__(self) -> None:
+        """Clean up resources on destruction."""
+        self.close()
+
+    def close(self) -> None:
+        """Clean up resources including file handlers and retry thread.
+
+        This method should be called when the EventClient is no longer needed,
+        especially in test scenarios where many clients may be created.
+
+        Note: Bound child clients (created via bind()/unbind()) share resources
+        with their parent and will skip cleanup to avoid closing shared resources.
+        """
+        # Bound child clients share resources with parent - don't close them
+        if getattr(self, "_is_bound_child", False):
+            return
+
+        # Signal shutdown
+        with self._buffer_lock:
+            self._shutdown = True
+
+        # Wait for retry thread to finish if it exists
+        if self._retry_thread is not None and self._retry_thread.is_alive():
+            # Give the thread a reasonable time to finish (5 seconds)
+            self._retry_thread.join(timeout=5.0)
+
+        # Close and remove all handlers to free file descriptors
+        if hasattr(self, "logger") and self.logger:
+            for handler in self.logger.handlers[:]:
+                with contextlib.suppress(Exception):
+                    handler.close()
+                    self.logger.removeHandler(handler)
+
+        # Close HTTP session
+        if hasattr(self, "session") and self.session:
+            with contextlib.suppress(Exception):
+                self.session.close()
+
+    def __enter__(self) -> "EventClient":
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Context manager exit - clean up resources."""
+        self.close()
+
+    # ==================== Context Binding ====================
+
+    def bind(self, **context: Any) -> "EventClient":
+        """Create a new client with additional bound context.
+
+        Bound context is automatically included in all subsequent log messages
+        from the returned client.
+
+        Args:
+            **context: Key-value pairs to bind to all future log messages
+
+        Returns:
+            New EventClient instance with bound context
+
+        Example:
+            client = EventClient(name="workflow")
+            client = client.bind(workflow_id="wf-123")
+            client.info("Starting workflow")  # Includes workflow_id
+
+            client = client.bind(step=1)
+            client.info("Executing step")  # Includes workflow_id and step
+        """
+        new_client = copy.copy(self)
+        new_client._bound_context = {**self._bound_context, **context}
+        new_client._structlog_logger = self._structlog_logger.bind(**context)
+        # Mark as a bound child so it won't close shared resources
+        new_client._is_bound_child = True
+        return new_client
+
+    def unbind(self, *keys: str) -> "EventClient":
+        """Create a new client with specified context keys removed.
+
+        Args:
+            *keys: Keys to remove from the bound context
+
+        Returns:
+            New EventClient instance without the specified context keys
+        """
+        new_client = copy.copy(self)
+        new_client._bound_context = {
+            k: v for k, v in self._bound_context.items() if k not in keys
+        }
+        new_client._structlog_logger = self._structlog_logger.unbind(*keys)
+        # Mark as a bound child so it won't close shared resources
+        new_client._is_bound_child = True
+        return new_client
+
+    # ==================== Error Handling ====================
+
+    def _handle_error(self, error: Exception, context: str) -> None:
+        """Handle errors based on fail_on_error configuration.
+
+        Args:
+            error: The exception that occurred
+            context: Description of what operation failed
+
+        Raises:
+            The original exception if fail_on_error is True
+        """
+        error_msg = f"{context}: {error}"
+
+        if self.config.fail_on_error:
+            # Re-raise with context
+            raise type(error)(error_msg) from error
+        # Log silently and continue
+        # Use stderr to avoid infinite recursion if logging itself fails
+        sys.stderr.write(f"[EventClient Warning] {error_msg}\n")
+
+    # ==================== Idiomatic Structlog API ====================
+
+    def debug(self, message: str, **kwargs: Any) -> None:
+        """Log a debug message.
+
+        Args:
+            message: The log message
+            **kwargs: Additional structured data to include in the log entry
+        """
+        try:
+            combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_DEBUG)
+            self._structlog_logger.debug(message, **combined_context)
+            self._maybe_send_to_server(message, EventLogLevel.DEBUG, **kwargs)
+        except Exception as e:
+            self._handle_error(e, "Failed to log debug message")
+
+    def info(self, message: str, **kwargs: Any) -> None:
+        """Log an info message.
+
+        Args:
+            message: The log message
+            **kwargs: Additional structured data to include in the log entry
+        """
+        try:
+            combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_INFO)
+            self._structlog_logger.info(message, **combined_context)
+            self._maybe_send_to_server(message, EventLogLevel.INFO, **kwargs)
+        except Exception as e:
+            self._handle_error(e, "Failed to log info message")
+
+    def warning(self, message: str, **kwargs: Any) -> None:
+        """Log a warning message.
+
+        Args:
+            message: The log message
+            **kwargs: Additional structured data to include in the log entry
+        """
+        try:
+            combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_WARNING)
+            self._structlog_logger.warning(message, **combined_context)
+            self._maybe_send_to_server(message, EventLogLevel.WARNING, **kwargs)
+        except Exception as e:
+            self._handle_error(e, "Failed to log warning message")
+
+    def error(self, message: str, **kwargs: Any) -> None:
+        """Log an error message.
+
+        Args:
+            message: The log message
+            **kwargs: Additional structured data to include in the log entry
+        """
+        try:
+            combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_ERROR)
+            self._structlog_logger.error(message, **combined_context)
+            self._maybe_send_to_server(message, EventLogLevel.ERROR, **kwargs)
+        except Exception as e:
+            self._handle_error(e, "Failed to log error message")
+
+    def critical(self, message: str, **kwargs: Any) -> None:
+        """Log a critical message.
+
+        Args:
+            message: The log message
+            **kwargs: Additional structured data to include in the log entry
+        """
+        try:
+            combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_CRITICAL)
+            self._structlog_logger.critical(message, **combined_context)
+            self._maybe_send_to_server(message, EventLogLevel.CRITICAL, **kwargs)
+        except Exception as e:
+            self._handle_error(e, "Failed to log critical message")
+
+    def exception(self, message: str, **kwargs: Any) -> None:
+        """Log an exception with traceback.
+
+        Args:
+            message: The log message
+            **kwargs: Additional structured data to include in the log entry
+        """
+        try:
+            combined_context = {**self._bound_context, **kwargs}
+            combined_context.setdefault("event_type", EventType.LOG_ERROR)
+            self._structlog_logger.exception(message, **combined_context)
+            self._maybe_send_to_server(
+                message, EventLogLevel.ERROR, exc_info=True, **kwargs
+            )
+        except Exception as e:
+            self._handle_error(e, "Failed to log exception")
+
+    # ==================== Backward Compatible Aliases ====================
+
+    def log_debug(self, event: Union[Event, str], **kwargs: Any) -> None:
+        """Log an event at the debug level.
+
+        Alias for debug(). Provided for backward compatibility.
+        """
+        if isinstance(event, Event):
+            self.log(event, logging.DEBUG)
+        else:
+            self.debug(str(event), **kwargs)
+
+    def log_info(self, event: Union[Event, str], **kwargs: Any) -> None:
+        """Log an event at the info level.
+
+        Alias for info(). Provided for backward compatibility.
+        """
+        if isinstance(event, Event):
+            self.log(event, logging.INFO)
+        else:
+            self.info(str(event), **kwargs)
+
+    def log_warning(
+        self,
+        event: Union[Event, str],
+        warning_category: Optional[type] = UserWarning,
+        **kwargs: Any,
+    ) -> None:
+        """Log an event at the warning level.
+
+        Args:
+            event: The event or message to log
+            warning_category: Optional warning category for warnings module integration
+            **kwargs: Additional structured data
+        """
+        if isinstance(event, Event):
+            self.log(event, logging.WARNING, warning_category=warning_category)
+        else:
+            if warning_category and self.logger.getEffectiveLevel() <= logging.WARNING:
+                # Warn via the warnings module
+                warnings.warn(
+                    str(event),
+                    category=warning_category,
+                    stacklevel=3,
+                )
+            self.warning(str(event), **kwargs)
+
+    # Backward compatible alias - warn points to log_warning for warning_category support
+    warn = log_warning
+
+    def log_error(self, event: Union[Event, str], **kwargs: Any) -> None:
+        """Log an event at the error level.
+
+        Alias for error(). Provided for backward compatibility.
+        """
+        if isinstance(event, Event):
+            self.log(event, logging.ERROR)
+        else:
+            self.error(str(event), **kwargs)
+
+    def log_critical(self, event: Union[Event, str], **kwargs: Any) -> None:
+        """Log an event at the critical level.
+
+        Alias for critical(). Provided for backward compatibility.
+        """
+        if isinstance(event, Event):
+            self.log(event, logging.CRITICAL)
+        else:
+            self.critical(str(event), **kwargs)
+
+    def log_alert(self, event: Union[Event, str], **kwargs: Any) -> None:
+        """Log an event at the alert level (critical with alert flag).
+
+        Args:
+            event: The event or message to log
+            **kwargs: Additional structured data
+        """
+        if isinstance(event, Event):
+            self.log(event, alert=True)
+        else:
+            self.critical(str(event), alert=True, **kwargs)
+            self._maybe_send_to_server(
+                str(event), EventLogLevel.CRITICAL, alert=True, **kwargs
+            )
+
+    alert = log_alert
+
+    # ==================== Event Server Communication ====================
+
+    def _maybe_send_to_server(
+        self,
+        message: str,
+        level: EventLogLevel,
+        alert: bool = False,
+        **context: Any,
+    ) -> None:
+        """Optionally send event to event server with error handling.
+
+        Args:
+            message: The log message
+            level: The log level
+            alert: Whether this is an alert
+            **context: Additional context to include
+        """
+        if not self.event_server:
+            return
+
+        try:
+            log_level_value = get_log_level_value(self.config.log_level)
+            if level.value < log_level_value:
+                return
+
+            # Determine event type based on level
+            event_type = EventType.LOG
+            if level == EventLogLevel.DEBUG:
+                event_type = EventType.LOG_DEBUG
+            elif level == EventLogLevel.INFO:
+                event_type = EventType.LOG_INFO
+            elif level == EventLogLevel.WARNING:
+                event_type = EventType.LOG_WARNING
+            elif level == EventLogLevel.ERROR:
+                event_type = EventType.LOG_ERROR
+            elif level == EventLogLevel.CRITICAL:
+                event_type = EventType.LOG_CRITICAL
+
+            # Combine bound context with event context
+            event_data = {
+                "message": message,
+                **self._bound_context,
+                **context,
+            }
+
+            if self._otel_runtime and self._otel_runtime.enabled:
+                trace_ctx = current_trace_context()
+            else:
+                trace_ctx = {"trace_id": None, "span_id": None}
+
+            event = Event(
+                event_type=event_type,
+                event_data=event_data,
+                log_level=level,
+                alert=alert,
+                source=self.config.source,
+                trace_id=trace_ctx.get("trace_id"),
+                span_id=trace_ctx.get("span_id"),
+            )
+
+            self._record_otel_event(level=level, event_type=event_type)
+            self._send_event_to_event_server_task(event)
+        except Exception as e:
+            self._handle_error(e, "Failed to send event to server")
+
+    # ==================== Legacy Log Method ====================
 
     def get_log(self) -> dict[str, Event]:
         """Read the log"""
@@ -90,12 +713,20 @@ class EventClient:
                 events[event.event_id] = event
         return events
 
-    def get_event(self, event_id: str) -> Optional[Event]:
-        """Get a specific event by ID."""
+    def get_event(
+        self, event_id: str, timeout: Optional[float] = None
+    ) -> Optional[Event]:
+        """
+        Get a specific event by ID.
+
+        Args:
+            event_id: The ID of the event to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         if self.event_server:
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + f"event/{event_id}",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
             )
             if not response.ok:
                 response.raise_for_status()
@@ -103,15 +734,26 @@ class EventClient:
         events = self.get_log()
         return events.get(event_id, None)
 
-    def get_events(self, number: int = 100, level: int = -1) -> dict[str, Event]:
-        """Query the event server for a certain number of recent events. If no event server is configured, query the log file instead."""
+    def get_events(
+        self, number: int = 100, level: int = -1, timeout: Optional[float] = None
+    ) -> dict[str, Event]:
+        """
+        Query the event server for a certain number of recent events.
+
+        If no event server is configured, query the log file instead.
+
+        Args:
+            number: Number of events to retrieve.
+            level: Log level filter. -1 uses effective log level.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         if level == -1:
             level = int(self.logger.getEffectiveLevel())
         events = OrderedDict()
         if self.event_server:
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + "events",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
                 params={"number": number, "level": level},
             )
             if not response.ok:
@@ -127,13 +769,23 @@ class EventClient:
                 break
         return selected_events
 
-    def query_events(self, selector: dict) -> dict[str, Event]:
-        """Query the event server for events based on a selector. Requires an event server be configured."""
+    def query_events(
+        self, selector: dict, timeout: Optional[float] = None
+    ) -> dict[str, Event]:
+        """
+        Query the event server for events based on a selector.
+
+        Requires an event server be configured.
+
+        Args:
+            selector: Dictionary selector for filtering events.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
         events = OrderedDict()
         if self.event_server:
-            response = requests.post(
+            response = self.session.post(
                 str(self.event_server) + "events/query",
-                timeout=10,
+                timeout=timeout or self.config.timeout_default,
                 params={"selector": selector},
             )
             if not response.ok:
@@ -147,11 +799,21 @@ class EventClient:
     def log(
         self,
         event: Union[Event, Any],
-        level: Optional[int] = None,
+        level: Optional[Union[int, EventLogLevel]] = None,
         alert: Optional[bool] = None,
-        warning_category: Optional[Warning] = None,
+        warning_category: Optional[type] = None,
     ) -> None:
-        """Log an event."""
+        """Log an event.
+
+        This is the legacy interface. For structured logging, prefer using
+        the new methods: debug(), info(), warning(), error(), critical().
+
+        Args:
+            event: Event object, string, dict, or other data to log
+            level: Log level (defaults to event's level or INFO)
+            alert: Whether to force an alert
+            warning_category: Optional warning category for warnings module
+        """
         # * If we've got a string or dict, check if it's a serialized event
         if isinstance(event, str):
             with contextlib.suppress(ValidationError):
@@ -163,11 +825,24 @@ class EventClient:
             event = Event(
                 event_type=EventType.LOG_ERROR,
                 event_data=traceback.format_exc(),
-                log_level=logging.ERROR,
+                log_level=EventLogLevel.ERROR,
             )
         if not isinstance(event, Event):
-            event = self._new_event_for_log(event, level)
-        event.log_level = level if level is not None else event.log_level
+            level_int: int = logging.INFO
+            if isinstance(level, EventLogLevel):
+                level_int = int(level.value)
+            elif level is not None:
+                level_int = int(level)
+            event = self._new_event_for_log(
+                event,
+                level_int,
+            )
+
+        event = Event.model_validate(event)
+        if level is not None:
+            event.log_level = (
+                level if isinstance(level, EventLogLevel) else EventLogLevel(level)
+            )
         event.alert = alert if alert is not None else event.alert
         if warning_category and self.logger.getEffectiveLevel() <= logging.WARNING:
             # * Warn via the warnings module
@@ -183,44 +858,7 @@ class EventClient:
         if self.logger.getEffectiveLevel() <= event.log_level and self.event_server:
             self._send_event_to_event_server_task(event)
 
-    def log_debug(self, event: Union[Event, str]) -> None:
-        """Log an event at the debug level."""
-        self.log(event, logging.DEBUG)
-
-    debug = log_debug
-
-    def log_info(self, event: Union[Event, str]) -> None:
-        """Log an event at the info level."""
-        self.log(event, logging.INFO)
-
-    info = log_info
-
-    def log_warning(
-        self, event: Union[Event, str], warning_category: Warning = UserWarning
-    ) -> None:
-        """Log an event at the warning level."""
-        self.log(event, logging.WARNING, warning_category=warning_category)
-
-    warning = log_warning
-    warn = log_warning
-
-    def log_error(self, event: Union[Event, str]) -> None:
-        """Log an event at the error level."""
-        self.log(event=event, level=logging.ERROR)
-
-    error = log_error
-
-    def log_critical(self, event: Union[Event, str]) -> None:
-        """Log an event at the critical level."""
-        self.log(event, logging.CRITICAL)
-
-    critical = log_critical
-
-    def log_alert(self, event: Union[Event, str]) -> None:
-        """Log an event at the alert level."""
-        self.log(event, alert=True)
-
-    alert = log_alert
+    # ==================== Utilization Methods ====================
 
     def get_utilization_periods(
         self,
@@ -272,14 +910,15 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + "utilization/periods",
                 params=params,
-                timeout=30,
+                timeout=self.config.timeout_data_operations,
             )
             if not response.ok:
                 self.logger.error(
-                    f"Error getting utilization periods: HTTP {response.status_code}"
+                    "Error getting utilization periods",
+                    extra={"http_status_code": response.status_code},
                 )
                 response.raise_for_status()
 
@@ -291,8 +930,11 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException as e:
-            self.logger.error(f"Error getting utilization periods: {e}")
+        except requests.RequestException:
+            self.logger.error(
+                "Error getting utilization periods",
+                exc_info=True,
+            )
             return None
 
     def get_session_utilization(
@@ -337,10 +979,10 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + "utilization/sessions",
                 params=params,
-                timeout=60,
+                timeout=self.config.timeout_long_operations,
             )
 
             if not response.ok:
@@ -397,15 +1039,16 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = requests.get(
+            response = self.session.get(
                 str(self.event_server) + "utilization/users",
                 params=params,
-                timeout=60,
+                timeout=self.config.timeout_long_operations,
             )
 
             if not response.ok:
                 self.logger.error(
-                    f"Error getting user utilization report: HTTP {response.status_code}"
+                    "Error getting user utilization report",
+                    extra={"http_status_code": response.status_code},
                 )
                 response.raise_for_status()
 
@@ -417,9 +1060,14 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException as e:
-            self.logger.error(f"Error getting user utilization report: {e}")
+        except requests.RequestException:
+            self.logger.error(
+                "Error getting user utilization report",
+                exc_info=True,
+            )
             return None
+
+    # ==================== Internal Methods ====================
 
     def _start_retry_thread(self) -> None:
         with self._buffer_lock:
@@ -433,15 +1081,19 @@ class EventClient:
     def _retry_buffered_events(self) -> None:
         backoff = 2
         max_backoff = 60
-        while not self._event_buffer.empty():
+        while not self._event_buffer.empty() and not self._shutdown:
+            event: Optional[Event] = None
             try:
                 event = self._event_buffer.get()
-                self._send_event_to_event_server(event, retrying=True)
+                if isinstance(event, Event):
+                    self._send_event_to_event_server(event, retrying=True)
                 backoff = 2  # Reset backoff on success
             except Exception:
+                self._record_otel_retry()
                 time.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)
-                self._event_buffer.put(event)  # Re-add the event to the buffer
+                if event is not None:
+                    self._event_buffer.put(event)  # Re-add the event to the buffer
         with self._buffer_lock:
             self._retrying = False
 
@@ -452,21 +1104,36 @@ class EventClient:
         """Send an event to the event manager. Buffer on failure."""
         try:
             self._send_event_to_event_server(event, retrying=retrying)
-        except Exception as e:
-            self.logger.error(f"Error in _send_event_to_event_server_task: {e}")
+        except Exception:
+            self.logger.error(
+                "Error in _send_event_to_event_server_task",
+                exc_info=True,
+            )
 
     def _send_event_to_event_server(self, event: Event, retrying: bool = False) -> None:
         """Send an event to the event manager. Buffer on failure."""
 
         try:
-            response = requests.post(
+            start = time.perf_counter()
+            headers: dict[str, str] = {}
+            if self._otel_runtime and self._otel_runtime.enabled:
+                with contextlib.suppress(Exception):
+                    inject_headers(headers)
+            response = self.session.post(
                 url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),
-                timeout=10,
+                headers=headers,
+                timeout=self.config.timeout_default,
             )
 
             if not response.ok:
                 response.raise_for_status()
+
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            self._record_otel_send_latency(
+                latency_ms=elapsed_ms,
+                event_type=event.event_type or EventType.UNKNOWN,
+            )
 
         except Exception:
             if not retrying:

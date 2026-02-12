@@ -91,8 +91,43 @@ class RestNodeConfig(NodeConfig):
     )
     uvicorn_kwargs: dict[str, Any] = Field(
         title="Uvicorn Configuration",
-        description="Configuration for the Uvicorn server that runs the REST API.",
-        default_factory=dict,
+        description="Configuration for the Uvicorn server that runs the REST API. By default, sets limit_concurrency=10 to protect against connection exhaustion attacks.",
+        default_factory=lambda: {"limit_concurrency": 10},
+    )
+    enable_rate_limiting: bool = Field(
+        title="Enable Rate Limiting",
+        description="Enable rate limiting middleware for the REST API.",
+        default=True,
+    )
+    rate_limit_requests: int = Field(
+        title="Rate Limit Requests",
+        description="Maximum number of requests allowed per long time window (only used if enable_rate_limiting is True).",
+        default=100,
+        ge=1,
+    )
+    rate_limit_window: int = Field(
+        title="Rate Limit Window",
+        description="Long time window in seconds for rate limiting (only used if enable_rate_limiting is True).",
+        default=60,
+        ge=1,
+    )
+    rate_limit_short_requests: Optional[int] = Field(
+        title="Rate Limit Short Requests",
+        description="Maximum number of requests allowed per short time window for burst protection (only used if enable_rate_limiting is True). If None, short window limiting is disabled.",
+        default=50,
+        ge=1,
+    )
+    rate_limit_short_window: Optional[int] = Field(
+        title="Rate Limit Short Window",
+        description="Short time window for burst protection in seconds (only used if enable_rate_limiting is True). If None, short window limiting is disabled.",
+        default=1,
+        ge=1,
+    )
+    rate_limit_cleanup_interval: int = Field(
+        title="Rate Limit Cleanup Interval",
+        description="Interval in seconds between cleanup operations to prevent memory leaks (only used if enable_rate_limiting is True).",
+        default=300,
+        ge=1,
     )
 
 
@@ -333,6 +368,11 @@ class NodeStatus(MadsciBaseModel):
         title="Node Errored",
         description="Whether the node is in an errored state.",
     )
+    disconnected: bool = Field(
+        default=False,
+        title="Node Disconnected",
+        description="Whether the node is disconnected from the workcell manager",
+    )
     errors: list[Error] = Field(
         default_factory=list,
         title="Node Errors",
@@ -371,6 +411,8 @@ class NodeStatus(MadsciBaseModel):
             ready = False
         if self.paused:
             ready = False
+        if self.disconnected:
+            ready = False
         if len(self.waiting_for_config) > 0:
             ready = False
         return ready
@@ -386,6 +428,8 @@ class NodeStatus(MadsciBaseModel):
             reasons.append("Node is locked")
         if self.errored:
             reasons.append("Node is in an error state")
+        if self.disconnected:
+            reasons.append("Node is disconnected")
         if self.initializing:
             reasons.append("Node is initializing")
         if self.paused:

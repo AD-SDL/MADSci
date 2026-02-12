@@ -9,7 +9,8 @@ from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.ownership import ownership_context
+from madsci.common.ownership import ownership_class
+from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     Location,
     LocationDefinition,
@@ -26,10 +27,16 @@ from madsci.location_manager.transfer_planner import TransferPlanner
 REPRESENTATION_VAL_BODY = Body(...)
 
 
+@ownership_class()
 class LocationManager(
     AbstractManagerBase[LocationManagerSettings, LocationManagerDefinition]
 ):
-    """MADSci Location Manager using the new AbstractManagerBase pattern."""
+    """MADSci Location Manager using the new AbstractManagerBase pattern.
+
+    This class is decorated with @ownership_class() which automatically
+    establishes ownership context for all public methods, eliminating the
+    need for manual `with ownership_context():` blocks in each endpoint.
+    """
 
     SETTINGS_CLASS = LocationManagerSettings
     DEFINITION_CLASS = LocationManagerDefinition
@@ -49,7 +56,7 @@ class LocationManager(
         """Initialize manager-specific components."""
 
         self.state_handler = LocationStateHandler(
-            self.settings, manager_id=self.definition.manager_id
+            settings=self.settings, manager_id=self.definition.manager_id
         )
 
         # Initialize resource client with resource server URL from context
@@ -62,6 +69,10 @@ class LocationManager(
             self.state_handler, self.definition, self.resource_client
         )
 
+        # Sync any Redis-only locations to the definition file on startup
+        # This ensures locations added via API are persisted immediately
+        self._sync_locations_to_definition()
+
     def _initialize_locations_from_definition(self) -> None:
         """Initialize locations from the definition, creating or updating them in the state handler."""
 
@@ -72,7 +83,7 @@ class LocationManager(
             )
 
             # Handle resource creation/initialization if resource_template_name is provided
-            resource_id = None
+            resource_id = existing_location.resource_id if existing_location else None
             if location_def.resource_template_name:
                 if existing_location and existing_location.resource_id:
                     # Location exists and has a resource, validate it still exists and matches template
@@ -88,32 +99,12 @@ class LocationManager(
                 location_id=location_def.location_id,
                 location_name=location_def.location_name,
                 description=location_def.description,
-                representations=location_def.representations
-                if location_def.representations
-                else None,
+                representations=location_def.representations or None,
                 resource_id=resource_id,  # Associate the resource with the location
                 allow_transfers=location_def.allow_transfers,
             )
 
-            if existing_location is None:
-                # Location doesn't exist, create it
-                self.state_handler.set_location(location.location_id, location)
-            else:
-                # Location exists, update if there are changes
-                needs_update = False
-
-                if location.representations != existing_location.representations:
-                    existing_location.representations = location.representations
-                    needs_update = True
-
-                if resource_id != existing_location.resource_id:
-                    existing_location.resource_id = resource_id
-                    needs_update = True
-
-                if needs_update:
-                    self.state_handler.update_location(
-                        location.location_id, existing_location
-                    )
+            self.state_handler.set_location(location.location_id, location)
 
     def _initialize_location_resource(
         self, location_def: LocationDefinition
@@ -146,8 +137,13 @@ class LocationManager(
         except Exception as e:
             # Log the error but continue - locations can still function without associated resources
             self.logger.warning(
-                f"Failed to create resource from template '{location_def.resource_template_name}' "
-                f"for location '{location_def.location_name}': {e}"
+                "Failed to create resource from template",
+                event_type=EventType.RESOURCE_CREATE,
+                template_name=location_def.resource_template_name,
+                location_id=location_def.location_id,
+                location_name=location_def.location_name,
+                error=str(e),
+                exc_info=True,
             )
             return None
 
@@ -175,22 +171,105 @@ class LocationManager(
             if existing_resource:
                 # Resource exists, reuse it
                 self.logger.debug(
-                    f"Reusing existing resource '{existing_resource_id}' for location '{location_def.location_name}'"
+                    "Reusing existing resource for location",
+                    existing_resource_id=existing_resource_id,
+                    location_id=location_def.location_id,
+                    location_name=location_def.location_name,
                 )
                 return existing_resource_id
             self.logger.info(
-                f"Existing resource '{existing_resource_id}' for location '{location_def.location_name}' "
-                f"no longer exists. Creating new resource."
+                "Existing resource missing; recreating for location",
+                event_type=EventType.RESOURCE_CREATE,
+                existing_resource_id=existing_resource_id,
+                location_id=location_def.location_id,
+                location_name=location_def.location_name,
             )
 
         except Exception as e:
             self.logger.info(
-                f"Failed to validate existing resource '{existing_resource_id}' for location '{location_def.location_name}': {e}. "
-                f"Creating new resource."
+                "Failed to validate existing location resource; recreating",
+                event_type=EventType.RESOURCE_CREATE,
+                existing_resource_id=existing_resource_id,
+                location_id=location_def.location_id,
+                location_name=location_def.location_name,
+                error=str(e),
+                exc_info=True,
             )
 
         # Existing resource doesn't exist, create a new one
         return self._initialize_location_resource(location_def)
+
+    def _sync_locations_to_definition(self) -> None:
+        """Sync current runtime locations back to the definition file.
+
+        This method reads all locations from Redis state, converts them to
+        LocationDefinition objects, and writes them back to the YAML definition file.
+        It preserves other definition settings like transfer_capabilities.
+        It also preserves resource_template_name and resource_template_overrides for
+        locations that were originally defined with them.
+        """
+        try:
+            # Get current locations from state
+            runtime_locations = self.state_handler.get_locations()
+
+            # Create a map of original location definitions by ID to preserve template info
+            original_location_map = {
+                loc.location_id: loc for loc in self.definition.locations
+            }
+
+            # Convert runtime Location objects to LocationDefinition objects
+            location_definitions = []
+            for location in runtime_locations:
+                # Check if this location was originally defined with resource template info
+                original_location = original_location_map.get(location.location_id)
+
+                # Preserve resource_template_name and resource_template_overrides if they exist
+                resource_template_name = (
+                    original_location.resource_template_name
+                    if original_location
+                    else None
+                )
+                resource_template_overrides = (
+                    original_location.resource_template_overrides
+                    if original_location
+                    else None
+                )
+
+                # Create LocationDefinition from Location
+                # Note: We don't persist resource_id as it's runtime-only
+                location_def = LocationDefinition(
+                    location_id=location.location_id,
+                    location_name=location.location_name,
+                    description=location.description,
+                    representations=location.representations or {},
+                    allow_transfers=location.allow_transfers,
+                    resource_template_name=resource_template_name,
+                    resource_template_overrides=resource_template_overrides,
+                )
+                location_definitions.append(location_def)
+
+            # Update the definition with new locations
+            self.definition.locations = location_definitions
+
+            # Write to file, preserving other definition fields
+            definition_path = self.get_definition_path()
+            self.definition.to_yaml(definition_path)
+
+            self.logger.debug(
+                "Synced locations to definition file",
+                location_count=len(location_definitions),
+                definition_path=str(definition_path),
+            )
+
+        except Exception as e:
+            # Log error but don't fail the operation - persistence is best-effort
+            self.logger.warning(
+                "Failed to sync locations to definition file",
+                event_type=EventType.LOCATION_UPDATE,
+                definition_path=str(self.get_definition_path()),
+                error=str(e),
+                exc_info=True,
+            )
 
     def get_health(self) -> LocationManagerHealth:
         """Get the health status of the Location Manager."""
@@ -225,16 +304,20 @@ class LocationManager(
     @get("/locations", tags=["Locations"])
     def get_locations(self) -> list[Location]:
         """Get all locations."""
-        with ownership_context():
-            return self.state_handler.get_locations()
+        return self.state_handler.get_locations()
 
     @post("/location", tags=["Locations"])
     def add_location(self, location: Location) -> Location:
         """Add a new location."""
-        with ownership_context():
+        with self.span(
+            "location.create",
+            attributes={"location.id": location.location_id},
+        ):
             result = self.state_handler.set_location(location.location_id, location)
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
+            # Sync locations to definition file
+            self._sync_locations_to_definition()
             return result
 
     @get("/location", tags=["Locations"])
@@ -242,55 +325,54 @@ class LocationManager(
         self, location_id: Optional[str] = None, name: Optional[str] = None
     ) -> Location:
         """Get a specific location by ID or name."""
-        with ownership_context():
-            # Exactly one of location_id or name must be provided
-            if (location_id is None) == (name is None):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Exactly one of 'location_id' or 'name' query parameter must be provided",
-                )
-
-            if location_id is not None:
-                # Search by ID
-                location = self.state_handler.get_location(location_id)
-                if location is None:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Location with ID '{location_id}' not found",
-                    )
-                return location
-            # Search by name
-            locations = self.state_handler.get_locations()
-            for location in locations:
-                if location.name == name:
-                    return location
+        # Exactly one of location_id or name must be provided
+        if (location_id is None) == (name is None):
             raise HTTPException(
-                status_code=404, detail=f"Location with name '{name}' not found"
+                status_code=400,
+                detail="Exactly one of 'location_id' or 'name' query parameter must be provided",
             )
+
+        if location_id is not None:
+            # Search by ID
+            location = self.state_handler.get_location(location_id)
+            if location is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Location with ID '{location_id}' not found",
+                )
+            return location
+        # Search by name
+        locations = self.state_handler.get_locations()
+        for location in locations:
+            if location.name == name:
+                return location
+        raise HTTPException(
+            status_code=404, detail=f"Location with name '{name}' not found"
+        )
 
     @get("/location/{location_id}", tags=["Locations"])
     def get_location_by_id(self, location_id: str) -> Location:
         """Get a specific location by ID."""
-        with ownership_context():
-            location = self.state_handler.get_location(location_id)
-            if location is None:
-                raise HTTPException(
-                    status_code=404, detail=f"Location {location_id} not found"
-                )
-            return location
+        location = self.state_handler.get_location(location_id)
+        if location is None:
+            raise HTTPException(
+                status_code=404, detail=f"Location {location_id} not found"
+            )
+        return location
 
     @delete("/location/{location_id}", tags=["Locations"])
     def delete_location(self, location_id: str) -> dict[str, str]:
         """Delete a specific location by ID."""
-        with ownership_context():
-            success = self.state_handler.delete_location(location_id)
-            if not success:
-                raise HTTPException(
-                    status_code=404, detail=f"Location {location_id} not found"
-                )
-            # Rebuild transfer graph since deleted location affects transfer capabilities
-            self.transfer_planner.rebuild_transfer_graph()
-            return {"message": f"Location {location_id} deleted successfully"}
+        success = self.state_handler.delete_location(location_id)
+        if not success:
+            raise HTTPException(
+                status_code=404, detail=f"Location {location_id} not found"
+            )
+        # Rebuild transfer graph since deleted location affects transfer capabilities
+        self.transfer_planner.rebuild_transfer_graph()
+        # Sync locations to definition file
+        self._sync_locations_to_definition()
+        return {"message": f"Location {location_id} deleted successfully"}
 
     @post("/location/{location_id}/set_representation/{node_name}", tags=["Locations"])
     def set_representations(
@@ -300,22 +382,23 @@ class LocationManager(
         representation_val: Annotated[Any, REPRESENTATION_VAL_BODY],
     ) -> Location:
         """Set representations for a location for a specific node."""
-        with ownership_context():
-            location = self.state_handler.get_location(location_id)
-            if location is None:
-                raise HTTPException(
-                    status_code=404, detail=f"Location {location_id} not found"
-                )
+        location = self.state_handler.get_location(location_id)
+        if location is None:
+            raise HTTPException(
+                status_code=404, detail=f"Location {location_id} not found"
+            )
 
-            # Update the location with new representations
-            if location.representations is None:
-                location.representations = {}
-            location.representations[node_name] = representation_val
+        # Update the location with new representations
+        if location.representations is None:
+            location.representations = {}
+        location.representations[node_name] = representation_val
 
-            result = self.state_handler.update_location(location_id, location)
-            # Rebuild transfer graph since representations affect transfer capabilities
-            self.transfer_planner.rebuild_transfer_graph()
-            return result
+        result = self.state_handler.update_location(location_id, location)
+        # Rebuild transfer graph since representations affect transfer capabilities
+        self.transfer_planner.rebuild_transfer_graph()
+        # Sync locations to definition file
+        self._sync_locations_to_definition()
+        return result
 
     @delete(
         "/location/{location_id}/remove_representation/{node_name}", tags=["Locations"]
@@ -326,34 +409,35 @@ class LocationManager(
         node_name: str,
     ) -> Location:
         """Remove representations for a location for a specific node."""
-        with ownership_context():
-            location = self.state_handler.get_location(location_id)
-            if location is None:
-                raise HTTPException(
-                    status_code=404, detail=f"Location {location_id} not found"
-                )
+        location = self.state_handler.get_location(location_id)
+        if location is None:
+            raise HTTPException(
+                status_code=404, detail=f"Location {location_id} not found"
+            )
 
-            # Check if representations exist and if the node_name exists
-            if (
-                location.representations is None
-                or node_name not in location.representations
-            ):
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Representation for node '{node_name}' not found in location {location_id}",
-                )
+        # Check if representations exist and if the node_name exists
+        if (
+            location.representations is None
+            or node_name not in location.representations
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Representation for node '{node_name}' not found in location {location_id}",
+            )
 
-            # Remove the representation for the specified node
-            del location.representations[node_name]
+        # Remove the representation for the specified node
+        del location.representations[node_name]
 
-            # If no representations remain, set to empty dict (consistent with existing behavior)
-            if not location.representations:
-                location.representations = {}
+        # If no representations remain, set to empty dict (consistent with existing behavior)
+        if not location.representations:
+            location.representations = {}
 
-            result = self.state_handler.update_location(location_id, location)
-            # Rebuild transfer graph since representations affect transfer capabilities
-            self.transfer_planner.rebuild_transfer_graph()
-            return result
+        result = self.state_handler.update_location(location_id, location)
+        # Rebuild transfer graph since representations affect transfer capabilities
+        self.transfer_planner.rebuild_transfer_graph()
+        # Sync locations to definition file
+        self._sync_locations_to_definition()
+        return result
 
     @post("/location/{location_id}/attach_resource", tags=["Locations"])
     def attach_resource(
@@ -362,7 +446,13 @@ class LocationManager(
         resource_id: str,
     ) -> Location:
         """Attach a resource to a location."""
-        with ownership_context():
+        with self.span(
+            "attachment.create",
+            attributes={
+                "location.id": location_id,
+                "resource.id": resource_id,
+            },
+        ):
             location = self.state_handler.get_location(location_id)
             if location is None:
                 raise HTTPException(
@@ -371,6 +461,8 @@ class LocationManager(
 
             location.resource_id = resource_id
 
+            # Note: We don't sync resource_id changes to definition as resource_id is runtime-only
+            # The definition uses resource_template_name for resource initialization
             return self.state_handler.update_location(location_id, location)
 
     @delete("/location/{location_id}/detach_resource", tags=["Locations"])
@@ -379,24 +471,25 @@ class LocationManager(
         location_id: str,
     ) -> Location:
         """Detach the resource from a location."""
-        with ownership_context():
-            location = self.state_handler.get_location(location_id)
-            if location is None:
-                raise HTTPException(
-                    status_code=404, detail=f"Location {location_id} not found"
-                )
+        location = self.state_handler.get_location(location_id)
+        if location is None:
+            raise HTTPException(
+                status_code=404, detail=f"Location {location_id} not found"
+            )
 
-            # Check if location has a resource attached
-            if location.resource_id is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No resource attached to location {location_id}",
-                )
+        # Check if location has a resource attached
+        if location.resource_id is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No resource attached to location {location_id}",
+            )
 
-            # Detach the resource
-            location.resource_id = None
+        # Detach the resource
+        location.resource_id = None
 
-            return self.state_handler.update_location(location_id, location)
+        # Note: We don't sync resource_id changes to definition as resource_id is runtime-only
+        # The definition uses resource_template_name for resource initialization
+        return self.state_handler.update_location(location_id, location)
 
     @post("/transfer/plan", tags=["Transfer"])
     def plan_transfer(
@@ -417,7 +510,13 @@ class LocationManager(
         Raises:
             HTTPException: If no transfer path exists
         """
-        with ownership_context():
+        with self.span(
+            "transfer.plan",
+            attributes={
+                "transfer.source_location_id": source_location_id,
+                "transfer.target_location_id": target_location_id,
+            },
+        ):
             try:
                 return self.transfer_planner.plan_transfer(
                     source_location_id, target_location_id
@@ -453,8 +552,7 @@ class LocationManager(
         Returns:
             Dict mapping location IDs to lists of reachable location IDs
         """
-        with ownership_context():
-            return self.transfer_planner.get_transfer_graph_adjacency_list()
+        return self.transfer_planner.get_transfer_graph_adjacency_list()
 
     @get("/location/{location_id}/resources", tags=["Resources"])
     def get_location_resources(self, location_id: str) -> ResourceHierarchy:
@@ -470,35 +568,34 @@ class LocationManager(
         Raises:
             HTTPException: If location not found
         """
-        with ownership_context():
-            location = self.state_handler.get_location(location_id)
-            if location is None:
-                raise HTTPException(
-                    status_code=404, detail=f"Location {location_id} not found"
-                )
+        location = self.state_handler.get_location(location_id)
+        if location is None:
+            raise HTTPException(
+                status_code=404, detail=f"Location {location_id} not found"
+            )
 
-            # If no resource is attached to this location, return empty hierarchy
-            if not location.resource_id:
-                return ResourceHierarchy(
-                    ancestor_ids=[], resource_id="", descendant_ids={}
-                )
+        # If no resource is attached to this location, return empty hierarchy
+        if not location.resource_id:
+            return ResourceHierarchy(ancestor_ids=[], resource_id="", descendant_ids={})
 
-            try:
-                # Query the resource hierarchy for the attached resource
-                return self.resource_client.query_resource_hierarchy(
-                    location.resource_id
-                )
-            except Exception as e:
-                self.logger.warning(
-                    f"Failed to query resource hierarchy for location {location_id} "
-                    f"with resource_id {location.resource_id}: {e}"
-                )
-                # Return empty hierarchy if query fails
-                return ResourceHierarchy(
-                    ancestor_ids=[],
-                    resource_id=location.resource_id or "",
-                    descendant_ids={},
-                )
+        try:
+            # Query the resource hierarchy for the attached resource
+            return self.resource_client.query_resource_hierarchy(location.resource_id)
+        except Exception as e:
+            self.logger.warning(
+                "Failed to query resource hierarchy for location",
+                event_type=EventType.DATA_QUERY,
+                location_id=location_id,
+                resource_id=location.resource_id,
+                error=str(e),
+                exc_info=True,
+            )
+            # Return empty hierarchy if query fails
+            return ResourceHierarchy(
+                ancestor_ids=[],
+                resource_id=location.resource_id or "",
+                descendant_ids={},
+            )
 
 
 @asynccontextmanager

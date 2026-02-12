@@ -3,20 +3,26 @@
 import json
 import traceback
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, AsyncGenerator, Optional, Union
-from datetime import datetime
+from pathlib import Path
+from typing import Annotated, Any, AsyncGenerator, ClassVar, Optional, Union
 
 from classy_fastapi import get, post
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.params import Body
 from madsci.client.data_client import DataClient
-from madsci.client.location_client import LocationClient
-from madsci.common.context import get_current_madsci_context
+from madsci.client.location_client import (
+    LocationClient,
+)
+from madsci.common.context import (
+    get_current_madsci_context,
+)
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.event_types import Event, EventType
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
     WorkcellManagerDefinition,
@@ -32,15 +38,14 @@ from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
+    cancel_workflow,
     check_parameters,
     create_workflow,
-    save_workflow_files,
-    cancel_workflow,
     pause_workflow,
+    save_workflow_files,
 )
 from pymongo.synchronous.database import Database
 from ulid import ULID
-
 
 # Module-level constants for Body() calls to avoid B008 linting errors
 LOOKUP_VAL_BODY = Body(...)
@@ -49,10 +54,18 @@ LOOKUP_VAL_BODY = Body(...)
 class WorkcellManager(
     AbstractManagerBase[WorkcellManagerSettings, WorkcellManagerDefinition]
 ):
-    """MADSci Workcell Manager using the new AbstractManagerBase pattern."""
+    """
+    MADSci Workcell Manager using the new AbstractManagerBase pattern.
+
+    This manager uses MadsciClientMixin (via AbstractManagerBase) for client management.
+    Required clients: data, location
+    """
 
     SETTINGS_CLASS = WorkcellManagerSettings
     DEFINITION_CLASS = WorkcellManagerDefinition
+
+    # Declare required clients for the mixin
+    REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "data", "location"]
 
     def __init__(
         self,
@@ -76,8 +89,85 @@ class WorkcellManager(
         return WorkcellManagerDefinition(name=name)
 
     def initialize(self, **kwargs: Any) -> None:
-        """Initialize manager-specific components."""
+        """
+        Initialize manager-specific components.
+
+        This method sets up the workcell-specific state handler and clients.
+        Client initialization is handled by MadsciClientMixin via setup_clients().
+        """
         super().initialize(**kwargs)
+
+        # Skip version validation if external mongo_connection was provided (e.g., in tests)
+        # This is commonly done in tests where a mock or containerized MongoDB is used
+        if self.mongo_connection is not None:
+            # External connection provided, likely in test context - skip version validation
+            self.logger.info(
+                "External mongo_connection provided, skipping MongoDB version validation",
+                event_type=EventType.MANAGER_START,
+                manager_name=self.definition.name,
+                manager_id=self.definition.manager_id,
+                manager_type="workcell",
+                mongo_external_connection=True,
+            )
+            # Continue with the rest of initialization (ownership, state handler, clients)
+            global_ownership_info.workcell_id = self.definition.manager_id
+            global_ownership_info.manager_id = self.definition.manager_id
+
+            # Initialize state handler
+            self.state_handler = WorkcellStateHandler(
+                self.definition,
+                workcell_settings=self.settings,
+                redis_connection=self.redis_connection,
+                mongo_connection=self.mongo_connection,
+            )
+
+            # Initialize clients
+            context = get_current_madsci_context()
+            self.data_client = DataClient(context.data_server_url)
+            self.location_client = LocationClient(context.location_server_url)
+            return
+
+        self.logger.info(
+            "Validating MongoDB schema version",
+            event_type=EventType.MANAGER_START,
+            manager_name=self.definition.name,
+            manager_id=self.definition.manager_id,
+            manager_type="workcell",
+            mongo_db=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+        )
+
+        schema_file_path = Path(__file__).parent / "schema.json"
+        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
+        version_checker = MongoDBVersionChecker(
+            db_url=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+            schema_file_path=str(schema_file_path),
+            backup_dir=str(mig_cfg.backup_dir),
+            logger=self.logger,
+        )
+
+        try:
+            version_checker.validate_or_fail()
+            self.logger.info(
+                "MongoDB version validation completed successfully",
+                event_type=EventType.MANAGER_START,
+                manager_name=self.definition.name,
+                manager_id=self.definition.manager_id,
+                manager_type="workcell",
+                database_name=self.settings.database_name,
+            )
+        except RuntimeError:
+            self.logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!",
+                event_type=EventType.MANAGER_ERROR,
+                manager_name=self.definition.name,
+                manager_id=self.definition.manager_id,
+                manager_type="workcell",
+                database_name=self.settings.database_name,
+                exc_info=True,
+            )
+            raise
 
         # Set up global ownership
         global_ownership_info.workcell_id = self.definition.manager_id
@@ -86,14 +176,17 @@ class WorkcellManager(
         # Initialize state handler
         self.state_handler = WorkcellStateHandler(
             self.definition,
+            workcell_settings=self.settings,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
         )
 
-        # Initialize clients
-        context = get_current_madsci_context()
-        self.data_client = DataClient(context.data_server_url)
-        self.location_client = LocationClient(context.location_server_url)
+        # Initialize clients using MadsciClientMixin
+        # This will create data_client and location_client from context
+        self.setup_clients()
+
+        # Clients are now available as self.data_client and self.location_client
+        # They will use URLs from get_current_madsci_context() by default
 
     def create_server(self, **kwargs: Any) -> FastAPI:
         """Create the FastAPI server application with lifespan."""
@@ -245,9 +338,16 @@ class WorkcellManager(
         self, command: str, node: str
     ) -> AdminCommandResponse:
         """Send admin command to a node."""
-        node = self.state_handler.get_node(node)
-        if command in node.info.capabilities.admin_commands:
-            client = find_node_client(node.node_url)
+        node_object = self.state_handler.get_node(node)
+        if command == "reset":
+            with self.state_handler.wc_state_lock():
+                # Clear errors on reset command
+                node_object.status.errored = False
+                node_object.status.disconnected = False
+                node_object.status.errors = []
+                self.state_handler.set_node(node_name=node, node=node_object)
+        if command in node_object.info.capabilities.admin_commands:
+            client = find_node_client(node_object.node_url)
             return client.send_admin_command(command)
         raise HTTPException(
             status_code=400, detail="Node cannot perform that admin command"
@@ -272,21 +372,27 @@ class WorkcellManager(
     def get_workflow(self, workflow_id: str) -> Workflow:
         """Get info on a specific workflow."""
         return self.state_handler.get_workflow(workflow_id)
-    
+
     @post("/workflow/{workflow_id}/pause")
     def pause_workflow(self, workflow_id: str) -> Workflow:
+        """Pause a running workflow."""
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             wf = pause_workflow(wf)
             self.state_handler.set_active_workflow(wf)
 
-            node_name = wf.steps[wf.status.current_step_index].node
-            try:
-                self.send_admin_command_to_node("pause", node_name)
-            except HTTPException as e:
-                self.logger.warning(f"Pause not supported by node {node_name}: {e.detail}")
+            if 0 <= wf.status.current_step_index < len(wf.steps):
+                node_name = wf.steps[wf.status.current_step_index].node
+                try:
+                    self.send_admin_command_to_node("pause", node_name)
+                except HTTPException:
+                    self.logger.warning(
+                        "Pause not supported by node",
+                        node_name=node_name,
+                        exc_info=True,
+                    )
             self.state_handler.set_active_workflow(wf)
-        
+
         return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/resume")
@@ -297,9 +403,10 @@ class WorkcellManager(
             if wf.status.paused:
                 index = wf.status.current_step_index
                 wf.status.reset(index)
-                self.send_admin_command_to_node(
-                    "resume", wf.steps[wf.status.current_step_index].node
-                )
+                if 0 <= wf.status.current_step_index < len(wf.steps):
+                    self.send_admin_command_to_node(
+                        "resume", wf.steps[wf.status.current_step_index].node
+                    )
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.enqueue_workflow(wf.workflow_id)
         return self.state_handler.get_workflow(workflow_id)
@@ -312,13 +419,18 @@ class WorkcellManager(
             wf = cancel_workflow(wf)
             self.state_handler.set_active_workflow(wf)
 
-            node_name = wf.steps[wf.status.current_step_index].node
-            try:
-                self.send_admin_command_to_node("cancel", node_name)
-            except HTTPException as e:
-                self.logger.warning(f"Cancel not supported by node {node_name}: {e.detail}")
+            if 0 <= wf.status.current_step_index < len(wf.steps):
+                node_name = wf.steps[wf.status.current_step_index].node
+                try:
+                    self.send_admin_command_to_node("cancel", node_name)
+                except HTTPException:
+                    self.logger.warning(
+                        "Cancel not supported by this node",
+                        node_name=node_name,
+                        exc_info=True,
+                    )
             self.state_handler.set_active_workflow(wf)
-            
+
         return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/retry")
@@ -330,7 +442,7 @@ class WorkcellManager(
                 if index < 0:
                     index = wf.status.current_step_index
                 if wf.status.completed:
-                    index = 0 
+                    index = 0
                 wf.status.reset(index)
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.delete_archived_workflow(wf.workflow_id)
@@ -374,7 +486,12 @@ class WorkcellManager(
         except HTTPException as e:
             raise e
         except Exception as e:
-            self.logger.error(f"Error saving workflow definition: {e}")
+            self.logger.error(
+                "Error saving workflow definition",
+                event_type=EventType.WORKFLOW_CREATE,
+                error=str(e),
+                exc_info=True,
+            )
             traceback.print_exc()
             raise HTTPException(
                 status_code=500,
@@ -472,37 +589,48 @@ class WorkcellManager(
                             status_code=400,
                             detail="Input File Paths must be a dictionary with string keys",
                         )
-                workcell = self.state_handler.get_workcell_definition()
-                check_parameters(wf_def, json_inputs, file_input_paths)
-                wf = create_workflow(
-                    workflow_def=wf_def,
-                    workcell=workcell,
-                    json_inputs=json_inputs,
-                    file_input_paths=file_input_paths,
-                    state_handler=self.state_handler,
-                    location_client=self.location_client,
-                )
 
-                wf = save_workflow_files(
-                    workflow=wf, files=files, data_client=self.data_client
-                )
-
-                with self.state_handler.wc_state_lock():
-                    self.state_handler.set_active_workflow(wf)
-                    self.state_handler.enqueue_workflow(wf.workflow_id)
-
-                self.logger.log(
-                    Event(
-                        event_type=EventType.WORKFLOW_START,
-                        event_data=wf.model_dump(mode="json"),
+                with self.span(
+                    "workflow.execute",
+                    attributes={"workflow.step_count": len(wf_def.steps)},
+                ):
+                    workcell = self.state_handler.get_workcell_definition()
+                    check_parameters(wf_def, json_inputs, file_input_paths)
+                    wf = create_workflow(
+                        workflow_def=wf_def,
+                        workcell=workcell,
+                        json_inputs=json_inputs,
+                        file_input_paths=file_input_paths,
+                        state_handler=self.state_handler,
+                        location_client=self.location_client,
                     )
-                )
-                return wf
+
+                    wf = save_workflow_files(
+                        workflow=wf, files=files, data_client=self.data_client
+                    )
+
+                    with self.state_handler.wc_state_lock():
+                        self.state_handler.set_active_workflow(wf)
+                        self.state_handler.enqueue_workflow(wf.workflow_id)
+
+                    self.logger.log(
+                        Event(
+                            event_type=EventType.WORKFLOW_START,
+                            event_data=wf.model_dump(mode="json"),
+                        )
+                    )
+                    return wf
 
         except HTTPException as e:
             raise e
         except Exception as e:
-            self.logger.error(f"Error starting workflow: {e}")
+            self.logger.error(
+                "Error starting workflow",
+                event_type=EventType.WORKFLOW_START,
+                workflow_definition_id=workflow_definition_id,
+                error=str(e),
+                exc_info=True,
+            )
             traceback.print_exc()
             raise HTTPException(
                 status_code=500,
