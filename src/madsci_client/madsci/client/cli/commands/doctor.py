@@ -334,7 +334,7 @@ def run_all_checks(categories: list[str] | None = None) -> DiagnosticResults:
 def format_status_icon(status: CheckStatus) -> str:
     """Get the icon for a check status."""
     icons = {
-        CheckStatus.PASSED: "[green]\\u2713[/green]",
+        CheckStatus.PASSED: "[green]\u2713[/green]",
         CheckStatus.FAIL: "[red]\u2717[/red]",
         CheckStatus.WARN: "[yellow]\u26a0[/yellow]",
         CheckStatus.SKIP: "[dim]\u25cb[/dim]",

@@ -154,6 +154,11 @@ class ManagerHealth(MadsciBaseModel):
         description="Human-readable description of any problems or status.",
         default=None,
     )
+    version: Optional[str] = Field(
+        title="Manager Version",
+        description="The version of the manager's package.",
+        default=None,
+    )
 
     model_config = ConfigDict(extra="allow")
 

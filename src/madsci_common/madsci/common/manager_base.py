@@ -6,7 +6,10 @@ standardizing common patterns and reducing code duplication.
 """
 
 import contextlib
+import sys
 from abc import ABCMeta
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Any, ContextManager, Generic, Optional, TypeVar
 
@@ -321,6 +324,26 @@ class AbstractManagerBase(
                 healthy=False, description=f"Health check failed: {e!s}"
             )
 
+    def _resolve_package_version(self) -> str | None:
+        """Resolve the installed package version for this manager."""
+        try:
+            # Use the class's qualname-derived module. When run as __main__,
+            # type(self).__module__ is '__main__', so we fall back to the
+            # actual module spec or the class's declared module path.
+            module = type(self).__module__
+            if module == "__main__":
+                # Recover the real module name from the __spec__
+                spec = sys.modules["__main__"].__spec__
+                if spec and spec.name:
+                    module = spec.name
+
+            module_parts = module.split(".")
+            if len(module_parts) >= 2:
+                package_name = ".".join(module_parts[:2])
+                return pkg_version(package_name)
+        except (PackageNotFoundError, Exception):
+            return None
+
     @get("/health")
     def health_endpoint(self) -> ManagerHealth:
         """
@@ -333,7 +356,10 @@ class AbstractManagerBase(
         Returns:
             ManagerHealth: The current health status
         """
-        return self.get_health()
+        health = self.get_health()
+        if health.version is None:
+            health.version = self._resolve_package_version()
+        return health
 
     @get("/")
     def get_definition_root(self) -> DefinitionT:
