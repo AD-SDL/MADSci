@@ -127,7 +127,10 @@ class EventClient:
         # Set up log directory and file
         self.log_dir = Path(self.config.log_dir).expanduser()
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.logfile = self.log_dir / f"{self.name}.log"
+        # Sanitize the name for use as a filename (e.g. "request.POST./admin/cancel"
+        # would otherwise create nested directories due to forward slashes)
+        safe_name = self.name.replace("/", "_").replace("\\", "_")
+        self.logfile = self.log_dir / f"{safe_name}.log"
 
         # Create the stdlib logger for file handling and console output
         self.logger = logging.getLogger(self.name)

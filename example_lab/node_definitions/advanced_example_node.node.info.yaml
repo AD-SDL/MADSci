@@ -1411,7 +1411,7 @@ config_schema:
       title: Device Number
       type: integer
     wait_time:
-      default: 10.0
+      default: 2.0
       title: Wait Time
       type: number
   title: AdvancedExampleConfig
