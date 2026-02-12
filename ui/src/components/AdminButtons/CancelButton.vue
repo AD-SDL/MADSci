@@ -55,7 +55,6 @@ watchEffect(() => {
 watchEffect(() => {
     // Determine if the node is cancelable (if actively running something)
     if (props.node) {
-        console.log("Node Status (from props=get_status):", props.node_status)
         if (props.node_status == 'busy' || props.node_status == 'running' || props.node_status == 'paused') {
             canCancel.value = true
         }

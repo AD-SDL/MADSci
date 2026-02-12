@@ -495,4 +495,5 @@ def cancel_active_workflows(state_handler: WorkcellStateHandler) -> None:
     """Cancels all currently running workflow runs"""
     for wf in state_handler.get_active_workflows().values():
         if wf.status.active:
-            cancel_workflow(wf)
+            cancelled_wf = cancel_workflow(wf)
+            state_handler.set_active_workflow(cancelled_wf)

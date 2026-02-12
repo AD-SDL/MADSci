@@ -64,7 +64,7 @@ class AdvancedExampleConfig(RestNodeConfig):
     device_number: int = 0
     """The device number of the advanced example node."""
 
-    wait_time: float = 10.0
+    wait_time: float = 2.0
     """Time to wait while running an action, in seconds (simulates real hardware timing)."""
 
 

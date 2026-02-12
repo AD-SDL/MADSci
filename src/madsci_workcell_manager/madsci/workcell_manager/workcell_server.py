@@ -379,7 +379,6 @@ class WorkcellManager(
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             wf = pause_workflow(wf)
-            self.state_handler.set_active_workflow(wf)
 
             if 0 <= wf.status.current_step_index < len(wf.steps):
                 node_name = wf.steps[wf.status.current_step_index].node
@@ -404,9 +403,16 @@ class WorkcellManager(
                 index = wf.status.current_step_index
                 wf.status.reset(index)
                 if 0 <= wf.status.current_step_index < len(wf.steps):
-                    self.send_admin_command_to_node(
-                        "resume", wf.steps[wf.status.current_step_index].node
-                    )
+                    try:
+                        self.send_admin_command_to_node(
+                            "resume", wf.steps[wf.status.current_step_index].node
+                        )
+                    except HTTPException:
+                        self.logger.warning(
+                            "Resume not supported by node",
+                            node_name=wf.steps[wf.status.current_step_index].node,
+                            exc_info=True,
+                        )
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.enqueue_workflow(wf.workflow_id)
         return self.state_handler.get_workflow(workflow_id)
@@ -417,7 +423,6 @@ class WorkcellManager(
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
             wf = cancel_workflow(wf)
-            self.state_handler.set_active_workflow(wf)
 
             if 0 <= wf.status.current_step_index < len(wf.steps):
                 node_name = wf.steps[wf.status.current_step_index].node

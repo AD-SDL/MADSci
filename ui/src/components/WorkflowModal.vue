@@ -4,7 +4,6 @@
       <v-card-title>
         <div class="d-flex align-center w-100">
           <h2 class="title py-3 my-3">Workflow: {{ modal_title }}</h2>
-          <!-- {{modal_text.run_id}} -->
           <PauseResumeButton
             :wf_id="modal_text.workflow_id"
             :wf_status="modal_text.status"
@@ -34,6 +33,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import CancelButton from './AdminButtons/CancelButton.vue';
+import PauseResumeButton from './AdminButtons/PauseResumeButton.vue';
 import ResetButton from './AdminButtons/ResetButton.vue';
 const props = defineProps(['modal_title', 'modal_text'])
 const flowdef = ref(false)

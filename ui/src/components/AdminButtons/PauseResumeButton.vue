@@ -68,7 +68,6 @@ watchEffect(() => {
 
 watchEffect(() => {
     if (props.node) {
-        console.log("Node Status (from props=get_status):", props.node_status)
         // Determine if pressing pause/resume button should be allowed
         if (props.node_status == 'busy' || props.node_status == 'running' || props.node_status == 'paused') {
             allowButton.value = true

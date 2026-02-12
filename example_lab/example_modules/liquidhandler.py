@@ -51,9 +51,9 @@ def interruptable(action_fn: Any) -> Any:
     @functools.wraps(action_fn)
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         self._cancel_event.clear()
-        self.logger.debug("Cancel and pause events cleared in interruptable wrapper")
         self._pause_event.clear()
-        result_container = {"value": None}
+        self.logger.debug("Cancel and pause events cleared in interruptable wrapper")
+        result_container: dict[str, Any] = {"value": None, "error": None}
 
         def run() -> None:
             try:
@@ -66,20 +66,25 @@ def interruptable(action_fn: Any) -> Any:
                 self.logger.debug("PausedError raised in interruptable wrapper")
                 result_container["value"] = self._pause_result()
             except Exception as e:
-                result_container["value"] = e
+                result_container["error"] = e
 
-        t = threading.Thread(target=run)
+        t = threading.Thread(target=run, daemon=True)
         t.start()
         while t.is_alive():
             if self._cancel_event.is_set() or self._pause_event.is_set():
                 self.logger.debug("Cancel or pause event set, returning from wrapper")
-                t.join(timeout=0.25)
+                t.join(timeout=2.0)
+                if t.is_alive():
+                    self.logger.warning("Action thread still running after interrupt")
                 return (
                     self._cancel_result()
                     if self._cancel_event.is_set()
                     else self._pause_result()
                 )
             time.sleep(0.05)
+
+        if result_container["error"] is not None:
+            raise result_container["error"]
         return result_container["value"]
 
     return wrapper
@@ -101,7 +106,7 @@ class LiquidHandlerConfig(RestNodeConfig):
     device_number: int = 0
     """The device number of the liquid handler (for multi-device setups)."""
 
-    wait_time: float = 10.0
+    wait_time: float = 2.0
     """Time to wait while running an action, in seconds (simulates real hardware timing)."""
 
 
@@ -212,7 +217,12 @@ class LiquidHandlerNode(RestNode):
             remaining = end - time.monotonic()
             if remaining <= 0:
                 return
-            self._cancel_event.wait(timeout=min(tick, remaining))
+            sleep_time = min(tick, remaining)
+            # Wait on cancel; if it doesn't fire, also check pause
+            if self._cancel_event.wait(timeout=sleep_time / 2):
+                self._checkpoint()
+            if self._pause_event.wait(timeout=sleep_time / 2):
+                self._checkpoint()
 
     def startup_handler(self) -> None:
         """

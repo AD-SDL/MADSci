@@ -43,8 +43,7 @@
           </template>
         </div>
         <v-sheet class="pa-2 rounded-lg text-md-center" :class="'node_status_' + get_status(wc_state.nodes[modal_title].status)">
-          <!-- {{ Object.entries(wc_state.nodes[modal_title].status).filter(([_, value]) => value === true).map(([key, _]) => key).join(' ') }} -->
-            {{ get_status(wc_state.nodes[modal_title].status )}}
+          {{ get_status(wc_state.nodes[modal_title].status) }}
         </v-sheet>
       </v-card-title>
 

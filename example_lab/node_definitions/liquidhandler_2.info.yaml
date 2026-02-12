@@ -160,7 +160,7 @@ config:
   rate_limit_short_window: 1
   rate_limit_cleanup_interval: 300
   device_number: 0
-  wait_time: 10.0
+  wait_time: 2.0
 config_schema:
   description: "Configuration for the liquid handler node module.\n\nExtends RestNodeConfig\
     \ to add liquid handler-specific settings.\nThese settings can be overridden via\
