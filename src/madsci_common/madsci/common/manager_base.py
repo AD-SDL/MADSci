@@ -130,6 +130,17 @@ class AbstractManagerBase(
         self._settings = settings or self.create_default_settings()
         self._definition = definition or self.load_or_create_definition()
 
+        # Apply settings overrides to definition
+        self._apply_settings_overrides()
+
+        # Resolve identity from registry if enabled
+        self._resolver = None
+        if (
+            isinstance(self._settings, ManagerSettings)
+            and self._settings.enable_registry_resolution
+        ):
+            self._resolve_identity_from_registry()
+
         # Setup logging
         self.setup_logging()
         self.logger.info(
@@ -275,6 +286,109 @@ class AbstractManagerBase(
             self.logger.warning(
                 "OpenTelemetry setup failed; continuing without OTEL",
                 event_type=EventType.MANAGER_ERROR,
+                exc_info=True,
+            )
+
+    def _apply_settings_overrides(self) -> None:
+        """Apply settings-based overrides to the definition.
+
+        When manager_name or manager_description are set in settings,
+        they override the corresponding definition values.
+        """
+        if not isinstance(self._settings, ManagerSettings):
+            return
+
+        if self._settings.manager_name is not None and hasattr(
+            self._definition, "name"
+        ):
+            self._definition.name = self._settings.manager_name
+
+        if self._settings.manager_description is not None and hasattr(
+            self._definition, "description"
+        ):
+            self._definition.description = self._settings.manager_description
+
+    def _resolve_identity_from_registry(self) -> None:
+        """Resolve manager identity from the ID Registry.
+
+        Uses IdentityResolver to look up or create a stable ID for this
+        manager. The resolved ID is written back to the definition's
+        manager_id field. Resolution failures are non-fatal: a warning
+        is logged and the definition's existing ID is kept.
+        """
+        try:
+            # Lazy import to avoid circular dependencies
+            from madsci.common.registry.identity_resolver import (  # noqa: PLC0415
+                IdentityResolver,
+            )
+
+            lab_url = (
+                self._settings.lab_url
+                if isinstance(self._settings, ManagerSettings)
+                else None
+            )
+            self._resolver = IdentityResolver(lab_url=lab_url)
+
+            # Determine the name to resolve
+            name = None
+            if (
+                isinstance(self._settings, ManagerSettings)
+                and self._settings.manager_name
+            ):
+                name = self._settings.manager_name
+            elif hasattr(self._definition, "name"):
+                name = self._definition.name
+            else:
+                name = self.__class__.__name__
+
+            result = self._resolver.resolve_with_info(
+                name=name,
+                component_type="manager",
+                metadata={"manager_class": self.__class__.__name__},
+            )
+
+            # Update the definition's ID field
+            # Different definition classes use different field names
+            if hasattr(self._definition, "resource_manager_id"):
+                self._definition.resource_manager_id = result.id
+            if hasattr(self._definition, "manager_id"):
+                self._definition.manager_id = result.id
+
+        except Exception:
+            import logging  # noqa: PLC0415
+
+            logging.getLogger(__name__).warning(
+                "Registry identity resolution failed; using definition ID",
+                exc_info=True,
+            )
+
+    def release_identity(self) -> None:
+        """Release the registry lock for this manager's identity.
+
+        Should be called during shutdown to allow other instances to
+        acquire the same name.
+        """
+        if self._resolver is None:
+            return
+
+        try:
+            name = None
+            if (
+                isinstance(self._settings, ManagerSettings)
+                and self._settings.manager_name
+            ):
+                name = self._settings.manager_name
+            elif hasattr(self._definition, "name"):
+                name = self._definition.name
+            else:
+                name = self.__class__.__name__
+
+            self._resolver.release(name)
+        except Exception:
+            import logging  # noqa: PLC0415
+
+            logging.getLogger(__name__).warning(
+                "Failed to release registry identity",
                 exc_info=True,
             )
 

@@ -480,18 +480,16 @@ Each template includes: interface class, fake interface, test file, README.
 **Files modified**:
 - `example_lab/.env` (added commented-out settings equivalents)
 
-#### E.2 Manager integration with ID Registry [XL]
+#### E.2 Manager integration with ID Registry [XL] ✅ COMPLETE
 
-**Migration strategy** (gradual rollout):
-1. **Add opt-in support first**: Add an `enable_registry_resolution: bool = False` setting to `AbstractManagerBase`. When `True`, the manager resolves its ID from the registry at startup; when `False` (default), behavior is unchanged.
-2. **Pilot with one low-risk manager**: Enable registry resolution on the **Location Manager** first (lowest downstream impact). Validate in example_lab.
-3. **Roll out to remaining managers one at a time**: Event -> Data -> Experiment -> Resource -> Workcell -> Lab (ordered by increasing risk/complexity).
-4. **Deprecation phase**: Once all managers work with registry resolution, emit deprecation warnings when `manager_definition` YAML files are used without a registry entry. Set a target version for removing the old pattern.
-5. **Remove old pattern**: Flip default to `True`, then remove the flag entirely.
+**Implemented**: Opt-in `enable_registry_resolution` in `ManagerSettings`. When true, managers resolve `manager_id` from `IdentityResolver` at startup. Settings-based name/description overrides applied to definitions. Non-fatal fallback on resolution failure. `release_identity()` for shutdown cleanup. 15 unit tests.
 
-**Files to modify**:
-- `src/madsci_common/madsci/common/manager_base.py`
-- Individual manager settings classes (to add `enable_registry_resolution`)
+**Files modified**:
+- `src/madsci_common/madsci/common/types/manager_types.py` (added registry resolution fields)
+- `src/madsci_common/madsci/common/manager_base.py` (added resolution + override methods)
+
+**Files created**:
+- `src/madsci_common/tests/test_registry_resolution.py` (15 tests)
 
 #### E.3 Settings consolidation in managers [L]
 - Gradually move structural config from definitions to settings

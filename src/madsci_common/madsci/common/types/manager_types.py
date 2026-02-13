@@ -108,6 +108,28 @@ class ManagerSettings(MadsciBaseSettings):
         ge=1,
     )
 
+    # Registry resolution (opt-in)
+    enable_registry_resolution: bool = Field(
+        default=False,
+        title="Enable Registry Resolution",
+        description="When true, resolve manager_id from the ID Registry at startup instead of from the definition YAML.",
+    )
+    manager_name: Optional[str] = Field(
+        default=None,
+        title="Manager Name",
+        description="Name for registry lookup. Overrides the name from the definition file when set.",
+    )
+    manager_description: Optional[str] = Field(
+        default=None,
+        title="Manager Description",
+        description="Override the description from the definition file.",
+    )
+    lab_url: Optional[AnyUrl] = Field(
+        default=None,
+        title="Lab URL",
+        description="Lab Manager URL for distributed registry coordination.",
+    )
+
     # OpenTelemetry configuration
     otel_enabled: bool = Field(
         default=False,
