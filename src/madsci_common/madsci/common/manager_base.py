@@ -145,7 +145,9 @@ class AbstractManagerBase(
         self.logger.info(
             "Manager settings loaded",
             event_type=EventType.MANAGER_START,
-            settings=self._settings.model_dump(mode="json"),
+            settings=self._settings.model_dump_safe()
+            if hasattr(self._settings, "model_dump_safe")
+            else self._settings.model_dump(mode="json"),
         )
         self.logger.info(
             "Manager definition loaded",

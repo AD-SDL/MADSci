@@ -310,6 +310,8 @@ class TemplateRegistry:
             raise ValueError(f"Invalid template ID: {template_id}")
 
         category, name = parts
+        self._validate_path_component(category)
+        self._validate_path_component(name)
         template_path = self.user_template_dir / category / name
 
         if template_path.exists():

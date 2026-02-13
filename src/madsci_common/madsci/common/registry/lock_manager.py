@@ -221,14 +221,14 @@ class LockManager:
         Args:
             name: The component name to stop heartbeating.
         """
-        if name in self._stop_events:
-            self._stop_events[name].set()
-            del self._stop_events[name]
+        stop_event = self._stop_events.pop(name, None)
+        if stop_event is not None:
+            stop_event.set()
             logger.debug("Stopped heartbeat: name=%s", name)
-        if name in self._heartbeat_threads:
+        thread = self._heartbeat_threads.pop(name, None)
+        if thread is not None:
             # Wait briefly for thread to exit
-            self._heartbeat_threads[name].join(timeout=1.0)
-            del self._heartbeat_threads[name]
+            thread.join(timeout=1.0)
 
     def stop_all_heartbeats(self) -> None:
         """Stop all heartbeat threads.

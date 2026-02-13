@@ -276,7 +276,7 @@ class TemplateEngine:
 
         return defaults
 
-    def render(  # noqa: C901
+    def render(  # noqa: C901, PLR0912
         self,
         output_dir: Path,
         parameters: dict[str, Any],
@@ -335,6 +335,12 @@ class TemplateEngine:
             # Full paths
             source_full = self.template_dir / source_path
             dest_full = output_dir / dest_path
+
+            # Prevent path traversal: rendered source must stay inside template_dir
+            if not source_full.resolve().is_relative_to(self.template_dir.resolve()):
+                raise TemplateValidationError(
+                    [f"Path traversal detected in source: {source_path}"]
+                )
 
             # Prevent path traversal: rendered destination must stay inside output_dir
             if not dest_full.resolve().is_relative_to(output_dir.resolve()):

@@ -125,19 +125,20 @@ class MigrationConverter:
                     env_file = self._get_env_output_path(migration)
 
                     # Append to existing or create new
+                    migration_ts = datetime.now(tz=timezone.utc).isoformat()
                     with env_file.open("a") as f:
                         f.write(f"\n# Migrated from {migration.source_path.name}\n")
-                        f.write(
-                            f"# Migration date: {datetime.now(tz=timezone.utc).isoformat()}\n"
-                        )
+                        f.write(f"# Migration date: {migration_ts}\n")
                         for key, value in env_vars.items():
-                            # Quote values with special characters
-                            quoted_value = (
-                                f"'{value}'"
-                                if any(c in value for c in " \n\t{}[]")
-                                else value
+                            # Always double-quote values and escape
+                            # special characters to prevent injection
+                            escaped = (
+                                value.replace("\\", "\\\\")
+                                .replace('"', '\\"')
+                                .replace("$", "\\$")
+                                .replace("`", "\\`")
                             )
-                            f.write(f"{key}={quoted_value}\n")
+                            f.write(f'{key}="{escaped}"\n')
 
                     migration.output_files.append(env_file)
                     logger.info("Generated env file: env_file=%s", str(env_file))
@@ -196,7 +197,8 @@ class MigrationConverter:
         with path.open() as f:
             content = f.read()
 
-        migration_date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(tz=timezone.utc)
+        migration_date = now.strftime("%Y-%m-%d %H:%M:%S")
         deprecation_header = f"""\
 # ╔════════════════════════════════════════════════════════════════════════╗
 # ║  DEPRECATED - This file format is deprecated                           ║
@@ -212,7 +214,7 @@ class MigrationConverter:
 # ╚════════════════════════════════════════════════════════════════════════╝
 
 _deprecated: true
-_migrated_at: "{datetime.now(tz=timezone.utc).isoformat()}"
+_migrated_at: "{now.isoformat()}"
 
 """
 

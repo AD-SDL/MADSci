@@ -166,7 +166,7 @@ def madsci(
 
     cli_config = MadsciCLIConfig.load(config)
     # CLI --lab-url overrides config file when explicitly provided
-    if lab_url and lab_url != "http://localhost:8000/":
+    if ctx.get_parameter_source("lab_url") == click.core.ParameterSource.COMMANDLINE:
         cli_config.lab_url = lab_url  # type: ignore[assignment]
 
     ctx.obj["config"] = cli_config

@@ -68,8 +68,13 @@ def _export_settings(
         try:
             defaults = settings_cls().model_dump(mode="json")
             data = {k: v for k, v in data.items() if data.get(k) != defaults.get(k)}
-        except Exception:  # noqa: S110
-            pass
+        except Exception:
+            import logging as _logging
+
+            _logging.getLogger(__name__).debug(
+                "Could not create default settings instance for comparison",
+                exc_info=True,
+            )
 
     if output_format == "json":
         return json.dumps(data, indent=2, default=str)

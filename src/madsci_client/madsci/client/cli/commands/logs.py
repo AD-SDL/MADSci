@@ -167,7 +167,10 @@ def filter_logs(
         ]
 
     if grep:
-        pattern = re.compile(grep, re.IGNORECASE)
+        try:
+            pattern = re.compile(grep, re.IGNORECASE)
+        except re.error as e:
+            raise click.ClickException(f"Invalid regex pattern '{grep}': {e}") from e
         result = [
             log
             for log in result

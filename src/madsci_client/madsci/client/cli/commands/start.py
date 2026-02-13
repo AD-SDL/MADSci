@@ -193,21 +193,55 @@ def _open_log_file(name: str) -> tuple[Path, IO]:
 
 
 def _write_pid(name: str, pid: int) -> Path:
-    """Write a PID file for a named process."""
+    """Write a PID file for a named process.
+
+    Records the PID and the executable path so that ``_read_pid`` can
+    verify the process identity before sending signals.
+    """
+    import json as _json
+
     _PID_DIR.mkdir(parents=True, exist_ok=True)
     pid_file = _PID_DIR / f"{name}.pid"
-    pid_file.write_text(str(pid))
+    pid_data = {"pid": pid, "exe": sys.executable, "name": name}
+    pid_file.write_text(_json.dumps(pid_data))
     return pid_file
 
 
 def _read_pid(name: str) -> int | None:
-    """Read a PID file and check if the process is still alive."""
+    """Read a PID file and check if the process is still alive.
+
+    Also verifies that the running process matches the expected
+    executable to guard against PID reuse after the original process
+    exits.
+    """
+    import json as _json
+
     pid_file = _PID_DIR / f"{name}.pid"
     if not pid_file.exists():
         return None
     try:
-        pid = int(pid_file.read_text().strip())
+        content = pid_file.read_text().strip()
+        # Support both new JSON format and legacy plain-int format
+        try:
+            pid_data = _json.loads(content)
+            pid = int(pid_data["pid"])
+            expected_exe = pid_data.get("exe")
+        except (_json.JSONDecodeError, KeyError):
+            pid = int(content)
+            expected_exe = None
+
         os.kill(pid, 0)  # Check if process exists
+
+        # Verify process identity to avoid PID reuse issues
+        if expected_exe:
+            try:
+                proc_exe = Path(f"/proc/{pid}/exe").resolve()
+                if proc_exe != Path(expected_exe).resolve():
+                    pid_file.unlink(missing_ok=True)
+                    return None
+            except (OSError, ValueError):
+                pass  # /proc not available (macOS), skip verification
+
         return pid
     except (ValueError, ProcessLookupError, PermissionError):
         # Stale PID file
@@ -328,12 +362,16 @@ def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
 
     if detach:
         log_path, log_fh = _open_log_file(f"manager-{name}")
-        proc = subprocess.Popen(  # noqa: S603
-            cmd,
-            stdout=log_fh,
-            stderr=log_fh,
-            start_new_session=True,
-        )
+        try:
+            proc = subprocess.Popen(  # noqa: S603
+                cmd,
+                stdout=log_fh,
+                stderr=log_fh,
+                start_new_session=True,
+            )
+        except Exception:
+            log_fh.close()
+            raise
         log_fh.close()
         pid_file = _write_pid(f"manager-{name}", proc.pid)
         console.print(f"[green]Started {name} manager[/green] (PID {proc.pid})")
@@ -393,12 +431,16 @@ def start_node(
 
     if detach:
         log_path, log_fh = _open_log_file(f"node-{name}")
-        proc = subprocess.Popen(  # noqa: S603
-            cmd,
-            stdout=log_fh,
-            stderr=log_fh,
-            start_new_session=True,
-        )
+        try:
+            proc = subprocess.Popen(  # noqa: S603
+                cmd,
+                stdout=log_fh,
+                stderr=log_fh,
+                start_new_session=True,
+            )
+        except Exception:
+            log_fh.close()
+            raise
         log_fh.close()
         pid_file = _write_pid(f"node-{name}", proc.pid)
         console.print(f"[green]Started node '{name}'[/green] (PID {proc.pid})")

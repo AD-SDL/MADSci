@@ -132,6 +132,17 @@ class MadsciCLIConfig(BaseSettings):
             with path.open() as f:
                 return toml.load(f)
         except Exception:
+            import logging as _logging
+
+            import click as _click
+
+            _logging.getLogger(__name__).debug(
+                "Failed to parse config file: %s", path, exc_info=True
+            )
+            _click.echo(
+                f"Warning: Could not parse config file {path}, using defaults.",
+                err=True,
+            )
             return {}
 
     def save(self, path: Optional[Path] = None) -> None:
@@ -149,7 +160,7 @@ class MadsciCLIConfig(BaseSettings):
         data = {}
         for field_name in self.model_fields:
             value = getattr(self, field_name)
-            if isinstance(value, Path) or hasattr(value, "__str__"):
+            if isinstance(value, (Path, AnyUrl)):
                 data[field_name] = str(value)
             else:
                 data[field_name] = value

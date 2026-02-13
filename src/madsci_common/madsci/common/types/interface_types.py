@@ -300,11 +300,13 @@ class HTTPInterfaceSettings(
         default=None,
         title="Password",
         description="Password for basic or API key authentication.",
+        json_schema_extra={"secret": True},
     )
     auth_token: Optional[str] = Field(
         default=None,
         title="Bearer Token",
         description="Bearer token for token-based authentication.",
+        json_schema_extra={"secret": True},
     )
     auth_header_name: str = Field(
         default="Authorization",
