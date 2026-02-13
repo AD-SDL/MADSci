@@ -47,6 +47,7 @@ class ExperimentManagerSettings(
         description="The URL of the MongoDB database for the experiment manager.",
         default=AnyUrl("mongodb://localhost:27017"),
         validation_alias=AliasChoices("mongo_db_url", "EXPERIMENT_DB_URL", "db_url"),
+        json_schema_extra={"secret": True},
     )
     database_name: str = Field(
         default="madsci_experiments",

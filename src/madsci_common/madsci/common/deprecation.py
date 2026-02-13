@@ -66,6 +66,30 @@ def emit_definition_deprecation_warning(
     warnings.warn(message, MadsciDeprecationWarning, stacklevel=3)
 
 
+def emit_auto_write_deprecation_warning(
+    file_path: Path,
+    file_type: str = "configuration",
+) -> None:
+    """Emit a deprecation warning for auto-writing of configuration files.
+
+    Args:
+        file_path: Path to the file being auto-written.
+        file_type: Type of file (e.g., "manager definition", "node info").
+    """
+    message = (
+        f"\n\n⚠️  DEPRECATION WARNING: Auto-writing {file_type} file\n"
+        f"  File: {file_path}\n"
+        f"\n"
+        f"  Auto-writing of {file_type} files is deprecated as of v{DEPRECATED_IN}\n"
+        f"  and will be removed in v{REMOVAL_IN}. Use 'madsci config export'\n"
+        f"  to export configuration explicitly.\n"
+        f"\n"
+        f"  For more information, see:\n"
+        f"  https://ad-sdl.github.io/MADSci/guides/migration_from_definitions/\n"
+    )
+    warnings.warn(message, MadsciDeprecationWarning, stacklevel=3)
+
+
 def deprecated(
     reason: str,
     deprecated_in: str = DEPRECATED_IN,

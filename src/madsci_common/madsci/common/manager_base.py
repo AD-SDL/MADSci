@@ -128,7 +128,7 @@ class AbstractManagerBase(
 
         # Initialize settings and definition
         self._settings = settings or self.create_default_settings()
-        self._definition = definition or self.load_or_create_definition()
+        self._definition = definition or self.load_definition()
 
         # Apply settings overrides to definition
         self._apply_settings_overrides()
@@ -510,7 +510,8 @@ class AbstractManagerBase(
 
         This endpoint allows exporting the current manager settings in a format
         suitable for backup, documentation, or replicating the configuration
-        to another environment.
+        to another environment. Secrets are always redacted from the API
+        endpoint for safety.
 
         Args:
             include_defaults: If True, include fields with default values.
@@ -523,12 +524,14 @@ class AbstractManagerBase(
         return self.get_settings_export(
             include_defaults=include_defaults,
             include_schema=include_schema,
+            include_secrets=False,
         )
 
     def get_settings_export(
         self,
         include_defaults: bool = True,
         include_schema: bool = False,
+        include_secrets: bool = False,
     ) -> dict[str, Any]:
         """
         Export current settings for backup/replication.
@@ -537,46 +540,27 @@ class AbstractManagerBase(
         in a format suitable for backup, documentation, or replicating the
         configuration to another environment.
 
+        Sensitive fields are identified via field-level metadata:
+        - Fields with ``json_schema_extra={"secret": True}``
+        - Fields typed as ``SecretStr`` / ``SecretBytes``
+
         Args:
             include_defaults: If True, include fields with default values.
                              If False, only include non-default settings.
             include_schema: If True, include JSON schema for documentation.
+            include_secrets: If True, include actual secret values.
+                            Defaults to False (secrets are redacted).
 
         Returns:
             dict: Settings as a dictionary with the following structure:
-                - "settings": The settings values (secrets redacted)
+                - "settings": The settings values (secrets redacted by default)
                 - "schema" (optional): JSON schema if include_schema is True
                 - "schema_title" (optional): Settings class name if include_schema is True
         """
-        data = self._settings.model_dump(mode="json")
-
-        # Redact sensitive fields based on common patterns.
-        # Use word-boundary-aware matching to avoid false positives on fields
-        # like "primary_key", "auth_enabled", "token_count", etc.
-        # Exact-match patterns are checked with substring matching;
-        # boundary patterns require the sensitive word to appear as a
-        # standalone segment (delimited by "_" or start/end of string).
-        import re  # noqa: PLC0415
-
-        exact_patterns = [
-            "password",
-            "secret",
-            "credential",
-            "api_key",
-            "apikey",
-        ]
-        boundary_patterns = [
-            r"(?:^|_)token(?:_|$)",
-            r"(?:^|_)key(?:_|$)",
-            r"(?:^|_)auth(?:_|$)",
-        ]
-        for field in list(data.keys()):
-            field_lower = field.lower()
-            is_sensitive = any(
-                pattern in field_lower for pattern in exact_patterns
-            ) or any(re.search(pattern, field_lower) for pattern in boundary_patterns)
-            if is_sensitive:
-                data[field] = "***REDACTED***"
+        if hasattr(self._settings, "model_dump_safe"):
+            data = self._settings.model_dump_safe(include_secrets=include_secrets)
+        else:
+            data = self._settings.model_dump(mode="json")
 
         if not include_defaults:
             # Only include fields that differ from defaults
@@ -597,12 +581,15 @@ class AbstractManagerBase(
 
         return result
 
-    def load_or_create_definition(self) -> DefinitionT:
+    def load_definition(self) -> DefinitionT:
         """Load definition from file or create default.
 
         .. deprecated:: 0.7.0
-            Definition files are deprecated. Use settings-based configuration instead.
-            This method will be removed in v0.8.0.
+            Definition files are deprecated. Use settings-based configuration
+            instead. This method will be removed in v0.8.0.
+
+        As of v0.7.0, this method no longer auto-writes definition files
+        to disk. To export a definition, use ``madsci config export``.
         """
         from madsci.common.deprecation import (  # noqa: PLC0415
             emit_definition_deprecation_warning,
@@ -624,15 +611,28 @@ class AbstractManagerBase(
         else:
             definition = self.create_default_definition()
 
-        # Only log if logger is initialized
-        if hasattr(self, "_logger"):
-            self.logger.info(
-                "Writing manager definition to file",
-                event_type=EventType.MANAGER_START,
-                definition_path=str(def_path),
-            )
-        definition.to_yaml(def_path)
         return definition
+
+    def load_or_create_definition(self) -> DefinitionT:
+        """Load definition from file or create default.
+
+        .. deprecated:: 0.7.0
+            Renamed to :meth:`load_definition`. Definition files are no longer
+            auto-written to disk. Use ``madsci config export`` to export
+            configuration explicitly.
+        """
+        import warnings  # noqa: PLC0415
+
+        from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
+
+        warnings.warn(
+            "load_or_create_definition() is deprecated. Use load_definition() instead. "
+            "Definition files are no longer auto-written to disk. "
+            "Use 'madsci config export' to export configuration explicitly.",
+            MadsciDeprecationWarning,
+            stacklevel=2,
+        )
+        return self.load_definition()
 
     def configure_app(self, app: FastAPI) -> None:
         """

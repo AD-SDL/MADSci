@@ -196,6 +196,7 @@ class WorkcellManagerSettings(
         default=None,
         title="Redis Password",
         description="The password for the redis server.",
+        json_schema_extra={"secret": True},
     )
     scheduler_update_interval: float = Field(
         default=5.0,
@@ -234,6 +235,7 @@ class WorkcellManagerSettings(
         validation_alias=AliasChoices(
             "mongo_db_url", "WORKCELL_MONGO_URL", "mongo_url"
         ),
+        json_schema_extra={"secret": True},
     )
     database_name: str = Field(
         default="madsci_workcells",

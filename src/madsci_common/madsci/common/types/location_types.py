@@ -352,6 +352,7 @@ class LocationManagerSettings(
         title="Redis Password",
         description="The password for the Redis server (if required).",
         default=None,
+        json_schema_extra={"secret": True},
     )
 
 

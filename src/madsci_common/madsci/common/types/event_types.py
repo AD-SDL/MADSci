@@ -83,6 +83,7 @@ class EventManagerSettings(
         title="MongoDB URL",
         description="The URL of the MongoDB database used by the Event Manager.",
         validation_alias=AliasChoices("mongo_db_url", "EVENT_DB_URL", "db_url"),
+        json_schema_extra={"secret": True},
     )
     database_name: str = Field(
         default="madsci_events",
@@ -646,11 +647,13 @@ class EmailAlertsConfig(MadsciBaseModel):
         default=None,
         title="SMTP Username",
         description="The username for authenticating with the SMTP server.",
+        json_schema_extra={"secret": True},
     )
     smtp_password: Optional[str] = Field(
         default=None,
         title="SMTP Password",
         description="The password for authenticating with the SMTP server.",
+        json_schema_extra={"secret": True},
     )
     use_tls: bool = Field(
         default=True,

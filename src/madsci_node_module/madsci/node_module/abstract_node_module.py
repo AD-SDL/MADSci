@@ -1206,7 +1206,24 @@ class AbstractNode(MadsciClientMixin):
         )
 
     def _update_node_info_and_definition(self) -> None:
-        """Update the node info and definition files, if possible."""
+        """Update the node info and definition files, if possible.
+
+        .. deprecated:: 0.7.0
+            Auto-writing of node definition and info files is deprecated.
+            Use ``madsci config export`` to export node configuration
+            explicitly. This method will be removed in v0.8.0.
+        """
+        import warnings  # noqa: PLC0415
+
+        from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
+
+        warnings.warn(
+            "Auto-writing of node definition and info files is deprecated as of v0.7.0 "
+            "and will be removed in v0.8.0. Set update_node_files=False in your node "
+            "config and use 'madsci config export' to export configuration explicitly.",
+            MadsciDeprecationWarning,
+            stacklevel=2,
+        )
         try:
             self.node_definition.to_yaml(self.config.node_definition)
             if not self.config.node_info_path:

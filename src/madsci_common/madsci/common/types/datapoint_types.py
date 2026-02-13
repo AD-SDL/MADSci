@@ -216,12 +216,16 @@ class ObjectStorageSettings(
         description="Endpoint for S3-compatible storage (e.g., 'minio.example.com:9000')",
     )
     access_key: str = Field(
-        title="Access Key", description="Access key for authentication", default=""
+        title="Access Key",
+        description="Access key for authentication",
+        default="",
+        json_schema_extra={"secret": True},
     )
     secret_key: str = Field(
         title="Secret Key",
         description="Secret key for authentication",
         default="",
+        json_schema_extra={"secret": True},
     )
     secure: bool = Field(
         default=False,
@@ -275,6 +279,7 @@ class DataManagerSettings(
         title="MongoDB URL",
         description="The URL of the MongoDB database used by the Data Manager.",
         validation_alias=AliasChoices("mongo_db_url", "DATA_DB_URL", "db_url"),
+        json_schema_extra={"secret": True},
     )
     file_storage_path: PathLike = Field(
         title="File Storage Path",

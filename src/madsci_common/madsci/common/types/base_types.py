@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated, Any, ClassVar, Optional, TypeVar, Union
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from pydantic.config import ConfigDict
 from pydantic_settings import (
     BaseSettings,
@@ -19,6 +19,9 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 from sqlmodel import SQLModel
+
+REDACTED_PLACEHOLDER = "***REDACTED***"
+"""Placeholder string used when redacting secret field values."""
 
 _T = TypeVar("_T")
 
@@ -106,6 +109,34 @@ class MadsciBaseSettings(BaseSettings):
             YamlConfigSettingsSource(settings_cls),
         )
 
+    def model_dump_safe(
+        self,
+        include_secrets: bool = False,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Dump settings data with secret fields redacted by default.
+
+        Secret fields are identified by ``json_schema_extra={"secret": True}``
+        or ``SecretStr`` / ``SecretBytes`` type annotations.
+
+        Args:
+            include_secrets: If True, include actual secret values.
+            **kwargs: Additional keyword arguments forwarded to ``model_dump``.
+
+        Returns:
+            dict: Settings with secrets redacted unless ``include_secrets=True``.
+        """
+        kwargs.setdefault("mode", "json")
+        data = self.model_dump(**kwargs)
+        if include_secrets:
+            return data
+        for field_name, field_info in type(self).model_fields.items():
+            if field_name not in data:
+                continue
+            if _is_secret_field(field_info):
+                data[field_name] = REDACTED_PLACEHOLDER
+        return data
+
 
 class MadsciSQLModel(SQLModel):
     """
@@ -156,21 +187,6 @@ class MadsciBaseModel(BaseModel):
         validate_default=True,
     )
 
-    def to_yaml(self, path: PathLike, **kwargs: Any) -> None:
-        """
-        Allows all derived data models to be exported into yaml.
-
-        kwargs are passed to model_dump
-        """
-        Path(path).expanduser().parent.mkdir(parents=True, exist_ok=True)
-        with Path(path).expanduser().open(mode="w") as fp:
-            yaml.dump(
-                self.model_dump(mode="json", **kwargs),
-                fp,
-                indent=2,
-                sort_keys=False,
-            )
-
     @classmethod
     def from_yaml(cls: type[_T], path: PathLike) -> _T:
         """
@@ -180,18 +196,102 @@ class MadsciBaseModel(BaseModel):
             raw_data = yaml.safe_load(fp)
         return cls.model_validate(raw_data)
 
-    def model_dump_yaml(self) -> str:
-        """
-        Convert the model to a YAML string.
+    def model_dump_yaml(self, include_secrets: bool = True) -> str:
+        """Convert the model to a YAML string.
+
+        Args:
+            include_secrets: If False, redact secret field values.
 
         Returns:
             YAML string representation of the model
         """
+        if include_secrets:
+            dump = self.model_dump(mode="json")
+        else:
+            dump = self.model_dump_safe(include_secrets=False)
         return yaml.dump(
-            self.model_dump(mode="json"),
+            dump,
             indent=2,
             sort_keys=False,
         )
+
+    def model_dump_safe(
+        self,
+        include_secrets: bool = False,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Dump model data with secret fields redacted by default.
+
+        This method provides a safe way to export model data without
+        accidentally exposing sensitive values. Secret fields are identified
+        by:
+        - Fields typed as ``SecretStr`` / ``SecretBytes``
+        - Fields with ``json_schema_extra={"secret": True}`` metadata
+
+        Args:
+            include_secrets: If True, include actual secret values.
+                Defaults to False (secrets are replaced with
+                ``***REDACTED***``).
+            **kwargs: Additional keyword arguments forwarded to
+                ``model_dump(mode="json", ...)``.
+
+        Returns:
+            dict: Model data with secrets redacted unless
+                ``include_secrets=True``.
+        """
+        kwargs.setdefault("mode", "json")
+        data = self.model_dump(**kwargs)
+        if include_secrets:
+            return data
+        return self._redact_secrets(data)
+
+    def _redact_secrets(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Redact secret fields in a dumped data dict.
+
+        Walks through the model's field metadata to find fields that are
+        ``SecretStr``, ``SecretBytes``, or annotated with
+        ``json_schema_extra={"secret": True}``, and replaces their values
+        with ``***REDACTED***``.
+        """
+        for field_name, field_info in type(self).model_fields.items():
+            if field_name not in data:
+                continue
+            if _is_secret_field(field_info):
+                data[field_name] = REDACTED_PLACEHOLDER
+            elif isinstance(data[field_name], dict) and hasattr(
+                field_info, "annotation"
+            ):
+                # If the field is a nested model, recurse
+                value = getattr(self, field_name, None)
+                if isinstance(value, MadsciBaseModel):
+                    data[field_name] = value.model_dump_safe(include_secrets=False)
+        return data
+
+    def to_yaml(
+        self, path: PathLike, include_secrets: bool = True, **kwargs: Any
+    ) -> None:
+        """Export the model to a YAML file.
+
+        Args:
+            path: File path to write to.
+            include_secrets: If False, redact secret field values.
+                Defaults to True for backwards compatibility with
+                internal serialization (e.g., definition file round-trips).
+            **kwargs: Additional keyword arguments forwarded to
+                ``model_dump``.
+        """
+        Path(path).expanduser().parent.mkdir(parents=True, exist_ok=True)
+        if include_secrets:
+            dump = self.model_dump(mode="json", **kwargs)
+        else:
+            dump = self.model_dump_safe(include_secrets=False, **kwargs)
+        with Path(path).expanduser().open(mode="w") as fp:
+            yaml.dump(
+                dump,
+                fp,
+                indent=2,
+                sort_keys=False,
+            )
 
     def to_mongo(self) -> dict[str, Any]:
         """
@@ -202,6 +302,32 @@ class MadsciBaseModel(BaseModel):
             if field in self._mongo_excluded_fields:
                 json_data.pop(field, None)
         return json_data
+
+
+def _is_secret_field(field_info: Any) -> bool:
+    """Check whether a Pydantic FieldInfo represents a secret field.
+
+    A field is considered secret if:
+    - Its annotation is ``SecretStr`` or ``SecretBytes``
+    - It has ``json_schema_extra={"secret": True}`` metadata
+    """
+    from pydantic import SecretBytes  # noqa: PLC0415
+
+    # Check annotation type
+    annotation = getattr(field_info, "annotation", None)
+    if annotation is not None:
+        # Handle Optional[SecretStr] etc. by checking origin and args
+        origin = getattr(annotation, "__origin__", None)
+        if origin is Union:
+            args = getattr(annotation, "__args__", ())
+            if any(a is SecretStr or a is SecretBytes for a in args):
+                return True
+        if annotation is SecretStr or annotation is SecretBytes:
+            return True
+
+    # Check json_schema_extra metadata
+    extra = getattr(field_info, "json_schema_extra", None)
+    return bool(isinstance(extra, dict) and extra.get("secret"))
 
 
 class Error(MadsciBaseModel):

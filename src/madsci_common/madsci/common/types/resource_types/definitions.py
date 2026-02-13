@@ -73,6 +73,7 @@ class ResourceManagerSettings(
         title="Database URL",
         description="The URL of the database for the resource manager.",
         default="postgresql://madsci:madsci@localhost:5432/resources",
+        json_schema_extra={"secret": True},
     )
 
 
