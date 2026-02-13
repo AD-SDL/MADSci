@@ -23,6 +23,18 @@ parameters:
     required: true
     default: "A distributed MADSci self-driving laboratory"
 
+  - name: db_user
+    type: string
+    description: "PostgreSQL database user"
+    required: false
+    default: "madsci"
+
+  - name: db_password
+    type: string
+    description: "PostgreSQL database password (change for production!)"
+    required: false
+    default: "madsci"
+
 files:
   - source: "{{lab_name}}/README.md.j2"
     destination: "{{lab_name}}/README.md"

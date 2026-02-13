@@ -3,10 +3,12 @@
 Provides real-time log viewing with filtering capabilities.
 """
 
+from collections import OrderedDict
 from datetime import datetime
 from typing import Any, ClassVar
 
 import httpx
+from madsci.client.cli.tui.constants import EVENT_MANAGER_URL
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal
@@ -59,7 +61,11 @@ class LogsScreen(Screen):
         """Initialize the screen."""
         super().__init__(**kwargs)
         self.follow_mode = False
-        self.seen_ids: set[str] = set()
+        # Use an OrderedDict as a bounded set (max 10,000 IDs) to
+        # prevent unbounded memory growth in long-running follow mode.
+        self._seen_ids: OrderedDict[str, None] = OrderedDict()
+        self._follow_timer: Any = None
+        self._max_seen_ids = 10_000
 
     def compose(self) -> ComposeResult:
         """Compose the logs screen layout."""
@@ -99,7 +105,7 @@ class LogsScreen(Screen):
         logs = await self._fetch_logs(level=level, search=search)
 
         if not logs:
-            if not self.seen_ids:  # Only show message if no logs have been loaded
+            if not self._seen_ids:  # Only show message if no logs have been loaded
                 log_view.write(
                     "[dim]No logs available. Event Manager may not be running.[/dim]"
                 )
@@ -108,8 +114,11 @@ class LogsScreen(Screen):
         # Add new logs to display
         for entry in logs:
             entry_id = entry.get("event_id", entry.get("id", str(hash(str(entry)))))
-            if entry_id not in self.seen_ids:
-                self.seen_ids.add(entry_id)
+            if entry_id not in self._seen_ids:
+                self._seen_ids[entry_id] = None
+                # Trim oldest entries when exceeding the bound
+                while len(self._seen_ids) > self._max_seen_ids:
+                    self._seen_ids.popitem(last=False)
                 log_view.write(self._format_log_entry(entry))
 
     async def _fetch_logs(
@@ -137,7 +146,7 @@ class LogsScreen(Screen):
 
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
-                    "http://localhost:8001/events",
+                    f"{EVENT_MANAGER_URL.rstrip('/')}/events",
                     params=params,
                 )
                 if response.status_code == 200:
@@ -194,7 +203,7 @@ class LogsScreen(Screen):
         """Clear the log view."""
         log_view = self.query_one("#log-view", RichLog)
         log_view.clear()
-        self.seen_ids.clear()
+        self._seen_ids.clear()
         self.notify("Logs cleared", timeout=2)
 
     def action_toggle_follow(self) -> None:
@@ -202,9 +211,13 @@ class LogsScreen(Screen):
         self.follow_mode = not self.follow_mode
         if self.follow_mode:
             self.notify("Follow mode enabled", timeout=2)
-            # Start a timer to periodically refresh
-            self.set_interval(2.0, self._follow_refresh, name="follow-timer")
+            self._follow_timer = self.set_interval(
+                2.0, self._follow_refresh, name="follow-timer"
+            )
         else:
+            if self._follow_timer is not None:
+                self._follow_timer.stop()
+                self._follow_timer = None
             self.notify("Follow mode disabled", timeout=2)
 
     async def _follow_refresh(self) -> None:
@@ -215,6 +228,9 @@ class LogsScreen(Screen):
     def action_go_back(self) -> None:
         """Go back to the previous screen."""
         self.follow_mode = False
+        if self._follow_timer is not None:
+            self._follow_timer.stop()
+            self._follow_timer = None
         self.app.switch_screen("dashboard")
 
     def on_select_changed(self, event: Select.Changed) -> None:  # noqa: ARG002
@@ -222,12 +238,12 @@ class LogsScreen(Screen):
         # Clear and refresh when filters change
         log_view = self.query_one("#log-view", RichLog)
         log_view.clear()
-        self.seen_ids.clear()
+        self._seen_ids.clear()
         self.run_worker(self.refresh_data())
 
     def on_input_submitted(self, event: Input.Submitted) -> None:  # noqa: ARG002
         """Handle search input submission."""
         log_view = self.query_one("#log-view", RichLog)
         log_view.clear()
-        self.seen_ids.clear()
+        self._seen_ids.clear()
         self.run_worker(self.refresh_data())

@@ -26,7 +26,22 @@ def backup() -> None:
 
 def _register_subcommands() -> None:
     """Lazily register subcommands from the backup tools CLI."""
-    from madsci.common.backup_tools.cli import madsci_backup
+    try:
+        from madsci.common.backup_tools.cli import madsci_backup
+    except ImportError:
+        # DB client packages (psycopg2, pymongo) may not be installed.
+        # Register a placeholder that explains the situation.
+        @backup.command("create")
+        def _missing_deps() -> None:  # type: ignore[misc]
+            """Create a backup (requires database client packages)."""
+            import click
+
+            raise click.ClickException(
+                "Backup dependencies not installed.\n"
+                "  Install with: pip install 'madsci.common[postgres]' or 'madsci.common[mongo]'"
+            )
+
+        return
 
     # Copy subcommands from the existing backup CLI group
     for name, cmd in madsci_backup.commands.items():

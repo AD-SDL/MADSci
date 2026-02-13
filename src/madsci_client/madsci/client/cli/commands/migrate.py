@@ -9,15 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 import click
-from rich.console import Console
+from madsci.client.cli.utils.output import get_console as _get_console
 from rich.table import Table
-
-
-def _get_console(ctx: click.Context) -> Console:
-    """Get console from Click context, respecting global --no-color and --quiet flags."""
-    if ctx.obj and "console" in ctx.obj:
-        return ctx.obj["console"]
-    return Console()
 
 
 @click.group()

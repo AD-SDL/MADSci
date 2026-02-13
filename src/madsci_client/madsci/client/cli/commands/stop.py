@@ -58,9 +58,9 @@ def stop(
     if ctx.invoked_subcommand is not None:
         return
 
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     compose_file = _find_compose_file(config_path)
     console.print(f"Using compose file: [cyan]{compose_file}[/cyan]")
@@ -92,7 +92,22 @@ def stop(
 
 
 @stop.command("manager")
-@click.argument("name")
+@click.argument(
+    "name",
+    type=click.Choice(
+        sorted(
+            [
+                "lab",
+                "event",
+                "experiment",
+                "resource",
+                "data",
+                "workcell",
+                "location",
+            ]
+        )
+    ),
+)
 @click.pass_context
 def stop_manager(ctx: click.Context, name: str) -> None:
     """Stop a background manager process.
@@ -102,9 +117,9 @@ def stop_manager(ctx: click.Context, name: str) -> None:
         madsci stop manager event     Stop the event manager
     """
     from madsci.client.cli.commands.start import _read_pid, _remove_pid
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     pid_name = f"manager-{name}"
     pid = _read_pid(pid_name)
@@ -135,9 +150,9 @@ def stop_node(ctx: click.Context, name: str) -> None:
         madsci stop node my_node     Stop the node
     """
     from madsci.client.cli.commands.start import _read_pid, _remove_pid
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     pid_name = f"node-{name}"
     pid = _read_pid(pid_name)

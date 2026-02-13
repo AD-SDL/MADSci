@@ -243,10 +243,10 @@ def logs(  # noqa: C901, PLR0912
         madsci logs --grep "workflow"        Filter by pattern
         madsci logs workcell_manager         Logs from specific service
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
     from rich.panel import Panel
 
-    console: Console = ctx.obj.get("console", Console())
+    console = get_console(ctx)
     no_color = ctx.obj.get("no_color", False)
 
     since_dt = None

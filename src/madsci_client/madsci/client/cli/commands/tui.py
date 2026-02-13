@@ -14,7 +14,7 @@ import click
     help="Initial screen to display.",
 )
 @click.pass_context
-def tui(ctx: click.Context, screen: str) -> None:  # noqa: ARG001
+def tui(ctx: click.Context, screen: str) -> None:
     """Launch interactive terminal user interface.
 
     The TUI provides a visual interface for managing and monitoring
@@ -46,8 +46,8 @@ def tui(ctx: click.Context, screen: str) -> None:  # noqa: ARG001
     # Get lab URL from context
     lab_url = ctx.obj.get("lab_url", "http://localhost:8000/")
 
-    # Create and run the TUI app
-    app = MadsciApp(lab_url=lab_url)
+    # Create and run the TUI app, starting on the requested screen
+    app = MadsciApp(lab_url=lab_url, initial_screen=screen)
     result = app.run()
 
     # If user pressed Ctrl+P (return code 2), launch command palette

@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 import click
 
 if TYPE_CHECKING:
+    from typing import IO
+
     from rich.console import Console
 
 # Manager name -> Python module mapping.
@@ -33,6 +35,9 @@ MANAGER_MODULES: dict[str, str] = {
 
 # Directory for PID files.
 _PID_DIR = Path.home() / ".madsci" / "pids"
+
+# Directory for detached process logs.
+_LOG_DIR = Path.home() / ".madsci" / "logs"
 
 
 def _find_compose_file(config_path: str | None) -> Path:
@@ -170,6 +175,21 @@ def _wait_for_health(console: Console, timeout: int) -> None:
     _print_health_summary(console, results, total, elapsed, timeout)
 
 
+def _open_log_file(name: str) -> tuple[Path, IO]:
+    """Create and open a timestamped log file for a detached process.
+
+    Returns the log path and the open file handle (caller is responsible
+    for the handle's lifetime — it is inherited by the child process).
+    """
+    from datetime import datetime
+
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = _LOG_DIR / f"{name}_{ts}.log"
+    fh = log_path.open("a")
+    return log_path, fh
+
+
 def _write_pid(name: str, pid: int) -> Path:
     """Write a PID file for a named process."""
     _PID_DIR.mkdir(parents=True, exist_ok=True)
@@ -259,9 +279,9 @@ def start(
     if ctx.invoked_subcommand is not None:
         return
 
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     if mode == "local":
         _start_local(console)
@@ -288,9 +308,9 @@ def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
         madsci start manager event       Start event manager (foreground)
         madsci start manager event -d    Start in background
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     module = MANAGER_MODULES[name]
 
@@ -305,14 +325,16 @@ def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
     cmd = [sys.executable, "-m", module]
 
     if detach:
+        log_path, log_fh = _open_log_file(f"manager-{name}")
         proc = subprocess.Popen(  # noqa: S603
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_fh,
+            stderr=log_fh,
         )
         pid_file = _write_pid(f"manager-{name}", proc.pid)
         console.print(f"[green]Started {name} manager[/green] (PID {proc.pid})")
         console.print(f"  PID file: [dim]{pid_file}[/dim]")
+        console.print(f"  Log file: [dim]{log_path}[/dim]")
         console.print(f"  Stop with: madsci stop manager {name}")
     else:
         console.print(f"Starting {name} manager...")
@@ -348,9 +370,9 @@ def start_node(
         madsci start node ./my_node.py -d        Start in background
         madsci start node ./my_node.py --name lh Start with custom name
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     node_path = Path(path).resolve()
     name = node_name or node_path.stem
@@ -366,14 +388,16 @@ def start_node(
     cmd = [sys.executable, str(node_path)]
 
     if detach:
+        log_path, log_fh = _open_log_file(f"node-{name}")
         proc = subprocess.Popen(  # noqa: S603
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_fh,
+            stderr=log_fh,
         )
         pid_file = _write_pid(f"node-{name}", proc.pid)
         console.print(f"[green]Started node '{name}'[/green] (PID {proc.pid})")
         console.print(f"  PID file: [dim]{pid_file}[/dim]")
+        console.print(f"  Log file: [dim]{log_path}[/dim]")
         console.print(f"  Stop with: madsci stop node {name}")
     else:
         console.print(f"Starting node '{name}' from {node_path}...")

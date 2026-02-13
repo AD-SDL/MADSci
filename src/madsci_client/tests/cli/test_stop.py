@@ -1,5 +1,6 @@
 """Tests for the madsci stop command."""
 
+import signal
 from unittest.mock import patch
 
 from click.testing import CliRunner
@@ -100,5 +101,5 @@ class TestStopCommand:
             result = runner.invoke(madsci, ["stop", "manager", "event"])
             assert result.exit_code == 0
             assert "Stopped event manager" in result.output
-            mock_kill.assert_called_once()
+            mock_kill.assert_called_once_with(12345, signal.SIGTERM)
             mock_remove.assert_called_once_with("manager-event")

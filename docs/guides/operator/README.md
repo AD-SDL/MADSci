@@ -25,9 +25,18 @@ A Lab Operator:
 ### Starting the Lab
 
 ```bash
-# Start all services
+# Start all services (recommended)
 cd my_lab
+madsci start -d
+
+# Alternative: using Docker Compose directly
 docker compose up -d
+
+# Start a single manager
+madsci start manager event -d
+
+# Start a node
+madsci start node ./my_node.py -d
 
 # Verify everything is running
 madsci status
@@ -52,14 +61,17 @@ madsci tui
 ### Stopping the Lab
 
 ```bash
-# Graceful stop (preserves data)
-docker compose stop
+# Stop all services (recommended)
+madsci stop
 
-# Stop and remove containers
-docker compose down
+# Stop a specific manager or node
+madsci stop manager event
+madsci stop node my_node
 
-# Full cleanup (WARNING: deletes data)
-docker compose down -v
+# Alternative: using Docker Compose directly
+docker compose stop              # Graceful stop (preserves data)
+docker compose down              # Stop and remove containers
+docker compose down -v           # Full cleanup (WARNING: deletes data)
 ```
 
 ### Backups

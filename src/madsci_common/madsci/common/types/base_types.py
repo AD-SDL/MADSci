@@ -117,7 +117,8 @@ class MadsciBaseSettings(BaseSettings):
         """Dump settings data with secret fields redacted by default.
 
         Secret fields are identified by ``json_schema_extra={"secret": True}``
-        or ``SecretStr`` / ``SecretBytes`` type annotations.
+        or ``SecretStr`` / ``SecretBytes`` type annotations. Nested models
+        are recursively redacted.
 
         Args:
             include_secrets: If True, include actual secret values.
@@ -130,11 +131,21 @@ class MadsciBaseSettings(BaseSettings):
         data = self.model_dump(**kwargs)
         if include_secrets:
             return data
+        return self._redact_secrets(data)
+
+    def _redact_secrets(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Redact secret fields in a dumped data dict, recursing into nested models."""
         for field_name, field_info in type(self).model_fields.items():
             if field_name not in data:
                 continue
             if _is_secret_field(field_info):
                 data[field_name] = REDACTED_PLACEHOLDER
+            elif isinstance(data[field_name], dict) and hasattr(
+                field_info, "annotation"
+            ):
+                value = getattr(self, field_name, None)
+                if isinstance(value, (MadsciBaseModel, MadsciBaseSettings)):
+                    data[field_name] = value.model_dump_safe(include_secrets=False)
         return data
 
 

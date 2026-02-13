@@ -49,14 +49,20 @@ class MadsciApp(App):
         "workflows": WorkflowsScreen,
     }
 
-    def __init__(self, lab_url: str = "http://localhost:8000/") -> None:
+    def __init__(
+        self,
+        lab_url: str = "http://localhost:8000/",
+        initial_screen: str = "dashboard",
+    ) -> None:
         """Initialize the MADSci TUI application.
 
         Args:
             lab_url: URL of the Lab Manager.
+            initial_screen: Name of the screen to show on launch.
         """
         super().__init__()
         self.lab_url = lab_url
+        self._initial_screen = initial_screen
 
     def compose(self) -> ComposeResult:
         """Compose the application layout."""
@@ -65,7 +71,7 @@ class MadsciApp(App):
 
     async def on_mount(self) -> None:
         """Handle application mount event."""
-        await self.push_screen("dashboard")
+        await self.push_screen(self._initial_screen)
 
     def action_switch_screen(self, screen: str) -> None:
         """Switch to a named screen.

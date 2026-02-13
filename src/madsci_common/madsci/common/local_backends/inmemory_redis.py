@@ -29,6 +29,17 @@ _list_registry: dict[tuple[int, str], list[Any]] = {}
 _list_registry_lock = threading.Lock()
 
 
+def clear_all_registries() -> None:
+    """Clear all module-level registries.
+
+    Useful in test fixtures to prevent cross-test state pollution.
+    """
+    with _dict_registry_lock:
+        _dict_registry.clear()
+    with _list_registry_lock:
+        _list_registry.clear()
+
+
 class InMemoryRedisClient:
     """Drop-in replacement for ``redis.Redis`` supporting the subset of
     methods used by MADSci state handlers: ``incr``, ``get``, and ``ping``.

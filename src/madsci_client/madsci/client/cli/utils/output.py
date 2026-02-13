@@ -6,10 +6,28 @@ Provides consistent output formatting helpers for CLI commands.
 import json
 from typing import Any
 
+import click
 import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+
+def get_console(ctx: click.Context) -> Console:
+    """Get Rich Console from Click context, with fallback.
+
+    All CLI commands should use this function instead of
+    creating their own Console or inlining ``ctx.obj.get(...)``.
+
+    Args:
+        ctx: Click context.
+
+    Returns:
+        Console instance from context, or a new default Console.
+    """
+    if ctx.obj and "console" in ctx.obj:
+        return ctx.obj["console"]
+    return Console()
 
 
 def output_result(

@@ -7,26 +7,13 @@ import socket
 from typing import Any, ClassVar
 
 import httpx
+from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, DEFAULT_SERVICES
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
 from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import DataTable, Label, Static
-
-# Default auto-refresh interval in seconds
-AUTO_REFRESH_INTERVAL = 5.0
-
-# Default service URLs
-DEFAULT_SERVICES = {
-    "lab_manager": "http://localhost:8000/",
-    "event_manager": "http://localhost:8001/",
-    "experiment_manager": "http://localhost:8002/",
-    "resource_manager": "http://localhost:8003/",
-    "data_manager": "http://localhost:8004/",
-    "workcell_manager": "http://localhost:8005/",
-    "location_manager": "http://localhost:8006/",
-}
 
 INFRASTRUCTURE_SERVICES = {
     "mongodb": ("localhost", 27017),

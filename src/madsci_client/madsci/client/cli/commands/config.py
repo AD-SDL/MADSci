@@ -148,9 +148,9 @@ def export(
         madsci config export event --include-secrets Include secret values
         madsci config export --all                  Export all managers
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     if not manager_type and not export_all:
         console.print(

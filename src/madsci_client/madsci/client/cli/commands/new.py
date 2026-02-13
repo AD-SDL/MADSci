@@ -21,11 +21,11 @@ if TYPE_CHECKING:
 
 def get_console(ctx: click.Context) -> Console:
     """Get console from context or create new one."""
-    from rich.console import Console
+    from madsci.client.cli.utils.output import (
+        get_console as _get_console,
+    )
 
-    if ctx.obj and "console" in ctx.obj:
-        return ctx.obj["console"]
-    return Console()
+    return _get_console(ctx)
 
 
 def collect_parameters_interactive(  # noqa: C901

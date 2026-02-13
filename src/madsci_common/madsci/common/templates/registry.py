@@ -80,12 +80,14 @@ class TemplateRegistry:
             Path to bundled templates, or None if not found.
         """
         try:
-            # Templates are bundled in madsci_common package
-            with importlib.resources.as_file(
-                importlib.resources.files("madsci.common") / "bundled_templates"
-            ) as path:
-                if path.exists():
-                    return path
+            # Use importlib.resources.files() directly — it returns a
+            # Traversable that, for on-disk packages, is already a real
+            # Path.  This avoids the as_file() context-manager whose
+            # temporary path can become invalid after the ``with`` exits.
+            resource = importlib.resources.files("madsci.common") / "bundled_templates"
+            path = Path(str(resource))
+            if path.exists():
+                return path
         except (TypeError, FileNotFoundError):
             pass
         return None

@@ -7,26 +7,17 @@ active workflows, and recent events.
 from typing import Any, ClassVar
 
 import httpx
+from madsci.client.cli.tui.constants import (
+    AUTO_REFRESH_INTERVAL,
+    DEFAULT_SERVICES,
+    EVENT_MANAGER_URL,
+)
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import Label, Static
-
-# Default auto-refresh interval in seconds
-AUTO_REFRESH_INTERVAL = 5.0
-
-# Default service URLs
-DEFAULT_SERVICES = {
-    "lab_manager": "http://localhost:8000/",
-    "event_manager": "http://localhost:8001/",
-    "experiment_manager": "http://localhost:8002/",
-    "resource_manager": "http://localhost:8003/",
-    "data_manager": "http://localhost:8004/",
-    "workcell_manager": "http://localhost:8005/",
-    "location_manager": "http://localhost:8006/",
-}
 
 
 class ServiceStatusWidget(Static):
@@ -112,7 +103,7 @@ class RecentEventsPanel(Static):
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
-                    "http://localhost:8001/events",
+                    f"{EVENT_MANAGER_URL.rstrip('/')}/events",
                     params={"limit": 5},
                 )
                 if response.status_code == 200:

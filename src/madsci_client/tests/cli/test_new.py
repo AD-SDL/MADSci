@@ -101,10 +101,15 @@ class TestNewModuleCommand:
                 ],
             )
 
-            # Should report template not found (bundled templates may not be installed)
-            # Either succeeds (templates found) or fails gracefully
-            # We just check it doesn't crash
+            # Bundled templates should be available; exit 0 means template
+            # was found and rendered, exit 1 means template not found
+            # (acceptable in environments without bundled templates).
             assert result.exit_code in (0, 1)
+            if result.exit_code == 1:
+                assert (
+                    "not found" in result.output.lower()
+                    or "error" in result.output.lower()
+                )
 
 
 class TestNewExperimentCommand:
@@ -126,8 +131,13 @@ class TestNewExperimentCommand:
                 ],
             )
 
-            # Should not crash
+            # Exit 0 = template rendered; exit 1 = template not found
             assert result.exit_code in (0, 1)
+            if result.exit_code == 1:
+                assert (
+                    "not found" in result.output.lower()
+                    or "error" in result.output.lower()
+                )
 
 
 class TestNewWorkflowCommand:
@@ -149,5 +159,10 @@ class TestNewWorkflowCommand:
                 ],
             )
 
-            # Should not crash
+            # Exit 0 = template rendered; exit 1 = template not found
             assert result.exit_code in (0, 1)
+            if result.exit_code == 1:
+                assert (
+                    "not found" in result.output.lower()
+                    or "error" in result.output.lower()
+                )

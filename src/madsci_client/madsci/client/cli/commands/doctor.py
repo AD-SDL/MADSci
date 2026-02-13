@@ -380,10 +380,10 @@ def doctor(  # noqa: C901
         madsci doctor --check docker   Only check Docker
         madsci doctor --json           Output as JSON
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
     from rich.panel import Panel
 
-    console: Console = ctx.obj.get("console", Console())
+    console = get_console(ctx)
 
     cat_list = list(categories) if categories else None
     results = run_all_checks(cat_list)

@@ -8,7 +8,6 @@ standardizing common patterns and reducing code duplication.
 import contextlib
 import sys
 from abc import ABCMeta
-from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Any, ContextManager, Generic, Optional, TypeVar
@@ -308,6 +307,18 @@ class AbstractManagerBase(
         ):
             self._definition.description = self._settings.manager_description
 
+    def _resolve_name(self) -> str:
+        """Resolve the manager name from settings or definition.
+
+        Checks settings.manager_name first, then definition.name,
+        and falls back to the class name.
+        """
+        if isinstance(self._settings, ManagerSettings) and self._settings.manager_name:
+            return self._settings.manager_name
+        if hasattr(self._definition, "name"):
+            return self._definition.name
+        return self.__class__.__name__
+
     def _resolve_identity_from_registry(self) -> None:
         """Resolve manager identity from the ID Registry.
 
@@ -329,17 +340,7 @@ class AbstractManagerBase(
             )
             self._resolver = IdentityResolver(lab_url=lab_url)
 
-            # Determine the name to resolve
-            name = None
-            if (
-                isinstance(self._settings, ManagerSettings)
-                and self._settings.manager_name
-            ):
-                name = self._settings.manager_name
-            elif hasattr(self._definition, "name"):
-                name = self._definition.name
-            else:
-                name = self.__class__.__name__
+            name = self._resolve_name()
 
             result = self._resolver.resolve_with_info(
                 name=name,
@@ -372,18 +373,7 @@ class AbstractManagerBase(
             return
 
         try:
-            name = None
-            if (
-                isinstance(self._settings, ManagerSettings)
-                and self._settings.manager_name
-            ):
-                name = self._settings.manager_name
-            elif hasattr(self._definition, "name"):
-                name = self._definition.name
-            else:
-                name = self.__class__.__name__
-
-            self._resolver.release(name)
+            self._resolver.release(self._resolve_name())
         except Exception:
             import logging  # noqa: PLC0415
 
@@ -455,7 +445,7 @@ class AbstractManagerBase(
             if len(module_parts) >= 2:
                 package_name = ".".join(module_parts[:2])
                 return pkg_version(package_name)
-        except (PackageNotFoundError, Exception):
+        except Exception:
             return None
 
     @get("/health")
@@ -567,10 +557,13 @@ class AbstractManagerBase(
             try:
                 defaults = type(self._settings)().model_dump(mode="json")
                 data = {k: v for k, v in data.items() if data.get(k) != defaults.get(k)}
-            except Exception:  # noqa: S110
-                # If we can't create a default instance (e.g., required fields),
-                # return all fields instead of failing
-                pass
+            except Exception:
+                import logging  # noqa: PLC0415
+
+                logging.getLogger(__name__).debug(
+                    "Could not create default settings instance for comparison",
+                    exc_info=True,
+                )
 
         result: dict[str, Any] = {"settings": data}
 

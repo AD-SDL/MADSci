@@ -6,6 +6,7 @@ This module provides the engine for rendering templates into generated projects.
 
 import logging
 import re
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -159,8 +160,7 @@ class TemplateEngine:
         env.filters["pascal_case"] = pascal_case
         env.filters["camel_case"] = camel_case
         env.filters["kebab_case"] = kebab_case
-        env.filters["upper"] = str.upper
-        env.filters["lower"] = str.lower
+        # Note: "upper" and "lower" are Jinja2 built-in filters.
 
         return env
 
@@ -195,13 +195,21 @@ class TemplateEngine:
                     errors.append(
                         f"Parameter '{param.name}' does not match pattern: {param.pattern}"
                     )
-                if param.min_length and len(value) < param.min_length:
+                if param.min_length is not None and len(value) < param.min_length:
                     errors.append(
                         f"Parameter '{param.name}' is too short (min: {param.min_length})"
                     )
-                if param.max_length and len(value) > param.max_length:
+                if param.max_length is not None and len(value) > param.max_length:
                     errors.append(
                         f"Parameter '{param.name}' is too long (max: {param.max_length})"
+                    )
+
+            elif param.type == ParameterType.PATH:
+                if not isinstance(value, str):
+                    errors.append(f"Parameter '{param.name}' must be a string")
+                elif "\x00" in value:
+                    errors.append(
+                        f"Parameter '{param.name}' contains invalid null byte"
                     )
 
             elif param.type in (ParameterType.INTEGER, ParameterType.FLOAT):
@@ -348,9 +356,12 @@ class TemplateEngine:
                 cmd = cmd_template.render(**values)
 
                 try:
-                    subprocess.run(  # noqa: S602
-                        cmd,
-                        shell=True,
+                    # Tokenize the command to avoid shell injection.
+                    # shlex.split + shell=False prevents user-supplied
+                    # template values from being interpreted as shell syntax.
+                    subprocess.run(  # noqa: S603
+                        shlex.split(cmd),
+                        shell=False,
                         cwd=output_dir,
                         check=not hook.continue_on_error,
                         capture_output=True,

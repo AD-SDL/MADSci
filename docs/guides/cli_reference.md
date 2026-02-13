@@ -80,6 +80,8 @@ madsci start --build            # Rebuild images first
 madsci start --mode local       # Start without Docker (pure Python)
 madsci start --services workcell_manager --services lab_manager
 madsci start --config path/to/compose.yaml
+madsci start -d --no-wait       # Skip health polling after starting
+madsci start -d --wait-timeout 120  # Custom health poll timeout
 ```
 
 | Option | Description |
@@ -89,15 +91,33 @@ madsci start --config path/to/compose.yaml
 | `--services` | Start only specific services (repeatable) |
 | `--config PATH` | Path to Docker Compose file |
 | `--mode [docker\|local]` | Run mode (default: docker) |
+| `--wait/--no-wait` | Wait for services to become healthy (default: wait when `-d`) |
+| `--wait-timeout INT` | Timeout for health polling in seconds (default: 60) |
+
+#### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `start manager <name>` | Start a single manager (lab, event, experiment, resource, data, workcell, location) |
+| `start node <path>` | Start a node module from a Python file |
+
+```bash
+madsci start manager event       # Start event manager (foreground)
+madsci start manager event -d    # Start in background
+madsci start node ./my_node.py   # Start node (foreground)
+madsci start node ./my_node.py -d --name lh  # Background with custom name
+```
 
 ### `madsci stop`
 
-Stop MADSci lab services via Docker Compose.
+Stop MADSci lab services via Docker Compose. Also supports stopping individual background managers and nodes.
 
 ```bash
 madsci stop                     # Stop all services
 madsci stop --remove            # Stop and remove images
 madsci stop --volumes           # Stop and remove volumes (data loss!)
+madsci stop manager event       # Stop a background manager
+madsci stop node my_node        # Stop a background node
 ```
 
 | Option | Description |
@@ -105,6 +125,13 @@ madsci stop --volumes           # Stop and remove volumes (data loss!)
 | `--remove` | Remove locally-built images after stopping |
 | `--volumes` | Remove named volumes (requires confirmation) |
 | `--config PATH` | Path to Docker Compose file |
+
+#### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `stop manager <name>` | Stop a background manager process |
+| `stop node <name>` | Stop a background node process |
 
 ### `madsci status`
 

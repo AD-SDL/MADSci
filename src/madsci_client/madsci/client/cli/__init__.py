@@ -164,6 +164,7 @@ def madsci(
     ctx.obj["verbose"] = verbose
     ctx.obj["quiet"] = quiet
     ctx.obj["json"] = json_output
+    ctx.obj["no_color"] = no_color
 
     # Create console with appropriate settings
     ctx.obj["console"] = Console(

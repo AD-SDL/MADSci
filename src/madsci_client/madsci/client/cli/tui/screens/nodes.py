@@ -7,18 +7,13 @@ by querying the Workcell Manager.
 from typing import Any, ClassVar
 
 import httpx
+from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, WORKCELL_MANAGER_URL
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
 from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import DataTable, Label, Static
-
-# Default URLs
-WORKCELL_MANAGER_URL = "http://localhost:8005/"
-
-# Auto-refresh interval
-AUTO_REFRESH_INTERVAL = 5.0
 
 
 class NodeDetailPanel(Static):

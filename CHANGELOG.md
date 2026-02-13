@@ -13,7 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `madsci init` - Interactive lab initialization wizard
 - `madsci new` - Component scaffolding from templates (module, interface, node, experiment, workflow, workcell, lab subcommands)
 - `madsci start` - Start lab services (Docker Compose or local mode)
+  - `madsci start manager <name>` - Start a single manager as a subprocess
+  - `madsci start node <path>` - Start a node module as a subprocess
+  - `--wait/--no-wait` flag for health polling after detached start
 - `madsci stop` - Stop lab services
+  - `madsci stop manager <name>` - Stop a background manager process
+  - `madsci stop node <name>` - Stop a background node process
 - `madsci status` - Service health checking with `--watch` and `--json` support
 - `madsci doctor` - Environment diagnostic checks (python, docker, ports)
 - `madsci logs` - Event log viewing with `--follow`, `--level`, `--grep`, `--since` filters
