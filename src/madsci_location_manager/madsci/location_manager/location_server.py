@@ -48,16 +48,20 @@ class LocationManager(
         self,
         settings: Optional[LocationManagerSettings] = None,
         definition: Optional[LocationManagerDefinition] = None,
+        redis_connection: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the LocationManager."""
+        self.redis_connection = redis_connection
         super().__init__(settings=settings, definition=definition, **kwargs)
 
     def initialize(self, **_kwargs: Any) -> None:
         """Initialize manager-specific components."""
 
         self.state_handler = LocationStateHandler(
-            settings=self.settings, manager_id=self.definition.manager_id
+            settings=self.settings,
+            manager_id=self.definition.manager_id,
+            redis_connection=self.redis_connection,
         )
 
         # Initialize resource client with resource server URL from context

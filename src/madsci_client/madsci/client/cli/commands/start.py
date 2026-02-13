@@ -1,6 +1,7 @@
 """MADSci CLI start command.
 
-Wraps `docker compose up` for starting MADSci lab services.
+Wraps `docker compose up` for starting MADSci lab services, or launches
+all managers in a single process with in-memory backends (local mode).
 """
 
 from __future__ import annotations
@@ -9,8 +10,12 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 
 def _find_compose_file(config_path: str | None) -> Path:
@@ -83,6 +88,12 @@ def _check_docker() -> None:
     type=click.Path(),
     help="Path to Docker Compose file.",
 )
+@click.option(
+    "--mode",
+    type=click.Choice(["docker", "local"], case_sensitive=False),
+    default="docker",
+    help="Run mode: 'docker' (default) uses Docker Compose; 'local' runs all managers in-process with in-memory backends.",
+)
 @click.pass_context
 def start(
     ctx: click.Context,
@@ -90,20 +101,60 @@ def start(
     do_build: bool,
     services: tuple[str, ...],
     config_path: str | None,
+    mode: str,
 ) -> None:
-    """Start MADSci lab services via Docker Compose.
+    """Start MADSci lab services.
 
     \b
     Examples:
-        madsci start              Start all services (foreground)
-        madsci start -d           Start in background
-        madsci start --build      Rebuild images first
+        madsci start              Start all services via Docker (foreground)
+        madsci start -d           Start in background (Docker mode)
+        madsci start --build      Rebuild images first (Docker mode)
+        madsci start --mode local Start all managers in-process (no Docker)
         madsci start --services workcell_manager --services lab_manager
     """
     from rich.console import Console
 
     console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
 
+    if mode == "local":
+        _start_local(console)
+    else:
+        _start_docker(console, detach, do_build, services, config_path)
+
+
+def _start_local(console: Console) -> None:
+    """Start all managers in a single process with in-memory backends."""
+    from madsci.common.local_backends.local_runner import LocalRunner
+
+    console.print()
+    console.print("[bold green]MADSci Local Mode[/bold green]")
+    console.print("[dim]All managers running in-process with in-memory backends.[/dim]")
+    console.print(
+        "[yellow]Warning: Data is ephemeral and will not persist across restarts.[/yellow]"
+    )
+    console.print()
+    console.print("Managers starting on ports 8000-8006...")
+    console.print("[dim]Press Ctrl+C to stop.[/dim]")
+    console.print()
+
+    runner = LocalRunner()
+
+    try:
+        runner.start()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Shutting down...[/yellow]")
+        sys.exit(130)
+
+
+def _start_docker(
+    console: Console,
+    detach: bool,
+    do_build: bool,
+    services: tuple[str, ...],
+    config_path: str | None,
+) -> None:
+    """Start services via Docker Compose."""
     _check_docker()
 
     compose_file = _find_compose_file(config_path)
