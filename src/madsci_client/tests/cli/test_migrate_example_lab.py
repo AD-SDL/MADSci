@@ -57,14 +57,26 @@ class TestMigrationScannerAgainstExampleLab:
         assert manager_names == expected_managers
 
     def test_scanner_finds_all_node_definitions(self, example_lab_path: Path) -> None:
-        """Scanner should find all 6 node definition files."""
+        """Scanner should find all committed node definition files."""
         scanner = MigrationScanner(example_lab_path)
         plan = scanner.scan()
 
         node_files = [m for m in plan.files if m.file_type.value == "node_definition"]
+        node_names = {m.source_path.name for m in node_files}
 
-        assert len(node_files) == 6, (
-            f"Expected 6 node definitions, found {len(node_files)}: "
+        # These 5 node definitions are committed to the repo
+        expected_nodes = {
+            "robotarm_1.node.yaml",
+            "advanced_example_node.node.yaml",
+            "liquidhandler_1.node.yaml",
+            "liquidhandler_2.node.yaml",
+            "platereader_1.node.yaml",
+        }
+        assert expected_nodes.issubset(node_names), (
+            f"Missing expected node definitions: {expected_nodes - node_names}"
+        )
+        assert len(node_files) >= 5, (
+            f"Expected at least 5 node definitions, found {len(node_files)}: "
             f"{[m.source_path.name for m in node_files]}"
         )
 
@@ -85,12 +97,15 @@ class TestMigrationScannerAgainstExampleLab:
         )
 
     def test_scanner_total_file_count(self, example_lab_path: Path) -> None:
-        """Scanner should find all 20 definition files (7 manager + 6 node + 7 workflow)."""
+        """Scanner should find at least 19 definition files (7 manager + 5 node + 7 workflow).
+
+        Note: locally-generated or gitignored files may increase the count.
+        """
         scanner = MigrationScanner(example_lab_path)
         plan = scanner.scan()
 
-        assert plan.total_count == 20, (
-            f"Expected 20 total definition files, found {plan.total_count}"
+        assert plan.total_count >= 19, (
+            f"Expected at least 19 total definition files, found {plan.total_count}"
         )
 
     def test_all_files_have_pending_status(self, example_lab_path: Path) -> None:
@@ -168,7 +183,7 @@ class TestMigrateScanCLIAgainstExampleLab:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "files" in data
-        assert len(data["files"]) == 20
+        assert len(data["files"]) >= 19
 
     def test_scan_cli_verbose_shows_details(self, example_lab_path: Path) -> None:
         """CLI scan with --verbose should show names and IDs."""

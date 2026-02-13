@@ -24,8 +24,14 @@ dev = [
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = [
+    "{{ module_name }}_interface",
+    "{{ module_name }}_fake_interface",
+    "{{ module_name }}_rest_node",
+    "{{ module_name }}_types",
+]
 
 [tool.ruff]
 line-length = 100
