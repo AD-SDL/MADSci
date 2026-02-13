@@ -252,8 +252,15 @@ def generate_from_template(  # noqa: C901, PLR0912
     return True
 
 
-@click.group()
-def new() -> None:
+@click.group(invoke_without_command=True)
+@click.option(
+    "--tui",
+    "use_tui",
+    is_flag=True,
+    help="Launch interactive TUI template browser.",
+)
+@click.pass_context
+def new(ctx: click.Context, use_tui: bool) -> None:
     """Create new MADSci components from templates.
 
     Generate scaffolding for modules, interfaces, nodes, experiments,
@@ -265,7 +272,59 @@ def new() -> None:
         madsci new module --name my_device  Create with specified name
         madsci new interface --type fake    Add fake interface to module
         madsci new experiment               Create new experiment
+        madsci new --tui                    Launch TUI template browser
     """
+    if ctx.invoked_subcommand is not None:
+        return
+
+    if use_tui:
+        _launch_tui_browser(ctx)
+    elif not ctx.invoked_subcommand:
+        click.echo(ctx.get_help())
+
+
+def _launch_tui_browser(ctx: click.Context) -> None:
+    """Launch the TUI template browser and generate from the selected template."""
+    try:
+        from madsci.client.cli.tui.screens.new_wizard import TemplateBrowserScreen
+        from textual.app import App
+    except ImportError as e:
+        console = get_console(ctx)
+        console.print(
+            "[red]Error: TUI dependencies not installed.[/red]\n\n"
+            "Install with:\n"
+            "  pip install 'madsci.client[tui]'\n\n"
+            f"Details: {e}"
+        )
+        return
+
+    class TemplateBrowserApp(App):
+        """Minimal app that runs the template browser screen."""
+
+        TITLE = "MADSci Template Browser"
+
+        def on_mount(self) -> None:
+            self.push_screen(TemplateBrowserScreen(), callback=self._on_result)
+
+        def _on_result(self, template_id: str | None) -> None:
+            self.exit(template_id)
+
+    app = TemplateBrowserApp()
+    template_id = app.run()
+
+    if not template_id:
+        return
+
+    console = get_console(ctx)
+    output_dir = Path.cwd()
+
+    generate_from_template(
+        template_id=template_id,
+        output_dir=output_dir,
+        name=None,
+        no_interactive=False,
+        console=console,
+    )
 
 
 @new.command()

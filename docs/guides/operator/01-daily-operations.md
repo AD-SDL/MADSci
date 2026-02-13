@@ -10,10 +10,34 @@ This guide covers the day-to-day operations of running a MADSci-powered self-dri
 
 ## Starting the Lab
 
-### Full Lab Startup (Docker)
+### Full Lab Startup
 
 ```bash
-# Start all services
+# Start all services in the background
+madsci start -d
+
+# Verify everything is running
+madsci status
+
+# Or start in the foreground (logs streamed to terminal)
+madsci start
+```
+
+### Local Mode (No Docker)
+
+For development or environments without Docker:
+
+```bash
+# Start all managers in-process with in-memory backends
+madsci start --mode=local
+
+# Data is ephemeral and will not persist across restarts
+```
+
+### Full Lab Startup (Docker, Advanced)
+
+```bash
+# Use docker compose directly for more control
 docker compose up -d
 
 # Verify everything is running
@@ -40,13 +64,26 @@ Docker Compose handles dependency ordering, but the logical startup sequence is:
 ### Starting Individual Services
 
 ```bash
+# Start a specific manager
+madsci start manager event
+
+# Start a specific node
+madsci start node ./path/to/node.py
+
+# Start in the background with PID tracking
+madsci start manager event -d
+```
+
+### Starting Individual Services (Docker, Advanced)
+
+```bash
 # Start only infrastructure
 docker compose up -d mongodb redis postgres minio
 
-# Start a specific manager
+# Start a specific manager via Docker
 docker compose up -d event_manager
 
-# Start a specific node
+# Start a specific node via Docker
 docker compose up -d liquidhandler_1
 
 # Start managers without nodes
@@ -54,9 +91,9 @@ docker compose up -d lab_manager event_manager experiment_manager \
   resource_manager data_manager location_manager workcell_manager
 ```
 
-### Starting Without Docker
+### Starting Without Docker (Advanced)
 
-For development or environments without Docker:
+For running individual services directly:
 
 ```bash
 # Start a manager directly
@@ -76,13 +113,29 @@ EVENT_SERVER_PORT=8001 EVENT_MONGO_DB_URL=mongodb://localhost:27017 \
 
 ```bash
 # Stop all services (preserves data volumes)
+madsci stop
+
+# Stop a specific background manager
+madsci stop manager event
+
+# Stop a specific background node
+madsci stop node <name>
+
+# Stop and remove images
+madsci stop --remove
+
+# Stop and remove volumes (data loss — requires confirmation)
+madsci stop --volumes
+```
+
+### Graceful Shutdown (Docker, Advanced)
+
+```bash
+# Stop all services via docker compose directly
 docker compose down
 
 # Stop a specific service
 docker compose stop liquidhandler_1
-
-# Stop and remove containers, but keep data
-docker compose down
 
 # Stop and remove everything including data volumes (DESTRUCTIVE)
 docker compose down -v
@@ -286,7 +339,7 @@ curl -X POST http://localhost:2000/admin/unlock
 
 A recommended daily routine for lab operators:
 
-1. **Morning startup**: `docker compose up -d && madsci status`
+1. **Morning startup**: `madsci start -d && madsci status`
 2. **Verify health**: Check all services show HEALTHY
 3. **Review overnight logs**: `madsci logs --since 12h --level WARNING`
 4. **Check disk space**: `df -h` (especially for data and log volumes)

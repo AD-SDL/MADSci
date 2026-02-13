@@ -116,6 +116,30 @@ WorkflowDetailPanel {
     min-height: 14;
 }
 
+/* ===== Template Browser ===== */
+
+TemplateBrowserScreen #category-panel {
+    border: solid $primary;
+    padding: 1;
+}
+
+TemplateBrowserScreen #template-table-panel {
+    border: solid $primary;
+    padding: 1;
+}
+
+TemplateBrowserScreen #detail-panel {
+    border: solid $primary;
+    padding: 1;
+    min-height: 8;
+    max-height: 12;
+}
+
+TemplateBrowserScreen #search-bar {
+    height: 3;
+    padding: 0 1;
+}
+
 /* ===== Auto-Refresh Indicator ===== */
 
 .auto-refresh-indicator {

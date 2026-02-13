@@ -2,13 +2,16 @@
 
 Wraps `docker compose up` for starting MADSci lab services, or launches
 all managers in a single process with in-memory backends (local mode).
+Also supports starting individual managers and nodes as subprocesses.
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,6 +19,20 @@ import click
 
 if TYPE_CHECKING:
     from rich.console import Console
+
+# Manager name -> Python module mapping.
+MANAGER_MODULES: dict[str, str] = {
+    "lab": "madsci.squid.lab_server",
+    "event": "madsci.event_manager.event_server",
+    "experiment": "madsci.experiment_manager.experiment_server",
+    "resource": "madsci.resource_manager.resource_server",
+    "data": "madsci.data_manager.data_server",
+    "workcell": "madsci.workcell_manager.workcell_server",
+    "location": "madsci.location_manager.location_server",
+}
+
+# Directory for PID files.
+_PID_DIR = Path.home() / ".madsci" / "pids"
 
 
 def _find_compose_file(config_path: str | None) -> Path:
@@ -74,7 +91,115 @@ def _check_docker() -> None:
         )
 
 
-@click.command()
+def _print_health_summary(
+    console: Console,
+    results: dict,
+    total: int,
+    elapsed: int,
+    timeout: int,
+) -> None:
+    """Print a summary of service health check results."""
+    from madsci.client.cli.commands.status import ServiceStatus
+
+    healthy = sum(1 for s in results.values() if s == ServiceStatus.HEALTHY)
+
+    if healthy == total:
+        console.print(
+            f"\n[green]All {total} services healthy (took {elapsed}s).[/green]"
+        )
+    else:
+        console.print(
+            f"\n[yellow]{healthy}/{total} healthy after {timeout}s timeout.[/yellow]"
+        )
+        for name, st in results.items():
+            if st != ServiceStatus.HEALTHY:
+                console.print(f"  [red]\u25cb[/red] {name}: {st.value}")
+
+
+def _wait_for_health(console: Console, timeout: int) -> None:
+    """Poll service health endpoints and display progress.
+
+    Uses ``check_service_health`` and ``DEFAULT_SERVICES`` from the status
+    module to avoid duplicating health-check logic.
+    """
+    from madsci.client.cli.commands.status import (
+        DEFAULT_SERVICES,
+        ServiceStatus,
+        check_service_health,
+    )
+    from rich.live import Live
+    from rich.table import Table
+
+    start_time = time.monotonic()
+    deadline = start_time + timeout
+    total = len(DEFAULT_SERVICES)
+
+    def _build_table(results: dict[str, ServiceStatus]) -> Table:
+        table = Table(title="Waiting for services...", show_header=True)
+        table.add_column("Status", justify="center", width=4)
+        table.add_column("Service", style="cyan")
+        for name in DEFAULT_SERVICES:
+            st = results.get(name, ServiceStatus.UNKNOWN)
+            icon = (
+                "[green]\u25cf[/green]"
+                if st == ServiceStatus.HEALTHY
+                else "[dim]\u25cb[/dim]"
+            )
+            table.add_row(icon, name)
+        return table
+
+    results: dict[str, ServiceStatus] = {}
+
+    try:
+        with Live(console=console, refresh_per_second=2) as live:
+            while time.monotonic() < deadline:
+                for name, url in DEFAULT_SERVICES.items():
+                    info = check_service_health(name, url, timeout=3.0)
+                    results[name] = info.status
+                live.update(_build_table(results))
+
+                healthy = sum(1 for s in results.values() if s == ServiceStatus.HEALTHY)
+                if healthy == total:
+                    break
+                time.sleep(2)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Health check interrupted.[/yellow]")
+        return
+
+    elapsed = int(time.monotonic() - start_time)
+    _print_health_summary(console, results, total, elapsed, timeout)
+
+
+def _write_pid(name: str, pid: int) -> Path:
+    """Write a PID file for a named process."""
+    _PID_DIR.mkdir(parents=True, exist_ok=True)
+    pid_file = _PID_DIR / f"{name}.pid"
+    pid_file.write_text(str(pid))
+    return pid_file
+
+
+def _read_pid(name: str) -> int | None:
+    """Read a PID file and check if the process is still alive."""
+    pid_file = _PID_DIR / f"{name}.pid"
+    if not pid_file.exists():
+        return None
+    try:
+        pid = int(pid_file.read_text().strip())
+        os.kill(pid, 0)  # Check if process exists
+        return pid
+    except (ValueError, ProcessLookupError, PermissionError):
+        # Stale PID file
+        pid_file.unlink(missing_ok=True)
+        return None
+
+
+def _remove_pid(name: str) -> None:
+    """Remove a PID file."""
+    pid_file = _PID_DIR / f"{name}.pid"
+    pid_file.unlink(missing_ok=True)
+
+
+@click.group(invoke_without_command=True)
 @click.option("-d", "--detach", is_flag=True, help="Run services in the background.")
 @click.option("--build", "do_build", is_flag=True, help="Build images before starting.")
 @click.option(
@@ -94,6 +219,17 @@ def _check_docker() -> None:
     default="docker",
     help="Run mode: 'docker' (default) uses Docker Compose; 'local' runs all managers in-process with in-memory backends.",
 )
+@click.option(
+    "--wait/--no-wait",
+    default=None,
+    help="Wait for services to become healthy after starting (default: wait when -d is used).",
+)
+@click.option(
+    "--wait-timeout",
+    type=int,
+    default=60,
+    help="Timeout in seconds for health check polling (default: 60).",
+)
 @click.pass_context
 def start(
     ctx: click.Context,
@@ -102,6 +238,8 @@ def start(
     services: tuple[str, ...],
     config_path: str | None,
     mode: str,
+    wait: bool | None,
+    wait_timeout: int,
 ) -> None:
     """Start MADSci lab services.
 
@@ -109,10 +247,18 @@ def start(
     Examples:
         madsci start              Start all services via Docker (foreground)
         madsci start -d           Start in background (Docker mode)
+        madsci start -d --no-wait Skip health polling after starting
         madsci start --build      Rebuild images first (Docker mode)
         madsci start --mode local Start all managers in-process (no Docker)
         madsci start --services workcell_manager --services lab_manager
+        madsci start manager event       Start a single manager
+        madsci start manager event -d    Start manager in background
+        madsci start node ./node.py      Start a node module
     """
+    # Only run the default Docker/local flow when no subcommand is given.
+    if ctx.invoked_subcommand is not None:
+        return
+
     from rich.console import Console
 
     console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
@@ -121,6 +267,126 @@ def start(
         _start_local(console)
     else:
         _start_docker(console, detach, do_build, services, config_path)
+
+        # Health polling: default to True when detached, False otherwise.
+        should_wait = wait if wait is not None else detach
+        if should_wait:
+            _wait_for_health(console, wait_timeout)
+
+
+@start.command("manager")
+@click.argument("name", type=click.Choice(sorted(MANAGER_MODULES.keys())))
+@click.option(
+    "-d", "--detach", is_flag=True, help="Run in the background with PID tracking."
+)
+@click.pass_context
+def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
+    """Start a single manager as a subprocess.
+
+    \b
+    Examples:
+        madsci start manager event       Start event manager (foreground)
+        madsci start manager event -d    Start in background
+    """
+    from rich.console import Console
+
+    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+
+    module = MANAGER_MODULES[name]
+
+    # Check for already running process
+    existing_pid = _read_pid(f"manager-{name}")
+    if existing_pid is not None:
+        raise click.ClickException(
+            f"Manager '{name}' is already running (PID {existing_pid}).\n"
+            f"  Stop it first: madsci stop manager {name}"
+        )
+
+    cmd = [sys.executable, "-m", module]
+
+    if detach:
+        proc = subprocess.Popen(  # noqa: S603
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        pid_file = _write_pid(f"manager-{name}", proc.pid)
+        console.print(f"[green]Started {name} manager[/green] (PID {proc.pid})")
+        console.print(f"  PID file: [dim]{pid_file}[/dim]")
+        console.print(f"  Stop with: madsci stop manager {name}")
+    else:
+        console.print(f"Starting {name} manager...")
+        console.print("[dim]Press Ctrl+C to stop.[/dim]")
+        try:
+            subprocess.run(cmd, check=True)  # noqa: S603
+        except subprocess.CalledProcessError as exc:
+            raise click.ClickException(
+                f"Manager '{name}' exited with code {exc.returncode}."
+            ) from exc
+        except KeyboardInterrupt:
+            console.print(f"\n[yellow]{name} manager stopped.[/yellow]")
+            sys.exit(130)
+
+
+@start.command("node")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "-d", "--detach", is_flag=True, help="Run in the background with PID tracking."
+)
+@click.option(
+    "--name", "node_name", help="Name for PID tracking (default: filename stem)."
+)
+@click.pass_context
+def start_node(
+    ctx: click.Context, path: str, detach: bool, node_name: str | None
+) -> None:
+    """Start a node module as a subprocess.
+
+    \b
+    Examples:
+        madsci start node ./my_node.py           Start node (foreground)
+        madsci start node ./my_node.py -d        Start in background
+        madsci start node ./my_node.py --name lh Start with custom name
+    """
+    from rich.console import Console
+
+    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+
+    node_path = Path(path).resolve()
+    name = node_name or node_path.stem
+
+    # Check for already running process
+    existing_pid = _read_pid(f"node-{name}")
+    if existing_pid is not None:
+        raise click.ClickException(
+            f"Node '{name}' is already running (PID {existing_pid}).\n"
+            f"  Stop it first: madsci stop node {name}"
+        )
+
+    cmd = [sys.executable, str(node_path)]
+
+    if detach:
+        proc = subprocess.Popen(  # noqa: S603
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        pid_file = _write_pid(f"node-{name}", proc.pid)
+        console.print(f"[green]Started node '{name}'[/green] (PID {proc.pid})")
+        console.print(f"  PID file: [dim]{pid_file}[/dim]")
+        console.print(f"  Stop with: madsci stop node {name}")
+    else:
+        console.print(f"Starting node '{name}' from {node_path}...")
+        console.print("[dim]Press Ctrl+C to stop.[/dim]")
+        try:
+            subprocess.run(cmd, check=True)  # noqa: S603
+        except subprocess.CalledProcessError as exc:
+            raise click.ClickException(
+                f"Node '{name}' exited with code {exc.returncode}."
+            ) from exc
+        except KeyboardInterrupt:
+            console.print(f"\n[yellow]Node '{name}' stopped.[/yellow]")
+            sys.exit(130)
 
 
 def _start_local(console: Console) -> None:

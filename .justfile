@@ -69,6 +69,10 @@ pdm-install-all:
 pdm-build:
   @pdm build
 
+# Run the full UX verification suite
+verify-ux: checks test
+  @echo "UX verification complete"
+
 # Run automated tests
 test *args:
   @pytest {{args}}

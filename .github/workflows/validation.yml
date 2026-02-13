@@ -87,7 +87,7 @@ jobs:
         run: pip install ruff
 
       - name: Run template validation tests
-        run: pdm run pytest tests/e2e/test_templates.py -v --tb=short || echo "Template tests not yet implemented"
+        run: pdm run pytest src/madsci_common/tests/test_templates/test_template_engine.py -v --tb=short
 
   # Summary job that requires all others to pass
   validation-complete:

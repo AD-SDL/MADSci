@@ -50,8 +50,11 @@ MADSci is made up of a number of different modular components, each of which can
 
 ### Guides
 
+- [CLI Reference](./docs/guides/cli_reference.md): Complete reference for all 17 CLI commands, options, and aliases.
+- [Template Catalog](./docs/guides/template_catalog.md): All 26 built-in templates with parameters and examples.
 - [Logging and Event Context](./docs/guides/logging.md): Guide to MADSci's structured logging system and hierarchical context propagation.
 - [Observability](./example_lab/OBSERVABILITY.md): How to use the OpenTelemetry observability stack for distributed tracing, metrics, and logs.
+- [Daily Operations](./docs/guides/operator/01-daily-operations.md): Day-to-day lab operations, startup, shutdown, and health checks.
 
 ## Installation
 
@@ -89,15 +92,24 @@ For users new to docker, we recommend checking out our [Docker Guide](https://gi
 
 ### Quick Start
 
-Try MADSci with our complete example lab:
+```bash
+pip install madsci-client
+madsci init my_lab          # Interactive lab setup wizard
+cd my_lab
+madsci start                # Start with Docker
+# or
+madsci start --mode=local   # Start without Docker (pure Python)
+```
+
+Access the dashboard at `http://localhost:8000` to monitor your lab.
+
+To try the complete example lab instead:
 
 ```bash
 git clone https://github.com/AD-SDL/MADSci.git
 cd MADSci
 docker compose up  # Starts all services with example configuration
 ```
-
-Access the dashboard at `http://localhost:8000` to monitor your virtual lab.
 
 ## Configuration
 
@@ -125,16 +137,72 @@ We're working on bringing the following additional components to MADSci:
 2. **[Example Notebooks](./example_lab/notebooks)**: Jupyter notebooks covering core concepts and implementation patterns, included in the example lab
 3. **Configuration examples**: See [example_lab/managers/](./example_lab/managers/) for manager configurations
 
-### Common Usage Patterns
+### CLI Overview
 
-**Starting a basic lab:**
+MADSci provides a unified CLI (`madsci`) with 17 commands:
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `init` | | Initialize a new lab interactively |
+| `new` | `n` | Create components from 26 built-in templates |
+| `start` | | Start lab services (Docker or local mode) |
+| `stop` | | Stop lab services |
+| `status` | `s` | Check service health |
+| `doctor` | `doc` | Run diagnostic checks |
+| `logs` | `l` | View and filter event logs |
+| `run` | | Run workflows or experiments |
+| `validate` | `val` | Validate configuration files |
+| `config` | `cfg` | Export, create, or inspect configuration |
+| `backup` | | Create database backups |
+| `registry` | | Manage service registry |
+| `migrate` | | Run database migrations |
+| `tui` | `ui` | Launch interactive terminal interface |
+| `completion` | | Generate shell completions |
+| `commands` | `cmd` | List all commands |
+| `version` | | Show version information |
+
+Run `madsci <command> --help` for details on any command. See [CLI Reference](./docs/guides/cli_reference.md) for full documentation.
+
+### Templates
+
+Generate scaffolding for any MADSci component:
+
 ```bash
-# Use our example lab as a starting point
-cp -r example_lab my_lab
-cd my_lab
-# Modify configurations in managers/ directory
-docker compose up
+madsci new list                       # Browse all 26 templates
+madsci new module                     # Interactive module creation
+madsci new experiment --modality tui  # TUI experiment
+madsci new lab --template standard    # Full lab with Docker Compose
 ```
+
+See [Template Catalog](./docs/guides/template_catalog.md) for the complete list.
+
+### TUI (Terminal User Interface)
+
+```bash
+madsci tui    # Launch interactive dashboard
+```
+
+Provides real-time service status, log browsing, node management, and workflow monitoring with auto-refresh.
+
+### Local Mode
+
+Run all managers without Docker using in-memory backends:
+
+```bash
+madsci start --mode=local
+```
+
+Useful for development, testing, and environments without Docker. Data is ephemeral.
+
+### Configuration Management
+
+```bash
+madsci config export           # Export current config to YAML
+madsci config create           # Create a new config file interactively
+madsci config show             # Display active configuration
+```
+
+### Common Usage Patterns
 
 **Creating custom nodes:**
 ```python
