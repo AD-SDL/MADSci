@@ -153,6 +153,70 @@
         }
       }
     },
+    "pre-commit@latest": {
+      "last_modified": "2026-01-31T12:06:42Z",
+      "resolved": "github:NixOS/nixpkgs/f214de98544a6acf0d9917ba265ac50849048fcb#pre-commit",
+      "source": "devbox-search",
+      "version": "4.5.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/j5pi70fd5x4qjcvdvk2bac03zl9wwims-pre-commit-4.5.1",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/vcixf2jrwjq8b97aws4l51fliwbb2lfl-pre-commit-4.5.1-dist"
+            }
+          ],
+          "store_path": "/nix/store/j5pi70fd5x4qjcvdvk2bac03zl9wwims-pre-commit-4.5.1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/k9b61qhcmsycb9pj6iswc8i34wjn30lq-pre-commit-4.5.1",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/mnizha2q7yzl8x6skvsqxb75m3ps5l52-pre-commit-4.5.1-dist"
+            }
+          ],
+          "store_path": "/nix/store/k9b61qhcmsycb9pj6iswc8i34wjn30lq-pre-commit-4.5.1"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/5wfgd7dj6jm45g96ng7byy0wdbahim3d-pre-commit-4.5.1",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/h5prdxph0gcrxjqqr64kykz1bc3hwmw7-pre-commit-4.5.1-dist"
+            }
+          ],
+          "store_path": "/nix/store/5wfgd7dj6jm45g96ng7byy0wdbahim3d-pre-commit-4.5.1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/m9rrqw4kzly6qqg5m6d6qi2z5a6xvwyk-pre-commit-4.5.1",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/aiylyj2jy96h2zcafb4sh03n7cma75bd-pre-commit-4.5.1-dist"
+            }
+          ],
+          "store_path": "/nix/store/m9rrqw4kzly6qqg5m6d6qi2z5a6xvwyk-pre-commit-4.5.1"
+        }
+      }
+    },
     "python@3.10": {
       "last_modified": "2026-01-23T17:20:52Z",
       "plugin_version": "0.0.4",
@@ -255,6 +319,54 @@
             }
           ],
           "store_path": "/nix/store/arj23552j8w9k5wqhbs1gn2m4pd7skbm-uv-0.9.26"
+        }
+      }
+    },
+    "yarn@latest": {
+      "last_modified": "2026-01-23T17:20:52Z",
+      "resolved": "github:NixOS/nixpkgs/a1bab9e494f5f4939442a57a58d0449a109593fe#yarn",
+      "source": "devbox-search",
+      "version": "1.22.22",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/0cd64z50gqis8fcvcixhifd3c093gxma-yarn-1.22.22",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/0cd64z50gqis8fcvcixhifd3c093gxma-yarn-1.22.22"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/r26rphs7kpljdnshd1nci1g5qjw0ayn2-yarn-1.22.22",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/r26rphs7kpljdnshd1nci1g5qjw0ayn2-yarn-1.22.22"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/n78iwihflnr0c8bf0xyhvm6nivq0yng2-yarn-1.22.22",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/n78iwihflnr0c8bf0xyhvm6nivq0yng2-yarn-1.22.22"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/5yc7qn8vaawl2v2gqd0rv2igir9wasg3-yarn-1.22.22",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/5yc7qn8vaawl2v2gqd0rv2igir9wasg3-yarn-1.22.22"
         }
       }
     }
